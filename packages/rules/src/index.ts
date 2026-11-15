@@ -50,6 +50,9 @@ export {
 export { pageReadingLevel } from "./content/reading-level";
 // Page-time terminology variant counts: same shared-function rule as the reading level above.
 export { pageTerminologyVariants } from "./content/terminology-consistency";
+// Page-time main-text simhash: audit-engine stores it on page_features and content/near-duplicate's
+// legacy path derives it with the SAME function, so both paths agree by construction.
+export { pageContentSimhash } from "./content/near-duplicate";
 // Per-page chrome fingerprint. `template-discontinuity` consumes it by fuzzy
 // similarity; audit-engine reduces the SAME object to page_features' equality
 // cluster key (#1949) and hands it to `buildCollectedPageSignal`, so one DOM

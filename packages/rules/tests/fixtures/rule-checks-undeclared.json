@@ -98,6 +98,7 @@
   "content/meta-in-body",
   "content/mime-type",
   "content/mojibake",
+  "content/near-duplicate",
   "content/placeholder-contact",
   "content/placeholder-media",
   "content/placeholder-text",

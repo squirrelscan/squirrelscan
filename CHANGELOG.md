@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **New rule `content/near-duplicate`.** Groups indexable pages whose main text is nearly identical: the same page with a city name, a date or a sentence swapped, a small edit (location pages, programmatic landing pages), which `content/duplicate-content` cannot see because it only matches exact copies. Each page's main text (navigation, header, footer, sidebars and forms dropped) is reduced to a 64-bit simhash over distinct word triples (a repeated phrase counts once), and pages within 5 bits of each other form a cluster that lists every member URL. A paragraph rewritten out of several is beyond the limit and is not reported. A cluster of 10 or more distinct texts fails (doorway scale), a smaller one warns. Exact copies inside a cluster are counted and left to `content/duplicate-content`, a group made only of exact copies is not reported twice, and pages that share one canonical or are hreflang versions of each other are left out. Skips a crawl under 10 pages. The hash is stored per page (`page_features.content_simhash`, schema version 44) so the streaming and legacy paths give the same answer. (squirrelscan/repo#1369)
+
 ## v0.0.183 (2026-11-17)
 
 Four new probing security rules check what a site hands to anyone who asks: open JSON APIs, sensitive JSON fields, exposed files such as `.env` and `.git`, and auth endpoints that leak the user record. Four more catch mixed locale conventions, inconsistent terminology, copy whose own date has passed and broken byline conventions. Large audits peak at about half the memory, and a probe that never got an answer is now reported as not checked instead of clean. This release adds 8 rules: 336 rules on by default, 28 of them in Security, 29 in Content, 16 in E-E-A-T and 4 in Internationalization.

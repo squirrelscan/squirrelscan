@@ -275,6 +275,7 @@
                   "rules/content/word-count",
                   "rules/content/duplicate-title",
                   "rules/content/duplicate-content",
+                  "rules/content/near-duplicate",
                   "rules/content/duplicate-description",
                   "rules/content/keyword-stuffing",
                   "rules/content/broken-html",

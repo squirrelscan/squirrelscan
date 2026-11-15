@@ -58,7 +58,7 @@ export interface ContentFingerprint {
   words: number;
 }
 
-function isSpaceCode(c: number): boolean {
+export function isSpaceCode(c: number): boolean {
   return (
     c <= 32 ||
     c === 0xa0 ||
@@ -337,7 +337,10 @@ export function buildCheck(input: ContentInput): CheckResult {
 }
 
 /** Distinct pages once pages listing each other as hreflang alternates (any language) are joined. */
-function countComponents(urls: readonly string[], metas: ReadonlyMap<string, PageMeta>): number {
+export function countComponents(
+  urls: readonly string[],
+  metas: ReadonlyMap<string, PageMeta>,
+): number {
   // No alternates anywhere: nothing can join.
   if (!urls.some((u) => (metas.get(u)?.alternates?.length ?? 0) > 0)) return urls.length;
   const index = new RegionVariantIndex();

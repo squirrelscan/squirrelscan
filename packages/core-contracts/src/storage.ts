@@ -1080,6 +1080,13 @@ export interface PageFeatureRow {
    */
   terminologyVariants?: Record<string, number> | null;
   /**
+   * 64-bit simhash of the page's main text (nav, header, footer and aside dropped), 16 hex chars.
+   * Null when the main text is under 100 words, the page redirects, or it has no body. Optional:
+   * absent on a row stored before it existed, which reads as null (content/near-duplicate does
+   * not judge the page).
+   */
+  contentSimhash?: string | null;
+  /**
    * Report-only per-page scalars (#2343). Null on a row written before schema
    * v30, which is what makes the report's fallback parse reachable rather than
    * dead code.

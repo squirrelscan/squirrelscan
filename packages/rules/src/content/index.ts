@@ -30,6 +30,7 @@ import { terminologyConsistencyRule } from "./terminology-consistency";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
 import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { unrenderedMarkupRule } from "./unrendered-markup";
+import { nearDuplicateRule } from "./near-duplicate";
 import { voiceConsistencyRule } from "./voice-consistency";
 import { wordCountRule } from "./word-count";
 
@@ -64,6 +65,7 @@ export const rules: Rule[] = [
   h1TitleAlignmentRule,
   voiceConsistencyRule,
   terminologyConsistencyRule,
+  nearDuplicateRule,
 ];
 
 export {
@@ -94,6 +96,7 @@ export {
   thinVsSiteNormRule,
   titlePatternOutlierRule,
   unrenderedMarkupRule,
+  nearDuplicateRule,
   voiceConsistencyRule,
   wordCountRule,
 };

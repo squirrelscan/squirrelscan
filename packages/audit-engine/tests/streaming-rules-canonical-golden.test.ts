@@ -229,7 +229,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 110240 -> 110740 (repo#1359): i18n/locale-mixing adds one row per page (500 pages run it).
       // 110740 -> 110741 (security/auth-endpoint-disclosure, repo#1968): a site-scoped probing rule; this gate
       // runs passive, so it adds one skipped row and sends nothing. healthScore.overall is unmoved.
-      expect(v1.findings.length).toBe(110741);
+      // 110741 -> 110742 (content/near-duplicate, repo#1369): a site rule adds one row. It passes on the
+      // synthetic site (distinct shingles vote once, so the shared sentence template does not cluster
+      // pages), so healthScore.overall is unmoved.
+      expect(v1.findings.length).toBe(110742);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -263,9 +266,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 328 -> 329 security/unauthenticated-api, 329 -> 330 security/json-sensitive-fields,
       // 330 -> 331 security/exposed-files (#1932), 331 -> 332 eeat/byline-consistency (squirrelscan/repo#1364),
       // 332 -> 333 content/stale-dated-copy, 333 -> 334 content/terminology-consistency, 334 -> 335 i18n/locale-mixing (repo#1359),
-      // 335 -> 336 security/auth-endpoint-disclosure;
+      // 335 -> 336 security/auth-endpoint-disclosure, 336 -> 337 content/near-duplicate;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(336);
+      expect(v1.perRuleTally.length).toBe(337);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,

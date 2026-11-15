@@ -1,0 +1,126 @@
+---
+title: "Near-duplicate content: pages whose main text barely differs"
+description: "Pages that differ only by a city name, a date or a sentence are not exact duplicates, so the exact-match rule misses them. squirrel compares a fingerprint of each page's main text and groups pages that are nearly identical."
+---
+
+## What near-duplicate content is
+
+Near-duplicate content is the same page text served on several URLs with a small edit between them: a city name, a date, a product name or one short paragraph. Location pages ("plumbers in Ashford", "plumbers in Bristol") and programmatic landing pages are the usual source. Search engines treat a large set of such pages as one page with many doors, so the pages compete with each other and a big enough set looks like doorway content.
+
+[content/duplicate-content](/rules/content/duplicate-content) reports pages whose body text is identical. One changed word is enough to hide a page from it. This rule covers that gap.
+
+## What squirrel checks
+
+The rule is site-wide and emits a single check named `near-duplicate`. For every crawled page it reads the main text: the first `main` element (or `[role="main"]`) when there is one, otherwise the body. Inside it, `nav`, `header`, `footer`, `aside`, `form` and `menu` elements, elements with the role `navigation`, `banner`, `contentinfo`, `complementary` or `search`, and anything marked `aria-hidden="true"` are dropped, along with scripts, styles, templates and code blocks. Pages that share only a menu and a footer therefore do not match.
+
+The text is lowercased and cut into words (runs of letters and digits, at most the first 20,000 per page). Each distinct run of three words is hashed once, and the hashes vote on a single 64-bit fingerprint, a simhash. A phrase repeated on the page, such as a sentence template, counts once, so it cannot out-vote the page's distinct text. Pages whose fingerprints differ in 5 bits or fewer are joined into a cluster. Two unrelated pages differ in about 32 bits and fall within 5 by chance with a probability of about 4.5 in 10 trillion, negligible even across a 10,000-page crawl. A city or date swap in a 300 to 400 word page measures 0 to 6 bits, and a cluster of many location pages links through its neighbours, so the cluster is found even when one pair sits just past the limit.
+
+- Skipped when fewer than 10 pages were crawled. Message: `Only N page(s) crawled; 10 needed to compare pages for near-duplicate content`.
+- Skipped when fewer than two pages have enough main text to compare. Message: `Fewer than 2 pages have enough main text to compare`.
+- Fail when a cluster holds 10 or more distinct texts, the scale of a doorway set. Warn when every cluster is smaller. Message: `N near-duplicate cluster(s) found across M pages`. Each item is one cluster, labelled `N pages have nearly identical main text`, with the URLs in it. Clusters are ordered largest first, then by first URL, and URLs within a cluster are sorted. Severity warning, weight 4.
+- Pass otherwise. Message: `No pages have nearly identical main text`.
+
+The check's details give `totalClusters`, `totalPages`, `comparedPages`, `minWords` and `maxDistance`. At most 50 clusters are listed as items and at most 20 URLs per cluster; `omittedClusters` and each item's `omittedUrls` say how many were left off the list, and the totals still count them. Each item's `meta` has `pageCount`, `distinctTexts`, `exactCopies` and `widestLinkBits`, the largest distance of a pair that linked the cluster together.
+
+### What is left out
+
+A page is not compared when it is:
+
+- shorter than 100 words of main text. The minimum is fixed and cannot be configured; it keeps short pages that share a template from grouping together. These are counted under `excluded.unhashed`.
+- a redirect: a page whose final URL is a different page than the one requested (also counted under `unhashed`).
+- an error or other non-2xx response (`excluded.notOk`).
+- marked `noindex`, by a `<meta name="robots">` tag or an `X-Robots-Tag` header (`excluded.noindex`).
+- a pagination page: a URL with a `page`, `p`, `pg`, `offset` or `start` query parameter, or a path ending in `/page/N` (`excluded.pagination`).
+
+The rule compares at most 10,000 distinct texts; pages beyond that are counted in `unjudgedPages`.
+
+### Exact copies
+
+Pages with identical body text are one text for this rule. A group made only of exact copies is not reported here, because `content/duplicate-content` already reports it. When exact copies sit in a cluster with a near variant, the cluster is reported and its label adds `(N are exact copies, also reported by content/duplicate-content)`.
+
+### Pages that resolve to one canonical
+
+Each page's `rel="canonical"` is resolved against its own URL, and a page with no canonical counts as canonical to itself. A cluster is reported only when its pages do not all declare the same canonical. A cluster that points at one canonical is working as intended and is counted as `canonicalisedClusters`.
+
+### Localised versions
+
+Pages that list each other as `<link rel="alternate" hreflang>` alternates, in any language, are versions of one page and not near-duplicates of one another. A cluster is dropped when all its pages are connected this way (counted under `excluded.hreflang`).
+
+### What it does not catch
+
+The threshold is tight on purpose, so only small edits are caught: a name, a date or a sentence. A page where a paragraph was rewritten, for example one paragraph out of five, measures well beyond 5 bits and is not reported.
+
+### Not the same question as the doorway rule
+
+[integrity/seo-doorway](/rules/integrity/seo-doorway) is a per-page rule that looks for injected, off-topic, keyword-stuffed affiliate posts, a sign the site was compromised. It does not look at clusters, and it does not fire on a set of templated location pages you published yourself. This rule answers the other question: which of your pages say the same thing. Run both and they report different problems.
+
+## How to fix it
+
+Give each page content specific to its own topic: the local facts, prices, staff, case studies or questions that are true for that page only. If a set of pages cannot say anything different, merge them into one page and redirect the extra URLs to it with a 301, or point the copies at one canonical URL.
+
+```html
+<link rel="canonical" href="https://example.com/plumbers" />
+```
+
+| | |
+|---|---|
+| **Rule ID** | `content/near-duplicate` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/near-duplicate"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/near-duplicate"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/duplicate-content](/rules/content/duplicate-content): pages whose body text is identical.
+- [integrity/seo-doorway](/rules/integrity/seo-doorway): injected off-topic affiliate posts on a compromised site.
+- [core/canonical](/rules/core/canonical): the canonical tag that resolves a cluster.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+{/* glossary:backlinks:end */}
+
+## References
+
+- [Spam policies for Google web search: doorways, Google Search Central](https://developers.google.com/search/docs/essentials/spam-policies)
+- [Consolidate duplicate URLs, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each cluster of near-duplicate pages is listed with the pages in it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>
