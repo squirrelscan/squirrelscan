@@ -75,7 +75,7 @@ describe("links/redirect-chains — trailing-slash false positives", () => {
       },
     ];
 
-    const { checks } = (await redirectChainsRule.run(ctx(pages)));
+    const { checks } = await redirectChainsRule.run(ctx(pages));
 
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
@@ -96,7 +96,7 @@ describe("links/redirect-chains — trailing-slash false positives", () => {
       links: ["https://example.com/o-mnie/", "https://example.com/blog/"],
     }));
 
-    const { checks } = (await redirectChainsRule.run(ctx(pages)));
+    const { checks } = await redirectChainsRule.run(ctx(pages));
 
     expect(checks.map((c) => c.status)).toEqual(["pass"]);
   });
@@ -141,7 +141,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const redirectPages = (await check(pages, "redirect-pages"));
+    const redirectPages = await check(pages, "redirect-pages");
     expect(redirectPages?.status).toBe("warn");
     expect(redirectPages?.items).toHaveLength(1);
     expect(redirectPages?.items?.[0]?.label).toBe(
@@ -199,7 +199,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
       { url: `${b}/`, finalUrl: `${b}/`, links: [`${b}/_fault/r1`] },
     ];
-    const { checks } = (await redirectChainsRule.run(ctx(pages)));
+    const { checks } = await redirectChainsRule.run(ctx(pages));
     const label = (await check(pages, "redirect-pages"))?.items?.[0]?.label ?? "";
     expect(label.startsWith("3 hops: ")).toBe(true);
     for (const part of ["r1", "r2", "r3", "gift-boxes"]) expect(label).toContain(part);
@@ -239,7 +239,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const redirectPages = (await check(pages, "redirect-pages"));
+    const redirectPages = await check(pages, "redirect-pages");
     expect(redirectPages?.status).toBe("warn");
     expect(redirectPages?.items?.[0]?.label).toBe(
       "https://example.com/o-mnie → https://example.com/o-mnie/ (200)",
@@ -260,7 +260,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const redirectPages = (await check(pages, "redirect-pages"));
+    const redirectPages = await check(pages, "redirect-pages");
     expect(redirectPages?.status).toBe("warn");
     // An unobserved status is omitted rather than printed as "(0)".
     expect(redirectPages?.items?.[0]?.label).toBe(
@@ -293,7 +293,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       })),
     ];
 
-    const linksToRedirect = (await check(pages, "links-to-redirect"));
+    const linksToRedirect = await check(pages, "links-to-redirect");
     expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual(["https://example.com/guilty/"]);
   });
 
@@ -351,7 +351,7 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const linksToRedirect = (await check(pages, "links-to-redirect"));
+    const linksToRedirect = await check(pages, "links-to-redirect");
     expect(linksToRedirect?.status).toBe("warn");
     expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual(["https://example.com/"]);
   });
@@ -359,11 +359,14 @@ describe("links/redirect-chains — genuine redirects still report", () => {
 
 describe("links/redirect-chains — a chain can never claim a 200 first hop", () => {
   test.each([
-    ["all-2xx two-hop chain", [hop("https://example.com/a", 200), hop("https://example.com/a/", 200)]],
-    ["2xx then 3xx (the redirect is the LAST hop, so it led nowhere)", [
-      hop("https://example.com/a", 200),
-      hop("https://example.com/a/", 301),
-    ]],
+    [
+      "all-2xx two-hop chain",
+      [hop("https://example.com/a", 200), hop("https://example.com/a/", 200)],
+    ],
+    [
+      "2xx then 3xx (the redirect is the LAST hop, so it led nowhere)",
+      [hop("https://example.com/a", 200), hop("https://example.com/a/", 301)],
+    ],
   ])("%s produces no warning", async (_name, hops) => {
     const pages: PageInput[] = [
       {
@@ -440,12 +443,12 @@ describe("links/redirect-chains — link sections", () => {
   }
 
   test("links-to-redirect items say where the links sit and carry meta.sections", async () => {
-    const item = (await redirectChainsRule
-      .run(sectionedCtx("footer")))
-      .checks.find((c) => c.name === "links-to-redirect")!.items![0]!;
+    const item = (await redirectChainsRule.run(sectionedCtx("footer"))).checks.find(
+      (c) => c.name === "links-to-redirect",
+    )!.items![0]!;
 
     expect(item.label).toBe(
-      "https://example.com/old (301) → https://example.com/new (200), linked in the footer and the page content"
+      "https://example.com/old (301) → https://example.com/new (200), linked in the footer and the page content",
     );
     expect((item.meta as { sections?: unknown }).sections).toEqual({ footer: 2, content: 1 });
     expect(item.sourcePages).toEqual(["https://example.com/a", "https://example.com/b"]);
@@ -456,9 +459,9 @@ describe("links/redirect-chains — link sections", () => {
     for (const page of c.site!.pages) {
       for (const link of page.parsed?.links ?? []) delete (link as { section?: string }).section;
     }
-    const item = (await redirectChainsRule
-      .run(c))
-      .checks.find((x) => x.name === "links-to-redirect")!.items![0]!;
+    const item = (await redirectChainsRule.run(c)).checks.find(
+      (x) => x.name === "links-to-redirect",
+    )!.items![0]!;
 
     expect(item.label).toBe("https://example.com/old (301) → https://example.com/new (200)");
     expect("sections" in (item.meta as object)).toBe(false);

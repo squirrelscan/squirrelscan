@@ -8,10 +8,19 @@ import type { Config } from "@squirrelscan/config";
 import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildV2Report } from "../src/report-stream";
-import { generateReportFromStorage, runStreamingRules, type PreFetchedAssets } from "../src/adapter";
+import {
+  generateReportFromStorage,
+  runStreamingRules,
+  type PreFetchedAssets,
+} from "../src/adapter";
 
 const CONFIG = { rule_options: {}, rules: { enable: [] } } as unknown as Config;
-const ASSETS: PreFetchedAssets = { resourceSizes: { css: [], images: [] }, scripts: [], pdfSizes: [], sitemapUrlStatuses: [] };
+const ASSETS: PreFetchedAssets = {
+  resourceSizes: { css: [], images: [] },
+  scripts: [],
+  pdfSizes: [],
+  sitemapUrlStatuses: [],
+};
 const HTML = { "content-type": "text/html" };
 
 const page = (title: string, links: string[]) =>
@@ -28,8 +37,14 @@ function serve(): string {
     hostname: "127.0.0.1",
     fetch(req) {
       const path = new URL(req.url).pathname;
-      if (path === "/robots.txt") return new Response("User-agent: *\nDisallow: /private/\n", { headers: { "content-type": "text/plain" } });
-      if (path === "/") return new Response(page("Home", ["/about", "/private/a", "/private/b"]), { headers: HTML });
+      if (path === "/robots.txt")
+        return new Response("User-agent: *\nDisallow: /private/\n", {
+          headers: { "content-type": "text/plain" },
+        });
+      if (path === "/")
+        return new Response(page("Home", ["/about", "/private/a", "/private/b"]), {
+          headers: HTML,
+        });
       return new Response(page(path, []), { headers: HTML });
     },
   });
@@ -59,11 +74,22 @@ async function crawlAndReport(respectRobots: boolean) {
   const storage = crawler.storage as SQLiteStorage;
   const pages = await Effect.runPromise(storage.getPages(crawlId));
   const result = await Effect.runPromise(
-    runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 8 }) as Effect.Effect<never, never, never>,
+    runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, {
+      batchSize: 8,
+    }) as Effect.Effect<never, never, never>,
   );
-  const scanScope = { origin: "cloud" as const, pagesCrawled: pages.length, capped: false, respectRobots };
-  const v1 = await Effect.runPromise(generateReportFromStorage(storage, crawlId, result, { scanScope }));
-  const v2 = await Effect.runPromise(buildV2Report(storage, crawlId, result as never, { scanScope }));
+  const scanScope = {
+    origin: "cloud" as const,
+    pagesCrawled: pages.length,
+    capped: false,
+    respectRobots,
+  };
+  const v1 = await Effect.runPromise(
+    generateReportFromStorage(storage, crawlId, result, { scanScope }),
+  );
+  const v2 = await Effect.runPromise(
+    buildV2Report(storage, crawlId, result as never, { scanScope }),
+  );
   const bare = await Effect.runPromise(generateReportFromStorage(storage, crawlId, result));
   return { pages: pages.map((p) => new URL(p.url).pathname).sort(), v1, v2, bare };
 }

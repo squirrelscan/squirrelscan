@@ -85,9 +85,7 @@ export const http2Rule: Rule = {
       "h2o",
     ];
 
-    const likelyH2 = knownH2Providers.some(
-      (p) => server.includes(p) || via.includes(p)
-    );
+    const likelyH2 = knownH2Providers.some((p) => server.includes(p) || via.includes(p));
 
     if (likelyH2 && checks.length === 0) {
       checks.push({

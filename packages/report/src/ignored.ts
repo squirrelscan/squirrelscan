@@ -32,15 +32,22 @@ const clean = (value: unknown, max = MAX_TEXT): string =>
  */
 export function summarizeIgnored(
   checksByRule: Iterable<[string, readonly CheckResult[]]>,
-  scope?: { entries: Array<{ rule: string; reason?: string }>; disabled?: boolean; timedOut?: number[]; carriedStale?: boolean },
+  scope?: {
+    entries: Array<{ rule: string; reason?: string }>;
+    disabled?: boolean;
+    timedOut?: number[];
+    carriedStale?: boolean;
+  },
 ): IgnoreSummary | undefined {
-  const entries: IgnoredEntrySummary[] = (scope?.entries ?? []).slice(0, MAX_ENTRIES).map((e, index) => ({
-    index,
-    rule: clean(e.rule),
-    ...(e.reason ? { reason: clean(e.reason, 200) } : {}),
-    items: 0,
-    pages: 0,
-  }));
+  const entries: IgnoredEntrySummary[] = (scope?.entries ?? [])
+    .slice(0, MAX_ENTRIES)
+    .map((e, index) => ({
+      index,
+      rule: clean(e.rule),
+      ...(e.reason ? { reason: clean(e.reason, 200) } : {}),
+      items: 0,
+      pages: 0,
+    }));
   const byRule: IgnoreSummary["byRule"] = {};
   let items = 0;
   let pages = 0;
@@ -65,7 +72,9 @@ export function summarizeIgnored(
     }
   }
   if (entries.length === 0 && items === 0 && pages === 0 && !scope?.disabled) return undefined;
-  const timedOutEntries = (scope?.timedOut ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < entries.length).slice(0, MAX_ENTRIES);
+  const timedOutEntries = (scope?.timedOut ?? [])
+    .filter((i) => Number.isInteger(i) && i >= 0 && i < entries.length)
+    .slice(0, MAX_ENTRIES);
   return {
     items,
     pages,
@@ -81,7 +90,8 @@ export function summarizeIgnored(
 export function safeIgnored(report: Pick<AuditReport, "ignored">): IgnoreSummary | null {
   const raw = report.ignored;
   if (!raw || typeof raw !== "object") return null;
-  const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+  const count = (v: unknown): number =>
+    typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
   const entries: IgnoredEntrySummary[] = Array.isArray(raw.entries)
     ? raw.entries.slice(0, MAX_ENTRIES).map((e, i) => ({
         index: Number.isInteger(e?.index) ? e.index : i,
@@ -130,8 +140,12 @@ export function ignoredLine(report: Pick<AuditReport, "ignored">): string | null
   const parts: string[] = [];
   if (s.items > 0) parts.push(plural(s.items, "finding", "findings"));
   if (s.pages > 0) parts.push(plural(s.pages, "page", "pages"));
-  const what = parts.length > 0 ? `${parts.join(" and ")} on ${plural(rules, "rule", "rules")}` : "nothing";
-  const entryNote = s.entries.length > 0 ? ` (${matched} of ${plural(s.entries.length, "entry", "entries")} matched)` : "";
+  const what =
+    parts.length > 0 ? `${parts.join(" and ")} on ${plural(rules, "rule", "rules")}` : "nothing";
+  const entryNote =
+    s.entries.length > 0
+      ? ` (${matched} of ${plural(s.entries.length, "entry", "entries")} matched)`
+      : "";
   const stale = s.carriedStale
     ? " The ignore list changed since the last audit, and findings carried from pages this run did not crawl may still include waived items: re-run without a page limit or with --refresh."
     : "";
@@ -171,9 +185,13 @@ export function ignoredNoteLines(report: Pick<AuditReport, "ignored">): string[]
       const waived: string[] = [];
       if (e.items > 0) waived.push(plural(e.items, "finding", "findings"));
       if (e.pages > 0) waived.push(plural(e.pages, "page", "pages"));
-      lines.push(`Ignore entry ${e.index + 1} (${e.rule}), ${e.reason}: ${waived.join(" and ")} waived.`);
+      lines.push(
+        `Ignore entry ${e.index + 1} (${e.rule}), ${e.reason}: ${waived.join(" and ")} waived.`,
+      );
     } else if (!matched) {
-      lines.push(`Ignore entry ${e.index + 1} (${e.rule})${e.reason ? `, ${e.reason},` : ""} matched nothing.`);
+      lines.push(
+        `Ignore entry ${e.index + 1} (${e.rule})${e.reason ? `, ${e.reason},` : ""} matched nothing.`,
+      );
     }
   }
   return lines;

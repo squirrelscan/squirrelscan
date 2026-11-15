@@ -23,7 +23,7 @@ export const touchTargetsRule: Rule = {
 
     // Check for very small explicit sizes on interactive elements
     const interactiveElements = doc.querySelectorAll(
-      "button, a, input[type='submit'], input[type='button'], [role='button']"
+      "button, a, input[type='submit'], input[type='button'], [role='button']",
     );
 
     let smallTargetHints = 0;

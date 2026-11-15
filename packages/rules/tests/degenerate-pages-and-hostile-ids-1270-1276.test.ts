@@ -63,26 +63,41 @@ describe("#1276: hostile ids and roles do not break the selector rules", () => {
     test(`label for=${JSON.stringify(id)} still associates`, async () => {
       const labelled = (type: string, extra = "") =>
         pageWith(`<label for="${esc}">Name</label><input type="${type}" id="${esc}"${extra}>`);
-      for (const rule of [formLabelsRule, formFieldMultipleLabelsRule, ariaInputFieldNameRule, selectNameRule]) {
+      for (const rule of [
+        formLabelsRule,
+        formFieldMultipleLabelsRule,
+        ariaInputFieldNameRule,
+        selectNameRule,
+      ]) {
         expect(() => runRule(rule, labelled("text"))).not.toThrow();
       }
       // The label names the field, so the name rules stay quiet.
       const named = (await runRule(formLabelsRule, labelled("text"))).checks;
       expect(named.every((c) => c.status !== "fail" && c.status !== "warn")).toBe(true);
-      const roleNamed = (await runRule(
-        ariaInputFieldNameRule,
-        pageWith(`<label for="${esc}">Name</label><div role="textbox" id="${esc}" tabindex="0"></div>`)
-      )).checks;
+      const roleNamed = (
+        await runRule(
+          ariaInputFieldNameRule,
+          pageWith(
+            `<label for="${esc}">Name</label><div role="textbox" id="${esc}" tabindex="0"></div>`,
+          ),
+        )
+      ).checks;
       expect(roleNamed.every((c) => c.status !== "fail")).toBe(true);
-      const sel = (await runRule(
-        selectNameRule,
-        pageWith(`<label for="${esc}">Pick</label><select id="${esc}"><option>a</option></select>`)
-      )).checks;
+      const sel = (
+        await runRule(
+          selectNameRule,
+          pageWith(
+            `<label for="${esc}">Pick</label><select id="${esc}"><option>a</option></select>`,
+          ),
+        )
+      ).checks;
       expect(sel.every((c) => c.status !== "fail")).toBe(true);
     });
 
     test(`two labels for ${JSON.stringify(id)} are counted`, async () => {
-      const html = pageWith(`<label for="${esc}">A</label><label for="${esc}">B</label><input type="text" id="${esc}">`);
+      const html = pageWith(
+        `<label for="${esc}">A</label><label for="${esc}">B</label><input type="text" id="${esc}">`,
+      );
       const checks = (await runRule(formFieldMultipleLabelsRule, html)).checks;
       expect(checks.some((c) => c.status === "warn")).toBe(true);
     });
@@ -91,7 +106,7 @@ describe("#1276: hostile ids and roles do not break the selector rules", () => {
       const html = pageWith(
         `<label for="${esc}">L</label><div role="checkbox" id="${esc}" tabindex="0"></div>` +
           `<div role="meter" id="${esc}2"></div><div role="progressbar" id="${esc}3"></div>` +
-          `<div role="button" id="${esc}4" tabindex="0">x</div><div role="listitem" id="${esc}5">i</div>`
+          `<div role="button" id="${esc}4" tabindex="0">x</div><div role="listitem" id="${esc}5">i</div>`,
       );
       for (const rule of [
         ariaToggleFieldNameRule,
@@ -129,7 +144,8 @@ const CONSTANT_SELECTORS: Array<{ file: string; snippet: string }> = [
   { file: "security/mixed-content.ts", snippet: "`${selector}[${attribute}]`" },
 ];
 
-const SELECTOR_CALL = /\b(querySelectorAll|querySelector|closest|matches|querySelectorAllOutsideNoscript)\(/g;
+const SELECTOR_CALL =
+  /\b(querySelectorAll|querySelector|closest|matches|querySelectorAllOutsideNoscript)\(/g;
 
 /** The text of the call's first argument, from just after `(` to the top-level `,` or the closing `)`. */
 function firstArgument(source: string, open: number): string {
@@ -191,10 +207,18 @@ describe("#1276 guard", () => {
 
   test("the guard sees multi-line calls, variables and #/. selectors", () => {
     expect(
-      selectorArguments("doc.querySelector(\n  `label[for='${id}']`\n)").some((a) => a.includes("${"))
+      selectorArguments("doc.querySelector(\n  `label[for='${id}']`\n)").some((a) =>
+        a.includes("${"),
+      ),
     ).toBe(true);
-    expect(selectorArguments("const sel = `#${id}`;\ndoc.querySelector(sel);").some((a) => a.includes("${"))).toBe(true);
+    expect(
+      selectorArguments("const sel = `#${id}`;\ndoc.querySelector(sel);").some((a) =>
+        a.includes("${"),
+      ),
+    ).toBe(true);
     expect(selectorArguments("el.closest(`.${cls}`)").some((a) => a.includes("${"))).toBe(true);
-    expect(selectorArguments('doc.querySelectorAll("a[href]")').some((a) => a.includes("${"))).toBe(false);
+    expect(selectorArguments('doc.querySelectorAll("a[href]")').some((a) => a.includes("${"))).toBe(
+      false,
+    );
   });
 });

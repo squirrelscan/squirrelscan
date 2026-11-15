@@ -80,7 +80,14 @@ export function agentSkillFiles(
         file.encoding === "base64"
           ? decodeBase64(file.content)
           : new TextEncoder().encode(file.content);
-      out.set(uri, { uri, skill: skill.name, path: file.path, mimeType: file.mimeType, bytes, contents });
+      out.set(uri, {
+        uri,
+        skill: skill.name,
+        path: file.path,
+        mimeType: file.mimeType,
+        bytes,
+        contents,
+      });
     }
   }
   if (bundle === AGENT_SKILLS_BUNDLE) files = out;

@@ -39,10 +39,16 @@ describe("findStrayStrings", () => {
       findStrayStrings({ ...valid, region: { ...valid.region, trees: "some page words" } }),
     ).toEqual(["region.trees value"]);
     expect(
-      findStrayStrings({ ...valid, region: { ...valid.region, tokenStreams: ["classid", "page text"] } }),
+      findStrayStrings({
+        ...valid,
+        region: { ...valid.region, tokenStreams: ["classid", "page text"] },
+      }),
     ).toEqual(["region.tokenStreams entry"]);
     expect(
-      findStrayStrings({ ...valid, region: { ...valid.region, tokenStreams: ["classid", "text"] } }),
+      findStrayStrings({
+        ...valid,
+        region: { ...valid.region, tokenStreams: ["classid", "text"] },
+      }),
     ).toEqual([]);
   });
 });

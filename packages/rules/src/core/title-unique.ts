@@ -22,7 +22,7 @@ function normalizeTitle(rawTitle: string): string {
 // First-seen-ordered duplicate groups (>1 url). Shared so the legacy and
 // streaming paths produce an identical `duplicates` list.
 function findDuplicates(
-  titleMap: Map<string, string[]>
+  titleMap: Map<string, string[]>,
 ): Array<{ title: string; count: number; urls: string[] }> {
   const duplicates: Array<{ title: string; count: number; urls: string[] }> = [];
   for (const [title, urls] of titleMap) {
@@ -35,7 +35,7 @@ function findDuplicates(
 
 // Shared result builder — identical output regardless of how the map was built.
 function buildCheck(
-  duplicates: Array<{ title: string; count: number; urls: string[] }>
+  duplicates: Array<{ title: string; count: number; urls: string[] }>,
 ): CheckResult {
   if (duplicates.length === 0) {
     return {

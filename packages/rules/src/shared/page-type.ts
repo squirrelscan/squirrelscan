@@ -124,7 +124,8 @@ function hasEmailAddress(text: string): boolean {
     const at = text.indexOf("@", from);
     if (at < 0) return false;
     from = at + 1;
-    if (at > 0 && LOCAL_CHAR.test(text[at - 1]!) && EMAIL_DOMAIN.test(text.slice(at + 1, at + 301))) return true;
+    if (at > 0 && LOCAL_CHAR.test(text[at - 1]!) && EMAIL_DOMAIN.test(text.slice(at + 1, at + 301)))
+      return true;
   }
   return false;
 }
@@ -161,7 +162,16 @@ function hasPhoneNumber(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     const char = text[i]!;
     const isDigit = char >= "0" && char <= "9";
-    if (isDigit || (run.length > 0 && (char === " " || char === "(" || char === ")" || char === "-" || char === "." || char === "\u00a0"))) {
+    if (
+      isDigit ||
+      (run.length > 0 &&
+        (char === " " ||
+          char === "(" ||
+          char === ")" ||
+          char === "-" ||
+          char === "." ||
+          char === "\u00a0"))
+    ) {
       if (run.length === 0) plus = i > 0 && text[i - 1] === "+";
       run += char;
       if (run.length > MAX_PHONE_RUN) {
@@ -177,7 +187,8 @@ function hasPhoneNumber(text: string): boolean {
 }
 
 /** Elements that are page furniture, not the page's own content. */
-const CHROME = "header, nav, footer, aside, [role='banner'], [role='navigation'], [role='contentinfo'], [role='complementary'], script, style, noscript, template";
+const CHROME =
+  "header, nav, footer, aside, [role='banner'], [role='navigation'], [role='contentinfo'], [role='complementary'], script, style, noscript, template";
 
 interface MainContent {
   text: string;
@@ -227,7 +238,8 @@ function mainContent(parsed: ParsedPage): MainContent | null {
 function buildMainContent(parsed: ParsedPage): MainContent | null {
   const document = parsed.document;
   if (!document) return null;
-  const root = document.querySelector("main, [role='main']") ?? document.body ?? document.documentElement;
+  const root =
+    document.querySelector("main, [role='main']") ?? document.body ?? document.documentElement;
   if (!root) return null;
   const copy = root.cloneNode(true) as Element;
   for (const chrome of Array.from(copy.querySelectorAll(CHROME))) chrome.remove();
@@ -246,7 +258,10 @@ function buildMainContent(parsed: ParsedPage): MainContent | null {
  * and neither is a footer. `legal` needs policy vocabulary, not the word "legal". A support page
  * with a contact form is a contact surface and is accepted.
  */
-export function bodyCorroboratesPageType(parsed: ParsedPage | null | undefined, label: string): boolean {
+export function bodyCorroboratesPageType(
+  parsed: ParsedPage | null | undefined,
+  label: string,
+): boolean {
   if (!parsed || (label !== "legal" && label !== "contact")) return false;
   const main = mainContent(parsed);
   if (!main || main.text.length === 0) return false;

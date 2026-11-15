@@ -28,66 +28,66 @@ async function run(ctx: RuleContext): Promise<CheckResult> {
 describe("images/aspect-mismatch", () => {
   test("warns: attrs 4:5 into a CSS 4:3 px box", async () => {
     // 1200x1500 (0.80) forced into 1000x750 (1.33) → distortion.
-    const c = (await run(
+    const c = await run(
       makeCtx(`<img src="/p.jpg" width="1200" height="1500" style="width:1000px;height:750px">`),
-    ));
+    );
     expect(c.status).toBe("warn");
     expect(c.items?.[0]?.id).toBe("/p.jpg");
   });
 
   test("warns: CSS aspect-ratio conflicts with attrs", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(`<img src="/p.jpg" width="1200" height="1500" style="width:100%;aspect-ratio:4/3">`),
-    ));
+    );
     expect(c.status).toBe("warn");
   });
 
   test("passes: matching ratios (4:3 attrs, 4:3 css px)", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(`<img src="/p.jpg" width="1200" height="900" style="width:400px;height:300px">`),
-    ));
+    );
     expect(c.status).toBe("pass");
   });
 
   test("passes: object-fit cover compensates for the box mismatch", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(
         `<img src="/p.jpg" width="1200" height="1500" style="width:1000px;height:750px;object-fit:cover">`,
       ),
-    ));
+    );
     expect(c.status).toBe("pass");
   });
 
   test("passes: CSS width with height:auto preserves aspect (recommended pattern)", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(`<img src="/p.jpg" width="1200" height="1500" style="width:1000px;height:auto">`),
-    ));
+    );
     expect(c.status).toBe("pass");
   });
 
   test("passes: no inline style to compare against", async () => {
-    const c = (await run(makeCtx(`<img src="/p.jpg" width="1200" height="1500">`)));
+    const c = await run(makeCtx(`<img src="/p.jpg" width="1200" height="1500">`));
     expect(c.status).toBe("pass");
   });
 
   test("passes: percentage CSS dims are not comparable, skipped", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(`<img src="/p.jpg" width="1200" height="1500" style="width:50%;height:50%">`),
-    ));
+    );
     expect(c.status).toBe("pass");
   });
 
   test("passes: missing attr dimensions skipped", async () => {
-    const c = (await run(makeCtx(`<img src="/p.jpg" style="width:1000px;height:750px">`)));
+    const c = await run(makeCtx(`<img src="/p.jpg" style="width:1000px;height:750px">`));
     expect(c.status).toBe("pass");
   });
 
   test("passes: class-based object-cover (Tailwind) compensates", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(
         `<img src="/p.jpg" class="object-cover w-full" width="1200" height="800" style="aspect-ratio:1/1;width:100%">`,
       ),
-    ));
+    );
     expect(c.status).toBe("pass");
   });
 

@@ -43,7 +43,10 @@ const TWO_SECTIONS: CheckItem = {
   meta: { statusCode: 404, sections: { content: 1, footer: 1 }, linkedFrom: 1 },
 };
 
-function report(items: CheckItem[], message = `${items.length} broken internal link(s) (4xx/5xx)`): AuditReport {
+function report(
+  items: CheckItem[],
+  message = `${items.length} broken internal link(s) (4xx/5xx)`,
+): AuditReport {
   const rule: ReportRuleResult = {
     meta: {
       id: "links/broken-links",
@@ -169,7 +172,9 @@ describe("broken link sources: llm", () => {
   });
 
   test("a long list says how many pages it leaves out", () => {
-    const long = renderLlm(report([{ ...MANY, sourcePages: [...MANY.sourcePages!, `${SITE}/p6`] }]));
+    const long = renderLlm(
+      report([{ ...MANY, sourcePages: [...MANY.sourcePages!, `${SITE}/p6`] }]),
+    );
     expect(long).toContain("; +2 more pages)");
   });
 });
@@ -178,7 +183,9 @@ describe("broken link sources: json and xml carry the per-source data", () => {
   test("json", () => {
     const json = JSON.parse(renderJson(BOTH));
     const items = json.issues
-      ? json.issues.flatMap((r: { checks: { items?: CheckItem[] }[] }) => r.checks.flatMap((c) => c.items ?? []))
+      ? json.issues.flatMap((r: { checks: { items?: CheckItem[] }[] }) =>
+          r.checks.flatMap((c) => c.items ?? []),
+        )
       : [];
     const gone = items.find((i: CheckItem) => i.id === GONE) as CheckItem | undefined;
     expect(gone?.sources).toEqual(TWICE.sources);
@@ -194,7 +201,9 @@ describe("broken link sources: json and xml carry the per-source data", () => {
 });
 
 describe("an item from an older report, with repeated source pages and no per-source detail", () => {
-  const OLD = report([{ id: GONE, label: `${GONE} (404)`, sourcePages: [`${SITE}/a`, `${SITE}/a`, `${SITE}/b`] }]);
+  const OLD = report([
+    { id: GONE, label: `${GONE} (404)`, sourcePages: [`${SITE}/a`, `${SITE}/a`, `${SITE}/b`] },
+  ]);
 
   test("lists each page once, keeps the old summary", () => {
     const text = renderText(OLD);

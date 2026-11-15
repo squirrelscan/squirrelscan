@@ -58,12 +58,17 @@ export const brandImpersonationRule: Rule = {
       if (notes.controlsUnread || notes.templatesUnread || notes.hiddenCssTruncated) {
         const parts: string[] = [];
         if (notes.controlsUnread) {
-          parts.push(`${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full`);
+          parts.push(
+            `${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full`,
+          );
         }
         if (notes.templatesUnread) {
-          parts.push(`${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? " was" : "s were"} past the template limit and not read`);
+          parts.push(
+            `${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? " was" : "s were"} past the template limit and not read`,
+          );
         }
-        if (notes.hiddenCssTruncated) parts.push("a CSS rule too large to read may hide text in a sign-in label");
+        if (notes.hiddenCssTruncated)
+          parts.push("a CSS rule too large to read may hide text in a sign-in label");
         checks.push({
           name: "brand-impersonation",
           status: "info",
@@ -84,9 +89,7 @@ export const brandImpersonationRule: Rule = {
 
     const signals = detectPageSignals(ctx);
     const escalate = shouldEscalate(signals, "brand-impersonation");
-    const corroborating = [...signals].filter(
-      (s) => s !== "brand-impersonation"
-    );
+    const corroborating = [...signals].filter((s) => s !== "brand-impersonation");
 
     checks.push({
       name: "brand-impersonation",

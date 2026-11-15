@@ -14,7 +14,10 @@ import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage"
 import { agentBlockingRule } from "../src/ax/agent-blocking";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-function probe(userAgent: AgentAccessUserAgent, over: Partial<AgentAccessProbe> = {}): AgentAccessProbe {
+function probe(
+  userAgent: AgentAccessUserAgent,
+  over: Partial<AgentAccessProbe> = {},
+): AgentAccessProbe {
   return {
     userAgent,
     userAgentString: `${userAgent}-UA`,
@@ -33,7 +36,13 @@ function ctx(agentAccess: AgentAccessData | null): RuleContext {
   return {
     page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
-    site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, agentAccess },
+    site: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      agentAccess,
+    },
     options: {},
   };
 }
@@ -42,13 +51,16 @@ async function run(agentAccess: AgentAccessData | null): Promise<CheckResult[]> 
   return (await agentBlockingRule.run(ctx(agentAccess))).checks;
 }
 
-const both = (gpt: Partial<AgentAccessProbe>, claude: Partial<AgentAccessProbe>): AgentAccessData => ({
+const both = (
+  gpt: Partial<AgentAccessProbe>,
+  claude: Partial<AgentAccessProbe>,
+): AgentAccessData => ({
   probes: [probe("browser"), probe("gptbot", gpt), probe("claude-user", claude)],
 });
 
 describe("ax/agent-blocking", () => {
   test("skips cleanly when the prefetch did not run", async () => {
-    const checks = (await run(null));
+    const checks = await run(null);
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
@@ -56,20 +68,20 @@ describe("ax/agent-blocking", () => {
 
   // #409: a probe the budget skipped is not a network failure to report.
   test("a browser baseline that was never sent → skipped as not checked", async () => {
-    const checks = (await run({
+    const checks = await run({
       probes: [
         probe("browser", { status: 0, error: PROBE_NOT_ATTEMPTED_ERROR }),
         probe("gptbot"),
         probe("claude-user"),
       ],
-    }));
+    });
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.message).toContain("not checked");
   });
 
   test("an agent probe that was never sent → not checked info, no pass", async () => {
-    const checks = (await run(both({}, { status: 0, error: PROBE_NOT_ATTEMPTED_ERROR })));
+    const checks = await run(both({}, { status: 0, error: PROBE_NOT_ATTEMPTED_ERROR }));
     const claude = checks.find(
       (c) => c.name === "agent-access" && c.details?.userAgent === "claude-user",
     );
@@ -79,56 +91,60 @@ describe("ax/agent-blocking", () => {
   });
 
   test("skips when the browser baseline is not 2xx", async () => {
-    const checks = (await run({
+    const checks = await run({
       probes: [probe("browser", { status: 503 }), probe("gptbot"), probe("claude-user")],
-    }));
+    });
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.message).toContain("Browser baseline");
   });
 
   test("passes when both agents match the browser", async () => {
-    const checks = (await run(both({}, {})));
+    const checks = await run(both({}, {}));
     expect(checks.some((c) => c.status === "pass")).toBe(true);
     expect(checks.every((c) => c.status !== "warn" && c.status !== "fail")).toBe(true);
   });
 
   test("GPTBot 403 while browser 200 is a warn (training opt-out)", async () => {
-    const checks = (await run(both({ status: 403 }, {})));
+    const checks = await run(both({ status: 403 }, {}));
     const gpt = checks.find((c) => c.details?.userAgent === "gptbot");
     expect(gpt?.status).toBe("warn");
     expect(gpt?.message).toContain("GPTBot");
   });
 
   test("Claude-User blocked is the worst case → fail", async () => {
-    const checks = (await run(both({}, { status: 403 })));
+    const checks = await run(both({}, { status: 403 }));
     const claude = checks.find((c) => c.details?.userAgent === "claude-user");
     expect(claude?.status).toBe("fail");
     expect(claude?.message).toContain("worst case");
   });
 
   test("a Cloudflare challenge to Claude-User counts as blocked", async () => {
-    const checks = (await run(both({}, { status: 200, challenged: true, challengeSignal: "cf-mitigated" })));
+    const checks = await run(
+      both({}, { status: 200, challenged: true, challengeSignal: "cf-mitigated" }),
+    );
     const claude = checks.find((c) => c.details?.userAgent === "claude-user");
     expect(claude?.status).toBe("fail");
     expect(claude?.message).toContain("cf-mitigated");
   });
 
   test("a 402 is treated as pay-per-crawl (info), not a block", async () => {
-    const checks = (await run(both({ status: 402, paymentRequired: true, paymentSignal: "http-402" }, {})));
+    const checks = await run(
+      both({ status: 402, paymentRequired: true, paymentSignal: "http-402" }, {}),
+    );
     const pay = checks.find((c) => c.name === "agent-access-payment");
     expect(pay?.status).toBe("info");
     expect(checks.every((c) => c.status !== "warn" && c.status !== "fail")).toBe(true);
   });
 
   test("a same-status but tiny body warns (soft-block / interstitial)", async () => {
-    const checks = (await run(both({ status: 200, bodySize: 500 }, {})));
+    const checks = await run(both({ status: 200, bodySize: 500 }, {}));
     const gpt = checks.find((c) => c.details?.userAgent === "gptbot");
     expect(gpt?.status).toBe("warn");
     expect(gpt?.message).toContain("soft-block");
   });
 
   test("a network-error agent probe is inconclusive info, not a block", async () => {
-    const checks = (await run(both({ status: 0, error: "ECONNRESET" }, {})));
+    const checks = await run(both({ status: 0, error: "ECONNRESET" }, {}));
     const gpt = checks.find((c) => c.name === "agent-access" && c.details?.userAgent === "gptbot");
     expect(gpt?.status).toBe("info");
   });
@@ -142,7 +158,9 @@ describe("ax/agent-blocking UA probes and all-token mode (#3788)", () => {
     expect(gpt?.message).toContain("GPTBot UA probe is blocked (HTTP 403)");
     expect(claude?.message).toContain("Claude-User UA probe is blocked");
     const passed = (await run(both({}, {}))).find((c) => c.status === "pass");
-    expect(passed?.message).toBe("GPTBot and Claude-User UA probes reached the homepage like a browser");
+    expect(passed?.message).toBe(
+      "GPTBot and Claude-User UA probes reached the homepage like a browser",
+    );
   });
 
   test("per-bot checks carry status and X-Robots-Tag", async () => {
@@ -186,9 +204,30 @@ describe("ax/agent-blocking UA probes and all-token mode (#3788)", () => {
     );
     expect(summary[0]?.details?.browserXRobotsTag).toBe("all");
     expect(summary[0]?.details?.probes).toEqual([
-      { userAgent: "gptbot", token: "GPTBot", userAgentString: "gptbot-UA", status: 200, xRobotsTag: "noai", verdict: "ok" },
-      { userAgent: "ccbot", token: "CCBot", userAgentString: "ccbot-UA", status: 403, xRobotsTag: null, verdict: "blocked" },
-      { userAgent: "claude-user", token: "Claude-User", userAgentString: "claude-user-UA", status: 200, xRobotsTag: null, verdict: "ok" },
+      {
+        userAgent: "gptbot",
+        token: "GPTBot",
+        userAgentString: "gptbot-UA",
+        status: 200,
+        xRobotsTag: "noai",
+        verdict: "ok",
+      },
+      {
+        userAgent: "ccbot",
+        token: "CCBot",
+        userAgentString: "ccbot-UA",
+        status: 403,
+        xRobotsTag: null,
+        verdict: "blocked",
+      },
+      {
+        userAgent: "claude-user",
+        token: "Claude-User",
+        userAgentString: "claude-user-UA",
+        status: 200,
+        xRobotsTag: null,
+        verdict: "ok",
+      },
     ]);
   });
 

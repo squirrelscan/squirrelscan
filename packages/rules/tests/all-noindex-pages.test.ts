@@ -44,18 +44,20 @@ describe("crawl/all-noindex-pages options", () => {
 
   test("a non-array pattern is rejected by the schema", () => {
     expect(() => allNoindexPages.meta.optionsSchema?.parse({ warnOnPatterns: "/blog/" })).toThrow();
-    expect(() => allNoindexPages.meta.optionsSchema?.parse({ errorOnPatterns: "/blog/" })).toThrow();
+    expect(() =>
+      allNoindexPages.meta.optionsSchema?.parse({ errorOnPatterns: "/blog/" }),
+    ).toThrow();
   });
 
   test("errorOnPatterns still escalates a noindexed page to critical", async () => {
-    const checks = (await run(["/blog/post/"], { errorOnPatterns: ["/blog/"] }));
+    const checks = await run(["/blog/post/"], { errorOnPatterns: ["/blog/"] });
     expect(checks).toHaveLength(1);
     expect(checks[0]?.name).toBe("critical-noindex");
     expect(checks[0]?.status).toBe("fail");
   });
 
   test("warnOnPatterns still escalates a noindexed page to important", async () => {
-    const checks = (await run(["/products/shirt/"], { warnOnPatterns: ["/products/"] }));
+    const checks = await run(["/products/shirt/"], { warnOnPatterns: ["/products/"] });
     expect(checks).toHaveLength(1);
     expect(checks[0]?.name).toBe("important-noindex");
     expect(checks[0]?.status).toBe("warn");

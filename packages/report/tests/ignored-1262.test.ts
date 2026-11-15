@@ -32,15 +32,27 @@ describe("summarizeIgnored", () => {
   test("adds up what the engine recorded per rule and per entry, and keeps entries that matched nothing", () => {
     const summary = summarizeIgnored(
       [
-        ["security/cookie-flags", [...checks({ items: 2, entries: [0] }), ...checks({ items: 3, entries: [0] })]],
+        [
+          "security/cookie-flags",
+          [...checks({ items: 2, entries: [0] }), ...checks({ items: 3, entries: [0] })],
+        ],
         ["core/meta-title", checks({ pages: 1, entries: [1] })],
         ["seo/other", [{ name: "x", status: "warn", message: "m" }]],
       ],
-      { entries: [{ rule: "security/cookie-flags", reason: "Shopify" }, { rule: "core/*" }, { rule: "never/matches" }] },
+      {
+        entries: [
+          { rule: "security/cookie-flags", reason: "Shopify" },
+          { rule: "core/*" },
+          { rule: "never/matches" },
+        ],
+      },
     )!;
     expect(summary.items).toBe(5);
     expect(summary.pages).toBe(1);
-    expect(summary.byRule).toEqual({ "security/cookie-flags": { items: 5, pages: 0 }, "core/meta-title": { items: 0, pages: 1 } });
+    expect(summary.byRule).toEqual({
+      "security/cookie-flags": { items: 5, pages: 0 },
+      "core/meta-title": { items: 0, pages: 1 },
+    });
     expect(summary.entries).toEqual([
       { index: 0, rule: "security/cookie-flags", reason: "Shopify", items: 5, pages: 0 },
       { index: 1, rule: "core/*", items: 0, pages: 1 },
@@ -74,7 +86,10 @@ const report = (ignored: unknown): AuditReport =>
 const WAIVED = {
   items: 3,
   pages: 1,
-  byRule: { "security/cookie-flags": { items: 3, pages: 0 }, "core/meta-title": { items: 0, pages: 1 } },
+  byRule: {
+    "security/cookie-flags": { items: 3, pages: 0 },
+    "core/meta-title": { items: 0, pages: 1 },
+  },
   entries: [
     { index: 0, rule: "security/cookie-flags", reason: "Shopify sets these", items: 3, pages: 0 },
     { index: 1, rule: "never/matches", items: 0, pages: 0 },
@@ -88,12 +103,16 @@ describe("the lines", () => {
       "Ignored by squirrel.toml: 3 findings and 1 page on 2 rules (1 of 2 entries matched). Run with --no-ignore to see them.",
     );
     expect(unusedIgnoreEntries(r)).toHaveLength(1);
-    expect(ignoredEntryLines(r)[0]).toBe("Ignore entry 1 (security/cookie-flags), Shopify sets these: 3 findings");
+    expect(ignoredEntryLines(r)[0]).toBe(
+      "Ignore entry 1 (security/cookie-flags), Shopify sets these: 3 findings",
+    );
     expect(ignoredEntryLines(r)[1]).toBe("Ignore entry 2 (never/matches): matched nothing");
   });
 
   test("warn that carried findings may still include waived items when the list changed", () => {
-    expect(ignoredLine(report({ ...WAIVED, carriedStale: true }))).toContain("carried from pages this run did not crawl");
+    expect(ignoredLine(report({ ...WAIVED, carriedStale: true }))).toContain(
+      "carried from pages this run did not crawl",
+    );
   });
 
   test("a report with no summary has no line", () => {
@@ -127,7 +146,9 @@ describe("every renderer carries it", () => {
 
   // #1262: the HTML report lists an entry that matched nothing, and every report shows an entry's reason.
   test("the HTML report lists the entry that matched nothing", () => {
-    expect(renderHtml(r, { reportId: "rep_1" })).toContain("Ignore entry 2 (never/matches) matched nothing.");
+    expect(renderHtml(r, { reportId: "rep_1" })).toContain(
+      "Ignore entry 2 (never/matches) matched nothing.",
+    );
   });
 
   test("text, markdown and HTML show an entry's reason and what it waived", () => {
@@ -163,7 +184,9 @@ describe("every renderer carries it", () => {
     expect(meta.ignored?.items).toBe(3);
     expect(meta.ignored?.entries[0]?.reason).toBe("Shopify sets these");
     const llm = renderLlm(r);
-    expect(llm).toContain('<entry index="1" rule="security/cookie-flags" items="3" pages="0" reason="Shopify sets these"/>');
+    expect(llm).toContain(
+      '<entry index="1" rule="security/cookie-flags" items="3" pages="0" reason="Shopify sets these"/>',
+    );
     expect(XMLValidator.validate(llm)).toBe(true);
     expect(XMLValidator.validate(renderXml(r))).toBe(true);
   });
@@ -175,7 +198,15 @@ describe("a stored report is untrusted", () => {
     pages: -4,
     disabled: "yes",
     byRule: { [`bad${ESC}[2J<rule>`]: { items: Number.NaN, pages: 2 } },
-    entries: [{ index: "x", rule: `r/x${ESC}[2J"><script>`, reason: `why${ESC}[31m<b>`, items: 1e400, pages: 1 }],
+    entries: [
+      {
+        index: "x",
+        rule: `r/x${ESC}[2J"><script>`,
+        reason: `why${ESC}[31m<b>`,
+        items: 1e400,
+        pages: 1,
+      },
+    ],
   };
 
   test("fields are validated, strings stripped of control characters, counts made safe", () => {
@@ -206,19 +237,27 @@ describe("a stored report is untrusted", () => {
 
 describe("entries that ran over their work budget (review of #1333)", () => {
   test("the summary carries them, validated, and the line says findings were shown", () => {
-    const summary = summarizeIgnored([], { entries: [{ rule: "a/b" }, { rule: "c/d" }], timedOut: [1, 7, -1, 1.5] });
+    const summary = summarizeIgnored([], {
+      entries: [{ rule: "a/b" }, { rule: "c/d" }],
+      timedOut: [1, 7, -1, 1.5],
+    });
     expect(summary?.timedOutEntries).toEqual([1]);
     const line = ignoredLine({ ignored: summary });
     expect(line).toContain("1 entry (2) timed out");
     expect(line).toContain("stopped matching");
     // a stored report is untrusted: junk is dropped
-    expect(safeIgnored({ ignored: { ...summary!, timedOutEntries: ["x", 1, 99999] } as never })?.timedOutEntries).toEqual([1]);
+    expect(
+      safeIgnored({ ignored: { ...summary!, timedOutEntries: ["x", 1, 99999] } as never })
+        ?.timedOutEntries,
+    ).toEqual([1]);
   });
 });
 
 describe("the stored summary of an ignore list (review of #1333)", () => {
   test("carriedStale from the stored scope reaches a rebuilt report's summary", () => {
-    expect(summarizeIgnored([], { entries: [{ rule: "a/b" }], carriedStale: true })?.carriedStale).toBe(true);
+    expect(
+      summarizeIgnored([], { entries: [{ rule: "a/b" }], carriedStale: true })?.carriedStale,
+    ).toBe(true);
     expect(summarizeIgnored([], { entries: [{ rule: "a/b" }] })?.carriedStale).toBeUndefined();
   });
 

@@ -29,11 +29,19 @@ const pair = (word: string, us: string, uk: string, oxford = false): SpellingPai
 });
 
 const SPELLING_PAIRS: SpellingPair[] = [
-  pair("color/colour", "colors?|colored|colorful|coloring", "colours?|coloured|colourful|colouring"),
+  pair(
+    "color/colour",
+    "colors?|colored|colorful|coloring",
+    "colours?|coloured|colourful|colouring",
+  ),
   pair("center/centre", "centers?|centered", "centres?|centred"),
   pair("behavior/behaviour", "behaviors?|behavioral", "behaviours?|behavioural"),
   pair("favorite/favourite", "favorites?", "favourites?"),
-  pair("license/licence", "(?:a|an|the|this|our|your|its|driver's|software|open-source)\\s+license", "licences?|licenced"),
+  pair(
+    "license/licence",
+    "(?:a|an|the|this|our|your|its|driver's|software|open-source)\\s+license",
+    "licences?|licenced",
+  ),
   pair(
     "organize/organise",
     "organize[sd]?|organizing|organization",
@@ -41,7 +49,12 @@ const SPELLING_PAIRS: SpellingPair[] = [
     true,
   ),
   pair("analyze/analyse", "analyze[sd]?|analyzing", "analyse[sd]?|analysing", true),
-  pair("optimize/optimise", "optimize[sd]?|optimizing|optimization", "optimise[sd]?|optimising|optimisation", true),
+  pair(
+    "optimize/optimise",
+    "optimize[sd]?|optimizing|optimization",
+    "optimise[sd]?|optimising|optimisation",
+    true,
+  ),
 ];
 
 const UK_REGIONS = new Set(["gb", "au", "nz", "ie", "in", "za"]);

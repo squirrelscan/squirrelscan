@@ -165,7 +165,9 @@ export function createStructureBuilder(): StructureBuilder {
           pages: sectionPages.get(section) ?? 0,
           links: sectionLinks.get(section) ?? 0,
         }))
-        .sort((a, b) => b.links - a.links || SECTIONS.indexOf(a.section) - SECTIONS.indexOf(b.section));
+        .sort(
+          (a, b) => b.links - a.links || SECTIONS.indexOf(a.section) - SECTIONS.indexOf(b.section),
+        );
       let totalLinks = unknownLinks;
       for (const row of sections) totalLinks += row.links;
       const counts: ReportStructurePageType[] = [...labelPages]
@@ -180,7 +182,8 @@ export function createStructureBuilder(): StructureBuilder {
         chrome: {
           links: chromeLinks,
           contentLinks,
-          share: placedInternal > 0 ? Math.round((chromeLinks / placedInternal) * 1000) / 1000 : null,
+          share:
+            placedInternal > 0 ? Math.round((chromeLinks / placedInternal) * 1000) / 1000 : null,
         },
         pageTypes: { counts, notClassified, byModel, degraded },
       };

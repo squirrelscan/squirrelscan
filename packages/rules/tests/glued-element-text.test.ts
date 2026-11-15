@@ -55,8 +55,8 @@ const PAIRS: [string, string[]][] = [
 describe("schema/rating-scope: glued and spaced markup get the same verdict", () => {
   for (const [name, parts] of PAIRS) {
     test(name, async () => {
-      const glued = (await visibility(parts.join("")));
-      const spaced = (await visibility(parts.join(" ")));
+      const glued = await visibility(parts.join(""));
+      const spaced = await visibility(parts.join(" "));
       expect(spaced?.status).toBe("pass");
       expect(glued?.status).toBe(spaced?.status);
       expect(glued?.message).toBe(spaced?.message);

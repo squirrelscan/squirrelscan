@@ -77,7 +77,10 @@ function serveSite(): { origin: string; seen: Seen[] } {
         case "/old-settings":
           return new Response(null, { status: 302, headers: { location: "/logout" } });
       }
-      return new Response(html("Not found"), { status: 404, headers: { "content-type": "text/html" } });
+      return new Response(html("Not found"), {
+        status: 404,
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   servers.push(server);
@@ -114,7 +117,9 @@ async function auditQuick() {
     external_links: { enabled: false, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
     internal_links: { enabled: true },
   } as unknown as Config;
-  const preRules = await Effect.runPromise(runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}));
+  const preRules = await Effect.runPromise(
+    runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}),
+  );
   return { ...site, crawlEnd, assets: preRules.assets };
 }
 
@@ -124,7 +129,10 @@ describe("the internal link probe never changes state (repo#2729)", () => {
     const probes = seen.slice(crawlEnd);
 
     for (const path of ACTION_PATHS) {
-      expect(seen.filter((r) => r.path === path), path).toEqual([]);
+      expect(
+        seen.filter((r) => r.path === path),
+        path,
+      ).toEqual([]);
     }
 
     const missing = probes.filter((r) => r.path === "/missing-page");
@@ -136,9 +144,7 @@ describe("the internal link probe never changes state (repo#2729)", () => {
     }
 
     // The redirecting link was asked once (HEAD) and reported as its 302.
-    expect(probes.filter((r) => r.path === "/old-settings").map((r) => r.method)).toEqual([
-      "HEAD",
-    ]);
+    expect(probes.filter((r) => r.path === "/old-settings").map((r) => r.method)).toEqual(["HEAD"]);
     const byPath = new Map(
       (assets.linkTargetStatuses ?? []).map((s) => [new URL(s.url).pathname, s.status]),
     );
@@ -174,7 +180,12 @@ describe("probeLinkTargets", () => {
     });
     const { results } = await Effect.runPromise(
       probeLinkTargets(
-        ["https://example.com/a", "https://example.com/b", "https://example.com/c", "https://example.com/d"],
+        [
+          "https://example.com/a",
+          "https://example.com/b",
+          "https://example.com/c",
+          "https://example.com/d",
+        ],
         { ...base, send: site.send },
       ),
     );
@@ -193,7 +204,9 @@ describe("probeLinkTargets", () => {
 
   test("sends only User-Agent and Accept, never credentials", async () => {
     const site = fakeSite({ "/a": () => new Response(null, { status: 200 }) });
-    await Effect.runPromise(probeLinkTargets(["https://example.com/a"], { ...base, send: site.send }));
+    await Effect.runPromise(
+      probeLinkTargets(["https://example.com/a"], { ...base, send: site.send }),
+    );
     const [call] = site.calls;
     expect([...new Headers(call!.init.headers).keys()].sort()).toEqual(["accept", "user-agent"]);
     expect(call!.init.credentials).toBe("omit");
@@ -203,7 +216,8 @@ describe("probeLinkTargets", () => {
   test("follows a redirect only while every hop may be requested", async () => {
     const site = fakeSite({
       "/moved": () => new Response(null, { status: 301, headers: { location: "/gone" } }),
-      "/out": () => new Response(null, { status: 302, headers: { location: "https://other.example/x" } }),
+      "/out": () =>
+        new Response(null, { status: 302, headers: { location: "https://other.example/x" } }),
       "/to-action": () => new Response(null, { status: 302, headers: { location: "/logout" } }),
     });
     const { results } = await Effect.runPromise(

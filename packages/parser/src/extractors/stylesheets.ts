@@ -16,10 +16,7 @@ function isStylesheetLink(rel: string, asValue: string | null): boolean {
   return false;
 }
 
-export function extractStylesheets(
-  doc: Document,
-  baseUrl: string
-): StylesheetRef[] {
+export function extractStylesheets(doc: Document, baseUrl: string): StylesheetRef[] {
   const results: StylesheetRef[] = [];
   // A <noscript> fallback stylesheet never loads with scripting on (#434).
   const links = querySelectorAllOutsideNoscript(doc, "link[href]");

@@ -57,19 +57,40 @@ describe("checkPageTypeScope", () => {
 
   test("scoped at the share of the pages of the type, not below", () => {
     const s = structure([["docs", 10]]);
-    expect(checkPageTypeScope(typed("docs"), 8, s)).toEqual({ pageType: "docs", pages: 8, typePages: 10 });
+    expect(checkPageTypeScope(typed("docs"), 8, s)).toEqual({
+      pageType: "docs",
+      pages: 8,
+      typePages: 10,
+    });
     expect(checkPageTypeScope(typed("docs"), 7, s)).toBeUndefined();
-    expect(checkPageTypeScope(typed("docs"), 10, s)).toEqual({ pageType: "docs", pages: 10, typePages: 10 });
+    expect(checkPageTypeScope(typed("docs"), 10, s)).toEqual({
+      pageType: "docs",
+      pages: 10,
+      typePages: 10,
+    });
   });
 
   test("the denominator is the pages of the type, not every audited page", () => {
     // 9 of the 9 documentation pages, though only 9 of the 60 pages the audit saw.
-    const s = structure([["docs", 9], ["article", 40]], { notClassified: 11 });
-    expect(checkPageTypeScope(typed("docs"), 9, s)).toEqual({ pageType: "docs", pages: 9, typePages: 9 });
+    const s = structure(
+      [
+        ["docs", 9],
+        ["article", 40],
+      ],
+      { notClassified: 11 },
+    );
+    expect(checkPageTypeScope(typed("docs"), 9, s)).toEqual({
+      pageType: "docs",
+      pages: 9,
+      typePages: 9,
+    });
   });
 
   test("two pages are the least that is scoped", () => {
-    const s = structure([["contact", 2], ["docs", 1]]);
+    const s = structure([
+      ["contact", 2],
+      ["docs", 1],
+    ]);
     expect(checkPageTypeScope(typed("contact"), 2, s)).toMatchObject({ pages: 2, typePages: 2 });
     expect(checkPageTypeScope(typed("docs"), 1, s)).toBeUndefined();
     expect(checkPageTypeScope(typed("docs"), 0, s)).toBeUndefined();
@@ -82,8 +103,12 @@ describe("checkPageTypeScope", () => {
   test("no structure, no count for the type, or a type only counted as not classified", () => {
     expect(checkPageTypeScope(typed("docs"), 9, undefined)).toBeUndefined();
     expect(checkPageTypeScope(typed("docs"), 9, structure([["article", 9]]))).toBeUndefined();
-    expect(checkPageTypeScope(typed("docs"), 9, structure([], { notClassified: 9 }))).toBeUndefined();
-    expect(checkPageTypeScope(typed("docs"), 9, { pageTypes: undefined } as unknown as ReportStructure)).toBeUndefined();
+    expect(
+      checkPageTypeScope(typed("docs"), 9, structure([], { notClassified: 9 })),
+    ).toBeUndefined();
+    expect(
+      checkPageTypeScope(typed("docs"), 9, { pageTypes: undefined } as unknown as ReportStructure),
+    ).toBeUndefined();
   });
 
   test("a check that does not name a classifier page type is never scoped", () => {
@@ -91,8 +116,12 @@ describe("checkPageTypeScope", () => {
     expect(checkPageTypeScope({}, 9, s)).toBeUndefined();
     expect(checkPageTypeScope({ details: { pageType: "docs" } }, 9, s)).toBeUndefined();
     // Another rule's `pageType` is a schema and URL based guess in a different label space.
-    expect(checkPageTypeScope({ details: { pageType: "docs", pageTypeSource: "schema" } }, 9, s)).toBeUndefined();
-    expect(checkPageTypeScope({ details: { pageType: 7, pageTypeSource: "model" } }, 9, s)).toBeUndefined();
+    expect(
+      checkPageTypeScope({ details: { pageType: "docs", pageTypeSource: "schema" } }, 9, s),
+    ).toBeUndefined();
+    expect(
+      checkPageTypeScope({ details: { pageType: 7, pageTypeSource: "model" } }, 9, s),
+    ).toBeUndefined();
   });
 
   test("a label that is not plain lowercase words never reaches an output", () => {
@@ -104,8 +133,12 @@ describe("checkPageTypeScope", () => {
 
 describe("pageTypeScopeLine", () => {
   test("all, and some", () => {
-    expect(pageTypeScopeLine({ pageType: "docs", pages: 9, typePages: 9 })).toBe("On all 9 documentation pages");
-    expect(pageTypeScopeLine({ pageType: "docs", pages: 9, typePages: 11 })).toBe("On 9 of 11 documentation pages");
+    expect(pageTypeScopeLine({ pageType: "docs", pages: 9, typePages: 9 })).toBe(
+      "On all 9 documentation pages",
+    );
+    expect(pageTypeScopeLine({ pageType: "docs", pages: 9, typePages: 11 })).toBe(
+      "On 9 of 11 documentation pages",
+    );
   });
 
   test.each([
@@ -118,12 +151,18 @@ describe("pageTypeScopeLine", () => {
     ["about", "about pages"],
     ["listing_index", "listing pages"],
   ])("%s reads as %s", (label, plural) => {
-    expect(pageTypeScopeLine({ pageType: label, pages: 4, typePages: 4 })).toBe(`On all 4 ${plural}`);
-    expect(pageTypeScopeLine({ pageType: label, pages: 4, typePages: 5 })).toBe(`On 4 of 5 ${plural}`);
+    expect(pageTypeScopeLine({ pageType: label, pages: 4, typePages: 4 })).toBe(
+      `On all 4 ${plural}`,
+    );
+    expect(pageTypeScopeLine({ pageType: label, pages: 4, typePages: 5 })).toBe(
+      `On 4 of 5 ${plural}`,
+    );
   });
 
   test("a label this version has no wording for reads as its own words", () => {
-    expect(pageTypeScopeLine({ pageType: "event_page", pages: 3, typePages: 3 })).toBe("On all 3 event page pages");
+    expect(pageTypeScopeLine({ pageType: "event_page", pages: 3, typePages: 3 })).toBe(
+      "On all 3 event page pages",
+    );
   });
 
   test("large counts are grouped", () => {
@@ -135,7 +174,8 @@ describe("pageTypeScopeLine", () => {
 
 const MESSAGE_DOCS =
   "Reads as a documentation page but declares no Article, TechArticle, HowTo or FAQPage structured data";
-const MESSAGE_CONTACT = "Reads as a contact page but declares no ContactPage or Organization structured data";
+const MESSAGE_CONTACT =
+  "Reads as a contact page but declares no ContactPage or Organization structured data";
 
 const META: ReportRuleResult["meta"] = {
   id: "schema/expected-type",
@@ -162,7 +202,12 @@ function expectedTypeReport(
       status: "fail",
       message: MESSAGE_DOCS,
       pageUrl: docsPage(k),
-      details: { pageType: "docs", pageTypeSource: "model", confidence: 0.93 + (k % 5) / 100, expected: "Article" },
+      details: {
+        pageType: "docs",
+        pageTypeSource: "model",
+        confidence: 0.93 + (k % 5) / 100,
+        expected: "Article",
+      },
     });
   }
   for (let k = 0; k < 2; k++) {
@@ -171,7 +216,12 @@ function expectedTypeReport(
       status: "fail",
       message: MESSAGE_CONTACT,
       pageUrl: contactPage(k),
-      details: { pageType: "contact", pageTypeSource: "model", confidence: 0.99, expected: "ContactPage or Organization" },
+      details: {
+        pageType: "contact",
+        pageTypeSource: "model",
+        confidence: 0.99,
+        expected: "ContactPage or Organization",
+      },
     });
   }
   return {
@@ -186,7 +236,14 @@ function expectedTypeReport(
   };
 }
 
-const SCOPED = structure([["docs", 9], ["contact", 2], ["article", 22]], { notClassified: 21 });
+const SCOPED = structure(
+  [
+    ["docs", 9],
+    ["contact", 2],
+    ["article", 22],
+  ],
+  { notClassified: 21 },
+);
 const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
 
 describe("a scoped check in each format", () => {
@@ -218,7 +275,14 @@ describe("a scoped check in each format", () => {
 
   test("llm: a scoped check keeps its line when another check of the rule is not scoped, and only the open pages are listed", () => {
     // Documentation at 9 of 9 is scoped; contact at 2 of 5 is below the share and keeps its pages.
-    const llm = renderLlm(expectedTypeReport(structure([["docs", 9], ["contact", 5]])));
+    const llm = renderLlm(
+      expectedTypeReport(
+        structure([
+          ["docs", 9],
+          ["contact", 5],
+        ]),
+      ),
+    );
     expect(llm).toContain("On all 9 documentation pages");
     expect(llm).not.toContain("/docs/page-");
     expect(llm).not.toContain("On all 2 contact pages");
@@ -234,7 +298,11 @@ describe("a scoped check in each format", () => {
 
   test("json and xml keep the bounded page list and add the scope", () => {
     const json = JSON.parse(renderJson(expectedTypeReport(SCOPED)));
-    const checks = json.issues[0].checks as Array<{ message: string; scope?: unknown; affectedPages: string[] }>;
+    const checks = json.issues[0].checks as Array<{
+      message: string;
+      scope?: unknown;
+      affectedPages: string[];
+    }>;
     const docs = checks.find((c) => c.message === MESSAGE_DOCS)!;
     expect(docs.scope).toEqual({ pageType: "docs", pages: 9, typePages: 9 });
     expect(docs.affectedPages).toHaveLength(9);
@@ -248,20 +316,42 @@ describe("a scoped check in each format", () => {
   });
 
   test("nine of eleven documentation pages", () => {
-    const s = structure([["docs", 11], ["contact", 2]]);
+    const s = structure([
+      ["docs", 11],
+      ["contact", 2],
+    ]);
     const text = renderText(expectedTypeReport(s));
     expect(text).toContain("On 9 of 11 documentation pages");
     expect(text).toContain("On all 2 contact pages");
-    const checks = JSON.parse(renderJson(expectedTypeReport(s))).issues[0].checks as Array<{ message: string; scope?: unknown }>;
-    expect(checks.find((c) => c.message === MESSAGE_DOCS)?.scope).toEqual({ pageType: "docs", pages: 9, typePages: 11 });
+    const checks = JSON.parse(renderJson(expectedTypeReport(s))).issues[0].checks as Array<{
+      message: string;
+      scope?: unknown;
+    }>;
+    expect(checks.find((c) => c.message === MESSAGE_DOCS)?.scope).toEqual({
+      pageType: "docs",
+      pages: 9,
+      typePages: 11,
+    });
   });
 });
 
 describe("a check that is not scoped keeps its page rows", () => {
   const unscoped: Array<[string, ReportStructure | undefined]> = [
     ["no structure data", undefined],
-    ["below the share (9 of 20)", structure([["docs", 20], ["contact", 2]])],
-    ["more pages than the report counts", structure([["docs", 8], ["contact", 2]])],
+    [
+      "below the share (9 of 20)",
+      structure([
+        ["docs", 20],
+        ["contact", 2],
+      ]),
+    ],
+    [
+      "more pages than the report counts",
+      structure([
+        ["docs", 8],
+        ["contact", 2],
+      ]),
+    ],
     ["the type not counted", structure([["article", 40]], { notClassified: 14 })],
   ];
   for (const [name, s] of unscoped) {
@@ -272,14 +362,20 @@ describe("a check that is not scoped keeps its page rows", () => {
       expect(text).toContain("-> /docs/page-00");
       expect(renderMarkdown(report)).toContain("/docs/page-00");
       expect(renderLlm(report)).toContain("/docs/page-00");
-      const checks = JSON.parse(renderJson(report)).issues[0].checks as Array<{ message: string; scope?: unknown }>;
+      const checks = JSON.parse(renderJson(report)).issues[0].checks as Array<{
+        message: string;
+        scope?: unknown;
+      }>;
       expect(checks.find((c) => c.message === MESSAGE_DOCS)?.scope).toBeUndefined();
       expect(renderXml(report)).not.toContain('page-type="docs"');
     });
   }
 
   test("one scoped type does not scope the other: below the share, the contact rows stay", () => {
-    const s = structure([["docs", 9], ["contact", 5]]);
+    const s = structure([
+      ["docs", 9],
+      ["contact", 5],
+    ]);
     const text = renderText(expectedTypeReport(s));
     expect(text).toContain("On all 9 documentation pages");
     expect(text).toContain("-> /contact-0");
@@ -287,7 +383,13 @@ describe("a check that is not scoped keeps its page rows", () => {
   });
 
   test("a single page of a type is a row, not a scope", () => {
-    const report = expectedTypeReport(structure([["docs", 1], ["contact", 2]]), 1);
+    const report = expectedTypeReport(
+      structure([
+        ["docs", 1],
+        ["contact", 2],
+      ]),
+      1,
+    );
     const text = renderText(report);
     expect(text).toContain("-> /docs/page-00");
     expect(text).toContain("On all 2 contact pages");
@@ -296,17 +398,30 @@ describe("a check that is not scoped keeps its page rows", () => {
   test("a check with carried pages is not scoped: its pages are not all in this audit's counts", () => {
     const s = structure([["docs", 9]]);
     // Nine pages, so the numbers would read "all 9": four failed now, five are carried.
-    expect(checkPageTypeScope({ ...typed("docs"), carriedPages: [docsPage(0)] }, 9, s)).toBeUndefined();
+    expect(
+      checkPageTypeScope({ ...typed("docs"), carriedPages: [docsPage(0)] }, 9, s),
+    ).toBeUndefined();
     expect(checkPageTypeScope({ ...typed("docs"), carriedCount: 5 }, 9, s)).toBeUndefined();
     expect(checkPageTypeScope({ ...typed("docs"), provenance: "carried" }, 9, s)).toBeUndefined();
-    expect(checkPageTypeScope({ ...typed("docs"), carriedPages: [] }, 9, s)).toMatchObject({ pages: 9, typePages: 9 });
-    expect(checkPageTypeScope({ ...typed("docs"), carriedPages: [docsPage(0)] }, 9, structure([["docs", 40]]))).toBeUndefined();
+    expect(checkPageTypeScope({ ...typed("docs"), carriedPages: [] }, 9, s)).toMatchObject({
+      pages: 9,
+      typePages: 9,
+    });
+    expect(
+      checkPageTypeScope(
+        { ...typed("docs"), carriedPages: [docsPage(0)] },
+        9,
+        structure([["docs", 40]]),
+      ),
+    ).toBeUndefined();
   });
 
   test("a carried finding keeps its page rows in a rendered report", () => {
     const report = expectedTypeReport(SCOPED);
     const rule = report.ruleResults["schema/expected-type"]!;
-    rule.checks = rule.checks.map((c, k) => (k < 5 ? { ...c, provenance: "carried" as const, lastSeenAt: 1 } : c));
+    rule.checks = rule.checks.map((c, k) =>
+      k < 5 ? { ...c, provenance: "carried" as const, lastSeenAt: 1 } : c,
+    );
     const text = renderText(report);
     expect(text).not.toMatch(/On (all )?\d+( of \d+)? documentation pages/);
     expect(text).toContain("-> /docs/page-00");

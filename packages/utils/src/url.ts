@@ -317,7 +317,8 @@ export function parseUserUrl(input: string): UrlParseResult {
     }
 
     const local =
-      isLocalhost(parsed.hostname) || isNonPublicHostnameForPolicy(normalizeIpHostname(parsed.hostname));
+      isLocalhost(parsed.hostname) ||
+      isNonPublicHostnameForPolicy(normalizeIpHostname(parsed.hostname));
 
     // Only normalize scheme when user didn't provide one
     if (!hasScheme) {

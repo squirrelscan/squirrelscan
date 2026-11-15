@@ -93,12 +93,16 @@ async function auditWall(engine: Engine, status: number, headers: Record<string,
   ) as Promise<ReportShape>;
 }
 
-const findings = (checks: CheckResult[]) => checks.filter((c) => c.status === "fail" || c.status === "warn");
+const findings = (checks: CheckResult[]) =>
+  checks.filter((c) => c.status === "fail" || c.status === "warn");
 
 for (const engine of ["v1", "v2"] as const) {
   describe(`a site that refuses every fetch (${engine} report)`, () => {
     test("the audit is blocked with no pages, and says which fetches were refused and by whom", async () => {
-      const report = await auditWall(engine, 403, { server: "cloudflare", "cf-mitigated": "challenge" });
+      const report = await auditWall(engine, 403, {
+        server: "cloudflare",
+        "cf-mitigated": "challenge",
+      });
 
       expect(report.status).toBe("blocked");
       expect(report.totalPages).toBe(0);
@@ -114,7 +118,10 @@ for (const engine of ["v1", "v2"] as const) {
     });
 
     test("no rule reports an absence it could not have observed", async () => {
-      const report = await auditWall(engine, 403, { server: "cloudflare", "cf-mitigated": "challenge" });
+      const report = await auditWall(engine, 403, {
+        server: "cloudflare",
+        "cf-mitigated": "challenge",
+      });
 
       const reported = Object.entries(report.ruleResults).flatMap(([id, r]) =>
         findings(r.checks).map((c) => `${id}: ${c.message}`),
@@ -123,7 +130,10 @@ for (const engine of ["v1", "v2"] as const) {
     });
 
     test("no category or group is scored off findings it could not have observed", async () => {
-      const report = await auditWall(engine, 403, { server: "cloudflare", "cf-mitigated": "challenge" });
+      const report = await auditWall(engine, 403, {
+        server: "cloudflare",
+        "cf-mitigated": "challenge",
+      });
 
       expect(report.healthScore?.overall).toBeNull();
       expect(report.healthScore?.categories).toEqual([]);

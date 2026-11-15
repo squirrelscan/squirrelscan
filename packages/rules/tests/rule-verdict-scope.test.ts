@@ -99,7 +99,7 @@ describe("declared template rules vs the measurement on two real crawls", () => 
 
   test.each(
     pageRules.filter((r) => mayFanOutAcrossTemplate(r.meta)).map((r) => [r.meta.id] as const),
-  )('%s is constant on both measured corpora', (ruleId) => {
+  )("%s is constant on both measured corpora", (ruleId) => {
     for (const [name, ids] of constantIn) {
       if (!ids.has(ruleId)) {
         throw new Error(

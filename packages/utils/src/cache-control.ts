@@ -93,7 +93,7 @@ export function cacheControlLifetimeSeconds(cc: CacheControl): number | undefine
  */
 export function expiresLifetimeSeconds(
   expires: string | null,
-  fetchedAt: number
+  fetchedAt: number,
 ): number | undefined {
   if (!expires) return undefined;
   const expiresMs = new Date(expires).getTime();

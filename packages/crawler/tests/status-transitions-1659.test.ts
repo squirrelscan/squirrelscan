@@ -15,11 +15,26 @@ import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
 import { SQLiteStorage } from "../src/storage/sqlite";
-import type { CrawlMetadata, CrawlStatus, FrontierRecord, FrontierStatus } from "../src/storage/types";
+import type {
+  CrawlMetadata,
+  CrawlStatus,
+  FrontierRecord,
+  FrontierStatus,
+} from "../src/storage/types";
 
 const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> =>
   Effect.runPromise(eff as Effect.Effect<A, never, never>);
-const STATS = { pagesTotal: 0, pagesFetched: 0, pagesFailed: 0, pagesSkipped: 0, pagesUnchanged: 0, linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0 };
+const STATS = {
+  pagesTotal: 0,
+  pagesFetched: 0,
+  pagesFailed: 0,
+  pagesSkipped: 0,
+  pagesUnchanged: 0,
+  linksTotal: 0,
+  imagesTotal: 0,
+  bytesTotal: 0,
+  avgLoadTimeMs: 0,
+};
 
 let dir: string;
 beforeEach(() => {
@@ -31,7 +46,13 @@ async function crawlAt(status: CrawlStatus): Promise<{ s: SQLiteStorage; id: str
   const s = new SQLiteStorage(join(dir, "project.db"));
   await run(s.init());
   const id = await run(
-    s.createCrawl({ baseUrl: "https://e.test", startedAt: 1, status: "running", config: {} as CrawlMetadata["config"], stats: STATS } as Omit<CrawlMetadata, "id">),
+    s.createCrawl({
+      baseUrl: "https://e.test",
+      startedAt: 1,
+      status: "running",
+      config: {} as CrawlMetadata["config"],
+      stats: STATS,
+    } as Omit<CrawlMetadata, "id">),
   );
   // Reach `status` along the legal path the crawler takes.
   const path: Record<CrawlStatus, CrawlStatus[]> = {
@@ -148,7 +169,14 @@ describe("crawl status: an illegal write is a no-op that does not throw", () => 
 });
 
 const entry = (url: string, status: FrontierStatus): FrontierRecord => ({
-  normalizedUrl: url, rawUrl: url, depth: 1, priority: 0, status, source: "discovered", enqueuedAt: 1, retryCount: 0,
+  normalizedUrl: url,
+  rawUrl: url,
+  depth: 1,
+  priority: 0,
+  status,
+  source: "discovered",
+  enqueuedAt: 1,
+  retryCount: 0,
 });
 
 async function frontierAt(status: FrontierStatus): Promise<{ s: SQLiteStorage; id: string }> {
@@ -156,7 +184,8 @@ async function frontierAt(status: FrontierStatus): Promise<{ s: SQLiteStorage; i
   await run(s.upsertFrontier(id, entry("https://e.test/a", status)));
   return { s, id };
 }
-const frontierStatus = async (s: SQLiteStorage, id: string) => (await run(s.getFrontierEntry(id, "https://e.test/a")))?.status;
+const frontierStatus = async (s: SQLiteStorage, id: string) =>
+  (await run(s.getFrontierEntry(id, "https://e.test/a")))?.status;
 
 describe("frontier status", () => {
   test("pending -> fetching (popNextUrl) -> done, failed or skipped", async () => {
@@ -164,7 +193,9 @@ describe("frontier status", () => {
       const { s, id } = await frontierAt("pending");
       const popped = await run(s.popNextUrl(id));
       expect(popped?.status).toBe("fetching");
-      await run(s.updateFrontierStatus(id, "https://e.test/a", to, to === "failed" ? "boom" : undefined));
+      await run(
+        s.updateFrontierStatus(id, "https://e.test/a", to, to === "failed" ? "boom" : undefined),
+      );
       expect(await frontierStatus(s, id)).toBe(to);
       s.close?.();
       rmSync(dir, { recursive: true, force: true });
@@ -199,14 +230,18 @@ describe("frontier status", () => {
     const seen: Array<{ kind: string; from: string; to: string }> = [];
     s.onIgnoredTransition = (info) => seen.push(info);
     await run(s.updateFrontierStatus(id, "https://e.test/a", "done"));
-    expect(seen).toEqual([{ kind: "frontier", id: "https://e.test/a", from: "pending", to: "done" }]);
+    expect(seen).toEqual([
+      { kind: "frontier", id: "https://e.test/a", from: "pending", to: "done" },
+    ]);
     s.close?.();
   });
 
   test("a finished entry is not rewritten by a late worker", async () => {
     for (const from of ["done", "failed", "skipped"] as const) {
       const { s, id } = await frontierAt(from);
-      await run(s.updateFrontierStatus(id, "https://e.test/a", from === "done" ? "failed" : "done", "late"));
+      await run(
+        s.updateFrontierStatus(id, "https://e.test/a", from === "done" ? "failed" : "done", "late"),
+      );
       expect(await frontierStatus(s, id), from).toBe(from);
       s.close?.();
       rmSync(dir, { recursive: true, force: true });
@@ -219,20 +254,60 @@ describe("frontier status", () => {
 
 const ORIGIN = "https://example.com";
 const HEADERS = {
-  contentType: "text/html", contentEncoding: null, cacheControl: null, expires: null, vary: null, etag: null, server: null,
-  lastModified: null, link: null, serverTiming: null, age: null, xCache: null, cfCacheStatus: null, xVercelCache: null,
-  altSvc: null, acceptRanges: null,
+  contentType: "text/html",
+  contentEncoding: null,
+  cacheControl: null,
+  expires: null,
+  vary: null,
+  etag: null,
+  server: null,
+  lastModified: null,
+  link: null,
+  serverTiming: null,
+  age: null,
+  xCache: null,
+  cfCacheStatus: null,
+  xVercelCache: null,
+  altSvc: null,
+  acceptRanges: null,
 };
-const SECURITY = { hsts: null, csp: null, xFrameOptions: null, xContentTypeOptions: null, referrerPolicy: null, permissionsPolicy: null, xRobotsTag: null };
+const SECURITY = {
+  hsts: null,
+  csp: null,
+  xFrameOptions: null,
+  xContentTypeOptions: null,
+  referrerPolicy: null,
+  permissionsPolicy: null,
+  xRobotsTag: null,
+};
 const fetcher: CrawlFetcher = (url) =>
   Effect.gen(function* () {
     const body = `<!doctype html><html><body><a href="${ORIGIN}/a">a</a></body></html>`;
     yield* applyStatusGuards(url, 200, new Headers(), body);
     return {
-      url, finalUrl: url, status: 200, loadTime: 1, ttfb: 1, downloadTime: 1, headers: HEADERS, securityHeaders: SECURITY,
-      contentType: "text/html", body, sizeBytes: body.length,
-      redirectChain: { sourceUrl: url, finalUrl: url, hops: [], chainLength: 0, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false },
-      fetcherId: undefined, fallbackReason: undefined,
+      url,
+      finalUrl: url,
+      status: 200,
+      loadTime: 1,
+      ttfb: 1,
+      downloadTime: 1,
+      headers: HEADERS,
+      securityHeaders: SECURITY,
+      contentType: "text/html",
+      body,
+      sizeBytes: body.length,
+      redirectChain: {
+        sourceUrl: url,
+        finalUrl: url,
+        hops: [],
+        chainLength: 0,
+        isLoop: false,
+        endsInError: false,
+        httpsToHttp: false,
+        httpToHttps: false,
+      },
+      fetcherId: undefined,
+      fallbackReason: undefined,
     };
   });
 
@@ -241,7 +316,12 @@ describe("stop() after the crawl reached a terminal status (#1659)", () => {
   beforeEach(() => {
     originalFetch = globalThis.fetch;
     globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
       const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
       Object.defineProperty(res, "url", { value: url, configurable: true });
       return Promise.resolve(res);
@@ -253,8 +333,17 @@ describe("stop() after the crawl reached a terminal status (#1659)", () => {
 
   test("a completed crawl stays completed when stop() is called afterwards", async () => {
     const config: Partial<CrawlerConfig> = {
-      concurrency: 1, perHostConcurrency: 1, delayMs: 0, perHostDelayMs: 0, timeoutMs: 1000, userAgent: "test",
-      respectRobots: false, incremental: false, useCacheControl: false, breadthFirst: false, disableLinkDiscovery: false,
+      concurrency: 1,
+      perHostConcurrency: 1,
+      delayMs: 0,
+      perHostDelayMs: 0,
+      timeoutMs: 1000,
+      userAgent: "test",
+      respectRobots: false,
+      incremental: false,
+      useCacheControl: false,
+      breadthFirst: false,
+      disableLinkDiscovery: false,
       coverageMode: "full",
     };
     const out = await Effect.runPromise(

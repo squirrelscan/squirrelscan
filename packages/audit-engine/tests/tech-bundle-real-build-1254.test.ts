@@ -135,9 +135,15 @@ describe("alignment sweep: string-heavy code before the config", () => {
   const UNIT = `var a="https://www.example.com/x//y",b='it\\'s "q"',c=\`t//\${a}\`,d=/["']\\//g;/* c "x */ // note 'y\n`;
   const REF = "abcdefghijklmnopqrst";
   const apps: Record<string, [string, string]> = {
-    firebase: [`var cfg={apiKey:"k",authDomain:"demo-app.firebaseapp.com",projectId:"p"};`, "firebase"],
+    firebase: [
+      `var cfg={apiKey:"k",authDomain:"demo-app.firebaseapp.com",projectId:"p"};`,
+      "firebase",
+    ],
     clerk: [`var p={publishableKey:"${CLERK_KEY}"};`, "clerk"],
-    supabase: [`var c=tg("https://${REF}.supabase.co","${["eyJ", "x".repeat(60)].join("")}");`, "supabase"],
+    supabase: [
+      `var c=tg("https://${REF}.supabase.co","${["eyJ", "x".repeat(60)].join("")}");`,
+      "supabase",
+    ],
   };
   for (const [name, [app, id]] of Object.entries(apps)) {
     test(`${name}: 0..400 chars of offset (81 alignments), every one detects`, () => {

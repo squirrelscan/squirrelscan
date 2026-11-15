@@ -45,9 +45,7 @@ export const breadcrumbSchemaRule: Rule = {
       return { checks };
     }
 
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let breadcrumbSchema: Record<string, unknown> | null = null;
     const pageNodes: Record<string, unknown>[] = [];
 
@@ -79,7 +77,9 @@ export const breadcrumbSchemaRule: Rule = {
       // sits in a trail (a high-precision class, and never a markup-rules answer),
       // so the page shows a trail that no structured data describes (#2307). With
       // the classifier off no link carries a section and this stays the info check.
-      const trailLinks = (ctx.parsed.links ?? []).filter((link) => link.section === "breadcrumbs").length;
+      const trailLinks = (ctx.parsed.links ?? []).filter(
+        (link) => link.section === "breadcrumbs",
+      ).length;
       if (trailLinks >= MIN_TRAIL_LINKS) {
         // A trail declared nested in another node (`WebPage.breadcrumb`), or marked
         // up as microdata or RDFa (older themes), is described, just not as a

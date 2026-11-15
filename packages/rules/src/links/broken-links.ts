@@ -170,7 +170,12 @@ export const brokenLinksRule: Rule = {
         }
         if (fetched?.wafChallenge) {
           refusedTargets.add(normalizedTarget);
-          refusedLinks.push({ url: target, sources, statusCode: fetched.status, wafChallenge: true });
+          refusedLinks.push({
+            url: target,
+            sources,
+            statusCode: fetched.status,
+            wafChallenge: true,
+          });
           continue;
         }
         // Not HTML, and it answered 2xx/3xx: a known status, not broken.

@@ -53,17 +53,12 @@ describe("parsePage — contactLinks", () => {
       URL,
     );
 
-    expect(parsed.contactLinks?.map((c) => c.value)).toEqual([
-      "hi@example.com",
-      "+15551234567",
-    ]);
+    expect(parsed.contactLinks?.map((c) => c.value)).toEqual(["hi@example.com", "+15551234567"]);
   });
 
   test("scheme matching is case-insensitive", () => {
     const parsed = parsePage(page(`<a href="TEL:5551234567">call</a>`), URL);
-    expect(parsed.contactLinks).toEqual([
-      { scheme: "tel", value: "5551234567", text: "call" },
-    ]);
+    expect(parsed.contactLinks).toEqual([{ scheme: "tel", value: "5551234567", text: "call" }]);
   });
 
   test("other schemes are not contact links", () => {
@@ -75,10 +70,9 @@ describe("parsePage — contactLinks", () => {
   });
 
   test("the carried list is capped", () => {
-    const anchors = Array.from(
-      { length: 50 },
-      (_, i) => `<a href="tel:555000${i}">n${i}</a>`,
-    ).join("");
+    const anchors = Array.from({ length: 50 }, (_, i) => `<a href="tel:555000${i}">n${i}</a>`).join(
+      "",
+    );
     const parsed = parsePage(page(anchors), URL);
     expect(parsed.contactLinks).toHaveLength(32);
   });
@@ -104,7 +98,12 @@ describe("parsePage — Cloudflare email-protection links (pub#811)", () => {
       URL,
     );
     expect(parsed.contactLinks).toEqual([
-      { scheme: "mailto", value: "hi@example.com", text: "[email\u00a0protected]", obfuscated: "cloudflare" },
+      {
+        scheme: "mailto",
+        value: "hi@example.com",
+        text: "[email\u00a0protected]",
+        obfuscated: "cloudflare",
+      },
     ]);
     expect(parsed.links.map((l) => l.url)).toEqual(["https://example.com/about"]);
   });

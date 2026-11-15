@@ -30,7 +30,13 @@ async function methods(bodyHtml: string): Promise<string[]> {
   const ctx = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url),
-    site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, scripts: [] },
+    site: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      scripts: [],
+    },
     options: {},
   } as unknown as RuleContext;
   const check = (await skipLinkRule.run(ctx)).checks[0];

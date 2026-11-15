@@ -32,7 +32,16 @@ async function names(url: string, redirectChain: RedirectChain | undefined): Pro
 }
 
 function chain(finalUrl: string, hops: RedirectChain["hops"]): RedirectChain {
-  return { sourceUrl: OLD, finalUrl, hops, chainLength: hops.length - 1, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false };
+  return {
+    sourceUrl: OLD,
+    finalUrl,
+    hops,
+    chainLength: hops.length - 1,
+    isLoop: false,
+    endsInError: false,
+    httpsToHttp: false,
+    httpToHttps: false,
+  };
 }
 
 describe("i18n/hreflang self reference after a redirect (pub#827)", () => {

@@ -71,7 +71,11 @@ export const ariaTreeitemNameRule: Rule = {
     }
     if (unnamed.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow("aria-treeitem-name", "treeitem(s) without accessible names", unnamed.unconfirmed),
+        unconfirmedRow(
+          "aria-treeitem-name",
+          "treeitem(s) without accessible names",
+          unnamed.unconfirmed,
+        ),
       );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {

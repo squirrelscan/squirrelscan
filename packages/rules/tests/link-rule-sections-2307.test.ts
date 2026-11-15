@@ -34,11 +34,11 @@ const body = (inner: string) =>
 
 describe("links/https-downgrade — link sections", () => {
   const html = body(
-    '<footer><a href="http://other.example/x">x</a></footer><p><a href="http://other.example/y">y</a></p>'
+    '<footer><a href="http://other.example/x">x</a></footer><p><a href="http://other.example/y">y</a></p>',
   );
 
   test("an item says where its link sits; an unplaced one stays bare", async () => {
-    const { checks } = (await httpsDowngradeRule.run(pageCtx(html)));
+    const { checks } = await httpsDowngradeRule.run(pageCtx(html));
 
     expect(checks[0]!.items).toEqual([
       {
@@ -76,11 +76,11 @@ describe("links/nofollow-internal — link sections", () => {
   // /x is nofollowed in the navigation and followed in the page content: only the nofollowed
   // link counts, so the content link does not change the answer.
   const html = body(
-    '<nav><a href="/x" rel="nofollow">x</a></nav><main><a href="/x">x again</a></main>'
+    '<nav><a href="/x" rel="nofollow">x</a></nav><main><a href="/x">x again</a></main>',
   );
 
   test("an item says where the nofollowed link sits, not where the followed one does", async () => {
-    const { checks } = (await nofollowInternalRule.run(crawlCtx(html)));
+    const { checks } = await nofollowInternalRule.run(crawlCtx(html));
 
     expect(checks[0]!.items).toEqual([
       {
@@ -93,12 +93,14 @@ describe("links/nofollow-internal — link sections", () => {
   });
 
   test("without section data the item is bare", async () => {
-    expect((await nofollowInternalRule.run(crawlCtx(html, true))).checks[0]!.items).toEqual([{ id: "/x" }]);
+    expect((await nofollowInternalRule.run(crawlCtx(html, true))).checks[0]!.items).toEqual([
+      { id: "/x" },
+    ]);
   });
 
   test("a link marked only sponsored or ugc is not counted as a nofollowed one", async () => {
     const mixed = body(
-      '<nav><a href="/x" rel="nofollow">x</a></nav><footer><a href="/x" rel="sponsored">x</a></footer>'
+      '<nav><a href="/x" rel="nofollow">x</a></nav><footer><a href="/x" rel="sponsored">x</a></footer>',
     );
 
     expect((await nofollowInternalRule.run(crawlCtx(mixed))).checks[0]!.items?.[0]).toMatchObject({
@@ -186,7 +188,11 @@ describe("links/weak-internal-links — link sections", () => {
     };
 
     expect(checks[0]!.items).toEqual([
-      { id: LONE, label: `${LONE}, linked in the navigation`, meta: { sections: { navigation: 1 } } },
+      {
+        id: LONE,
+        label: `${LONE}, linked in the navigation`,
+        meta: { sections: { navigation: 1 } },
+      },
     ]);
   });
 
@@ -202,7 +208,9 @@ describe("links/weak-internal-links — link sections", () => {
         ]),
       inboundSectionCounts: () => new Map([[LONE, { navigation: 1 }]]),
     } as unknown as RuleContext["siteQuery"];
-    const viaQuery = (await weakInternalLinksRule.run(c)) as { checks: Array<{ items?: unknown[] }> };
+    const viaQuery = (await weakInternalLinksRule.run(c)) as {
+      checks: Array<{ items?: unknown[] }>;
+    };
     const legacy = (await weakInternalLinksRule.run(legacyCtx("navigation"))) as {
       checks: Array<{ items?: unknown[] }>;
     };
@@ -211,14 +219,23 @@ describe("links/weak-internal-links — link sections", () => {
   });
 
   test("without section data the item is bare, on both paths", async () => {
-    const legacy = (await weakInternalLinksRule.run(legacyCtx())) as { checks: Array<{ items?: unknown[] }> };
+    const legacy = (await weakInternalLinksRule.run(legacyCtx())) as {
+      checks: Array<{ items?: unknown[] }>;
+    };
     expect(legacy.checks[0]!.items).toEqual([{ id: LONE }]);
 
     const c = legacyCtx();
     c.siteQuery = {
-      incomingLinkCounts: () => new Map([[`${BASE}/`, 0], [`${BASE}/a`, 2], [LONE, 1]]),
+      incomingLinkCounts: () =>
+        new Map([
+          [`${BASE}/`, 0],
+          [`${BASE}/a`, 2],
+          [LONE, 1],
+        ]),
     } as unknown as RuleContext["siteQuery"];
-    const streamed = (await weakInternalLinksRule.run(c)) as { checks: Array<{ items?: unknown[] }> };
+    const streamed = (await weakInternalLinksRule.run(c)) as {
+      checks: Array<{ items?: unknown[] }>;
+    };
     expect(streamed.checks[0]!.items).toEqual([{ id: LONE }]);
   });
 });

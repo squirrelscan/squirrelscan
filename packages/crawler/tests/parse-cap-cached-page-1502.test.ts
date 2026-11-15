@@ -47,7 +47,10 @@ function fetcherFor(fetched: string[], home: string = HOME): DocumentFetcher {
     capabilities: { jsRendering: false, cookies: false, screenshot: false },
     async fetch(req) {
       fetched.push(req.url);
-      return mockResponse(req.url, req.url === `${ORIGIN}/` ? home : "<!doctype html><title>l</title><p>leaf</p>");
+      return mockResponse(
+        req.url,
+        req.url === `${ORIGIN}/` ? home : "<!doctype html><title>l</title><p>leaf</p>",
+      );
     },
   };
 }
@@ -80,7 +83,10 @@ const baseConfig = {
   maxPages: 50,
 };
 
-async function crawlRecord(storage: CrawlStorage, config: Record<string, unknown>): Promise<string> {
+async function crawlRecord(
+  storage: CrawlStorage,
+  config: Record<string, unknown>,
+): Promise<string> {
   const crawlId = await Effect.runPromise(
     storage.createCrawl({
       baseUrl: ORIGIN,
@@ -115,7 +121,9 @@ async function reuseUnderCap(cap: number | undefined, encodedSize?: number, home
   const storage = await Effect.runPromise(createTestStorage());
   const cfg1 = { ...baseConfig, incremental: false, useCacheControl: false, maxParseBytes: 1 };
   const crawlId1 = await crawlRecord(storage, cfg1);
-  const crawler1 = await Effect.runPromise(createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([], home) }, storage }));
+  const crawler1 = await Effect.runPromise(
+    createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([], home) }, storage }),
+  );
   await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
   const stored = await Effect.runPromise(storage.getPage(crawlId1, `${ORIGIN}/`));
   expect(stored?.parsedData ?? null).toBeNull(); // nothing parsed on pass 1
@@ -132,9 +140,13 @@ async function reuseUnderCap(cap: number | undefined, encodedSize?: number, home
     ...(cap !== undefined ? { maxParseBytes: cap } : {}),
   };
   const crawlId2 = await crawlRecord(storage, cfg2);
-  const crawler2 = await Effect.runPromise(createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched, home) }, storage }));
+  const crawler2 = await Effect.runPromise(
+    createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched, home) }, storage }),
+  );
   await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
-  const frontier = (await Effect.runPromise(storage.getAllFrontierEntries(crawlId2))).map((e) => e.normalizedUrl);
+  const frontier = (await Effect.runPromise(storage.getAllFrontierEntries(crawlId2))).map(
+    (e) => e.normalizedUrl,
+  );
   const stats = await Effect.runPromise(storage.getStats(crawlId2));
   await Effect.runPromise(storage.close());
   return { fetched, frontier, unchanged: stats?.pagesUnchanged ?? 0 };

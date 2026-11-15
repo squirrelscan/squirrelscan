@@ -46,7 +46,10 @@ export async function decodeResolutionSignal(
 ): Promise<ResolutionSignal> {
   if (compact.v !== 1) throw new Error(`unknown compact resolution signal version ${compact.v}`);
   // The publish schema bounds this too; the decoder does not rely on it.
-  if (typeof compact.data !== "string" || compact.data.length > RESOLUTION_PUBLISH_LIMITS.maxBytes) {
+  if (
+    typeof compact.data !== "string" ||
+    compact.data.length > RESOLUTION_PUBLISH_LIMITS.maxBytes
+  ) {
     throw new Error("compact resolution signal: data past the signal's byte budget");
   }
   const json = inflateCapped(compact.data, RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes);

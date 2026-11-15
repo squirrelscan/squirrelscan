@@ -32,13 +32,19 @@ const JSD_MAX_SCRIPTS = 60;
  * {@link JSD_MAX_SCRIPTS} scripts are read, not the first; at most {@link JSD_SCRIPT_CHARS} characters of
  * each, so a megabyte of script costs no more than a kilobyte. Linear in the number of scripts.
  */
-export function hasJavaScriptDetections(doc: { querySelectorAll(selector: string): Iterable<ScriptLike> }): boolean {
+export function hasJavaScriptDetections(doc: {
+  querySelectorAll(selector: string): Iterable<ScriptLike>;
+}): boolean {
   const scripts = Array.from(doc.querySelectorAll("script"));
   for (const script of scripts.slice(-JSD_MAX_SCRIPTS)) {
     const src = script.getAttribute("src");
     if (src && JSD_MARKER.test(src.slice(0, JSD_SCRIPT_CHARS))) return true;
     const text = script.textContent;
-    if (text && JSD_MARKER.test(text.length > JSD_SCRIPT_CHARS ? text.slice(0, JSD_SCRIPT_CHARS) : text)) return true;
+    if (
+      text &&
+      JSD_MARKER.test(text.length > JSD_SCRIPT_CHARS ? text.slice(0, JSD_SCRIPT_CHARS) : text)
+    )
+      return true;
   }
   return false;
 }

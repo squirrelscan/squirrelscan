@@ -53,7 +53,10 @@ export interface RetentionMeasurement {
  * in preference to collecting, so an opportunistic collect leaves the arm's
  * garbage in the number and makes every arm look like a leak.
  */
-export function measureArm(iterations: number, build: (i: number) => unknown): RetentionMeasurement {
+export function measureArm(
+  iterations: number,
+  build: (i: number) => unknown,
+): RetentionMeasurement {
   Bun.gc(true);
   const before = process.memoryUsage().external;
   const kept: unknown[] = [];

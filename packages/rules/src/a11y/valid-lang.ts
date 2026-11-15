@@ -210,8 +210,7 @@ export const validLangRule: Rule = {
   meta: {
     id: "a11y/valid-lang",
     name: "Valid Lang Attributes",
-    description:
-      "Checks that all lang attributes on the page have valid values",
+    description: "Checks that all lang attributes on the page have valid values",
     solution:
       "All lang attributes should use valid BCP 47 language tags. This includes lang attributes on any element, not just <html>. Use lang to mark up content in a different language from the page default.",
     category: "a11y",
@@ -237,9 +236,7 @@ export const validLangRule: Rule = {
       if (!isValidLangCode(lang)) {
         const tagName = el.tagName.toLowerCase();
         const id = el.getAttribute("id");
-        invalidLangs.push(
-          `${id ? `${tagName}#${id}` : tagName}: lang="${lang}"`
-        );
+        invalidLangs.push(`${id ? `${tagName}#${id}` : tagName}: lang="${lang}"`);
       }
     }
 
@@ -249,10 +246,7 @@ export const validLangRule: Rule = {
         status: "warn",
         message: `${invalidLangs.length} element(s) with invalid lang attribute`,
         items: invalidLangs.slice(0, 10).map((id) => ({ id })),
-        details:
-          invalidLangs.length > 10
-            ? { additional: invalidLangs.length - 10 }
-            : undefined,
+        details: invalidLangs.length > 10 ? { additional: invalidLangs.length - 10 } : undefined,
       });
     } else if (elementsWithLang.length > 1) {
       // More than just html element

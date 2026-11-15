@@ -21,7 +21,19 @@ const HOTJAR: Platform = { key: "hotjar", label: "Hotjar", idLabel: "site ID" };
 const CLARITY: Platform = { key: "clarity", label: "Microsoft Clarity", idLabel: "project ID" };
 
 /** Report order: stable, so the same page always yields the same checks. */
-const PLATFORMS: Platform[] = [GA4, GTM, PLAUSIBLE, FATHOM, MATOMO, SEGMENT, MIXPANEL, AMPLITUDE, HEAP, HOTJAR, CLARITY];
+const PLATFORMS: Platform[] = [
+  GA4,
+  GTM,
+  PLAUSIBLE,
+  FATHOM,
+  MATOMO,
+  SEGMENT,
+  MIXPANEL,
+  AMPLITUDE,
+  HEAP,
+  HOTJAR,
+  CLARITY,
+];
 
 /**
  * Two kinds of evidence per (platform, id). `loader` is the script or frame that
@@ -86,7 +98,8 @@ function googleTagManagerUrl(src: string): { path: string; id: string | null } |
  * `https:` or `http:`. Anchoring on the opening quote and `//` is what keeps a URL that merely contains the
  * text (a query string, a path segment, a longer hostname) from counting.
  */
-const INLINE_GTM_LOADER = /['"`](?:https?:)?\/\/(?:www\.)?googletagmanager\.com\/gtm\.js(?=[?#'"`])/i;
+const INLINE_GTM_LOADER =
+  /['"`](?:https?:)?\/\/(?:www\.)?googletagmanager\.com\/gtm\.js(?=[?#'"`])/i;
 
 /** The Clarity loader as an inline script writes it, anchored the same way. */
 const INLINE_CLARITY_LOADER = /['"`](?:https?:)?\/\/(?:www\.)?clarity\.ms\/tag(?=[/?#'"`])/i;
@@ -150,7 +163,9 @@ export const duplicateTagsRule: Rule = {
       ) {
         bump(AMPLITUDE, m[1]!, "loader");
       } else if (
-        (m = /^\/js\/heap-([\w-]+)\.js$/i.exec(vendorUrl(src, ["heapanalytics.com"], true)?.path ?? ""))
+        (m = /^\/js\/heap-([\w-]+)\.js$/i.exec(
+          vendorUrl(src, ["heapanalytics.com"], true)?.path ?? "",
+        ))
       ) {
         bump(HEAP, m[1]!, "loader");
       } else if (
@@ -207,7 +222,11 @@ export const duplicateTagsRule: Rule = {
     duplicates.sort(
       (a, b) =>
         PLATFORMS.indexOf(a.platform) - PLATFORMS.indexOf(b.platform) ||
-        (a.id.toLowerCase() < b.id.toLowerCase() ? -1 : a.id.toLowerCase() > b.id.toLowerCase() ? 1 : 0),
+        (a.id.toLowerCase() < b.id.toLowerCase()
+          ? -1
+          : a.id.toLowerCase() > b.id.toLowerCase()
+            ? 1
+            : 0),
     );
 
     for (const t of duplicates) {

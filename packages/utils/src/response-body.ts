@@ -360,9 +360,7 @@ export async function readBodyCapped(res: Response, maxBytes: number): Promise<s
 
       const remaining = maxBytes - total;
       const piece =
-        value.byteLength > remaining
-          ? Uint8Array.prototype.slice.call(value, 0, remaining)
-          : value;
+        value.byteLength > remaining ? Uint8Array.prototype.slice.call(value, 0, remaining) : value;
       chunks.push(piece);
       total += piece.byteLength;
     }

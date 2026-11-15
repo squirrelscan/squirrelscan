@@ -79,10 +79,7 @@ function kadencePost(url: string): { url: string; html: string } {
 }
 
 // Yoast-style @graph: Article.author is an @id ref to a separate Person node.
-function yoastPost(
-  url: string,
-  authorName = "Jane Doe"
-): { url: string; html: string } {
+function yoastPost(url: string, authorName = "Jane Doe"): { url: string; html: string } {
   const graph = {
     "@context": "https://schema.org",
     "@graph": [
@@ -103,7 +100,7 @@ function yoastPost(
   return {
     url,
     html: `<html><head><script type="application/ld+json">${JSON.stringify(
-      graph
+      graph,
     )}</script></head><body><article class="post"><p>Body.</p></article></body></html>`,
   };
 }
@@ -218,7 +215,7 @@ describe("parser — Yoast @graph @id author resolution", () => {
       ],
     };
     const html = `<html><head><script type="application/ld+json">${JSON.stringify(
-      graph
+      graph,
     )}</script></head><body><article><p>b</p></article></body></html>`;
     const p = parsePage(html, url);
     expect(p.author?.name).toBe("Jane Doe");
@@ -237,7 +234,7 @@ describe("parser — Yoast @graph @id author resolution", () => {
       ],
     };
     const html = `<html><head><script type="application/ld+json">${JSON.stringify(
-      graph
+      graph,
     )}</script></head><body><article><p>b</p></article></body></html>`;
     const p = parsePage(html, url);
     expect(p.author?.name).toBe("Jane Doe");
@@ -256,7 +253,7 @@ describe("parser — Yoast @graph @id author resolution", () => {
       ],
     };
     const html = `<html><head><script type="application/ld+json">${JSON.stringify(
-      graph
+      graph,
     )}</script></head><body><article><p>b</p></article></body></html>`;
     const p = parsePage(html, url);
     expect(p.author?.name).toBe("Inline Name");
@@ -267,12 +264,12 @@ describe("parser — Yoast @graph @id author resolution", () => {
 
 describe("eeat/author-byline — visible markup", () => {
   test("detects hCard byline on Kadence post (no JSON-LD)", async () => {
-    const checks = (await run(authorBylineRule, siteCtx([kadencePost("https://ex.com/blog/post")])));
+    const checks = await run(authorBylineRule, siteCtx([kadencePost("https://ex.com/blog/post")]));
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
 
   test("detects author via Yoast @graph @id ref", async () => {
-    const checks = (await run(authorBylineRule, siteCtx([yoastPost("https://ex.com/blog/post")])));
+    const checks = await run(authorBylineRule, siteCtx([yoastPost("https://ex.com/blog/post")]));
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
 
@@ -287,7 +284,7 @@ describe("eeat/author-byline — visible markup", () => {
       { url: "https://ex.com/e", html: "<html><body><p>e</p></body></html>" },
       kadencePost("https://ex.com/the-post"),
     ];
-    const checks = (await run(authorBylineRule, siteCtx(pages)));
+    const checks = await run(authorBylineRule, siteCtx(pages));
     // Exactly one content page (the byline post) with an author → 100%.
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
@@ -303,7 +300,7 @@ describe("eeat/author-byline — visible markup", () => {
         </body></html>`,
       },
     ];
-    const checks = (await run(authorBylineRule, siteCtx(orgPages)));
+    const checks = await run(authorBylineRule, siteCtx(orgPages));
     expect(check(checks, "author-byline")?.status).toBe("warn");
   });
 });
@@ -312,13 +309,13 @@ describe("eeat/author-byline — visible markup", () => {
 
 describe("eeat/content-dates — visible markup", () => {
   test("detects entry-meta <time> dates on Kadence post (no JSON-LD)", async () => {
-    const checks = (await run(contentDatesRule, siteCtx([kadencePost("https://ex.com/blog/post")])));
+    const checks = await run(contentDatesRule, siteCtx([kadencePost("https://ex.com/blog/post")]));
     expect(check(checks, "date-published")?.status).toBe("pass");
     expect(check(checks, "date-modified")?.status).toBe("pass");
   });
 
   test("detects dates via Yoast @graph Article schema", async () => {
-    const checks = (await run(contentDatesRule, siteCtx([yoastPost("https://ex.com/blog/post")])));
+    const checks = await run(contentDatesRule, siteCtx([yoastPost("https://ex.com/blog/post")]));
     expect(check(checks, "date-published")?.status).toBe("pass");
   });
 
@@ -332,7 +329,7 @@ describe("eeat/content-dates — visible markup", () => {
       { url: "https://ex.com/e", html: "<html><body><p>e</p></body></html>" },
       kadencePost("https://ex.com/the-post"),
     ];
-    const checks = (await run(contentDatesRule, siteCtx(pages)));
+    const checks = await run(contentDatesRule, siteCtx(pages));
     expect(check(checks, "date-published")?.status).toBe("pass");
   });
 
@@ -346,7 +343,7 @@ describe("eeat/content-dates — visible markup", () => {
         </body></html>`,
       },
     ];
-    const checks = (await run(contentDatesRule, siteCtx(pages)));
+    const checks = await run(contentDatesRule, siteCtx(pages));
     expect(check(checks, "date-published")?.status).toBe("warn");
   });
 });

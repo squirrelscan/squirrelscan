@@ -85,9 +85,7 @@ const server = Bun.serve({
     // The asset IS gzipped, but the confirming GET never gets to say so.
     if (path === "/confirm-503.css") {
       if (isHead) return identity();
-      return isRanged
-        ? partialIdentity()
-        : new Response("slow down", { status: 503 });
+      return isRanged ? partialIdentity() : new Response("slow down", { status: 503 });
     }
 
     return identity();
@@ -102,17 +100,13 @@ afterAll(() => {
 
 describe("script fetcher captures content-encoding (#9)", () => {
   test("an uncompressed script records null — observed, and absent", async () => {
-    const [result] = await Effect.runPromise(
-      fetchScriptContents([`${base}/plain.js`])
-    );
+    const [result] = await Effect.runPromise(fetchScriptContents([`${base}/plain.js`]));
     expect(result?.status).toBe(200);
     expect(result?.contentEncoding).toBe(null);
   });
 
   test("a gzipped script records the coding, not null", async () => {
-    const [result] = await Effect.runPromise(
-      fetchScriptContents([`${base}/gzip.js`])
-    );
+    const [result] = await Effect.runPromise(fetchScriptContents([`${base}/gzip.js`]));
     expect(result?.status).toBe(200);
     expect(result?.contentEncoding).toBe("gzip");
     // fetch decodes the body, so sizeBytes is the DECODED length while the
@@ -143,18 +137,14 @@ const VERIFY = { verifyCompression: true };
 
 describe("resource checker captures content-encoding (#9)", () => {
   test("an uncompressed stylesheet records null", async () => {
-    const [result] = await Effect.runPromise(
-      checkResourceSizes([`${base}/plain.css`], VERIFY)
-    );
+    const [result] = await Effect.runPromise(checkResourceSizes([`${base}/plain.css`], VERIFY));
     expect(result?.status).toBe(200);
     expect(result?.contentEncoding).toBe(null);
     expect(result?.sizeBytes).toBe(BODY.length);
   });
 
   test("a gzipped stylesheet records the coding", async () => {
-    const [result] = await Effect.runPromise(
-      checkResourceSizes([`${base}/gzip.css`], VERIFY)
-    );
+    const [result] = await Effect.runPromise(checkResourceSizes([`${base}/gzip.css`], VERIFY));
     expect(result?.status).toBe(200);
     expect(result?.contentEncoding).toBe("gzip");
   });
@@ -164,7 +154,7 @@ describe("resource checker captures content-encoding (#9)", () => {
     // sizeBytes 300_009 — a textbook large-uncompressed-CSS finding against a
     // server that compresses perfectly well.
     const [result] = await Effect.runPromise(
-      checkResourceSizes([`${base}/head-hides-gzip.css`], VERIFY)
+      checkResourceSizes([`${base}/head-hides-gzip.css`], VERIFY),
     );
     expect(result?.status).toBe(200);
     expect(result?.contentEncoding).toBe("gzip");
@@ -174,7 +164,7 @@ describe("resource checker captures content-encoding (#9)", () => {
     // The CDN shape: HEAD and the one-byte Range BOTH answer identity, and only
     // an ordinary GET reveals the coding.
     const [result] = await Effect.runPromise(
-      checkResourceSizes([`${base}/range-hides-gzip.css`], VERIFY)
+      checkResourceSizes([`${base}/range-hides-gzip.css`], VERIFY),
     );
     expect(result?.contentEncoding).toBe("gzip");
   });
@@ -183,7 +173,7 @@ describe("resource checker captures content-encoding (#9)", () => {
     // The counterpart to the case above: same request sequence, and the finding
     // must still be produced. Otherwise the fix would just silence the rule.
     const [result] = await Effect.runPromise(
-      checkResourceSizes([`${base}/range-really-plain.css`], VERIFY)
+      checkResourceSizes([`${base}/range-really-plain.css`], VERIFY),
     );
     expect(result?.contentEncoding).toBe(null);
     expect(result?.sizeBytes).toBe(BODY.length);
@@ -197,7 +187,7 @@ describe("resource checker captures content-encoding (#9)", () => {
     // report this gzipped asset as 300KB of uncompressed CSS: precisely the
     // false positive the verification exists to prevent.
     const [result] = await Effect.runPromise(
-      checkResourceSizes([`${base}/confirm-503.css`], VERIFY)
+      checkResourceSizes([`${base}/confirm-503.css`], VERIFY),
     );
     expect(result?.contentEncoding).toBeUndefined();
   });
@@ -206,7 +196,7 @@ describe("resource checker captures content-encoding (#9)", () => {
     // Only the encoding degrades to unknown. perf/css-file-size and
     // perf/total-byte-weight still need the size, so the record must survive.
     const [result] = await Effect.runPromise(
-      checkResourceSizes([`${base}/confirm-503.css`], VERIFY)
+      checkResourceSizes([`${base}/confirm-503.css`], VERIFY),
     );
     expect(result?.sizeBytes).toBe(BODY.length);
     expect(result?.error).toBe(null);
@@ -214,9 +204,7 @@ describe("resource checker captures content-encoding (#9)", () => {
 
   test("verification costs at most one extra plain GET", async () => {
     const calls = await traceRequests(() =>
-      Effect.runPromise(
-        checkResourceSizes([`${base}/range-hides-gzip.css`], VERIFY)
-      )
+      Effect.runPromise(checkResourceSizes([`${base}/range-hides-gzip.css`], VERIFY)),
     );
     expect(calls).toEqual(["HEAD", "GET(range)", "GET"]);
   });
@@ -228,7 +216,7 @@ describe("resource checker keeps the cheap path when verification is off (#9)", 
   // sitemap URL would pay for the extra requests above.
   test("a compressible type short-circuits on HEAD by default", async () => {
     const calls = await traceRequests(() =>
-      Effect.runPromise(checkResourceSizes([`${base}/head-hides-gzip.css`]))
+      Effect.runPromise(checkResourceSizes([`${base}/head-hides-gzip.css`])),
     );
     expect(calls).toEqual(["HEAD"]);
   });
@@ -236,14 +224,14 @@ describe("resource checker keeps the cheap path when verification is off (#9)", 
   test("a compressible type still short-circuits on a HEAD that names a coding", async () => {
     // Even with verification on, a HEAD carrying positive evidence is enough.
     const calls = await traceRequests(() =>
-      Effect.runPromise(checkResourceSizes([`${base}/gzip.css`], VERIFY))
+      Effect.runPromise(checkResourceSizes([`${base}/gzip.css`], VERIFY)),
     );
     expect(calls).toEqual(["HEAD"]);
   });
 
   test("a non-compressible type short-circuits on HEAD even with verification on", async () => {
     const calls = await traceRequests(() =>
-      Effect.runPromise(checkResourceSizes([`${base}/plain.png`], VERIFY))
+      Effect.runPromise(checkResourceSizes([`${base}/plain.png`], VERIFY)),
     );
     expect(calls).toEqual(["HEAD"]);
   });

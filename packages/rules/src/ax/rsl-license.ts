@@ -37,7 +37,8 @@ export const rslLicenseRule: Rule = {
       checks.push({
         name: "rsl-license-present",
         status: "info",
-        message: "No machine-readable licensing declared (no robots.txt License: directive or Link: rel=license)",
+        message:
+          "No machine-readable licensing declared (no robots.txt License: directive or Link: rel=license)",
         value: "absent",
       });
       return { checks };

@@ -173,7 +173,12 @@ function walk(
       quote = c;
       continue;
     }
-    if (c === "(" && ident !== "" && asciiLower(unescapeCss(ident)) === "url" && !opensQuoted(text, i + 1)) {
+    if (
+      c === "(" &&
+      ident !== "" &&
+      asciiLower(unescapeCss(ident)) === "url" &&
+      !opensQuoted(text, i + 1)
+    ) {
       let j = i + 1;
       for (; j < n && text[j] !== ")"; j++) if (text[j] === "\\") j = escapeEnd(text, j);
       i = j;
@@ -250,16 +255,26 @@ function opensQuoted(text: string, from: number): boolean {
 /** CSS escapes undone: `\30 0` is `00`, `\76` is `v`, `\w` is `w`. Linear, one regex pass. */
 function unescapeCss(text: string): string {
   if (!text.includes("\\")) return text;
-  return text.replace(/\\(?:([0-9a-f]{1,6})[ \t\n\r\f]?|([^\n]))/gi, (_m, hex?: string, char?: string) => {
-    if (char !== undefined) return char;
-    const code = Number.parseInt(hex!, 16);
-    return code === 0 || code > 0x10_ffff || (code >= 0xd800 && code <= 0xdfff) ? "�" : String.fromCodePoint(code);
-  });
+  return text.replace(
+    /\\(?:([0-9a-f]{1,6})[ \t\n\r\f]?|([^\n]))/gi,
+    (_m, hex?: string, char?: string) => {
+      if (char !== undefined) return char;
+      const code = Number.parseInt(hex!, 16);
+      return code === 0 || code > 0x10_ffff || (code >= 0xd800 && code <= 0xdfff)
+        ? "�"
+        : String.fromCodePoint(code);
+    },
+  );
 }
 
 function parseDeclarations(text: string, reading: Reading = "tokens"): Declaration[] {
   const out: Declaration[] = [];
-  const raws = reading === "tokens" ? splitDeclarations(text) : reading === "naive" ? stripCommentsTolerant(text).split(";") : text.split(";");
+  const raws =
+    reading === "tokens"
+      ? splitDeclarations(text)
+      : reading === "naive"
+        ? stripCommentsTolerant(text).split(";")
+        : text.split(";");
   const decode = reading === "plain" ? (t: string): string => t : unescapeCss;
   for (const raw of raws) {
     const idx = raw.indexOf(":");
@@ -315,8 +330,8 @@ function parseSelectorList(selector: string): { selectors: ParsedSelector[]; ove
   return { selectors: out, oversized };
 }
 
-
-const isCombinator = (c: string): boolean => c === " " || c === "\n" || c === "\t" || c === ">" || c === "+" || c === "~";
+const isCombinator = (c: string): boolean =>
+  c === " " || c === "\n" || c === "\t" || c === ">" || c === "+" || c === "~";
 
 /** Splits `text` at the commas outside brackets, parentheses and strings: a selector list, or a `:is(a, b)` is one part. Linear. */
 function splitTopLevel(text: string, separator: string): string[] {
@@ -467,7 +482,9 @@ function foldSelector(selector: string): string {
 
 /** Attributes whose values HTML compares without case in an attribute selector (the Selectors spec list). */
 const CASE_INSENSITIVE_ATTRS: ReadonlySet<string> = new Set(
-  "accept accept-charset align alink axis bgcolor charset checked clear codetype color compact declare defer dir direction disabled enctype face frame hreflang http-equiv lang language link media method multiple nohref noresize noshade nowrap readonly rel rev rules scope scrolling selected shape target text type valign valuetype vlink".split(" ")
+  "accept accept-charset align alink axis bgcolor charset checked clear codetype color compact declare defer dir direction disabled enctype face frame hreflang http-equiv lang language link media method multiple nohref noresize noshade nowrap readonly rel rev rules scope scrolling selected shape target text type valign valuetype vlink".split(
+    " ",
+  ),
 );
 
 /** What HTML splits a token list (`class`, `~=`) on: space, tab, LF, FF and CR, not JavaScript's `\s` (NBSP, U+2003, U+FEFF, VT). */
@@ -514,7 +531,16 @@ const cap99 = (n: number): number => Math.min(n, 99);
  * taken as matching (it still counts in the specificity; `:where()` counts nothing): the error is toward detection.
  */
 function parseCompound(text: string): ParsedSelector | undefined {
-  const out: ParsedSelector = { tag: false, classes: [], ids: [], classesExact: [], idsExact: [], attrs: [], specificity: 0, unknown: false };
+  const out: ParsedSelector = {
+    tag: false,
+    classes: [],
+    ids: [],
+    classesExact: [],
+    idsExact: [],
+    attrs: [],
+    specificity: 0,
+    unknown: false,
+  };
   let i = 0;
   let classLike = 0;
   // A namespace prefix: `*|` (any) is read away. `|` (no namespace) is accepted but Chrome does not apply it to an HTML element
@@ -619,23 +645,35 @@ function parseCompound(text: string): ParsedSelector | undefined {
 
 /** Pseudo-classes written without arguments (Chrome). `-webkit-` ones are all accepted: Chrome has several and the list moves. */
 const PLAIN_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
-  "active any-link autofill checked current default defined disabled empty enabled first-child first-of-type focus focus-visible focus-within fullscreen future host hover in-range indeterminate interest-source interest-target invalid last-child last-of-type link modal only-child only-of-type open optional out-of-range past picture-in-picture placeholder-shown popover-open read-only read-write required root scope target user-invalid user-valid valid visited xr-overlay active-view-transition target-current target-before target-after horizontal vertical start end decrement increment double-button single-button no-button corner-present window-inactive".split(" "),
+  "active any-link autofill checked current default defined disabled empty enabled first-child first-of-type focus focus-visible focus-within fullscreen future host hover in-range indeterminate interest-source interest-target invalid last-child last-of-type link modal only-child only-of-type open optional out-of-range past picture-in-picture placeholder-shown popover-open read-only read-write required root scope target user-invalid user-valid valid visited xr-overlay active-view-transition target-current target-before target-after horizontal vertical start end decrement increment double-button single-button no-button corner-present window-inactive".split(
+    " ",
+  ),
 );
 /** Pseudo-classes that take an argument in parentheses. */
 const FUNCTIONAL_PSEUDO_CLASSES: ReadonlySet<string> = new Set(
-  "active-view-transition-type dir has host host-context is lang not nth-child nth-last-child nth-last-of-type nth-of-type state where".split(" "),
+  "active-view-transition-type dir has host host-context is lang not nth-child nth-last-child nth-last-of-type nth-of-type state where".split(
+    " ",
+  ),
 );
 /** Pseudo-elements, with or without arguments (`::part(x)`). */
 const PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(
-  "after backdrop before checkmark column cue cue-region details-content file-selector-button first-letter first-line grammar-error highlight marker part picker picker-icon placeholder scroll-button scroll-marker scroll-marker-group search-text selection slotted spelling-error target-text view-transition view-transition-group view-transition-image-pair view-transition-new view-transition-old".split(" "),
+  "after backdrop before checkmark column cue cue-region details-content file-selector-button first-letter first-line grammar-error highlight marker part picker picker-icon placeholder scroll-button scroll-marker scroll-marker-group search-text selection slotted spelling-error target-text view-transition view-transition-group view-transition-image-pair view-transition-new view-transition-old".split(
+    " ",
+  ),
 );
 /** Pseudo-elements a browser also accepts with one colon. */
-const LEGACY_PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(["after", "before", "first-letter", "first-line"]);
+const LEGACY_PSEUDO_ELEMENTS: ReadonlySet<string> = new Set([
+  "after",
+  "before",
+  "first-letter",
+  "first-line",
+]);
 
 /** Deepest `:not()` / `:has()` read: past it the arguments are not checked (they are taken as valid). */
 const MAX_VALIDATE_DEPTH = 8;
 
-const isCssSpace = (c: string | undefined): boolean => c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+const isCssSpace = (c: string | undefined): boolean =>
+  c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
 
 /** The end of a valid identifier at `at` (not starting with a digit, nor `-` and a digit), or -1. */
 function validIdentEnd(text: string, at: number): number {
@@ -723,7 +761,15 @@ function validAttribute(inner: string, d: Doubt): boolean {
 }
 
 /** Pseudo-elements after which a pseudo-class is never valid (`::before:hover`); the others take some (`::part(x):hover`, `::-webkit-scrollbar:horizontal`). */
-const NO_PSEUDO_CLASS_AFTER: ReadonlySet<string> = new Set(["after", "backdrop", "before", "first-letter", "first-line", "marker", "placeholder"]);
+const NO_PSEUDO_CLASS_AFTER: ReadonlySet<string> = new Set([
+  "after",
+  "backdrop",
+  "before",
+  "first-letter",
+  "first-line",
+  "marker",
+  "placeholder",
+]);
 
 /** Pseudo-classes Chrome accepts after a pseudo-element that otherwise takes none (checked in headless Chrome); any other is read as doubtful. */
 const PSEUDO_CLASS_AFTER_ELEMENT: ReadonlyMap<string, ReadonlySet<string>> = new Map([
@@ -747,7 +793,14 @@ function trimCss(text: string): string {
 }
 
 /** Highlight pseudo-elements: only a few pseudo-classes may follow them, never another pseudo-element. */
-const HIGHLIGHT_PSEUDO_ELEMENTS: ReadonlySet<string> = new Set(["selection", "highlight", "spelling-error", "grammar-error", "target-text", "search-text"]);
+const HIGHLIGHT_PSEUDO_ELEMENTS: ReadonlySet<string> = new Set([
+  "selection",
+  "highlight",
+  "spelling-error",
+  "grammar-error",
+  "target-text",
+  "search-text",
+]);
 
 /**
  * `text` must be exactly one compound selector: a combinator, a space-separated complex selector or a pseudo-element
@@ -766,7 +819,14 @@ function exactCompound(text: string, depth: number, d: Doubt, forbidElement: boo
 function secondElementValid(previous: string, next: string): boolean {
   if (next === "part" || next === "slotted") return false;
   if (previous === "before" || previous === "after") return next === "marker";
-  if (previous === "first-letter" || previous === "first-line" || previous === "marker" || previous === "placeholder" || previous === "backdrop") return false;
+  if (
+    previous === "first-letter" ||
+    previous === "first-line" ||
+    previous === "marker" ||
+    previous === "placeholder" ||
+    previous === "backdrop"
+  )
+    return false;
   if (previous === "slotted") return next !== "first-line" && next !== "first-letter";
   // a highlight pseudo-element takes no further pseudo-element (`::selection::before`)
   if (HIGHLIGHT_PSEUDO_ELEMENTS.has(previous)) return false;
@@ -798,7 +858,12 @@ const AN_PLUS_B = /^(?:even|odd|[+-]?\d+|[+-]?\d*n(?:[ \t\n\r\f]*[+-][ \t\n\r\f]
  */
 function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): boolean {
   const text = trimCss(args);
-  if (name === "nth-child" || name === "nth-last-child" || name === "nth-of-type" || name === "nth-last-of-type") {
+  if (
+    name === "nth-child" ||
+    name === "nth-last-child" ||
+    name === "nth-of-type" ||
+    name === "nth-last-of-type"
+  ) {
     if (text.includes("\\")) {
       d.doubtful = true;
       return true;
@@ -822,7 +887,8 @@ function pseudoArgsState(name: string, args: string, depth: number, d: Doubt): b
       if (inner === "doubtful") d.doubtful = true;
       // The grammar of `of` takes real selectors and a browser may reject a pseudo-element there (Chrome 156 accepts it): not certain either way,
       // so the part is doubtful: a cover rule using it is still read, and a decoy using it cannot hide a cover.
-      if (/::|:(?:before|after|first-line|first-letter)(?![A-Za-z0-9_-])/i.test(list)) d.doubtful = true;
+      if (/::|:(?:before|after|first-line|first-letter)(?![A-Za-z0-9_-])/i.test(list))
+        d.doubtful = true;
     }
     return true;
   }
@@ -875,7 +941,11 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
   let element: string | undefined;
   d.element = false;
   const first = text[i];
-  if (first === "*" || first === "|" || (first !== undefined && first !== "&" && validIdentEnd(text, i) >= 0)) {
+  if (
+    first === "*" ||
+    first === "|" ||
+    (first !== undefined && first !== "&" && validIdentEnd(text, i) >= 0)
+  ) {
     // a type selector, with an optional namespace prefix: only `*|` and `|` name a namespace that exists
     let p = i;
     let named = false;
@@ -935,7 +1005,12 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
       if (isElement || LEGACY_PSEUDO_ELEMENTS.has(name)) {
         if (d.forbidElement) return -1;
         if (element !== undefined && !secondElementValid(element, name)) return -1;
-        if (isElement && (name === "part" || name === "slotted") && (args === undefined || !pseudoElementArgsValid(name, args, depth, d))) return -1;
+        if (
+          isElement &&
+          (name === "part" || name === "slotted") &&
+          (args === undefined || !pseudoElementArgsValid(name, args, depth, d))
+        )
+          return -1;
         // a name this list does not know may be valid in some engine (`::-moz-selection`): doubtful
         if (!PSEUDO_ELEMENTS.has(name) && !name.startsWith("-webkit-")) d.doubtful = true;
         else if (PSEUDO_ELEMENTS.has(name)) element = name;
@@ -951,11 +1026,30 @@ function validCompound(text: string, at: number, depth: number, d: Doubt): numbe
         return -1;
       } else if (!name.startsWith("-webkit-")) {
         // after a pseudo-element that takes some pseudo-classes, only a verified one is certainly valid
-        if (element !== undefined && !NO_PSEUDO_CLASS_AFTER.has(element) && !PSEUDO_CLASS_AFTER_ELEMENT.get(element)?.has(name)) d.doubtful = true;
-        if (element !== undefined && NO_PSEUDO_CLASS_AFTER.has(element) && (name === "not" || name === "has")) d.doubtful = true;
-        if (args === undefined ? !PLAIN_PSEUDO_CLASSES.has(name) : !FUNCTIONAL_PSEUDO_CLASSES.has(name)) d.doubtful = true;
+        if (
+          element !== undefined &&
+          !NO_PSEUDO_CLASS_AFTER.has(element) &&
+          !PSEUDO_CLASS_AFTER_ELEMENT.get(element)?.has(name)
+        )
+          d.doubtful = true;
+        if (
+          element !== undefined &&
+          NO_PSEUDO_CLASS_AFTER.has(element) &&
+          (name === "not" || name === "has")
+        )
+          d.doubtful = true;
+        if (
+          args === undefined
+            ? !PLAIN_PSEUDO_CLASSES.has(name)
+            : !FUNCTIONAL_PSEUDO_CLASSES.has(name)
+        )
+          d.doubtful = true;
         // `:not()` and `:has()` are strict lists (`:is()` and `:where()` forgive an invalid argument, so they are not read).
-        else if (args !== undefined && (name === "not" || name === "has") && depth < MAX_VALIDATE_DEPTH) {
+        else if (
+          args !== undefined &&
+          (name === "not" || name === "has") &&
+          depth < MAX_VALIDATE_DEPTH
+        ) {
           const inner = selectorListState(args, name === "has", depth + 1, true);
           if (inner === "invalid") return -1;
           if (inner === "doubtful") d.doubtful = true;
@@ -1018,7 +1112,12 @@ interface Doubt {
  */
 export type SelectorListState = "valid" | "doubtful" | "invalid";
 
-export function selectorListState(selector: string, relative: boolean, depth = 0, forbidElement = false): SelectorListState {
+export function selectorListState(
+  selector: string,
+  relative: boolean,
+  depth = 0,
+  forbidElement = false,
+): SelectorListState {
   const d: Doubt = { doubtful: false, forbidElement };
   for (const part of splitTopLevel(selector, ",")) {
     if (part.length > MAX_SELECTOR_CHARS + 64) continue;
@@ -1034,7 +1133,10 @@ const UNKNOWN_MARK = "\u0001";
  * The selectors of a rule's list that can match an iframe, each as its subject compound (see {@link subjectCompound}), and
  * whether one part was past a bound (it is not read and could match any iframe).
  */
-function parseFrameSelectorList(selector: string): { selectors: ParsedSelector[]; oversized: boolean } {
+function parseFrameSelectorList(selector: string): {
+  selectors: ParsedSelector[];
+  oversized: boolean;
+} {
   const out: ParsedSelector[] = [];
   let oversized = false;
   for (const part of splitTopLevel(selector, ",")) {
@@ -1083,7 +1185,11 @@ const countChar = (text: string, char: string): number => {
  * {@link MAX_SELECTOR_CHARS} (its length is worked out before it is built, so a run of `&` is not expanded), and a shared
  * budget of produced selectors. Whatever one of those drops makes `cut` true: the caller reports the CSS truncated.
  */
-function nestSelector(parent: string, child: string, budget: NestBudget): { selector: string; cut: boolean; invalid?: boolean; doubtful?: boolean } {
+function nestSelector(
+  parent: string,
+  child: string,
+  budget: NestBudget,
+): { selector: string; cut: boolean; invalid?: boolean; doubtful?: boolean } {
   // A child list with a certainly invalid part is dropped whole, with the rules nested in it.
   const state = selectorListState(child, true);
   if (state === "invalid") return { selector: "", cut: false, invalid: true };
@@ -1100,7 +1206,8 @@ function nestSelector(parent: string, child: string, budget: NestBudget): { sele
     if (marked) text = text.slice(1);
     const subject = subjectCompound(text);
     // The parent's own ancestors and pseudo-classes are dropped with it: what is built from it is of unknown applicability.
-    if (subject) parents.push({ subject, unknown: marked || subject !== text || subject.includes(":") });
+    if (subject)
+      parents.push({ subject, unknown: marked || subject !== text || subject.includes(":") });
   }
   const out: string[] = [];
   const emit = (text: string): void => {
@@ -1139,7 +1246,10 @@ function nestSelector(parent: string, child: string, budget: NestBudget): { sele
         cut = true;
         continue;
       }
-      emit((parent.unknown || subject !== text ? UNKNOWN_MARK : "") + subject.replaceAll("&", parent.subject));
+      emit(
+        (parent.unknown || subject !== text ? UNKNOWN_MARK : "") +
+          subject.replaceAll("&", parent.subject),
+      );
     }
   }
   return { selector: out.join(","), cut, doubtful };
@@ -1149,7 +1259,11 @@ function nestSelector(parent: string, child: string, budget: NestBudget): { sele
 function ruleKey(selector: ParsedSelector, wanted: Wanted): string | undefined {
   if (!selector.classes.every((c) => wanted.classes.has(c))) return undefined;
   if (!selector.ids.every((i) => wanted.ids.has(i))) return undefined;
-  const first = selector.classes[0] ? `.${selector.classes[0]}` : selector.ids[0] ? `#${selector.ids[0]}` : undefined;
+  const first = selector.classes[0]
+    ? `.${selector.classes[0]}`
+    : selector.ids[0]
+      ? `#${selector.ids[0]}`
+      : undefined;
   return first ?? (selector.tag ? "iframe" : "*");
 }
 
@@ -1234,12 +1348,15 @@ function atRuleKind(prelude: string): { descend: boolean; known: boolean } {
   if (!name || !GROUP_AT_RULES.has(name[1]!)) return { descend: false, known: false };
   if (name[1] !== "media") return { descend: true, known: false };
   if (prelude.length > MAX_AT_PRELUDE) return { descend: true, known: false };
-  const text = asciiLower(prelude.includes("\\") ? unescapeCss(prelude) : prelude).slice(name[0].length);
+  const text = asciiLower(prelude.includes("\\") ? unescapeCss(prelude) : prelude).slice(
+    name[0].length,
+  );
   let descend = false;
   let known = false;
   for (const q of splitTopLevel(text, ",")) {
     const query = q.trim();
-    if (/^(?:only\s+)?(?:print|speech)(?![\w-])/.test(query) || /^not\s+all(?![\w-])/.test(query)) continue;
+    if (/^(?:only\s+)?(?:print|speech)(?![\w-])/.test(query) || /^not\s+all(?![\w-])/.test(query))
+      continue;
     descend = true;
     if (query === "" || /^(?:only\s+)?(?:all|screen)$/.test(query)) known = true;
   }
@@ -1283,7 +1400,8 @@ export function scanCss(
       if (atRules) {
         // A group rule's block is read in place: its rules are the next ones, and its closing `}` is skipped like any other.
         let stop = i + 1;
-        while (stop < n && stop - i <= MAX_PRELUDE_CHARS && css[stop] !== "{" && css[stop] !== ";") stop++;
+        while (stop < n && stop - i <= MAX_PRELUDE_CHARS && css[stop] !== "{" && css[stop] !== ";")
+          stop++;
         const kind = css[stop] === "{" ? atRuleKind(css.slice(i, stop)) : undefined;
         if (kind?.descend) {
           open.push(!kind.known);
@@ -1321,8 +1439,14 @@ export function scanCss(
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector, so a rule that could
     // be an overlay's is reported rather than skipped in silence; the rest of the sheet is still read.
     if (brace - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
-    else if (close - brace - 1 > MAX_BODY_CHARS) onOversized?.(lowerSelector(css.slice(i, brace).trim()), "body", hasNestedBlock(css, brace, close));
-    else onRule(lowerSelector(css.slice(i, brace).trim()), css.slice(brace + 1, close), undecided > 0);
+    else if (close - brace - 1 > MAX_BODY_CHARS)
+      onOversized?.(
+        lowerSelector(css.slice(i, brace).trim()),
+        "body",
+        hasNestedBlock(css, brace, close),
+      );
+    else
+      onRule(lowerSelector(css.slice(i, brace).trim()), css.slice(brace + 1, close), undecided > 0);
     i = close + 1;
   }
 }
@@ -1404,7 +1528,8 @@ function scanCssTokens(
     // A rule whose selector or body is past the bounds is not read, and the caller is told which selector (see the plain scan).
     if (ch !== "@") {
       if (open - i > MAX_PRELUDE_CHARS) onOversized?.("", "prelude");
-      else if (close - open - 1 > MAX_BODY_CHARS) onOversized?.(lowerSelector(selector.trim()), "body", hasNestedBlock(css, open, close));
+      else if (close - open - 1 > MAX_BODY_CHARS)
+        onOversized?.(lowerSelector(selector.trim()), "body", hasNestedBlock(css, open, close));
       else onRule(lowerSelector(selector.trim()), css.slice(open + 1, close), undecided > 0);
     }
     i = close + 1;
@@ -1473,7 +1598,11 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
           if (attr.op !== "" && !attr.ci) hasUnknown.value = true;
         }
         // A class or id written with capitals reads differently under a browser's case-sensitive match: the decided reading too.
-        if (parsed.classesExact.some((c) => c !== asciiLower(c)) || parsed.idsExact.some((i) => i !== asciiLower(i))) hasUnknown.value = true;
+        if (
+          parsed.classesExact.some((c) => c !== asciiLower(c)) ||
+          parsed.idsExact.some((i) => i !== asciiLower(i))
+        )
+          hasUnknown.value = true;
       }
       if (atUnknown || selectors.some((parsed) => parsed.unknown)) hasUnknown.value = true;
       for (const key of keys) {
@@ -1524,7 +1653,12 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
             const nested = nestSelector(selector, inner, nest);
             if (nested.invalid) return;
             if (nested.cut) cut.dropped = true;
-            addRule(nested.selector, innerBody, depth + 1, atUnknown || innerUnknown || nested.doubtful === true);
+            addRule(
+              nested.selector,
+              innerBody,
+              depth + 1,
+              atUnknown || innerUnknown || nested.doubtful === true,
+            );
           },
           reading,
           undefined,
@@ -1533,19 +1667,39 @@ function sheetFor(doc: Document, wanted: Wanted, reading: Reading): Sheet {
       }
       keepRule(selectors, parts.after, atUnknown);
     };
-    scanCss(css, (selector, body, unknown) => addRule(selector, body, 0, unknown), reading, (selector, reason, nested) => {
-      // A rule past the bounds is not read: say so when it could be an overlay's. A selector list past the bound could match any
-      // iframe; a body past it matters when one of its selectors matches an iframe on the page.
-      if (reason === "prelude") {
-        if (wanted.frames > 0) cut.dropped = true;
-        return;
-      }
-      const { selectors, oversized } = parseFrameSelectorList(selector);
-      // A body past the bound that holds nested rules is unread whatever its own selector is: a nested rule could be an iframe's.
-      if ((nested && wanted.frames > 0) || (oversized && wanted.frames > 0) || selectors.some((parsed) => ruleKey(parsed, wanted))) cut.dropped = true;
-    }, true);
+    scanCss(
+      css,
+      (selector, body, unknown) => addRule(selector, body, 0, unknown),
+      reading,
+      (selector, reason, nested) => {
+        // A rule past the bounds is not read: say so when it could be an overlay's. A selector list past the bound could match any
+        // iframe; a body past it matters when one of its selectors matches an iframe on the page.
+        if (reason === "prelude") {
+          if (wanted.frames > 0) cut.dropped = true;
+          return;
+        }
+        const { selectors, oversized } = parseFrameSelectorList(selector);
+        // A body past the bound that holds nested rules is unread whatever its own selector is: a nested rule could be an iframe's.
+        if (
+          (nested && wanted.frames > 0) ||
+          (oversized && wanted.frames > 0) ||
+          selectors.some((parsed) => ruleKey(parsed, wanted))
+        )
+          cut.dropped = true;
+      },
+      true,
+    );
   }
-  const sheet: Sheet = { byKey, attrNames, nest, hasUnknown: hasUnknown.value, memo: new Map(), truncated: truncated || cut.dropped, work: SHEET_WORK_BUDGET, quirks: !doc.doctype };
+  const sheet: Sheet = {
+    byKey,
+    attrNames,
+    nest,
+    hasUnknown: hasUnknown.value,
+    memo: new Map(),
+    truncated: truncated || cut.dropped,
+    work: SHEET_WORK_BUDGET,
+    quirks: !doc.doctype,
+  };
   byReading[reading] = sheet;
   return sheet;
 }
@@ -1580,7 +1734,12 @@ function attrMatches(condition: AttrCondition, raw: string | undefined, foldAll:
  * selectors whose applicability is known count: a rule in an undecided at-rule, and a selector with an ancestor part or a
  * pseudo-class, are left out (see {@link Mode}).
  */
-function matchedSpecificity(rule: Rule, frame: FrameNames, attr: (name: string) => string | undefined, decided: boolean): number {
+function matchedSpecificity(
+  rule: Rule,
+  frame: FrameNames,
+  attr: (name: string) => string | undefined,
+  decided: boolean,
+): number {
   if (decided && rule.atUnknown) return -1;
   let best = -1;
   for (const selector of rule.selectors) {
@@ -1589,8 +1748,10 @@ function matchedSpecificity(rule: Rule, frame: FrameNames, attr: (name: string) 
     if (
       // The decided reading compares a class and an id as a browser does: case-sensitively in standards mode, folded in quirks mode (no doctype); the full reading always folds case.
       (decided && !frame.quirks
-        ? selector.classesExact.every((c) => frame.rawClasses.has(c)) && selector.idsExact.every((i) => i === frame.rawId)
-        : selector.classes.every((c) => frame.classes.has(c)) && selector.ids.every((i) => i === frame.id)) &&
+        ? selector.classesExact.every((c) => frame.rawClasses.has(c)) &&
+          selector.idsExact.every((i) => i === frame.rawId)
+        : selector.classes.every((c) => frame.classes.has(c)) &&
+          selector.ids.every((i) => i === frame.id)) &&
       selector.attrs.every((a) => attrMatches(a, attr(a.name), !decided))
     ) {
       best = selector.specificity;
@@ -1660,7 +1821,8 @@ function sheetLayers(
   for (const name of sheet.attrNames) attrKey += `\u0000${name}=${attr(name) ?? "\u0001"}`;
   const { id, classes } = frame;
   // The decided reading also depends on the names' case as written.
-  const exact = mode === "decided" ? `\u0000${frame.rawId}\u0000${[...frame.rawClasses].sort().join(" ")}` : "";
+  const exact =
+    mode === "decided" ? `\u0000${frame.rawId}\u0000${[...frame.rawClasses].sort().join(" ")}` : "";
   const key = `${mode}\u0000${id}\u0000${[...classes].sort().join(" ")}${exact}${attrKey}`;
   const cached = memo.get(key);
   if (cached) return cached;
@@ -1710,7 +1872,12 @@ function sheetLayers(
 }
 
 /** The iframe's resolved style properties, lower-cased: stylesheet, then inline, `!important` over either. */
-function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading, mode: Mode): Map<string, string> {
+function resolvedStyle(
+  sheet: Sheet,
+  frame: Element,
+  reading: Reading,
+  mode: Mode,
+): Map<string, string> {
   const rawId = getAttrCI(frame, "id") ?? "";
   const id = asciiLower(rawId);
   // The class attribute is charged to the page's budget by length, so padding it costs the page, not the scan.
@@ -1729,7 +1896,13 @@ function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading, mode: Mod
     const value = getAttrCI(frame, name);
     return value === undefined || value === null ? undefined : value.slice(0, MAX_ATTR_CHARS);
   };
-  const [normal, important] = sheetLayers(sheet, { id, classes, rawId, rawClasses, quirks: sheet.quirks }, attr, sheet.memo, mode) as [Declaration[], Declaration[]];
+  const [normal, important] = sheetLayers(
+    sheet,
+    { id, classes, rawId, rawClasses, quirks: sheet.quirks },
+    attr,
+    sheet.memo,
+    mode,
+  ) as [Declaration[], Declaration[]];
   const inline = parseDeclarations(getAttrCI(frame, "style") ?? "", reading);
   const layers: Declaration[][] = [
     normal,
@@ -1740,9 +1913,12 @@ function resolvedStyle(sheet: Sheet, frame: Element, reading: Reading, mode: Mod
   const out = new Map<string, string>();
   for (const layer of layers) {
     for (const d of layer) {
-      if (d.property === "inset") for (const [side, value] of expandInset(d.value)) out.set(side, value);
-      else if (d.property === "inset-block") for (const [side, value] of expandPair(d.value, "top", "bottom")) out.set(side, value);
-      else if (d.property === "inset-inline") for (const [side, value] of expandPair(d.value, "left", "right")) out.set(side, value);
+      if (d.property === "inset")
+        for (const [side, value] of expandInset(d.value)) out.set(side, value);
+      else if (d.property === "inset-block")
+        for (const [side, value] of expandPair(d.value, "top", "bottom")) out.set(side, value);
+      else if (d.property === "inset-inline")
+        for (const [side, value] of expandPair(d.value, "left", "right")) out.set(side, value);
       else out.set(LOGICAL_SIDES[d.property] ?? d.property, d.value);
     }
   }
@@ -1766,10 +1942,17 @@ const AXIS_UNITS = {
   height: "%|[dsl]?vh|[dsl]?vb|cqh|cqb|vmax|vmin|cqmin|cqmax",
 } as const;
 const AXIS_TOKEN = {
-  width: new RegExp(`(?<![\\d.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.width})`, "gi"),
-  height: new RegExp(`(?<![\\d.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.height})`, "gi"),
+  width: new RegExp(
+    `(?<![\\d.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.width})`,
+    "gi",
+  ),
+  height: new RegExp(
+    `(?<![\\d.])([+-]?)(\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|\\.\\d+(?:e[+-]?\\d+)?)(?:${AXIS_UNITS.height})`,
+    "gi",
+  ),
 };
-const FILL_KEYWORD = /(?:^|[\s(,])(?:-webkit-|-moz-)?(?:stretch|fill-available|available)(?:$|[\s),])/i;
+const FILL_KEYWORD =
+  /(?:^|[\s(,])(?:-webkit-|-moz-)?(?:stretch|fill-available|available)(?:$|[\s),])/i;
 /** Work cap of the tokeniser: a longer (whitespace-collapsed) value is padding, not a length, and counts as filling. */
 const MAX_LENGTH_SCAN = 2_048;
 const MAX_RAW_LENGTH = 100_000;
@@ -1817,14 +2000,16 @@ function wantedFor(doc: Document): Wanted {
     wanted.frames++;
     const id = asciiLower(getAttrCI(frame, "id") ?? "");
     if (id) wanted.ids.add(id);
-    for (const c of asciiLower(getAttrCI(frame, "class") ?? "").split(HTML_SPACES)) if (c) wanted.classes.add(c);
+    for (const c of asciiLower(getAttrCI(frame, "class") ?? "").split(HTML_SPACES))
+      if (c) wanted.classes.add(c);
   }
   wantedCache.set(doc, wanted);
   return wanted;
 }
 
 /** Whether a geometry is a fixed, high-z-index, viewport-filling cover pinned to a corner (what the detector requires). */
-export const isCover = (g: OverlayGeometry): boolean => g.fixed && g.zIndex >= 1000 && g.fillsViewport && g.pinned;
+export const isCover = (g: OverlayGeometry): boolean =>
+  g.fixed && g.zIndex >= 1000 && g.fillsViewport && g.pinned;
 
 /**
  * An iframe's geometry as the page styles it: the first of the three {@link Reading}s that makes it a cover, else the
@@ -1847,12 +2032,22 @@ export function overlayGeometry(doc: Document, frame: Element): OverlayGeometry 
 }
 
 /** The cascaded style of a frame under one reading (exported for the tests that compare readings with the old rules). */
-export function styleUnder(doc: Document, frame: Element, reading: Reading, mode: Mode = "all"): Map<string, string> {
+export function styleUnder(
+  doc: Document,
+  frame: Element,
+  reading: Reading,
+  mode: Mode = "all",
+): Map<string, string> {
   return resolvedStyle(sheetFor(doc, wantedFor(doc), reading), frame, reading, mode);
 }
 
 /** The geometry under one reading (exported for the tests that compare readings). */
-export function overlayGeometryFor(doc: Document, frame: Element, reading: Reading, mode: Mode = "all"): OverlayGeometry {
+export function overlayGeometryFor(
+  doc: Document,
+  frame: Element,
+  reading: Reading,
+  mode: Mode = "all",
+): OverlayGeometry {
   const style = resolvedStyle(sheetFor(doc, wantedFor(doc), reading), frame, reading, mode);
   const position = style.get("position");
   const zIndex = Number.parseInt(style.get("z-index") ?? "0", 10);
@@ -1862,7 +2057,12 @@ export function overlayGeometryFor(doc: Document, frame: Element, reading: Readi
   // `inset: 0` stretches an element over its containing block only when it has no size of its own.
   const autoSize = (value: string): boolean => value === "" || value === "auto";
   const stretched =
-    zero("top") && zero("right") && zero("bottom") && zero("left") && autoSize(width) && autoSize(height);
+    zero("top") &&
+    zero("right") &&
+    zero("bottom") &&
+    zero("left") &&
+    autoSize(width) &&
+    autoSize(height);
   return {
     fixed: position === "fixed" || position === "absolute",
     zIndex: Number.isFinite(zIndex) ? zIndex : 0,
@@ -1872,7 +2072,10 @@ export function overlayGeometryFor(doc: Document, frame: Element, reading: Readi
 }
 
 /** What nesting used of the sheet's budget under one reading: nested rules read and selectors produced (for tests that assert the bounds). */
-export function nestingUsed(doc: Document, reading: Reading = "tokens"): { rules: number; selectors: number } {
+export function nestingUsed(
+  doc: Document,
+  reading: Reading = "tokens",
+): { rules: number; selectors: number } {
   const { rules, selectors } = sheetFor(doc, wantedFor(doc), reading).nest;
   return { rules, selectors: MAX_NESTED_SELECTORS - selectors };
 }
@@ -1881,10 +2084,15 @@ export function nestingUsed(doc: Document, reading: Reading = "tokens"): { rules
 export function cssScanTruncated(doc: Document): boolean {
   // The `tokens` sheet always; the others only if a frame needed them (they are built on demand).
   const tokens = sheetFor(doc, wantedFor(doc), "tokens");
-  return tokens.truncated || Object.values(sheetCache.get(doc) ?? {}).some((sheet) => sheet.truncated);
+  return (
+    tokens.truncated || Object.values(sheetCache.get(doc) ?? {}).some((sheet) => sheet.truncated)
+  );
 }
 
-const hiddenCache = new WeakMap<object, { classes: Set<string>; ids: Set<string>; truncated: boolean }>();
+const hiddenCache = new WeakMap<
+  object,
+  { classes: Set<string>; ids: Set<string>; truncated: boolean }
+>();
 
 const ZERO_SIZE = /^0(?:\.0+)?(?:px|em|rem|%|pt)?$/;
 
@@ -1903,7 +2111,11 @@ function declaresHidden(declarations: Declaration[]): boolean {
  * for reading a label as a visitor sees it (#784). Simple `.class` and `#id` selectors only, over the same
  * one-pass scan and the same CSS bound as the overlay geometry.
  */
-export function hiddenSelectors(doc: Document): { classes: Set<string>; ids: Set<string>; truncated: boolean } {
+export function hiddenSelectors(doc: Document): {
+  classes: Set<string>;
+  ids: Set<string>;
+  truncated: boolean;
+} {
   const cached = hiddenCache.get(doc);
   if (cached) return cached;
   const classes = new Set<string>();
@@ -1921,21 +2133,31 @@ export function hiddenSelectors(doc: Document): { classes: Set<string>; ids: Set
     if (text.length > room) truncated = true;
     const css = text.length > room ? text.slice(0, room) : text;
     chars += css.length;
-    scanCss(css, (selector, body) => {
-      const { selectors: parsed, oversized } = parseSelectorList(selector);
-      if (oversized) truncated = true;
-      if (parsed.length === 0) return;
-      const declarations = parseDeclarations(body);
-      if (!declaresHidden(declarations)) return;
-      for (const sel of parsed) {
-        if (sel.tag) continue;
-        for (const c of sel.classes) classes.add(c);
-        for (const i of sel.ids) ids.add(i);
-      }
-    }, "tokens", (selector, reason) => {
-      // an unread rule: a selector list past the bound could name any class, a body past it matters when its selector is a class or id
-      if (reason === "prelude" || parseSelectorList(selector).oversized || parseSelectors(selector).some((sel) => !sel.tag)) truncated = true;
-    });
+    scanCss(
+      css,
+      (selector, body) => {
+        const { selectors: parsed, oversized } = parseSelectorList(selector);
+        if (oversized) truncated = true;
+        if (parsed.length === 0) return;
+        const declarations = parseDeclarations(body);
+        if (!declaresHidden(declarations)) return;
+        for (const sel of parsed) {
+          if (sel.tag) continue;
+          for (const c of sel.classes) classes.add(c);
+          for (const i of sel.ids) ids.add(i);
+        }
+      },
+      "tokens",
+      (selector, reason) => {
+        // an unread rule: a selector list past the bound could name any class, a body past it matters when its selector is a class or id
+        if (
+          reason === "prelude" ||
+          parseSelectorList(selector).oversized ||
+          parseSelectors(selector).some((sel) => !sel.tag)
+        )
+          truncated = true;
+      },
+    );
   }
   const result = { classes, ids, truncated };
   hiddenCache.set(doc, result);

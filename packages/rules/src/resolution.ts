@@ -178,7 +178,11 @@ function collectResolutionEvidence(
   const ruleEvaluated = new Map<string, Set<string>>();
   const explicitSkips = new Map<string, Set<string>>();
   const noteExplicitSkip = (key: string, check: CheckResult): void => {
-    const urls = check.pageUrl ? [check.pageUrl] : check.details?.aggregated === true ? (check.pages ?? []) : [];
+    const urls = check.pageUrl
+      ? [check.pageUrl]
+      : check.details?.aggregated === true
+        ? (check.pages ?? [])
+        : [];
     if (urls.length === 0) return;
     let skipped = explicitSkips.get(key);
     if (!skipped) explicitSkips.set(key, (skipped = new Set<string>()));
@@ -223,8 +227,7 @@ function collectResolutionEvidence(
         for (const url of skippedUrls) set.add(normalized(url));
         continue;
       }
-      const timeoutSkip =
-        check.status === "skipped" && isRuleWideGapSkipReason(check.skipReason);
+      const timeoutSkip = check.status === "skipped" && isRuleWideGapSkipReason(check.skipReason);
       // (pub#999) A rule that THREW is the same gap: the runner records it as a
       // failed `<rule>-error`, which names none of the rule's real checks either.
       // Unlike the timeout skip it is a real (failed) row, so it falls through to
@@ -341,7 +344,10 @@ function collectResolutionEvidence(
         for (const url of pageUrls) rulePages.add(normalized(url));
       }
       if (check.name.endsWith(UNCONFIRMED_CHECK_SUFFIX)) {
-        const base = resolutionCheckKey(ruleId, check.name.slice(0, -UNCONFIRMED_CHECK_SUFFIX.length));
+        const base = resolutionCheckKey(
+          ruleId,
+          check.name.slice(0, -UNCONFIRMED_CHECK_SUFFIX.length),
+        );
         let pages = unconfirmedOf.get(base);
         if (!pages) {
           pages = new Set<string>();
@@ -654,10 +660,7 @@ function compactPayload(
     }
     const count = missing.length + missingHashed.size;
     if (count === 0) continue;
-    if (
-      count > limits.maxHashesPerCheck ||
-      notEvaluatedTotal + count > limits.maxHashesTotal
-    ) {
+    if (count > limits.maxHashesPerCheck || notEvaluatedTotal + count > limits.maxHashesTotal) {
       truncated.add(key);
       continue;
     }

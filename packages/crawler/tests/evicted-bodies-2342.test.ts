@@ -122,9 +122,7 @@ describe("evicted page bodies (#2342)", () => {
     content.bodies.delete(before!.htmlHash!);
 
     expect(await run(storage.getCachedPage("https://example.com/evicted"))).toBeNull();
-    expect((await run(storage.getCachedPage("https://example.com/kept")))?.html).toContain(
-      "/kept",
-    );
+    expect((await run(storage.getCachedPage("https://example.com/kept")))?.html).toContain("/kept");
     expect(storage.evictedCacheEntryCount()).toBe(1);
   });
 
@@ -268,7 +266,11 @@ describe("evicted page bodies (#2342)", () => {
     expect(await run(storage.countEvictedPageBodies(mine))).toEqual({ evicted: 0, stored: 4 });
 
     // Evict two of this crawl's bodies and the other crawl's one.
-    for (const url of ["https://example.com/a", "https://example.com/c", "https://example.com/other"]) {
+    for (const url of [
+      "https://example.com/a",
+      "https://example.com/c",
+      "https://example.com/other",
+    ]) {
       const row = await run(storage.getCachedPage(url));
       content.bodies.delete(row!.htmlHash!);
     }

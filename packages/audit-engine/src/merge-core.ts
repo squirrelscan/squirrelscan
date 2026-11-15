@@ -88,7 +88,7 @@ export interface FlatFinding {
  * replayed as a page finding by a later smart audit.
  */
 export function isRunLocalRuleErrorFinding(
-  finding: Pick<PageFindingRecord, "ruleId" | "checkName">
+  finding: Pick<PageFindingRecord, "ruleId" | "checkName">,
 ): boolean {
   return finding.checkName === `${finding.ruleId}-error`;
 }
@@ -403,7 +403,7 @@ export function findingKey(
   normalizedUrl: string,
   ruleId: string,
   checkName: string,
-  locator: string
+  locator: string,
 ): string {
   return [normalizedUrl, ruleId, checkName, locator].join(KEY_SEP);
 }
@@ -578,7 +578,7 @@ export function itemFindingMessage(check: CheckResult, item: CheckItem): string 
   // not weaken page-invariance.
   const budget = Math.min(
     ITEM_MESSAGE_PREFIX_MAX,
-    Math.max(0, REPORT_LIMITS.maxMediumString - id.length - 2)
+    Math.max(0, REPORT_LIMITS.maxMediumString - id.length - 2),
   );
   // A message with no wording in it ("26") yields "" — fall back to the check
   // name, which is page-invariant too.
@@ -682,8 +682,7 @@ function itemFindingPayload(
     ...(expected !== null ? { e: expected } : {}),
   };
   const occurrenceCount = check.componentOccurrences?.length ?? 0;
-  const fits = (payload: string): boolean =>
-    payload.length <= REPORT_LIMITS.maxFindingPayload;
+  const fits = (payload: string): boolean => payload.length <= REPORT_LIMITS.maxFindingPayload;
 
   // (#2341) Resource evidence rides the SAME ladder, one rung behind element
   // evidence: it is folded into every candidate payload below and is the first
@@ -790,8 +789,7 @@ function itemFindingPayload(
  */
 function wholeCheckPayload(check: CheckResult): string | null {
   const base = { details: check.details, pages: check.pages };
-  const fits = (payload: string): boolean =>
-    payload.length <= REPORT_LIMITS.maxFindingPayload;
+  const fits = (payload: string): boolean => payload.length <= REPORT_LIMITS.maxFindingPayload;
   const occurrenceCount = check.componentOccurrences?.length ?? 0;
   // A whole-check row is the only row of its check, so it always owns whatever
   // resource evidence there is — there is no sibling to defer to.
@@ -885,7 +883,7 @@ function wholeCheckPayload(check: CheckResult): string | null {
 export function flattenChecks(
   normalizedUrl: string,
   ruleId: string,
-  checks: CheckResult[]
+  checks: CheckResult[],
 ): FlatFinding[] {
   const out: FlatFinding[] = [];
   for (const check of checks) {
@@ -1065,7 +1063,7 @@ function freshKeysOf(fresh: readonly FlatFinding[]): Set<string> {
  */
 function dedupeByKey(
   priors: readonly PageFindingRecord[],
-  freshKeys: Set<string>
+  freshKeys: Set<string>,
 ): readonly PageFindingRecord[] {
   const seen = new Set<string>();
   const out: PageFindingRecord[] = [];
@@ -1097,10 +1095,7 @@ function dedupeByKey(
  * its `firstSeenAt` behind on the way through. The fresh records are then emitted
  * by {@link MergeSession.finish}, which is why it must be called last.
  */
-export function createMergeSession(
-  input: MergeSessionInput,
-  sink: MergePriorSink
-): MergeSession {
+export function createMergeSession(input: MergeSessionInput, sink: MergePriorSink): MergeSession {
   const {
     siteKey,
     crawlId,
@@ -1126,10 +1121,7 @@ export function createMergeSession(
   // Index fresh findings by key (latest wins on dup keys within a run).
   const freshByKey = new Map<string, FlatFinding>();
   for (const f of freshFindings) {
-    freshByKey.set(
-      findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
-      f
-    );
+    freshByKey.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), f);
   }
 
   // (#1876) First-seen stamps harvested from the priors this run's fresh findings
@@ -1321,7 +1313,7 @@ export function createMergeSession(
       const persisted: PageFindingRecord[] = [];
       let merged: MergedFinding | undefined;
       const freshHere = freshByKey.has(
-        findingKey(prior.normalizedUrl, prior.ruleId, successor, prior.locator)
+        findingKey(prior.normalizedUrl, prior.ruleId, successor, prior.locator),
       );
       decidePrior(asSuccessor, {
         persist: (record) => persisted.push(record),
@@ -1356,12 +1348,7 @@ export function createMergeSession(
 
   /** Prior OPEN findings (we only ever load "open"): resolve, stale, or carry. */
   const decidePrior = (prior: PageFindingRecord, sink: MergePriorSink): void => {
-    const key = findingKey(
-      prior.normalizedUrl,
-      prior.ruleId,
-      prior.checkName,
-      prior.locator
-    );
+    const key = findingKey(prior.normalizedUrl, prior.ruleId, prior.checkName, prior.locator);
     // Superseded by a fresh finding this run. The fresh record inherits this
     // prior's first-seen (a finding that resolved and returned must not reset it),
     // which is the ONLY thing the pre-#1876 whole-prior index was for.
@@ -1380,10 +1367,7 @@ export function createMergeSession(
     // (#1652) Same value for every carry branch below — computed once here so a
     // new branch can't silently forget it and default a never-rendered page back
     // to "carried".
-    const unrendered = neverRendered(
-      prior.normalizedUrl,
-      wasCrawled || signalCrawled
-    );
+    const unrendered = neverRendered(prior.normalizedUrl, wasCrawled || signalCrawled);
 
     if (wasRemoved) {
       // Page gone — stale this finding. NOTE: site_pages state + the bulk
@@ -1421,7 +1405,7 @@ export function createMergeSession(
       // local merge) or the sampled payload can say. Carry.
       if (
         notEvaluated?.pageChecks.has(
-          pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName)
+          pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName),
         ) ||
         notEvaluated?.clippedChecks.has(`${prior.ruleId}${KEY_SEP}${prior.checkName}`) ||
         notEvaluated?.rules.has(prior.ruleId) ||
@@ -1483,7 +1467,7 @@ export function createMergeSession(
           // fails the check for any other item.
           if (
             completeItemChecks?.has(
-              pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName)
+              pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName),
             )
           ) {
             sink.persist({
@@ -1658,10 +1642,7 @@ function indexPriorPages(priorPages: readonly SitePageRecord[]): {
   return { index, pages, active };
 }
 
-function toMerged(
-  r: PageFindingRecord,
-  neverRendered: boolean
-): MergedFinding {
+function toMerged(r: PageFindingRecord, neverRendered: boolean): MergedFinding {
   return {
     neverRendered,
     siteKey: r.siteKey,

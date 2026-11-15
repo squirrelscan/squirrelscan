@@ -42,7 +42,9 @@ function hreflangProblem(raw: string): { reason: string; suggestion?: string } |
   if (value.includes("_")) {
     const fixed = value
       .split("_")
-      .map((part, i) => (i === 0 ? part.toLowerCase() : part.length === 2 ? part.toUpperCase() : part))
+      .map((part, i) =>
+        i === 0 ? part.toLowerCase() : part.length === 2 ? part.toUpperCase() : part,
+      )
       .join("-");
     return { reason: "uses an underscore instead of a hyphen", suggestion: fixed };
   }
@@ -73,7 +75,9 @@ function hreflangProblem(raw: string): { reason: string; suggestion?: string } |
     i++;
   }
   if (i < parts.length) {
-    return { reason: "has subtags after the region; hreflang takes language, script and region only" };
+    return {
+      reason: "has subtags after the region; hreflang takes language, script and region only",
+    };
   }
   return null;
 }
@@ -104,8 +108,7 @@ export const hreflangRule: Rule = {
       checks.push({
         name: "hreflang",
         status: "info",
-        message:
-          "No hreflang tags found (not required for single-language sites)",
+        message: "No hreflang tags found (not required for single-language sites)",
         value: null,
       });
       return { checks };

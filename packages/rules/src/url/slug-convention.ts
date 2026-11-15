@@ -303,7 +303,7 @@ function skip(message: string): CheckResult {
 /** Stable ordering for buckets/norms: dimension order, then page type. */
 function compareScope(
   a: { dimension: Dimension; pageType: string | null },
-  b: { dimension: Dimension; pageType: string | null }
+  b: { dimension: Dimension; pageType: string | null },
 ): number {
   const byDimension = DIMENSIONS.indexOf(a.dimension) - DIMENSIONS.indexOf(b.dimension);
   if (byDimension !== 0) return byDimension;
@@ -323,7 +323,7 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
   if (sitePageCount < SLUG_NORM_MIN_PAGES) {
     return [
       skip(
-        `Only ${sitePageCount} page(s) crawled; ${SLUG_NORM_MIN_PAGES} needed to establish a URL convention norm`
+        `Only ${sitePageCount} page(s) crawled; ${SLUG_NORM_MIN_PAGES} needed to establish a URL convention norm`,
       ),
     ];
   }
@@ -334,8 +334,7 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
 
   const buckets = [...rollup.buckets.values()].sort(compareScope);
   for (const bucket of buckets) {
-    const floor =
-      bucket.pageType === null ? SLUG_NORM_MIN_SAMPLE : SLUG_NORM_MIN_GROUP_PAGES;
+    const floor = bucket.pageType === null ? SLUG_NORM_MIN_SAMPLE : SLUG_NORM_MIN_GROUP_PAGES;
     if (bucket.total < floor) continue;
 
     const modal = modalValue(bucket);
@@ -374,7 +373,7 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
   if (judged.length === 0) {
     return [
       skip(
-        `No URL convention reaches ${Math.round(SLUG_NORM_MIN_AGREEMENT * 100)}% agreement across enough comparable pages`
+        `No URL convention reaches ${Math.round(SLUG_NORM_MIN_AGREEMENT * 100)}% agreement across enough comparable pages`,
       ),
     ];
   }
@@ -385,7 +384,7 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
     .slice(0, SLUG_NORM_MAX_NORMS)
     .map(
       (j) =>
-        `${DIMENSION_LABELS[j.dimension]}${j.pageType ? ` [${j.pageType}]` : ""} ${valueLabel(j.dimension, j.norm)} ${Math.round(j.share * 100)}%`
+        `${DIMENSION_LABELS[j.dimension]}${j.pageType ? ` [${j.pageType}]` : ""} ${valueLabel(j.dimension, j.norm)} ${Math.round(j.share * 100)}%`,
     )
     .join(", ");
 
@@ -421,7 +420,7 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
   // Biggest deviant group first; the scope key breaks ties so the list never
   // depends on crawl order.
   deviations.sort(
-    (a, b) => b.urls.length - a.urls.length || compareScope(a, b) || (a.value < b.value ? -1 : 1)
+    (a, b) => b.urls.length - a.urls.length || compareScope(a, b) || (a.value < b.value ? -1 : 1),
   );
   const items: CheckItem[] = deviations.slice(0, SLUG_NORM_MAX_ITEMS).map((d) => ({
     id: `${d.dimension}:${d.pageType ?? "*"}:${d.value}`,
@@ -504,7 +503,12 @@ export const slugConventionRule: Rule = {
       if (page.redirectSource) continue;
       // An error page with no document (v1 appends one per 4xx/5xx it could not parse) is not a page of the
       // site's own URLs: the streaming universe has no row for it, so neither count includes it (#1359).
-      if (page.statusCode >= 400 && !page.parsed?.document && (!page.parsed?.pageType || page.parsed.pageType === "unknown")) continue;
+      if (
+        page.statusCode >= 400 &&
+        !page.parsed?.document &&
+        (!page.parsed?.pageType || page.parsed.pageType === "unknown")
+      )
+        continue;
       accumulatePage(rollup, {
         url: page.url,
         status: page.statusCode,

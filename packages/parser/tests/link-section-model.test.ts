@@ -29,7 +29,10 @@ function hookFor(
   calls: string[] = [],
 ): PageClassifierHook {
   return () => ({
-    classification: { pageType: { label: "article", confidence: 0.8, source: "model" }, degraded: "" },
+    classification: {
+      pageType: { label: "article", confidence: 0.8, source: "model" },
+      degraded: "",
+    },
     placeLink: (element) => {
       const text = element.textContent ?? "";
       calls.push(text);
@@ -182,7 +185,10 @@ describe("link section from the classifier", () => {
 
   test("a placer that throws leaves the markup answer", () => {
     const hook: PageClassifierHook = () => ({
-      classification: { pageType: { label: "other", confidence: 0, source: "rules" }, degraded: "" },
+      classification: {
+        pageType: { label: "other", confidence: 0, source: "rules" },
+        degraded: "",
+      },
       placeLink: () => {
         throw new Error("boom");
       },
@@ -215,7 +221,10 @@ describe("a truncated placement fails closed", () => {
   });
 
   test("a landmark the markup names is kept", () => {
-    const out = links(`<nav><a href="/n">n</a></nav><footer><a href="/f">f</a></footer>`, truncatedHook);
+    const out = links(
+      `<nav><a href="/n">n</a></nav><footer><a href="/f">f</a></footer>`,
+      truncatedHook,
+    );
     expect(out.map((l) => [l.text, l.section])).toEqual([
       ["n", "navigation"],
       ["f", "footer"],
@@ -249,8 +258,7 @@ describe("page classification on the parsed page", () => {
 
 describe("producers agree", () => {
   test("extractLinks with a placer gives the same sections as parsePage", () => {
-    const body =
-      `<footer><a href="/f">f</a></footer><main><a href="/p">p</a></main><div><a href="/b">b</a></div>`;
+    const body = `<footer><a href="/f">f</a></footer><main><a href="/p">p</a></main><div><a href="/b">b</a></div>`;
     const answers = {
       p: { section: model("pagination", 0.95) },
       b: { region: model("content_block", 0.85) },

@@ -46,11 +46,7 @@ export const shareButtonsRule: Rule = {
     const hasShareButtons = matchesLowercased(sharePatterns, ctx.page.html);
 
     // Check for share URLs
-    const shareUrls = [
-      "facebook.com/sharer",
-      "twitter.com/intent/tweet",
-      "linkedin.com/share",
-    ];
+    const shareUrls = ["facebook.com/sharer", "twitter.com/intent/tweet", "linkedin.com/share"];
 
     const links = doc.querySelectorAll("a[href]");
     let shareLinksFound = 0;
@@ -67,8 +63,7 @@ export const shareButtonsRule: Rule = {
         name: "share-buttons",
         status: "pass",
         message: "Social share functionality detected",
-        value:
-          shareLinksFound > 0 ? `${shareLinksFound} share link(s)` : undefined,
+        value: shareLinksFound > 0 ? `${shareLinksFound} share link(s)` : undefined,
       });
     } else {
       // Only suggest for content pages

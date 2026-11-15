@@ -50,10 +50,7 @@ export function extractScripts(doc: Document, baseUrl: string): ScriptRef[] {
  * Check if a script URL is same-domain as the base URL.
  * Used to filter out third-party scripts.
  */
-export function isSameDomainScript(
-  scriptUrl: string,
-  baseHost: string
-): boolean {
+export function isSameDomainScript(scriptUrl: string, baseHost: string): boolean {
   const scriptHost = getHostname(scriptUrl).toLowerCase();
   if (!scriptHost) return false;
 

@@ -21,7 +21,9 @@ function contentScore(override?: { ruleId: string; check: CheckResult }): number
         : { name: rule.meta.id.split("/")[1]!, status: "pass", message: "ok" };
     results.set(rule.meta.id, { meta: rule.meta, checks: [check] });
   }
-  const category = calculateHealthScore({ results }).categories.find((c) => c.category === "content");
+  const category = calculateHealthScore({ results }).categories.find(
+    (c) => c.category === "content",
+  );
   if (!category) throw new Error("no content category score");
   return category.score;
 }

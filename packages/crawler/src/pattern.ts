@@ -94,10 +94,7 @@ export function createPatternStats(): PatternStats {
 /**
  * Get pattern stats for a URL
  */
-export function getPatternStats(
-  stats: PatternStats,
-  url: string
-): UrlPattern | null {
+export function getPatternStats(stats: PatternStats, url: string): UrlPattern | null {
   const pattern = getUrlPattern(url);
   return stats.patterns.get(pattern) ?? null;
 }
@@ -105,11 +102,7 @@ export function getPatternStats(
 /**
  * Check if pattern has been sufficiently sampled
  */
-export function isPatternSampled(
-  stats: PatternStats,
-  url: string,
-  limit: number
-): boolean {
+export function isPatternSampled(stats: PatternStats, url: string, limit: number): boolean {
   const pattern = getUrlPattern(url);
   const entry = stats.patterns.get(pattern);
   return entry ? entry.crawledCount >= limit : false;

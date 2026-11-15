@@ -121,7 +121,10 @@ test("folding checks that carry markers keeps the record of omission", () => {
   const folded = foldOverflowChecks(
     [
       marked("https://example.test/a", 3),
-      { ...marked("https://example.test/b", 5), componentEvidence: { state: "omitted", reason: "payload-limit", occurrenceCount: 5 } },
+      {
+        ...marked("https://example.test/b", 5),
+        componentEvidence: { state: "omitted", reason: "payload-limit", occurrenceCount: 5 },
+      },
       marked("https://example.test/c", 2),
     ],
     { maxChecks: 1, maxItemsPerCheck: 10, maxPagesPerCheck: 10, maxSourcePagesPerItem: 10 },

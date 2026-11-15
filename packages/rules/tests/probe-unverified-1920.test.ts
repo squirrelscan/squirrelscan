@@ -7,13 +7,26 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { hasWafChallengeEvidence, wafChallengeVendor, WAF_CHALLENGE_MARKERS } from "@squirrelscan/utils/waf-markers";
+import {
+  hasWafChallengeEvidence,
+  wafChallengeVendor,
+  WAF_CHALLENGE_MARKERS,
+} from "@squirrelscan/utils/waf-markers";
 
 import { jsonSensitiveFieldsRule } from "../src/security/json-sensitive-fields";
 import { isThrottledOrChallenged, isUnverifiedReply } from "../src/security/probe-http";
 import { unauthenticatedApiRule } from "../src/security/unauthenticated-api";
 import type { CheckResult, Rule } from "../src/types";
-import { BASE, candidate, json, ruleCtx, stubFetch, surface, type Route, type SentRequest } from "./helpers/graphql-server";
+import {
+  BASE,
+  candidate,
+  json,
+  ruleCtx,
+  stubFetch,
+  surface,
+  type Route,
+  type SentRequest,
+} from "./helpers/graphql-server";
 
 let restore: (() => void) | undefined;
 afterEach(() => {
@@ -42,17 +55,21 @@ const appUnauthorized = () =>
   });
 /** A Cloudflare managed challenge in the app's place. */
 const cfChallenge = () =>
-  new Response('<!DOCTYPE html><html><head><title>Just a moment...</title></head><body><script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script></body></html>', {
-    status: 403,
-    headers: { "content-type": "text/html", server: "cloudflare", "cf-mitigated": "challenge" },
-  });
-const throttled = () => new Response("slow down", { status: 429, headers: { "retry-after": "30" } });
+  new Response(
+    '<!DOCTYPE html><html><head><title>Just a moment...</title></head><body><script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script></body></html>',
+    {
+      status: 403,
+      headers: { "content-type": "text/html", server: "cloudflare", "cf-mitigated": "challenge" },
+    },
+  );
+const throttled = () =>
+  new Response("slow down", { status: 429, headers: { "retry-after": "30" } });
 const serverError = () => new Response("upstream failed", { status: 502 });
 
 async function run(
   rule: Rule,
   routes: Record<string, Route>,
-  paths: string[]
+  paths: string[],
 ): Promise<{ checks: CheckResult[]; sent: SentRequest[] }> {
   const stub = stubFetch(routes);
   restore = stub.restore;
@@ -95,11 +112,15 @@ describe("shared WAF markers (#1920)", () => {
   });
 
   test("Cloudflare body markers need server: cloudflare; set-cookie names are read from Headers", () => {
-    expect(hasWafChallengeEvidence({ headers: { server: "nginx" }, body: "just a moment" })).toBe(false);
+    expect(hasWafChallengeEvidence({ headers: { server: "nginx" }, body: "just a moment" })).toBe(
+      false,
+    );
     const h = new Headers();
     h.append("set-cookie", "datadome=abc; Path=/");
     expect(wafChallengeVendor({ headers: h })).toBe("datadome");
-    expect(hasWafChallengeEvidence({ headers: { server: "cloudflare" }, body: '{"error":"forbidden"}' })).toBe(false);
+    expect(
+      hasWafChallengeEvidence({ headers: { server: "cloudflare" }, body: '{"error":"forbidden"}' }),
+    ).toBe(false);
   });
 });
 
@@ -124,7 +145,11 @@ describe("probe-http: protected vs unverified (#1920)", () => {
       { status: 429, headers: null, text: "" },
       { status: 403, headers: wafHeaders({ "cf-mitigated": "challenge" }), text: "" },
       { status: 403, headers: wafHeaders({ server: "cloudflare" }), text: "<html>cf-chl</html>" },
-      { status: 403, headers: wafHeaders({ "x-amzn-waf-action": "block" }), text: '{"message":"Forbidden"}' },
+      {
+        status: 403,
+        headers: wafHeaders({ "x-amzn-waf-action": "block" }),
+        text: '{"message":"Forbidden"}',
+      },
       { status: 403, headers: wafHeaders({ "x-datadome": "protected" }), text: "" },
       { status: 403, headers: wafHeaders({ "x-sucuri-id": "1" }), text: "" },
     ];
@@ -169,7 +194,12 @@ for (const [label, rule, uncheckedName] of RULES) {
       ]);
       expect(sent).toHaveLength(1);
       expect(checks).toEqual([
-        expect.objectContaining({ name: uncheckedName, status: "skipped", skipReason: "probe-incomplete", value: "not-checked" }),
+        expect.objectContaining({
+          name: uncheckedName,
+          status: "skipped",
+          skipReason: "probe-incomplete",
+          value: "not-checked",
+        }),
       ]);
       expect(checks[0]!.details).toMatchObject({ pushback: true, verified: 0, unverified: 2 });
     });
@@ -182,27 +212,44 @@ for (const [label, rule, uncheckedName] of RULES) {
 
     test("a 5xx is not checked", async () => {
       const { checks } = await run(rule, { [USERS]: serverError }, ["/api/users"]);
-      expect(checks).toEqual([expect.objectContaining({ name: uncheckedName, status: "skipped", skipReason: "probe-incomplete" })]);
+      expect(checks).toEqual([
+        expect.objectContaining({
+          name: uncheckedName,
+          status: "skipped",
+          skipReason: "probe-incomplete",
+        }),
+      ]);
       expect(checks[0]!.message).toContain("server error (5xx)");
     });
 
     test("zero candidates is not checked, never a pass", async () => {
       const { checks, sent } = await run(rule, {}, []);
       expect(sent).toHaveLength(0);
-      expect(checks).toEqual([expect.objectContaining({ name: uncheckedName, status: "skipped", skipReason: "no-endpoints" })]);
+      expect(checks).toEqual([
+        expect.objectContaining({
+          name: uncheckedName,
+          status: "skipped",
+          skipReason: "no-endpoints",
+        }),
+      ]);
     });
 
     test("partial: findings for the verified open endpoint plus a note naming how many were not verified", async () => {
-      const { checks, sent } = await run(rule, { [USERS]: () => json(USER_ROWS), [POSTS]: serverError }, [
-        "/api/users",
-        "/api/posts",
-      ]);
+      const { checks, sent } = await run(
+        rule,
+        { [USERS]: () => json(USER_ROWS), [POSTS]: serverError },
+        ["/api/users", "/api/posts"],
+      );
       expect(sent).toHaveLength(2);
       const findings = checks.filter((c) => c.status === "fail" || c.status === "warn");
       expect(findings.length).toBeGreaterThan(0);
       expect(findings.every((c) => JSON.stringify(c).includes(USERS))).toBe(true);
       const note = checks.find((c) => c.name === uncheckedName)!;
-      expect(note).toMatchObject({ status: "skipped", value: "not-checked", details: { verified: 1, unverified: 1 } });
+      expect(note).toMatchObject({
+        status: "skipped",
+        value: "not-checked",
+        details: { verified: 1, unverified: 1 },
+      });
       expect(note.message).toContain("1 of 2");
       expect(checks.some((c) => c.status === "pass")).toBe(false);
       // No value from the response reaches the output.
@@ -211,11 +258,11 @@ for (const [label, rule, uncheckedName] of RULES) {
     });
 
     test("partial with a challenge: the open endpoint is reported, the challenged rest is not checked", async () => {
-      const { checks, sent } = await run(rule, { [USERS]: () => json(USER_ROWS), [POSTS]: cfChallenge }, [
-        "/api/users",
-        "/api/posts",
-        "/api/orders",
-      ]);
+      const { checks, sent } = await run(
+        rule,
+        { [USERS]: () => json(USER_ROWS), [POSTS]: cfChallenge },
+        ["/api/users", "/api/posts", "/api/orders"],
+      );
       expect(sent).toHaveLength(2);
       expect(checks.some((c) => c.status === "fail" || c.status === "warn")).toBe(true);
       const note = checks.find((c) => c.name === uncheckedName)!;

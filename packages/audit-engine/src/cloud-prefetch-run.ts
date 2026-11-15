@@ -548,13 +548,13 @@ export function createCloudPrefetchCollector(siteUrl: string): {
         if (entry.parsed?.document == null) continue;
         if (entry.page.status < 200 || entry.page.status >= 300) continue;
         if (metadataPrefix.length < SERVICE_LIMITS.metadataMaxPages) metadataPrefix.push(entry);
-        if (
-          !primaryHome &&
-          (entry.page.finalUrl === siteUrl || entry.page.url === siteUrl)
-        ) {
+        if (!primaryHome && (entry.page.finalUrl === siteUrl || entry.page.url === siteUrl)) {
           primaryHome = entry;
         }
-        if (!rootHome && (isRoot(entry.page.finalUrl || entry.page.url) || isRoot(entry.page.url))) {
+        if (
+          !rootHome &&
+          (isRoot(entry.page.finalUrl || entry.page.url) || isRoot(entry.page.url))
+        ) {
           rootHome = entry;
         }
       }

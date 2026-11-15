@@ -41,7 +41,11 @@ export interface PageTypeScopeCheck {
  * region or page-type counts would compare two populations (pub#857, pub#860).
  */
 export function hasCarriedPages(check: PageTypeScopeCheck): boolean {
-  return (check.carriedPages?.length ?? 0) > 0 || (check.carriedCount ?? 0) > 0 || check.provenance === "carried";
+  return (
+    (check.carriedPages?.length ?? 0) > 0 ||
+    (check.carriedCount ?? 0) > 0 ||
+    check.provenance === "carried"
+  );
 }
 
 export interface PageTypeScope {

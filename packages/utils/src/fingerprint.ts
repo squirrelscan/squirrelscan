@@ -69,7 +69,6 @@ const CF_CHALLENGE = /__CF\$cv\$params|\/cdn-cgi\/challenge-platform\//i;
 // deploy-version cache-buster; both must stay fingerprint-significant.
 const EPOCH_MS_TOKEN = /\b\d{13}\b/g;
 
-
 const SHOPIFY_EXTENSION_HOST = "cdn.shopify.com";
 const SHOPIFY_EXTENSION_PATH = "/extensions/";
 
@@ -240,8 +239,9 @@ function neutralizeScripts(html: string): string {
         // accepted narrowing, bounded by the 7-day TTL (#991).
         const rewritten = body
           .replace(EPOCH_MS_TOKEN, "0")
-          .replace(IDENTITY_FIELD, (_m, name1, sep1, name2, sep2) =>
-            `"${name1 ?? name2}"${name1 ? sep1 : sep2}""`,
+          .replace(
+            IDENTITY_FIELD,
+            (_m, name1, sep1, name2, sep2) => `"${name1 ?? name2}"${name1 ? sep1 : sep2}""`,
           );
         if (rewritten !== body) edits.push({ start: bodyStart, end: bodyEnd, text: rewritten });
       },

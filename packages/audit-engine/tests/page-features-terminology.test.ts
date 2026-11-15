@@ -10,7 +10,16 @@ import type { PageRecord } from "@squirrelscan/core-contracts";
 import { extractPageFeatures } from "../src/index";
 
 const URL_ = "https://example.com/a";
-const record = { url: URL_, normalizedUrl: URL_, finalUrl: URL_, depth: 1, status: 200, sizeBytes: 1, headers: {}, securityHeaders: {} } as unknown as PageRecord;
+const record = {
+  url: URL_,
+  normalizedUrl: URL_,
+  finalUrl: URL_,
+  depth: 1,
+  status: 200,
+  sizeBytes: 1,
+  headers: {},
+  securityHeaders: {},
+} as unknown as PageRecord;
 
 describe("extractPageFeatures: terminologyVariants", () => {
   test("equals the rule's per-page extractor", () => {

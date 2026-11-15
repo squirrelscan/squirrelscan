@@ -44,14 +44,18 @@ describe("security/version-disclosure", () => {
   });
 
   test("Server with a version warns, naming the header and value", async () => {
-    const checks = warns(await run([page("https://example.com/", { server: "Apache/2.4.41 (Ubuntu)" })]));
+    const checks = warns(
+      await run([page("https://example.com/", { server: "Apache/2.4.41 (Ubuntu)" })]),
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]?.message).toContain("Server");
     expect(checks[0]?.message).toContain("Apache/2.4.41 (Ubuntu)");
   });
 
   test("X-Powered-By with a version warns", async () => {
-    const checks = warns(await run([page("https://example.com/", { "x-powered-by": "PHP/7.4.3" })]));
+    const checks = warns(
+      await run([page("https://example.com/", { "x-powered-by": "PHP/7.4.3" })]),
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]?.message).toContain("X-Powered-By");
     expect(checks[0]?.message).toContain("PHP/7.4.3");
@@ -59,46 +63,50 @@ describe("security/version-disclosure", () => {
 
   test("ASP.NET version headers warn, including a bare version value", async () => {
     const checks = warns(
-      (await run([
+      await run([
         page("https://example.com/", {
           "x-aspnet-version": "4.0.30319",
           "x-aspnetmvc-version": "5.2",
         }),
-      ])),
+      ]),
     );
     expect(checks.map((c) => c.value).sort()).toEqual(["4.0.30319", "5.2"]);
   });
 
   test("X-Generator with a version warns", async () => {
-    const checks = warns(await run([page("https://example.com/", { "x-generator": "WordPress 6.2.1" })]));
+    const checks = warns(
+      await run([page("https://example.com/", { "x-generator": "WordPress 6.2.1" })]),
+    );
     expect(checks).toHaveLength(1);
   });
 
   test("a product name with no version is not reported", async () => {
-    const checks = (await run([
+    const checks = await run([
       page("https://example.com/", { server: "nginx", "x-powered-by": "Express" }),
-    ]));
+    ]);
     expect(warns(checks)).toHaveLength(0);
     expect(checks.find((c) => c.status === "pass")).toBeDefined();
   });
 
   test("cloudflare and other edge names alone are not reported", async () => {
-    expect(warns(await run([page("https://example.com/", { server: "cloudflare" })]))).toHaveLength(0);
-  });
-
-  test("a single-number generator (Drupal 9) is not a version under the strict pattern", async () => {
-    expect(warns(await run([page("https://example.com/", { "x-generator": "Drupal 9" })]))).toHaveLength(
+    expect(warns(await run([page("https://example.com/", { server: "cloudflare" })]))).toHaveLength(
       0,
     );
   });
 
+  test("a single-number generator (Drupal 9) is not a version under the strict pattern", async () => {
+    expect(
+      warns(await run([page("https://example.com/", { "x-generator": "Drupal 9" })])),
+    ).toHaveLength(0);
+  });
+
   test("one finding per header value across the site, listing every page it was seen on", async () => {
     const checks = warns(
-      (await run([
+      await run([
         page("https://example.com/", { server: "nginx/1.18.0" }),
         page("https://example.com/about", { server: "nginx/1.18.0" }),
         page("https://example.com/blog", { server: "nginx/1.18.0" }),
-      ])),
+      ]),
     );
     expect(checks).toHaveLength(1);
     // In the standard item field, so the report lists the pages.
@@ -130,7 +138,7 @@ describe("security/version-disclosure", () => {
   });
 
   test("page records stored before the version headers: not checked, never a pass", async () => {
-    const checks = (await run([oldPage("https://example.com/", { server: "cloudflare" })]));
+    const checks = await run([oldPage("https://example.com/", { server: "cloudflare" })]);
     expect(checks.find((c) => c.status === "pass")).toBeUndefined();
     const skipped = checks.find((c) => c.name === "version-disclosure-unrecorded");
     expect(skipped?.status).toBe("skipped");
@@ -138,23 +146,23 @@ describe("security/version-disclosure", () => {
   });
 
   test("on stored records, a versioned Server header is still reported", async () => {
-    const checks = (await run([oldPage("https://example.com/", { server: "nginx/1.18.0" })]));
+    const checks = await run([oldPage("https://example.com/", { server: "nginx/1.18.0" })]);
     expect(warns(checks)).toHaveLength(1);
     expect(checks.find((c) => c.name === "version-disclosure-unrecorded")?.status).toBe("skipped");
   });
 
   test("two different values for the same header give two findings", async () => {
     const checks = warns(
-      (await run([
+      await run([
         page("https://example.com/", { server: "nginx/1.18.0" }),
         page("https://example.com/app", { server: "nginx/1.20.1" }),
-      ])),
+      ]),
     );
     expect(checks).toHaveLength(2);
   });
 
   test("no version on any page passes", async () => {
-    const checks = (await run([page("https://example.com/", { server: "cloudflare" })]));
+    const checks = await run([page("https://example.com/", { server: "cloudflare" })]);
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("pass");
   });

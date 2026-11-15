@@ -58,7 +58,9 @@ describe("normalizeScriptText is linear on adversarial input", () => {
     const run = (n: number) => {
       const text = "&".repeat(n);
       // Best of three, so one slow run does not decide it.
-      return Math.min(...Array.from({ length: 3 }, () => timed(() => normalizeScriptText(text)).ms));
+      return Math.min(
+        ...Array.from({ length: 3 }, () => timed(() => normalizeScriptText(text)).ms),
+      );
     };
     const small = Math.max(run(1 * MB), 1);
     const large = run(4 * MB);
@@ -74,7 +76,8 @@ describe("normalizeScriptText is linear on adversarial input", () => {
 });
 
 describe("findNeedles does one pass and bounded verification", () => {
-  const needle = (i: number) => `Needle ${i} is a sentence long enough to be indexed by its first window of characters.`;
+  const needle = (i: number) =>
+    `Needle ${i} is a sentence long enough to be indexed by its first window of characters.`;
 
   test("thousands of needles cost one pass: positions never exceed the haystack", () => {
     const haystack = "function f(e){return e}".repeat(Math.ceil((4 * MB) / 23));
@@ -97,7 +100,10 @@ describe("findNeedles does one pass and bounded verification", () => {
 
   test("a bucket flooded with needles sharing one prefix is capped too", () => {
     const shared = "Shared opening of twenty-four chars and more, then ";
-    const needles = Array.from({ length: 20_000 }, (_, i) => `${shared}${i} and the rest of the sentence continues here.`);
+    const needles = Array.from(
+      { length: 20_000 },
+      (_, i) => `${shared}${i} and the rest of the sentence continues here.`,
+    );
     const haystack = shared.repeat(100_000);
     const search = findNeedles(haystack, buildNeedleIndex(needles));
     expect(search.verifications).toBeLessThanOrEqual(MAX_VERIFICATIONS);
@@ -125,7 +131,9 @@ describe("extractContentSentences is bounded on adversarial pages", () => {
 
   test("one 5 MB text node is read to a few kilobytes", () => {
     const sentence = "word ".repeat(1_000_000);
-    const { value, ms } = timed(() => extractContentSentences(doc(`<main><p>${sentence}</p></main>`)));
+    const { value, ms } = timed(() =>
+      extractContentSentences(doc(`<main><p>${sentence}</p></main>`)),
+    );
     expect(value.length).toBeLessThanOrEqual(1);
     expect(value[0]?.length ?? 0).toBeLessThanOrEqual(200);
     expect(ms).toBeLessThan(CEILING_MS);
@@ -146,7 +154,10 @@ describe("extractContentSentences is bounded on adversarial pages", () => {
   });
 
   test("tens of thousands of long distinct paragraphs keep at most five sentences of 200 characters", () => {
-    const paragraphs = Array.from({ length: 20_000 }, (_, i) => `<p>${`paragraph${i} `.repeat(15)}</p>`).join("");
+    const paragraphs = Array.from(
+      { length: 20_000 },
+      (_, i) => `<p>${`paragraph${i} `.repeat(15)}</p>`,
+    ).join("");
     const { value } = timed(() => extractContentSentences(doc(`<main>${paragraphs}</main>`)));
     expect(value.length).toBeLessThanOrEqual(5);
     for (const sentence of value) expect(sentence.length).toBeLessThanOrEqual(200);
@@ -175,7 +186,12 @@ describe("the rule does bounded work on a site of many large chunks", () => {
       parsed: parsePage(pages[0]!, `${BASE}/p0`),
       site: {
         baseUrl: BASE,
-        pages: pages.map((html, i) => ({ url: `${BASE}/p${i}`, statusCode: 200, parsed: parsePage(html, `${BASE}/p${i}`), sizeBytes: 1000 })),
+        pages: pages.map((html, i) => ({
+          url: `${BASE}/p${i}`,
+          statusCode: 200,
+          parsed: parsePage(html, `${BASE}/p${i}`),
+          sizeBytes: 1000,
+        })),
         robotsTxt: null,
         sitemaps: null,
         scripts: chunks,

@@ -113,8 +113,14 @@ for (const engine of ["v1", "v2"] as const) {
 
 test("the store keeps the media type and the charset apart", async () => {
   const { storedHeaders } = await audit("v1");
-  expect(storedHeaders("/quoted")).toMatchObject({ contentType: "text/html", contentTypeCharset: "UTF-8" });
-  expect(storedHeaders("/none")).toMatchObject({ contentType: "text/html", contentTypeCharset: null });
+  expect(storedHeaders("/quoted")).toMatchObject({
+    contentType: "text/html",
+    contentTypeCharset: "UTF-8",
+  });
+  expect(storedHeaders("/none")).toMatchObject({
+    contentType: "text/html",
+    contentTypeCharset: null,
+  });
 });
 
 // An incremental crawl that fetches a page whose body has not changed reuses

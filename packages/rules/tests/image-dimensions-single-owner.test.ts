@@ -30,7 +30,9 @@ describe("missing image dimensions have one owner", () => {
     const cls = results.get("perf/cls-hints")?.find((c) => c.name === "cls-images");
     expect(dim?.status).toBe("warn");
     expect(cls?.status).toBe("info");
-    expect(cls?.message).toBe("1 image(s) without width/height in static HTML: reported by images/dimensions");
+    expect(cls?.message).toBe(
+      "1 image(s) without width/height in static HTML: reported by images/dimensions",
+    );
   });
 
   test("both rules key the image by the same absolute URL", async () => {

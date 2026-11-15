@@ -11,7 +11,9 @@ describe("robots_user_agent", () => {
   });
 
   test("takes another token, or empty for the user agent's own", () => {
-    expect(CrawlerConfigSchema.parse({ robots_user_agent: "MyBot" }).robots_user_agent).toBe("MyBot");
+    expect(CrawlerConfigSchema.parse({ robots_user_agent: "MyBot" }).robots_user_agent).toBe(
+      "MyBot",
+    );
     expect(CrawlerConfigSchema.parse({ robots_user_agent: "" }).robots_user_agent).toBe("");
   });
 });

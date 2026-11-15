@@ -31,10 +31,7 @@ import {
  */
 export function withObservedHopStatuses(hops: RedirectChain["hops"]): RedirectChain["hops"] {
   return hops.map((hop, i) =>
-    i < hops.length - 1 &&
-    hop.type === "http" &&
-    hop.statusCode >= 200 &&
-    hop.statusCode < 300
+    i < hops.length - 1 && hop.type === "http" && hop.statusCode >= 200 && hop.statusCode < 300
       ? { ...hop, statusCode: 0 }
       : hop,
   );
@@ -342,10 +339,7 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
             try {
               // The same address as the request it repeats (repo#2830,
               // repo#3430): a fresh lookup here could answer differently.
-              const raw = await guardedBy(fetchRaw, req.egress)(
-                currentUrl,
-                requestInit,
-              );
+              const raw = await guardedBy(fetchRaw, req.egress)(currentUrl, requestInit);
               finalBody = await readBodyCapped(raw, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
             } catch {
               finalBody = "";

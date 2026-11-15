@@ -67,7 +67,10 @@ describe("readBodyCapped (streamed)", () => {
 });
 
 describe("readBodyCapped (no-stream fallback)", () => {
-  function fakeResponse(text: string, headers: Record<string, string>): {
+  function fakeResponse(
+    text: string,
+    headers: Record<string, string>,
+  ): {
     res: Response;
     textCalls: () => number;
   } {

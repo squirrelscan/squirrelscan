@@ -82,7 +82,13 @@ function rules(
       if (engine === "v1") {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        const ran = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, preRules.assets);
+        const ran = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          preRules.assets,
+        );
         return ran.siteRuleResults.get("links/broken-links") ?? [];
       }
       const ran = yield* runStreamingRules(storage, crawlId, CONFIG, preRules.assets);
@@ -175,7 +181,10 @@ async function storedParseAudit(engine: "v1" | "v2") {
   );
   // The crawler's own serialization of today's parse, with `links` and
   // `contactLinks` as a parse before pub#811 stored them.
-  const { document: _doc, ...parsed } = parsePage(pageRecord(origin, "/", null).html!, `${origin}/`);
+  const { document: _doc, ...parsed } = parsePage(
+    pageRecord(origin, "/", null).html!,
+    `${origin}/`,
+  );
   const oldParse = JSON.stringify({
     ...parsed,
     links: [

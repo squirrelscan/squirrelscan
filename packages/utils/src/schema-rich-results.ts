@@ -198,7 +198,7 @@ export function getRichResultTypes(schemas: SchemaCollection): string[] {
   for (const type of schemas.types) {
     // Case-insensitive match against rich result types
     const match = RICH_RESULT_TYPES.find(
-      (richType) => richType.toLowerCase() === type.toLowerCase()
+      (richType) => richType.toLowerCase() === type.toLowerCase(),
     );
 
     if (match) {

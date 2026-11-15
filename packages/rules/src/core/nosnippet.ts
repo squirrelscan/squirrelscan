@@ -60,9 +60,7 @@ Note: max-snippet:N where N > 0 is fine (sets snippet character limit).`,
       });
     } else {
       // Check if max-snippet with non-zero value (info only)
-      const maxSnippetMatch = directives.find((d) =>
-        d.startsWith("max-snippet:")
-      );
+      const maxSnippetMatch = directives.find((d) => d.startsWith("max-snippet:"));
       if (maxSnippetMatch) {
         checks.push({
           name: "nosnippet",

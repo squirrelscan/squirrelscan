@@ -28,62 +28,64 @@ async function run(ctx: RuleContext): Promise<CheckResult> {
 
 describe("perf/carousel-hidden-eager", () => {
   test("warns: eager img in aria-hidden swiper slide", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(
         `<div class="swiper">
           <div class="swiper-slide"><img src="/slide1.jpg"></div>
           <div class="swiper-slide" aria-hidden="true"><img src="/slide2.jpg"></div>
         </div>`,
       ),
-    ));
+    );
     expect(c.status).toBe("warn");
     expect(c.items?.map((i) => i.id)).toEqual(["/slide2.jpg"]);
   });
 
   test("warns: eager img in display:none carousel-item", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(`<div class="carousel-item" style="display:none"><img src="/hidden.jpg"></div>`),
-    ));
+    );
     expect(c.status).toBe("warn");
   });
 
   test("passes: lazy img in hidden slide (handled by lazy rules)", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(
         `<div class="swiper-slide" aria-hidden="true"><img src="/slide2.jpg" loading="lazy"></div>`,
       ),
-    ));
+    );
     expect(c.status).toBe("pass");
   });
 
   test("passes: visible slide eager img is fine", async () => {
-    const c = (await run(makeCtx(`<div class="swiper-slide"><img src="/slide1.jpg"></div>`)));
+    const c = await run(makeCtx(`<div class="swiper-slide"><img src="/slide1.jpg"></div>`));
     expect(c.status).toBe("pass");
   });
 
   test("passes: hidden element that is NOT a carousel slide", async () => {
-    const c = (await run(makeCtx(`<div class="tab-panel" hidden><img src="/tab.jpg"></div>`)));
+    const c = await run(makeCtx(`<div class="tab-panel" hidden><img src="/tab.jpg"></div>`));
     expect(c.status).toBe("pass");
   });
 
   test("passes: generic slide-in animation is not a carousel", async () => {
-    const c = (await run(makeCtx(`<div hidden><div class="slide-in"><img src="/promo.jpg"></div></div>`)));
+    const c = await run(
+      makeCtx(`<div hidden><div class="slide-in"><img src="/promo.jpg"></div></div>`),
+    );
     expect(c.status).toBe("pass");
   });
 
   test("warns: whole carousel container hidden with eager img", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(`<div class="carousel" style="display:none"><div><img src="/x.jpg"></div></div>`),
-    ));
+    );
     expect(c.status).toBe("warn");
   });
 
   test("passes: data URI images skipped", async () => {
-    const c = (await run(
+    const c = await run(
       makeCtx(
         `<div class="swiper-slide" aria-hidden="true"><img src="data:image/gif;base64,AA"></div>`,
       ),
-    ));
+    );
     expect(c.status).toBe("pass");
   });
 

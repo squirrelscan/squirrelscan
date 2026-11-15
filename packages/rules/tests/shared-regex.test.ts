@@ -16,7 +16,15 @@ const SHARED = sharedRegex(/[a-z]\d/g);
 
 function rule(id: string, run: (ctx: RuleContext) => RuleResult): Rule {
   return {
-    meta: { id, name: id, description: "test rule", category: "core", scope: "page", severity: "info", weight: 1 },
+    meta: {
+      id,
+      name: id,
+      description: "test rule",
+      category: "core",
+      scope: "page",
+      severity: "info",
+      weight: 1,
+    },
     run,
   };
 }
@@ -42,14 +50,30 @@ describe("shared regex reset on abandon", () => {
       checks: [{ name: "test/next", status: "pass", message: `matches ${countMatches()}` }],
     }));
     const rules = [killed, next];
-    const config: RulesConfig = { rule_options: {}, rules: { enable: rules.map((r) => r.meta.id) } };
+    const config: RulesConfig = {
+      rule_options: {},
+      rules: { enable: rules.map((r) => r.meta.id) },
+    };
     const ns: RuleNamespace = { name: "test", rules };
     const runner = new RuleRunner({ config, additionalNamespaces: [ns], ruleTimeBudgetMs: 50 });
-    const page: PageData = { url: "https://example.com/", html: "<p>x</p>", statusCode: 200, loadTime: 0, headers: {} };
+    const page: PageData = {
+      url: "https://example.com/",
+      html: "<p>x</p>",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    };
 
-    const { checks } = await runner.runPageRules(page, { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null });
+    const { checks } = await runner.runPageRules(page, {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    });
 
-    expect(checks.find((c) => c.name === "test/killed-error")?.details).toMatchObject({ timedOut: true });
+    expect(checks.find((c) => c.name === "test/killed-error")?.details).toMatchObject({
+      timedOut: true,
+    });
     expect(checks.find((c) => c.name === "test/next")?.message).toBe("matches 5");
   }, 30_000);
 
@@ -65,7 +89,7 @@ describe("shared regex reset on abandon", () => {
         for (;;) {
           // spin
         }
-      }, 30)
+      }, 30),
     ).toThrow(RuleTimeoutError);
     expect(SHARED.lastIndex).toBe(0);
     resetSharedRegexes();
@@ -82,19 +106,25 @@ describe("shared regex reset on abandon", () => {
 describe("module-level stateful regexes are registered", () => {
   function sourceFiles(dir: string): string[] {
     return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? sourceFiles(join(dir, e.name)) : e.name.endsWith(".ts") ? [join(dir, e.name)] : []
+      e.isDirectory()
+        ? sourceFiles(join(dir, e.name))
+        : e.name.endsWith(".ts")
+          ? [join(dir, e.name)]
+          : [],
     );
   }
 
   test("every /g or /y constant used with exec or test goes through sharedRegex", () => {
-    const decl = /^(?:export )?const (\w+)\b[^=\n]*= *(sharedRegex\()?(?:\/.*\/[a-z]*[gy][a-z]*|new RegExp\(.*"[a-z]*[gy][a-z]*"\))\)?[;,]?\s*$/gm;
+    const decl =
+      /^(?:export )?const (\w+)\b[^=\n]*= *(sharedRegex\()?(?:\/.*\/[a-z]*[gy][a-z]*|new RegExp\(.*"[a-z]*[gy][a-z]*"\))\)?[;,]?\s*$/gm;
     const unregistered: string[] = [];
     for (const file of sourceFiles(join(import.meta.dir, "../src"))) {
       const source = readFileSync(file, "utf8");
       for (const m of source.matchAll(decl)) {
         const [, name, wrapped] = m;
         if (wrapped) continue;
-        if (new RegExp(`\\b${name}\\.(?:exec|test)\\(`).test(source)) unregistered.push(`${file}: ${name}`);
+        if (new RegExp(`\\b${name}\\.(?:exec|test)\\(`).test(source))
+          unregistered.push(`${file}: ${name}`);
       }
     }
     expect(unregistered).toEqual([]);

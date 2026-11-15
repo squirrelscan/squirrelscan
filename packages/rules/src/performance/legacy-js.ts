@@ -100,10 +100,9 @@ export const legacyJsRule: Rule = {
     // Check for module/nomodule differential serving
     const moduleScripts = querySelectorAllOutsideNoscript(doc, 'script[type="module"]');
     const nomoduleScripts = querySelectorAllByAttrCI(doc, "script", "nomodule").filter(
-      (script) => !isInsideNoscript(script)
+      (script) => !isInsideNoscript(script),
     );
-    const hasDifferentialServing =
-      moduleScripts.length > 0 && nomoduleScripts.length > 0;
+    const hasDifferentialServing = moduleScripts.length > 0 && nomoduleScripts.length > 0;
 
     // Report findings
     if (legacyFound.length > 0) {
@@ -148,11 +147,7 @@ export const legacyJsRule: Rule = {
       });
     }
 
-    if (
-      legacyFound.length === 0 &&
-      es5PatternsFound.length === 0 &&
-      moduleScripts.length === 0
-    ) {
+    if (legacyFound.length === 0 && es5PatternsFound.length === 0 && moduleScripts.length === 0) {
       checks.push({
         name: "legacy-js",
         status: "info",

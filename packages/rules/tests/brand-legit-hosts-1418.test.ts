@@ -14,7 +14,11 @@ const url = "https://shop.example/";
 function brand(label: string, href: string, pageUrl = url): string | null {
   const html = `<!doctype html><html><head><title>Account</title></head><body><main><h1>Account</h1><a href="${href}">${label}</a></main></body></html>`;
   const parsed = parsePage(html, pageUrl);
-  const ctx = { page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
+  const ctx = {
+    page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+    parsed,
+    options: {},
+  } as unknown as RuleContext;
   return detectBrandImpersonation(ctx)?.brand ?? null;
 }
 const google = (href: string): string | null => brand("Sign in with Google", href);
@@ -83,14 +87,27 @@ describe("how a host is matched", () => {
     }
   });
   test("a backslash form that names another host is judged by the host it names", () => {
-    expect(google(String.raw`https:\\credential-fixture.invalid\accounts.google.com`)).toBe("Google");
-    expect(google(String.raw`https:\\accounts.google.com@credential-fixture.invalid\x`)).toBe("Google");
+    expect(google(String.raw`https:\\credential-fixture.invalid\accounts.google.com`)).toBe(
+      "Google",
+    );
+    expect(google(String.raw`https:\\accounts.google.com@credential-fixture.invalid\x`)).toBe(
+      "Google",
+    );
   });
   test("the dot boundary: a host that only ends with a listed host's text is not it", () => {
-    for (const href of ["https://evilaccounts.google.com/", "https://notaccounts.youtube.com/", "https://xmyaccount.google.com/"]) {
+    for (const href of [
+      "https://evilaccounts.google.com/",
+      "https://notaccounts.youtube.com/",
+      "https://xmyaccount.google.com/",
+    ]) {
       expect(google(href), href).toBe("Google");
     }
-    for (const href of ["https://xlogin.live.com/", "https://evillogin.microsoftonline.de/", "https://notaccount.live.com/", "https://fakeaccount.microsoft.com/"]) {
+    for (const href of [
+      "https://xlogin.live.com/",
+      "https://evillogin.microsoftonline.de/",
+      "https://notaccount.live.com/",
+      "https://fakeaccount.microsoft.com/",
+    ]) {
       expect(microsoft(href), href).toBe("Microsoft");
     }
     expect(brand("Log in to Calendly", "https://evilcalendly.com/login")).toBe("Calendly");
@@ -108,17 +125,39 @@ describe("how a host is matched", () => {
     expect(google("https://accounts.google.com./o/oauth2")).toBe("Google");
   });
   test("a look-alike label is reported: homograph, extra label, hyphen", () => {
-    for (const href of ["https://accounts.g\u043e\u043egle.com/", "https://accounts.google.com.credential-fixture.invalid/", "https://accounts-google.com/", "https://login-live.com/"]) {
-      expect(brand("Sign in with Google", href) ?? brand("Sign in with Microsoft", href), href).not.toBeNull();
+    for (const href of [
+      "https://accounts.g\u043e\u043egle.com/",
+      "https://accounts.google.com.credential-fixture.invalid/",
+      "https://accounts-google.com/",
+      "https://login-live.com/",
+    ]) {
+      expect(
+        brand("Sign in with Google", href) ?? brand("Sign in with Microsoft", href),
+        href,
+      ).not.toBeNull();
     }
   });
   test("a page on a user-content host is the same site as the other hosts of its domain (unchanged: a known limit)", () => {
     // `isSelfOrSameSite`: sites.google.com and docs.google.com share a registrable domain, so a page hosted on the first whose
     // "Sign in with Google" goes to the second is the site's own surface and is spared; the same for forms.microsoft.com.
-    expect(brand("Sign in with Google", "https://docs.google.com/forms/d/e/abc/viewform", "https://sites.google.com/view/anything")).toBeNull();
-    expect(brand("Sign in with Microsoft", "https://answers.microsoft.com/x", "https://forms.microsoft.com/r/abc")).toBeNull();
+    expect(
+      brand(
+        "Sign in with Google",
+        "https://docs.google.com/forms/d/e/abc/viewform",
+        "https://sites.google.com/view/anything",
+      ),
+    ).toBeNull();
+    expect(
+      brand(
+        "Sign in with Microsoft",
+        "https://answers.microsoft.com/x",
+        "https://forms.microsoft.com/r/abc",
+      ),
+    ).toBeNull();
     // while the same link from a page on another domain is reported
-    expect(brand("Sign in with Google", "https://docs.google.com/forms/d/e/abc/viewform")).toBe("Google");
+    expect(brand("Sign in with Google", "https://docs.google.com/forms/d/e/abc/viewform")).toBe(
+      "Google",
+    );
   });
 });
 
@@ -171,7 +210,8 @@ describe("Microsoft: only its sign-in hosts spare a sign-in control", () => {
   });
   test("the real B2C shape puts /tfp/<tenant>.onmicrosoft.com/<policy> before the authorize path: own tenant spared, foreign tenant reported", () => {
     // built from parts: the tenant host, the /tfp/ directory path, the policy and the authorize tail
-    const b2c = (tenant: string, tail: string, query = ""): string => `https://${tenant}.b2clogin.com/tfp/${tenant}.onmicrosoft.com/${tail}${query}`;
+    const b2c = (tenant: string, tail: string, query = ""): string =>
+      `https://${tenant}.b2clogin.com/tfp/${tenant}.onmicrosoft.com/${tail}${query}`;
     const policy = ["b2c", "1", "signin"].join("_");
     const own = "shop";
     const foreign = "tenant";
@@ -194,11 +234,14 @@ describe("Microsoft: only its sign-in hosts spare a sign-in control", () => {
     }
   });
   test("a tenant is matched against a site name of at least three letters, and the name is the registrable domain's", () => {
-    const authorize = (tenant: string) => `https://${tenant}.b2clogin.com/${tenant}.onmicrosoft.com/oauth2/v2.0/authorize`;
+    const authorize = (tenant: string) =>
+      `https://${tenant}.b2clogin.com/${tenant}.onmicrosoft.com/oauth2/v2.0/authorize`;
     expect(brand("Sign in with Microsoft", authorize("abc"), "https://abc.com/")).toBeNull(); // three letters: matched
     expect(brand("Sign in with Microsoft", authorize("ab"), "https://ab.com/")).toBe("Microsoft"); // two letters: never spared
     expect(brand("Sign in with Microsoft", authorize("shop"), "https://www.shop.com/")).toBeNull(); // a sub-domain of the site
-    expect(brand("Sign in with Microsoft", authorize("www"), "https://www.shop.com/")).toBe("Microsoft");
+    expect(brand("Sign in with Microsoft", authorize("www"), "https://www.shop.com/")).toBe(
+      "Microsoft",
+    );
   });
   test("forms, answers and other microsoft.com hosts are reported", () => {
     for (const href of [
@@ -216,13 +259,20 @@ describe("Microsoft: only its sign-in hosts spare a sign-in control", () => {
 });
 
 describe("hostile pages stay linear, at 5 MB and at 10 MiB", () => {
-  for (const [label, bytes] of [["5 MB", 5_000_000], ["10 MiB", 10 * 1_048_576]] as const) {
+  for (const [label, bytes] of [
+    ["5 MB", 5_000_000],
+    ["10 MiB", 10 * 1_048_576],
+  ] as const) {
     test(`${label} of sign-in links to user-content hosts, then a real one`, () => {
       const unit = '<a href="https://sites.google.com/view/x?q=1">Sign in with Google</a>';
       const body = unit.repeat(Math.ceil(bytes / unit.length));
       const html = `<!doctype html><html><head><title>A</title></head><body><main><h1>A</h1>${body}<a href="https://accounts.google.com/">Sign in with Google</a></main></body></html>`;
       const parsed = parsePage(html, url);
-      const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
+      const ctx = {
+        page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+        parsed,
+        options: {},
+      } as unknown as RuleContext;
       const started = performance.now();
       const hit = detectBrandImpersonation(ctx);
       const elapsed = performance.now() - started;
@@ -235,16 +285,22 @@ describe("hostile pages stay linear, at 5 MB and at 10 MiB", () => {
 
 describe("the brand data", () => {
   test("no brand's host list is a registrable domain that hosts user content", () => {
-    const hosts = BRAND_SPECS.flatMap((spec) => [spec.brand === "Google" || spec.brand === "Microsoft" ? spec.legitHosts : []].flat());
-    for (const bare of ["google.com", "microsoft.com", "live.com", "microsoftonline.com", "youtube.com"]) {
+    const hosts = BRAND_SPECS.flatMap((spec) =>
+      [spec.brand === "Google" || spec.brand === "Microsoft" ? spec.legitHosts : []].flat(),
+    );
+    for (const bare of [
+      "google.com",
+      "microsoft.com",
+      "live.com",
+      "microsoftonline.com",
+      "youtube.com",
+    ]) {
       expect(hosts, bare).not.toContain(bare);
     }
   });
   test("other brands are unchanged", () => {
     const calendly = BRAND_SPECS.find((spec) => spec.brand === "Calendly")!;
     expect(calendly.legitHosts).toEqual(["calendly.com"]);
-    expect(
-      brand("Sign in to Calendly", "https://calendly.com/login"),
-    ).toBeNull();
+    expect(brand("Sign in to Calendly", "https://calendly.com/login")).toBeNull();
   });
 });

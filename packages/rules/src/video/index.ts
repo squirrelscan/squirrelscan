@@ -7,8 +7,4 @@ import { videoAccessibleRule } from "./video-accessible";
 import { videoSchemaPresenceRule } from "./video-schema";
 import { videoThumbnailRule } from "./video-thumbnail";
 
-export const rules: Rule[] = [
-  videoSchemaPresenceRule,
-  videoThumbnailRule,
-  videoAccessibleRule,
-];
+export const rules: Rule[] = [videoSchemaPresenceRule, videoThumbnailRule, videoAccessibleRule];

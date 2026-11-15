@@ -126,9 +126,7 @@ export const orphanPageRule: Rule = {
       // If the site has NO sitemap at all, absence from sitemap is meaningless,
       // so we require zero inbound links alone — but that's a weaker signal, so
       // we still gate severity via correlation below.
-      const isHidden = hasSitemap
-        ? inboundCount === 0 && !inSitemap
-        : inboundCount === 0;
+      const isHidden = hasSitemap ? inboundCount === 0 && !inSitemap : inboundCount === 0;
       if (!isHidden) continue;
 
       // Correlate with page-level integrity signals.
@@ -175,8 +173,10 @@ export const orphanPageRule: Rule = {
     const escalated = hidden.filter((h) => h.escalated);
     const reviewOnly = hidden.filter((h) => !h.escalated);
     const listOf = (items: typeof hidden) =>
-      items.slice(0, 5).map((h) => getPathname(h.url)).join("\n") +
-      (items.length > 5 ? `\n+${items.length - 5} more` : "");
+      items
+        .slice(0, 5)
+        .map((h) => getPathname(h.url))
+        .join("\n") + (items.length > 5 ? `\n+${items.length - 5} more` : "");
 
     if (escalated.length > 0) {
       checks.push({
@@ -198,7 +198,12 @@ export const orphanPageRule: Rule = {
           : `${reviewOnly.length} hidden page(s): in no sitemap and linked from nowhere (review)`,
         value: listOf(reviewOnly),
         items: reviewOnly.map((h) => ({ id: h.url })),
-        details: { total: reviewOnly.length, hasSitemap, escalated: false, ...(corpusIncomplete ? { sitemapIncomplete: true } : {}) },
+        details: {
+          total: reviewOnly.length,
+          hasSitemap,
+          escalated: false,
+          ...(corpusIncomplete ? { sitemapIncomplete: true } : {}),
+        },
       });
     }
 

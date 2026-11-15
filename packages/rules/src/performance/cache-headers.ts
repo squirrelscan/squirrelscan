@@ -125,8 +125,7 @@ export const cacheHeadersRule: Rule = {
               status: "warn",
               message: `Short cache for static asset (${maxAgeSeconds}s)`,
               value: cacheControl,
-              expected:
-                "Static assets should cache for at least 1 day (86400s)",
+              expected: "Static assets should cache for at least 1 day (86400s)",
             });
           } else {
             checks.push({

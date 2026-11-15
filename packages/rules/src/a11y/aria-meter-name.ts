@@ -83,7 +83,13 @@ export const ariaMeterNameRule: Rule = {
       });
     }
     if (unnamed.unconfirmed.length > 0) {
-      checks.push(unconfirmedRow("aria-meter-name", "meter element(s) without accessible names", unnamed.unconfirmed));
+      checks.push(
+        unconfirmedRow(
+          "aria-meter-name",
+          "meter element(s) without accessible names",
+          unnamed.unconfirmed,
+        ),
+      );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
       if (meterRoles.length > 0 || meters.length > 0) {

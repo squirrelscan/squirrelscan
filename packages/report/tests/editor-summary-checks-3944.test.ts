@@ -44,7 +44,10 @@ describe("buildEditorSummaryRequest checks (#3944)", () => {
         "security/hsts": { meta: {}, checks: [check("hsts", "pass")] },
         "ax/llms-txt": {
           meta: {},
-          checks: [check("llms-txt-present", "info", "present"), check("llms-txt-format", "info", "valid")],
+          checks: [
+            check("llms-txt-present", "info", "present"),
+            check("llms-txt-format", "info", "valid"),
+          ],
         },
         "ax/markdown-response": { meta: {}, checks: [check("markdown-response", "warn")] },
         // Not a confirmable family: its pass is not sent.

@@ -49,17 +49,15 @@ export const contentDatesRule: Rule = {
 
     for (const page of pages) {
       const hasArticleSchema = page.parsed.schema.types.some((t) =>
-        ["Article", "BlogPosting", "NewsArticle"].includes(t)
+        ["Article", "BlogPosting", "NewsArticle"].includes(t),
       );
       // A page with visible byline/date markup (Kadence-style entry pages) is
       // article content even without JSON-LD Article schema — otherwise we'd
       // skip the very pages this fix is meant to detect.
       const hasVisibleContentSignal =
-        page.parsed.visibleDatePublished != null ||
-        page.parsed.visibleAuthor != null;
+        page.parsed.visibleDatePublished != null || page.parsed.visibleAuthor != null;
 
-      if (!hasArticleSchema && !hasVisibleContentSignal && pages.length > 5)
-        continue;
+      if (!hasArticleSchema && !hasVisibleContentSignal && pages.length > 5) continue;
       contentPages++;
 
       // Check for date schema
@@ -104,9 +102,7 @@ export const contentDatesRule: Rule = {
     }
 
     const datePercentage = Math.round((pagesWithDates / contentPages) * 100);
-    const modifiedPercentage = Math.round(
-      (pagesWithModified / contentPages) * 100
-    );
+    const modifiedPercentage = Math.round((pagesWithModified / contentPages) * 100);
 
     if (datePercentage >= 80) {
       checks.push({

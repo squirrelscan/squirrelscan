@@ -20,10 +20,15 @@ export const optionsSchema = z.object({
     .array(
       z
         .string()
-        .regex(HOSTNAME, "must be a hostname such as static.example.com, with no scheme, port or path")
+        .regex(
+          HOSTNAME,
+          "must be a hostname such as static.example.com, with no scheme, port or path",
+        ),
     )
     .default([])
-    .describe("Extra hostnames whose scripts and stylesheets update in place, exempt from the check"),
+    .describe(
+      "Extra hostnames whose scripts and stylesheets update in place, exempt from the check",
+    ),
 });
 
 // A handful of widely-deployed third-party SDKs that explicitly document SRI

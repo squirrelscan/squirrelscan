@@ -23,7 +23,12 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { UNREADABLE_MESSAGE, bareTypeName, jsonLdTypes, microdataAndRdfaTypes } from "./markup-types";
+import {
+  UNREADABLE_MESSAGE,
+  bareTypeName,
+  jsonLdTypes,
+  microdataAndRdfaTypes,
+} from "./markup-types";
 
 export const optionsSchema = z.object({
   min_confidence: z
@@ -53,7 +58,8 @@ const ARTICLE_TYPES = new Set([
   "discussionforumposting",
 ]);
 // Not `endsWith("posting")`: that would take JobPosting for an article.
-const isArticleType = (name: string): boolean => name.endsWith("article") || ARTICLE_TYPES.has(name);
+const isArticleType = (name: string): boolean =>
+  name.endsWith("article") || ARTICLE_TYPES.has(name);
 
 const PRODUCT_TYPES = new Set([
   "product",
@@ -69,7 +75,13 @@ const PRODUCT_TYPES = new Set([
   "webapplication",
 ]);
 
-const LISTING_TYPES = new Set(["collectionpage", "itemlist", "searchresultspage", "blog", "offercatalog"]);
+const LISTING_TYPES = new Set([
+  "collectionpage",
+  "itemlist",
+  "searchresultspage",
+  "blog",
+  "offercatalog",
+]);
 // The subset that says "this page is an index", used for the veto. OfferCatalog is
 // a valid listing answer for product_listing but does not prove a post is an index.
 const VETO_TYPES = new Set(["collectionpage", "itemlist", "searchresultspage", "blog"]);
@@ -143,7 +155,10 @@ const FAMILIES: Readonly<Record<string, PageTypeFamily>> = {
     noun: "about page",
     wanted: "AboutPage, ProfilePage, Person or Organization",
     matches: (name) =>
-      name === "aboutpage" || name === "profilepage" || name === "person" || isOrganizationType(name),
+      name === "aboutpage" ||
+      name === "profilepage" ||
+      name === "person" ||
+      isOrganizationType(name),
     detail: false,
   },
 };

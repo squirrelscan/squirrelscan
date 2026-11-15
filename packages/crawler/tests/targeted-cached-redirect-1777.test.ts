@@ -90,7 +90,10 @@ const baseConfig = {
   maxPages: 50,
 };
 
-async function createCrawlRecord(storage: CrawlStorage, config: Record<string, unknown>): Promise<string> {
+async function createCrawlRecord(
+  storage: CrawlStorage,
+  config: Record<string, unknown>,
+): Promise<string> {
   return Effect.runPromise(
     storage.createCrawl({
       baseUrl: ORIGIN,

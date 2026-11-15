@@ -3,64 +3,60 @@
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // ARIA attribute value types and valid values
-const ariaAttributeValues: Record<string, { type: string; values?: string[] }> =
-  {
-    "aria-autocomplete": {
-      type: "token",
-      values: ["inline", "list", "both", "none"],
-    },
-    "aria-busy": { type: "boolean" },
-    "aria-checked": { type: "tristate", values: ["true", "false", "mixed"] },
-    "aria-current": {
-      type: "token",
-      values: ["page", "step", "location", "date", "time", "true", "false"],
-    },
-    "aria-disabled": { type: "boolean" },
-    "aria-dropeffect": {
-      type: "tokenlist",
-      values: ["copy", "execute", "link", "move", "none", "popup"],
-    },
-    "aria-expanded": { type: "boolean-or-undefined" },
-    "aria-grabbed": { type: "boolean-or-undefined" },
-    "aria-haspopup": {
-      type: "token",
-      values: ["true", "false", "menu", "listbox", "tree", "grid", "dialog"],
-    },
-    "aria-hidden": { type: "boolean-or-undefined" },
-    "aria-invalid": {
-      type: "token",
-      values: ["true", "false", "grammar", "spelling"],
-    },
-    "aria-level": { type: "integer" },
-    "aria-live": { type: "token", values: ["off", "polite", "assertive"] },
-    "aria-modal": { type: "boolean" },
-    "aria-multiline": { type: "boolean" },
-    "aria-multiselectable": { type: "boolean" },
-    "aria-orientation": {
-      type: "token",
-      values: ["horizontal", "vertical", "undefined"],
-    },
-    "aria-pressed": { type: "tristate", values: ["true", "false", "mixed"] },
-    "aria-readonly": { type: "boolean" },
-    "aria-relevant": {
-      type: "tokenlist",
-      values: ["additions", "all", "removals", "text"],
-    },
-    "aria-required": { type: "boolean" },
-    "aria-selected": { type: "boolean-or-undefined" },
-    "aria-sort": {
-      type: "token",
-      values: ["none", "ascending", "descending", "other"],
-    },
-    "aria-valuemax": { type: "number" },
-    "aria-valuemin": { type: "number" },
-    "aria-valuenow": { type: "number" },
-  };
+const ariaAttributeValues: Record<string, { type: string; values?: string[] }> = {
+  "aria-autocomplete": {
+    type: "token",
+    values: ["inline", "list", "both", "none"],
+  },
+  "aria-busy": { type: "boolean" },
+  "aria-checked": { type: "tristate", values: ["true", "false", "mixed"] },
+  "aria-current": {
+    type: "token",
+    values: ["page", "step", "location", "date", "time", "true", "false"],
+  },
+  "aria-disabled": { type: "boolean" },
+  "aria-dropeffect": {
+    type: "tokenlist",
+    values: ["copy", "execute", "link", "move", "none", "popup"],
+  },
+  "aria-expanded": { type: "boolean-or-undefined" },
+  "aria-grabbed": { type: "boolean-or-undefined" },
+  "aria-haspopup": {
+    type: "token",
+    values: ["true", "false", "menu", "listbox", "tree", "grid", "dialog"],
+  },
+  "aria-hidden": { type: "boolean-or-undefined" },
+  "aria-invalid": {
+    type: "token",
+    values: ["true", "false", "grammar", "spelling"],
+  },
+  "aria-level": { type: "integer" },
+  "aria-live": { type: "token", values: ["off", "polite", "assertive"] },
+  "aria-modal": { type: "boolean" },
+  "aria-multiline": { type: "boolean" },
+  "aria-multiselectable": { type: "boolean" },
+  "aria-orientation": {
+    type: "token",
+    values: ["horizontal", "vertical", "undefined"],
+  },
+  "aria-pressed": { type: "tristate", values: ["true", "false", "mixed"] },
+  "aria-readonly": { type: "boolean" },
+  "aria-relevant": {
+    type: "tokenlist",
+    values: ["additions", "all", "removals", "text"],
+  },
+  "aria-required": { type: "boolean" },
+  "aria-selected": { type: "boolean-or-undefined" },
+  "aria-sort": {
+    type: "token",
+    values: ["none", "ascending", "descending", "other"],
+  },
+  "aria-valuemax": { type: "number" },
+  "aria-valuemin": { type: "number" },
+  "aria-valuenow": { type: "number" },
+};
 
-function validateAriaValue(
-  attr: string,
-  value: string
-): { valid: boolean; reason?: string } {
+function validateAriaValue(attr: string, value: string): { valid: boolean; reason?: string } {
   const spec = ariaAttributeValues[attr];
   if (!spec) return { valid: true }; // Unknown attr validated elsewhere
 
@@ -77,12 +73,7 @@ function validateAriaValue(
       break;
 
     case "boolean-or-undefined":
-      if (
-        trimmed !== "true" &&
-        trimmed !== "false" &&
-        trimmed !== "undefined" &&
-        trimmed !== ""
-      ) {
+      if (trimmed !== "true" && trimmed !== "false" && trimmed !== "undefined" && trimmed !== "") {
         return {
           valid: false,
           reason: `must be 'true', 'false', or 'undefined', got '${value}'`,
@@ -183,10 +174,7 @@ export const ariaValidAttrValueRule: Rule = {
         status: "fail",
         message: `${invalidValues.length} ARIA attribute(s) with invalid values`,
         items: invalidValues.slice(0, 10).map((id) => ({ id })),
-        details:
-          invalidValues.length > 10
-            ? { additional: invalidValues.length - 10 }
-            : undefined,
+        details: invalidValues.length > 10 ? { additional: invalidValues.length - 10 } : undefined,
       });
     } else {
       checks.push({

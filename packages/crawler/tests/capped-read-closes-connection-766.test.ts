@@ -154,7 +154,9 @@ describe("a capped read closes its connection (#766)", () => {
           connections++;
         },
         data(socket) {
-          socket.write("HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 5\r\n\r\nhello");
+          socket.write(
+            "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 5\r\n\r\nhello",
+          );
         },
       },
     });

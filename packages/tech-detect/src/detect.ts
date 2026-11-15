@@ -78,7 +78,13 @@ function matchesInCode(
     }
     // Nothing that starts inside this string can be code: continue after it.
     const end = stringEnd(strings, m.index);
-    if (stringValue && end !== -1 && (!validate || validate(m)) && isScriptTextString(code, strings, skipStart(skips, m.index), end, stringValue)) return true;
+    if (
+      stringValue &&
+      end !== -1 &&
+      (!validate || validate(m)) &&
+      isScriptTextString(code, strings, skipStart(skips, m.index), end, stringValue)
+    )
+      return true;
     if (end >= re.lastIndex) re.lastIndex = end + 1;
     else if (m[0].length === 0) re.lastIndex++;
   }
@@ -108,11 +114,21 @@ interface InertRange {
   data: boolean;
 }
 
-const RAW_TEXT_TAGS: ReadonlySet<string> = new Set(["style", "textarea", "title", "xmp", "iframe", "noembed", "noframes"]);
+const RAW_TEXT_TAGS: ReadonlySet<string> = new Set([
+  "style",
+  "textarea",
+  "title",
+  "xmp",
+  "iframe",
+  "noembed",
+  "noframes",
+]);
 const SHADOW_ROOT: ReadonlySet<string> = new Set(["shadowrootmode"]);
 const SCRIPT_TYPE_ATTRS: ReadonlySet<string> = new Set(["type", "language"]);
 const COMMENT_END = /--!?>/g;
-const RAW_TEXT_CLOSERS: ReadonlyMap<string, RegExp> = new Map([...RAW_TEXT_TAGS].map((name) => [name, new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, "gi")]));
+const RAW_TEXT_CLOSERS: ReadonlyMap<string, RegExp> = new Map(
+  [...RAW_TEXT_TAGS].map((name) => [name, new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, "gi")]),
+);
 
 const commentCache = new WeakMap<Detector, boolean>();
 /**
@@ -123,7 +139,9 @@ const commentCache = new WeakMap<Detector, boolean>();
 function readsComments(detector: Detector): boolean {
   let known = commentCache.get(detector);
   if (known === undefined) {
-    known = (detector.type === "html" && detector.comments === true) || ("pattern" in detector && detector.pattern.source.includes("<!--"));
+    known =
+      (detector.type === "html" && detector.comments === true) ||
+      ("pattern" in detector && detector.pattern.source.includes("<!--"));
     commentCache.set(detector, known);
   }
   return known;
@@ -145,7 +163,12 @@ function readsDataScripts(detector: Detector): boolean {
 }
 
 /** `html` without the `ranges` (sorted, non-overlapping), and without comments unless `keepComments`, without data script text unless `keepData`. */
-function cutRanges(html: string, ranges: readonly InertRange[], keepComments: boolean, keepData: boolean): string {
+function cutRanges(
+  html: string,
+  ranges: readonly InertRange[],
+  keepComments: boolean,
+  keepData: boolean,
+): string {
   let out = "";
   let at = 0;
   for (const r of ranges) {
@@ -211,13 +234,25 @@ function flightKind(body: string): "f" | "s" | null {
  * icon, manifest, search) describes or relates a URL, so a vendor URL there is not a vendor loaded (#1539). A link with no rel
  * names nothing.
  */
-const LOADING_LINK_RELS = new Set(["stylesheet", "preload", "modulepreload", "prefetch", "prerender", "preconnect", "dns-prefetch"]);
+const LOADING_LINK_RELS = new Set([
+  "stylesheet",
+  "preload",
+  "modulepreload",
+  "prefetch",
+  "prerender",
+  "preconnect",
+  "dns-prefetch",
+]);
 const LINK_REL = new Set(["rel"]);
 function linkLoads(tag: string): boolean {
-  const rel = parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, LINK_REL).get("rel");
+  const rel = parseTagAttributes(
+    tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag,
+    LINK_REL,
+  ).get("rel");
   if (!rel) return false;
   // HTML ASCII whitespace separates the tokens, as in a browser.
-  for (const token of rel.split(/[ \t\n\f\r]+/)) if (LOADING_LINK_RELS.has(token.toLowerCase())) return true;
+  for (const token of rel.split(/[ \t\n\f\r]+/))
+    if (LOADING_LINK_RELS.has(token.toLowerCase())) return true;
   return false;
 }
 
@@ -293,13 +328,15 @@ const DEFERRED_LOADER_TYPES: ReadonlySet<string> = new Set([
   "easyoptscript",
   "application/x-imovisor-consent",
 ]);
-const ROCKET_LOADER_TYPE = /^[0-9a-f]{8,64}-(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/;
+const ROCKET_LOADER_TYPE =
+  /^[0-9a-f]{8,64}-(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/;
 
 /** Whether a type that is not JavaScript is a wrapper a tool runs later: see {@link DEFERRED_LOADER_TYPES}. */
 function isDeferredLoaderType(type: string): boolean {
   return DEFERRED_LOADER_TYPES.has(type) || ROCKET_LOADER_TYPE.test(type);
 }
-const isAsciiSpace = (code: number): boolean => code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
+const isAsciiSpace = (code: number): boolean =>
+  code === 9 || code === 10 || code === 12 || code === 13 || code === 32;
 
 /** `value` without leading and trailing ASCII whitespace (not `String.trim`, which also strips U+00A0 and the like). */
 function asciiTrim(value: string): string {
@@ -318,7 +355,13 @@ function asciiTrim(value: string): string {
 export function scriptTypeRuns(typeString: string): boolean {
   // Trim first, then bound: slicing first would turn 2048 spaces before `application/json` into "" (an empty type runs).
   const type = asciiTrim(typeString).slice(0, 2048).toLowerCase();
-  return type === "" || type === "module" || type.includes("&") || JS_MIME_ESSENCES.has(type) || isDeferredLoaderType(type);
+  return (
+    type === "" ||
+    type === "module" ||
+    type.includes("&") ||
+    JS_MIME_ESSENCES.has(type) ||
+    isDeferredLoaderType(type)
+  );
 }
 
 /** Whether a `<script>` with these attributes (`type`, `language`) runs: a `type` decides; else a `language` is the type `text/<language>`. */
@@ -360,7 +403,12 @@ const IMPORTMAP_ADDRESS = /^(?:https?:\/\/|\.{0,2}\/)/i;
 
 /** A URL value that is written as the `src` of one well-formed tag: http, https, protocol-relative or a relative path. */
 function isImportMapUrl(value: string): boolean {
-  if (value.length > IMPORTMAP_MAX_URL_CHARS || IMPORTMAP_UNSAFE_URL.test(value) || LONE_SURROGATE.test(value)) return false;
+  if (
+    value.length > IMPORTMAP_MAX_URL_CHARS ||
+    IMPORTMAP_UNSAFE_URL.test(value) ||
+    LONE_SURROGATE.test(value)
+  )
+    return false;
   return IMPORTMAP_ADDRESS.test(value);
 }
 
@@ -377,7 +425,8 @@ function importMapUrls(text: string, limit: number): { urls: string[]; skipped: 
   }
   const urls: string[] = [];
   let skipped = 0;
-  const isTable = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
+  const isTable = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
   const take = (table: unknown): void => {
     if (!isTable(table)) return;
     for (const value of Object.values(table)) {
@@ -450,12 +499,22 @@ function tagEnd(html: string, open: number): number {
 
 /** A `<template>` start tag that is a declarative shadow root: its first `shadowrootmode` is exactly `open` or `closed` (ASCII case-insensitive, not trimmed). */
 function isDeclarativeShadowRoot(tag: string): boolean {
-  const mode = parseTagAttributes(tag.slice(0, MAX_TAG_CHARS), SHADOW_ROOT, false).get("shadowrootmode")?.toLowerCase();
+  const mode = parseTagAttributes(tag.slice(0, MAX_TAG_CHARS), SHADOW_ROOT, false)
+    .get("shadowrootmode")
+    ?.toLowerCase();
   return mode === "open" || mode === "closed";
 }
 
 let lastMarkup:
-  | { html: string; attrs: ReadonlySet<string>; markup: string; tags: CollectedTag[]; importMapSkipped: number; ranges: InertRange[]; views: Partial<Record<"clean" | "commented" | "data" | "commented+data", string>> }
+  | {
+      html: string;
+      attrs: ReadonlySet<string>;
+      markup: string;
+      tags: CollectedTag[];
+      importMapSkipped: number;
+      ranges: InertRange[];
+      views: Partial<Record<"clean" | "commented" | "data" | "commented+data", string>>;
+    }
   | undefined;
 
 /** A tag the page pass kept, with its attributes as written (names lower case, first wins). */
@@ -473,7 +532,11 @@ const MAX_ATTRIBUTE_VALUE_CHARS = 2_048;
  * values; names lower case; first wins (as in a browser). Other attributes are walked past, not kept: a page of tags
  * with a hundred attributes each must not cost a hundred map entries per tag. The walk itself is bounded.
  */
-function parseTagAttributes(tag: string, wanted: ReadonlySet<string>, trim = true): Map<string, string> {
+function parseTagAttributes(
+  tag: string,
+  wanted: ReadonlySet<string>,
+  trim = true,
+): Map<string, string> {
   const attrs = new Map<string, string>();
   let i = tag.search(/[\s/]/);
   if (i === -1) return attrs;
@@ -503,7 +566,12 @@ function parseTagAttributes(tag: string, wanted: ReadonlySet<string>, trim = tru
     if (name && wanted.has(name) && !attrs.has(name)) {
       // Trim first, then cap: a cap first would turn 2048 spaces before `application/json` into "" (an empty script type runs).
       const whole = trim ? value.trim() : value;
-      attrs.set(name, whole.length > MAX_ATTRIBUTE_VALUE_CHARS ? whole.slice(0, MAX_ATTRIBUTE_VALUE_CHARS) : whole);
+      attrs.set(
+        name,
+        whole.length > MAX_ATTRIBUTE_VALUE_CHARS
+          ? whole.slice(0, MAX_ATTRIBUTE_VALUE_CHARS)
+          : whole,
+      );
     }
   }
   return attrs;
@@ -529,7 +597,8 @@ function neededAttributes(fingerprints: readonly TechFingerprint[]): ReadonlySet
 
 /** The attribute names the running `detectTechnologies` call reads (the built-in signatures' by default). */
 let activeAttrs: ReadonlySet<string> | undefined;
-const defaultAttrs = (): ReadonlySet<string> => (activeAttrs ??= neededAttributes(ALL_FINGERPRINTS));
+const defaultAttrs = (): ReadonlySet<string> =>
+  (activeAttrs ??= neededAttributes(ALL_FINGERPRINTS));
 
 /** Drop the page pass's result: it is per page, and a page's tags must not outlive the call that read them. */
 export function releasePageMarkup(): void {
@@ -550,7 +619,14 @@ export function pageMarkup(html: string): string {
   let importMapMarkup = 0;
   const ranges: InertRange[] = [];
   // Open `<template>` tags, innermost last; what the pass kept up to the tag is restored when a cut template closes.
-  const templates: Array<{ contentStart: number; cut: boolean; parts: number; collected: number; flight: number; state: number[] }> = [];
+  const templates: Array<{
+    contentStart: number;
+    cut: boolean;
+    parts: number;
+    collected: number;
+    flight: number;
+    state: number[];
+  }> = [];
   /** Open `<template>`s whose content a browser keeps inert (every one but a declarative shadow root). */
   let openCut = 0;
   // Where the import map entries read while such a template was open sit in `parts` and `collected` (ascending). A template that
@@ -603,21 +679,38 @@ export function pageMarkup(html: string): string {
           collected.length = t.collected;
           flightBodies.length = t.flight;
           while (mapParts.length > 0 && mapParts[mapParts.length - 1]! >= t.parts) mapParts.pop();
-          while (mapCollected.length > 0 && mapCollected[mapCollected.length - 1]! >= t.collected) mapCollected.pop();
-          [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] = t.state as [number, number, number, number];
-          while (ranges.length > 0 && ranges[ranges.length - 1]!.from >= t.contentStart) ranges.pop();
+          while (mapCollected.length > 0 && mapCollected[mapCollected.length - 1]! >= t.collected)
+            mapCollected.pop();
+          [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] = t.state as [
+            number,
+            number,
+            number,
+            number,
+          ];
+          while (ranges.length > 0 && ranges[ranges.length - 1]!.from >= t.contentStart)
+            ranges.pop();
           ranges.push({ from: t.contentStart, to: open, comment: false, data: false });
         }
       } else {
         const cut = !isDeclarativeShadowRoot(tag);
         if (cut) openCut++;
-        templates.push({ contentStart: pos, cut, parts: parts.length, collected: collected.length, flight: flightBodies.length, state: [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup] });
+        templates.push({
+          contentStart: pos,
+          cut,
+          parts: parts.length,
+          collected: collected.length,
+          flight: flightBodies.length,
+          state: [inlineText, importMapSkipped, importMapUrlCount, importMapMarkup],
+        });
       }
     }
     if (name[1] === "/") continue;
     if (tagName === "link" && !linkLoads(tag)) continue;
     if (COLLECTED_TAGS.has(tagName) && collected.length < MAX_COLLECTED_TAGS) {
-      const attrs = parseTagAttributes(tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag, wanted);
+      const attrs = parseTagAttributes(
+        tag.length > MAX_TAG_CHARS ? tag.slice(0, MAX_TAG_CHARS) : tag,
+        wanted,
+      );
       if (attrs.size > 0) collected.push({ tag: tagName, attrs });
     }
     if (tagName === "script" && !tag.endsWith("/>")) {
@@ -630,7 +723,8 @@ export function pageMarkup(html: string): string {
       const runs = scriptRuns(scriptAttrs);
       const length = end - pos;
       // A script the browser does not run is data: its text is not read by the `html` detectors either; an unclosed one stays.
-      if (length > 0 && endMatch && !halted && !runs) ranges.push({ from: pos, to: end, comment: false, data: true });
+      if (length > 0 && endMatch && !halted && !runs)
+        ranges.push({ from: pos, to: end, comment: false, data: true });
       const bundlerList = BUNDLER_RESOURCES_TYPE.test(asciiTrim(type).slice(0, 32));
       if (length > 0 && (bundlerList || /^importmap$/i.test(asciiTrim(type).slice(0, 32)))) {
         // The page loads these as modules (a bundler's list: as scripts): each is a script URL, for the URL patterns (as one tag in the markup) and for the
@@ -638,7 +732,10 @@ export function pageMarkup(html: string): string {
         if (length > IMPORTMAP_MAX_CHARS) importMapSkipped++;
         else {
           const readUrls = bundlerList ? bundlerResourceUrls : importMapUrls;
-          const { urls, skipped } = readUrls(html.slice(pos, end), Math.min(IMPORTMAP_MAX_URLS_PER_MAP, IMPORTMAP_MAX_URLS_PER_PAGE - importMapUrlCount));
+          const { urls, skipped } = readUrls(
+            html.slice(pos, end),
+            Math.min(IMPORTMAP_MAX_URLS_PER_MAP, IMPORTMAP_MAX_URLS_PER_PAGE - importMapUrlCount),
+          );
           importMapSkipped += skipped;
           for (const url of urls) {
             const synthetic = `<script type="module" src="${url}"></script>`;
@@ -662,7 +759,10 @@ export function pageMarkup(html: string): string {
         // A flight script (`self.__next_f`) is read with the page's other flight scripts, for the script
         // elements they carry, not as text (#1437). One with no readable chunk is read like any other script.
         const flight = flightKind(head) === "f";
-        if (flight && hasFlightChunk(html.slice(pos, Math.min(end, pos + FLIGHT_SCRIPT_MAX_CHARS)))) {
+        if (
+          flight &&
+          hasFlightChunk(html.slice(pos, Math.min(end, pos + FLIGHT_SCRIPT_MAX_CHARS)))
+        ) {
           const take = Math.min(length, FLIGHT_SCRIPT_MAX_CHARS, INLINE_TEXT_BUDGET - inlineText);
           flightBodies.push(html.slice(pos, pos + take));
           inlineText += take;
@@ -693,12 +793,22 @@ export function pageMarkup(html: string): string {
     for (let i = 0; i < parts.length; i++) if (!dropParts.has(i)) parts[w++] = parts[i]!;
     parts.length = w;
     w = 0;
-    for (let i = 0; i < collected.length; i++) if (!dropCollected.has(i)) collected[w++] = collected[i]!;
+    for (let i = 0; i < collected.length; i++)
+      if (!dropCollected.has(i)) collected[w++] = collected[i]!;
     collected.length = w;
   }
-  if (flightBodies.length > 0) parts.push(flightLoaderText(flightBodies, (t) => !scriptTypeRuns(t)));
+  if (flightBodies.length > 0)
+    parts.push(flightLoaderText(flightBodies, (t) => !scriptTypeRuns(t)));
   const markup = parts.join("\n");
-  lastMarkup = { html, attrs: wanted, markup, tags: collected, importMapSkipped, ranges, views: {} };
+  lastMarkup = {
+    html,
+    attrs: wanted,
+    markup,
+    tags: collected,
+    importMapSkipped,
+    ranges,
+    views: {},
+  };
   return markup;
 }
 
@@ -711,7 +821,13 @@ function pageHtml(html: string, keepComments: boolean, keepData = false): string
   pageMarkup(html);
   const page = lastMarkup;
   if (!page || page.ranges.length === 0) return html;
-  const key = keepComments ? (keepData ? "commented+data" : "commented") : keepData ? "data" : "clean";
+  const key = keepComments
+    ? keepData
+      ? "commented+data"
+      : "commented"
+    : keepData
+      ? "data"
+      : "clean";
   return (page.views[key] ??= cutRanges(html, page.ranges, keepComments, keepData));
 }
 
@@ -735,7 +851,8 @@ function matchesTagAttr(detector: Extract<Detector, { type: "tag-attr" }>, html:
       if (value === undefined) continue;
       if (detector.pattern.test(value)) return true;
       if (detector.tokens) {
-        for (const token of value.split(/[\s,]+/)) if (token && detector.pattern.test(token)) return true;
+        for (const token of value.split(/[\s,]+/))
+          if (token && detector.pattern.test(token)) return true;
       }
     }
   }
@@ -775,7 +892,8 @@ function matchDetector(
                 detector.validate,
                 detector.stringValue,
               ) &&
-              (!detector.also || detector.also.pattern.test(scriptView(views, s.content, maxChars).head)),
+              (!detector.also ||
+                detector.also.pattern.test(scriptView(views, s.content, maxChars).head)),
           ) ?? false
         );
       }
@@ -984,9 +1102,7 @@ function detectOnePage(
   // builder loads for every app) is dropped, not reported as a second stack.
   const found = new Set(results.map((r) => r.id));
   const suppressed = new Set(
-    fingerprints
-      .filter((fp) => fp.unlessAny?.some((id) => found.has(id)))
-      .map((fp) => fp.id),
+    fingerprints.filter((fp) => fp.unlessAny?.some((id) => found.has(id))).map((fp) => fp.id),
   );
   return suppressed.size ? results.filter((r) => !suppressed.has(r.id)) : results;
 }

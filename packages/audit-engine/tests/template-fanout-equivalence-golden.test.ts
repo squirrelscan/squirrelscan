@@ -56,7 +56,12 @@ import { foldOverflowChecks } from "@squirrelscan/rules/fold";
 import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
 import type { Config } from "@squirrelscan/config";
 
-import { buildHeadersMap, buildSiteContext, isRenderedFetch, parseHtmlForRules } from "../src/adapter";
+import {
+  buildHeadersMap,
+  buildSiteContext,
+  isRenderedFetch,
+  parseHtmlForRules,
+} from "../src/adapter";
 import { isAuditablePage } from "../src/page-features";
 import { foldRuleResultIntoTallies, type RuleTally } from "../src/scoring";
 import { streamPageRules } from "../src/streaming";
@@ -591,13 +596,17 @@ describe("a verdict is never copied across origins", () => {
       name: "a script that gains an integrity attribute",
       ruleId: "security/sri",
       a: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/a.js"></script>`),
-      b: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/a.js" integrity="sha384-abc" crossorigin="anonymous"></script>`),
+      b: sameChrome(
+        `${VIEWPORT}<script src="https://cdn.other.test/a.js" integrity="sha384-abc" crossorigin="anonymous"></script>`,
+      ),
     },
     {
       name: "a cross-origin stylesheet that gains an integrity attribute",
       ruleId: "security/sri",
       a: sameChrome(`${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css">`),
-      b: sameChrome(`${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css" integrity="sha384-abc">`),
+      b: sameChrome(
+        `${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css" integrity="sha384-abc">`,
+      ),
     },
     {
       name: "a second main landmark",
@@ -634,7 +643,10 @@ describe("a verdict is never copied across origins", () => {
       name: "aria-hidden on <body>",
       ruleId: "a11y/aria-hidden-body",
       a: sameChrome(VIEWPORT),
-      b: sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x" aria-hidden="true">'),
+      b: sameChrome(VIEWPORT).replace(
+        '<body class="tpl-x">',
+        '<body class="tpl-x" aria-hidden="true">',
+      ),
     },
     {
       name: "a missing favicon link",
@@ -651,8 +663,12 @@ describe("a verdict is never copied across origins", () => {
     {
       name: "the same favicon links in another order",
       ruleId: "core/favicon",
-      a: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.ico"><link rel="icon" href="/favicon.svg">`),
-      b: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.svg"><link rel="icon" href="/favicon.ico">`),
+      a: sameChrome(
+        `${VIEWPORT}<link rel="icon" href="/favicon.ico"><link rel="icon" href="/favicon.svg">`,
+      ),
+      b: sameChrome(
+        `${VIEWPORT}<link rel="icon" href="/favicon.svg"><link rel="icon" href="/favicon.ico">`,
+      ),
     },
   ];
 
@@ -707,9 +723,9 @@ describe("a verdict is never copied across origins", () => {
     );
     // Duplicates count, and `name` is not `property`.
     expect(sig(sameChrome(`${VIEWPORT}${VIEWPORT}`))).not.toBe(base);
-    expect(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script><script src="/a.js"></script>`))).not.toBe(
-      sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`)),
-    );
+    expect(
+      sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script><script src="/a.js"></script>`)),
+    ).not.toBe(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`)));
     expect(sig(sameChrome(`${VIEWPORT}<meta name="x" content="1">`))).not.toBe(
       sig(sameChrome(`${VIEWPORT}<meta property="x" content="1">`)),
     );
@@ -723,10 +739,23 @@ describe("a verdict is never copied across origins", () => {
   test("fanoutInputSignature separates the <html> and <body> attributes and icon links (#614)", () => {
     const sig = (html: string) => fanoutInputSignature(parseDocument(html));
     const base = sig(sameChrome(VIEWPORT));
-    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="fr">'))).not.toBe(base);
-    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" xml:lang="fr">'))).not.toBe(base);
-    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" aria-hidden="true">'))).not.toBe(base);
-    expect(sig(sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x" aria-hidden="true">'))).not.toBe(base);
+    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="fr">'))).not.toBe(
+      base,
+    );
+    expect(
+      sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" xml:lang="fr">')),
+    ).not.toBe(base);
+    expect(
+      sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" aria-hidden="true">')),
+    ).not.toBe(base);
+    expect(
+      sig(
+        sameChrome(VIEWPORT).replace(
+          '<body class="tpl-x">',
+          '<body class="tpl-x" aria-hidden="true">',
+        ),
+      ),
+    ).not.toBe(base);
     const icon = `<link rel="icon" href="/favicon-a.ico">`;
     expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(base);
     expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(
@@ -738,7 +767,10 @@ describe("a verdict is never copied across origins", () => {
     );
     // Positive control: a <body> or <html> attribute no declared rule reads leaves
     // the signature alone, so the new inputs do not make the key over-sensitive.
-    const otherClass = sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x home">');
+    const otherClass = sameChrome(VIEWPORT).replace(
+      '<body class="tpl-x">',
+      '<body class="tpl-x home">',
+    );
     const otherDir = sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" dir="ltr">');
     expect(otherClass).not.toBe(sameChrome(VIEWPORT));
     expect(otherDir).not.toBe(sameChrome(VIEWPORT));
@@ -760,7 +792,9 @@ describe("a verdict is never copied across origins", () => {
     expect(fanoutClusterKey("abc123", "not a url", SIG)).not.toBe(
       fanoutClusterKey("abc123", "also not a url", SIG),
     );
-    expect(fanoutClusterKey("abc123", "not a url", SIG)).toBe(fanoutClusterKey("abc123", "not a url", SIG));
+    expect(fanoutClusterKey("abc123", "not a url", SIG)).toBe(
+      fanoutClusterKey("abc123", "not a url", SIG),
+    );
   });
 });
 

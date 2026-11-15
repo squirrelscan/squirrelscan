@@ -172,7 +172,6 @@ export function encodeIndexGaps(sortedIndexes: readonly number[]): number[] {
   return gaps;
 }
 
-
 /**
  * `skipReason` of a page check whose rule stopped at a work cap before it had
  * looked at the whole page and found nothing in the part it did look at

@@ -8,7 +8,12 @@
 import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
 
-import { hiddenTextRule, parseColor, parseDeclarations, parseLengthPx } from "../src/content/hidden-text";
+import {
+  hiddenTextRule,
+  parseColor,
+  parseDeclarations,
+  parseLengthPx,
+} from "../src/content/hidden-text";
 import type { ParsedPage, RuleContext } from "../src/types";
 
 function ctx(html: string, options: Record<string, unknown> = {}): RuleContext {
@@ -65,29 +70,33 @@ describe("content/hidden-text — meta", () => {
 
 describe("content/hidden-text — outcomes", () => {
   test("pass: an ordinary visible page reports nothing", async () => {
-    const check = (await run(`<html><body><p>${PAYLOAD}</p></body></html>`));
+    const check = await run(`<html><body><p>${PAYLOAD}</p></body></html>`);
     expect(check.status).toBe("pass");
   });
 
   test("skipped: a document with no body is skipped, not passed", async () => {
     const doc = parseHTML("<html></html>").document;
     doc.querySelector("body")?.remove();
-    const check = (await hiddenTextRule.run({
-      page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
-      parsed: { document: doc } as unknown as ParsedPage,
-      options: {},
-    } as unknown as RuleContext)).checks[0];
+    const check = (
+      await hiddenTextRule.run({
+        page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+        parsed: { document: doc } as unknown as ParsedPage,
+        options: {},
+      } as unknown as RuleContext)
+    ).checks[0];
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("no-body");
   });
 
   test("warn: hidden text without links stays a warning", async () => {
-    const check = (await run(`<html><body><div style="display:none">${PAYLOAD}</div></body></html>`));
+    const check = await run(`<html><body><div style="display:none">${PAYLOAD}</div></body></html>`);
     expect(check.status).toBe("warn");
   });
 
   test("fail: hidden LINKS escalate the finding above hidden text", async () => {
-    const check = (await run(`<html><body><div style="display:none">${SPAM_LINKS}</div></body></html>`));
+    const check = await run(
+      `<html><body><div style="display:none">${SPAM_LINKS}</div></body></html>`,
+    );
     expect(check.status).toBe("fail");
     expect(check.details?.hiddenLinks).toBe(12);
   });
@@ -95,7 +104,7 @@ describe("content/hidden-text — outcomes", () => {
 
 describe("content/hidden-text — techniques", () => {
   test("display:none from an inline style", async () => {
-    const check = (await run(`<html><body><div style="display:none">${PAYLOAD}</div></body></html>`));
+    const check = await run(`<html><body><div style="display:none">${PAYLOAD}</div></body></html>`);
     expect(check.status).toBe("warn");
     expect(check.items?.[0].meta?.techniques).toEqual(["display:none"]);
   });
@@ -103,7 +112,7 @@ describe("content/hidden-text — techniques", () => {
   test("visibility:hidden from a <style> class rule", async () => {
     const html = `<html><head><style>.promo-copy { visibility: hidden; }</style></head>
       <body><div class="promo-copy">${PAYLOAD}</div></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.status).toBe("warn");
     expect(check.items?.[0].meta?.techniques).toEqual(["visibility:hidden"]);
   });
@@ -115,46 +124,50 @@ describe("content/hidden-text — techniques", () => {
   });
 
   test("opacity:0", async () => {
-    const check = (await run(`<html><body><div style="opacity:0">${PAYLOAD}</div></body></html>`));
+    const check = await run(`<html><body><div style="opacity:0">${PAYLOAD}</div></body></html>`);
     expect(check.status).toBe("warn");
     expect(check.items?.[0].meta?.techniques).toEqual(["opacity:0"]);
   });
 
   test("font-size:0 on the element carrying the text", async () => {
-    const check = (await run(`<html><body><div style="font-size:0">${PAYLOAD}</div></body></html>`));
+    const check = await run(`<html><body><div style="font-size:0">${PAYLOAD}</div></body></html>`);
     expect(check.status).toBe("warn");
     expect(check.items?.[0].meta?.techniques).toEqual(["font-size:0"]);
   });
 
   test("off-screen text-indent", async () => {
-    const check = (await run(`<html><body><div style="text-indent:-9999px">${PAYLOAD}</div></body></html>`));
+    const check = await run(
+      `<html><body><div style="text-indent:-9999px">${PAYLOAD}</div></body></html>`,
+    );
     expect(check.status).toBe("warn");
     expect(check.items?.[0].meta?.techniques).toEqual(["text-indent off-screen"]);
   });
 
   test("off-screen absolute positioning", async () => {
     const html = `<html><body><div style="position:absolute;left:-9999px;width:400px;height:200px">${PAYLOAD}</div></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.status).toBe("warn");
     expect(check.items?.[0].meta?.techniques).toEqual(["position:absolute left:-9999px"]);
   });
 
   test("off-screen negative margin", async () => {
-    const check = (await run(`<html><body><div style="margin-left:-9999px">${PAYLOAD}</div></body></html>`));
+    const check = await run(
+      `<html><body><div style="margin-left:-9999px">${PAYLOAD}</div></body></html>`,
+    );
     expect(check.status).toBe("warn");
     expect(check.items?.[0].meta?.techniques).toEqual(["margin-left off-screen"]);
   });
 
   test("zero-size clipping", async () => {
     const html = `<html><body><div style="height:0;overflow:hidden">${PAYLOAD}</div></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.status).toBe("warn");
     expect(check.items?.[0].meta?.techniques).toEqual(["height:0 with overflow:hidden"]);
   });
 
   test("colour on the same colour, both inline on the element", async () => {
     const html = `<html><body><p style="color:#ffffff;background-color:#fff">${PAYLOAD}</p></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.status).toBe("warn");
     expect(String(check.items?.[0].label)).toContain("color #ffffff");
   });
@@ -488,67 +501,228 @@ const CHROMIUM_ROWS: Array<{
   style?: string;
   browser: "hidden" | "shown";
 }> = [
-  { name: "unquoted url( swallows braces (the #679 repro)", css: ".a{background:url(}.b{display:none}.c{)}", browser: "shown" },
+  {
+    name: "unquoted url( swallows braces (the #679 repro)",
+    css: ".a{background:url(}.b{display:none}.c{)}",
+    browser: "shown",
+  },
   { name: "URL( in upper case", css: ".a{background:URL(}.b{display:none}.c{)}", browser: "shown" },
-  { name: "url( with a leading space", css: ".a{background:url( }.b{display:none}.c{)}", browser: "shown" },
-  { name: "a bad url( (inner space) still runs to its )", css: ".a{background:url(x y}.b{display:none}.c{)}", browser: "shown" },
-  { name: "an escaped ) inside url( does not end it", css: ".a{background:url(x~)}.b{display:none}.c{)}", browser: "shown" },
-  { name: "a name ending in url( is a plain function", css: ".a{background:myurl(}.b{display:none}.c{)}", browser: "shown" },
+  {
+    name: "url( with a leading space",
+    css: ".a{background:url( }.b{display:none}.c{)}",
+    browser: "shown",
+  },
+  {
+    name: "a bad url( (inner space) still runs to its )",
+    css: ".a{background:url(x y}.b{display:none}.c{)}",
+    browser: "shown",
+  },
+  {
+    name: "an escaped ) inside url( does not end it",
+    css: ".a{background:url(x~)}.b{display:none}.c{)}",
+    browser: "shown",
+  },
+  {
+    name: "a name ending in url( is a plain function",
+    css: ".a{background:myurl(}.b{display:none}.c{)}",
+    browser: "shown",
+  },
   { name: "`.url(` in a prelude is a url token", css: ".url(}.b{display:none}", browser: "shown" },
-  { name: "a ( block in a value swallows }", css: ".a{width:calc(1px}.b{display:none}.c{)}", browser: "shown" },
-  { name: "a [ block in a value swallows }", css: ".a{x:[}.b{display:none}.c{]}", browser: "shown" },
-  { name: "a ( block in a prelude swallows }", css: ".a:not(.c}.b{display:none}", browser: "shown" },
+  {
+    name: "a ( block in a value swallows }",
+    css: ".a{width:calc(1px}.b{display:none}.c{)}",
+    browser: "shown",
+  },
+  {
+    name: "a [ block in a value swallows }",
+    css: ".a{x:[}.b{display:none}.c{]}",
+    browser: "shown",
+  },
+  {
+    name: "a ( block in a prelude swallows }",
+    css: ".a:not(.c}.b{display:none}",
+    browser: "shown",
+  },
   { name: "a [ block in a prelude swallows }", css: ".a[x=}.b{display:none}", browser: "shown" },
   { name: "an escaped } in a value", css: ".a{color:red~}.b{display:none}", browser: "shown" },
   { name: "an escaped } in a selector", css: ".a~}.b{display:none}", browser: "shown" },
   { name: "; inside a ( block in a value", css: ".b{x:(;display:none;)}", browser: "shown" },
   { name: "; inside a [ block in a value", css: ".b{x:[;display:none;]}", browser: "shown" },
   { name: "; inside a { block in a value", css: ".b{x:{;display:none;}}", browser: "shown" },
-  { name: "; inside an unquoted url(", css: ".b{background:url(a;display:none)}", browser: "shown" },
+  {
+    name: "; inside an unquoted url(",
+    css: ".b{background:url(a;display:none)}",
+    browser: "shown",
+  },
   { name: "an escaped ; in a value", css: ".b{color:red~;display:none}", browser: "shown" },
   { name: "an escaped ; in a custom property", css: ".b{--x:a~;display:none}", browser: "shown" },
   { name: "an escaped ; in a selector", css: ".a~;.b{display:none}", browser: "shown" },
   { name: "an escaped ; inside ( in a value", css: ".b{x:(~;display:none)}", browser: "shown" },
-  { name: "an escaped backslash then a real ;", css: ".b{color:red~~;display:none}", browser: "hidden" },
-  { name: "a stray ) does not open or close anything", css: ".b{color:red);display:none}", browser: "hidden" },
-  { name: "a stray ] does not open or close anything", css: ".b{color:red];display:none}", browser: "hidden" },
+  {
+    name: "an escaped backslash then a real ;",
+    css: ".b{color:red~~;display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "a stray ) does not open or close anything",
+    css: ".b{color:red);display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "a stray ] does not open or close anything",
+    css: ".b{color:red];display:none}",
+    browser: "hidden",
+  },
   { name: "an escaped ( is not a block", css: ".a{content:~(}.b{display:none}", browser: "hidden" },
   { name: "an escaped [ is not a block", css: ".a{content:~[}.b{display:none}", browser: "hidden" },
   { name: "an escaped ( then ; in a value", css: ".b{content:~(;display:none}", browser: "hidden" },
   { name: "an escaped ) closes no block", css: ".b{x:(~);display:none}", browser: "shown" },
-  { name: "an escaped quote is not a string", css: '.b{content:~";display:none}', browser: "hidden" },
+  {
+    name: "an escaped quote is not a string",
+    css: '.b{content:~";display:none}',
+    browser: "hidden",
+  },
   { name: "an escaped { in a value", css: ".a{content:~{}.b{display:none}", browser: "hidden" },
-  { name: "a bad url( ends at its first )", css: ".b{x:url((;display:none);display:none}", browser: "hidden" },
-  { name: "#url( is a hash token and a ( block", css: ".b{x:#url((;display:none);display:none}", browser: "shown" },
-  { name: "@url( is an at-keyword and a ( block", css: ".b{x:@url((;display:none);display:none}", browser: "shown" },
-  { name: "url( after a hex escape's space continues that name", css: ".b{x:a~20 url((;display:none);display:none}", browser: "shown" },
-  { name: "url( after an escaped backslash and a space is a url token", css: ".b{x:a~~20 url((;display:none);display:none}", browser: "hidden" },
-  { name: "url( after an escaped space continues that name", css: ".b{x:a~ url((;display:none);display:none}", browser: "shown" },
-  { name: "url( after a plain space is a url token", css: ".b{x:a url((;display:none);display:none}", browser: "hidden" },
-  { name: "url( after an escaped ! continues that name", css: ".b{x:a~!url((;display:none);display:none}", browser: "shown" },
-  { name: "url( after an escaped backslash and a ! is a url token", css: ".b{x:a~~!url((;display:none);display:none}", browser: "hidden" },
-  { name: "url( after an escaped # continues that name", css: ".b{x:~#url((;display:none);display:none}", browser: "shown" },
-  { name: "url( after a hex escape ended by a newline continues that name", css: ".b{x:a~20\nurl((;display:none);display:none}", browser: "shown" },
-  { name: "an inline style: #url( is a hash token and a ( block", css: "", style: "x:#url((;display:none);display:none", browser: "shown" },
+  {
+    name: "a bad url( ends at its first )",
+    css: ".b{x:url((;display:none);display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "#url( is a hash token and a ( block",
+    css: ".b{x:#url((;display:none);display:none}",
+    browser: "shown",
+  },
+  {
+    name: "@url( is an at-keyword and a ( block",
+    css: ".b{x:@url((;display:none);display:none}",
+    browser: "shown",
+  },
+  {
+    name: "url( after a hex escape's space continues that name",
+    css: ".b{x:a~20 url((;display:none);display:none}",
+    browser: "shown",
+  },
+  {
+    name: "url( after an escaped backslash and a space is a url token",
+    css: ".b{x:a~~20 url((;display:none);display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "url( after an escaped space continues that name",
+    css: ".b{x:a~ url((;display:none);display:none}",
+    browser: "shown",
+  },
+  {
+    name: "url( after a plain space is a url token",
+    css: ".b{x:a url((;display:none);display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "url( after an escaped ! continues that name",
+    css: ".b{x:a~!url((;display:none);display:none}",
+    browser: "shown",
+  },
+  {
+    name: "url( after an escaped backslash and a ! is a url token",
+    css: ".b{x:a~~!url((;display:none);display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "url( after an escaped # continues that name",
+    css: ".b{x:~#url((;display:none);display:none}",
+    browser: "shown",
+  },
+  {
+    name: "url( after a hex escape ended by a newline continues that name",
+    css: ".b{x:a~20\nurl((;display:none);display:none}",
+    browser: "shown",
+  },
+  {
+    name: "an inline style: #url( is a hash token and a ( block",
+    css: "",
+    style: "x:#url((;display:none);display:none",
+    browser: "shown",
+  },
   { name: "a plain display:none rule", css: ".b{display:none}", browser: "hidden" },
-  { name: "an ordinary url()", css: ".a{background:url(x.png)}.b{display:none}", browser: "hidden" },
+  {
+    name: "an ordinary url()",
+    css: ".a{background:url(x.png)}.b{display:none}",
+    browser: "hidden",
+  },
   { name: "a quoted url()", css: '.a{background:url("x")}.b{display:none}', browser: "hidden" },
-  { name: "a data: url() with ; inside", css: ".a{background:url(data:image/png;base64,AAAA)}.b{display:none}", browser: "hidden" },
+  {
+    name: "a data: url() with ; inside",
+    css: ".a{background:url(data:image/png;base64,AAAA)}.b{display:none}",
+    browser: "hidden",
+  },
   { name: "a } inside a string", css: '.a{content:"}"}.b{display:none}', browser: "hidden" },
-  { name: "an escaped quote inside a string", css: '.a{content:"~"}"}.b{display:none}', browser: "hidden" },
+  {
+    name: "an escaped quote inside a string",
+    css: '.a{content:"~"}"}.b{display:none}',
+    browser: "hidden",
+  },
   { name: "a } inside a comment", css: ".a{color:red/* } */}.b{display:none}", browser: "hidden" },
-  { name: "an inline style: ; inside a [ block", css: "", style: "x:[;display:none]", browser: "shown" },
-  { name: "an inline style: ; inside an unquoted url(", css: "", style: "background:url(a;display:none)", browser: "shown" },
-  { name: "an inline style: an escaped ;", css: "", style: "color:red~;display:none", browser: "shown" },
-  { name: "an inline style: a plain display:none", css: "", style: "color:red;display:none", browser: "hidden" },
-  { name: "an @media block with parentheses", css: "@media (min-width:1px){.c{color:red}}.b{display:none}", browser: "hidden" },
+  {
+    name: "an inline style: ; inside a [ block",
+    css: "",
+    style: "x:[;display:none]",
+    browser: "shown",
+  },
+  {
+    name: "an inline style: ; inside an unquoted url(",
+    css: "",
+    style: "background:url(a;display:none)",
+    browser: "shown",
+  },
+  {
+    name: "an inline style: an escaped ;",
+    css: "",
+    style: "color:red~;display:none",
+    browser: "shown",
+  },
+  {
+    name: "an inline style: a plain display:none",
+    css: "",
+    style: "color:red;display:none",
+    browser: "hidden",
+  },
+  {
+    name: "an @media block with parentheses",
+    css: "@media (min-width:1px){.c{color:red}}.b{display:none}",
+    browser: "hidden",
+  },
   { name: "Tailwind escaped slash", css: ".w-1~/2{width:50%}.b{display:none}", browser: "hidden" },
-  { name: "Tailwind arbitrary url() value", css: ".bg-~[url~(x~)~]{color:red}.b{display:none}", browser: "hidden" },
-  { name: "Tailwind arbitrary variant", css: ".~[~&~>~*~]~:p-4>*{padding:1rem}.b{display:none}", browser: "hidden" },
-  { name: "calc() and var() in values", css: ".a{width:calc(100% - var(--x, 2px))}.b{display:none}", browser: "hidden" },
-  { name: "grid line names in [ ]", css: ".a{grid-template-columns:[full-start] 1fr [full-end]}.b{display:none}", browser: "hidden" },
-  { name: "an attribute selector with a quoted }", css: '.a[title="}"]{color:red}.b{display:none}', browser: "hidden" },
-  { name: "nested rule inside a block", css: ".a{color:red;&:hover{color:blue}}.b{display:none}", browser: "hidden" },
+  {
+    name: "Tailwind arbitrary url() value",
+    css: ".bg-~[url~(x~)~]{color:red}.b{display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "Tailwind arbitrary variant",
+    css: ".~[~&~>~*~]~:p-4>*{padding:1rem}.b{display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "calc() and var() in values",
+    css: ".a{width:calc(100% - var(--x, 2px))}.b{display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "grid line names in [ ]",
+    css: ".a{grid-template-columns:[full-start] 1fr [full-end]}.b{display:none}",
+    browser: "hidden",
+  },
+  {
+    name: "an attribute selector with a quoted }",
+    css: '.a[title="}"]{color:red}.b{display:none}',
+    browser: "hidden",
+  },
+  {
+    name: "nested rule inside a block",
+    css: ".a{color:red;&:hover{color:blue}}.b{display:none}",
+    browser: "hidden",
+  },
 ];
 
 const backslashes = (s: string): string => s.replaceAll("~", "\\");
@@ -557,7 +731,9 @@ describe("content/hidden-text — CSS tokenization matches Chromium (pub#679)", 
   for (const row of CHROMIUM_ROWS) {
     test(`${row.name}: ${row.browser}`, async () => {
       const style =
-        row.style === undefined ? "" : ` style="${backslashes(row.style).replaceAll('"', "&quot;")}"`;
+        row.style === undefined
+          ? ""
+          : ` style="${backslashes(row.style).replaceAll('"', "&quot;")}"`;
       const html = `<html><head><style>${backslashes(row.css)}</style></head>
         <body><p class="b"${style}>${PAYLOAD}</p></body></html>`;
       expect((await run(html)).status).toBe(row.browser === "hidden" ? "warn" : "pass");
@@ -671,9 +847,9 @@ describe("content/hidden-text — page-level fade-in wrappers", () => {
 
 describe("content/hidden-text — payload thresholds and reporting", () => {
   test("a tiny hidden string with no link payload is not worth reporting", async () => {
-    expect((await run(`<html><body><div style="display:none">Loading</div></body></html>`)).status).toBe(
-      "pass",
-    );
+    expect(
+      (await run(`<html><body><div style="display:none">Loading</div></body></html>`)).status,
+    ).toBe("pass");
   });
 
   test("min_hidden_chars is configurable", async () => {
@@ -684,7 +860,7 @@ describe("content/hidden-text — payload thresholds and reporting", () => {
 
   test("hidden links below min_hidden_links warn rather than fail", async () => {
     const html = `<html><body><div style="display:none">${PAYLOAD} <a href="/a">one</a></div></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.status).toBe("warn");
     expect(check.details?.hiddenLinks).toBe(1);
   });
@@ -697,7 +873,7 @@ describe("content/hidden-text — payload thresholds and reporting", () => {
       <a href="mailto:a@b.com">mail</a><a href="tel:+1234">call</a>
       <a href="data:text/html,<b>hi</b>">data</a><a href="vbscript:msgbox">vb</a>
       <a href="ftp://example.com/f">ftp</a></div></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.status).toBe("warn");
     expect(check.details?.hiddenLinks).toBe(0);
   });
@@ -711,7 +887,7 @@ describe("content/hidden-text — payload thresholds and reporting", () => {
 
   test("items name the offending element, the technique and a snippet", async () => {
     const html = `<html><body><div id="kw" class="seo-block" style="display:none">${PAYLOAD}</div></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.items).toHaveLength(1);
     expect(check.items?.[0].id).toBe("div#kw.seo-block");
     expect(check.items?.[0].label).toBe("div#kw.seo-block — display:none");
@@ -721,7 +897,7 @@ describe("content/hidden-text — payload thresholds and reporting", () => {
 
   test("only the outermost hidden element is reported, not every descendant", async () => {
     const html = `<html><body><div style="display:none"><section><p>${PAYLOAD}</p><p>${PAYLOAD}</p></section></div></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.items).toHaveLength(1);
     expect(check.details?.hiddenElements).toBe(1);
   });
@@ -731,7 +907,7 @@ describe("content/hidden-text — payload thresholds and reporting", () => {
       { length: 13 },
       (_, i) => `<div style="display:none">${PAYLOAD} block ${i}</div>`,
     ).join("\n");
-    const check = (await run(`<html><body>${blocks}</body></html>`));
+    const check = await run(`<html><body>${blocks}</body></html>`);
     expect(check.items).toHaveLength(10);
     expect(check.details?.hiddenElements).toBe(13);
     expect(check.details?.additional).toBe(3);
@@ -740,7 +916,7 @@ describe("content/hidden-text — payload thresholds and reporting", () => {
   test("visible siblings of a hidden block are still walked", async () => {
     const html = `<html><body><div class="wrapper"><p>${PAYLOAD}</p>
       <div style="display:none">${PAYLOAD}</div></div></body></html>`;
-    const check = (await run(html));
+    const check = await run(html);
     expect(check.status).toBe("warn");
     expect(check.details?.hiddenElements).toBe(1);
   });

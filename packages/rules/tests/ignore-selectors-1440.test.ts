@@ -29,24 +29,37 @@ async function checks(ignore: IgnoreEntry[] | undefined, html = PAGE): Promise<C
     config: { rule_options: {}, rules: { enable: [RULE] }, ...(ignore ? { ignore } : {}) } as never,
   });
   const parsed = parsePage(html, URL);
-  const out = await runner.runPageRules({ url: URL, html, statusCode: 200, loadTime: 0, headers: {}, parsed } as never);
+  const out = await runner.runPageRules({
+    url: URL,
+    html,
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+    parsed,
+  } as never);
   return out.ruleResults.get(RULE)!.checks;
 }
 const mismatch = (all: CheckResult[]) => all.find((c) => c.name === "label-content-name-mismatch")!;
 
 describe("the country selector case from the issue", () => {
   test("the select inside <localization-form> is waived, the merchant's own select is still reported", async () => {
-    const all = await checks([{ rule: RULE, selectors: ["localization-form select"], reason: "rendered by the platform" }]);
+    const all = await checks([
+      { rule: RULE, selectors: ["localization-form select"], reason: "rendered by the platform" },
+    ]);
     const check = mismatch(all);
     expect(check.status).toBe("fail");
     expect(check.items).toHaveLength(1);
     expect(check.items![0]!.id).toContain("select: visible=");
-    expect(check.message).toBe("1 element(s) where visible text doesn't match accessible name (1 ignored)");
+    expect(check.message).toBe(
+      "1 element(s) where visible text doesn't match accessible name (1 ignored)",
+    );
     expect(readIgnoredDetails(check.details)).toEqual({ items: 1, entries: [0] });
   });
 
   test("waiving both leaves a pass that says how many were waived", async () => {
-    const all = await checks([{ rule: RULE, selectors: ["localization-form select", "div.checkout > select#ship"] }]);
+    const all = await checks([
+      { rule: RULE, selectors: ["localization-form select", "div.checkout > select#ship"] },
+    ]);
     const check = mismatch(all);
     expect(check.status).toBe("pass");
     expect(check.message).toContain("2 waived by squirrel.toml");
@@ -60,19 +73,29 @@ describe("the country selector case from the issue", () => {
   });
 
   test("items AND selectors: both must hit", async () => {
-    const hit = await checks([{ rule: RULE, selectors: ["localization-form select"], items: ["glob:select: visible=*"] }]);
+    const hit = await checks([
+      { rule: RULE, selectors: ["localization-form select"], items: ["glob:select: visible=*"] },
+    ]);
     expect(mismatch(hit).items).toHaveLength(1);
-    const miss = await checks([{ rule: RULE, selectors: ["localization-form select"], items: ["no such item"] }]);
+    const miss = await checks([
+      { rule: RULE, selectors: ["localization-form select"], items: ["no such item"] },
+    ]);
     expect(mismatch(miss).items).toHaveLength(2);
   });
 
   test("no output carries the element path, with or without an entry", async () => {
-    for (const ignore of [undefined, [{ rule: RULE, selectors: ["footer select"] }], [{ rule: RULE, selectors: ["localization-form select"] }]]) {
+    for (const ignore of [
+      undefined,
+      [{ rule: RULE, selectors: ["footer select"] }],
+      [{ rule: RULE, selectors: ["localization-form select"] }],
+    ]) {
       const check = mismatch(await checks(ignore));
       for (const item of check.items ?? []) expect(Object.keys(item)).not.toContain("selector");
     }
     // and a run with no entry is the same list of checks as one whose only entry matched nothing
-    expect(JSON.stringify(await checks(undefined))).toBe(JSON.stringify(await checks([{ rule: RULE, selectors: ["footer select"] }])));
+    expect(JSON.stringify(await checks(undefined))).toBe(
+      JSON.stringify(await checks([{ rule: RULE, selectors: ["footer select"] }])),
+    );
   });
 });
 
@@ -111,14 +134,19 @@ describe("selector language", () => {
     expect(performance.now() - started).toBeLessThan(200);
   });
   test("elementSelector keeps only parseable tokens, and bounds the path in every dimension", () => {
-    const doc = parsePage(`<html><body><div id="a b" class="ok  weird!class x_y"><p id="p1"></p></div></body></html>`, URL).document!;
+    const doc = parsePage(
+      `<html><body><div id="a b" class="ok  weird!class x_y"><p id="p1"></p></div></body></html>`,
+      URL,
+    ).document!;
     expect(elementSelector(doc.getElementById("p1")!)).toBe("html > body > div.ok.x_y > p#p1");
   });
 });
 
 describe("config and validation", () => {
   test("an entry with only selectors on a rule that reports no elements is a validate problem naming the rule", () => {
-    const problems = checkIgnoreEntries([{ rule: "security/cookie-flags", selectors: ["form select"] }]);
+    const problems = checkIgnoreEntries([
+      { rule: "security/cookie-flags", selectors: ["form select"] },
+    ]);
     expect(problems).toHaveLength(1);
     expect(problems[0]!.message).toContain("security/cookie-flags");
     expect(problems[0]!.message).toContain("does not report an element path");
@@ -146,8 +174,14 @@ describe("selector work is bounded (#1440 review)", () => {
   const FORM_LABELS = "a11y/form-labels";
 
   test("10 entries of 100 selectors against 5,000 unlabeled inputs time the entries out instead of running for seconds", async () => {
-    const selectors = Array.from({ length: 100 }, (_, i) => `main div.w${i} form#nomatch${i} input`);
-    const entries: IgnoreEntry[] = Array.from({ length: 10 }, () => ({ rule: FORM_LABELS, selectors }));
+    const selectors = Array.from(
+      { length: 100 },
+      (_, i) => `main div.w${i} form#nomatch${i} input`,
+    );
+    const entries: IgnoreEntry[] = Array.from({ length: 10 }, () => ({
+      rule: FORM_LABELS,
+      selectors,
+    }));
     const timedOut: number[] = [];
     const runner = new RuleRunner({
       config: { rule_options: {}, rules: { enable: [FORM_LABELS] }, ignore: entries } as never,
@@ -156,7 +190,14 @@ describe("selector work is bounded (#1440 review)", () => {
     const html = inputs(5_000);
     const parsed = parsePage(html, URL);
     const started = performance.now();
-    await runner.runPageRules({ url: URL, html, statusCode: 200, loadTime: 0, headers: {}, parsed } as never);
+    await runner.runPageRules({
+      url: URL,
+      html,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+      parsed,
+    } as never);
     expect(performance.now() - started).toBeLessThan(8_000);
     timedOut.push(...runner.ignoreTimedOutEntries());
     expect(timedOut.length).toBeGreaterThan(0);
@@ -164,12 +205,20 @@ describe("selector work is bounded (#1440 review)", () => {
 
   test("an entry whose selectors spend its work budget stops waiving and is reported once", () => {
     const timeouts: string[] = [];
-    const table = new IgnoreTable([{ rule: RULE, selectors: ["main div.a form#b input", "main div.c form#d input"] }], {
-      onTimeout: (message) => timeouts.push(message),
-      limits: { perEntry: 2_000 },
-    });
+    const table = new IgnoreTable(
+      [{ rule: RULE, selectors: ["main div.a form#b input", "main div.c form#d input"] }],
+      {
+        onTimeout: (message) => timeouts.push(message),
+        limits: { perEntry: 2_000 },
+      },
+    );
     const path = "html > body > main > div.a > form#b > input";
-    const check = (): CheckResult => ({ name: "label-content-name-mismatch", status: "fail", message: "1 element(s) x", items: [{ id: "i", selector: path }] });
+    const check = (): CheckResult => ({
+      name: "label-content-name-mismatch",
+      status: "fail",
+      message: "1 element(s) x",
+      items: [{ id: "i", selector: path }],
+    });
     let waived = 0;
     for (let i = 0; i < 200; i++) {
       const out = table.filterChecks(RULE, URL, [check()])[0]!;
@@ -183,9 +232,17 @@ describe("selector work is bounded (#1440 review)", () => {
   });
 
   test("a selector entry makes the rule's verdict page-dependent, so template fan-out does not copy it", () => {
-    expect(new IgnoreTable([{ rule: RULE, selectors: ["form select"] }]).hasUrlEntries(RULE)).toBe(true);
+    expect(new IgnoreTable([{ rule: RULE, selectors: ["form select"] }]).hasUrlEntries(RULE)).toBe(
+      true,
+    );
     expect(new IgnoreTable([{ rule: RULE, items: ["x"] }]).hasUrlEntries(RULE)).toBe(false);
-    const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: [RULE] }, ignore: [{ rule: RULE, selectors: ["form select"] }] } as never });
+    const runner = new RuleRunner({
+      config: {
+        rule_options: {},
+        rules: { enable: [RULE] },
+        ignore: [{ rule: RULE, selectors: ["form select"] }],
+      } as never,
+    });
     expect(runner.ignoresByPage(RULE)).toBe(true);
   });
 });
@@ -196,9 +253,25 @@ describe("the element path is bounded and only computed when an entry wants it (
     `<!doctype html><html><head><title>t</title></head><body><div class="${classes}"><form>${Array.from({ length: controls }, (_, i) => `<input type="text" name="n${i}">`).join("")}</form></div></body></html>`;
   const FORM_LABELS = "a11y/form-labels";
   const runOn = async (html: string, ignore?: IgnoreEntry[]): Promise<CheckResult[]> => {
-    const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: [FORM_LABELS] }, ...(ignore ? { ignore } : {}) } as never, ruleTimeBudgetMs: 0 });
+    const runner = new RuleRunner({
+      config: {
+        rule_options: {},
+        rules: { enable: [FORM_LABELS] },
+        ...(ignore ? { ignore } : {}),
+      } as never,
+      ruleTimeBudgetMs: 0,
+    });
     const parsed = parsePage(html, URL);
-    return (await runner.runPageRules({ url: URL, html, statusCode: 200, loadTime: 0, headers: {}, parsed } as never)).ruleResults.get(FORM_LABELS)!.checks;
+    return (
+      await runner.runPageRules({
+        url: URL,
+        html,
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+        parsed,
+      } as never)
+    ).ruleResults.get(FORM_LABELS)!.checks;
   };
 
   test("no selector entry: no path is computed (the rule is told not to), however many controls and however long the class", async () => {
@@ -209,8 +282,13 @@ describe("the element path is bounded and only computed when an entry wants it (
     expect(unlabeled.items).toHaveLength(5_000);
     // the rule itself, run with the flag unset, builds no path at all
     const { formLabelsRule } = await import("../src/a11y/form-labels");
-    const direct = (await formLabelsRule.run({ page: { url: URL, html: "", statusCode: 200, loadTime: 0, headers: {} }, parsed: { document: parsePage(hostile(50), URL).document }, options: {} } as never));
-    for (const check of direct.checks) for (const item of check.items ?? []) expect(Object.keys(item)).not.toContain("selector");
+    const direct = await formLabelsRule.run({
+      page: { url: URL, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      parsed: { document: parsePage(hostile(50), URL).document },
+      options: {},
+    } as never);
+    for (const check of direct.checks)
+      for (const item of check.items ?? []) expect(Object.keys(item)).not.toContain("selector");
   }, 60_000);
 
   test("with a selector entry, a 409 KB class attribute and 5,000 controls are bounded and every control is waived", async () => {
@@ -231,15 +309,27 @@ describe("the element path is bounded and only computed when an entry wants it (
     expect(path.length).toBeLessThanOrEqual(1_000);
     expect(path.split(" > ").length).toBeLessThanOrEqual(16);
     expect(path.endsWith("p#leaf")).toBe(true);
-    for (const piece of path.split(" > ")) expect(piece.split(".").length - 1).toBeLessThanOrEqual(6);
+    for (const piece of path.split(" > "))
+      expect(piece.split(".").length - 1).toBeLessThanOrEqual(6);
   });
 
   test("selector matching is charged for its real work: a 16-ancestor path against 12-part selectors spends the entry's budget", () => {
     const selectors = Array.from({ length: 20 }, () => "a b c d e f g h i j k l");
     const timeouts: string[] = [];
-    const table = new IgnoreTable([{ rule: RULE, selectors }], { onTimeout: (m) => timeouts.push(m), limits: { perEntry: 20_000 } });
+    const table = new IgnoreTable([{ rule: RULE, selectors }], {
+      onTimeout: (m) => timeouts.push(m),
+      limits: { perEntry: 20_000 },
+    });
     const path = Array.from({ length: 16 }, () => "div").join(" > ");
-    for (let i = 0; i < 200; i++) table.filterChecks(RULE, URL, [{ name: "label-content-name-mismatch", status: "fail", message: "1 element(s)", items: [{ id: `i${i}`, selector: path }] }]);
+    for (let i = 0; i < 200; i++)
+      table.filterChecks(RULE, URL, [
+        {
+          name: "label-content-name-mismatch",
+          status: "fail",
+          message: "1 element(s)",
+          items: [{ id: `i${i}`, selector: path }],
+        },
+      ]);
     expect(timeouts).toHaveLength(1);
   });
 });
@@ -257,11 +347,21 @@ describe("who computes a path, and what bounds it (#1440 review)", () => {
 <form><input type="text" name="n1"></form>
 </main></body></html>`;
   const runner = (ignore: IgnoreEntry[] | undefined, enable: string[]) =>
-    new RuleRunner({ config: { rule_options: {}, rules: { enable }, ...(ignore ? { ignore } : {}) } as never, ruleTimeBudgetMs: 0 });
+    new RuleRunner({
+      config: { rule_options: {}, rules: { enable }, ...(ignore ? { ignore } : {}) } as never,
+      ruleTimeBudgetMs: 0,
+    });
   const RULES3 = ["a11y/label-content-name-mismatch", "a11y/select-name", "a11y/form-labels"];
   const runAll = async (r: RuleRunner): Promise<void> => {
     const parsed = parsePage(PAGE_WITH_ALL, URL);
-    await r.runPageRules({ url: URL, html: PAGE_WITH_ALL, statusCode: 200, loadTime: 0, headers: {}, parsed } as never);
+    await r.runPageRules({
+      url: URL,
+      html: PAGE_WITH_ALL,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+      parsed,
+    } as never);
   };
 
   test("the runner asks for a path only for a rule an entry with selectors names: none, another rule's entry, items-only entries", async () => {
@@ -283,31 +383,40 @@ describe("who computes a path, and what bounds it (#1440 review)", () => {
   test("each of the three rules builds a path only when told to", async () => {
     const { selectNameRule } = await import("../src/a11y/select-name");
     const { formLabelsRule } = await import("../src/a11y/form-labels");
-    const { labelContentNameMismatchRule } = await import("../src/a11y/label-content-name-mismatch");
+    const { labelContentNameMismatchRule } =
+      await import("../src/a11y/label-content-name-mismatch");
     spy = spyOn(elementPath, "elementSelector");
-    const make = (wants: boolean) => ({
-      page: { url: URL, html: PAGE_WITH_ALL, statusCode: 200, loadTime: 0, headers: {} },
-      parsed: parsePage(PAGE_WITH_ALL, URL),
-      options: {},
-      ...(wants ? { wantsItemSelectors: true } : {}),
-    }) as never;
+    const make = (wants: boolean) =>
+      ({
+        page: { url: URL, html: PAGE_WITH_ALL, statusCode: 200, loadTime: 0, headers: {} },
+        parsed: parsePage(PAGE_WITH_ALL, URL),
+        options: {},
+        ...(wants ? { wantsItemSelectors: true } : {}),
+      }) as never;
     for (const rule of [selectNameRule, formLabelsRule, labelContentNameMismatchRule]) {
       spy.mockClear();
       const off = rule.run(make(false));
       const offResult = (off instanceof Promise ? await off : off).checks;
       expect(spy, `${rule.meta.id} flag unset`).toHaveBeenCalledTimes(0);
-      for (const check of offResult) for (const item of check.items ?? []) expect(Object.keys(item)).not.toContain("selector");
+      for (const check of offResult)
+        for (const item of check.items ?? []) expect(Object.keys(item)).not.toContain("selector");
       const on = rule.run(make(true));
       const onResult = (on instanceof Promise ? await on : on).checks;
       expect(spy.mock.calls.length, `${rule.meta.id} flag set`).toBeGreaterThan(0);
-      expect(onResult.some((c) => (c.items ?? []).some((i) => typeof i.selector === "string")), rule.meta.id).toBe(true);
+      expect(
+        onResult.some((c) => (c.items ?? []).some((i) => typeof i.selector === "string")),
+        rule.meta.id,
+      ).toBe(true);
     }
   });
 
   test("a class attribute is read only to 1,024 characters and an id past 40 is never in the path", () => {
     // 1,200 characters of unusable tokens, then `c7`; and a 41-character id.
     const junk = Array.from({ length: 300 }, (_, i) => `a!${i}`).join(" ");
-    const doc = parsePage(`<html><body><div id="${"i".repeat(41)}" class="${junk} c7"><p id="leaf">x</p></div></body></html>`, URL).document!;
+    const doc = parsePage(
+      `<html><body><div id="${"i".repeat(41)}" class="${junk} c7"><p id="leaf">x</p></div></body></html>`,
+      URL,
+    ).document!;
     const path = elementSelector(doc.getElementById("leaf")!);
     expect(path).toBe("html > body > div > p#leaf");
     const m = compileSelector("div.c7");
@@ -315,12 +424,18 @@ describe("who computes a path, and what bounds it (#1440 review)", () => {
     const ident = compileSelector(`#${"i".repeat(41)}`);
     expect(typeof ident !== "string" && ident.test(parsePath(path))).toBe(false);
     // within the first 1,024 characters the same class is used
-    const near = parsePage(`<html><body><div class="a!b c7"><p id="leaf">x</p></div></body></html>`, URL).document!;
+    const near = parsePage(
+      `<html><body><div class="a!b c7"><p id="leaf">x</p></div></body></html>`,
+      URL,
+    ).document!;
     expect(elementSelector(near.getElementById("leaf")!)).toBe("html > body > div.c7 > p#leaf");
   });
 
   test("a shared ancestor is read once, however many controls sit under it", () => {
-    const doc = parsePage(`<html><body><div id="wrap" class="w"><form id="f">${Array.from({ length: 50 }, (_, i) => `<input id="i${i}">`).join("")}</form></div></body></html>`, URL).document!;
+    const doc = parsePage(
+      `<html><body><div id="wrap" class="w"><form id="f">${Array.from({ length: 50 }, (_, i) => `<input id="i${i}">`).join("")}</form></div></body></html>`,
+      URL,
+    ).document!;
     const wrap = doc.getElementById("wrap")!;
     const form = doc.getElementById("f")!;
     const inputs = Array.from({ length: 50 }, (_, i) => doc.getElementById(`i${i}`)!); // looked up before counting: a lookup reads ids
@@ -341,8 +456,18 @@ describe("who computes a path, and what bounds it (#1440 review)", () => {
     const path = Array.from({ length: 16 }, () => "div").join(" > ");
     const selector = Array.from({ length: 12 }, () => "div").join(" ");
     const timeouts: string[] = [];
-    const table = new IgnoreTable([{ rule: RULE, selectors: [selector] }], { onTimeout: (m) => timeouts.push(m), limits: { perEntry: 2_000 } });
-    const out = table.filterChecks(RULE, URL, [{ name: "label-content-name-mismatch", status: "fail", message: "1 element(s)", items: [{ id: "i", selector: path }] }])[0]!;
+    const table = new IgnoreTable([{ rule: RULE, selectors: [selector] }], {
+      onTimeout: (m) => timeouts.push(m),
+      limits: { perEntry: 2_000 },
+    });
+    const out = table.filterChecks(RULE, URL, [
+      {
+        name: "label-content-name-mismatch",
+        status: "fail",
+        message: "1 element(s)",
+        items: [{ id: "i", selector: path }],
+      },
+    ])[0]!;
     // 12 x 16 x 16 = 3,072 steps is over the budget: the entry stops waiving and is reported. Charged only
     // parts x segments (192) it would have matched and waived the item.
     expect(out.status).toBe("fail");
@@ -351,7 +476,12 @@ describe("who computes a path, and what bounds it (#1440 review)", () => {
   });
 
   test("an ancestor whose tag name is not a plain name makes the whole path unmatchable (fails closed)", () => {
-    const path = elementSelector(parsePage(`<html><body><svg:x><p id="leaf">x</p></svg:x></body></html>`, URL).document!.getElementById("leaf")!);
+    const path = elementSelector(
+      parsePage(
+        `<html><body><svg:x><p id="leaf">x</p></svg:x></body></html>`,
+        URL,
+      ).document!.getElementById("leaf")!,
+    );
     const m = compileSelector("p");
     // either the path is built without the odd ancestor, or it does not parse: it never matches an ancestor selector wrongly
     const hit = typeof m !== "string" && m.test(parsePath(path));

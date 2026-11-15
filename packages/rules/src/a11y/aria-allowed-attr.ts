@@ -79,9 +79,7 @@ export const ariaAllowedAttrRule: Rule = {
           // Decorative image
           for (const attr of ariaAttrs) {
             if (conflictingAttrs.img_decorative.includes(attr)) {
-              issues.push(
-                `img[alt=""]: ${attr} conflicts with decorative intent`
-              );
+              issues.push(`img[alt=""]: ${attr} conflicts with decorative intent`);
             }
           }
         }
@@ -101,8 +99,7 @@ export const ariaAllowedAttrRule: Rule = {
         status: "warn",
         message: `${issues.length} element(s) with inappropriate ARIA attributes`,
         items: issues.slice(0, 10).map((id) => ({ id })),
-        details:
-          issues.length > 10 ? { additional: issues.length - 10 } : undefined,
+        details: issues.length > 10 ? { additional: issues.length - 10 } : undefined,
       });
     } else {
       checks.push({

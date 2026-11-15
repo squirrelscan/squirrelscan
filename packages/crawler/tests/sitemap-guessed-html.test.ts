@@ -88,9 +88,9 @@ describe("guessed sitemap locations on a catch-all server (#670)", () => {
     expect(result.truncated).toBe(false);
     // Recorded as guesses that found nothing, which no rule reports.
     expect(result.failed).toHaveLength(COMMON_LOCATIONS.length);
-    expect(result.failed.every((f) => f.source === "common" && f.error === SITEMAP_HTML_PAGE_ERROR)).toBe(
-      true,
-    );
+    expect(
+      result.failed.every((f) => f.source === "common" && f.error === SITEMAP_HTML_PAGE_ERROR),
+    ).toBe(true);
   });
 
   test("a sitemap DECLARED in robots.txt that returns a web page still fails, saying what came back", async () => {
@@ -135,9 +135,9 @@ describe("guessed sitemap locations on a catch-all server (#670)", () => {
 
     const result = await discover(origin);
 
-    expect(result.discovered.map((sitemap) => [sitemap.url, sitemap.errors, sitemap.urlCount])).toEqual([
-      [`${origin}/sitemap_index.xml`, [], 2],
-    ]);
+    expect(
+      result.discovered.map((sitemap) => [sitemap.url, sitemap.errors, sitemap.urlCount]),
+    ).toEqual([[`${origin}/sitemap_index.xml`, [], 2]]);
     expect(result.all).toHaveLength(1);
   });
 
@@ -191,7 +191,11 @@ describe("what counts as a web page rather than a sitemap", () => {
   });
 
   test("a fragment served as text/html is a page", () => {
-    const decoded = decodeSitemapBody(bytes("<div>Not found</div>"), url, "text/html; charset=utf-8");
+    const decoded = decodeSitemapBody(
+      bytes("<div>Not found</div>"),
+      url,
+      "text/html; charset=utf-8",
+    );
     expect(decoded.notASitemap).toBe(true);
     expect(decoded.data.errors).toEqual([SITEMAP_HTML_PAGE_ERROR]);
   });
@@ -230,14 +234,22 @@ describe("what counts as a web page rather than a sitemap", () => {
   });
 
   test("an opening comment of any length is skipped", () => {
-    const decoded = decodeSitemapBody(bytes(`<!--${"x".repeat(10_000)}--><html><body>x</body></html>`), url, "application/xml");
+    const decoded = decodeSitemapBody(
+      bytes(`<!--${"x".repeat(10_000)}--><html><body>x</body></html>`),
+      url,
+      "application/xml",
+    );
     expect(decoded.notASitemap).toBe(true);
   });
 
   test("many opening comments are read in linear time", () => {
     // A backtracking pattern over repeated comments took seconds here.
     const started = performance.now();
-    const decoded = decodeSitemapBody(bytes(`${"<!--x-->".repeat(5_000)}${urlset("https://example.com/")}`), url, "application/xml");
+    const decoded = decodeSitemapBody(
+      bytes(`${"<!--x-->".repeat(5_000)}${urlset("https://example.com/")}`),
+      url,
+      "application/xml",
+    );
     expect(decoded.data.urlCount).toBe(1);
     expect(performance.now() - started).toBeLessThan(1_000);
   });

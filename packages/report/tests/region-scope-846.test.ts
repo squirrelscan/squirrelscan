@@ -23,7 +23,8 @@ import type { AuditReport, ReportRuleResult } from "../src/types";
 
 const SITE = "https://example.com";
 const page = (k: number) => `${SITE}/p${String(k).padStart(2, "0")}`;
-const pages = (from: number, to: number) => Array.from({ length: to - from }, (_, k) => page(from + k));
+const pages = (from: number, to: number) =>
+  Array.from({ length: to - from }, (_, k) => page(from + k));
 
 function structure(sections: Record<string, number>, total = 53): ReportStructure {
   return {
@@ -40,7 +41,13 @@ function structure(sections: Record<string, number>, total = 53): ReportStructur
   } as unknown as ReportStructure;
 }
 
-const SITE_STRUCTURE = structure({ header: 53, navigation: 53, footer: 52, content: 50, sidebar: 6 });
+const SITE_STRUCTURE = structure({
+  header: 53,
+  navigation: 53,
+  footer: 52,
+  content: 50,
+  sidebar: 6,
+});
 
 describe("itemRegionScope", () => {
   const item = (regions: CheckItem["regions"], extra: Partial<CheckItem> = {}): CheckItem => ({
@@ -53,7 +60,11 @@ describe("itemRegionScope", () => {
   test("scoped at the documented share of the pages with the region, not below", () => {
     expect(REGION_SCOPE_MIN_SHARE).toBe(0.8);
     const s = structure({ footer: 10 });
-    expect(itemRegionScope(item({ footer: 8 }), s)).toMatchObject({ region: "footer", pages: 8, regionPages: 10 });
+    expect(itemRegionScope(item({ footer: 8 }), s)).toMatchObject({
+      region: "footer",
+      pages: 8,
+      regionPages: 10,
+    });
     expect(itemRegionScope(item({ footer: 7 }), s)).toBeUndefined();
   });
 
@@ -64,7 +75,9 @@ describe("itemRegionScope", () => {
   });
 
   test("of two regions that qualify, the one it is on most", () => {
-    expect(itemRegionScope(item({ header: 45, footer: 50 }), SITE_STRUCTURE)?.region).toBe("footer");
+    expect(itemRegionScope(item({ header: 45, footer: 50 }), SITE_STRUCTURE)?.region).toBe(
+      "footer",
+    );
   });
 
   test("the page content, a region on one page, and missing data are never scoped", () => {
@@ -75,7 +88,11 @@ describe("itemRegionScope", () => {
   });
 
   test("a sidebar on a few pages is scoped against those pages", () => {
-    expect(itemRegionScope(item({ sidebar: 5 }), SITE_STRUCTURE)).toMatchObject({ region: "sidebar", pages: 5, regionPages: 6 });
+    expect(itemRegionScope(item({ sidebar: 5 }), SITE_STRUCTURE)).toMatchObject({
+      region: "sidebar",
+      pages: 5,
+      regionPages: 6,
+    });
   });
 
   // Template regions beyond the page frame: blocks that recur the same on every page that has them.
@@ -105,7 +122,10 @@ describe("itemRegionScope", () => {
   });
 
   test("pages outside the region come from the item's total", () => {
-    const scope = itemRegionScope(item({ header: 49, content: 3 }, { pageCount: 52 }), SITE_STRUCTURE);
+    const scope = itemRegionScope(
+      item({ header: 49, content: 3 }, { pageCount: 52 }),
+      SITE_STRUCTURE,
+    );
     expect(scope).toEqual({ region: "header", pages: 49, regionPages: 53, otherPages: 3 });
   });
 
@@ -127,7 +147,9 @@ describe("itemRegionScope", () => {
       pages: 50,
       regionPages: 52,
     });
-    expect(checkRegionScope({ details: { region: "content" } }, 50, SITE_STRUCTURE)).toBeUndefined();
+    expect(
+      checkRegionScope({ details: { region: "content" } }, 50, SITE_STRUCTURE),
+    ).toBeUndefined();
     expect(checkRegionScope({}, 50, SITE_STRUCTURE)).toBeUndefined();
   });
 });
@@ -186,7 +208,14 @@ function footerLinkReport(): AuditReport {
     structure: SITE_STRUCTURE,
     ruleResults: {
       "links/broken-links": {
-        meta: { ...LINK_TEXT_META, id: "links/broken-links", name: "Broken Links", category: "links", scope: "site", severity: "error" },
+        meta: {
+          ...LINK_TEXT_META,
+          id: "links/broken-links",
+          name: "Broken Links",
+          category: "links",
+          scope: "site",
+          severity: "error",
+        },
         checks: [
           {
             name: "broken-links",
@@ -220,7 +249,13 @@ function copyrightReport(): AuditReport {
     structure: SITE_STRUCTURE,
     ruleResults: {
       "content/stale-copyright": {
-        meta: { ...LINK_TEXT_META, id: "content/stale-copyright", name: "Stale Copyright Year", category: "content", weight: 2 },
+        meta: {
+          ...LINK_TEXT_META,
+          id: "content/stale-copyright",
+          name: "Stale Copyright Year",
+          category: "content",
+          weight: 2,
+        },
         checks: pages(0, 50).map((pageUrl) => ({
           name: "footer-copyright-year",
           status: "warn" as const,
@@ -287,7 +322,9 @@ describe("scoped findings in each format", () => {
 
   test("llm", () => {
     const llm = renderLlm(linkTextReport());
-    expect(llm).toContain("(in the site header, on 49 of 53 pages, and on 3 other pages; also from: /p00 (in the page content)");
+    expect(llm).toContain(
+      "(in the site header, on 49 of 53 pages, and on 3 other pages; also from: /p00 (in the page content)",
+    );
     expect(llm).not.toMatch(/Pages \(52\): \//);
   });
 
@@ -295,17 +332,23 @@ describe("scoped findings in each format", () => {
     const html = renderHtml(linkTextReport());
     expect(html).toContain("In the site header, on 49 of 53 pages, and on 3 other pages");
     // The check's page list is still there but starts closed.
-    expect(html).toMatch(/<details class="mt-1"><summary class="more">52 pages affected<\/summary>/);
+    expect(html).toMatch(
+      /<details class="mt-1"><summary class="more">52 pages affected<\/summary>/,
+    );
   });
 
   test("json and xml carry the scope beside the bounded page list", () => {
     const json = JSON.parse(renderJson(linkTextReport()));
-    const items = json.issues.flatMap((r: { checks: { items?: unknown[] }[] }) => r.checks.flatMap((c) => c.items ?? []));
+    const items = json.issues.flatMap((r: { checks: { items?: unknown[] }[] }) =>
+      r.checks.flatMap((c) => c.items ?? []),
+    );
     const readMore = items.find((i: { id: string }) => i.id === "read more");
     expect(readMore.scope).toEqual({ region: "header", pages: 49, regionPages: 53, otherPages: 3 });
     expect(readMore.sourcePages.length).toBeGreaterThan(0);
     expect(items.find((i: { id: string }) => i.id === "click here").scope).toBeUndefined();
-    expect(renderXml(linkTextReport())).toContain('<scope region="header" pages="49" region-pages="53" other-pages="3"/>');
+    expect(renderXml(linkTextReport())).toContain(
+      '<scope region="header" pages="49" region-pages="53" other-pages="3"/>',
+    );
   });
 
   test("a link in the footer of every page: one line, no rows", () => {
@@ -331,7 +374,13 @@ describe("scoped findings in each format", () => {
       structure: structure({ header: 53, breadcrumbs: 14, content: 50 }),
       ruleResults: {
         "links/redirect-chains": {
-          meta: { ...LINK_TEXT_META, id: "links/redirect-chains", name: "Redirect Chains", category: "links", scope: "site" },
+          meta: {
+            ...LINK_TEXT_META,
+            id: "links/redirect-chains",
+            name: "Redirect Chains",
+            category: "links",
+            scope: "site",
+          },
           checks: [
             {
               name: "links-to-redirect",
@@ -342,7 +391,11 @@ describe("scoped findings in each format", () => {
                   id: `${SITE}/docs`,
                   label: `${SITE}/docs (301) → ${SITE}/docs/ (200), linked in the breadcrumbs`,
                   sourcePages,
-                  sources: sourcePages.map((p) => ({ page: p, links: 1, sections: { breadcrumbs: 1 } })),
+                  sources: sourcePages.map((p) => ({
+                    page: p,
+                    links: 1,
+                    sections: { breadcrumbs: 1 },
+                  })),
                   regions: { breadcrumbs: 14 },
                   meta: { sections: { breadcrumbs: 14 } },
                 },
@@ -381,7 +434,9 @@ describe("scoped findings in each format", () => {
     expect(renderXml(report)).toContain(`<label>${SITE}/gone (404)</label>`);
     const json = JSON.parse(renderJson(report));
     expect(json.issues[0].checks[0].items[0].label).toBe(`${SITE}/gone (404)`);
-    expect(json.issues[0].checks[0].items[1].label).toBe(`${SITE}/lost (404), linked in the page content`);
+    expect(json.issues[0].checks[0].items[1].label).toBe(
+      `${SITE}/lost (404), linked in the page content`,
+    );
   });
 
   test("a check that only reads the footer names it once", () => {
@@ -390,7 +445,12 @@ describe("scoped findings in each format", () => {
     expect(count(text, "-> /p")).toBe(0);
     expect(renderMarkdown(copyrightReport())).toContain("In the site footer, on 50 of 52 pages");
     const json = JSON.parse(renderJson(copyrightReport()));
-    expect(json.issues[0].checks[0].scope).toEqual({ region: "footer", pages: 50, regionPages: 52, otherPages: 0 });
+    expect(json.issues[0].checks[0].scope).toEqual({
+      region: "footer",
+      pages: 50,
+      regionPages: 52,
+      otherPages: 0,
+    });
   });
 
   test("without section data the report keeps today's page lists", () => {
@@ -405,7 +465,9 @@ describe("a finding that carries pages from an earlier audit is never scoped to 
   function carriedReport(): AuditReport {
     const report = linkTextReport();
     const rule = report.ruleResults["a11y/link-text"]!;
-    rule.checks = rule.checks.map((c, k) => (k >= 45 ? { ...c, provenance: "carried" as const, lastSeenAt: 1 } : c));
+    rule.checks = rule.checks.map((c, k) =>
+      k >= 45 ? { ...c, provenance: "carried" as const, lastSeenAt: 1 } : c,
+    );
     return report;
   }
   const REGION_LINE = /In the site header, on \d+ of \d+ pages/i;
@@ -418,7 +480,9 @@ describe("a finding that carries pages from an earlier audit is never scoped to 
     expect(itemRegionScope(item, s, { carriedPages: [page(1)] })).toBeUndefined();
     expect(itemRegionScope(item, s, { provenance: "carried" })).toBeUndefined();
     expect(itemRegionScope(item, s, { carriedPages: [] })).toMatchObject({ region: "footer" });
-    expect(checkRegionScope({ details: { region: "footer" }, carriedCount: 2 }, 50, SITE_STRUCTURE)).toBeUndefined();
+    expect(
+      checkRegionScope({ details: { region: "footer" }, carriedCount: 2 }, 50, SITE_STRUCTURE),
+    ).toBeUndefined();
   });
 
   test("fresh pages only still read as before (control)", () => {
@@ -433,7 +497,9 @@ describe("a finding that carries pages from an earlier audit is never scoped to 
     expect(renderHtml(report)).not.toMatch(REGION_LINE);
     expect(renderXml(report)).not.toContain("<scope region=");
     const json = JSON.parse(renderJson(report));
-    const items = json.issues.flatMap((r: { checks: { items?: unknown[] }[] }) => r.checks.flatMap((c) => c.items ?? []));
+    const items = json.issues.flatMap((r: { checks: { items?: unknown[] }[] }) =>
+      r.checks.flatMap((c) => c.items ?? []),
+    );
     expect(items.some((i: { scope?: unknown }) => i.scope !== undefined)).toBe(false);
     // and the pages are listed, as for any unscoped finding
     expect(renderText(report)).toContain("-> /p");

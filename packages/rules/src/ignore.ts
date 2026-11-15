@@ -92,7 +92,11 @@ export function globMatch(glob: string, text: string): boolean {
 }
 
 /** The walk behind {@link globMatch}, counting loop iterations; null when `limit` ran out. */
-function globRun(glob: string, text: string, limit: number): { matched: boolean; steps: number } | null {
+function globRun(
+  glob: string,
+  text: string,
+  limit: number,
+): { matched: boolean; steps: number } | null {
   let g = 0;
   let t = 0;
   let star = -1;
@@ -144,7 +148,11 @@ function compileTextMatcher(pattern: string, budget: EntryBudget): TextMatcher |
     budget.metered = true;
     return (text) => {
       if (budget.dead || budget.total.left <= 0 || text.length > MAX_MATCH_INPUT) return false;
-      const result = globRun(glob, text, Math.min(MAX_STEPS_PER_TEST, budget.left, budget.total.left));
+      const result = globRun(
+        glob,
+        text,
+        Math.min(MAX_STEPS_PER_TEST, budget.left, budget.total.left),
+      );
       if (result === null) {
         budget.dead = true;
         return false;
@@ -167,7 +175,8 @@ export function ruleMatcher(pattern: string): (ruleId: string) => boolean {
 function splitUrlRegex(pattern: string): { source: string; flags: string } {
   const source = pattern.slice(6);
   const colon = source.lastIndexOf(":");
-  if (colon > 0 && /^[gimsuvy]+$/.test(source.slice(colon + 1))) return { source: source.slice(0, colon), flags: source.slice(colon + 1) };
+  if (colon > 0 && /^[gimsuvy]+$/.test(source.slice(colon + 1)))
+    return { source: source.slice(0, colon), flags: source.slice(colon + 1) };
   return { source, flags: "" };
 }
 
@@ -237,26 +246,52 @@ export class IgnoreTable {
     this.onTimeout = options.onTimeout;
     this.isIgnorableRule = options.isIgnorableRule ?? (() => true);
     this.countsItems = options.messageCountsItems ?? (() => false);
-    const total = { left: options.limits?.perAudit ?? MAX_STEPS_PER_AUDIT, compile: { left: options.limits?.compile ?? MAX_COMPILE_WORK_PER_TABLE } };
+    const total = {
+      left: options.limits?.perAudit ?? MAX_STEPS_PER_AUDIT,
+      compile: { left: options.limits?.compile ?? MAX_COMPILE_WORK_PER_TABLE },
+    };
     (entries ?? []).forEach((entry, index) => {
       if (index >= MAX_ENTRIES) {
-        if (index === MAX_ENTRIES) this.problems.push({ entry: index, field: "rule", pattern: entry.rule, message: `more than ${MAX_ENTRIES} entries: the rest are not applied` });
+        if (index === MAX_ENTRIES)
+          this.problems.push({
+            entry: index,
+            field: "rule",
+            pattern: entry.rule,
+            message: `more than ${MAX_ENTRIES} entries: the rest are not applied`,
+          });
         return;
       }
-      const budget: EntryBudget = { left: options.limits?.perEntry ?? MAX_STEPS_PER_ENTRY, dead: false, metered: false, total };
+      const budget: EntryBudget = {
+        left: options.limits?.perEntry ?? MAX_STEPS_PER_ENTRY,
+        dead: false,
+        metered: false,
+        total,
+      };
       const refused = (field: IgnoreMatcherProblem["field"], pattern: string, message: string) => {
         this.problems.push({ entry: index, field, pattern, message });
       };
       // Like the config schema's superRefine, enforced here for entries that never went
       // through it: an entry with no items and no urls (a bare rule, `checks` alone,
       // empty arrays) would waive everything the rule finds.
-      if ((entry.items?.length ?? 0) === 0 && (entry.urls?.length ?? 0) === 0 && (entry.selectors?.length ?? 0) === 0) {
-        refused("rule", entry.rule, "an entry needs `items`, `urls` or `selectors`: without any it would waive every finding of the rule, so it is not applied");
+      if (
+        (entry.items?.length ?? 0) === 0 &&
+        (entry.urls?.length ?? 0) === 0 &&
+        (entry.selectors?.length ?? 0) === 0
+      ) {
+        refused(
+          "rule",
+          entry.rule,
+          "an entry needs `items`, `urls` or `selectors`: without any it would waive every finding of the rule, so it is not applied",
+        );
         return;
       }
       for (const field of ["items", "urls", "checks", "selectors"] as const) {
         if ((entry[field]?.length ?? 0) > MAX_MATCHERS_PER_FIELD) {
-          refused(field, `${entry[field]!.length} patterns`, `more than ${MAX_MATCHERS_PER_FIELD} patterns in one entry: the entry is not applied`);
+          refused(
+            field,
+            `${entry[field]!.length} patterns`,
+            `more than ${MAX_MATCHERS_PER_FIELD} patterns in one entry: the entry is not applied`,
+          );
           return;
         }
       }
@@ -341,7 +376,17 @@ export class IgnoreTable {
   signatureFor(ruleId: string): string | null {
     const list = this.forRule(ruleId);
     if (list.length === 0) return null;
-    return JSON.stringify(list.map((c) => [c.index, c.entry.rule, c.entry.checks ?? null, c.entry.items ?? null, c.entry.selectors ?? null, c.entry.urls ?? null, c.entry.reason ?? null]));
+    return JSON.stringify(
+      list.map((c) => [
+        c.index,
+        c.entry.rule,
+        c.entry.checks ?? null,
+        c.entry.items ?? null,
+        c.entry.selectors ?? null,
+        c.entry.urls ?? null,
+        c.entry.reason ?? null,
+      ]),
+    );
   }
 
   /**
@@ -415,7 +460,10 @@ export class IgnoreTable {
       message: `Skipped: this page is ignored for this rule by squirrel.toml${reason ? ` (${reason})` : ""}`,
       skipReason: IGNORED_SKIP_REASON,
       // Folds apart from any other skip of the same rule, like the noindex gate.
-      details: { foldKey: IGNORED_SKIP_REASON, ignored: { pages: 1, entries: [entryIndex] } satisfies IgnoredDetails },
+      details: {
+        foldKey: IGNORED_SKIP_REASON,
+        ignored: { pages: 1, entries: [entryIndex] } satisfies IgnoredDetails,
+      },
     };
   }
 
@@ -485,7 +533,15 @@ export class IgnoreTable {
       if (remaining.length === 0) {
         // Everything this check found is waived: the rule ran and nothing actionable
         // is left, so it reads as a pass that says how much was waived.
-        const { items: _items, pages: _pages, componentOccurrences: _c, componentEvidence: _ce, siteResourceOccurrences: _s, siteResourceEvidence: _se, ...rest } = check;
+        const {
+          items: _items,
+          pages: _pages,
+          componentOccurrences: _c,
+          componentEvidence: _ce,
+          siteResourceOccurrences: _s,
+          siteResourceEvidence: _se,
+          ...rest
+        } = check;
         return {
           ...rest,
           status: "pass",
@@ -496,17 +552,32 @@ export class IgnoreTable {
       // Some items remain: the check keeps its status. Its message was built from the
       // full list, so say what was left out (and fix the count where the rule's
       // message starts with it).
-      const base = this.countsItems(ruleId) ? check.message.replace(/\d+/, String(remaining.length)) : check.message;
+      const base = this.countsItems(ruleId)
+        ? check.message.replace(/\d+/, String(remaining.length))
+        : check.message;
       const waived = removedItems + removedPages;
       // Evidence that still counted the waived items must not outlive them: the additive
       // element and resource evidence is dropped (reports then group from `items`), and the
       // page list keeps only pages a remaining item sits on.
-      const { componentOccurrences: _c, componentEvidence: _ce, siteResourceOccurrences: _s, siteResourceEvidence: _se, ...kept } = check;
+      const {
+        componentOccurrences: _c,
+        componentEvidence: _ce,
+        siteResourceOccurrences: _s,
+        siteResourceEvidence: _se,
+        ...kept
+      } = check;
       const pageSet = remaining.every((i) => i.sourcePages && i.sourcePages.length > 0)
         ? new Set(remaining.flatMap((i) => i.sourcePages!))
         : null;
-      const pages = check.pages && pageSet ? check.pages.filter((p) => pageSet.has(p)) : check.pages;
-      return { ...kept, ...(pages ? { pages } : {}), items: remaining, message: `${base} (${waived} ignored)`, details };
+      const pages =
+        check.pages && pageSet ? check.pages.filter((p) => pageSet.has(p)) : check.pages;
+      return {
+        ...kept,
+        ...(pages ? { pages } : {}),
+        items: remaining,
+        message: `${base} (${waived} ignored)`,
+        details,
+      };
     }
 
     // A check without items is waived whole only for a page waiver (urls, no items) that matches its page.
@@ -520,7 +591,10 @@ export class IgnoreTable {
             message: `Skipped: this page is ignored for this check by squirrel.toml${c.entry.reason ? ` (${c.entry.reason})` : ""}`,
             skipReason: IGNORED_SKIP_REASON,
             ...(check.pageUrl ? { pageUrl: check.pageUrl } : {}),
-            details: { foldKey: IGNORED_SKIP_REASON, ignored: { pages: 1, entries: [c.index] } satisfies IgnoredDetails },
+            details: {
+              foldKey: IGNORED_SKIP_REASON,
+              ignored: { pages: 1, entries: [c.index] } satisfies IgnoredDetails,
+            },
           };
         }
       }
@@ -529,7 +603,11 @@ export class IgnoreTable {
   }
 
   /** The item after one entry: unchanged (same object), narrowed (fewer source pages) or null (waived). Items, selectors and urls AND together. */
-  private applyToItem(c: CompiledEntry, item: CheckItem, checkPage: string | undefined): CheckItem | null {
+  private applyToItem(
+    c: CompiledEntry,
+    item: CheckItem,
+    checkPage: string | undefined,
+  ): CheckItem | null {
     if (c.items) {
       const hit = c.items.some((m) => m(item.id) || (item.label !== undefined && m(item.label)));
       this.noteTimeout(c);
@@ -545,7 +623,11 @@ export class IgnoreTable {
       const keep = item.sourcePages.filter((page) => !this.matchesUrls(c, page));
       if (keep.length === item.sourcePages.length) return item;
       if (keep.length === 0) return null;
-      return { ...item, sourcePages: keep, ...(item.sources ? { sources: item.sources.filter((s) => keep.includes(s.page)) } : {}) };
+      return {
+        ...item,
+        sourcePages: keep,
+        ...(item.sources ? { sources: item.sources.filter((s) => keep.includes(s.page)) } : {}),
+      };
     }
     if (checkPage !== undefined && this.matchesUrls(c, checkPage)) return null;
     return item;
@@ -558,7 +640,8 @@ export class IgnoreTable {
  * field existed. The same array when no item has one.
  */
 export function stripItemSelectors(checks: CheckResult[]): CheckResult[] {
-  if (!checks.some((check) => check.items?.some((item) => item.selector !== undefined))) return checks;
+  if (!checks.some((check) => check.items?.some((item) => item.selector !== undefined)))
+    return checks;
   return checks.map((check) => {
     if (!check.items?.some((item) => item.selector !== undefined)) return check;
     return {

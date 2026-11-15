@@ -135,7 +135,7 @@ export const sessionIdsRule: Rule = {
     name: "Session IDs in URLs",
     description: "Checks that crawlable URLs do not carry a session ID",
     solution:
-      "A session ID in the URL gives every visitor, and every crawler visit, a different URL for the same page, so search engines see unlimited duplicates, and a shared link can hand one visitor's session to another. Keep the session in a cookie. For PHP set session.use_only_cookies=1 and session.use_trans_sid=0; for Java servlet containers disable URL rewriting (tracking-mode COOKIE); for ASP.NET use cookieless=\"false\". Redirect the old URLs to the clean ones and add a canonical tag.",
+      'A session ID in the URL gives every visitor, and every crawler visit, a different URL for the same page, so search engines see unlimited duplicates, and a shared link can hand one visitor\'s session to another. Keep the session in a cookie. For PHP set session.use_only_cookies=1 and session.use_trans_sid=0; for Java servlet containers disable URL rewriting (tracking-mode COOKIE); for ASP.NET use cookieless="false". Redirect the old URLs to the clean ones and add a canonical tag.',
     category: "url",
     scope: "page",
     verdictScope: "page",
@@ -152,7 +152,12 @@ export const sessionIdsRule: Rule = {
         name: "session-id-in-url",
         status: "warn",
         message: `Page URL carries a session ID (${nameList(own)})`,
-        items: [{ id: maskSessionValues(ctx.page.url, own), label: `${own[0]!.where} parameter ${own[0]!.name}` }],
+        items: [
+          {
+            id: maskSessionValues(ctx.page.url, own),
+            label: `${own[0]!.where} parameter ${own[0]!.name}`,
+          },
+        ],
         details: { parameters: own.map((p) => p.name), where: own.map((p) => p.where) },
       });
     }

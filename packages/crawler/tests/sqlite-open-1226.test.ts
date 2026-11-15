@@ -25,7 +25,9 @@ describe("openSqlite", () => {
     db.exec("INSERT INTO t VALUES (1), (2), (3)");
     // A method reached through the guard's Object.create wrapper cannot see the
     // native statement's private fields unless it is bound to the statement.
-    const rows = [...(db.prepare("SELECT x FROM t ORDER BY x").iterate() as Iterable<{ x: number }>)];
+    const rows = [
+      ...(db.prepare("SELECT x FROM t ORDER BY x").iterate() as Iterable<{ x: number }>),
+    ];
     expect(rows.map((r) => r.x)).toEqual([1, 2, 3]);
     db.close();
   });
@@ -71,7 +73,7 @@ describe("openSqlite", () => {
          db.exec("BEGIN IMMEDIATE"); db.exec("INSERT INTO t VALUES (1)");
          console.log("locked"); await Bun.sleep(600); db.exec("COMMIT");`,
       ],
-      { stdout: "pipe", stderr: "ignore" }
+      { stdout: "pipe", stderr: "ignore" },
     );
     const reader = holder.stdout.getReader();
     await reader.read(); // "locked"
@@ -93,7 +95,9 @@ describe("openSqlite", () => {
     const file = join(dir, "wal.db");
     const db = openSqlite(file, 1000);
     enableWal(db);
-    expect((db.query("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode).toBe("wal");
+    expect((db.query("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode).toBe(
+      "wal",
+    );
     db.close();
   });
 });

@@ -32,18 +32,12 @@ export const duplicateIdActiveRule: Rule = {
     const checks: CheckResult[] = [];
 
     // Native focusable with IDs + elements with tabindex (case-insensitive) and IDs
-    const nativeFocusable = Array.from(
-      doc.querySelectorAll(NATIVE_FOCUSABLE_WITH_ID_SELECTOR)
-    );
+    const nativeFocusable = Array.from(doc.querySelectorAll(NATIVE_FOCUSABLE_WITH_ID_SELECTOR));
     const allWithId = doc.querySelectorAll("[id]");
     const tabindexFocusable: Element[] = [];
     for (const el of allWithId) {
       const tabindex = getAttrCI(el, "tabindex");
-      if (
-        tabindex !== null &&
-        tabindex !== "-1" &&
-        !nativeFocusable.includes(el)
-      ) {
+      if (tabindex !== null && tabindex !== "-1" && !nativeFocusable.includes(el)) {
         tabindexFocusable.push(el);
       }
     }
@@ -79,10 +73,7 @@ export const duplicateIdActiveRule: Rule = {
         status: "fail",
         message: `${duplicates.length} duplicate ID(s) on focusable elements`,
         items: duplicates.slice(0, 10).map((id) => ({ id })),
-        details:
-          duplicates.length > 10
-            ? { additional: duplicates.length - 10 }
-            : undefined,
+        details: duplicates.length > 10 ? { additional: duplicates.length - 10 } : undefined,
       });
     } else {
       checks.push({

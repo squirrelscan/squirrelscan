@@ -4,7 +4,11 @@ import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../t
 
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 
-import { createStaticVisibility, unconfirmedItem, unconfirmedMessage } from "../shared/static-hidden";
+import {
+  createStaticVisibility,
+  unconfirmedItem,
+  unconfirmedMessage,
+} from "../shared/static-hidden";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 function hasAccessibleName(el: Element): boolean {
@@ -67,7 +71,7 @@ export const buttonNameRule: Rule = {
 
     const buttons = doc.querySelectorAll("button, [role='button']");
     const inputButtons = doc.querySelectorAll(
-      'input[type="button"], input[type="submit"], input[type="reset"]'
+      'input[type="button"], input[type="submit"], input[type="reset"]',
     );
 
     const missingNames: string[] = [];
@@ -113,10 +117,7 @@ export const buttonNameRule: Rule = {
         status: "fail",
         message: "Buttons without accessible names",
         items: missingNames.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingNames.length > 10
-            ? { additional: missingNames.length - 10 }
-            : undefined,
+        details: missingNames.length > 10 ? { additional: missingNames.length - 10 } : undefined,
       });
     }
 
@@ -126,10 +127,7 @@ export const buttonNameRule: Rule = {
         status: "warn",
         message: unconfirmedMessage("button(s) without accessible names", unconfirmed),
         items: unconfirmed.slice(0, 10),
-        details:
-          unconfirmed.length > 10
-            ? { additional: unconfirmed.length - 10 }
-            : undefined,
+        details: unconfirmed.length > 10 ? { additional: unconfirmed.length - 10 } : undefined,
       });
     }
 
@@ -143,9 +141,7 @@ export const buttonNameRule: Rule = {
               ? "All buttons in the accessibility tree have accessible names"
               : "All buttons have accessible names",
           details:
-            hiddenWithoutName > 0
-              ? { buttonsChecked, hiddenWithoutName }
-              : { buttonsChecked },
+            hiddenWithoutName > 0 ? { buttonsChecked, hiddenWithoutName } : { buttonsChecked },
         });
       } else {
         checks.push({

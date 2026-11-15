@@ -156,7 +156,7 @@ describe("extractPageStructure", () => {
           pageType: { label: "about", confidence: 0.8, source: "rules" },
           degraded: "",
         },
-      })
+      }),
     ).toEqual({
       sections: {},
       chromeInternal: 0,
@@ -164,7 +164,9 @@ describe("extractPageStructure", () => {
       pageType: { label: "about", confidence: 0.8, source: "rules" },
       degraded: false,
     });
-    expect(extractPageStructure({ links: [{ isInternal: true, section: "content" }] })?.pageType).toBeNull();
+    expect(
+      extractPageStructure({ links: [{ isInternal: true, section: "content" }] })?.pageType,
+    ).toBeNull();
   });
 });
 
@@ -201,8 +203,14 @@ describe("page structure builder", () => {
 
   test("a rules answer counts from 0.8 and not below it; a model answer always counts", () => {
     const at = (confidence: number, source: Source) =>
-      build([scalars({ sections: { content: 1 }, chrome: 0, content: 1, type: { label: "legal", confidence, source } })])!
-        .pageTypes;
+      build([
+        scalars({
+          sections: { content: 1 },
+          chrome: 0,
+          content: 1,
+          type: { label: "legal", confidence, source },
+        }),
+      ])!.pageTypes;
 
     expect(at(0.8, "rules").counts).toEqual([{ label: "legal", pages: 1 }]);
     expect(at(0.79, "rules")).toMatchObject({ counts: [], notClassified: 1 });
@@ -241,7 +249,7 @@ describe("page structure builder", () => {
 describe("page structure wording", () => {
   test("one line of page types, most pages first", () => {
     expect(structurePageTypesLine(STRUCTURE)).toBe(
-      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified."
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.",
     );
   });
 
@@ -269,14 +277,16 @@ describe("page structure in the output formats", () => {
     const md = renderMarkdown(withStructure);
 
     expect(md).toContain("### Page structure");
-    expect(md).toContain("Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.");
+    expect(md).toContain(
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.",
+    );
     expect(md).toContain("| Section | Pages | Links |");
     expect(md).toContain("| Footer | 5 | 30 |");
     expect(md).toContain("| Content | 5 | 18 |");
     expect(md).toContain("| Comments | 1 | 1 |");
     expect(md).toContain("71 links counted; 3 could not be placed in a section.");
     expect(md).toContain(
-      "71% of internal links sit in the header, footer, navigation and sidebar; 29% in the page content."
+      "71% of internal links sit in the header, footer, navigation and sidebar; 29% in the page content.",
     );
     expect(md).toContain("1 page fell back to the markup rules for part of the classification.");
     // Rows come out most links first.
@@ -289,7 +299,15 @@ describe("page structure in the output formats", () => {
       report({
         structure: STRUCTURE,
         technologies: {
-          items: [{ id: "nextjs", name: "Next.js", category: "framework", version: null, confidence: "high" }],
+          items: [
+            {
+              id: "nextjs",
+              name: "Next.js",
+              category: "framework",
+              version: null,
+              confidence: "high",
+            },
+          ],
           added: [],
           removed: [],
           firstScan: true,
@@ -322,10 +340,12 @@ describe("page structure in the output formats", () => {
 
     expect(text).toContain("REPORT DETAIL");
     expect(text).toContain("Page structure\n");
-    expect(text).toContain("Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.");
+    expect(text).toContain(
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.",
+    );
     expect(text).toMatch(/Footer\s+5\s+30/);
     expect(text).toContain(
-      "71% of internal links sit in the header, footer, navigation and sidebar; 29% in the page content."
+      "71% of internal links sit in the header, footer, navigation and sidebar; 29% in the page content.",
     );
   });
 
@@ -333,7 +353,9 @@ describe("page structure in the output formats", () => {
     const llm = renderLlm(withStructure);
 
     expect(llm).toContain('<page-structure pages="7" links="71" chrome-share="0.712">');
-    expect(llm).toContain("Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.");
+    expect(llm).toContain(
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.",
+    );
     // The section id the JSON report uses, one row per section.
     expect(llm).toContain('<section name="footer" pages="5" links="30"/>');
     expect(llm).toContain('<section name="related_content" pages="1" links="2"/>');
@@ -344,7 +366,7 @@ describe("page structure in the output formats", () => {
     const xml = renderXml(withStructure);
 
     expect(xml).toContain(
-      '<page-structure pages="7" links="71" unknown-links="3" chrome-links="42" content-links="17" chrome-share="0.712">'
+      '<page-structure pages="7" links="71" unknown-links="3" chrome-links="42" content-links="17" chrome-share="0.712">',
     );
     expect(xml).toContain('<section name="footer" pages="5" links="30"/>');
     expect(xml).toContain('<page-types not-classified="3" by-model="2" degraded="1">');
@@ -359,7 +381,10 @@ describe("page structure in the output formats", () => {
       sections: [{ section: "footer", pages: "<y>" as unknown as number, links: 3 }],
     } as typeof STRUCTURE;
 
-    for (const out of [renderLlm(report({ structure: hostile })), renderXml(report({ structure: hostile }))]) {
+    for (const out of [
+      renderLlm(report({ structure: hostile })),
+      renderXml(report({ structure: hostile })),
+    ]) {
       expect(out).not.toContain("<x/>");
       expect(out).not.toContain("<y>");
       expect(out).toContain('pages="0"');
@@ -394,11 +419,19 @@ describe("page structure in the output formats", () => {
       }
       return out;
     };
-    for (const out of [renderMarkdown(r), renderText(r), renderLlm(r), renderXml(r), markup(renderHtml(r))]) {
+    for (const out of [
+      renderMarkdown(r),
+      renderText(r),
+      renderLlm(r),
+      renderXml(r),
+      markup(renderHtml(r)),
+    ]) {
       expect(out).not.toContain("undefined");
       expect(out).not.toContain("null page");
     }
-    expect(renderMarkdown(r)).toContain("Page types: 2 constructor pages, 1 contact page; 3 not classified.");
+    expect(renderMarkdown(r)).toContain(
+      "Page types: 2 constructor pages, 1 contact page; 3 not classified.",
+    );
   });
 
   test("links that are all unknown still get their totals line, with no table", () => {
@@ -421,7 +454,9 @@ describe("page structure in the output formats", () => {
 
     expect(html).toContain('<section id="structure">');
     expect(html).toContain("Page structure");
-    expect(html).toContain("Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.");
+    expect(html).toContain(
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.",
+    );
     expect(html).toContain("30 links on 5 pages");
     expect(html).toContain("2 links on 1 page<");
   });

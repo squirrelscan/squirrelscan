@@ -4,7 +4,12 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { describeAction, methodOf, passwordFormGetRule, submissions } from "../src/security/password-form-get";
+import {
+  describeAction,
+  methodOf,
+  passwordFormGetRule,
+  submissions,
+} from "../src/security/password-form-get";
 import type { CheckResult, RuleContext } from "../src/types";
 
 function run(body: string): CheckResult[] {
@@ -50,7 +55,11 @@ describe("failures", () => {
     expect(f?.message).toBe("1 form(s) with a password field submit by GET");
     expect(f?.items?.[0]?.id).toBe('form[action="/login"]');
     expect(f?.items?.[0]?.label).toContain("form 1 of 1 (/login)");
-    expect(f?.items?.[0]?.meta).toMatchObject({ reason: "get-method", action: "/login", position: 1 });
+    expect(f?.items?.[0]?.meta).toMatchObject({
+      reason: "get-method",
+      action: "/login",
+      position: 1,
+    });
     expect(passwordFormGetRule.meta.severity).toBe("error");
   });
 
@@ -60,12 +69,18 @@ describe("failures", () => {
   });
 
   test("method matched in any letter case", () => {
-    expect(failOf(run('<form action="/a" method="GeT"><input type="password"></form>'))).toBeDefined();
-    expect(isPass(run('<form action="/a" method="PoSt"><input type="PASSWORD"></form>'))).toBe(true);
+    expect(
+      failOf(run('<form action="/a" method="GeT"><input type="password"></form>')),
+    ).toBeDefined();
+    expect(isPass(run('<form action="/a" method="PoSt"><input type="PASSWORD"></form>'))).toBe(
+      true,
+    );
   });
 
   test("an unknown method value is GET", () => {
-    expect(failOf(run('<form action="/a" method="put"><input type="password"></form>'))).toBeDefined();
+    expect(
+      failOf(run('<form action="/a" method="put"><input type="password"></form>')),
+    ).toBeDefined();
   });
 
   test("position counts every form on the page", () => {
@@ -138,11 +153,15 @@ describe("formmethod on submit controls", () => {
 
 describe("passes and out of scope", () => {
   test("method=post passes", () => {
-    expect(isPass(run('<form action="/l" method="post"><input type="password"></form>'))).toBe(true);
+    expect(isPass(run('<form action="/l" method="post"><input type="password"></form>'))).toBe(
+      true,
+    );
   });
 
   test("method=dialog passes, nothing goes on the network", () => {
-    expect(isPass(run('<dialog open><form method="dialog"><input type="password"></form></dialog>'))).toBe(true);
+    expect(
+      isPass(run('<dialog open><form method="dialog"><input type="password"></form></dialog>')),
+    ).toBe(true);
   });
 
   test("a GET form with no password field is not assessed", () => {
@@ -167,7 +186,9 @@ describe("passes and out of scope", () => {
 
 describe("script submitted forms", () => {
   test("no action plus onsubmit is not determined, not a failure", () => {
-    const checks = run('<form onsubmit="return send(this)"><input type="password"><button>Go</button></form>');
+    const checks = run(
+      '<form onsubmit="return send(this)"><input type="password"><button>Go</button></form>',
+    );
     expect(failOf(checks)).toBeUndefined();
     expect(checks).toHaveLength(1);
     expect(checks[0]?.name).toBe("password-form-get-undetermined");
@@ -181,7 +202,9 @@ describe("script submitted forms", () => {
   });
 
   test("a javascript: action with a handler is not determined", () => {
-    const checks = run('<form action="javascript:void(0)" onsubmit="x()"><input type="password"></form>');
+    const checks = run(
+      '<form action="javascript:void(0)" onsubmit="x()"><input type="password"></form>',
+    );
     expect(checks[0]?.name).toBe("password-form-get-undetermined");
   });
 
@@ -198,18 +221,24 @@ describe("script submitted forms", () => {
     const checks = run(
       '<form action="/l"><input type="password"></form><form onsubmit="x()"><input type="password"></form>',
     );
-    expect(checks.map((c) => c.name).sort()).toEqual(["password-form-get", "password-form-get-undetermined"]);
+    expect(checks.map((c) => c.name).sort()).toEqual([
+      "password-form-get",
+      "password-form-get-undetermined",
+    ]);
   });
 });
 
 describe("determinism and reading only", () => {
   test("the same input gives the same result", () => {
-    const body = '<form action="/l"><input type="password"></form><form onsubmit="x()"><input type="password"></form>';
+    const body =
+      '<form action="/l"><input type="password"></form><form onsubmit="x()"><input type="password"></form>';
     expect(JSON.stringify(run(body))).toBe(JSON.stringify(run(body)));
   });
 
   test("a hostile snippet is length capped", () => {
-    const f = failOf(run(`<form action="/l" data-x="${"a".repeat(100000)}"><input type="password"></form>`));
+    const f = failOf(
+      run(`<form action="/l" data-x="${"a".repeat(100000)}"><input type="password"></form>`),
+    );
     expect((f?.items?.[0]?.snippet ?? "").length).toBeLessThanOrEqual(240);
   });
 });
@@ -228,7 +257,7 @@ describe("script-driven forms with no method (#1698 review)", () => {
     expect(w.status).toBe("warn");
     expect(w.message).toContain("fall back to GET");
     expect(w.items?.[0]?.meta).toMatchObject({ reason: "no-method", action: "(no action)" });
-    expect(w.items?.[0]?.label).toContain("method=\"post\" removes the risk");
+    expect(w.items?.[0]?.label).toContain('method="post" removes the risk');
     expect(w.items?.[0]?.label).toContain("if its script has not loaded or fails");
   });
 
@@ -250,8 +279,12 @@ describe("script-driven forms with no method (#1698 review)", () => {
   });
 
   test("an explicit method=get fails; so does a GET formmethod on a submit control", () => {
-    expect(failOf(run('<form method="get"><input type="password"><button>Go</button></form>'))).toBeDefined();
-    expect(failOf(run('<form><input type="password"><button formmethod="get">Go</button></form>'))).toBeDefined();
+    expect(
+      failOf(run('<form method="get"><input type="password"><button>Go</button></form>')),
+    ).toBeDefined();
+    expect(
+      failOf(run('<form><input type="password"><button formmethod="get">Go</button></form>')),
+    ).toBeDefined();
     expect(failOf(run('<form method="garbage"><input type="password"></form>'))).toBeDefined();
   });
 
@@ -262,14 +295,19 @@ describe("script-driven forms with no method (#1698 review)", () => {
   });
 
   test("a form that names post passes, with no warning", () => {
-    expect(isPass(run('<form method="post"><input type="password"><button>Go</button></form>'))).toBe(true);
+    expect(
+      isPass(run('<form method="post"><input type="password"><button>Go</button></form>')),
+    ).toBe(true);
   });
 
   test("a warning and a failure are reported side by side", () => {
     const checks = run(
       '<form><input type="password"></form><form method="get"><input type="password"></form>',
     );
-    expect(checks.map((c) => c.name).sort()).toEqual(["password-form-get", "password-form-get-no-method"]);
+    expect(checks.map((c) => c.name).sort()).toEqual([
+      "password-form-get",
+      "password-form-get-no-method",
+    ]);
   });
 
   test("submissions says whether the method was explicit", () => {
@@ -302,7 +340,9 @@ describe("the action shown never carries a token (#1698 review)", () => {
   });
 
   test("credentials in an absolute action are dropped", () => {
-    expect(actionOf("https://user:secret@auth.example.com/login?x=1")).toBe("https://auth.example.com/login");
+    expect(actionOf("https://user:secret@auth.example.com/login?x=1")).toBe(
+      "https://auth.example.com/login",
+    );
   });
 
   test("a query-only action reads as this page; none reads as no action", () => {
@@ -319,4 +359,3 @@ describe("the action shown never carries a token (#1698 review)", () => {
     expect(JSON.stringify(item)).not.toContain("SECRETVALUE");
   });
 });
-

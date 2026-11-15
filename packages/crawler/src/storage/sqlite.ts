@@ -79,7 +79,12 @@ import {
 /** A body that is an HTML document, not a script. */
 function looksLikeHtml(body: string): boolean {
   const head = body.slice(0, 256).trimStart().toLowerCase();
-  return head.startsWith("<!doctype html") || head.startsWith("<html") || head.startsWith("<head") || head.startsWith("<body");
+  return (
+    head.startsWith("<!doctype html") ||
+    head.startsWith("<html") ||
+    head.startsWith("<head") ||
+    head.startsWith("<body")
+  );
 }
 
 /** One fetched script handed to {@link SQLiteStorage.storeCrawlScripts}. */
@@ -463,9 +468,7 @@ const MIGRATIONS: Record<number, string[]> = {
   // and the difference between bounded and the #1908 shape of defect.
   //
   // `fetched_at` is in the index so the recency comparison is covered too.
-  26: [
-    `CREATE INDEX IF NOT EXISTS idx_pages_url_recency ON pages(normalized_url, fetched_at)`,
-  ],
+  26: [`CREATE INDEX IF NOT EXISTS idx_pages_url_recency ON pages(normalized_url, fetched_at)`],
   // Version 27: what the audit this crawl produced actually SAID
   // (squirrelscan/repo#1912). `crawls.status` is the crawl's lifecycle, and it
   // reads `analyzed` for a run whose report came out `failed` or `blocked` —
@@ -1387,7 +1390,6 @@ function gzipped(payload: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(out.buffer as ArrayBuffer, out.byteOffset, out.byteLength);
 }
 
-
 // Conservative hardcoded compaction bounds (#197). No squirrel.toml surface in
 // v1 — these are the only defaults `compactFindings` uses unless a test overrides.
 const COMPACT_DEFAULT_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // ~90 days
@@ -1405,10 +1407,7 @@ const PAGE_FEATURE_DEFAULT_PAGE_SIZE = 500;
 // Injection-safe whitelist mapping the typed duplicate-scan field to fixed
 // column names. The raw `field` is NEVER interpolated into SQL — only these
 // constant column names / the NULL literal are ever spliced into the query.
-const DUP_FIELD_COLUMNS: Record<
-  PageFeatureDuplicateField,
-  { hash: string; value: string }
-> = {
+const DUP_FIELD_COLUMNS: Record<PageFeatureDuplicateField, { hash: string; value: string }> = {
   title: { hash: "title_hash", value: "title" },
   description: { hash: "desc_hash", value: "description" },
   // Content-hash groups carry no scalar text sample.
@@ -1423,19 +1422,13 @@ const DUP_FIELD_COLUMNS: Record<
 // pop continues from where this one stopped).
 function capBatchPerHost(
   candidates: Record<string, unknown>[],
-  perHostLimit?: number
+  perHostLimit?: number,
 ): Record<string, unknown>[] {
-  if (
-    perHostLimit === undefined ||
-    perHostLimit <= 0 ||
-    candidates.length <= perHostLimit
-  ) {
+  if (perHostLimit === undefined || perHostLimit <= 0 || candidates.length <= perHostLimit) {
     return candidates;
   }
 
-  const hosts = candidates.map((row) =>
-    urlHostKey(row.normalized_url as string)
-  );
+  const hosts = candidates.map((row) => urlHostKey(row.normalized_url as string));
   if (new Set(hosts).size <= 1) return candidates;
 
   const perHost = new Map<string, number>();
@@ -1533,9 +1526,9 @@ export class SQLiteStorage implements CrawlStorage {
     `);
 
     // Get current version (0 if table is empty = fresh install with new schema)
-    const row = db
-      .prepare("SELECT version FROM schema_version LIMIT 1")
-      .get() as { version: number } | undefined;
+    const row = db.prepare("SELECT version FROM schema_version LIMIT 1").get() as
+      | { version: number }
+      | undefined;
 
     // If no version row exists, check if pages table has old schema
     let currentVersion: number;
@@ -1579,9 +1572,7 @@ export class SQLiteStorage implements CrawlStorage {
 
         // Update version only after all migrations succeed
         db.exec("DELETE FROM schema_version");
-        db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(
-          SCHEMA_VERSION
-        );
+        db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(SCHEMA_VERSION);
 
         db.exec("COMMIT");
       } catch (e) {
@@ -1624,7 +1615,7 @@ export class SQLiteStorage implements CrawlStorage {
     // One entry per RETIRED audit rather than one per audit: retention asks
     // "has anything here been retired" on every pass that deletes (#1912).
     db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_crawls_retired ON crawls(retired_at) WHERE retired_at IS NOT NULL`
+      `CREATE INDEX IF NOT EXISTS idx_crawls_retired ON crawls(retired_at) WHERE retired_at IS NOT NULL`,
     );
     // The complement, for the candidate query retention runs on every audit.
     // Partial on the same column from the other side, so it holds one entry per
@@ -1632,7 +1623,7 @@ export class SQLiteStorage implements CrawlStorage {
     // the order that query asks for: no temp b-tree, and the walk is bounded by
     // the window instead of by the history.
     db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_crawls_retention ON crawls(started_at) WHERE retired_at IS NULL`
+      `CREATE INDEX IF NOT EXISTS idx_crawls_retention ON crawls(started_at) WHERE retired_at IS NULL`,
     );
   }
 
@@ -1659,13 +1650,13 @@ export class SQLiteStorage implements CrawlStorage {
       | "resource_sizes"
       | "page_features"
       | "rule_results",
-    columns: ReadonlyArray<{ name: string; type: string }>
+    columns: ReadonlyArray<{ name: string; type: string }>,
   ): void {
     const db = this.getDb();
     const existing = new Set(
       (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
-        (c) => c.name
-      )
+        (c) => c.name,
+      ),
     );
     // No table yet (shouldn't happen — SCHEMA creates it first) → nothing to
     // reconcile; a fresh CREATE TABLE already has every column.
@@ -1703,9 +1694,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   // Crawl session
-  createCrawl(
-    metadata: Omit<CrawlMetadata, "id">
-  ): Effect.Effect<string, StorageError, never> {
+  createCrawl(metadata: Omit<CrawlMetadata, "id">): Effect.Effect<string, StorageError, never> {
     return Effect.try({
       try: () => {
         const id = randomUUID();
@@ -1724,7 +1713,7 @@ export class SQLiteStorage implements CrawlStorage {
           metadata.status,
           JSON.stringify(metadata.config),
           JSON.stringify(metadata.stats),
-          metadata.scanScope ? JSON.stringify(metadata.scanScope) : null
+          metadata.scanScope ? JSON.stringify(metadata.scanScope) : null,
         );
         return id;
       },
@@ -1732,9 +1721,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getCrawl(
-    id: string
-  ): Effect.Effect<CrawlMetadata | null, StorageError, never> {
+  getCrawl(id: string): Effect.Effect<CrawlMetadata | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -1749,7 +1736,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   updateCrawl(
     id: string,
-    updates: Partial<Omit<CrawlMetadata, "id">>
+    updates: Partial<Omit<CrawlMetadata, "id">>,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -1824,17 +1811,17 @@ export class SQLiteStorage implements CrawlStorage {
           const allowedFrom =
             updates.status !== undefined ? crawlStatusAllowedFrom(updates.status) : null;
           const stmt = db.query(
-            `UPDATE crawls SET ${sets.join(", ")} WHERE id = ? AND ${CRAWL_STATUS_GUARD_SQL}`
+            `UPDATE crawls SET ${sets.join(", ")} WHERE id = ? AND ${CRAWL_STATUS_GUARD_SQL}`,
           );
           const result = stmt.run(
             ...(values as (string | number | null)[]),
             allowedFrom,
-            allowedFrom
+            allowedFrom,
           );
           if (updates.status !== undefined && result.changes === 0) {
-            const row = db
-              .query("SELECT status FROM crawls WHERE id = ?")
-              .get(id) as { status: string } | undefined;
+            const row = db.query("SELECT status FROM crawls WHERE id = ?").get(id) as
+              | { status: string }
+              | undefined;
             // A missing crawl is the same quiet no-op it always was; an existing one
             // refused the move.
             if (row) {
@@ -1852,9 +1839,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  listCrawls(
-    limit?: number
-  ): Effect.Effect<CrawlMetadata[], StorageError, never> {
+  listCrawls(limit?: number): Effect.Effect<CrawlMetadata[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -1884,9 +1869,7 @@ export class SQLiteStorage implements CrawlStorage {
    * `type` falls back to "image" if unknown, and `cache_reason` is checked
    * against the known CacheHitReason set (anything else → null).
    */
-  private rowToResourceSizeRecord(
-    row: Record<string, unknown>
-  ): ResourceSizeRecord {
+  private rowToResourceSizeRecord(row: Record<string, unknown>): ResourceSizeRecord {
     const type = row.type === "css" ? "css" : "image";
     const rawReason = row.cache_reason as string | null;
     const cacheReason = isCacheHitReason(rawReason) ? rawReason : null;
@@ -1897,10 +1880,7 @@ export class SQLiteStorage implements CrawlStorage {
       error: (row.error as string | null) ?? null,
       contentType: (row.content_type as string | null) ?? null,
       sizeBytes: (row.size_bytes as number | null) ?? null,
-      sourcePages: this.safeJsonParse(
-        row.source_pages as string,
-        [] as string[]
-      ),
+      sourcePages: this.safeJsonParse(row.source_pages as string, [] as string[]),
       contentEncoding: (row.content_encoding as string | null) ?? null,
       transferBytes: (row.transfer_bytes as number | null) ?? null,
       cacheControl: (row.cache_control as string | null) ?? null,
@@ -1924,10 +1904,7 @@ export class SQLiteStorage implements CrawlStorage {
       completedAt: (row.completed_at as number | null) ?? undefined,
       status: row.status as CrawlMetadata["status"],
       retiredAt: (row.retired_at as number | null) ?? undefined,
-      config: this.safeJsonParse(
-        row.config as string,
-        {} as CrawlMetadata["config"]
-      ),
+      config: this.safeJsonParse(row.config as string, {} as CrawlMetadata["config"]),
       stats: this.safeJsonParse(row.stats as string, {
         pagesTotal: 0,
         pagesFetched: 0,
@@ -1941,19 +1918,13 @@ export class SQLiteStorage implements CrawlStorage {
       }),
       scanScope:
         typeof row.scan_scope === "string"
-          ? this.safeJsonParse(
-              row.scan_scope,
-              undefined as CrawlMetadata["scanScope"]
-            )
+          ? this.safeJsonParse(row.scan_scope, undefined as CrawlMetadata["scanScope"])
           : undefined,
     };
   }
 
   // Pages
-  upsertPage(
-    crawlId: string,
-    page: PageRecord
-  ): Effect.Effect<void, StorageError, never> {
+  upsertPage(crawlId: string, page: PageRecord): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -2017,7 +1988,7 @@ export class SQLiteStorage implements CrawlStorage {
           page.fetcherId ?? null,
           page.fallbackReason ?? null,
           page.sourceHash ?? null,
-          exactHtmlHash
+          exactHtmlHash,
         );
       },
       catch: (e) => StorageError.write(e),
@@ -2026,17 +1997,13 @@ export class SQLiteStorage implements CrawlStorage {
 
   getPage(
     crawlId: string,
-    normalizedUrl: string
+    normalizedUrl: string,
   ): Effect.Effect<PageRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM pages WHERE crawl_id = ? AND normalized_url = ?"
-        );
-        const row = stmt.get(crawlId, normalizedUrl) as
-          | Record<string, unknown>
-          | undefined;
+        const stmt = db.prepare("SELECT * FROM pages WHERE crawl_id = ? AND normalized_url = ?");
+        const row = stmt.get(crawlId, normalizedUrl) as Record<string, unknown> | undefined;
         if (!row) return null;
         return this.rowToPageRecord(row);
       },
@@ -2046,7 +2013,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   getPages(
     crawlId: string,
-    options?: PaginationOptions
+    options?: PaginationOptions,
   ): Effect.Effect<PageRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -2054,8 +2021,7 @@ export class SQLiteStorage implements CrawlStorage {
         // Deterministic order so repeat audits emit pages/affected-URLs in a
         // stable order (#150) — normalized_url is the per-page primary key and
         // how findings are keyed, so sorting by it keeps report diffs minimal.
-        let query =
-          "SELECT * FROM pages WHERE crawl_id = ? ORDER BY normalized_url ASC";
+        let query = "SELECT * FROM pages WHERE crawl_id = ? ORDER BY normalized_url ASC";
         const params: unknown[] = [crawlId];
 
         if (options?.limit) {
@@ -2068,9 +2034,10 @@ export class SQLiteStorage implements CrawlStorage {
         }
 
         const stmt = db.prepare(query);
-        const rows = stmt.all(
-          ...(params as (string | number | null)[])
-        ) as Record<string, unknown>[];
+        const rows = stmt.all(...(params as (string | number | null)[])) as Record<
+          string,
+          unknown
+        >[];
         return rows.map((row) => this.rowToPageRecord(row));
       },
       catch: (e) => StorageError.read(e),
@@ -2091,7 +2058,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   getPagesWithoutBodies(
     crawlId: string,
-    options?: PaginationOptions
+    options?: PaginationOptions,
   ): Effect.Effect<PageRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -2108,9 +2075,7 @@ export class SQLiteStorage implements CrawlStorage {
           params.push(options.offset);
         }
 
-        const rows = db
-          .prepare(query)
-          .all(...(params as (string | number | null)[])) as Record<
+        const rows = db.prepare(query).all(...(params as (string | number | null)[])) as Record<
           string,
           unknown
         >[];
@@ -2137,7 +2102,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   getPageLinkRows(
     crawlId: string,
-    options?: PaginationOptions
+    options?: PaginationOptions,
   ): Effect.Effect<PageLinkRow[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -2156,9 +2121,10 @@ export class SQLiteStorage implements CrawlStorage {
         }
 
         const stmt = db.prepare(query);
-        const rows = stmt.all(
-          ...(params as (string | number | null)[])
-        ) as Record<string, unknown>[];
+        const rows = stmt.all(...(params as (string | number | null)[])) as Record<
+          string,
+          unknown
+        >[];
         // Cast, not `?? null`: `rowToPageRecord` reads the same column the same
         // way, and a normalization here would be a divergence from `getPages`
         // that a parity test could not see.
@@ -2202,7 +2168,7 @@ export class SQLiteStorage implements CrawlStorage {
             `SELECT DISTINCT COALESCE(NULLIF(final_url, ''), url) AS page_url
                FROM pages
               WHERE crawl_id = ? AND status >= 200 AND status < 300
-              ORDER BY page_url ASC`
+              ORDER BY page_url ASC`,
           )
           .all(crawlId) as Array<{ page_url: string }>;
         return rows.map((row) => row.page_url);
@@ -2226,7 +2192,7 @@ export class SQLiteStorage implements CrawlStorage {
                 AND COALESCE(json_extract(redirect_chain, '$.isLoop'), 0) = 0
                 AND COALESCE(json_array_length(redirect_chain, '$.hops'), 0) > 1
               ELSE 0 END
-          )`
+          )`,
         );
         const row = stmt.get(crawlId) as { count: number };
         return row.count;
@@ -2235,15 +2201,12 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  hasPage(
-    crawlId: string,
-    normalizedUrl: string
-  ): Effect.Effect<boolean, StorageError, never> {
+  hasPage(crawlId: string, normalizedUrl: string): Effect.Effect<boolean, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.query(
-          "SELECT 1 FROM pages WHERE crawl_id = ? AND normalized_url = ? LIMIT 1"
+          "SELECT 1 FROM pages WHERE crawl_id = ? AND normalized_url = ? LIMIT 1",
         );
         // bun:sqlite returns NULL (not undefined) for no row, so a
         // `!== undefined` test here is always true. See hasFrontierEntry.
@@ -2253,9 +2216,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getCachedPage(
-    normalizedUrl: string
-  ): Effect.Effect<PageRecord | null, StorageError, never> {
+  getCachedPage(normalizedUrl: string): Effect.Effect<PageRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -2277,9 +2238,7 @@ export class SQLiteStorage implements CrawlStorage {
           ORDER BY fetched_at DESC, rowid DESC
           LIMIT 1
         `);
-        const row = stmt.get(normalizedUrl) as
-          | Record<string, unknown>
-          | undefined;
+        const row = stmt.get(normalizedUrl) as Record<string, unknown> | undefined;
         if (!row) return null;
         const page = this.rowToPageRecord(row);
         // The body went to the content store and the store's size cap has
@@ -2342,13 +2301,13 @@ export class SQLiteStorage implements CrawlStorage {
         const db = this.getDb();
         const rows = db
           .prepare(
-            "SELECT content_hash FROM pages WHERE crawl_id = ? AND html IS NULL AND content_hash IS NOT NULL"
+            "SELECT content_hash FROM pages WHERE crawl_id = ? AND html IS NULL AND content_hash IS NOT NULL",
           )
           .all(crawlId) as Array<{ content_hash: string }>;
         // Stored scripts (#1255) are kept like the HTML they belong to.
         const scripts = db
           .prepare(
-            "SELECT DISTINCT content_hash FROM crawl_scripts WHERE crawl_id = ? AND content_hash IS NOT NULL"
+            "SELECT DISTINCT content_hash FROM crawl_scripts WHERE crawl_id = ? AND content_hash IS NOT NULL",
           )
           .all(crawlId) as Array<{ content_hash: string }>;
         return store.touch([
@@ -2377,7 +2336,7 @@ export class SQLiteStorage implements CrawlStorage {
     crawlId: string,
     scripts: ReadonlyArray<StoredScriptInput>,
     limits: { maxBytes: number; totalBytes: number },
-    fetch?: StoredScriptsFetchSummary
+    fetch?: StoredScriptsFetchSummary,
   ): Effect.Effect<StoredScriptsSummary, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -2394,7 +2353,7 @@ export class SQLiteStorage implements CrawlStorage {
         const insert = db.prepare(
           `INSERT OR REPLACE INTO crawl_scripts
              (crawl_id, url, content_hash, size_bytes, status, skip_reason, source_pages, final_url)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         );
         const seen = new Map<string, number>(); // hash -> bytes, this crawl
         let distinctBytes = 0;
@@ -2404,7 +2363,16 @@ export class SQLiteStorage implements CrawlStorage {
             if (script.fetchSkipReason) {
               // Referenced but never requested (the fetch hit its memory or time
               // bound): no size, no body, and the reason is the whole record.
-              insert.run(crawlId, script.url, null, null, "skipped", script.fetchSkipReason, JSON.stringify(script.sourcePages), null);
+              insert.run(
+                crawlId,
+                script.url,
+                null,
+                null,
+                "skipped",
+                script.fetchSkipReason,
+                JSON.stringify(script.sourcePages),
+                null,
+              );
               summary.skipped++;
               summary.skippedByReason[script.fetchSkipReason] =
                 (summary.skippedByReason[script.fetchSkipReason] ?? 0) + 1;
@@ -2412,13 +2380,20 @@ export class SQLiteStorage implements CrawlStorage {
             }
             if (script.status === null || script.status < 200 || script.status >= 300) continue;
             const size =
-              script.content !== null
-                ? Buffer.byteLength(script.content)
-                : script.sizeBytes;
+              script.content !== null ? Buffer.byteLength(script.content) : script.sizeBytes;
             if (size === null) continue;
             const pages = JSON.stringify(script.sourcePages);
             const skip = (reason: StoredScriptSkipReason): void => {
-              insert.run(crawlId, script.url, null, size, "skipped", reason, pages, script.finalUrl ?? null);
+              insert.run(
+                crawlId,
+                script.url,
+                null,
+                size,
+                "skipped",
+                reason,
+                pages,
+                script.finalUrl ?? null,
+              );
               summary.skipped++;
               summary.skippedByReason[reason] = (summary.skippedByReason[reason] ?? 0) + 1;
             };
@@ -2452,17 +2427,35 @@ export class SQLiteStorage implements CrawlStorage {
               distinctBytes += size;
               summary.distinct++;
               summary.distinctBytes = distinctBytes;
-              insert.run(crawlId, script.url, stored, size, "stored", null, pages, script.finalUrl ?? null);
+              insert.run(
+                crawlId,
+                script.url,
+                stored,
+                size,
+                "stored",
+                null,
+                pages,
+                script.finalUrl ?? null,
+              );
               summary.stored++;
               continue;
             }
-            insert.run(crawlId, script.url, hash, size, "stored", null, pages, script.finalUrl ?? null);
+            insert.run(
+              crawlId,
+              script.url,
+              hash,
+              size,
+              "stored",
+              null,
+              pages,
+              script.finalUrl ?? null,
+            );
             summary.stored++;
           }
           if (fetch) {
             db.prepare(
               `INSERT OR REPLACE INTO crawl_scripts_summary (crawl_id, fetch_limit, dropped_by_limit)
-               VALUES (?, ?, ?)`
+               VALUES (?, ?, ?)`,
             ).run(crawlId, fetch.fetchLimit, fetch.droppedByLimit);
           }
           db.exec("COMMIT");
@@ -2479,14 +2472,14 @@ export class SQLiteStorage implements CrawlStorage {
   /** The scripts this crawl stored or skipped, in URL order. */
   getCrawlScripts(
     crawlId: string,
-    opts: { pageUrl?: string } = {}
+    opts: { pageUrl?: string } = {},
   ): Effect.Effect<StoredScriptRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const rows = this.getDb()
           .prepare(
             `SELECT url, content_hash, size_bytes, status, skip_reason, source_pages, final_url
-             FROM crawl_scripts WHERE crawl_id = ? ORDER BY url`
+             FROM crawl_scripts WHERE crawl_id = ? ORDER BY url`,
           )
           .all(crawlId) as Array<{
           url: string;
@@ -2514,7 +2507,7 @@ export class SQLiteStorage implements CrawlStorage {
               !(store.has
                 ? store.has(row.content_hash)
                 : store.getString(row.content_hash) !== null),
-          })
+          }),
         );
         const { pageUrl } = opts;
         return pageUrl === undefined
@@ -2527,18 +2520,16 @@ export class SQLiteStorage implements CrawlStorage {
 
   /** What the script fetch left out of this crawl's index, when it was recorded. */
   getCrawlScriptsSummary(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<StoredScriptsFetchSummary | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const row = this.getDb()
           .prepare(
-            "SELECT fetch_limit, dropped_by_limit FROM crawl_scripts_summary WHERE crawl_id = ?"
+            "SELECT fetch_limit, dropped_by_limit FROM crawl_scripts_summary WHERE crawl_id = ?",
           )
           .get(crawlId) as { fetch_limit: number | null; dropped_by_limit: number } | undefined;
-        return row
-          ? { fetchLimit: row.fetch_limit, droppedByLimit: row.dropped_by_limit }
-          : null;
+        return row ? { fetchLimit: row.fetch_limit, droppedByLimit: row.dropped_by_limit } : null;
       },
       catch: (e) => StorageError.read(e),
     });
@@ -2547,13 +2538,13 @@ export class SQLiteStorage implements CrawlStorage {
   /** A stored script's body by URL (requested or final) for this crawl; null when skipped or evicted. */
   getCrawlScriptBody(
     crawlId: string,
-    url: string
+    url: string,
   ): Effect.Effect<string | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const row = this.getDb()
           .prepare(
-            "SELECT content_hash FROM crawl_scripts WHERE crawl_id = ? AND (url = ? OR final_url = ?) AND content_hash IS NOT NULL"
+            "SELECT content_hash FROM crawl_scripts WHERE crawl_id = ? AND (url = ? OR final_url = ?) AND content_hash IS NOT NULL",
           )
           .get(crawlId, url, url) as { content_hash: string } | undefined;
         if (!row || !this.contentStore) return null;
@@ -2569,7 +2560,7 @@ export class SQLiteStorage implements CrawlStorage {
    * does not refresh anything's place in the store's eviction order.
    */
   countEvictedPageBodies(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<{ evicted: number; stored: number }, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -2577,14 +2568,12 @@ export class SQLiteStorage implements CrawlStorage {
         if (!store) return { evicted: 0, stored: 0 };
         const rows = this.getDb()
           .prepare(
-            "SELECT content_hash FROM pages WHERE crawl_id = ? AND html IS NULL AND html_hash IS NOT NULL AND content_hash IS NOT NULL"
+            "SELECT content_hash FROM pages WHERE crawl_id = ? AND html IS NULL AND html_hash IS NOT NULL AND content_hash IS NOT NULL",
           )
           .all(crawlId) as Array<{ content_hash: string }>;
         let evicted = 0;
         for (const { content_hash: hash } of rows) {
-          const present = store.has
-            ? store.has(hash)
-            : store.getString(hash) !== null;
+          const present = store.has ? store.has(hash) : store.getString(hash) !== null;
           if (!present) evicted++;
         }
         return { evicted, stored: rows.length };
@@ -2593,10 +2582,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  private rowToPageRecord(
-    row: Record<string, unknown>,
-    opts?: { body?: boolean }
-  ): PageRecord {
+  private rowToPageRecord(row: Record<string, unknown>, opts?: { body?: boolean }): PageRecord {
     const defaultHeaders: ResponseHeaders = {
       contentType: null,
       contentEncoding: null,
@@ -2656,15 +2642,9 @@ export class SQLiteStorage implements CrawlStorage {
       html, // Retrieved from content-store if not in local DB
       parsedData: (row.parsed_data as string | null | undefined) ?? null,
       headers: this.safeJsonParse(row.headers as string, defaultHeaders),
-      securityHeaders: this.safeJsonParse(
-        row.security_headers as string,
-        defaultSecurityHeaders
-      ),
+      securityHeaders: this.safeJsonParse(row.security_headers as string, defaultSecurityHeaders),
       requestHeaders: row.request_headers
-        ? this.safeJsonParse<Record<string, string>>(
-            row.request_headers as string,
-            {}
-          )
+        ? this.safeJsonParse<Record<string, string>>(row.request_headers as string, {})
         : null,
       fetcherId: (row.fetcher_id as string | null) ?? undefined,
       fallbackReason: (row.fallback_reason as string | null) ?? undefined,
@@ -2674,10 +2654,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   // Frontier
-  upsertFrontier(
-    crawlId: string,
-    entry: FrontierRecord
-  ): Effect.Effect<void, StorageError, never> {
+  upsertFrontier(crawlId: string, entry: FrontierRecord): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -2700,7 +2677,7 @@ export class SQLiteStorage implements CrawlStorage {
           entry.enqueuedAt,
           entry.fetchedAt ?? null,
           entry.retryCount,
-          entry.reason ?? null
+          entry.reason ?? null,
         );
       },
       catch: (e) => StorageError.write(e),
@@ -2717,13 +2694,13 @@ export class SQLiteStorage implements CrawlStorage {
    */
   hasFrontierEntry(
     crawlId: string,
-    normalizedUrl: string
+    normalizedUrl: string,
   ): Effect.Effect<boolean, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.query(
-          "SELECT 1 FROM frontier WHERE crawl_id = ? AND normalized_url = ? LIMIT 1"
+          "SELECT 1 FROM frontier WHERE crawl_id = ? AND normalized_url = ? LIMIT 1",
         );
         // `!= null`, NOT `!== undefined`: bun:sqlite's Statement.get() returns
         // NULL when no row matches, so an undefined test never fails and the
@@ -2736,17 +2713,13 @@ export class SQLiteStorage implements CrawlStorage {
 
   getFrontierEntry(
     crawlId: string,
-    normalizedUrl: string
+    normalizedUrl: string,
   ): Effect.Effect<FrontierRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.query(
-          "SELECT * FROM frontier WHERE crawl_id = ? AND normalized_url = ?"
-        );
-        const row = stmt.get(crawlId, normalizedUrl) as
-          | Record<string, unknown>
-          | undefined;
+        const stmt = db.query("SELECT * FROM frontier WHERE crawl_id = ? AND normalized_url = ?");
+        const row = stmt.get(crawlId, normalizedUrl) as Record<string, unknown> | undefined;
         if (!row) return null;
         return this.rowToFrontierRecord(row);
       },
@@ -2754,9 +2727,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  popNextUrl(
-    crawlId: string
-  ): Effect.Effect<FrontierRecord | null, StorageError, never> {
+  popNextUrl(crawlId: string): Effect.Effect<FrontierRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -2768,9 +2739,7 @@ export class SQLiteStorage implements CrawlStorage {
           ORDER BY priority ASC, enqueued_at ASC
           LIMIT 1
         `);
-        const row = selectStmt.get(crawlId) as
-          | Record<string, unknown>
-          | undefined;
+        const row = selectStmt.get(crawlId) as Record<string, unknown> | undefined;
 
         if (!row) return null;
 
@@ -2797,7 +2766,7 @@ export class SQLiteStorage implements CrawlStorage {
   popNextUrls(
     crawlId: string,
     count: number,
-    perHostLimit?: number
+    perHostLimit?: number,
   ): Effect.Effect<FrontierRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -2810,10 +2779,7 @@ export class SQLiteStorage implements CrawlStorage {
           ORDER BY priority ASC, enqueued_at ASC
           LIMIT ?
         `);
-        const candidates = selectStmt.all(crawlId, count) as Record<
-          string,
-          unknown
-        >[];
+        const candidates = selectStmt.all(crawlId, count) as Record<string, unknown>[];
 
         if (candidates.length === 0) return [];
 
@@ -2844,7 +2810,9 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const row = this.getDb()
-          .query("SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'skipped' AND reason = 'robots_disallowed'")
+          .query(
+            "SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'skipped' AND reason = 'robots_disallowed'",
+          )
           .get(crawlId) as { count: number };
         return row.count;
       },
@@ -2857,7 +2825,7 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.query(
-          "SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'pending'"
+          "SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'pending'",
         );
         const row = stmt.get(crawlId) as { count: number };
         return row.count;
@@ -2866,14 +2834,12 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getFetchingCount(
-    crawlId: string
-  ): Effect.Effect<number, StorageError, never> {
+  getFetchingCount(crawlId: string): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.query(
-          "SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'fetching'"
+          "SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'fetching'",
         );
         const row = stmt.get(crawlId) as { count: number };
         return row.count;
@@ -2886,13 +2852,12 @@ export class SQLiteStorage implements CrawlStorage {
     crawlId: string,
     normalizedUrl: string,
     status: FrontierStatus,
-    reason?: string
+    reason?: string,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const fetchedAt =
-          status === "done" || status === "failed" ? Date.now() : null;
+        const fetchedAt = status === "done" || status === "failed" ? Date.now() : null;
 
         // #1659: only the allowed-from statuses move (see FRONTIER_STATUS_TRANSITIONS):
         // a URL finishes from `fetching`, so a late worker cannot rewrite one a resume
@@ -2907,7 +2872,7 @@ export class SQLiteStorage implements CrawlStorage {
             UPDATE frontier
             SET status = ?, reason = ?, fetched_at = COALESCE(?, fetched_at)
             WHERE crawl_id = ? AND normalized_url = ? AND instr(?, ',' || status || ',') > 0
-          `
+          `,
                 )
                 .run(status, reason, fetchedAt, crawlId, normalizedUrl, allowedFrom)
             : db
@@ -2916,14 +2881,12 @@ export class SQLiteStorage implements CrawlStorage {
             UPDATE frontier
             SET status = ?, fetched_at = COALESCE(?, fetched_at)
             WHERE crawl_id = ? AND normalized_url = ? AND instr(?, ',' || status || ',') > 0
-          `
+          `,
                 )
                 .run(status, fetchedAt, crawlId, normalizedUrl, allowedFrom);
         if (result.changes === 0) {
           const row = db
-            .query(
-              "SELECT status FROM frontier WHERE crawl_id = ? AND normalized_url = ?"
-            )
+            .query("SELECT status FROM frontier WHERE crawl_id = ? AND normalized_url = ?")
             .get(crawlId, normalizedUrl) as { status: string } | undefined;
           if (row) {
             this.onIgnoredTransition?.({
@@ -2939,9 +2902,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  resetStaleFetching(
-    crawlId: string
-  ): Effect.Effect<number, StorageError, never> {
+  resetStaleFetching(crawlId: string): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -2957,9 +2918,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getAllFrontierEntries(
-    crawlId: string
-  ): Effect.Effect<FrontierRecord[], StorageError, never> {
+  getAllFrontierEntries(crawlId: string): Effect.Effect<FrontierRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3016,13 +2975,9 @@ export class SQLiteStorage implements CrawlStorage {
         // Clear all derived data, but keep pages for conditional GET cache
         // Pages will be upserted (updated) during re-crawl
         db.prepare("DELETE FROM rule_results WHERE crawl_id = ?").run(crawlId);
-        db.prepare("DELETE FROM image_appearances WHERE crawl_id = ?").run(
-          crawlId
-        );
+        db.prepare("DELETE FROM image_appearances WHERE crawl_id = ?").run(crawlId);
         db.prepare("DELETE FROM images WHERE crawl_id = ?").run(crawlId);
-        db.prepare("DELETE FROM link_appearances WHERE crawl_id = ?").run(
-          crawlId
-        );
+        db.prepare("DELETE FROM link_appearances WHERE crawl_id = ?").run(crawlId);
         db.prepare("DELETE FROM links WHERE crawl_id = ?").run(crawlId);
         db.prepare("DELETE FROM sitemap_urls WHERE crawl_id = ?").run(crawlId);
         db.prepare("DELETE FROM sitemaps WHERE crawl_id = ?").run(crawlId);
@@ -3056,10 +3011,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   // Links
-  upsertLink(
-    crawlId: string,
-    link: LinkRecord
-  ): Effect.Effect<void, StorageError, never> {
+  upsertLink(crawlId: string, link: LinkRecord): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3077,26 +3029,19 @@ export class SQLiteStorage implements CrawlStorage {
           link.wafBlocked ? 1 : null,
           link.wafProvider ?? null,
           link.rateLimited ? 1 : null,
-          link.unverifiedReason ?? null
+          link.unverifiedReason ?? null,
         );
       },
       catch: (e) => StorageError.write(e),
     });
   }
 
-  getLink(
-    crawlId: string,
-    href: string
-  ): Effect.Effect<LinkRecord | null, StorageError, never> {
+  getLink(crawlId: string, href: string): Effect.Effect<LinkRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM links WHERE crawl_id = ? AND href = ?"
-        );
-        const row = stmt.get(crawlId, href) as
-          | Record<string, unknown>
-          | undefined;
+        const stmt = db.prepare("SELECT * FROM links WHERE crawl_id = ? AND href = ?");
+        const row = stmt.get(crawlId, href) as Record<string, unknown> | undefined;
         if (!row) return null;
         return this.rowToLinkRecord(row);
       },
@@ -3106,7 +3051,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   addLinkAppearance(
     crawlId: string,
-    appearance: LinkAppearanceRecord
+    appearance: LinkAppearanceRecord,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3122,7 +3067,7 @@ export class SQLiteStorage implements CrawlStorage {
           appearance.anchorText,
           appearance.position,
           appearance.rel ? JSON.stringify(appearance.rel) : null,
-          appearance.isNofollow ? 1 : 0
+          appearance.isNofollow ? 1 : 0,
         );
       },
       catch: (e) => StorageError.write(e),
@@ -3135,7 +3080,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   addLinkAppearancesBatch(
     crawlId: string,
-    appearances: LinkAppearanceRecord[]
+    appearances: LinkAppearanceRecord[],
   ): Effect.Effect<void, StorageError, never> {
     if (appearances.length === 0) {
       return Effect.void;
@@ -3156,7 +3101,7 @@ export class SQLiteStorage implements CrawlStorage {
               appearance.anchorText,
               appearance.position,
               appearance.rel ? JSON.stringify(appearance.rel) : null,
-              appearance.isNofollow ? 1 : 0
+              appearance.isNofollow ? 1 : 0,
             );
           }
         });
@@ -3168,7 +3113,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   getLinks(
     crawlId: string,
-    options?: { unchecked?: boolean }
+    options?: { unchecked?: boolean },
   ): Effect.Effect<LinkRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3191,14 +3136,12 @@ export class SQLiteStorage implements CrawlStorage {
 
   getLinkAppearances(
     crawlId: string,
-    href: string
+    href: string,
   ): Effect.Effect<LinkAppearanceRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM link_appearances WHERE crawl_id = ? AND href = ?"
-        );
+        const stmt = db.prepare("SELECT * FROM link_appearances WHERE crawl_id = ? AND href = ?");
         const rows = stmt.all(crawlId, href) as Record<string, unknown>[];
         return rows.map((row) => this.rowToLinkAppearanceRecord(row));
       },
@@ -3208,7 +3151,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   getIncomingLinkCount(
     crawlId: string,
-    normalizedUrl: string
+    normalizedUrl: string,
   ): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3216,7 +3159,7 @@ export class SQLiteStorage implements CrawlStorage {
         // Cached: once per newly discovered URL, on the enqueue path that has no
         // link-count cache to read from (#1911).
         const stmt = db.query(
-          "SELECT COUNT(*) as count FROM link_appearances WHERE crawl_id = ? AND href = ?"
+          "SELECT COUNT(*) as count FROM link_appearances WHERE crawl_id = ? AND href = ?",
         );
         const row = stmt.get(crawlId, normalizedUrl) as { count: number };
         return row.count;
@@ -3230,7 +3173,7 @@ export class SQLiteStorage implements CrawlStorage {
    * Eliminates N+1 queries when prioritizing URLs during crawl.
    */
   getAllIncomingLinkCounts(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<Map<string, number>, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3255,9 +3198,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getLinksByPage(
-    pageUrl: string
-  ): Effect.Effect<LinkRecord[], StorageError, never> {
+  getLinksByPage(pageUrl: string): Effect.Effect<LinkRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3290,26 +3231,19 @@ export class SQLiteStorage implements CrawlStorage {
     };
   }
 
-  private rowToLinkAppearanceRecord(
-    row: Record<string, unknown>
-  ): LinkAppearanceRecord {
+  private rowToLinkAppearanceRecord(row: Record<string, unknown>): LinkAppearanceRecord {
     return {
       href: row.href as string,
       pageUrl: row.page_url as string,
       anchorText: row.anchor_text as string,
       position: row.position as LinkAppearanceRecord["position"],
-      rel: row.rel
-        ? this.safeJsonParse<string[]>(row.rel as string, [])
-        : undefined,
+      rel: row.rel ? this.safeJsonParse<string[]>(row.rel as string, []) : undefined,
       isNofollow: (row.is_nofollow as number) === 1,
     };
   }
 
   // Images
-  upsertImage(
-    crawlId: string,
-    image: ImageRecord
-  ): Effect.Effect<void, StorageError, never> {
+  upsertImage(crawlId: string, image: ImageRecord): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3324,26 +3258,19 @@ export class SQLiteStorage implements CrawlStorage {
           image.error ?? null,
           image.checkedAt ?? null,
           image.contentType ?? null,
-          image.size ?? null
+          image.size ?? null,
         );
       },
       catch: (e) => StorageError.write(e),
     });
   }
 
-  getImage(
-    crawlId: string,
-    src: string
-  ): Effect.Effect<ImageRecord | null, StorageError, never> {
+  getImage(crawlId: string, src: string): Effect.Effect<ImageRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM images WHERE crawl_id = ? AND src = ?"
-        );
-        const row = stmt.get(crawlId, src) as
-          | Record<string, unknown>
-          | undefined;
+        const stmt = db.prepare("SELECT * FROM images WHERE crawl_id = ? AND src = ?");
+        const row = stmt.get(crawlId, src) as Record<string, unknown> | undefined;
         if (!row) return null;
         return this.rowToImageRecord(row);
       },
@@ -3353,7 +3280,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   addImageAppearance(
     crawlId: string,
-    appearance: ImageAppearanceRecord
+    appearance: ImageAppearanceRecord,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3370,25 +3297,21 @@ export class SQLiteStorage implements CrawlStorage {
           appearance.width ?? null,
           appearance.height ?? null,
           appearance.isLazyLoaded ? 1 : 0,
-          appearance.inFigure ? 1 : 0
+          appearance.inFigure ? 1 : 0,
         );
       },
       catch: (e) => StorageError.write(e),
     });
   }
 
-  getImages(
-    crawlId: string
-  ): Effect.Effect<ImageRecord[], StorageError, never> {
+  getImages(crawlId: string): Effect.Effect<ImageRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         // Deterministic order so repeat audits emit affected-URL lists in a
         // stable order (#150). src is the per-image primary key here (the
         // images table has no normalized_url column).
-        const stmt = db.prepare(
-          "SELECT * FROM images WHERE crawl_id = ? ORDER BY src ASC"
-        );
+        const stmt = db.prepare("SELECT * FROM images WHERE crawl_id = ? ORDER BY src ASC");
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
         return rows.map((row) => this.rowToImageRecord(row));
       },
@@ -3398,14 +3321,12 @@ export class SQLiteStorage implements CrawlStorage {
 
   getImageAppearances(
     crawlId: string,
-    src: string
+    src: string,
   ): Effect.Effect<ImageAppearanceRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM image_appearances WHERE crawl_id = ? AND src = ?"
-        );
+        const stmt = db.prepare("SELECT * FROM image_appearances WHERE crawl_id = ? AND src = ?");
         const rows = stmt.all(crawlId, src) as Record<string, unknown>[];
         return rows.map((row) => this.rowToImageAppearanceRecord(row));
       },
@@ -3413,9 +3334,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getImagesByPage(
-    pageUrl: string
-  ): Effect.Effect<ImageRecord[], StorageError, never> {
+  getImagesByPage(pageUrl: string): Effect.Effect<ImageRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3445,9 +3364,7 @@ export class SQLiteStorage implements CrawlStorage {
     };
   }
 
-  private rowToImageAppearanceRecord(
-    row: Record<string, unknown>
-  ): ImageAppearanceRecord {
+  private rowToImageAppearanceRecord(row: Record<string, unknown>): ImageAppearanceRecord {
     return {
       src: row.src as string,
       pageUrl: row.page_url as string,
@@ -3460,10 +3377,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   // Robots & Sitemaps
-  setRobotsTxt(
-    crawlId: string,
-    robots: RobotsTxtRecord
-  ): Effect.Effect<void, StorageError, never> {
+  setRobotsTxt(crawlId: string, robots: RobotsTxtRecord): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3479,16 +3393,14 @@ export class SQLiteStorage implements CrawlStorage {
           robots.sizeBytes,
           JSON.stringify(robots.sitemaps),
           robots.fetchedAt,
-          robots.error ?? null
+          robots.error ?? null,
         );
       },
       catch: (e) => StorageError.write(e),
     });
   }
 
-  getRobotsTxt(
-    crawlId: string
-  ): Effect.Effect<RobotsTxtRecord | null, StorageError, never> {
+  getRobotsTxt(crawlId: string): Effect.Effect<RobotsTxtRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3527,7 +3439,7 @@ export class SQLiteStorage implements CrawlStorage {
           llms.llmsFullTxt.exists ? 1 : 0,
           llms.llmsFullTxt.content,
           llms.llmsFullTxt.sizeBytes,
-          llms.fetchedAt
+          llms.fetchedAt,
         );
       },
       catch: (e) => StorageError.write(e),
@@ -3563,7 +3475,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   setMarkdownProbe(
     crawlId: string,
-    probe: MarkdownProbeRecord
+    probe: MarkdownProbeRecord,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3584,7 +3496,7 @@ export class SQLiteStorage implements CrawlStorage {
           probe.markdownTokensHeader ?? null,
           probe.originalTokensHeader ?? null,
           probe.alternateMarkdownUrl ?? null,
-          probe.fetchedAt
+          probe.fetchedAt,
         );
       },
       catch: (e) => StorageError.write(e),
@@ -3592,7 +3504,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   getMarkdownProbe(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<MarkdownProbeRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3624,7 +3536,7 @@ export class SQLiteStorage implements CrawlStorage {
   // AX: well-known/agent-file probes — JSON blob per crawl.
   setWellKnownProbe(
     crawlId: string,
-    probe: WellKnownProbeRecord
+    probe: WellKnownProbeRecord,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3640,7 +3552,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   getWellKnownProbe(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<WellKnownProbeRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3660,7 +3572,7 @@ export class SQLiteStorage implements CrawlStorage {
   // AX: homepage access probes (browser/gptbot/claude-user) — JSON blob per crawl.
   setAgentAccess(
     crawlId: string,
-    access: AgentAccessRecord
+    access: AgentAccessRecord,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3675,9 +3587,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getAgentAccess(
-    crawlId: string
-  ): Effect.Effect<AgentAccessRecord | null, StorageError, never> {
+  getAgentAccess(crawlId: string): Effect.Effect<AgentAccessRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3708,7 +3618,7 @@ export class SQLiteStorage implements CrawlStorage {
           rsl.robotsHasLicense ? 1 : 0,
           rsl.linkHeaderPresent ? 1 : 0,
           JSON.stringify(rsl.documents),
-          rsl.fetchedAt
+          rsl.fetchedAt,
         );
       },
       catch: (e) => StorageError.write(e),
@@ -3734,10 +3644,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  addSitemap(
-    crawlId: string,
-    sitemap: SitemapRecord
-  ): Effect.Effect<void, StorageError, never> {
+  addSitemap(crawlId: string, sitemap: SitemapRecord): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3753,16 +3660,14 @@ export class SQLiteStorage implements CrawlStorage {
           JSON.stringify(sitemap.childSitemaps),
           JSON.stringify(sitemap.errors),
           sitemap.fetchedAt,
-          sitemap.isNewsSitemap ? 1 : 0
+          sitemap.isNewsSitemap ? 1 : 0,
         );
       },
       catch: (e) => StorageError.write(e),
     });
   }
 
-  getSitemaps(
-    crawlId: string
-  ): Effect.Effect<SitemapRecord[], StorageError, never> {
+  getSitemaps(crawlId: string): Effect.Effect<SitemapRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3772,10 +3677,7 @@ export class SQLiteStorage implements CrawlStorage {
           url: row.url as string,
           type: row.type as SitemapRecord["type"],
           urlCount: row.url_count as number,
-          childSitemaps: this.safeJsonParse<string[]>(
-            row.child_sitemaps as string,
-            []
-          ),
+          childSitemaps: this.safeJsonParse<string[]>(row.child_sitemaps as string, []),
           errors: this.safeJsonParse<string[]>(row.errors as string, []),
           fetchedAt: row.fetched_at as number,
           // NULL on any sitemap stored before v21 — reads back false, the old behaviour.
@@ -3788,7 +3690,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   addSitemapUrls(
     crawlId: string,
-    urls: SitemapUrlRecord[]
+    urls: SitemapUrlRecord[],
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3806,7 +3708,7 @@ export class SQLiteStorage implements CrawlStorage {
               url.loc,
               url.lastmod ?? null,
               url.changefreq ?? null,
-              url.priority ?? null
+              url.priority ?? null,
             );
           }
         });
@@ -3818,13 +3720,13 @@ export class SQLiteStorage implements CrawlStorage {
 
   getSitemapUrls(
     crawlId: string,
-    sitemapUrl: string
+    sitemapUrl: string,
   ): Effect.Effect<SitemapUrlRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(
-          "SELECT * FROM sitemap_urls WHERE crawl_id = ? AND sitemap_url = ?"
+          "SELECT * FROM sitemap_urls WHERE crawl_id = ? AND sitemap_url = ?",
         );
         const rows = stmt.all(crawlId, sitemapUrl) as Record<string, unknown>[];
         return rows.map((row) => ({
@@ -3842,7 +3744,7 @@ export class SQLiteStorage implements CrawlStorage {
   // Stats
   updateStats(
     crawlId: string,
-    updates: Partial<CrawlStats>
+    updates: Partial<CrawlStats>,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.gen(this, function* () {
       const crawl = yield* this.getCrawl(crawlId);
@@ -3853,9 +3755,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getStats(
-    crawlId: string
-  ): Effect.Effect<CrawlStats | null, StorageError, never> {
+  getStats(crawlId: string): Effect.Effect<CrawlStats | null, StorageError, never> {
     return Effect.gen(this, function* () {
       const crawl = yield* this.getCrawl(crawlId);
       return crawl?.stats ?? null;
@@ -3864,7 +3764,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   saveResourceSizes(
     crawlId: string,
-    records: ResourceSizeRecord[]
+    records: ResourceSizeRecord[],
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3897,7 +3797,7 @@ export class SQLiteStorage implements CrawlStorage {
               record.cacheReason ?? null,
               record.naturalWidth ?? null,
               record.naturalHeight ?? null,
-              record.animated == null ? null : record.animated ? 1 : 0
+              record.animated == null ? null : record.animated ? 1 : 0,
             );
           }
         });
@@ -3907,15 +3807,11 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getResourceSizes(
-    crawlId: string
-  ): Effect.Effect<ResourceSizeRecord[], StorageError, never> {
+  getResourceSizes(crawlId: string): Effect.Effect<ResourceSizeRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM resource_sizes WHERE crawl_id = ?"
-        );
+        const stmt = db.prepare("SELECT * FROM resource_sizes WHERE crawl_id = ?");
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
         return rows.map((row) => this.rowToResourceSizeRecord(row));
       },
@@ -3923,9 +3819,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getCachedResources(
-    crawlId: string
-  ): Effect.Effect<CachedResourceRecord[], StorageError, never> {
+  getCachedResources(crawlId: string): Effect.Effect<CachedResourceRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3965,7 +3859,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   saveSitemapUrlStatuses(
     crawlId: string,
-    statuses: SitemapUrlStatusRecord[]
+    statuses: SitemapUrlStatusRecord[],
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -3983,7 +3877,7 @@ export class SQLiteStorage implements CrawlStorage {
               status.url,
               status.status,
               status.error,
-              status.rateLimited ? 1 : null
+              status.rateLimited ? 1 : null,
             );
           }
         });
@@ -3994,21 +3888,18 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   getSitemapUrlStatuses(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<SitemapUrlStatusRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM sitemap_url_statuses WHERE crawl_id = ?"
-        );
+        const stmt = db.prepare("SELECT * FROM sitemap_url_statuses WHERE crawl_id = ?");
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
         return rows.map((row) => ({
           url: row.url as string,
           status: (row.status as number | null) ?? null,
           error: (row.error as string | null) ?? null,
-          rateLimited:
-            (row.rate_limited as number | null) === 1 ? true : undefined,
+          rateLimited: (row.rate_limited as number | null) === 1 ? true : undefined,
         }));
       },
       catch: (e) => StorageError.read(e),
@@ -4020,7 +3911,7 @@ export class SQLiteStorage implements CrawlStorage {
     crawlId: string,
     pageUrl: string,
     ruleId: string,
-    checks: CheckResult[]
+    checks: CheckResult[],
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4067,7 +3958,7 @@ export class SQLiteStorage implements CrawlStorage {
                 : null,
               check.siteResourceEvidence ? JSON.stringify(check.siteResourceEvidence) : null,
               check.observation ? JSON.stringify(check.observation) : null,
-              timestamp
+              timestamp,
             );
           }
         });
@@ -4079,7 +3970,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   getRuleResults(
     crawlId: string,
-    pageUrl?: string
+    pageUrl?: string,
   ): Effect.Effect<CheckResult[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4093,20 +3984,17 @@ export class SQLiteStorage implements CrawlStorage {
         }
 
         const stmt = db.prepare(query);
-        const rows = stmt.all(
-          ...(params as (string | number | null)[])
-        ) as Record<string, unknown>[];
+        const rows = stmt.all(...(params as (string | number | null)[])) as Record<
+          string,
+          unknown
+        >[];
 
         return rows.map((row) => ({
           name: row.check_name as string,
           status: row.status as CheckResult["status"],
           message: row.message as string,
-          value:
-            row.value !== null ? (row.value as string | number) : undefined,
-          expected:
-            row.expected !== null
-              ? (row.expected as string | number)
-              : undefined,
+          value: row.value !== null ? (row.value as string | number) : undefined,
+          expected: row.expected !== null ? (row.expected as string | number) : undefined,
         }));
       },
       catch: (e) => StorageError.read(e),
@@ -4128,7 +4016,7 @@ export class SQLiteStorage implements CrawlStorage {
    * engine's business, not storage's.
    */
   loadPageRuleCache(
-    cacheKeys: readonly string[]
+    cacheKeys: readonly string[],
   ): Effect.Effect<Map<string, string>, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4156,7 +4044,7 @@ export class SQLiteStorage implements CrawlStorage {
               `SELECT cache_key, payload, max(created_at) AS newest
                FROM page_rule_cache
                WHERE cache_key IN (${placeholders})
-               GROUP BY cache_key`
+               GROUP BY cache_key`,
             )
             .all(...chunk) as Array<{ cache_key: string; payload: Uint8Array<ArrayBuffer> }>;
           for (const row of rows) {
@@ -4179,7 +4067,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   savePageRuleCacheBatch(
     crawlId: string,
-    entries: ReadonlyArray<{ normalizedUrl: string; cacheKey: string; payload: string }>
+    entries: ReadonlyArray<{ normalizedUrl: string; cacheKey: string; payload: string }>,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4193,13 +4081,7 @@ export class SQLiteStorage implements CrawlStorage {
         const now = Date.now();
         const transaction = db.transaction(() => {
           for (const entry of entries) {
-            stmt.run(
-              crawlId,
-              entry.normalizedUrl,
-              entry.cacheKey,
-              gzipped(entry.payload),
-              now
-            );
+            stmt.run(crawlId, entry.normalizedUrl, entry.cacheKey, gzipped(entry.payload), now);
           }
         });
         transaction();
@@ -4246,7 +4128,7 @@ export class SQLiteStorage implements CrawlStorage {
         morePages: number;
       }>;
       occurrences: ReadonlyArray<{ key: string; normalizedUrl: string }>;
-    }
+    },
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4289,7 +4171,7 @@ export class SQLiteStorage implements CrawlStorage {
               pageCounts.get(node.key) ?? 0,
               JSON.stringify(node.conflicts),
               node.danglingRefs,
-              node.pageLocal ? 1 : 0
+              node.pageLocal ? 1 : 0,
             );
           }
           for (const edge of map.edges) {
@@ -4301,7 +4183,7 @@ export class SQLiteStorage implements CrawlStorage {
               edge.dangling ? 1 : 0,
               edge.occurrences,
               JSON.stringify(edge.pages),
-              edge.morePages
+              edge.morePages,
             );
           }
           for (const row of map.occurrences) {
@@ -4358,7 +4240,7 @@ export class SQLiteStorage implements CrawlStorage {
           .prepare(
             `SELECT key, entity_id, types, name, properties, occurrences,
                     page_count, conflicts, dangling_refs, page_local
-             FROM entities WHERE crawl_id = ? ORDER BY key`
+             FROM entities WHERE crawl_id = ? ORDER BY key`,
           )
           .all(crawlId) as Array<{
           key: string;
@@ -4375,7 +4257,7 @@ export class SQLiteStorage implements CrawlStorage {
         const edgeRows = db
           .prepare(
             `SELECT source, predicate, target, dangling, occurrences, pages, more_pages
-             FROM entity_edges WHERE crawl_id = ? ORDER BY source, target, predicate`
+             FROM entity_edges WHERE crawl_id = ? ORDER BY source, target, predicate`,
           )
           .all(crawlId) as Array<{
           source: string;
@@ -4389,7 +4271,7 @@ export class SQLiteStorage implements CrawlStorage {
         const occurrenceRows = db
           .prepare(
             `SELECT key, normalized_url FROM entity_occurrences
-             WHERE crawl_id = ? ORDER BY key, normalized_url`
+             WHERE crawl_id = ? ORDER BY key, normalized_url`,
           )
           .all(crawlId) as Array<{ key: string; normalized_url: string }>;
 
@@ -4441,7 +4323,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   carryForwardPageRuleCache(
     crawlId: string,
-    entries: ReadonlyArray<{ normalizedUrl: string; cacheKey: string }>
+    entries: ReadonlyArray<{ normalizedUrl: string; cacheKey: string }>,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4476,7 +4358,7 @@ export class SQLiteStorage implements CrawlStorage {
   saveRuleResultsBatch(
     crawlId: string,
     pageResults: Map<string, { ruleId: string; checks: CheckResult[] }[]>,
-    options: { replace?: boolean } = {}
+    options: { replace?: boolean } = {},
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4519,11 +4401,9 @@ export class SQLiteStorage implements CrawlStorage {
                   check.siteResourceOccurrences?.length
                     ? JSON.stringify(check.siteResourceOccurrences)
                     : null,
-                  check.siteResourceEvidence
-                    ? JSON.stringify(check.siteResourceEvidence)
-                    : null,
+                  check.siteResourceEvidence ? JSON.stringify(check.siteResourceEvidence) : null,
                   check.observation ? JSON.stringify(check.observation) : null,
-                  timestamp
+                  timestamp,
                 );
               }
             }
@@ -4540,13 +4420,13 @@ export class SQLiteStorage implements CrawlStorage {
    * Returns Map<pageUrl, LinkAppearanceRecord[]>
    */
   getAllLinkAppearancesByPage(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<Map<string, LinkAppearanceRecord[]>, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(
-          "SELECT * FROM link_appearances WHERE crawl_id = ? ORDER BY page_url"
+          "SELECT * FROM link_appearances WHERE crawl_id = ? ORDER BY page_url",
         );
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
 
@@ -4568,13 +4448,13 @@ export class SQLiteStorage implements CrawlStorage {
    * Returns Map<pageUrl, ImageAppearanceRecord[]>
    */
   getAllImageAppearancesByPage(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<Map<string, ImageAppearanceRecord[]>, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(
-          "SELECT * FROM image_appearances WHERE crawl_id = ? ORDER BY page_url"
+          "SELECT * FROM image_appearances WHERE crawl_id = ? ORDER BY page_url",
         );
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
 
@@ -4597,14 +4477,12 @@ export class SQLiteStorage implements CrawlStorage {
    * Used to batch-lookup appearances for multiple links in one query
    */
   getAllLinkAppearancesByHref(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<Map<string, LinkAppearanceRecord[]>, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM link_appearances WHERE crawl_id = ? ORDER BY href"
-        );
+        const stmt = db.prepare("SELECT * FROM link_appearances WHERE crawl_id = ? ORDER BY href");
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
 
         const result = new Map<string, LinkAppearanceRecord[]>();
@@ -4626,14 +4504,12 @@ export class SQLiteStorage implements CrawlStorage {
    * Used to batch-lookup appearances for multiple images in one query
    */
   getAllImageAppearancesBySrc(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<Map<string, ImageAppearanceRecord[]>, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM image_appearances WHERE crawl_id = ? ORDER BY src"
-        );
+        const stmt = db.prepare("SELECT * FROM image_appearances WHERE crawl_id = ? ORDER BY src");
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
 
         const result = new Map<string, ImageAppearanceRecord[]>();
@@ -4654,13 +4530,13 @@ export class SQLiteStorage implements CrawlStorage {
    */
   getLinkAppearancesForPage(
     crawlId: string,
-    pageUrl: string
+    pageUrl: string,
   ): Effect.Effect<LinkAppearanceRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(
-          "SELECT * FROM link_appearances WHERE crawl_id = ? AND page_url = ?"
+          "SELECT * FROM link_appearances WHERE crawl_id = ? AND page_url = ?",
         );
         const rows = stmt.all(crawlId, pageUrl) as Record<string, unknown>[];
         return rows.map((row) => this.rowToLinkAppearanceRecord(row));
@@ -4674,13 +4550,13 @@ export class SQLiteStorage implements CrawlStorage {
    */
   getImageAppearancesForPage(
     crawlId: string,
-    pageUrl: string
+    pageUrl: string,
   ): Effect.Effect<ImageAppearanceRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(
-          "SELECT * FROM image_appearances WHERE crawl_id = ? AND page_url = ?"
+          "SELECT * FROM image_appearances WHERE crawl_id = ? AND page_url = ?",
         );
         const rows = stmt.all(crawlId, pageUrl) as Record<string, unknown>[];
         return rows.map((row) => this.rowToImageAppearanceRecord(row));
@@ -4694,14 +4570,12 @@ export class SQLiteStorage implements CrawlStorage {
    * Returns Map<pageUrl, CheckResult[]>
    */
   getRuleResultsByPage(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<Map<string, CheckResult[]>, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY page_url"
-        );
+        const stmt = db.prepare("SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY page_url");
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
 
         const result = new Map<string, CheckResult[]>();
@@ -4723,14 +4597,12 @@ export class SQLiteStorage implements CrawlStorage {
    * Returns Map<ruleId, CheckResult[]>
    */
   getRuleResultsByRuleId(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<Map<string, CheckResult[]>, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY rule_id"
-        );
+        const stmt = db.prepare("SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY rule_id");
         const rows = stmt.all(crawlId) as Record<string, unknown>[];
 
         const result = new Map<string, CheckResult[]>();
@@ -4758,7 +4630,7 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const rows = this.getDb()
           .prepare(
-            "SELECT page_url AS url, COUNT(DISTINCT rule_id) AS n FROM rule_results WHERE crawl_id = ? AND page_url != '' AND status != 'skipped' GROUP BY page_url"
+            "SELECT page_url AS url, COUNT(DISTINCT rule_id) AS n FROM rule_results WHERE crawl_id = ? AND page_url != '' AND status != 'skipped' GROUP BY page_url",
           )
           .all(crawlId) as Array<{ url: string; n: number }>;
         return new Map(rows.map((row) => [row.url, row.n]));
@@ -4775,16 +4647,30 @@ export class SQLiteStorage implements CrawlStorage {
   getUnstoredFrontierEntries(
     crawlId: string,
     limit: number,
-  ): Effect.Effect<{ entries: Array<{ url: string; status: "failed" | "skipped"; reason: string | null }>; total: number }, StorageError, never> {
+  ): Effect.Effect<
+    {
+      entries: Array<{ url: string; status: "failed" | "skipped"; reason: string | null }>;
+      total: number;
+    },
+    StorageError,
+    never
+  > {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const unstored =
           "FROM frontier f WHERE f.crawl_id = ? AND f.status IN ('failed', 'skipped') AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.crawl_id = f.crawl_id AND p.normalized_url = f.normalized_url)";
         const rows = db
-          .prepare(`SELECT f.normalized_url AS url, f.status AS status, f.reason AS reason ${unstored} ORDER BY (f.status = 'skipped'), f.enqueued_at, f.normalized_url LIMIT ?`)
-          .all(crawlId, Math.max(0, Math.floor(limit))) as Array<{ url: string; status: "failed" | "skipped"; reason: string | null }>;
-        const total = (db.prepare(`SELECT COUNT(*) AS n ${unstored}`).get(crawlId) as { n: number }).n;
+          .prepare(
+            `SELECT f.normalized_url AS url, f.status AS status, f.reason AS reason ${unstored} ORDER BY (f.status = 'skipped'), f.enqueued_at, f.normalized_url LIMIT ?`,
+          )
+          .all(crawlId, Math.max(0, Math.floor(limit))) as Array<{
+          url: string;
+          status: "failed" | "skipped";
+          reason: string | null;
+        }>;
+        const total = (db.prepare(`SELECT COUNT(*) AS n ${unstored}`).get(crawlId) as { n: number })
+          .n;
         return { entries: rows, total };
       },
       catch: (e) => StorageError.read(e),
@@ -4854,12 +4740,10 @@ export class SQLiteStorage implements CrawlStorage {
 
         // `ORDER BY <column>` verbatim from the reader being replaced, so the
         // sequence is whatever SQLite would have produced there.
-        const groupBy = (
-          column: "page_url" | "rule_id"
-        ): Map<string, CheckResult[]> => {
+        const groupBy = (column: "page_url" | "rule_id"): Map<string, CheckResult[]> => {
           const ordered = db
             .prepare(
-              `SELECT id, ${column} AS k FROM rule_results WHERE crawl_id = ? ORDER BY ${column}`
+              `SELECT id, ${column} AS k FROM rule_results WHERE crawl_id = ? ORDER BY ${column}`,
             )
             .all(crawlId) as Array<{ id: number; k: string }>;
           const out = new Map<string, CheckResult[]>();
@@ -4890,7 +4774,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   getFlaggedPages(
     crawlId: string,
-    ruleIds: readonly string[]
+    ruleIds: readonly string[],
   ): Effect.Effect<Map<string, string[]>, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4899,7 +4783,7 @@ export class SQLiteStorage implements CrawlStorage {
         const marks = ruleIds.map(() => "?").join(", ");
         const rows = this.getDb()
           .prepare(
-            `SELECT rule_id, page_url, items FROM rule_results WHERE crawl_id = ? AND status IN ('fail', 'warn') AND rule_id IN (${marks})`
+            `SELECT rule_id, page_url, items FROM rule_results WHERE crawl_id = ? AND status IN ('fail', 'warn') AND rule_id IN (${marks})`,
           )
           .all(crawlId, ...ruleIds) as Array<{
           rule_id: string;
@@ -5115,7 +4999,7 @@ export class SQLiteStorage implements CrawlStorage {
                AND status IN ('completed', 'analyzed')
                AND (report_status IS NULL
                     OR report_status IN ('completed', 'partial'))
-             ORDER BY started_at DESC, rowid DESC`
+             ORDER BY started_at DESC, rowid DESC`,
           )
           .all() as Array<{ id: string; started_at: number }>;
         return rows.map((row) => ({
@@ -5153,11 +5037,9 @@ export class SQLiteStorage implements CrawlStorage {
           .prepare(
             `SELECT id, started_at, heartbeat_at, owner_pid, owner_host FROM crawls
              WHERE ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}
-             ORDER BY started_at DESC, rowid DESC`
+             ORDER BY started_at DESC, rowid DESC`,
           )
-          .all() as Array<
-          { id: string; started_at: number } & LeaseCrawlRow
-        >;
+          .all() as Array<{ id: string; started_at: number } & LeaseCrawlRow>;
         // A crawl whose owner is demonstrably alive is building its report right
         // now, however long ago it last touched a page.
         return rows
@@ -5206,21 +5088,21 @@ export class SQLiteStorage implements CrawlStorage {
           .prepare(
             `SELECT id, started_at FROM crawls
              WHERE retired_at IS NULL AND status IN ('completed', 'analyzed') AND report_status = 'building'
-             ORDER BY started_at DESC, rowid DESC`
+             ORDER BY started_at DESC, rowid DESC`,
           )
           .all() as Array<{ id: string; started_at: number }>;
         const interrupted = new Set(
           (
             db
               .prepare(
-                `SELECT id, heartbeat_at, owner_pid, owner_host FROM crawls WHERE ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}`
+                `SELECT id, heartbeat_at, owner_pid, owner_host FROM crawls WHERE ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}`,
               )
               .all() as Array<
               { id: string } & Pick<LeaseCrawlRow, "heartbeat_at" | "owner_pid" | "owner_host">
             >
           )
             .filter((row) => !isLeaseLive(row, this.leaseEnv))
-            .map((row) => row.id)
+            .map((row) => row.id),
         );
         return rows
           .filter((row) => !interrupted.has(row.id))
@@ -5275,7 +5157,7 @@ export class SQLiteStorage implements CrawlStorage {
    * A database too old to have the marker table has nothing to repair.
    */
   repairSupersededPagesOnce(
-    options: { chunk?: number; maxChunks?: number; budgetMs?: number } = {}
+    options: { chunk?: number; maxChunks?: number; budgetMs?: number } = {},
   ): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -5295,9 +5177,9 @@ export class SQLiteStorage implements CrawlStorage {
         // Resume where the last call stopped: a rowid cursor, so a row examined
         // (and kept, an only copy) is never examined again, however many chunks
         // the project needs. Stored beside the marker.
-        const saved = db
-          .prepare(SQLiteStorage.SUPERSEDED_REPAIR_SQL.cursor)
-          .get() as { at: number } | undefined;
+        const saved = db.prepare(SQLiteStorage.SUPERSEDED_REPAIR_SQL.cursor).get() as
+          | { at: number }
+          | undefined;
         let cursor = saved?.at ?? 0;
         let total = 0;
         const startedAt = performance.now();
@@ -5317,7 +5199,7 @@ export class SQLiteStorage implements CrawlStorage {
               .run(cursor, upper);
             deleted = Number(result.changes ?? 0);
             db.prepare(
-              "INSERT OR REPLACE INTO maintenance_marks (name, done_at) VALUES ('superseded-pages-cursor', ?)"
+              "INSERT OR REPLACE INTO maintenance_marks (name, done_at) VALUES ('superseded-pages-cursor', ?)",
             ).run(upper);
           });
           run.immediate();
@@ -5325,7 +5207,7 @@ export class SQLiteStorage implements CrawlStorage {
           if (upper === null) {
             // Every retired-crawl row examined: done for good, once.
             db.prepare(
-              "INSERT OR REPLACE INTO maintenance_marks (name, done_at) VALUES ('superseded-pages', ?)"
+              "INSERT OR REPLACE INTO maintenance_marks (name, done_at) VALUES ('superseded-pages', ?)",
             ).run(this.leaseEnv.now());
             break;
           }
@@ -5413,14 +5295,9 @@ export class SQLiteStorage implements CrawlStorage {
             lastActivityAt: row.last_activity,
             ...(row.owner_pid != null || row.owner_host != null
               ? {
-                  ownerPid:
-                    typeof row.owner_pid === "number" ? row.owner_pid : undefined,
-                  ownerHost:
-                    typeof row.owner_host === "string" ? row.owner_host : undefined,
-                  heartbeatAt:
-                    typeof row.heartbeat_at === "number"
-                      ? row.heartbeat_at
-                      : undefined,
+                  ownerPid: typeof row.owner_pid === "number" ? row.owner_pid : undefined,
+                  ownerHost: typeof row.owner_host === "string" ? row.owner_host : undefined,
+                  heartbeatAt: typeof row.heartbeat_at === "number" ? row.heartbeat_at : undefined,
                 }
               : {}),
           }));
@@ -5446,7 +5323,7 @@ export class SQLiteStorage implements CrawlStorage {
     // `squirrel analyze` records an outcome on a crawl it did not run the audit
     // for: it must not clear the `building` sentinel of an audit that is still
     // reconstructing its report (#955).
-    options?: { keepBuilding?: boolean }
+    options?: { keepBuilding?: boolean },
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -5456,12 +5333,12 @@ export class SQLiteStorage implements CrawlStorage {
           .prepare(
             options?.keepBuilding
               ? "UPDATE crawls SET report_status = ? WHERE id = ? AND (report_status IS NULL OR report_status != 'building')"
-              : "UPDATE crawls SET report_status = ?, building_at = CASE WHEN ? = 'building' THEN ? ELSE building_at END WHERE id = ?"
+              : "UPDATE crawls SET report_status = ?, building_at = CASE WHEN ? = 'building' THEN ? ELSE building_at END WHERE id = ?",
           )
           .run(
             ...(options?.keepBuilding
               ? [reportStatus, crawlId]
-              : [reportStatus, reportStatus, this.leaseEnv.now(), crawlId])
+              : [reportStatus, reportStatus, this.leaseEnv.now(), crawlId]),
           );
       },
       catch: (e) => StorageError.write(e),
@@ -5479,9 +5356,7 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const row = this.getDb()
-          .prepare(
-            "SELECT 1 AS present FROM crawls WHERE retired_at IS NOT NULL LIMIT 1"
-          )
+          .prepare("SELECT 1 AS present FROM crawls WHERE retired_at IS NOT NULL LIMIT 1")
           .get() as { present: number } | null;
         return row != null;
       },
@@ -5507,10 +5382,7 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const read = (pragma: string): number => {
-          const row = db.prepare(`PRAGMA ${pragma}`).get() as Record<
-            string,
-            unknown
-          > | null;
+          const row = db.prepare(`PRAGMA ${pragma}`).get() as Record<string, unknown> | null;
           const value = row ? Object.values(row)[0] : 0;
           return typeof value === "number" ? value : 0;
         };
@@ -5550,7 +5422,9 @@ export class SQLiteStorage implements CrawlStorage {
    * that some of their audit history stops being renderable, so it must be the
    * real number.
    */
-  previewRetireCrawls(crawlIds: string[]): Effect.Effect<
+  previewRetireCrawls(
+    crawlIds: string[],
+  ): Effect.Effect<
     { rowsByTable: Record<string, number>; supersededPages: number; totalRows: number },
     StorageError,
     never
@@ -5559,16 +5433,13 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const rowsByTable: Record<string, number> = {};
         let totalRows = 0;
-        if (crawlIds.length === 0)
-          return { rowsByTable, supersededPages: 0, totalRows: 0 };
+        if (crawlIds.length === 0) return { rowsByTable, supersededPages: 0, totalRows: 0 };
 
         const db = this.getDb();
         const placeholders = crawlIds.map(() => "?").join(", ");
         for (const table of SQLiteStorage.RETIREABLE_TABLES) {
           const row = db
-            .prepare(
-              `SELECT COUNT(*) AS c FROM ${table} WHERE crawl_id IN (${placeholders})`
-            )
+            .prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE crawl_id IN (${placeholders})`)
             .get(...crawlIds) as { c: number };
           if (row.c > 0) {
             rowsByTable[table] = row.c;
@@ -5630,9 +5501,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   private unfinishedCrawlRows(ids?: string[]): UnfinishedCrawlRow[] {
     const now = this.leaseEnv.now();
-    const where = ids
-      ? `AND id IN (${ids.map(() => "?").join(", ")})`
-      : "";
+    const where = ids ? `AND id IN (${ids.map(() => "?").join(", ")})` : "";
     return this.getDb()
       .prepare(
         `SELECT id, status, started_at, heartbeat_at, owner_pid, owner_host,
@@ -5642,7 +5511,7 @@ export class SQLiteStorage implements CrawlStorage {
          WHERE retired_at IS NULL
            AND status NOT IN ('completed', 'analyzed')
            ${where}
-         ORDER BY started_at DESC, rowid DESC`
+         ORDER BY started_at DESC, rowid DESC`,
       )
       .all(...(ids ?? [])) as UnfinishedCrawlRow[];
   }
@@ -5691,11 +5560,11 @@ export class SQLiteStorage implements CrawlStorage {
   retireCrawls(
     crawlIds: string[],
     retiredAt: number = Date.now(),
-    options: { allowAbandoned?: boolean } = {}
+    options: { allowAbandoned?: boolean } = {},
   ): Effect.Effect<number, StorageError, never> {
     return Effect.map(
       this.retireCrawlsDetailed(crawlIds, retiredAt, options),
-      (result) => result.deleted
+      (result) => result.deleted,
     );
   }
 
@@ -5717,33 +5586,27 @@ export class SQLiteStorage implements CrawlStorage {
   retireCrawlsDetailed(
     crawlIds: string[],
     retiredAt: number = Date.now(),
-    options: { allowAbandoned?: boolean } = {}
-  ): Effect.Effect<
-    { deleted: number; retired: string[]; skipped: string[] },
-    StorageError,
-    never
-  > {
+    options: { allowAbandoned?: boolean } = {},
+  ): Effect.Effect<{ deleted: number; retired: string[]; skipped: string[] }, StorageError, never> {
     return Effect.try({
       try: () => {
-        if (crawlIds.length === 0)
-          return { deleted: 0, retired: [], skipped: [] };
+        if (crawlIds.length === 0) return { deleted: 0, retired: [], skipped: [] };
         const db = this.getDb();
-        const marks = (n: number): string =>
-          Array.from({ length: n }, () => "?").join(", ");
+        const marks = (n: number): string => Array.from({ length: n }, () => "?").join(", ");
         let deleted = 0;
         let retired: string[] = [];
         let skipped: string[] = [];
         const run = db.transaction(() => {
           const unfinished = db
             .prepare(
-              `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND status NOT IN ('completed', 'analyzed')`
+              `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND status NOT IN ('completed', 'analyzed')`,
             )
             .all(...crawlIds) as Array<{ id: string }>;
           if (unfinished.length > 0 && !options.allowAbandoned) {
             throw new Error(
               `Refusing to retire ${unfinished.length} crawl(s) that are not finished: ${unfinished
                 .map((c) => c.id)
-                .join(", ")}`
+                .join(", ")}`,
             );
           }
           const unfinishedIds = new Set(unfinished.map((c) => c.id));
@@ -5754,7 +5617,7 @@ export class SQLiteStorage implements CrawlStorage {
           const building = (
             db
               .prepare(
-                `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND report_status = 'building'`
+                `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND report_status = 'building'`,
               )
               .all(...crawlIds) as Array<{ id: string }>
           ).map((c) => c.id);
@@ -5764,14 +5627,17 @@ export class SQLiteStorage implements CrawlStorage {
               : (
                   db
                     .prepare(
-                      `SELECT id, heartbeat_at, owner_pid, owner_host FROM crawls WHERE id IN (${marks(building.length)}) AND ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}`
+                      `SELECT id, heartbeat_at, owner_pid, owner_host FROM crawls WHERE id IN (${marks(building.length)}) AND ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}`,
                     )
                     .all(...building) as Array<
-                    { id: string } & Pick<LeaseCrawlRow, "heartbeat_at" | "owner_pid" | "owner_host">
+                    { id: string } & Pick<
+                      LeaseCrawlRow,
+                      "heartbeat_at" | "owner_pid" | "owner_host"
+                    >
                   >
                 )
                   .filter((row) => !isLeaseLive(row, this.leaseEnv))
-                  .map((c) => c.id)
+                  .map((c) => c.id),
           );
           const liveBuilding = new Set(building.filter((id) => !stillInterrupted.has(id)));
           // Re-decided HERE, inside the transaction, from the rows as they are
@@ -5782,27 +5648,23 @@ export class SQLiteStorage implements CrawlStorage {
               ? []
               : this.unfinishedCrawlRows(crawlIds)
                   .filter((row) => isCrawlAbandoned(row, this.leaseEnv))
-                  .map((row) => row.id)
+                  .map((row) => row.id),
           );
           retired = crawlIds.filter(
-            (id) =>
-              !liveBuilding.has(id) &&
-              (!unfinishedIds.has(id) || stillAbandoned.has(id))
+            (id) => !liveBuilding.has(id) && (!unfinishedIds.has(id) || stillAbandoned.has(id)),
           );
           skipped = crawlIds.filter((id) => !retired.includes(id));
           if (retired.length === 0) return;
           const placeholders = marks(retired.length);
           for (const table of SQLiteStorage.RETIREABLE_TABLES) {
             const result = db
-              .prepare(
-                `DELETE FROM ${table} WHERE crawl_id IN (${placeholders})`
-              )
+              .prepare(`DELETE FROM ${table} WHERE crawl_id IN (${placeholders})`)
               .run(...retired);
             deleted += Number(result.changes ?? 0);
           }
           const pageResult = db
             .prepare(
-              `DELETE FROM pages WHERE rowid IN (${this.supersededPagesSql("p.rowid", placeholders)})`
+              `DELETE FROM pages WHERE rowid IN (${this.supersededPagesSql("p.rowid", placeholders)})`,
             )
             .run(...retired);
           deleted += Number(pageResult.changes ?? 0);
@@ -5810,9 +5672,10 @@ export class SQLiteStorage implements CrawlStorage {
           // whose data is gone but which still reads as renderable. That state
           // is worse than either end of it: the report path would rebuild a
           // confident empty report from the pages that survive.
-          db.prepare(
-            `UPDATE crawls SET retired_at = ? WHERE id IN (${placeholders})`
-          ).run(retiredAt, ...retired);
+          db.prepare(`UPDATE crawls SET retired_at = ? WHERE id IN (${placeholders})`).run(
+            retiredAt,
+            ...retired,
+          );
         });
         // IMMEDIATE: take the write lock before the liveness read. A deferred
         // transaction would read under a snapshot and then fail with
@@ -5849,9 +5712,7 @@ export class SQLiteStorage implements CrawlStorage {
    * Same predicate, same guarantee: a row only goes when a newer row for the
    * same url exists, so this can never take a cache entry the crawler reads.
    */
-  collectSupersededPages(
-    crawlId: string
-  ): Effect.Effect<number, StorageError, never> {
+  collectSupersededPages(crawlId: string): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -5889,7 +5750,7 @@ export class SQLiteStorage implements CrawlStorage {
                AND (
                  SELECT retired_at FROM crawls c WHERE c.id = p.crawl_id
                ) IS NOT NULL
-             )`
+             )`,
           )
           .run(crawlId);
         return Number(result.changes ?? 0);
@@ -5922,14 +5783,12 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getCrawlByUrl(
-    baseUrl: string
-  ): Effect.Effect<CrawlMetadata | null, StorageError, never> {
+  getCrawlByUrl(baseUrl: string): Effect.Effect<CrawlMetadata | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(
-          "SELECT * FROM crawls WHERE base_url = ? ORDER BY started_at DESC LIMIT 1"
+          "SELECT * FROM crawls WHERE base_url = ? ORDER BY started_at DESC LIMIT 1",
         );
         const row = stmt.get(baseUrl) as Record<string, unknown> | undefined;
         if (!row) return null;
@@ -5943,9 +5802,7 @@ export class SQLiteStorage implements CrawlStorage {
    * Get crawls matching an ID prefix (first 8 hex chars)
    * Returns up to 2 matches to detect ambiguity
    */
-  getCrawlsByPrefix(
-    prefix: string
-  ): Effect.Effect<CrawlMetadata[], StorageError, never> {
+  getCrawlsByPrefix(prefix: string): Effect.Effect<CrawlMetadata[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -5969,7 +5826,7 @@ export class SQLiteStorage implements CrawlStorage {
     reportId: string,
     url: string,
     visibility: string,
-    publishedAt: string
+    publishedAt: string,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -5988,14 +5845,12 @@ export class SQLiteStorage implements CrawlStorage {
    * Get published report for a crawl
    */
   getPublishedReport(
-    crawlId: string
+    crawlId: string,
   ): Effect.Effect<PublishedReportRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare(
-          "SELECT * FROM published_reports WHERE crawl_id = ?"
-        );
+        const stmt = db.prepare("SELECT * FROM published_reports WHERE crawl_id = ?");
         const row = stmt.get(crawlId) as Record<string, unknown> | undefined;
         if (!row) return null;
         return {
@@ -6014,7 +5869,7 @@ export class SQLiteStorage implements CrawlStorage {
    * Get published reports for multiple crawls (batch query to avoid N+1)
    */
   getPublishedReportsBatch(
-    crawlIds: string[]
+    crawlIds: string[],
   ): Effect.Effect<Map<string, PublishedReportRecord>, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -6026,7 +5881,7 @@ export class SQLiteStorage implements CrawlStorage {
         // Use parameterized query with placeholders
         const placeholders = crawlIds.map(() => "?").join(",");
         const stmt = db.prepare(
-          `SELECT * FROM published_reports WHERE crawl_id IN (${placeholders})`
+          `SELECT * FROM published_reports WHERE crawl_id IN (${placeholders})`,
         );
         const rows = stmt.all(...crawlIds) as Array<Record<string, unknown>>;
 
@@ -6055,9 +5910,7 @@ export class SQLiteStorage implements CrawlStorage {
    * Upsert merged findings. Idempotent on the PK
    * (site_key, normalized_url, rule_id, check_name, locator).
    */
-  upsertFindings(
-    findings: PageFindingRecord[]
-  ): Effect.Effect<void, StorageError, never> {
+  upsertFindings(findings: PageFindingRecord[]): Effect.Effect<void, StorageError, never> {
     if (findings.length === 0) return Effect.void;
     return Effect.try({
       try: () => {
@@ -6088,7 +5941,7 @@ export class SQLiteStorage implements CrawlStorage {
               f.lastSeenCrawlId,
               f.lastSeenAt,
               f.provenance,
-              f.state
+              f.state,
             );
           }
         });
@@ -6100,7 +5953,7 @@ export class SQLiteStorage implements CrawlStorage {
 
   getFindings(
     siteKey: string,
-    states?: PageFindingRecord["state"][]
+    states?: PageFindingRecord["state"][],
   ): Effect.Effect<PageFindingRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -6110,22 +5963,16 @@ export class SQLiteStorage implements CrawlStorage {
         // Deterministic order so repeat audits emit findings in a stable order
         // (#150) — normalized_url is how findings are keyed (diff-friendly);
         // the rest of the primary key tie-breaks for total determinism.
-        const orderBy =
-          " ORDER BY normalized_url ASC, rule_id ASC, check_name ASC, locator ASC";
+        const orderBy = " ORDER BY normalized_url ASC, rule_id ASC, check_name ASC, locator ASC";
         if (states && states.length > 0) {
           const placeholders = states.map(() => "?").join(",");
           const stmt = db.prepare(
-            `SELECT * FROM page_findings WHERE site_key = ? AND state IN (${placeholders})${orderBy}`
+            `SELECT * FROM page_findings WHERE site_key = ? AND state IN (${placeholders})${orderBy}`,
           );
-          const rows = stmt.all(siteKey, ...states) as Record<
-            string,
-            unknown
-          >[];
+          const rows = stmt.all(siteKey, ...states) as Record<string, unknown>[];
           return rows.map((row) => this.rowToPageFinding(row));
         }
-        const stmt = db.prepare(
-          `SELECT * FROM page_findings WHERE site_key = ?${orderBy}`
-        );
+        const stmt = db.prepare(`SELECT * FROM page_findings WHERE site_key = ?${orderBy}`);
         const rows = stmt.all(siteKey) as Record<string, unknown>[];
         return rows.map((row) => this.rowToPageFinding(row));
       },
@@ -6141,7 +5988,7 @@ export class SQLiteStorage implements CrawlStorage {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number
+    lastStatus: number,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -6151,11 +5998,11 @@ export class SQLiteStorage implements CrawlStorage {
           db.prepare(
             `INSERT OR REPLACE INTO site_pages
               (site_key, normalized_url, last_status, state, last_seen_crawl_id, last_seen_at)
-             VALUES (?, ?, ?, 'removed', ?, ?)`
+             VALUES (?, ?, ?, 'removed', ?, ?)`,
           ).run(siteKey, normalizedUrl, lastStatus, crawlId, now);
           db.prepare(
             `UPDATE page_findings SET state = 'stale', last_seen_crawl_id = ?, last_seen_at = ?
-             WHERE site_key = ? AND normalized_url = ?`
+             WHERE site_key = ? AND normalized_url = ?`,
           ).run(crawlId, now, siteKey, normalizedUrl);
         });
         tx();
@@ -6164,9 +6011,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  upsertSitePages(
-    pages: SitePageRecord[]
-  ): Effect.Effect<void, StorageError, never> {
+  upsertSitePages(pages: SitePageRecord[]): Effect.Effect<void, StorageError, never> {
     if (pages.length === 0) return Effect.void;
     return Effect.try({
       try: () => {
@@ -6184,7 +6029,7 @@ export class SQLiteStorage implements CrawlStorage {
               p.lastStatus,
               p.state,
               p.lastSeenCrawlId,
-              p.lastSeenAt
+              p.lastSeenAt,
             );
           }
         });
@@ -6194,16 +6039,14 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getSitePages(
-    siteKey: string
-  ): Effect.Effect<SitePageRecord[], StorageError, never> {
+  getSitePages(siteKey: string): Effect.Effect<SitePageRecord[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         // Deterministic order so repeat audits emit pages in a stable order
         // (#150) — normalized_url is the per-page key here.
         const stmt = db.prepare(
-          "SELECT * FROM site_pages WHERE site_key = ? ORDER BY normalized_url ASC"
+          "SELECT * FROM site_pages WHERE site_key = ? ORDER BY normalized_url ASC",
         );
         const rows = stmt.all(siteKey) as Record<string, unknown>[];
         return rows.map((row) => ({
@@ -6233,7 +6076,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   compactFindings(
     siteKey: string,
-    opts?: CompactFindingsOptions
+    opts?: CompactFindingsOptions,
   ): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -6254,7 +6097,7 @@ export class SQLiteStorage implements CrawlStorage {
               `DELETE FROM page_findings
                WHERE site_key = ?
                  AND state IN ('resolved', 'stale')
-                 AND last_seen_at < ?`
+                 AND last_seen_at < ?`,
             )
             .run(siteKey, cutoff).changes;
 
@@ -6265,7 +6108,7 @@ export class SQLiteStorage implements CrawlStorage {
               `DELETE FROM site_pages
                WHERE site_key = ?
                  AND state = 'removed'
-                 AND last_seen_at < ?`
+                 AND last_seen_at < ?`,
             )
             .run(siteKey, cutoff).changes;
 
@@ -6278,7 +6121,7 @@ export class SQLiteStorage implements CrawlStorage {
             db
               .prepare(
                 `SELECT COUNT(*) AS c FROM page_findings
-                 WHERE site_key = ? AND state IN ('resolved', 'stale')`
+                 WHERE site_key = ? AND state IN ('resolved', 'stale')`,
               )
               .get(siteKey) as { c: number }
           ).c;
@@ -6294,7 +6137,7 @@ export class SQLiteStorage implements CrawlStorage {
                      WHERE site_key = ? AND state IN ('resolved', 'stale')
                      ORDER BY last_seen_at DESC, rowid DESC
                      LIMIT ?
-                   )`
+                   )`,
               )
               .run(siteKey, siteKey, maxTerminalFindings).changes;
           }
@@ -6309,31 +6152,26 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   // Project meta — cross-crawl key/value store (sticky user-agent, #875)
-  getProjectMeta(
-    key: string
-  ): Effect.Effect<string | null, StorageError, never> {
+  getProjectMeta(key: string): Effect.Effect<string | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const row = db
-          .prepare("SELECT value FROM project_meta WHERE key = ?")
-          .get(key) as { value: string } | undefined;
+        const row = db.prepare("SELECT value FROM project_meta WHERE key = ?").get(key) as
+          | { value: string }
+          | undefined;
         return row?.value ?? null;
       },
       catch: (e) => StorageError.read(e),
     });
   }
 
-  setProjectMeta(
-    key: string,
-    value: string
-  ): Effect.Effect<void, StorageError, never> {
+  setProjectMeta(key: string, value: string): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         db.prepare(
           `INSERT INTO project_meta (key, value, updated_at) VALUES (?, ?, ?)
-           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
         ).run(key, value, Date.now());
       },
       catch: (e) => StorageError.write(e),
@@ -6384,10 +6222,7 @@ export class SQLiteStorage implements CrawlStorage {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  private pageFeatureParams(
-    crawlId: string,
-    row: PageFeatureRow
-  ): (string | number | null)[] {
+  private pageFeatureParams(crawlId: string, row: PageFeatureRow): (string | number | null)[] {
     return [
       crawlId,
       row.normalizedUrl,
@@ -6436,13 +6271,13 @@ export class SQLiteStorage implements CrawlStorage {
   /** Upsert a single page-features row (PK conflict on (crawl_id, url) → replace). */
   upsertPageFeatures(
     crawlId: string,
-    row: PageFeatureRow
+    row: PageFeatureRow,
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         db.prepare(SQLiteStorage.PAGE_FEATURES_INSERT_SQL).run(
-          ...this.pageFeatureParams(crawlId, row)
+          ...this.pageFeatureParams(crawlId, row),
         );
       },
       catch: (e) => StorageError.write(e),
@@ -6452,7 +6287,7 @@ export class SQLiteStorage implements CrawlStorage {
   /** Batch upsert page-features rows in one transaction (stream-loop write path). */
   upsertPageFeaturesBatch(
     crawlId: string,
-    rows: PageFeatureRow[]
+    rows: PageFeatureRow[],
   ): Effect.Effect<void, StorageError, never> {
     if (rows.length === 0) return Effect.void;
     return Effect.try({
@@ -6473,15 +6308,13 @@ export class SQLiteStorage implements CrawlStorage {
   /** Fetch one page-features row, or null when absent. */
   getPageFeatures(
     crawlId: string,
-    normalizedUrl: string
+    normalizedUrl: string,
   ): Effect.Effect<PageFeatureRow | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const row = db
-          .prepare(
-            "SELECT * FROM page_features WHERE crawl_id = ? AND normalized_url = ?"
-          )
+          .prepare("SELECT * FROM page_features WHERE crawl_id = ? AND normalized_url = ?")
           .get(crawlId, normalizedUrl) as Record<string, unknown> | undefined;
         return row ? this.rowToPageFeature(row) : null;
       },
@@ -6490,16 +6323,12 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /** Count of accumulated page-features rows for the crawl (SiteQuery.pageCount). */
-  getPageFeaturesCount(
-    crawlId: string
-  ): Effect.Effect<number, StorageError, never> {
+  getPageFeaturesCount(crawlId: string): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const row = db
-          .prepare(
-            "SELECT COUNT(*) as count FROM page_features WHERE crawl_id = ?"
-          )
+          .prepare("SELECT COUNT(*) as count FROM page_features WHERE crawl_id = ?")
           .get(crawlId) as { count: number };
         return row.count;
       },
@@ -6511,15 +6340,13 @@ export class SQLiteStorage implements CrawlStorage {
    * The homepage row = the shallowest crawled page (depth 0 seed), tie-broken by
    * normalized_url for determinism. Null on an empty crawl. (SiteQuery.homepage)
    */
-  getHomepageFeature(
-    crawlId: string
-  ): Effect.Effect<PageFeatureRow | null, StorageError, never> {
+  getHomepageFeature(crawlId: string): Effect.Effect<PageFeatureRow | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const row = db
           .prepare(
-            "SELECT * FROM page_features WHERE crawl_id = ? ORDER BY depth ASC, normalized_url ASC LIMIT 1"
+            "SELECT * FROM page_features WHERE crawl_id = ? ORDER BY depth ASC, normalized_url ASC LIMIT 1",
           )
           .get(crawlId) as Record<string, unknown> | undefined;
         return row ? this.rowToPageFeature(row) : null;
@@ -6536,7 +6363,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   getPageFeaturesPage(
     crawlId: string,
-    opts?: { after?: string; limit?: number }
+    opts?: { after?: string; limit?: number },
   ): Effect.Effect<PageFeatureRow[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -6550,10 +6377,7 @@ export class SQLiteStorage implements CrawlStorage {
         }
         query += " ORDER BY normalized_url ASC LIMIT ?";
         params.push(limit);
-        const rows = db.prepare(query).all(...params) as Record<
-          string,
-          unknown
-        >[];
+        const rows = db.prepare(query).all(...params) as Record<string, unknown>[];
         return rows.map((row) => this.rowToPageFeature(row));
       },
       catch: (e) => StorageError.read(e),
@@ -6563,14 +6387,14 @@ export class SQLiteStorage implements CrawlStorage {
   /** Normalized URLs of pages classified as `pageType`, ordered deterministically. */
   getPageFeaturesByType(
     crawlId: string,
-    pageType: string
+    pageType: string,
   ): Effect.Effect<string[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const rows = db
           .prepare(
-            "SELECT normalized_url FROM page_features WHERE crawl_id = ? AND page_type = ? ORDER BY normalized_url ASC"
+            "SELECT normalized_url FROM page_features WHERE crawl_id = ? AND page_type = ? ORDER BY normalized_url ASC",
           )
           .all(crawlId, pageType) as Array<{ normalized_url: string }>;
         return rows.map((r) => r.normalized_url);
@@ -6580,16 +6404,12 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /** Sum of per-page transfer bytes across the crawl (SiteQuery.sumTransferBytes). */
-  sumPageFeatureTransferBytes(
-    crawlId: string
-  ): Effect.Effect<number, StorageError, never> {
+  sumPageFeatureTransferBytes(crawlId: string): Effect.Effect<number, StorageError, never> {
     return this.sumPageFeatureColumn(crawlId, "transfer_bytes");
   }
 
   /** Sum of per-page leaked-secret hit counts (SiteQuery.sumSecretHits). */
-  sumPageFeatureSecretHits(
-    crawlId: string
-  ): Effect.Effect<number, StorageError, never> {
+  sumPageFeatureSecretHits(crawlId: string): Effect.Effect<number, StorageError, never> {
     return this.sumPageFeatureColumn(crawlId, "secret_hits");
   }
 
@@ -6597,14 +6417,14 @@ export class SQLiteStorage implements CrawlStorage {
   // so splicing it into the SUM is injection-safe.
   private sumPageFeatureColumn(
     crawlId: string,
-    column: "transfer_bytes" | "secret_hits"
+    column: "transfer_bytes" | "secret_hits",
   ): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const row = db
           .prepare(
-            `SELECT COALESCE(SUM(${column}), 0) as total FROM page_features WHERE crawl_id = ?`
+            `SELECT COALESCE(SUM(${column}), 0) as total FROM page_features WHERE crawl_id = ?`,
           )
           .get(crawlId) as { total: number };
         return row.total;
@@ -6621,7 +6441,7 @@ export class SQLiteStorage implements CrawlStorage {
   getPageFeatureDuplicateGroups(
     crawlId: string,
     field: PageFeatureDuplicateField,
-    opts?: { maxGroups?: number; maxUrlsPerGroup?: number }
+    opts?: { maxGroups?: number; maxUrlsPerGroup?: number },
   ): Effect.Effect<DuplicateGroup[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -6632,7 +6452,7 @@ export class SQLiteStorage implements CrawlStorage {
           cols.hash,
           cols.value,
           opts?.maxGroups ?? PAGE_FEATURE_DEFAULT_MAX_GROUPS,
-          opts?.maxUrlsPerGroup ?? PAGE_FEATURE_DEFAULT_MAX_URLS_PER_GROUP
+          opts?.maxUrlsPerGroup ?? PAGE_FEATURE_DEFAULT_MAX_URLS_PER_GROUP,
         );
         return groups.map((g) => ({
           hash: g.key,
@@ -6651,7 +6471,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   getPageFeatureTemplateClusters(
     crawlId: string,
-    opts?: { maxGroups?: number; maxUrlsPerGroup?: number }
+    opts?: { maxGroups?: number; maxUrlsPerGroup?: number },
   ): Effect.Effect<TemplateCluster[], StorageError, never> {
     return Effect.try({
       try: () => {
@@ -6660,7 +6480,7 @@ export class SQLiteStorage implements CrawlStorage {
           "template_fp",
           "NULL",
           opts?.maxGroups ?? PAGE_FEATURE_DEFAULT_MAX_GROUPS,
-          opts?.maxUrlsPerGroup ?? PAGE_FEATURE_DEFAULT_MAX_URLS_PER_GROUP
+          opts?.maxUrlsPerGroup ?? PAGE_FEATURE_DEFAULT_MAX_URLS_PER_GROUP,
         );
         return groups.map((g) => ({
           fp: g.key,
@@ -6685,7 +6505,7 @@ export class SQLiteStorage implements CrawlStorage {
     hashCol: string,
     valueExpr: string,
     maxGroups: number,
-    maxUrlsPerGroup: number
+    maxUrlsPerGroup: number,
   ): Array<{ key: string; sample: string | null; urls: string[]; count: number }> {
     const db = this.getDb();
     const stmt = db.prepare(`
@@ -6710,12 +6530,7 @@ export class SQLiteStorage implements CrawlStorage {
       WHERE rn <= ?
       ORDER BY cnt DESC, hash ASC, rn ASC
     `);
-    const rows = stmt.all(
-      crawlId,
-      maxGroups,
-      crawlId,
-      maxUrlsPerGroup
-    ) as Array<{
+    const rows = stmt.all(crawlId, maxGroups, crawlId, maxUrlsPerGroup) as Array<{
       hash: string;
       sample: string | null;
       cnt: number;
@@ -6778,9 +6593,7 @@ export class SQLiteStorage implements CrawlStorage {
         ? this.safeJsonParse(row.rich_result_types as string, [] as string[])
         : [],
       napName: (row.nap_name as string | null) ?? null,
-      napPhones: row.nap_phones
-        ? this.safeJsonParse(row.nap_phones as string, [] as string[])
-        : [],
+      napPhones: row.nap_phones ? this.safeJsonParse(row.nap_phones as string, [] as string[]) : [],
       napPhoneFormats: row.nap_phone_formats
         ? this.safeJsonParse(row.nap_phone_formats as string, [] as string[])
         : [],
@@ -6799,7 +6612,10 @@ export class SQLiteStorage implements CrawlStorage {
         : null,
       readingLevel: (row.reading_level as number | null) ?? null,
       terminologyVariants: row.terminology_variants
-        ? this.safeJsonParse(row.terminology_variants as string, null as Record<string, number> | null)
+        ? this.safeJsonParse(
+            row.terminology_variants as string,
+            null as Record<string, number> | null,
+          )
         : null,
     };
   }

@@ -11,7 +11,15 @@ import type { AuditReport, HealthScore } from "../src/types";
 
 const groups = [
   { group: "seo", name: "SEO", score: 90, passed: 20, warnings: 4, failed: 0, total: 24 },
-  { group: "performance", name: "Performance", score: 91, passed: 10, warnings: 3, failed: 1, total: 14 },
+  {
+    group: "performance",
+    name: "Performance",
+    score: 91,
+    passed: 10,
+    warnings: 3,
+    failed: 1,
+    total: 14,
+  },
 ] as HealthScore["groups"];
 
 const score = (overrides: Partial<HealthScore> = {}): HealthScore =>
@@ -44,24 +52,38 @@ const report = (healthScore: HealthScore | undefined): AuditReport =>
 describe("scoreAdjustment", () => {
   test("says how far the overall sits below the pre-adjustment score, and why", () => {
     expect(scoreAdjustmentNoteFor(score())).toBe(NOTE);
-    expect(scoreAdjustment(score())).toMatchObject({ before: 95, percent: 24, issueDensity: true, crawlSetup: false });
+    expect(scoreAdjustment(score())).toMatchObject({
+      before: 95,
+      percent: 24,
+      issueDensity: true,
+      crawlSetup: false,
+    });
   });
 
   test("names the robots.txt / sitemap part when the penalties exceed the density part", () => {
     const note = scoreAdjustmentNoteFor(
       score({ overall: 55, debug: { base: 96, curved: 95, penalties: 40, issuePenalty: 23 } }),
     );
-    expect(note).toContain("95 before a 42% site-wide adjustment for issue density across the whole audit and robots.txt or sitemap problems.");
+    expect(note).toContain(
+      "95 before a 42% site-wide adjustment for issue density across the whole audit and robots.txt or sitemap problems.",
+    );
     expect(
-      scoreAdjustmentNoteFor(score({ overall: 76, debug: { base: 96, curved: 95, penalties: 19, issuePenalty: 0 } })),
+      scoreAdjustmentNoteFor(
+        score({ overall: 76, debug: { base: 96, curved: 95, penalties: 19, issuePenalty: 0 } }),
+      ),
     ).toContain("for robots.txt or sitemap problems.");
   });
 
   test("a density under half a percent still counts as issue density, beside a robots.txt or sitemap penalty", () => {
     const note = scoreAdjustmentNoteFor(
-      score({ overall: 76, debug: { base: 96, curved: 95, penalties: 19, issuePenalty: 0, issueDensity: 0.3 } }),
+      score({
+        overall: 76,
+        debug: { base: 96, curved: 95, penalties: 19, issuePenalty: 0, issueDensity: 0.3 },
+      }),
     );
-    expect(note).toContain("for issue density across the whole audit and robots.txt or sitemap problems.");
+    expect(note).toContain(
+      "for issue density across the whole audit and robots.txt or sitemap problems.",
+    );
   });
 
   test("nothing to show: no debug, no adjustment, no overall, no sections", () => {
@@ -69,7 +91,9 @@ describe("scoreAdjustment", () => {
     expect(scoreAdjustmentNoteFor(score({ overall: 95 }))).toBeNull();
     expect(scoreAdjustmentNoteFor(score({ overall: null }))).toBeNull();
     expect(scoreAdjustmentNoteFor(score({ groups: [] }))).toBeNull();
-    expect(scoreAdjustmentNoteFor(score({ debug: { base: 0, curved: 0, penalties: 0 } }))).toBeNull();
+    expect(
+      scoreAdjustmentNoteFor(score({ debug: { base: 0, curved: 0, penalties: 0 } })),
+    ).toBeNull();
     expect(scoreAdjustmentNoteFor(undefined)).toBeNull();
   });
 });
@@ -81,9 +105,9 @@ describe("every format carries the sentence, and only when there is one", () => 
     expect(renderHtml(r)).toContain("data-score-adjustment");
     expect(renderMarkdown(r)).toContain(`_${NOTE}_`);
     expect(renderText(r)).toContain(NOTE);
-    expect(renderLlm(r as Parameters<typeof renderLlm>[0], { includePassed: false, includeInfo: false })).toContain(
-      `<adjustment>${NOTE}</adjustment>`,
-    );
+    expect(
+      renderLlm(r as Parameters<typeof renderLlm>[0], { includePassed: false, includeInfo: false }),
+    ).toContain(`<adjustment>${NOTE}</adjustment>`);
   });
 
   test("a report without the debug fields renders no such line", () => {
@@ -91,8 +115,8 @@ describe("every format carries the sentence, and only when there is one", () => 
     expect(renderHtml(r)).not.toContain("data-score-adjustment");
     expect(renderMarkdown(r)).not.toContain("site-wide adjustment");
     expect(renderText(r)).not.toContain("site-wide adjustment");
-    expect(renderLlm(r as Parameters<typeof renderLlm>[0], { includePassed: false, includeInfo: false })).not.toContain(
-      "<adjustment>",
-    );
+    expect(
+      renderLlm(r as Parameters<typeof renderLlm>[0], { includePassed: false, includeInfo: false }),
+    ).not.toContain("<adjustment>");
   });
 });

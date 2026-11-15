@@ -397,7 +397,10 @@ function formHasExplicitCaptchaContainer(form: Element): boolean {
 function formHasCaptchaResponseField(form: Element): boolean {
   for (const provider of Object.values(CAPTCHA_PATTERNS)) {
     for (const fieldName of provider.responseFields) {
-      if (elementsWithAttribute(form, "name", fieldName).length > 0 || form.querySelector(`#${fieldName}`)) {
+      if (
+        elementsWithAttribute(form, "name", fieldName).length > 0 ||
+        form.querySelector(`#${fieldName}`)
+      ) {
         return true;
       }
     }
@@ -585,7 +588,8 @@ export const formCaptchaRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "Only client-side markup was inspected; this does not establish whether server-side abuse controls exist.",
+          uncertainty:
+            "Only client-side markup was inspected; this does not establish whether server-side abuse controls exist.",
         },
       });
     } else {
@@ -597,7 +601,8 @@ export const formCaptchaRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "A detected client-side signal does not verify that the control is enforced server-side.",
+          uncertainty:
+            "A detected client-side signal does not verify that the control is enforced server-side.",
         },
       });
     }

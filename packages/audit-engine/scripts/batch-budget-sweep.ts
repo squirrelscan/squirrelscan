@@ -303,7 +303,7 @@ function spawnUnder(
   // Kept SEPARATE, and both printed on failure. Concatenating them and taking
   // a tail loses the error: `time -l` appends ~800 characters of statistics
   // after the child's message, so the last 500 are all statistics.
-  
+
   // A non-zero exit invalidates the run even when the child printed its line
   // first: a failure after the print is still a failure, and the maxrss of a
   // process that died early is a small and entirely plausible number.
@@ -402,7 +402,10 @@ console.log(
 for (const cell of cells) {
   console.log(
     `${`${cell.budgetMB} MB`.padStart(7)} ${String(cell.batchPages).padStart(6)} ${cell.purge.padEnd(8)} ` +
-      `${[...cell.peaksMB].sort((a, b) => a - b).join(", ").padEnd(28)} ` +
+      `${[...cell.peaksMB]
+        .sort((a, b) => a - b)
+        .join(", ")
+        .padEnd(28)} ` +
       `${(cell.coldMB === null ? "-" : `${cell.coldMB} MB`).padStart(7)} ` +
       `${(cell.warmMB === null ? "-" : `${cell.warmMB} MB`).padStart(7)}`,
   );

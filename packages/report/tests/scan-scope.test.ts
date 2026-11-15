@@ -248,7 +248,9 @@ describe("a reduced page limit (#1909)", () => {
 
   test("an uncapped clamped run still names both, without 'reached'", () => {
     expect(
-      scanScopeLine(baseReport({ scanScope: { ...clampedScope, capped: false, pagesCrawled: 900 } })),
+      scanScopeLine(
+        baseReport({ scanScope: { ...clampedScope, capped: false, pagesCrawled: 900 } }),
+      ),
     ).toBe("Scan: 900 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested).");
   });
 
@@ -262,9 +264,7 @@ describe("a reduced page limit (#1909)", () => {
     // A producer echoing the same number both ways must not render a clamp that
     // never happened, which is why this compares rather than trusting presence.
     expect(
-      scanScopeLine(
-        baseReport({ scanScope: { ...clampedScope, requestedMaxPages: 4320 } }),
-      ),
+      scanScopeLine(baseReport({ scanScope: { ...clampedScope, requestedMaxPages: 4320 } })),
     ).toBe("Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 reached).");
   });
 
@@ -339,7 +339,13 @@ describe("XML scan scope (#350)", () => {
     expect(uncapped).toContain('<scan-scope origin="cli" crawled="12" capped="false"/>');
     const timed = renderXml(
       baseReport({
-        scanScope: { origin: "ci", maxPages: 100, pagesCrawled: 40, capped: false, stopReason: "time" },
+        scanScope: {
+          origin: "ci",
+          maxPages: 100,
+          pagesCrawled: 40,
+          capped: false,
+          stopReason: "time",
+        },
       }),
     );
     expect(timed).toContain(
@@ -379,7 +385,9 @@ describe("targeted run note (#1777)", () => {
     });
 
   test("an ordinary audit has no note and its line is unchanged", () => {
-    expect(scanScopeLine(scope(undefined))).toBe("Scan: 3 pages crawled from the CLI (page limit 100).");
+    expect(scanScopeLine(scope(undefined))).toBe(
+      "Scan: 3 pages crawled from the CLI (page limit 100).",
+    );
   });
 
   test("says how many of the given URLs were audited and that site-wide rules did not run", () => {
@@ -404,12 +412,21 @@ describe("audit level line of a targeted run (#1777)", () => {
         level: "surface",
         basedOn: "surface",
         changes: [],
-        settings: { pages: 10, crawlStrategy: "pattern-sampled", cloudChecks: true, render: "auto", externalLinks: false, probe: "active" },
+        settings: {
+          pages: 10,
+          crawlStrategy: "pattern-sampled",
+          cloudChecks: true,
+          render: "auto",
+          externalLinks: false,
+          probe: "active",
+        },
         ...extra,
       } as never,
     });
   test("says only the listed URLs were audited and no links were checked", () => {
-    expect(auditLevelLine(level({ targeted: true }))).toContain("Targeted: only the listed URLs were audited, and no links were checked.");
+    expect(auditLevelLine(level({ targeted: true }))).toContain(
+      "Targeted: only the listed URLs were audited, and no links were checked.",
+    );
   });
   test("an ordinary run's line is unchanged", () => {
     expect(auditLevelLine(level({}))).toBe("Audit level: Surface.");

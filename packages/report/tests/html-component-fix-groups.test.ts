@@ -167,7 +167,9 @@ describe("the sentence is the shared sentence, not one HTML assembled", () => {
     ["observed, no block name", report(PAGES.map((page) => check(page, [occurrence(page)])))],
     [
       "repeated subtree with a block name",
-      report(PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", "Downloads")]))),
+      report(
+        PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", "Downloads")])),
+      ),
     ],
     [
       "repeated subtree with no legible name",
@@ -214,10 +216,14 @@ describe("the sentence is the shared sentence, not one HTML assembled", () => {
 
   test("the block name is rendered as a name, and only inside the sentence", () => {
     const html = renderHtml(
-      report(PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", "Downloads")]))),
+      report(
+        PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", "Downloads")])),
+      ),
     );
     expect(html).toContain('<span class="fix-group-name">&quot;Downloads&quot;</span>');
-    expect(cardSentences(html)[0]).toContain('Likely one shared block ("Downloads") in the main content');
+    expect(cardSentences(html)[0]).toContain(
+      'Likely one shared block ("Downloads") in the main content',
+    );
   });
 
   test("a group with no name renders the sentence with no name markup", () => {
@@ -268,7 +274,9 @@ describe("partial coverage: the remainder is labelled, never hidden", () => {
   );
 
   test("the uncovered page keeps a list of its own, explicitly named", () => {
-    expect(html).toContain('<summary class="more">Pages not attributed to a shared component (1)</summary>');
+    expect(html).toContain(
+      '<summary class="more">Pages not attributed to a shared component (1)</summary>',
+    );
     expect(html).toContain('href="https://example.test/legal"');
   });
 
@@ -354,7 +362,9 @@ describe("a rollup is one card, however many slots the block holds", () => {
     ROLLUP_PAGES.map((page) =>
       check(
         page,
-        SLOTS.map((text, index) => promotable(page, `div:1>a:${index + 1}`, text, "Install squirrel")),
+        SLOTS.map((text, index) =>
+          promotable(page, `div:1>a:${index + 1}`, text, "Install squirrel"),
+        ),
       ),
     ),
   );
@@ -413,7 +423,7 @@ describe("a rollup is one card, however many slots the block holds", () => {
 });
 
 describe("site-controlled strings are neutralised", () => {
-  const hostile = "\"><script>alert(1)</script>";
+  const hostile = '"><script>alert(1)</script>';
 
   test("a defect value cannot open a tag or break out of an attribute", () => {
     const html = renderHtml(
@@ -437,7 +447,9 @@ describe("site-controlled strings are neutralised", () => {
 
   test("a block name from the page cannot inject markup either", () => {
     const html = renderHtml(
-      report(PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", hostile)]))),
+      report(
+        PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", hostile)])),
+      ),
     );
     expect(html).toContain('<span class="fix-group-name">');
     expect(html).not.toContain("<script>alert(1)</script>");
@@ -474,7 +486,9 @@ describe("no component evidence: nothing changes", () => {
     );
     const withoutEvidence = report(PAGES.map((page) => check(page)));
     expect(renderHtml(withEvidence)).toBe(renderHtml(withoutEvidence));
-    expect(renderHtml(withoutEvidence)).toContain('<summary class="more">3 pages affected</summary>');
+    expect(renderHtml(withoutEvidence)).toContain(
+      '<summary class="more">3 pages affected</summary>',
+    );
     expect(bodyOf(renderHtml(withoutEvidence))).not.toContain("fix-group");
   });
 });

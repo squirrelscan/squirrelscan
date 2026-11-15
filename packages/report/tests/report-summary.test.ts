@@ -81,9 +81,7 @@ describe("ReportSummary", () => {
   });
 
   test("no dedicated Screenshot heading — the screenshot moved into the summary", () => {
-    const html = renderHtml(
-      baseReport({ screenshotUrl: "https://assets.squirrelscan.com/s.png" }),
-    );
+    const html = renderHtml(baseReport({ screenshotUrl: "https://assets.squirrelscan.com/s.png" }));
     expect(html).not.toContain(">Screenshot</h2>");
     expect(html).toContain('class="screenshot-section ');
   });

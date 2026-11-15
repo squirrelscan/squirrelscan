@@ -32,7 +32,7 @@ declare module "bun:sqlite" {
      * takes the write lock before the first statement (BEGIN IMMEDIATE).
      */
     transaction<T extends (...args: any[]) => any>(
-      fn: T
+      fn: T,
     ): T & { deferred: T; immediate: T; exclusive: T };
     close(): void;
   }

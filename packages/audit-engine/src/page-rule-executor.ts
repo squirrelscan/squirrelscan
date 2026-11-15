@@ -13,7 +13,13 @@
 // thread (`rel`/`isNofollow` for weak-internal-links and orphan-pages, `textGlued`
 // and `textParts` for links/anchor-mismatch).
 
-import type { CheckResult, PageData, RuleRunResult, RuleRunner, SiteData } from "@squirrelscan/rules";
+import type {
+  CheckResult,
+  PageData,
+  RuleRunResult,
+  RuleRunner,
+  SiteData,
+} from "@squirrelscan/rules";
 
 /** One page to run page-scope rules on. `key` is the adapter's bucket key
  * (normalizedUrl); `page` carries the raw html + metadata + pre-parsed DOM. */
@@ -62,7 +68,11 @@ function yieldToEventLoop(): Promise<void> {
  * firing — and a backend must honor it so a timed-out audit stops promptly
  * instead of running the whole remaining batch to completion. */
 export interface PageRuleExecutor {
-  run(tasks: PageRuleTask[], siteData: SiteData, signal?: AbortSignal): Promise<PageRuleTaskResult[]>;
+  run(
+    tasks: PageRuleTask[],
+    siteData: SiteData,
+    signal?: AbortSignal,
+  ): Promise<PageRuleTaskResult[]>;
   /** Release any held resources. No-op for serial. */
   dispose(): Promise<void>;
 }
@@ -77,7 +87,11 @@ export class SerialPageRuleExecutor implements PageRuleExecutor {
     private readonly hooks?: PageRuleLoopHooks,
   ) {}
 
-  async run(tasks: PageRuleTask[], siteData: SiteData, signal?: AbortSignal): Promise<PageRuleTaskResult[]> {
+  async run(
+    tasks: PageRuleTask[],
+    siteData: SiteData,
+    signal?: AbortSignal,
+  ): Promise<PageRuleTaskResult[]> {
     const results: PageRuleTaskResult[] = [];
     const total = tasks.length;
     const yieldEveryMs = this.hooks?.yieldEveryMs;

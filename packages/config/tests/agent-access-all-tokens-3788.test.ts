@@ -10,8 +10,12 @@ describe("agent_access_all_tokens", () => {
   });
 
   test("parses true and false, rejects other types", () => {
-    expect(CrawlerConfigSchema.parse({ agent_access_all_tokens: true }).agent_access_all_tokens).toBe(true);
-    expect(CrawlerConfigSchema.parse({ agent_access_all_tokens: false }).agent_access_all_tokens).toBe(false);
+    expect(
+      CrawlerConfigSchema.parse({ agent_access_all_tokens: true }).agent_access_all_tokens,
+    ).toBe(true);
+    expect(
+      CrawlerConfigSchema.parse({ agent_access_all_tokens: false }).agent_access_all_tokens,
+    ).toBe(false);
     expect(CrawlerConfigSchema.safeParse({ agent_access_all_tokens: "yes" }).success).toBe(false);
   });
 });

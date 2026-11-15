@@ -20,10 +20,7 @@ import {
   resolutionRuleKey,
 } from "@squirrelscan/core-contracts/resolution";
 import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
-import {
-  buildPublishResolution,
-  buildResolutionSignal,
-} from "@squirrelscan/rules/resolution";
+import { buildPublishResolution, buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
@@ -230,10 +227,11 @@ describe("the rule-wide key's edge cases (pub#968)", () => {
       { length: RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls },
       (_, i) => `https://www.acme-shop.com/p/${i}`,
     );
-    const signal = buildResolutionSignal(
-      { [RULE]: { checks: [timedOut(A), pass(B)] } },
-      [A, B, ...filler],
-    )!;
+    const signal = buildResolutionSignal({ [RULE]: { checks: [timedOut(A), pass(B)] } }, [
+      A,
+      B,
+      ...filler,
+    ])!;
     expect(signal.truncated).toContain(resolutionRuleKey(RULE));
   });
 
@@ -251,10 +249,7 @@ describe("the rule-wide key's edge cases (pub#968)", () => {
       { length: RESOLUTION_SIGNAL_LIMITS.maxChecks + 5 },
       (_, i) => ({ ...pass(A), name: `c${i}` }),
     );
-    const signal = buildResolutionSignal(
-      { [RULE]: { checks: [...many, timedOut(B)] } },
-      [A, B],
-    )!;
+    const signal = buildResolutionSignal({ [RULE]: { checks: [...many, timedOut(B)] } }, [A, B])!;
     expect(signal.notEvaluated?.[resolutionRuleKey(RULE)]).toHaveLength(1);
     expect(Object.keys(signal.failing).length).toBeLessThan(RESOLUTION_SIGNAL_LIMITS.maxChecks);
   });

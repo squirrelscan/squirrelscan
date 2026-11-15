@@ -62,8 +62,7 @@ export const paginationRule: Rule = {
       // so a canonical pointing at that URL is correct. Only page 2 and later
       // must canonicalize to themselves. A first page canonicalizing anywhere
       // else still warns.
-      const firstPageToBase =
-        isFirstPage(url) && sameResource(canonicalParsed, unpaginated(url));
+      const firstPageToBase = isFirstPage(url) && sameResource(canonicalParsed, unpaginated(url));
       if (!canonicalIsPaginated && isPaginated && !firstPageToBase) {
         checks.push({
           name: "pagination-canonical",
@@ -119,9 +118,7 @@ function sameResource(a: URL, b: URL): boolean {
   // first), and every pair re-encoded so `a%26b=c` is not `a&b=c`.
   const query = (u: URL) =>
     JSON.stringify(
-      [...new Set(u.searchParams.keys())]
-        .sort()
-        .map((key) => [key, u.searchParams.getAll(key)]),
+      [...new Set(u.searchParams.keys())].sort().map((key) => [key, u.searchParams.getAll(key)]),
     );
   return a.origin === b.origin && path(a) === path(b) && query(a) === query(b);
 }

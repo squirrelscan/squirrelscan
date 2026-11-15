@@ -15,7 +15,7 @@ export function isRuleEnabled(
   enable: string[],
   disable: string[],
   ruleConfig?: { enabled?: boolean },
-  optIn = false
+  optIn = false,
 ): boolean {
   // Per-rule config takes highest precedence
   if (ruleConfig?.enabled === false) return false;
@@ -23,12 +23,7 @@ export function isRuleEnabled(
 
   // `*` is the default selection and must not spend credits on opt-in rules.
   // A concrete id/category pattern is an intentional opt-in.
-  if (
-    optIn &&
-    !enable.some(
-      (pattern) => pattern !== "*" && matchesRulePattern(ruleId, pattern)
-    )
-  ) {
+  if (optIn && !enable.some((pattern) => pattern !== "*" && matchesRulePattern(ruleId, pattern))) {
     return false;
   }
 
@@ -52,7 +47,7 @@ export function filterRules(
   enable: string[] | undefined,
   disable: string[] | undefined,
   ruleOptions: Record<string, { enabled?: boolean }>,
-  ruleRegistry?: ReadonlyMap<string, { meta: { optIn?: boolean } }>
+  ruleRegistry?: ReadonlyMap<string, { meta: { optIn?: boolean } }>,
 ): string[] {
   return ruleIds.filter((id) =>
     isRuleEnabled(
@@ -60,7 +55,7 @@ export function filterRules(
       enable ?? [],
       disable ?? [],
       ruleOptions[id],
-      ruleRegistry?.get(id)?.meta.optIn === true
-    )
+      ruleRegistry?.get(id)?.meta.optIn === true,
+    ),
   );
 }

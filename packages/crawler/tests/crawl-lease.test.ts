@@ -84,9 +84,7 @@ function leaseOf(path: string, id: string): LeaseRow {
 function columnsOf(path: string): string[] {
   const db = new Database(path, { readonly: true });
   try {
-    return (db.query("PRAGMA table_info(crawls)").all() as { name: string }[]).map(
-      (c) => c.name
-    );
+    return (db.query("PRAGMA table_info(crawls)").all() as { name: string }[]).map((c) => c.name);
   } finally {
     db.close();
   }
@@ -112,7 +110,7 @@ function seedOldDb(path: string, version: number): string {
   db.query("INSERT INTO schema_version (version) VALUES (?)").run(version);
   const id = randomUUID();
   db.query(
-    "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(id, "https://e.test", 1_000, "completed", "{}", JSON.stringify(STATS));
   db.close();
   return id;
@@ -130,7 +128,7 @@ describe("migration 35: lease columns", () => {
     const store = await openStore(path);
     const id = await run(store.createCrawl(meta));
     expect(columnsOf(path)).toEqual(
-      expect.arrayContaining(["owner_pid", "owner_host", "heartbeat_at"])
+      expect.arrayContaining(["owner_pid", "owner_host", "heartbeat_at"]),
     );
     expect(leaseOf(path, id)).toEqual({
       owner_pid: null,
@@ -146,7 +144,7 @@ describe("migration 35: lease columns", () => {
 
     const store = await openStore(path);
     expect(columnsOf(path)).toEqual(
-      expect.arrayContaining(["owner_pid", "owner_host", "heartbeat_at"])
+      expect.arrayContaining(["owner_pid", "owner_host", "heartbeat_at"]),
     );
     const crawls = await run(store.listCrawls());
     expect(crawls.map((c) => c.id)).toEqual([id]);
@@ -165,7 +163,7 @@ describe("migration 35: lease columns", () => {
 
     const store = await openStore(path);
     expect(columnsOf(path)).toEqual(
-      expect.arrayContaining(["owner_pid", "owner_host", "heartbeat_at"])
+      expect.arrayContaining(["owner_pid", "owner_host", "heartbeat_at"]),
     );
     // A WRITE proves it: a missing column reads as undefined, an UPDATE throws.
     const lease = startCrawlLease({ dbPath: path, getCrawlId: () => id });
@@ -182,7 +180,7 @@ describe("migration 35: lease columns", () => {
     // What an older CLI does: names its own columns only, reads by key.
     const db = new Database(path);
     db.query(
-      "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)",
     ).run("old-cli", "https://e.test", 1, "running", "{}", JSON.stringify(STATS));
     db.query("UPDATE crawls SET status = 'completed' WHERE id = 'old-cli'").run();
     db.close();
@@ -307,9 +305,7 @@ describe("startCrawlLease", () => {
       host: "box-a",
     });
     const other = new Database(path);
-    other
-      .query("UPDATE crawls SET owner_pid = 2, owner_host = 'box-b' WHERE id = ?")
-      .run(id);
+    other.query("UPDATE crawls SET owner_pid = 2, owner_host = 'box-b' WHERE id = ?").run(id);
     other.close();
     lease.release();
     expect(leaseOf(path, id).owner_pid).toBe(2);
@@ -344,7 +340,7 @@ describe("startCrawlLease", () => {
     const set = (pid: number | null, hb: number | null) => {
       const db = new Database(path);
       db.query(
-        "UPDATE crawls SET owner_pid = ?, owner_host = 'other', heartbeat_at = ? WHERE id = ?"
+        "UPDATE crawls SET owner_pid = ?, owner_host = 'other', heartbeat_at = ? WHERE id = ?",
       ).run(pid, hb, id);
       db.close();
     };
@@ -382,34 +378,28 @@ describe("startCrawlLease", () => {
     const start = tempPath("start");
     const release = tempPath("release");
     const resultPaths = [tempPath("result-a"), tempPath("result-b")];
-    const childScript = join(
-      import.meta.dir,
-      "fixtures/crawl-lease-claim-child.ts"
-    );
+    const childScript = join(import.meta.dir, "fixtures/crawl-lease-claim-child.ts");
     const children: Array<ReturnType<typeof Bun.spawn>> = [];
 
     try {
       for (const result of resultPaths) {
         children.push(
-          Bun.spawn(
-            [process.execPath, childScript, path, id, start, result, release],
-            { stderr: "inherit", stdout: "ignore" }
-          )
+          Bun.spawn([process.execPath, childScript, path, id, start, result, release], {
+            stderr: "inherit",
+            stdout: "ignore",
+          }),
         );
       }
       await Bun.write(start, "go");
       const deadline = Date.now() + 5_000;
-      while (
-        !resultPaths.every((result) => existsSync(result)) &&
-        Date.now() < deadline
-      ) {
+      while (!resultPaths.every((result) => existsSync(result)) && Date.now() < deadline) {
         await Bun.sleep(10);
       }
       expect(resultPaths.every((result) => existsSync(result))).toBe(true);
 
-      const results = await Promise.all(
-        resultPaths.map(async (result) => Bun.file(result).json())
-      ) as Array<{
+      const results = (await Promise.all(
+        resultPaths.map(async (result) => Bun.file(result).json()),
+      )) as Array<{
         claim: {
           acquired: boolean;
           ownerPid?: number;
@@ -434,10 +424,7 @@ describe("startCrawlLease", () => {
       });
     } finally {
       await Bun.write(release, "done");
-      await Promise.race([
-        Promise.all(children.map((child) => child.exited)),
-        Bun.sleep(1_000),
-      ]);
+      await Promise.race([Promise.all(children.map((child) => child.exited)), Bun.sleep(1_000)]);
       for (const child of children) {
         if (child.exitCode === null) child.kill();
       }
@@ -453,7 +440,7 @@ describe("startCrawlLease", () => {
     const set = (pid: number, host: string, heartbeat: number) => {
       const db = new Database(path);
       db.query(
-        "UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?"
+        "UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?",
       ).run(pid, host, heartbeat, id);
       db.close();
     };
@@ -489,9 +476,12 @@ describe("startCrawlLease", () => {
     const store = await openStore(path);
     const id = await run(store.createCrawl(meta));
     const db = new Database(path);
-    db.query(
-      "UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?"
-    ).run(process.pid, "box-a", 10_000_000 - 6 * 60_000, id);
+    db.query("UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?").run(
+      process.pid,
+      "box-a",
+      10_000_000 - 6 * 60_000,
+      id,
+    );
     db.close();
 
     const lease = startCrawlLease({

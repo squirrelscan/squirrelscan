@@ -73,7 +73,9 @@ function isConfirmedBroken(link: { status: number | null; error: string | null }
 
 /** A host that cannot be reached by any visitor: it does not exist, or sits under a suffix that never resolves. */
 function isDeadHostError(error: string): boolean {
-  return error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR || error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR;
+  return (
+    error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR || error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR
+  );
 }
 
 /** What a confirmed-broken link answered, for the message and the label. */
@@ -121,7 +123,7 @@ interface ExternalPlacement {
 function externalPlacement(
   pages: SiteData["pages"] | undefined,
   wanted: ReadonlySet<string>,
-  wantedMasked: ReadonlySet<string>
+  wantedMasked: ReadonlySet<string>,
 ): ExternalPlacement {
   const byHref = new Map<string, SourceTally>();
   const chromeByHref = new Map<string, SourceTally>();
@@ -129,7 +131,7 @@ function externalPlacement(
     key: string,
     page: string,
     section: LinkSection | undefined,
-    chromeSection: LinkSection | undefined
+    chromeSection: LinkSection | undefined,
   ): void => {
     let tally = byHref.get(key);
     if (!tally) byHref.set(key, (tally = new Map()));
@@ -149,7 +151,8 @@ function externalPlacement(
         let key = masked.get(link.url);
         if (key === undefined) masked.set(link.url, (key = maskLinkTokens(link.url)));
         // A link written without a token masks to itself and was counted above.
-        if (key !== link.url && wantedMasked.has(key)) count(key, page.url, link.section, chromeSectionOf(link));
+        if (key !== link.url && wantedMasked.has(key))
+          count(key, page.url, link.section, chromeSectionOf(link));
       }
     }
   }
@@ -184,7 +187,7 @@ function externalPlacement(
 function placementItemFields(
   href: string,
   sourcePages: readonly string[],
-  placement: ExternalPlacement
+  placement: ExternalPlacement,
 ): {
   label?: string;
   meta?: { sections: SectionCounts };
@@ -299,7 +302,11 @@ function overCapCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): Ch
     message: `${overCap} of ${eligible} external link(s) were not checked: over this audit's limit of ${linkCheck.cap}, which checks the most-linked first`,
     skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
     value: overCap,
-    details: { externalLinksFound: linkCheck.found, externalLinksChecked: linkCheck.checked, cap: linkCheck.cap },
+    details: {
+      externalLinksFound: linkCheck.found,
+      externalLinksChecked: linkCheck.checked,
+      cap: linkCheck.cap,
+    },
   };
 }
 
@@ -377,7 +384,8 @@ export const brokenExternalLinksRule: Rule = {
       wantedMasked.add(l.href);
     }
     for (const l of externalLinks) {
-      if (l.error || l.wafBlocked || isRateLimitedLink(l) || (l.status ?? 0) >= 400) wanted.add(l.href);
+      if (l.error || l.wafBlocked || isRateLimitedLink(l) || (l.status ?? 0) >= 400)
+        wanted.add(l.href);
     }
     const placement = externalPlacement(ctx.site?.pages, wanted, wantedMasked);
     const notRequested = linkCheck ? notRequestedCheck(linkCheck, placement) : null;
@@ -411,7 +419,9 @@ export const brokenExternalLinksRule: Rule = {
       // reported above, not counted here.
       const found = Math.max(
         0,
-        countExternalLinks(ctx.site?.pages) - (linkCheck?.notRequested ?? 0) - (linkCheck?.refused ?? 0),
+        countExternalLinks(ctx.site?.pages) -
+          (linkCheck?.notRequested ?? 0) -
+          (linkCheck?.refused ?? 0),
       );
       if (found > 0) {
         checks.push(
@@ -458,9 +468,7 @@ export const brokenExternalLinksRule: Rule = {
     // Same bucket, different cause: throttled targets (#1829).
     const rateLimitedLinks = externalLinks.filter((link) => isRateLimitedLink(link));
 
-    const checkedCount = externalLinks.filter(
-      (l) => l.status !== null || l.error !== null
-    ).length;
+    const checkedCount = externalLinks.filter((l) => l.status !== null || l.error !== null).length;
 
     // #1739: confirmed broken (404, 410, a host that does not resolve) fails; the rest of the broken
     // links (5xx, timeouts, TLS and connection errors, other 4xx) may be transient or specific to where
@@ -559,7 +567,8 @@ export const brokenExternalLinksRule: Rule = {
         const detailsOf = (list: typeof all) => ({
           totalBroken: list.length,
           totalChecked: checkedCount,
-          deadHosts: list.filter((b) => b.link.error !== null && isDeadHostError(b.link.error)).length,
+          deadHosts: list.filter((b) => b.link.error !== null && isDeadHostError(b.link.error))
+            .length,
           verifiedWorking,
           totalFound: found,
         });
@@ -671,7 +680,11 @@ export const brokenExternalLinksRule: Rule = {
             ...(sources ? { sources } : {}),
             ...regionsField(placement.regions(l.href)),
             meta: l.unverifiedReason
-              ? { wafProvider: l.wafProvider, unverifiedReason: l.unverifiedReason, ...sectionMeta(sections) }
+              ? {
+                  wafProvider: l.wafProvider,
+                  unverifiedReason: l.unverifiedReason,
+                  ...sectionMeta(sections),
+                }
               : { wafProvider: l.wafProvider, ...sectionMeta(sections) },
           };
         }),

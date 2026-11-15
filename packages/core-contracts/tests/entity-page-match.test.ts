@@ -13,7 +13,7 @@ describe("matchesEntityPage", () => {
     "$pattern against $url matches: $matches",
     ({ pattern, url, matches }) => {
       expect(matchesEntityPage(url, pattern)).toBe(matches);
-    }
+    },
   );
 });
 

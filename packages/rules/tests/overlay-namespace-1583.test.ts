@@ -23,14 +23,20 @@ function parse(css: string) {
 }
 const fires = (css: string): boolean => {
   const { html, parsed } = parse(css);
-  const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
+  const ctx = {
+    page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+    parsed,
+    options: {},
+  } as unknown as RuleContext;
   return detectFakeAuthOverlay(ctx) !== null;
 };
 /** The tokens reading only: the other two split nested rules at their first `}`. */
 const nestedCover = (css: string): boolean => {
   const doc = parse(css).parsed.document!;
   const el = doc.querySelector("iframe")!;
-  return (["decided", "all"] as const).some((mode) => isCover(overlayGeometryFor(doc, el, "tokens", mode)));
+  return (["decided", "all"] as const).some((mode) =>
+    isCover(overlayGeometryFor(doc, el, "tokens", mode)),
+  );
 };
 
 /** Selectors Chrome accepts and applies to the cover iframe above. */
@@ -51,19 +57,41 @@ const ACCEPTED = [
 const ACCEPTED_NOT_APPLIED = ["|iframe.cover", "|*.cover", "|iframe#google-auth"];
 
 /** Asks headless Chrome which selectors it accepts and which match the cover iframe; undefined when Chrome is not installed. */
-function chromeVerdicts(selectors: readonly string[]): Record<string, { supported: boolean; matches: boolean }> | undefined {
-  const bin = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"].find((name) => Bun.which(name) !== null);
+function chromeVerdicts(
+  selectors: readonly string[],
+): Record<string, { supported: boolean; matches: boolean }> | undefined {
+  const bin = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"].find(
+    (name) => Bun.which(name) !== null,
+  );
   if (!bin) return undefined;
   const dir = mkdtempSync(join(tmpdir(), "overlay-ns-"));
   try {
     const file = join(dir, "page.html");
     const script = `const out={};const f=document.querySelector('iframe');for(const s of ${JSON.stringify(selectors)}){let m=false;try{m=f.matches(s)}catch{}out[s]={supported:CSS.supports('selector('+s+')'),matches:m}}document.getElementById('r').textContent=JSON.stringify(out)`;
-    writeFileSync(file, `<!doctype html><html><body>${COVER_FRAME}<pre id="r"></pre><script>${script}</script></body></html>`);
-    const run = Bun.spawnSync([bin, "--headless=new", "--no-sandbox", "--disable-gpu", `--user-data-dir=${join(dir, "profile")}`, "--dump-dom", `file://${file}`], { stdout: "pipe", stderr: "ignore", timeout: 30_000 });
+    writeFileSync(
+      file,
+      `<!doctype html><html><body>${COVER_FRAME}<pre id="r"></pre><script>${script}</script></body></html>`,
+    );
+    const run = Bun.spawnSync(
+      [
+        bin,
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-gpu",
+        `--user-data-dir=${join(dir, "profile")}`,
+        "--dump-dom",
+        `file://${file}`,
+      ],
+      { stdout: "pipe", stderr: "ignore", timeout: 30_000 },
+    );
     const dom = run.stdout.toString();
     const match = /<pre id="r">([\s\S]*?)<\/pre>/.exec(dom);
     if (!match) return undefined;
-    const json = match[1]!.replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+    const json = match[1]!
+      .replaceAll("&quot;", '"')
+      .replaceAll("&lt;", "<")
+      .replaceAll("&gt;", ">")
+      .replaceAll("&amp;", "&");
     try {
       return JSON.parse(json) as Record<string, { supported: boolean; matches: boolean }>;
     } catch {
@@ -103,7 +131,13 @@ describe("a namespace separator on a type or an attribute does not keep a cover 
   }
 
   test("a named namespace stays doubtful: the rule is read as of unknown applicability, as in v0.0.162", () => {
-    for (const sel of ["h|x", "h|iframe.cover", "h|*.cover", "[h|id=google-auth]", "iframe[h|id=google-auth]"]) {
+    for (const sel of [
+      "h|x",
+      "h|iframe.cover",
+      "h|*.cover",
+      "[h|id=google-auth]",
+      "iframe[h|id=google-auth]",
+    ]) {
       expect(selectorListState(sel, false), sel).toBe("doubtful");
     }
     for (const sel of ["h|iframe.cover", "h|*.cover", "iframe[h|id=google-auth]"]) {
@@ -125,12 +159,15 @@ describe("a namespace separator on a type or an attribute does not keep a cover 
   test("a table of forms against headless Chrome: a form it applies to the iframe is not silent", () => {
     const verdicts = chromeVerdicts([...ACCEPTED, ...ACCEPTED_NOT_APPLIED]);
     if (!verdicts) {
-      console.warn("headless Chrome is not available or gave odd output: the browser comparison is skipped");
+      console.warn(
+        "headless Chrome is not available or gave odd output: the browser comparison is skipped",
+      );
       return;
     }
     for (const sel of [...ACCEPTED, ...ACCEPTED_NOT_APPLIED]) {
       const v = verdicts[sel];
-      if (v?.supported && v.matches) expect(fires(`${sel}{${FIXED}}`), `Chrome applies ${sel}`).toBe(true);
+      if (v?.supported && v.matches)
+        expect(fires(`${sel}{${FIXED}}`), `Chrome applies ${sel}`).toBe(true);
     }
   }, 60_000);
 });

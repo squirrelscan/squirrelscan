@@ -133,7 +133,7 @@ function buildCheck(
   name: string,
   drifts: Drift[],
   message: string,
-  comparedPages: number
+  comparedPages: number,
 ): CheckResult {
   return {
     name,
@@ -271,8 +271,8 @@ export const sitemapLastmodDriftRule: Rule = {
           "sitemap-lastmod-behind-page",
           behind,
           `${behind.length} page(s) have a sitemap lastmod older than the page's own dateModified by more than ${opts.behind_days} day(s)`,
-          comparedPages
-        )
+          comparedPages,
+        ),
       );
     }
 
@@ -283,8 +283,8 @@ export const sitemapLastmodDriftRule: Rule = {
           "sitemap-lastmod-ahead-of-page",
           ahead,
           `${ahead.length} page(s) have a sitemap lastmod newer than the page's own dateModified by more than ${opts.ahead_days} day(s)`,
-          comparedPages
-        )
+          comparedPages,
+        ),
       );
     }
 

@@ -23,7 +23,15 @@ function baseReport(ruleResults: Record<string, ReportRuleResult>): AuditReport 
 
 function rule(id: string, name: string, checks: ReportRuleResult["checks"]): ReportRuleResult {
   return {
-    meta: { id, name, description: `${name} description`, category: "crawlability", scope: "site", severity: "warning", weight: 1 },
+    meta: {
+      id,
+      name,
+      description: `${name} description`,
+      category: "crawlability",
+      scope: "site",
+      severity: "warning",
+      weight: 1,
+    },
     checks,
   };
 }
@@ -35,7 +43,11 @@ const INFO_RULE = rule("crawl/robots-meta-conflict", "Robots conflicts", [
     message: "2 page(s) blocked in robots.txt also have noindex",
     pages: ["https://example.com/b", "https://example.com/a"],
   },
-  { name: "robots-conflict", status: "pass", message: "No robots meta/robots.txt conflicts detected" },
+  {
+    name: "robots-conflict",
+    status: "pass",
+    message: "No robots meta/robots.txt conflicts detected",
+  },
 ]);
 
 describe("info checks in the JSON report (#669)", () => {
@@ -66,7 +78,11 @@ describe("info checks in the JSON report (#669)", () => {
       renderJson(
         baseReport({
           "crawl/robots-meta-conflict": rule("crawl/robots-meta-conflict", "Robots conflicts", [
-            { name: "robots-conflict", status: "pass", message: "No robots meta/robots.txt conflicts detected" },
+            {
+              name: "robots-conflict",
+              status: "pass",
+              message: "No robots meta/robots.txt conflicts detected",
+            },
           ]),
         }),
       ),
@@ -82,13 +98,19 @@ describe("info checks in the JSON report (#669)", () => {
 
 describe("info checks in the LLM report (#669)", () => {
   test("off by default: the LLM report is read against a token budget", () => {
-    expect(renderLlm(baseReport({ "crawl/robots-meta-conflict": INFO_RULE }))).not.toContain("<info-checks");
+    expect(renderLlm(baseReport({ "crawl/robots-meta-conflict": INFO_RULE }))).not.toContain(
+      "<info-checks",
+    );
   });
 
   test("listed under <info-checks> with the page count when asked for", () => {
-    const llm = renderLlm(baseReport({ "crawl/robots-meta-conflict": INFO_RULE }), { includeInfo: true });
+    const llm = renderLlm(baseReport({ "crawl/robots-meta-conflict": INFO_RULE }), {
+      includeInfo: true,
+    });
     expect(llm).toContain('<info-checks count="1">');
-    expect(llm).toContain('<check rule="crawl/robots-meta-conflict" name="redundant-noindex" pages="2">');
+    expect(llm).toContain(
+      '<check rule="crawl/robots-meta-conflict" name="redundant-noindex" pages="2">',
+    );
     expect(llm).toContain("Pages: https://example.com/a, https://example.com/b");
   });
 
@@ -96,7 +118,12 @@ describe("info checks in the LLM report (#669)", () => {
     const many: Record<string, ReportRuleResult> = {};
     for (let i = 0; i < 40; i++) {
       many[`x/r${String(i).padStart(2, "0")}`] = rule(`x/r${String(i).padStart(2, "0")}`, `R${i}`, [
-        { name: "note", status: "info", message: "Nothing to check", pages: ["https://example.com/a"] },
+        {
+          name: "note",
+          status: "info",
+          message: "Nothing to check",
+          pages: ["https://example.com/a"],
+        },
       ]);
     }
     const llm = renderLlm(baseReport(many), { includeInfo: true });
@@ -107,9 +134,16 @@ describe("info checks in the LLM report (#669)", () => {
   });
 
   test("pages are capped at ten per check with the true count", () => {
-    const pages = Array.from({ length: 25 }, (_, i) => `https://example.com/p${String(i).padStart(2, "0")}`);
+    const pages = Array.from(
+      { length: 25 },
+      (_, i) => `https://example.com/p${String(i).padStart(2, "0")}`,
+    );
     const parsed = JSON.parse(
-      renderJson(baseReport({ "x/r": rule("x/r", "R", [{ name: "note", status: "info", message: "m", pages }]) })),
+      renderJson(
+        baseReport({
+          "x/r": rule("x/r", "R", [{ name: "note", status: "info", message: "m", pages }]),
+        }),
+      ),
     ) as { infoChecks: Array<{ pages: string[]; pagesCount: number; pagesHasMore: boolean }> };
     expect(parsed.infoChecks[0]!.pages).toHaveLength(10);
     expect(parsed.infoChecks[0]).toMatchObject({ pagesCount: 25, pagesHasMore: true });
@@ -136,7 +170,11 @@ describe("a rule that timed out is a skipped check (#518)", () => {
           ]),
         }),
       ),
-    ) as { skippedChecks?: Array<Record<string, unknown>>; summary: { skipped: number }; issues: unknown[] };
+    ) as {
+      skippedChecks?: Array<Record<string, unknown>>;
+      summary: { skipped: number };
+      issues: unknown[];
+    };
     expect(parsed.skippedChecks).toHaveLength(1);
     expect(parsed.skippedChecks![0]).toMatchObject({
       ruleId: "content/hidden-text",
@@ -190,7 +228,14 @@ describe("info check messages are clipped (#669)", () => {
     const parsed = JSON.parse(
       renderJson(
         baseReport({
-          "x/r": rule("x/r", "R", [{ name: "note", status: "info", message: "m".repeat(1_000_000), pages: ["https://example.com/a"] }]),
+          "x/r": rule("x/r", "R", [
+            {
+              name: "note",
+              status: "info",
+              message: "m".repeat(1_000_000),
+              pages: ["https://example.com/a"],
+            },
+          ]),
         }),
       ),
     ) as { infoChecks: Array<{ message: string }> };

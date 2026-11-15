@@ -28,7 +28,11 @@ function occurrence(overrides: Partial<ComponentOccurrence> = {}): ComponentOccu
     family: { key: sig("b"), structuralSignature: sig("b") },
     variant: { key: sig("c"), structuralSignature: sig("c"), contentHash: sig("d") },
     element: { locator: "footer:1>footer>a:1", structuralSignature: sig("e") },
-    defect: { kind: "link-text-generic", values: { text: "read more" }, valueHashes: { text: sig("f") } },
+    defect: {
+      kind: "link-text-generic",
+      values: { text: "read more" },
+      valueHashes: { text: sig("f") },
+    },
     ...overrides,
   };
 }
@@ -74,7 +78,9 @@ describe("component evidence codec", () => {
   test("distinct shapes stay distinct", () => {
     const packed = packComponentOccurrences([
       occurrence(),
-      occurrence({ variant: { key: sig("9"), structuralSignature: sig("9"), contentHash: sig("8") } }),
+      occurrence({
+        variant: { key: sig("9"), structuralSignature: sig("9"), contentHash: sig("8") },
+      }),
       occurrence(),
     ]);
     expect(packed.shapes).toHaveLength(2);

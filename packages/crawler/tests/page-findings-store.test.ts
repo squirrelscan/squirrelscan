@@ -186,9 +186,24 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertFindings([
-        finding({ locator: "old-resolved", state: "resolved", fingerprint: "r1", lastSeenAt: NOW - 200 * DAY }),
-        finding({ locator: "old-stale", state: "stale", fingerprint: "s1", lastSeenAt: NOW - 200 * DAY }),
-        finding({ locator: "recent-resolved", state: "resolved", fingerprint: "r2", lastSeenAt: NOW - 1 * DAY }),
+        finding({
+          locator: "old-resolved",
+          state: "resolved",
+          fingerprint: "r1",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+        finding({
+          locator: "old-stale",
+          state: "stale",
+          fingerprint: "s1",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+        finding({
+          locator: "recent-resolved",
+          state: "resolved",
+          fingerprint: "r2",
+          lastSeenAt: NOW - 1 * DAY,
+        }),
       ]),
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
@@ -204,18 +219,31 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertFindings([
-        finding({ locator: "ancient-open", state: "open", fingerprint: "o1", lastSeenAt: NOW - 9999 * DAY }),
-        finding({ locator: "ancient-open-carried", state: "open", provenance: "carried", fingerprint: "o2", lastSeenAt: NOW - 9999 * DAY }),
-        finding({ locator: "ancient-stale", state: "stale", fingerprint: "s1", lastSeenAt: NOW - 9999 * DAY }),
+        finding({
+          locator: "ancient-open",
+          state: "open",
+          fingerprint: "o1",
+          lastSeenAt: NOW - 9999 * DAY,
+        }),
+        finding({
+          locator: "ancient-open-carried",
+          state: "open",
+          provenance: "carried",
+          fingerprint: "o2",
+          lastSeenAt: NOW - 9999 * DAY,
+        }),
+        finding({
+          locator: "ancient-stale",
+          state: "stale",
+          fingerprint: "s1",
+          lastSeenAt: NOW - 9999 * DAY,
+        }),
       ]),
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
     expect(deleted).toBe(1); // only the stale row
     const left = await run(store.getFindings(SITE));
-    expect(left.map((f) => f.locator).sort()).toEqual([
-      "ancient-open",
-      "ancient-open-carried",
-    ]);
+    expect(left.map((f) => f.locator).sort()).toEqual(["ancient-open", "ancient-open-carried"]);
     expect(left.every((f) => f.state === "open")).toBe(true);
     await run(store.close());
   });
@@ -224,9 +252,21 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertSitePages([
-        sitePage({ normalizedUrl: "https://example.com/active-old", state: "active", lastSeenAt: NOW - 9999 * DAY }),
-        sitePage({ normalizedUrl: "https://example.com/removed-old", state: "removed", lastSeenAt: NOW - 200 * DAY }),
-        sitePage({ normalizedUrl: "https://example.com/removed-recent", state: "removed", lastSeenAt: NOW - 1 * DAY }),
+        sitePage({
+          normalizedUrl: "https://example.com/active-old",
+          state: "active",
+          lastSeenAt: NOW - 9999 * DAY,
+        }),
+        sitePage({
+          normalizedUrl: "https://example.com/removed-old",
+          state: "removed",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+        sitePage({
+          normalizedUrl: "https://example.com/removed-recent",
+          state: "removed",
+          lastSeenAt: NOW - 1 * DAY,
+        }),
       ]),
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
@@ -243,7 +283,12 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertFindings([
-        finding({ locator: "recent", state: "resolved", fingerprint: "r1", lastSeenAt: NOW - 10 * DAY }),
+        finding({
+          locator: "recent",
+          state: "resolved",
+          fingerprint: "r1",
+          lastSeenAt: NOW - 10 * DAY,
+        }),
       ]),
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
@@ -265,11 +310,14 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
       }),
     );
     // plus one open row that must be ignored by the cap entirely
-    await run(store.upsertFindings([...recent, finding({ locator: "keep-open", state: "open", fingerprint: "open" })]));
-
-    const deleted = await run(
-      store.compactFindings(SITE, { now: NOW, maxTerminalFindings: 2 }),
+    await run(
+      store.upsertFindings([
+        ...recent,
+        finding({ locator: "keep-open", state: "open", fingerprint: "open" }),
+      ]),
     );
+
+    const deleted = await run(store.compactFindings(SITE, { now: NOW, maxTerminalFindings: 2 }));
     expect(deleted).toBe(3); // 5 terminal - 2 kept
 
     const left = await run(store.getFindings(SITE));
@@ -283,12 +331,15 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     // many open rows, zero terminal → cap of 1 deletes nothing
     const opens = Array.from({ length: 10 }, (_, i) =>
-      finding({ locator: `o${i}`, state: "open", fingerprint: `fp${i}`, lastSeenAt: NOW - i * 1000 }),
+      finding({
+        locator: `o${i}`,
+        state: "open",
+        fingerprint: `fp${i}`,
+        lastSeenAt: NOW - i * 1000,
+      }),
     );
     await run(store.upsertFindings(opens));
-    const deleted = await run(
-      store.compactFindings(SITE, { now: NOW, maxTerminalFindings: 1 }),
-    );
+    const deleted = await run(store.compactFindings(SITE, { now: NOW, maxTerminalFindings: 1 }));
     expect(deleted).toBe(0);
     expect((await run(store.getFindings(SITE))).length).toBe(10);
     await run(store.close());
@@ -298,8 +349,20 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertFindings([
-        finding({ siteKey: SITE, locator: "a", state: "stale", fingerprint: "f1", lastSeenAt: NOW - 200 * DAY }),
-        finding({ siteKey: "https://other.com", locator: "b", state: "stale", fingerprint: "f2", lastSeenAt: NOW - 200 * DAY }),
+        finding({
+          siteKey: SITE,
+          locator: "a",
+          state: "stale",
+          fingerprint: "f1",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+        finding({
+          siteKey: "https://other.com",
+          locator: "b",
+          state: "stale",
+          fingerprint: "f2",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
       ]),
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));

@@ -283,10 +283,7 @@ describe("eeat/byline-consistency: verdicts", () => {
 
   test("judges author and date independently", async () => {
     // Every article is dated; 18 of 20 have an author.
-    const specs = [
-      ...pages(18, BYLINED),
-      ...pages(2, { pageType: "article", date: true }),
-    ];
+    const specs = [...pages(18, BYLINED), ...pages(2, { pageType: "article", date: true })];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
     expect(check.items).toHaveLength(1);

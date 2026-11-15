@@ -24,7 +24,9 @@ const BREADCRUMB_LD = {
 };
 
 function html(schema?: unknown): string {
-  const script = schema ? `<script type="application/ld+json">${JSON.stringify(schema)}</script>` : "";
+  const script = schema
+    ? `<script type="application/ld+json">${JSON.stringify(schema)}</script>`
+    : "";
   return `<html><head><title>Parts</title>${script}</head><body><p>content</p></body></html>`;
 }
 
@@ -32,7 +34,11 @@ function link(url: string, section?: LinkSection) {
   return { url, text: url, isInternal: true, ...(section ? { section } : {}) };
 }
 
-async function run(body: string, sections: (LinkSection | undefined)[], url = "https://example.com/parts/x"): Promise<CheckResult[]> {
+async function run(
+  body: string,
+  sections: (LinkSection | undefined)[],
+  url = "https://example.com/parts/x",
+): Promise<CheckResult[]> {
   const parsed = parsePage(body, url) as ParsedPage;
   const ctx: RuleContext = {
     page: { url, html: body, statusCode: 200, loadTime: 0, headers: {} },
@@ -44,7 +50,7 @@ async function run(body: string, sections: (LinkSection | undefined)[], url = "h
 
 describe("schema/breadcrumb with the breadcrumbs section", () => {
   test("one breadcrumb-section link and no BreadcrumbList is a fail", async () => {
-    const checks = (await run(html(), ["breadcrumbs", "navigation", "footer"]));
+    const checks = await run(html(), ["breadcrumbs", "navigation", "footer"]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.name).toBe("breadcrumb-schema");
     expect(checks[0]!.status).toBe("fail");
@@ -53,14 +59,14 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
   });
 
   test("two breadcrumb-section links report the count", async () => {
-    const checks = (await run(html(), ["breadcrumbs", "breadcrumbs", "navigation"]));
+    const checks = await run(html(), ["breadcrumbs", "breadcrumbs", "navigation"]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("fail");
     expect(checks[0]!.details).toEqual({ trailLinks: 2 });
   });
 
   test("links in other sections only: the old info check, unchanged", async () => {
-    const checks = (await run(html(), ["navigation", "header", "footer", "sidebar"]));
+    const checks = await run(html(), ["navigation", "header", "footer", "sidebar"]);
     expect(checks).toEqual([
       {
         name: "breadcrumb-schema",
@@ -72,7 +78,7 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
   });
 
   test("no section on any link (classifier off) is the old info check, unchanged", async () => {
-    const checks = (await run(html(), [undefined, undefined, undefined]));
+    const checks = await run(html(), [undefined, undefined, undefined]);
     expect(checks).toEqual([
       {
         name: "breadcrumb-schema",
@@ -84,7 +90,7 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
   });
 
   test("a BreadcrumbList that is declared passes whatever the sections say", async () => {
-    const checks = (await run(html(BREADCRUMB_LD), ["breadcrumbs", "breadcrumbs", "breadcrumbs"]));
+    const checks = await run(html(BREADCRUMB_LD), ["breadcrumbs", "breadcrumbs", "breadcrumbs"]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.name).toBe("breadcrumb-valid");
     expect(checks[0]!.status).toBe("pass");
@@ -93,7 +99,7 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
   test("a trail marked up as microdata is described: no finding", async () => {
     const body =
       '<html><head><title>x</title></head><body><ol itemscope itemtype="http://schema.org/BreadcrumbList"><li>Docs</li></ol></body></html>';
-    const checks = (await run(body, ["breadcrumbs"]));
+    const checks = await run(body, ["breadcrumbs"]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("info");
     expect(checks[0]!.message).toBe("No BreadcrumbList schema found");
@@ -101,7 +107,7 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
 
   test("a URL-prefixed @type is the same type: no fail, and it is validated", async () => {
     const prefixed = { ...BREADCRUMB_LD, "@type": "https://schema.org/BreadcrumbList" };
-    const checks = (await run(html(prefixed), ["breadcrumbs", "breadcrumbs"]));
+    const checks = await run(html(prefixed), ["breadcrumbs", "breadcrumbs"]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.name).toBe("breadcrumb-valid");
     expect(checks[0]!.status).toBe("pass");
@@ -109,30 +115,42 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
 
   test("a URL-prefixed @type inside an array is the same type", async () => {
     const prefixed = { ...BREADCRUMB_LD, "@type": ["Thing", "https://schema.org/BreadcrumbList"] };
-    const checks = (await run(html(prefixed), ["breadcrumbs"]));
+    const checks = await run(html(prefixed), ["breadcrumbs"]);
     expect(checks.map((c) => c.name)).toEqual(["breadcrumb-valid"]);
   });
 
   test("a BreadcrumbList nested in another node is described: no fail", async () => {
-    const nested = { "@context": "https://schema.org", "@type": "WebPage", breadcrumb: BREADCRUMB_LD };
-    const checks = (await run(html(nested), ["breadcrumbs", "breadcrumbs"]));
+    const nested = {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      breadcrumb: BREADCRUMB_LD,
+    };
+    const checks = await run(html(nested), ["breadcrumbs", "breadcrumbs"]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("info");
     expect(checks[0]!.message).toBe("No BreadcrumbList schema found");
   });
 
   test("markup too large to read is an info check, not a fail", async () => {
-    const filler = '<i itemtype="https://example.com/Thing"></i>'.repeat(MAX_ANNOTATED_ELEMENTS + 1);
-    const checks = (await run(`<html><head><title>x</title></head><body>${filler}</body></html>`, ["breadcrumbs"]));
+    const filler = '<i itemtype="https://example.com/Thing"></i>'.repeat(
+      MAX_ANNOTATED_ELEMENTS + 1,
+    );
+    const checks = await run(`<html><head><title>x</title></head><body>${filler}</body></html>`, [
+      "breadcrumbs",
+    ]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("info");
     expect(checks[0]!.message).toBe(UNREADABLE_MESSAGE);
   });
 
   test("the homepage is still skipped", async () => {
-    const checks = (await run(html(), ["breadcrumbs", "breadcrumbs"], "https://example.com/"));
+    const checks = await run(html(), ["breadcrumbs", "breadcrumbs"], "https://example.com/");
     expect(checks).toEqual([
-      { name: "breadcrumb-schema", status: "info", message: "Homepage - breadcrumbs not typically needed" },
+      {
+        name: "breadcrumb-schema",
+        status: "info",
+        message: "Homepage - breadcrumbs not typically needed",
+      },
     ]);
   });
 

@@ -341,11 +341,7 @@ export function fixGroupLine(
  * the fallback for a single element with no label, and neither appears when a
  * unit spans several elements (no single slot describes them).
  */
-function fixPrefix(
-  group: ComponentFixGroup,
-  slot: string | undefined,
-  variantCount = 1,
-): string {
+function fixPrefix(group: ComponentFixGroup, slot: string | undefined, variantCount = 1): string {
   const label = describeRoot(group);
   const region = describeRegion(group);
   // Structural variants are stated, not hidden: the same repair covers two

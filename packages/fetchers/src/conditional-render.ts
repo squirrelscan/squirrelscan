@@ -161,7 +161,11 @@ export function createConditionalRenderDocumentFetcher(
         const rendered = await opts.render.fetch(req);
         const probe = await settleWithin(probePromise, bootstrapProbeGraceMs);
         if (probe && probe.status >= 200 && probe.status < 300 && !isDefinitelyNonHtml(probe)) {
-          return { ...rendered, sourceHash: computeSourceFingerprint(probe.body), serverHtml: probe.body };
+          return {
+            ...rendered,
+            sourceHash: computeSourceFingerprint(probe.body),
+            serverHtml: probe.body,
+          };
         }
         return rendered;
       }

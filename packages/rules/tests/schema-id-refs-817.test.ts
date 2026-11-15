@@ -28,7 +28,11 @@ async function run(rule: Rule, ...blocks: unknown[]): Promise<Record<string, str
     options: {},
   } as unknown as RuleContext;
   const out: Record<string, string> = {};
-  for (const c of (await rule.run(ctx)).checks as Array<{ name: string; status: string; message: string }>) {
+  for (const c of (await rule.run(ctx)).checks as Array<{
+    name: string;
+    status: string;
+    message: string;
+  }>) {
     // A rule may emit a warn and a pass under one name: keep both.
     out[out[c.name] ? `${c.name}#${c.status}` : c.name] = `${c.status}: ${c.message}`;
   }
@@ -68,16 +72,28 @@ describe("schema/faq — mainEntity @id references (pub#817)", () => {
   });
 
   test("a reference to a node in another script on the page resolves too", async () => {
-    const faq = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: [{ "@id": `${BASE}#q1` }, { "@id": `${BASE}#q2` }] };
-    const questions = { "@context": "https://schema.org", "@graph": [question("q1"), question("q2")] };
-    expect((await run(faqRule, faq, questions))["faq-valid"]).toBe("pass: FAQPage has 2 valid question(s)");
+    const faq = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: [{ "@id": `${BASE}#q1` }, { "@id": `${BASE}#q2` }],
+    };
+    const questions = {
+      "@context": "https://schema.org",
+      "@graph": [question("q1"), question("q2")],
+    };
+    expect((await run(faqRule, faq, questions))["faq-valid"]).toBe(
+      "pass: FAQPage has 2 valid question(s)",
+    );
   });
 
   test("a dangling reference, or a referenced Question without an answer, is still reported", async () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
-        { "@type": "FAQPage", mainEntity: [{ "@id": `${BASE}#q1` }, { "@id": `${BASE}#gone` }, { "@id": `${BASE}#q3` }] },
+        {
+          "@type": "FAQPage",
+          mainEntity: [{ "@id": `${BASE}#q1` }, { "@id": `${BASE}#gone` }, { "@id": `${BASE}#q3` }],
+        },
         question("q1"),
         question("q3", { acceptedAnswer: undefined }),
       ],
@@ -90,8 +106,14 @@ describe("schema/faq — mainEntity @id references (pub#817)", () => {
 
 describe("schema/faq — entries that are not objects (pub#817 review)", () => {
   test("a null or a bare string in mainEntity is an invalid question, not a crash", async () => {
-    const faq = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: [null, "What?", question("q1")] };
-    expect(await run(faqRule, faq)).toMatchObject({ "faq-questions": "warn: 2 question(s) missing required properties" });
+    const faq = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: [null, "What?", question("q1")],
+    };
+    expect(await run(faqRule, faq)).toMatchObject({
+      "faq-questions": "warn: 2 question(s) missing required properties",
+    });
   });
 });
 
@@ -103,7 +125,7 @@ describe("schema/review — entries that are not objects (pub#817 review)", () =
       name: "p",
       review: [null, "great", { "@type": "Review", author: "a", reviewRating: { ratingValue: 5 } }],
     };
-    const out = (await run(reviewRule, product));
+    const out = await run(reviewRule, product);
     expect(out["individual-reviews"]).toStartWith("pass:");
   });
 });
@@ -113,8 +135,19 @@ describe("schema/product and schema/review — @id references (pub#817)", () => 
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
-        { "@type": "Product", name: "Chair", image: `${BASE}c.jpg`, offers: { "@id": `${BASE}#offer` } },
-        { "@type": "Offer", "@id": `${BASE}#offer`, price: "10", priceCurrency: "EUR", availability: "https://schema.org/InStock" },
+        {
+          "@type": "Product",
+          name: "Chair",
+          image: `${BASE}c.jpg`,
+          offers: { "@id": `${BASE}#offer` },
+        },
+        {
+          "@type": "Offer",
+          "@id": `${BASE}#offer`,
+          price: "10",
+          priceCurrency: "EUR",
+          availability: "https://schema.org/InStock",
+        },
       ],
     };
     expect((await run(productRule, graph))["product-offer-details"]).toBeUndefined();
@@ -130,7 +163,12 @@ describe("schema/product and schema/review — @id references (pub#817)", () => 
           aggregateRating: { "@id": `${BASE}#rating` },
           review: [{ "@id": `${BASE}#r1` }],
         },
-        { "@type": "AggregateRating", "@id": `${BASE}#rating`, ratingValue: "4.5", reviewCount: "12" },
+        {
+          "@type": "AggregateRating",
+          "@id": `${BASE}#rating`,
+          ratingValue: "4.5",
+          reviewCount: "12",
+        },
         {
           "@type": "Review",
           "@id": `${BASE}#r1`,
@@ -139,7 +177,7 @@ describe("schema/product and schema/review — @id references (pub#817)", () => 
         },
       ],
     };
-    const result = (await run(reviewRule, graph));
+    const result = await run(reviewRule, graph);
     expect(result["aggregate-rating"]).toStartWith("pass");
     expect(Object.values(result).filter((v) => v.startsWith("warn"))).toEqual([]);
     expect(Object.values(result).join("\n")).toContain("1 valid review");
@@ -176,7 +214,12 @@ describe("@id resolution edge cases (pub#817 review)", () => {
             availability: "https://schema.org/InStock",
           },
         },
-        { "@type": "Product", name: "Chair", image: `${BASE}c.jpg`, offers: { "@id": `${BASE}#offer` } },
+        {
+          "@type": "Product",
+          name: "Chair",
+          image: `${BASE}c.jpg`,
+          offers: { "@id": `${BASE}#offer` },
+        },
       ],
     };
     expect((await run(productRule, graph))["product-offer-details"]).toBeUndefined();
@@ -186,13 +229,23 @@ describe("@id resolution edge cases (pub#817 review)", () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
-        { "@type": "Product", name: "Chair", review: [{ "@id": `${BASE}#r1` }], aggregateRating: { "@id": `${BASE}#rating` } },
+        {
+          "@type": "Product",
+          name: "Chair",
+          review: [{ "@id": `${BASE}#r1` }],
+          aggregateRating: { "@id": `${BASE}#rating` },
+        },
         { "@type": "Review", "@id": `${BASE}#r1` },
-        { "@type": "AggregateRating", "@id": `${BASE}#rating`, ratingValue: "4.5", reviewCount: "12" },
+        {
+          "@type": "AggregateRating",
+          "@id": `${BASE}#rating`,
+          ratingValue: "4.5",
+          reviewCount: "12",
+        },
         { "@type": "AggregateRating", "@id": `${BASE}#rating` },
       ],
     };
-    const result = (await run(reviewRule, graph));
+    const result = await run(reviewRule, graph);
     expect(result["individual-reviews"]).toBe("warn: 1 review(s) missing author or rating");
     expect(result["aggregate-rating"]).toStartWith("pass");
   });

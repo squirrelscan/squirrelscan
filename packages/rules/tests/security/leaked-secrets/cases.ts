@@ -66,7 +66,11 @@ function seedOf(id: string): number {
   return h >>> 0;
 }
 
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 
 /** `Stripe Live Key` -> `stripeLiveKey`, the object key a prefixed value sits under. */
 function keyNameFor(g: Generator): string {
@@ -124,7 +128,10 @@ function draw(g: Generator, id: string): Generated | null {
 /** Does the value fire its own pattern in the plainest assignment there is? */
 function firesBare(g: Generator, value: Generated): boolean {
   const keyName = g.keyName ?? "value";
-  const js = g.tier === "assignment" ? `var c={${value.text}};` : `var c={${keyName}:${JSON.stringify(value.text)}};`;
+  const js =
+    g.tier === "assignment"
+      ? `var c={${value.text}};`
+      : `var c={${keyName}:${JSON.stringify(value.text)}};`;
   return scanContent(js, "inline-script").length > 0;
 }
 
@@ -177,62 +184,80 @@ const SERVER_ONLY = new Set([
 
 function escalate(pattern: string, check: Check, location: string): Check {
   const served = location.startsWith("inline-script") || location.startsWith("external-script");
-  return SERVER_ONLY.has(pattern) && served && (check === "high" || check === "medium") ? "critical" : check;
+  return SERVER_ONLY.has(pattern) && served && (check === "high" || check === "medium")
+    ? "critical"
+    : check;
 }
 
 const POSITIVES: Case[] = GENERATORS.flatMap((g) => {
   // A stale generator (its pattern deleted or renamed) builds no cases, so the
   // coverage meta-test can report it as stale instead of the build throwing.
   if (!DETECTOR_PATTERNS.has(g.pattern)) {
-    HARNESS_ERRORS.push(`generator for pattern "${g.pattern}" has no FAST or CONTEXT pattern of that name`);
+    HARNESS_ERRORS.push(
+      `generator for pattern "${g.pattern}" has no FAST or CONTEXT pattern of that name`,
+    );
     return [];
   }
-  return CONTEXTS.filter((c) => c.accepts.includes(g.tier) && !g.notIn?.includes(c.id)).flatMap((c): Case[] => {
-    const id = `${slug(g.pattern)}@${c.id}`;
-    const value = draw(g, id);
-    if (value === null) return [];
-    const keyName = keyNameFor(g);
-    const embedded = c.embedTiered(value, keyName, g.tier);
+  return CONTEXTS.filter((c) => c.accepts.includes(g.tier) && !g.notIn?.includes(c.id)).flatMap(
+    (c): Case[] => {
+      const id = `${slug(g.pattern)}@${c.id}`;
+      const value = draw(g, id);
+      if (value === null) return [];
+      const keyName = keyNameFor(g);
+      const embedded = c.embedTiered(value, keyName, g.tier);
 
-    const gap = PATTERN_GAPS[g.pattern];
-    const claimed = g.tier === "keyed" && c.claims ? c.claims : g.pattern;
-    const pattern = gap ? gap.expectPattern : claimed === g.pattern && g.reportedAs ? g.reportedAs : claimed;
-    // A generator says which check its value lands in when a decoder (#361)
-    // moves it off the pattern's tier; a context that claims the value first
-    // (`Bearer …`) reports under its own pattern's tier instead.
-    const tier =
-      pattern === (g.reportedAs ?? g.pattern) && g.check ? g.check : pattern ? checkFor(pattern) : "medium";
-    const check = escalate(pattern ?? "", tier, c.location);
-    const expect: Expectation[] = pattern ? [{ pattern, check, location: c.location }] : [];
-    let knownGap = gap?.gap;
+      const gap = PATTERN_GAPS[g.pattern];
+      const claimed = g.tier === "keyed" && c.claims ? c.claims : g.pattern;
+      const pattern = gap
+        ? gap.expectPattern
+        : claimed === g.pattern && g.reportedAs
+          ? g.reportedAs
+          : claimed;
+      // A generator says which check its value lands in when a decoder (#361)
+      // moves it off the pattern's tier; a context that claims the value first
+      // (`Bearer …`) reports under its own pattern's tier instead.
+      const tier =
+        pattern === (g.reportedAs ?? g.pattern) && g.check
+          ? g.check
+          : pattern
+            ? checkFor(pattern)
+            : "medium";
+      const check = escalate(pattern ?? "", tier, c.location);
+      const expect: Expectation[] = pattern ? [{ pattern, check, location: c.location }] : [];
+      let knownGap = gap?.gap;
 
-    if (c.claims === "Bearer Token" && g.tier === "keyed" && !BEARER_RE.test(`Bearer ${value.text}`)) {
-      // Under the Bearer pattern's 20-character floor. `Bearer ` IS a value
-      // position now (#2218), so the keyword tier reaches the value; it is the
-      // floor alone that leaves nothing to report.
-      expect.length = 0;
-      knownGap =
-        "`Authorization: Bearer <value>` with a value under 20 chars (LinkedIn's 16) is reported by neither tier: the Bearer pattern has a 20-char floor, and the keyword tier needs its brand word within the look-behind, which the scheme has pushed out of reach";
-    }
+      if (
+        c.claims === "Bearer Token" &&
+        g.tier === "keyed" &&
+        !BEARER_RE.test(`Bearer ${value.text}`)
+      ) {
+        // Under the Bearer pattern's 20-character floor. `Bearer ` IS a value
+        // position now (#2218), so the keyword tier reaches the value; it is the
+        // floor alone that leaves nothing to report.
+        expect.length = 0;
+        knownGap =
+          "`Authorization: Bearer <value>` with a value under 20 chars (LinkedIn's 16) is reported by neither tier: the Bearer pattern has a 20-char floor, and the keyword tier needs its brand word within the look-behind, which the scheme has pushed out of reach";
+      }
 
-    if (c.claims === "Bearer Token" && g.tier === "prefixed" && bearerDuplicate(value.text)) {
-      expect.push({ pattern: "Bearer Token", check: "medium", location: c.location });
-      knownGap =
-        "`Authorization: Bearer <value>` around a value with a `.`, `;` or `%` (JWTs, OAuth client ids, Azure strings) reports a second medium \"Bearer Token\" for the prefix: a duplicate, and for a public-tier key a false warning";
-    }
+      if (c.claims === "Bearer Token" && g.tier === "prefixed" && bearerDuplicate(value.text)) {
+        expect.push({ pattern: "Bearer Token", check: "medium", location: c.location });
+        knownGap =
+          '`Authorization: Bearer <value>` around a value with a `.`, `;` or `%` (JWTs, OAuth client ids, Azure strings) reports a second medium "Bearer Token" for the prefix: a duplicate, and for a public-tier key a false warning';
+      }
 
-    return [
-      {
-        id,
-        url: "https://app.acme.test/dashboard",
-        html: embedded.html,
-        scripts: embedded.scripts,
-        expect,
-        secret: value.secret,
-        knownGap,
-      },
-    ];
-  });
+      return [
+        {
+          id,
+          url: "https://app.acme.test/dashboard",
+          html: embedded.html,
+          scripts: embedded.scripts,
+          expect,
+          secret: value.secret,
+          knownGap,
+        },
+      ];
+    },
+  );
 });
 
 // Probes for defects that are about interaction between patterns or about the
@@ -248,7 +273,10 @@ const inline = (js: string) =>
 
 // Each probe draws from its own id-seeded RNG, so adding or reordering one
 // changes nothing else (and nothing in the snapshot but its own rows).
-const probe = (id: string, build: (r: ReturnType<typeof seededRng>) => Omit<Case, "id" | "url">): Case => ({
+const probe = (
+  id: string,
+  build: (r: ReturnType<typeof seededRng>) => Omit<Case, "id" | "url">,
+): Case => ({
   id: `probe:${id}`,
   url: URL,
   ...build(seededRng(seedOf(`probe:${id}`))),
@@ -279,11 +307,15 @@ const PROBES: Case[] = [
   // reads as one however it is spelt (#357). The identifier heuristic still
   // applies to unquoted values (`apiKey: getSegmentKey`).
   probe("keyed-value-opening-camelcase-is-kept-when-quoted", (r) => ({
-    html: inline(`window.__CFG__={cohereKey:"ab${runOf(r, "CDEFGHJKLMNPQRSTUVWXYZ", 1)}${runOf(r, ALNUM, 37)}"};`),
+    html: inline(
+      `window.__CFG__={cohereKey:"ab${runOf(r, "CDEFGHJKLMNPQRSTUVWXYZ", 1)}${runOf(r, ALNUM, 37)}"};`,
+    ),
     expect: [{ pattern: "Cohere API Key", check: "medium", location: "inline-script" }],
   })),
   probe("keyed-value-with-underscore-is-kept-when-quoted", (r) => ({
-    html: inline(`window.__CFG__={cloudflareToken:"${runOf(r, DIGIT, 1)}${runOf(r, LOWER + DIGIT, 20)}_${runOf(r, LOWER + DIGIT, 18)}"};`),
+    html: inline(
+      `window.__CFG__={cloudflareToken:"${runOf(r, DIGIT, 1)}${runOf(r, LOWER + DIGIT, 20)}_${runOf(r, LOWER + DIGIT, 18)}"};`,
+    ),
     expect: [{ pattern: "Cloudflare API Token", check: "medium", location: "inline-script" }],
   })),
   probe("keyed-value-with-verb-prefix-is-kept-when-quoted", (r) => ({
@@ -297,11 +329,15 @@ const PROBES: Case[] = [
     expect: [{ pattern: "Algolia API Key", check: "medium", location: "html" }],
   })),
   probe("keyed-identifier-unquoted-is-still-dropped", () => ({
-    html: inline(`window.__CFG__={segmentKey:segmentAnalyticsMiddlewareFactoryInstance,mistralKey:getMistralCredential()};`),
+    html: inline(
+      `window.__CFG__={segmentKey:segmentAnalyticsMiddlewareFactoryInstance,mistralKey:getMistralCredential()};`,
+    ),
     expect: [],
   })),
   probe("digitalocean-spaces-eats-new-relic", (r) => ({
-    html: inline(`window.__NR__={licenseKey:"${runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ0123456789", 20)}DO${runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ0123456789", 18)}${["NR", "AL"].join("")}"};`),
+    html: inline(
+      `window.__NR__={licenseKey:"${runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ0123456789", 20)}DO${runOf(r, "ABCEFGHJKLMNPQRSTUVWXYZ0123456789", 18)}${["NR", "AL"].join("")}"};`,
+    ),
     // DigitalOcean Spaces `DO[A-Z0-9]{20,}` used to run before New Relic and
     // claim the tail. It runs after now, and the tail is mid-token anyway.
     expect: [{ pattern: "New Relic License Key", check: "high", location: "inline-script" }],
@@ -312,28 +348,38 @@ const PROBES: Case[] = [
     // list used to be substring tests over the whole value and dropped it;
     // it is anchored to the value's head and tail now (#357). The checksum
     // is valid (#361), so the token reports.
-    html: inline(`window.__T__={${["gh", "p_"].join("")}:"${githubTokenFrom(["gh", "p_"].join(""), `${runOf(r, ALNUM, 14)}Xxx${runOf(r, ALNUM, 13)}`)}"};`),
+    html: inline(
+      `window.__T__={${["gh", "p_"].join("")}:"${githubTokenFrom(["gh", "p_"].join(""), `${runOf(r, ALNUM, 14)}Xxx${runOf(r, ALNUM, 13)}`)}"};`,
+    ),
     expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "inline-script" }],
   })),
   probe("supabase-service-role-jwt-is-called-public", (r) => ({
-    html: inline(`const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "service_role"))});`),
+    html: inline(
+      `const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "service_role"))});`,
+    ),
     // The anon and service-role keys are both HS256 JWTs from the same
     // issuer; only the `role` claim differs, and the detector decodes it (#361).
-    expect: [{ pattern: "Supabase Service Role JWT", check: "critical", location: "inline-script" }],
+    expect: [
+      { pattern: "Supabase Service Role JWT", check: "critical", location: "inline-script" },
+    ],
     mustNotFire: ["Supabase Anon Key"],
   })),
 
   // ── Token structure (#361) ────────────────────────────────────────────
   probe("aws-key-id-outside-base32-is-medium", (r) => ({
     // `0`, `1`, `8`, `9` are not base32: no account id decodes, so not high.
-    html: inline(`window.__S3__={accessKeyId:"${["AK", "IA"].join("")}${runOf(r, "0189", 4)}${awsKeySuffix(r).slice(4)}",aws_secret_access_key:"${mixedRun(r, 40)}"};`),
+    html: inline(
+      `window.__S3__={accessKeyId:"${["AK", "IA"].join("")}${runOf(r, "0189", 4)}${awsKeySuffix(r).slice(4)}",aws_secret_access_key:"${mixedRun(r, 40)}"};`,
+    ),
     expect: [
       { pattern: "AWS Access Key ID", check: "medium", location: "inline-script" },
       { pattern: "AWS Secret Access Key", check: "critical", location: "inline-script" },
     ],
   })),
   probe("aws-key-id-in-base32-is-high", (r) => ({
-    html: inline(`window.__S3__={accessKeyId:"${["AK", "IA"].join("")}${awsKeySuffix(r)}",aws_secret_access_key:"${mixedRun(r, 40)}"};`),
+    html: inline(
+      `window.__S3__={accessKeyId:"${["AK", "IA"].join("")}${awsKeySuffix(r)}",aws_secret_access_key:"${mixedRun(r, 40)}"};`,
+    ),
     expect: [
       { pattern: "AWS Access Key ID", check: "high", location: "inline-script" },
       { pattern: "AWS Secret Access Key", check: "critical", location: "inline-script" },
@@ -355,11 +401,15 @@ const PROBES: Case[] = [
     expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "inline-script" }],
   })),
   probe("supabase-anon-jwt-is-public", (r) => ({
-    html: inline(`const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "anon"))});`),
+    html: inline(
+      `const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "anon"))});`,
+    ),
     expect: [{ pattern: "Supabase Anon Key", check: "public", location: "inline-script" }],
   })),
   probe("expired-supabase-jwt-is-info", (r) => ({
-    html: inline(`const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "service_role", 1600000000))});`),
+    html: inline(
+      `const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "service_role", 1600000000))});`,
+    ),
     expect: [{ pattern: "Supabase JWT (expired)", check: "info", location: "inline-script" }],
     mustNotFire: ["Supabase Service Role JWT", "Supabase Anon Key"],
   })),
@@ -417,7 +467,16 @@ const PROBES: Case[] = [
   // an RSC flight payload's escaped JSON) or a credential key keeps the tier
   // the claims decode to, minimum medium.
   probe("session-shaped-jwt-in-an-rsc-flight-authorization-header-is-medium", (r) => {
-    const token = issuerJwt(r, { iss: "https://vercel.acme.test", sub: `dpl_${runOf(r, ALNUM, 12)}`, iat: 2000000000 - 600, exp: 2000000000 }, "RS256");
+    const token = issuerJwt(
+      r,
+      {
+        iss: "https://vercel.acme.test",
+        sub: `dpl_${runOf(r, ALNUM, 12)}`,
+        iat: 2000000000 - 600,
+        exp: 2000000000,
+      },
+      "RS256",
+    );
     return {
       html: inline(
         `self.__next_f.push([1,"3:{\\"x-vercel-sc-headers\\":\\"{\\\\\\"Authorization\\\\\\":\\\\\\"Bearer ${token}\\\\\\"}\\",\\"x-vercel-sc-host\\":\\"sc.acme.test\\"}\n"])`,
@@ -448,7 +507,11 @@ const PROBES: Case[] = [
     expect: [{ pattern: "Session Token (JWT)", check: "info", location: "inline-script" }],
   })),
   probe("session-jwt-in-a-data-attribute-is-info", (r) => {
-    const token = issuerJwt(r, { sid: runOf(r, ALNUM, 24), iat: 2000000000 - 3600, exp: 2000000000 }, "ES256");
+    const token = issuerJwt(
+      r,
+      { sid: runOf(r, ALNUM, 24), iat: 2000000000 - 3600, exp: 2000000000 },
+      "ES256",
+    );
     return {
       html: `<!DOCTYPE html><html><head><title>x</title></head><body><div id="app" data-session="${token}"></div></body></html>`,
       expect: [{ pattern: "Session Token (JWT)", check: "info", location: "html" }],
@@ -462,8 +525,12 @@ const PROBES: Case[] = [
   })),
   probe("rs256-supabase-service-role-jwt-is-high", (r) => ({
     // Which token it is comes from the claims, not from the header literal.
-    html: inline(`const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co","${issuerJwt(r, { iss: "supabase", ref: runOf(r, LOWER, 20), role: "service_role", exp: 2000000000 }, "RS256")}");`),
-    expect: [{ pattern: "Supabase Service Role JWT", check: "critical", location: "inline-script" }],
+    html: inline(
+      `const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co","${issuerJwt(r, { iss: "supabase", ref: runOf(r, LOWER, 20), role: "service_role", exp: 2000000000 }, "RS256")}");`,
+    ),
+    expect: [
+      { pattern: "Supabase Service Role JWT", check: "critical", location: "inline-script" },
+    ],
   })),
   probe("shopify-storefront-jwt-is-public", (r) => ({
     // Shopify's boot code on every page of a shop: issued by the shop's own
@@ -510,15 +577,21 @@ const PROBES: Case[] = [
     expect: [{ pattern: "JSON Web Token (admin scope)", check: "high", location: "inline-script" }],
   })),
   probe("algolia-secured-key-without-restrictions-is-medium", (r) => ({
-    html: inline(`window.__ALGOLIA__={appId:"${runOf(r, UPPER, 10)}",algoliaSearchKey:"${algoliaSecuredKey(r, "")}"};`),
+    html: inline(
+      `window.__ALGOLIA__={appId:"${runOf(r, UPPER, 10)}",algoliaSearchKey:"${algoliaSecuredKey(r, "")}"};`,
+    ),
     expect: [{ pattern: "Algolia Secured API Key", check: "medium", location: "inline-script" }],
   })),
   probe("algolia-admin-shaped-hex-is-medium", (r) => ({
-    html: inline(`window.__ALGOLIA__={appId:"${runOf(r, UPPER, 10)}",algoliaKey:"${runOf(r, DIGIT, 1)}${runOf(r, HEX, 31)}"};`),
+    html: inline(
+      `window.__ALGOLIA__={appId:"${runOf(r, UPPER, 10)}",algoliaKey:"${runOf(r, DIGIT, 1)}${runOf(r, HEX, 31)}"};`,
+    ),
     expect: [{ pattern: "Algolia API Key", check: "medium", location: "inline-script" }],
   })),
   probe("base64-near-algolia-that-is-not-a-secured-key-is-silent", (r) => ({
-    html: inline(`window.__ALGOLIA__={appId:"${runOf(r, UPPER, 10)}",algoliaSearchKey:"${Buffer.from(runOf(r, LOWER + " ", 90)).toString("base64")}"};`),
+    html: inline(
+      `window.__ALGOLIA__={appId:"${runOf(r, UPPER, 10)}",algoliaSearchKey:"${Buffer.from(runOf(r, LOWER + " ", 90)).toString("base64")}"};`,
+    ),
     expect: [],
     mustNotFire: ["Algolia Secured API Key"],
   })),
@@ -526,7 +599,9 @@ const PROBES: Case[] = [
   // ── Encoded content (#360): the boundaries ────────────────────────────
   probe("entity-encoded-prefix-characters-still-report", (r) => {
     const key = ["s", "k_li", "ve_"].join("") + runOf(r, ALNUM, 24);
-    const encoded = [...key].map((c, i) => (i % 2 ? `&#${c.charCodeAt(0)};` : `&#x${c.charCodeAt(0).toString(16)};`)).join("");
+    const encoded = [...key]
+      .map((c, i) => (i % 2 ? `&#${c.charCodeAt(0)};` : `&#x${c.charCodeAt(0).toString(16)};`))
+      .join("");
     return {
       html: `<!DOCTYPE html><html><head><title>x</title></head><body><div data-stripe-key="${encoded}"></div></body></html>`,
       secret: key,
@@ -567,21 +642,34 @@ const PROBES: Case[] = [
   }),
   probe("base64-is-unwrapped-two-levels-and-no-further", (r) => {
     const key = githubToken(r, ["gh", "p_"].join(""));
-    const one = Buffer.from(`{"config":{"token":"${key}","locale":"en-GB","theme":"dark"}}`).toString("base64");
+    const one = Buffer.from(
+      `{"config":{"token":"${key}","locale":"en-GB","theme":"dark"}}`,
+    ).toString("base64");
     const two = Buffer.from(`{"payload":"${one}","v":2}`).toString("base64");
     const three = Buffer.from(`{"outer":"${two}","v":3}`).toString("base64");
     return {
       html: inline(`window.__TWO__="${two}";window.__THREE__="${three}";`),
       secret: key,
       // Two levels reports it, three does not; one finding for the value.
-      expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "inline-script (base64)" }],
+      expect: [
+        {
+          pattern: "GitHub Personal Access Token",
+          check: "high",
+          location: "inline-script (base64)",
+        },
+      ],
     };
   }),
   probe("url-encoded-settings-with-a-publishable-key-and-a-keyed-value", (r) => {
     // The real-corpus shape: a Stripe publishable key and a hex value under a
     // keyed name, both inside one URL-encoded JSON document.
     const pk = ["p", "k_li", "ve_"].join("") + runOf(r, ALNUM, 24);
-    const settings = JSON.stringify({ key: pk, currency: "usd", algoliaKey: runOf(r, DIGIT, 1) + runOf(r, HEX, 31), locale: "en" });
+    const settings = JSON.stringify({
+      key: pk,
+      currency: "usd",
+      algoliaKey: runOf(r, DIGIT, 1) + runOf(r, HEX, 31),
+      locale: "en",
+    });
     return {
       html: `<!DOCTYPE html><html><head><title>x</title></head><body><div data-stripe-settings="${encodeURIComponent(settings)}"></div></body></html>`,
       secret: pk,
@@ -595,16 +683,22 @@ const PROBES: Case[] = [
     // `%` followed by non-hex is a percent sign, and a run with fewer than
     // three escapes is not an encoded document; neither is decoded, so the
     // key written as `%73k_live_` is not assembled.
-    html: inline(`var a="100%25 off%20now";var b="%73${["k_li", "ve_"].join("")}${runOf(r, ALNUM, 24)}";var c="50% %zz";`),
+    html: inline(
+      `var a="100%25 off%20now";var b="%73${["k_li", "ve_"].join("")}${runOf(r, ALNUM, 24)}";var c="50% %zz";`,
+    ),
     expect: [],
     mustNotFire: ["Stripe Live Key"],
   })),
   probe("base64-binary-blob-is-skipped", (r) => ({
-    html: inline(`window.__WASM__="${Buffer.from(Array.from({ length: 3000 }, () => Math.floor(r() * 256))).toString("base64")}";`),
+    html: inline(
+      `window.__WASM__="${Buffer.from(Array.from({ length: 3000 }, () => Math.floor(r() * 256))).toString("base64")}";`,
+    ),
     expect: [],
   })),
   probe("railway-token-is-a-plain-uuid", (r) => ({
-    html: inline(`window.__ENV={"RAILWAY_TOKEN":"${[8, 4, 4, 4, 12].map((n) => runOf(r, HEX, n)).join("-")}"};`),
+    html: inline(
+      `window.__ENV={"RAILWAY_TOKEN":"${[8, 4, 4, 4, 12].map((n) => runOf(r, HEX, n)).join("-")}"};`,
+    ),
     expect: [],
     knownGap:
       "Railway API tokens are plain UUIDs; the `railway_[a-zA-Z0-9_-]{32,}` pattern matches a shape Railway does not issue",
@@ -632,8 +726,11 @@ const PROBES: Case[] = [
         content: `${"var q0=function(a,b){return a+b};".repeat(160_000)}var t={${["gh", "p_"].join("")}:"${githubToken(r, ["gh", "p_"].join(""))}"};`,
       },
     ],
-    expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "external-script" }],
-    knownGap: "no size cap: a 5 MB external script is scanned in full (this pins the cost, not a wrong result)",
+    expect: [
+      { pattern: "GitHub Personal Access Token", check: "high", location: "external-script" },
+    ],
+    knownGap:
+      "no size cap: a 5 MB external script is scanned in full (this pins the cost, not a wrong result)",
   })),
   probe("same-value-in-three-locations-reports-once", (r) => {
     const v = githubToken(r, ["gh", "p_"].join(""));
@@ -641,12 +738,22 @@ const PROBES: Case[] = [
       html: `<!DOCTYPE html><html><head><title>x</title><meta name="gh-token" content="${v}"></head><body><script>window.__T__="${v}";</script><script src="/app.js"></script></body></html>`,
       scripts: [{ url: "https://app.acme.test/app.js", content: `var token="${v}";` }],
       secret: v,
-      expect: [{ pattern: "GitHub Personal Access Token", check: "high", location: "external-script" }],
+      expect: [
+        { pattern: "GitHub Personal Access Token", check: "high", location: "external-script" },
+      ],
     };
   }),
 ];
 
-export const CASES: Case[] = [...POSITIVES, ...NEGATIVES, ...REAL_WORLD, ...ROUND_3, ...ROUND_5, ...DEDUP_CASES, ...PROBES];
+export const CASES: Case[] = [
+  ...POSITIVES,
+  ...NEGATIVES,
+  ...REAL_WORLD,
+  ...ROUND_3,
+  ...ROUND_5,
+  ...DEDUP_CASES,
+  ...PROBES,
+];
 
 export function caseById(id: string): Case {
   const found = CASES.find((c) => c.id === id);

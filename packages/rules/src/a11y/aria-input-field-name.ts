@@ -15,9 +15,7 @@ function getAccessibleName(el: Element, doc: Document): string | null {
   const labelledBy = el.getAttribute("aria-labelledby");
   if (labelledBy) {
     const ids = labelledBy.split(/\s+/);
-    const labels = ids
-      .map((id) => doc.getElementById(id)?.textContent?.trim())
-      .filter(Boolean);
+    const labels = ids.map((id) => doc.getElementById(id)?.textContent?.trim()).filter(Boolean);
     if (labels.length > 0) return labels.join(" ");
   }
 
@@ -84,17 +82,14 @@ export const ariaInputFieldNameRule: Rule = {
 
     // Check native inputs
     const inputs = doc.querySelectorAll(
-      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"])'
+      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"])',
     );
     for (const input of inputs) {
       if (input.hasAttribute("role")) continue; // Covered by role check
       if (!getAccessibleName(input, doc)) {
         const type = input.getAttribute("type") || "text";
         const name = input.getAttribute("name") || "";
-        unnamed.add(
-          input,
-          name ? `input[name="${name}"]` : `input[type="${type}"]`
-        );
+        unnamed.add(input, name ? `input[name="${name}"]` : `input[type="${type}"]`);
       }
     }
 
@@ -125,10 +120,7 @@ export const ariaInputFieldNameRule: Rule = {
         status: "fail",
         message: `${missingNames.length} input field(s) without accessible names`,
         items: missingNames.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingNames.length > 10
-            ? { additional: missingNames.length - 10 }
-            : undefined,
+        details: missingNames.length > 10 ? { additional: missingNames.length - 10 } : undefined,
       });
     }
     if (unnamed.unconfirmed.length > 0) {
@@ -136,8 +128,8 @@ export const ariaInputFieldNameRule: Rule = {
         unconfirmedRow(
           "aria-input-field-name",
           "input field(s) without accessible names",
-          unnamed.unconfirmed
-        )
+          unnamed.unconfirmed,
+        ),
       );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
@@ -146,8 +138,7 @@ export const ariaInputFieldNameRule: Rule = {
         status: "pass",
         ...(unnamed.hidden > 0
           ? {
-              message:
-                "All input fields in the accessibility tree have accessible names",
+              message: "All input fields in the accessibility tree have accessible names",
               details: { hiddenWithoutName: unnamed.hidden },
             }
           : { message: "All input fields have accessible names" }),

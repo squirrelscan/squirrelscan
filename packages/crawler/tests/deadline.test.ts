@@ -117,11 +117,12 @@ describe("withRequestDeadline (#1699)", () => {
       // asserts is that the signal has not been disarmed by the time `use` runs.
       const aborted = await withRequestDeadline(
         200,
-        (signal) => fetch(`http://localhost:${server.port}/`, { signal }).then((r) => {
-          // Stash the signal the way a real consumer would observe it.
-          (r as Response & { signal?: AbortSignal }).signal = signal;
-          return r;
-        }),
+        (signal) =>
+          fetch(`http://localhost:${server.port}/`, { signal }).then((r) => {
+            // Stash the signal the way a real consumer would observe it.
+            (r as Response & { signal?: AbortSignal }).signal = signal;
+            return r;
+          }),
         async (response) => {
           const signal = (response as Response & { signal?: AbortSignal }).signal;
           await Bun.sleep(500);

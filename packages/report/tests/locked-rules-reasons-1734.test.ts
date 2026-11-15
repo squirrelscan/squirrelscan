@@ -48,7 +48,12 @@ function report(lockedRules: LockedRule[], over: Partial<AuditReport> = {}): Aud
 
 describe("the closed set", () => {
   test("is exactly plan, credits, provider_error and unsupported_environment (credits: #1792)", () => {
-    expect([...LOCKED_RULE_REASONS]).toEqual(["plan", "credits", "provider_error", "unsupported_environment"]);
+    expect([...LOCKED_RULE_REASONS]).toEqual([
+      "plan",
+      "credits",
+      "provider_error",
+      "unsupported_environment",
+    ]);
     expect(isLockedRuleReason("plan")).toBe(true);
     expect(isLockedRuleReason("outage")).toBe(false);
     expect(isLockedRuleReason(undefined)).toBe(false);
@@ -61,7 +66,9 @@ describe("lockedRulesMessage by reason", () => {
     expect(msg.action).toContain("not included in the Free plan");
     expect(msg.groups?.map((g) => g.reason)).toEqual(["plan"]);
     expect(msg.cta?.url).toBe("https://app.squirrelscan.com");
-    expect(lockedRulesMessage(report([PLAN], { cloudPlan: "paid" }))!.action).toContain("your plan");
+    expect(lockedRulesMessage(report([PLAN], { cloudPlan: "paid" }))!.action).toContain(
+      "your plan",
+    );
   });
 
   test("a provider error says a re-run may help, not that the plan excludes it", () => {
@@ -76,12 +83,16 @@ describe("lockedRulesMessage by reason", () => {
     const msg = lockedRulesMessage(report([ENV], { cloudPlan: "paid" }))!;
     expect(msg.action).toContain("can't run in the environment this audit ran in");
     expect(msg.action).toContain("machine that can open a TLS connection");
-    const bare = lockedRulesMessage(report([{ ...ENV, detail: undefined }], { cloudPlan: "paid" }))!;
+    const bare = lockedRulesMessage(
+      report([{ ...ENV, detail: undefined }], { cloudPlan: "paid" }),
+    )!;
     expect(bare.action).toContain("direct network access");
   });
 
   test("mixed reasons give one sentence per cause, in a fixed order", () => {
-    const msg = lockedRulesMessage(report([ENV, NO_REASON, PROVIDER, PLAN], { cloudPlan: "free" }))!;
+    const msg = lockedRulesMessage(
+      report([ENV, NO_REASON, PROVIDER, PLAN], { cloudPlan: "free" }),
+    )!;
     expect(msg.groups?.map((g) => g.reason)).toEqual([
       "plan",
       "provider_error",
@@ -93,7 +104,9 @@ describe("lockedRulesMessage by reason", () => {
 
   test("an unknown reason reads as none, and detail is cut to one short line", () => {
     const odd = { ...PLAN, reason: "outage" } as unknown as LockedRule;
-    const before = lockedRulesMessage(report([{ id: PLAN.id, name: PLAN.name }], { cloudPlan: "paid" }));
+    const before = lockedRulesMessage(
+      report([{ id: PLAN.id, name: PLAN.name }], { cloudPlan: "paid" }),
+    );
     expect(lockedRulesMessage(report([odd], { cloudPlan: "paid" }))).toEqual({
       ...before!,
       rules: [odd],
@@ -191,7 +204,12 @@ describe("notChecked entries carry a cause (#1734)", () => {
     report([], {
       ruleResults: {
         "security/tls-certificate": {
-          meta: { id: "security/tls-certificate", name: "TLS Certificate", category: "security", severity: "error" },
+          meta: {
+            id: "security/tls-certificate",
+            name: "TLS Certificate",
+            category: "security",
+            severity: "error",
+          },
           checks: [
             {
               name: "tls-certificate",
@@ -206,7 +224,10 @@ describe("notChecked entries carry a cause (#1734)", () => {
     });
 
   test("a cause and its detail replace the skip-reason hint, in json and xml", () => {
-    const rep = withCause({ cause: "unsupported_environment", causeDetail: "No outbound TLS here." });
+    const rep = withCause({
+      cause: "unsupported_environment",
+      causeDetail: "No outbound TLS here.",
+    });
     const [rule] = notCheckedRules(rep);
     expect(rule?.cause).toBe("unsupported_environment");
     expect(rule?.hint).toContain("can't run in the environment");
@@ -218,7 +239,10 @@ describe("notChecked entries carry a cause (#1734)", () => {
   });
 
   test("a hostile causeDetail has its control characters removed and is escaped where it is printed", () => {
-    const rep = withCause({ cause: "provider_error", causeDetail: "<img src=x onerror=1>\u001b[31m [x](javascript:1)" });
+    const rep = withCause({
+      cause: "provider_error",
+      causeDetail: "<img src=x onerror=1>\u001b[31m [x](javascript:1)",
+    });
     expect(notCheckedRules(rep)[0]?.causeDetail).not.toContain("\u001b");
     expect(renderMarkdown(rep)).not.toMatch(/(?<!\\)<img/);
     expect(renderMarkdown(rep)).not.toMatch(/(?<!\\)\[x\]\(javascript/);
@@ -252,7 +276,7 @@ describe("publisher-supplied text is inert in every format (#1734 security revie
 
   test("markdown escapes link, image and HTML syntax in the sentence, the name and the id", () => {
     const out = renderMarkdown(r);
-    expect(out).toContain("\\[x\\](javascript:alert(1)) \\<img src=x onerror=1> \"quote");
+    expect(out).toContain('\\[x\\](javascript:alert(1)) \\<img src=x onerror=1> "quote');
     // Every `<` and `[` the publisher sent is backslash-escaped.
     expect(out).not.toMatch(/(?<!\\)<(?:img|script)/);
     expect(out).not.toMatch(/(?<!\\)\[(?:x|n)\]\(javascript/);
@@ -286,7 +310,9 @@ describe("publisher-supplied text is inert in every format (#1734 security revie
 
   test("json keeps the string as data with the control characters removed", () => {
     const json = JSON.parse(renderJson(r));
-    expect(json.lockedRules.rules[0].detail).toBe('[x](javascript:alert(1)) <img src=x onerror=1> "quote [31mred');
+    expect(json.lockedRules.rules[0].detail).toBe(
+      '[x](javascript:alert(1)) <img src=x onerror=1> "quote [31mred',
+    );
     expect(JSON.stringify(json)).not.toContain("\\u001b");
   });
 });

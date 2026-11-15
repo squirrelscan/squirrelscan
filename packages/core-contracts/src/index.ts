@@ -225,11 +225,7 @@ export interface ComponentOccurrence {
    * Why an occurrence is `uncertain`, so a degraded observation is never a
    * silent one. Absent exactly when `confidence` is "observed".
    */
-  uncertainReason?:
-    | "no-region"
-    | "content-nested"
-    | "region-main"
-    | "structure-truncated";
+  uncertainReason?: "no-region" | "content-nested" | "region-main" | "structure-truncated";
   region: {
     role: "footer" | "header" | "navigation" | "main" | "unknown";
     nestedIn: "article" | "main" | "none" | "unknown";
@@ -526,7 +522,8 @@ export const DISCOVERY_PROBE_NOT_APPROVED_SKIP_REASON = "discovery-probe-not-app
 export const DISCOVERY_PROBE_NOT_SENT_SKIP_REASON = "discovery-probe-not-sent";
 export const DISCOVERY_PROBE_REFUSED_SKIP_REASON = "discovery-probe-refused";
 export const DISCOVERY_PROBE_NO_ANSWER_SKIP_REASON = "discovery-probe-no-answer";
-export const DISCOVERY_PROBE_REDIRECT_NOT_FOLLOWED_SKIP_REASON = "discovery-probe-redirect-not-followed";
+export const DISCOVERY_PROBE_REDIRECT_NOT_FOLLOWED_SKIP_REASON =
+  "discovery-probe-redirect-not-followed";
 export const DISCOVERY_PROBE_SKIP_REASONS = [
   DISCOVERY_PROBE_NOT_APPROVED_SKIP_REASON,
   DISCOVERY_PROBE_NOT_SENT_SKIP_REASON,
@@ -537,8 +534,12 @@ export const DISCOVERY_PROBE_SKIP_REASONS = [
 export type DiscoveryProbeSkipReason = (typeof DISCOVERY_PROBE_SKIP_REASONS)[number];
 
 /** Whether `reason` is one of {@link DISCOVERY_PROBE_SKIP_REASONS}. */
-export function isDiscoveryProbeSkipReason(reason: string | undefined): reason is DiscoveryProbeSkipReason {
-  return reason !== undefined && (DISCOVERY_PROBE_SKIP_REASONS as readonly string[]).includes(reason);
+export function isDiscoveryProbeSkipReason(
+  reason: string | undefined,
+): reason is DiscoveryProbeSkipReason {
+  return (
+    reason !== undefined && (DISCOVERY_PROBE_SKIP_REASONS as readonly string[]).includes(reason)
+  );
 }
 
 /**
@@ -1846,7 +1847,14 @@ export interface ReportTechnologies {
    */
   truncated?: {
     /** `bundle-bytes`: a script past `[tech_detect] bundle_bytes`; `page-bytes` / `audit-bytes`: a script left out by the page or audit budget; `time-budget`: the per-page time budget ran out; `script-too-large`: the crawl dropped a first-party script over its fetch cap (5 MB), so detection never saw it; `script-limit`: first-party scripts the page references were not read because the audit's script limit was reached. */
-    reasons: Array<"bundle-bytes" | "page-bytes" | "audit-bytes" | "time-budget" | "script-too-large" | "script-limit">;
+    reasons: Array<
+      | "bundle-bytes"
+      | "page-bytes"
+      | "audit-bytes"
+      | "time-budget"
+      | "script-too-large"
+      | "script-limit"
+    >;
     /** Scripts read only in part or not at all. */
     scripts: number;
   };
@@ -1920,7 +1928,10 @@ export interface ReportHostEdge {
   /** The platform is both edge and host (Vercel, Netlify, Cloudflare Pages): there is no separate origin. */
   edgeHosted: boolean;
   /** `unknown` is reported, never the edge itself, when no origin could be told apart. */
-  origin: { status: "edge-hosted" } | { status: "unknown" } | { status: "identified"; id: string; name: string };
+  origin:
+    | { status: "edge-hosted" }
+    | { status: "unknown" }
+    | { status: "identified"; id: string; name: string };
   /** Other providers some source matched, when sources disagree. */
   alsoMatched?: Array<{ id: string; name: string; source: ReportEdgeSource }>;
 }
@@ -3008,7 +3019,13 @@ export function triggerToAuditSource(trigger: string | null | undefined): AuditS
  * Hosted agent-run status lifecycle. `queued` is a run waiting for a container slot that starts by
  * itself (#1665): the cloud has always stored it, but clients typed it away. It is not terminal.
  */
-export type AgentRunStatus = "queued" | "pending" | "running" | "completed" | "failed" | "cancelled";
+export type AgentRunStatus =
+  | "queued"
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 /**
  * Statuses where a run is finished — it leaves live "running now" feeds and
@@ -3026,7 +3043,14 @@ export const TERMINAL_AGENT_RUN_STATUSES: ReadonlySet<string> = new Set<AgentRun
  * The phases of an audit a person watching it sees, in the order a run goes through them. The CLI's
  * progress line and a hosted run's live progress use the same names.
  */
-export const RUN_PHASES = ["crawling", "external-links", "cloud", "rules", "walk", "complete"] as const;
+export const RUN_PHASES = [
+  "crawling",
+  "external-links",
+  "cloud",
+  "rules",
+  "walk",
+  "complete",
+] as const;
 export type RunPhase = (typeof RUN_PHASES)[number];
 
 /**
@@ -3049,7 +3073,10 @@ export function isRunNotice(value: unknown): value is RunNotice {
  * current one; a notice, a stage name this version does not know, an empty value or null leaves it
  * alone, so a notice cannot overwrite the phase.
  */
-export function nextVisiblePhase(current: RunPhase | null, incoming: string | null | undefined): RunPhase | null {
+export function nextVisiblePhase(
+  current: RunPhase | null,
+  incoming: string | null | undefined,
+): RunPhase | null {
   return isRunPhase(incoming) ? incoming : current;
 }
 

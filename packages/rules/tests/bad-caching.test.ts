@@ -13,7 +13,7 @@ import { badCachingRule } from "../src/performance/bad-caching";
 import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
 function siteCtx(
-  pages: { url: string; headers: Record<string, string>; fetchedAt?: number }[]
+  pages: { url: string; headers: Record<string, string>; fetchedAt?: number }[],
 ): RuleContext {
   const html = "<html><head><title>t</title></head><body></body></html>";
   const sitePages: SiteData["pages"] = pages.map((p) => ({
@@ -59,7 +59,9 @@ function verdict(checks: CheckResult[], name: "bad-caching-freshness" | "bad-cac
   const c = check(checks, name);
   if (!c) return undefined;
   expect(c.status).toBe("info");
-  return /no caching policy|send Cache-Control: no-store|served without/.test(c.message) ? "flagged" : "ok";
+  return /no caching policy|send Cache-Control: no-store|served without/.test(c.message)
+    ? "flagged"
+    : "ok";
 }
 
 const goodHeaders = {
@@ -70,7 +72,7 @@ const goodHeaders = {
 
 describe("perf/bad-caching", () => {
   test("skips when no HTML pages with headers", async () => {
-    const checks = (await run(badCachingRule, siteCtx([])));
+    const checks = await run(badCachingRule, siteCtx([]));
     expect(check(checks, "bad-caching")?.status).toBe("skipped");
   });
 
@@ -79,7 +81,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: goodHeaders,
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
     expect(verdict(checks, "bad-caching-compression")).toBe("ok");
@@ -90,7 +92,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { etag: '"x"', "content-encoding": "gzip" }, // no cache-control/expires
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     const freshness = check(checks, "bad-caching-freshness");
     expect(freshness?.status).toBe("info");
     expect(freshness?.pages?.length).toBeGreaterThan(0);
@@ -105,7 +107,7 @@ describe("perf/bad-caching", () => {
         "content-encoding": "gzip",
       },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
@@ -125,7 +127,7 @@ describe("perf/bad-caching", () => {
         "content-encoding": "gzip",
       },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
@@ -134,7 +136,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "no-cache, max-age=3600", "content-encoding": "gzip" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
@@ -147,7 +149,7 @@ describe("perf/bad-caching", () => {
         "content-encoding": "gzip",
       },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
@@ -156,7 +158,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "max-age=3600, s-maxage=0", "content-encoding": "gzip" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
@@ -171,7 +173,7 @@ describe("perf/bad-caching", () => {
         "content-encoding": "br",
       },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
@@ -184,7 +186,7 @@ describe("perf/bad-caching", () => {
         "content-encoding": "br",
       },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
@@ -193,11 +195,11 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "public, max-age=0, must-revalidate", "content-encoding": "br" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     const freshness = check(checks, "bad-caching-freshness");
     expect(freshness?.status).toBe("info");
     expect(freshness?.message).toBe(
-      "4/4 pages set no caching policy (no freshness lifetime and no validator)"
+      "4/4 pages set no caching policy (no freshness lifetime and no validator)",
     );
   });
 
@@ -213,7 +215,7 @@ describe("perf/bad-caching", () => {
         "content-encoding": "br",
       },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
@@ -225,7 +227,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { etag: '"x"', "content-encoding": "br" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
@@ -234,7 +236,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "public, max-age=600", "content-encoding": "br" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
@@ -259,7 +261,7 @@ describe("perf/bad-caching", () => {
       },
     }));
     expect(check(await run(badCachingRule, siteCtx(some)), "bad-caching-validators")?.status).toBe(
-      "warn"
+      "warn",
     );
   });
 
@@ -268,7 +270,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "public, max-age=0, must-revalidate", "content-encoding": "br" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
     expect(check(checks, "bad-caching-validators")?.status).toBe("warn");
   });
@@ -286,7 +288,7 @@ describe("perf/bad-caching", () => {
           ...(encoding ? { "content-encoding": encoding } : {}),
         },
       }));
-      const checks = (await run(badCachingRule, siteCtx(pages)));
+      const checks = await run(badCachingRule, siteCtx(pages));
       expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
       expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
     });
@@ -297,7 +299,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { "cache-control": "max-age=600", etag: '"x"' }, // no content-encoding
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-compression")).toBe("flagged");
   });
 
@@ -314,7 +316,7 @@ describe("perf/bad-caching", () => {
       headers: { expires: hourAfterFetch, "last-modified": "x", "content-encoding": "gzip" },
       fetchedAt: FETCHED_AT,
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
   });
@@ -384,7 +386,11 @@ describe("perf/bad-caching", () => {
     // A Date header is the reference; the fetch time is not needed.
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
-      headers: { expires: hourBeforeFetch, date: new Date(FETCHED_AT).toUTCString(), "content-encoding": "gzip" },
+      headers: {
+        expires: hourBeforeFetch,
+        date: new Date(FETCHED_AT).toUTCString(),
+        "content-encoding": "gzip",
+      },
     }));
     const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
@@ -426,13 +432,19 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/q${i}`,
       headers: { expires: soon, date: futureDate, "content-encoding": "gzip" },
     }));
-    expect(verdict(await run(badCachingRule, siteCtx(pages2)), "bad-caching-freshness")).toBe("flagged");
+    expect(verdict(await run(badCachingRule, siteCtx(pages2)), "bad-caching-freshness")).toBe(
+      "flagged",
+    );
   });
 
   test("a positive max-age wins over a past Expires", async () => {
     const pages = Array.from({ length: 4 }, (_, i) => ({
       url: `https://example.com/p${i}`,
-      headers: { "cache-control": "max-age=600", expires: hourBeforeFetch, "content-encoding": "gzip" },
+      headers: {
+        "cache-control": "max-age=600",
+        expires: hourBeforeFetch,
+        "content-encoding": "gzip",
+      },
       fetchedAt: FETCHED_AT,
     }));
     const checks = await run(badCachingRule, siteCtx(pages));
@@ -444,7 +456,7 @@ describe("perf/bad-caching", () => {
       url: `https://example.com/p${i}`,
       headers: { expires: "", "content-encoding": "gzip" },
     }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 });
@@ -472,18 +484,18 @@ describe("perf/bad-caching Cloudflare note", () => {
 
   test("pages behind Cloudflare get the note on the validators check", async () => {
     const pages = pagesWith(14, () => ({ ...strippedHeaders, "cf-cache-status": "HIT" }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const checks = await run(badCachingRule, siteCtx(pages));
     const validators = check(checks, "bad-caching-validators");
     expect(validators?.status).toBe("warn");
     expect(validators?.message).toBe(
-      `14/14 pages lack an ETag or Last-Modified validator. 14 of them ${NOTE}`
+      `14/14 pages lack an ETag or Last-Modified validator. 14 of them ${NOTE}`,
     );
     expect(validators?.details?.cloudflarePages).toBe(14);
     // Freshness is unchanged: same message, no note.
     const freshness = check(checks, "bad-caching-freshness");
     expect(freshness?.status).toBe("info");
     expect(freshness?.message).toBe(
-      "14/14 pages set no caching policy (no freshness lifetime and no validator)"
+      "14/14 pages set no caching policy (no freshness lifetime and no validator)",
     );
   });
 
@@ -491,7 +503,7 @@ describe("perf/bad-caching Cloudflare note", () => {
     const pages = pagesWith(4, () => ({ ...strippedHeaders, server: "cloudflare" }));
     const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.message).toBe(
-      `4/4 pages lack an ETag or Last-Modified validator. 4 of them ${NOTE}`
+      `4/4 pages lack an ETag or Last-Modified validator. 4 of them ${NOTE}`,
     );
   });
 
@@ -510,7 +522,7 @@ describe("perf/bad-caching Cloudflare note", () => {
     }));
     const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.message).toBe(
-      `4/4 pages lack an ETag or Last-Modified validator. 2 of them ${NOTE}`
+      `4/4 pages lack an ETag or Last-Modified validator. 2 of them ${NOTE}`,
     );
   });
 
@@ -546,7 +558,7 @@ describe("perf/bad-caching Cloudflare note", () => {
     }));
     const validators = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.message).toBe(
-      `6/10 pages lack an ETag or Last-Modified validator. 3 of them ${NOTE}`
+      `6/10 pages lack an ETag or Last-Modified validator. 3 of them ${NOTE}`,
     );
   });
 
@@ -580,21 +592,27 @@ describe("perf/bad-caching freshness and compression are info (pub#633)", () => 
     ["no caching headers, no compression", {}],
     ["a healthy site", goodHeaders],
   ])("%s: neither check moves the score", async (_name, headers) => {
-    const pages = Array.from({ length: 4 }, (_, i) => ({ url: `https://example.com/p${i}`, headers }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const pages = Array.from({ length: 4 }, (_, i) => ({
+      url: `https://example.com/p${i}`,
+      headers,
+    }));
+    const checks = await run(badCachingRule, siteCtx(pages));
     for (const name of ["bad-caching-freshness", "bad-caching-compression"]) {
       expect(check(checks, name)?.status).toBe("info");
     }
   });
 
   test("below the threshold, the messages and example pages are as before", async () => {
-    const pages = Array.from({ length: 4 }, (_, i) => ({ url: `https://example.com/p${i}`, headers: {} }));
-    const checks = (await run(badCachingRule, siteCtx(pages)));
+    const pages = Array.from({ length: 4 }, (_, i) => ({
+      url: `https://example.com/p${i}`,
+      headers: {},
+    }));
+    const checks = await run(badCachingRule, siteCtx(pages));
     expect(check(checks, "bad-caching-freshness")?.message).toBe(
-      "4/4 pages set no caching policy (no freshness lifetime and no validator)"
+      "4/4 pages set no caching policy (no freshness lifetime and no validator)",
     );
     expect(check(checks, "bad-caching-compression")?.message).toBe(
-      "4/4 compressible pages served without gzip/Brotli"
+      "4/4 compressible pages served without gzip/Brotli",
     );
     // The pages are still listed.
     expect(check(checks, "bad-caching-freshness")?.pages).toHaveLength(4);
@@ -607,7 +625,11 @@ describe("perf/bad-caching names JavaScript Detections (#605)", () => {
   const JSD = `<script>(function(){window.__CF$cv$params={r:'8a1',t:'MTcz'};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);})();</script>`;
   const stripped = { "cache-control": "max-age=0", server: "cloudflare" };
   const NAMES = "which may drop the ETag from HTML it rewrites";
-  const page = (i: number, html: string) => ({ url: `https://example.com/p${i}`, html, headers: stripped });
+  const page = (i: number, html: string) => ({
+    url: `https://example.com/p${i}`,
+    html,
+    headers: stripped,
+  });
 
   /** The resident engine reads each page's document; the streaming engine reads the recorded markers. */
   function ctxFor(engine: "resident" | "streaming", htmls: string[]): RuleContext {
@@ -618,7 +640,11 @@ describe("perf/bad-caching names JavaScript Detections (#605)", () => {
     if (engine === "resident") return base;
     return {
       ...base,
-      collectedSignals: { pages: pages.map((p, i) => buildCollectedPageSignal({ url: p.url, parsed: parsed[i]!, htmlBytes: 100 })) },
+      collectedSignals: {
+        pages: pages.map((p, i) =>
+          buildCollectedPageSignal({ url: p.url, parsed: parsed[i]!, htmlBytes: 100 }),
+        ),
+      },
     } as unknown as RuleContext;
   }
   const doc = (body: string) => `<html><head><title>t</title>${body}</head><body></body></html>`;
@@ -659,14 +685,22 @@ describe("perf/bad-caching names JavaScript Detections (#605)", () => {
 
     test(`${engine}: the path in visible text, or in a code sample, is not a script marker`, async () => {
       const text = `<p>Cloudflare loads /cdn-cgi/challenge-platform/scripts/jsd/main.js on your pages</p><pre>__CF$cv$params</pre>`;
-      const ctx = ctxFor(engine, [text, text, text, text].map((t) => `<html><head></head><body>${t}</body></html>`));
+      const ctx = ctxFor(
+        engine,
+        [text, text, text, text].map((t) => `<html><head></head><body>${t}</body></html>`),
+      );
       const v = check(await run(badCachingRule, ctx), "bad-caching-validators")!;
       expect(v.details?.javascriptDetectionsPages).toBeUndefined();
     });
 
     test(`${engine}: an external script from the challenge platform counts too`, async () => {
-      const ext = doc(`<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js" defer></script>`);
-      const v = check(await run(badCachingRule, ctxFor(engine, [ext, ext, ext, ext])), "bad-caching-validators")!;
+      const ext = doc(
+        `<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js" defer></script>`,
+      );
+      const v = check(
+        await run(badCachingRule, ctxFor(engine, [ext, ext, ext, ext])),
+        "bad-caching-validators",
+      )!;
       expect(v.details?.javascriptDetectionsPages).toBe(4);
     });
   }
@@ -681,7 +715,14 @@ describe("perf/bad-caching names JavaScript Detections (#605)", () => {
       expect(performance.now() - started).toBeLessThan(100);
     }
     // the marker beyond the read window of a huge script is not found, and that is the documented bound
-    expect(hasJavaScriptDetections(parsePage(`<html><head><script>${"x".repeat(5000)}/cdn-cgi/challenge-platform/</script></head></html>`, "https://example.com/").document!)).toBe(false);
+    expect(
+      hasJavaScriptDetections(
+        parsePage(
+          `<html><head><script>${"x".repeat(5000)}/cdn-cgi/challenge-platform/</script></head></html>`,
+          "https://example.com/",
+        ).document!,
+      ),
+    ).toBe(false);
   });
 });
 
@@ -694,7 +735,10 @@ describe("perf/bad-caching no-store (#1754)", () => {
     }));
 
   test("no-store behind Cloudflare names no-store and does not blame Cloudflare", async () => {
-    const checks = (await run(badCachingRule, siteCtx(noStorePages(6, { "cf-cache-status": "DYNAMIC" }))));
+    const checks = await run(
+      badCachingRule,
+      siteCtx(noStorePages(6, { "cf-cache-status": "DYNAMIC" })),
+    );
     const validators = check(checks, "bad-caching-validators");
     expect(validators?.status).toBe("warn");
     expect(validators?.message).toContain("Cache-Control: no-store");
@@ -704,7 +748,7 @@ describe("perf/bad-caching no-store (#1754)", () => {
   });
 
   test("freshness distinguishes no-store from no policy", async () => {
-    const checks = (await run(badCachingRule, siteCtx(noStorePages(4))));
+    const checks = await run(badCachingRule, siteCtx(noStorePages(4)));
     const msg = check(checks, "bad-caching-freshness")?.message ?? "";
     expect(msg).toContain("Cache-Control: no-store");
     expect(msg).not.toContain("no caching policy");
@@ -718,7 +762,8 @@ describe("perf/bad-caching no-store (#1754)", () => {
         headers: { "content-encoding": "gzip" },
       })),
     ];
-    const msg = check(await run(badCachingRule, siteCtx(pages)), "bad-caching-freshness")?.message ?? "";
+    const msg =
+      check(await run(badCachingRule, siteCtx(pages)), "bad-caching-freshness")?.message ?? "";
     expect(msg).toContain("2 send Cache-Control: no-store");
     expect(msg).toContain("2 set no caching policy");
   });

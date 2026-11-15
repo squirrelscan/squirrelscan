@@ -40,9 +40,9 @@ const IMAGE = ".wp-block-image>a,.wp-block-image>figure>a{display:inline-block}"
 describe("a show-only rule on an element nothing else hides", () => {
   test("WordPress lightbox button: an unnamed button fails, not unconfirmed", async () => {
     expect(
-      (await statuses(
+      await statuses(
         `<!doctype html><html lang="en"><head><title>t</title><style>${LIGHTBOX}</style></head><body><main><div class="wp-lightbox-container"><button></button></div></main></body></html>`,
-      )),
+      ),
     ).toEqual({ "button-name": "fail" });
   });
 
@@ -75,9 +75,9 @@ describe("a show-only rule where something else hides the element stays unknown"
 
   test("a hidden unnamed button is unconfirmed, not a pass or a failure", async () => {
     expect(
-      (await statuses(
+      await statuses(
         `<!doctype html><html lang="en"><head><title>t</title><style>${LIGHTBOX}</style></head><body><main><div class="wp-lightbox-container"><button hidden></button></div></main></body></html>`,
-      )),
+      ),
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 });

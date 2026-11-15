@@ -49,7 +49,10 @@ describe("perf/dom-size dom-max-children", () => {
   });
 
   test("a document with no body element is skipped, not measured", async () => {
-    const doc = { documentElement: parseHTML("<html></html>").document.documentElement, body: null };
+    const doc = {
+      documentElement: parseHTML("<html></html>").document.documentElement,
+      body: null,
+    };
     const ctx = {
       ...makeCtx("<html></html>"),
       parsed: { document: doc } as unknown as ParsedPage,
@@ -69,12 +72,15 @@ describe("perf/dom-size dom-max-children", () => {
 // #1270: a page with no markup parses to an empty shell, so it measures as an
 // empty body instead of being skipped or throwing.
 describe("perf/dom-size on a document with no markup", () => {
-  test.each(["", "just text", "<!-- only a comment -->"])("%j measures an empty body", async (html) => {
-    const result = await domSizeRule.run(makeCtx(html));
-    const total = result.checks.find((c) => c.name === "dom-total-nodes");
-    expect(total).toMatchObject({ status: "pass", value: 0 });
-    expect(result.checks.some((c) => c.message?.startsWith("Rule error"))).toBe(false);
-  });
+  test.each(["", "just text", "<!-- only a comment -->"])(
+    "%j measures an empty body",
+    async (html) => {
+      const result = await domSizeRule.run(makeCtx(html));
+      const total = result.checks.find((c) => c.name === "dom-total-nodes");
+      expect(total).toMatchObject({ status: "pass", value: 0 });
+      expect(result.checks.some((c) => c.message?.startsWith("Rule error"))).toBe(false);
+    },
+  );
 });
 
 // pub#548: total nodes and depth are measured from <body> too, so the three
@@ -102,14 +108,29 @@ describe("perf/dom-size total nodes and depth", () => {
   test("a deep body is still reported at the threshold", async () => {
     const nest = (n: number) => `${"<div>".repeat(n)}x${"</div>".repeat(n)}`;
     // body (1) + 31 divs = 32 levels: at the limit, passes; one more warns.
-    expect(await check(page("", nest(31)), "dom-depth")).toMatchObject({ status: "pass", value: 32 });
-    expect(await check(page("", nest(32)), "dom-depth")).toMatchObject({ status: "warn", value: 33 });
+    expect(await check(page("", nest(31)), "dom-depth")).toMatchObject({
+      status: "pass",
+      value: 32,
+    });
+    expect(await check(page("", nest(32)), "dom-depth")).toMatchObject({
+      status: "warn",
+      value: 33,
+    });
   });
 
   test("the node thresholds read the body count", async () => {
     const items = (n: number) => `<ul>${"<li>x</li>".repeat(n - 1)}</ul>`;
-    expect(await check(page("", items(1499)), "dom-total-nodes")).toMatchObject({ status: "pass", value: 1499 });
-    expect(await check(page("", items(1500)), "dom-total-nodes")).toMatchObject({ status: "warn", value: 1500 });
-    expect(await check(page("", items(3000)), "dom-total-nodes")).toMatchObject({ status: "fail", value: 3000 });
+    expect(await check(page("", items(1499)), "dom-total-nodes")).toMatchObject({
+      status: "pass",
+      value: 1499,
+    });
+    expect(await check(page("", items(1500)), "dom-total-nodes")).toMatchObject({
+      status: "warn",
+      value: 1500,
+    });
+    expect(await check(page("", items(3000)), "dom-total-nodes")).toMatchObject({
+      status: "fail",
+      value: 3000,
+    });
   });
 });

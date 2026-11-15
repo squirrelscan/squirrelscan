@@ -57,8 +57,5 @@ export function matchesRulePattern(ruleId: string, pattern: string): boolean {
   const p = splitCategory(pattern);
   if (p.category === "") return ruleId === pattern; // bare pattern → exact id
   const id = splitCategory(ruleId);
-  return (
-    canonicalCategory(id.category) === canonicalCategory(p.category) &&
-    id.rest === p.rest
-  );
+  return canonicalCategory(id.category) === canonicalCategory(p.category) && id.rest === p.rest;
 }

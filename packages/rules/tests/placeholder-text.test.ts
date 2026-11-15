@@ -9,7 +9,11 @@ import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 import { parseHTML } from "@squirrelscan/parser/dom";
 
-import { findPlaceholders, normalizeProse, placeholderTextRule } from "../src/content/placeholder-text";
+import {
+  findPlaceholders,
+  normalizeProse,
+  placeholderTextRule,
+} from "../src/content/placeholder-text";
 import { getRenderedProseText } from "../src/content/text-content";
 import type { ParsedPage, RuleContext } from "../src/types";
 
@@ -183,7 +187,9 @@ describe("findPlaceholders — JavaScript artifacts", () => {
   test("a bare NaN is still caught, and placeholder text still flags (#944)", () => {
     expect(kinds("Result: NaN")).toContain("js-artifact");
     expect(kinds("Rating: NaN, 5 reviews")).toContain("js-artifact");
-    expect(kinds("Lorem ipsum dolor sit amet, consectetur adipiscing elit")).toContain("lorem-ipsum");
+    expect(kinds("Lorem ipsum dolor sit amet, consectetur adipiscing elit")).toContain(
+      "lorem-ipsum",
+    );
     expect(kinds("Enter your text here")).not.toEqual([]);
   });
 
@@ -312,11 +318,13 @@ describe("findPlaceholders — adversarial input", () => {
 
 describe("placeholderTextRule", () => {
   test("a clean page passes", async () => {
-    expect((await run(page("<p>Ordinary copy about ordinary things.</p>")))[0]?.status).toBe("pass");
+    expect((await run(page("<p>Ordinary copy about ordinary things.</p>")))[0]?.status).toBe(
+      "pass",
+    );
   });
 
   test("machine-generated leftovers fail", async () => {
-    const [check] = (await run(page("<p>Hello {{ user.name }}</p>")));
+    const [check] = await run(page("<p>Hello {{ user.name }}</p>"));
     expect(check?.status).toBe("fail");
     expect(check?.message).toMatch(/unrendered template syntax/i);
     expect(check?.value).toBe(1);
@@ -324,20 +332,20 @@ describe("placeholderTextRule", () => {
 
   test("human filler only warns", async () => {
     // A page could just about mean to write these, so they are not a failure.
-    const [check] = (await run(page("<h1>Your Company Name</h1>\n<p>TODO: write this</p>")));
+    const [check] = await run(page("<h1>Your Company Name</h1>\n<p>TODO: write this</p>"));
     expect(check?.status).toBe("warn");
     expect(check?.items?.map((i) => i.id).sort()).toEqual(["boilerplate-copy", "todo-marker"]);
   });
 
   test("a certain family among warnings escalates the whole check", async () => {
-    const [check] = (await run(page("<h1>Sample text</h1>\n<p>Tags: [object Object]</p>")));
+    const [check] = await run(page("<h1>Sample text</h1>\n<p>Tags: [object Object]</p>"));
     expect(check?.status).toBe("fail");
   });
 
   test("a bare JavaScript value warns, it does not fail", async () => {
     // An API reference whose defaults column reads `null` is ordinary. Only
     // [object X], which nothing legitimate produces, is a failure.
-    const [check] = (await run(page("<table><tr><td>onError</td><td>null</td></tr></table>")));
+    const [check] = await run(page("<table><tr><td>onError</td><td>null</td></tr></table>"));
     expect(check?.status).toBe("warn");
     expect(check?.items?.[0]?.id).toBe("js-artifact");
   });
@@ -370,7 +378,7 @@ describe("placeholderTextRule", () => {
 describe("placeholderTextRule — what a reader never sees", () => {
   test("a docs page that shows template syntax in a code block stays clean", async () => {
     // The fixture that matters: this rule's own documentation.
-    const [check] = (await run(
+    const [check] = await run(
       page(`
         <h1>Templating</h1>
         <p>Interpolate a value with the double-brace form:</p>
@@ -380,13 +388,13 @@ describe("placeholderTextRule — what a reader never sees", () => {
         <p>A missing value renders as <code>undefined</code> or
         <samp>[object Object]</samp>. Press <kbd>XXX</kbd> to continue.</p>
       `),
-    ));
+    );
     expect(check?.status).toBe("pass");
   });
 
   test("this rule's own documentation page stays clean", async () => {
     // The design constraint stated at the top of the rule module, asserted.
-    const [check] = (await run(
+    const [check] = await run(
       page(`
         <h1>Placeholder Text</h1>
         <p>Detects template leftovers and filler copy that shipped to production.</p>
@@ -403,35 +411,35 @@ describe("placeholderTextRule — what a reader never sees", () => {
         </table>
         <pre><code>disable = ["content/placeholder-text"]</code></pre>
       `),
-    ));
+    );
     expect(check?.status).toBe("pass");
   });
 
   test("script and style contents are not visible text", async () => {
-    const [check] = (await run(
+    const [check] = await run(
       page('<script>var s = "{{ name }}";</script><style>/* TODO: colours */</style><p>Clean.</p>'),
-    ));
+    );
     expect(check?.status).toBe("pass");
   });
 
   test("an inert <template> is markup the browser never renders", async () => {
     // linkedom keeps template children in childNodes, so a plain text walk would
     // read every Vue/Alpine/Handlebars page as full of unrendered syntax.
-    const [check] = (await run(
+    const [check] = await run(
       page('<p>Clean.</p><template id="row"><li>{{ item.name }}</li></template>'),
-    ));
+    );
     expect(check?.status).toBe("pass");
   });
 
   test("a phrase is not glued together across a skipped subtree", async () => {
     // The `<code>` becomes a newline, and phrases match on literal spaces only.
-    const [check] = (await run(page("<p>Set your <code>x</code> company name in config.</p>")));
+    const [check] = await run(page("<p>Set your <code>x</code> company name in config.</p>"));
     expect(check?.status).toBe("pass");
   });
 
   test("inline markup inside a phrase does not hide it", async () => {
     // `<b>` is not excluded, so the text nodes concatenate with their own spaces.
-    const [check] = (await run(page("<p>Welcome to Your <b>Company</b> Name</p>")));
+    const [check] = await run(page("<p>Welcome to Your <b>Company</b> Name</p>"));
     expect(check?.status).toBe("warn");
   });
 
@@ -444,7 +452,7 @@ describe("placeholderTextRule — what a reader never sees", () => {
   test("a value alone in a table cell is a value alone on its line", async () => {
     // The shape a missing field actually takes, and the reason block boundaries
     // matter: every cell here sits on one source line.
-    const [check] = (await run(page("<table><tr><td>Author</td><td>undefined</td></tr></table>")));
+    const [check] = await run(page("<table><tr><td>Author</td><td>undefined</td></tr></table>"));
     expect(check?.items?.[0]?.id).toBe("js-artifact");
     expect(check?.value).toBe(1);
   });
@@ -506,9 +514,7 @@ describe("getRenderedProseText", () => {
 
   test("block elements are separated, inline elements are not", () => {
     expect(prose("<p>your <b>company</b> name</p>")).toBe("\nyour company name\n");
-    expect(prose("<tr><td>Author</td><td>undefined</td></tr>")).toBe(
-      "\n\nAuthor\n\nundefined\n\n",
-    );
+    expect(prose("<tr><td>Author</td><td>undefined</td></tr>")).toBe("\n\nAuthor\n\nundefined\n\n");
   });
 });
 
@@ -522,9 +528,14 @@ describe("placeholderTextRule — the title", () => {
       parsed: parsePage(html, "https://example.com/"),
       options: {},
     } as unknown as RuleContext;
-    return (await placeholderTextRule.run(ctx)).checks as Array<{ name: string; status: string; message: string }>;
+    return (await placeholderTextRule.run(ctx)).checks as Array<{
+      name: string;
+      status: string;
+      message: string;
+    }>;
   };
-  const titleCheck = async (title: string, body?: string) => (await titled(title, body)).find((c) => c.name === "placeholder-title");
+  const titleCheck = async (title: string, body?: string) =>
+    (await titled(title, body)).find((c) => c.name === "placeholder-title");
 
   test.each([
     ["undefined | Acme", "warn: Title shows a JavaScript value: undefined"],
@@ -536,7 +547,7 @@ describe("placeholderTextRule — the title", () => {
     ["[object Object] | Acme", "fail: Title shows a stringified object: [object Object]"],
     ["Acme anvils [object Promise]", "fail: Title shows a stringified object: [object Promise]"],
   ])("%s is reported", async (title, expected) => {
-    const c = (await titleCheck(title));
+    const c = await titleCheck(title);
     expect(c && `${c.status}: ${c.message}`).toBe(expected);
   });
 
@@ -550,17 +561,28 @@ describe("placeholderTextRule — the title", () => {
   });
 
   test("a page about the word is not reported: MDN's undefined page", async () => {
-    const mdn = "<h1>undefined</h1><p>The <code>undefined</code> global property represents the primitive value <code>undefined</code>.</p>";
+    const mdn =
+      "<h1>undefined</h1><p>The <code>undefined</code> global property represents the primitive value <code>undefined</code>.</p>";
     expect(await titleCheck("undefined - JavaScript | MDN", mdn)).toBeUndefined();
     // Named in a <code> element alone is enough too.
-    expect(await titleCheck("null - JavaScript | MDN", "<h1>The null value</h1><p>See <code>null</code>.</p>")).toBeUndefined();
+    expect(
+      await titleCheck(
+        "null - JavaScript | MDN",
+        "<h1>The null value</h1><p>See <code>null</code>.</p>",
+      ),
+    ).toBeUndefined();
     // Each value is judged on its own: the page is about undefined, not null.
-    expect((await titleCheck("undefined | null | Acme", mdn))?.message).toBe("Title shows a JavaScript value: null");
+    expect((await titleCheck("undefined | null | Acme", mdn))?.message).toBe(
+      "Title shows a JavaScript value: null",
+    );
   });
 
   test("reported once, by this rule's own check, beside the body result", async () => {
-    const checks = (await titled("undefined | Acme"));
-    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["placeholder-content:pass", "placeholder-title:warn"]);
+    const checks = await titled("undefined | Acme");
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
+      "placeholder-content:pass",
+      "placeholder-title:warn",
+    ]);
   });
 
   test("a clean title adds no row", async () => {

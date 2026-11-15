@@ -101,11 +101,17 @@ describe("a11y/button-name: what counts as hidden", () => {
     }
     // Inherited visibility is settled when the page loads no stylesheet this
     // check does not read; with one, an external rule could undo it.
-    expect(await statuses(fixture('<div style="visibility:hidden"><button></button></div>'))).toEqual({
+    expect(
+      await statuses(fixture('<div style="visibility:hidden"><button></button></div>')),
+    ).toEqual({
       "button-name": "pass",
     });
     expect(
-      (await statuses(fixture('<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><button></button></div>'))),
+      await statuses(
+        fixture(
+          '<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><button></button></div>',
+        ),
+      ),
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 
@@ -126,7 +132,9 @@ describe("a11y/button-name: what counts as hidden", () => {
 
   test("a hidden and a visible unnamed button: only the visible one fails", async () => {
     expect(
-      (await run(fixture('<div hidden><button id="zoom-in"></button></div><button id="cart"></button>'))),
+      await run(
+        fixture('<div hidden><button id="zoom-in"></button></div><button id="cart"></button>'),
+      ),
     ).toEqual([expect.objectContaining({ status: "fail", items: [{ id: "button#cart" }] })]);
   });
 });
@@ -134,13 +142,12 @@ describe("a11y/button-name: what counts as hidden", () => {
 describe("a11y/button-name: inline styles the check cannot read exactly", () => {
   test("are reported as unconfirmed, not as a failure", async () => {
     expect(
-      (await run(fixture('<div style="display:var(--d)"><button class="zoom-in"></button></div>'))),
+      await run(fixture('<div style="display:var(--d)"><button class="zoom-in"></button></div>')),
     ).toEqual([
       expect.objectContaining({
         name: "button-name-unconfirmed",
         status: "warn",
-        message:
-          "1 button(s) without accessible names may be hidden by a style (unconfirmed)",
+        message: "1 button(s) without accessible names may be hidden by a style (unconfirmed)",
         items: [expect.objectContaining({ id: "button.zoom-in" })],
       }),
     ]);

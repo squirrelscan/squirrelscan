@@ -22,11 +22,7 @@ import {
   slimEntityMapForViewer,
 } from "../src/entity-map";
 
-function node(
-  key: string,
-  occurrences: number,
-  extra: Partial<EntityMapNode> = {},
-): EntityMapNode {
+function node(key: string, occurrences: number, extra: Partial<EntityMapNode> = {}): EntityMapNode {
   return {
     key,
     id: null,
@@ -129,9 +125,7 @@ describe("slimEntityMapForPublish", () => {
     }
     const slim = slimEntityMapForPublish(map(fat, []));
 
-    expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
-      ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
-    );
+    expect(JSON.stringify(slim).length).toBeLessThanOrEqual(ENTITY_MAP_PUBLISH_LIMITS.maxBytes);
     // The busiest entities are the ones that survived.
     expect(slim.nodes.length).toBeGreaterThan(0);
     expect(slim.summary.nodeCount).toBe(400);
@@ -189,10 +183,7 @@ describe("slimEntityMapForPublish", () => {
     }
     const busiest = `n${String(many.length - 1).padStart(4, "0")}`;
     const clipped = "n0000";
-    const edges = [
-      edge(busiest, clipped),
-      edge(busiest, "id:https://example.com/#missing", true),
-    ];
+    const edges = [edge(busiest, clipped), edge(busiest, "id:https://example.com/#missing", true)];
     const slim = slimEntityMapForPublish(map(many, edges));
 
     expect(slim.edges).toHaveLength(1);
@@ -263,13 +254,9 @@ describe("slimEntityMapForViewer", () => {
 
     expect(viewer.nodes).toHaveLength(ENTITY_MAP_VIEWER_LIMITS.maxNodes);
     expect(viewer.truncated!.nodes).toBe(20_001 - ENTITY_MAP_VIEWER_LIMITS.maxNodes);
-    expect(JSON.stringify(viewer).length).toBeLessThanOrEqual(
-      ENTITY_MAP_VIEWER_LIMITS.maxBytes,
-    );
+    expect(JSON.stringify(viewer).length).toBeLessThanOrEqual(ENTITY_MAP_VIEWER_LIMITS.maxBytes);
     // An order of magnitude, not a few percent — the point of the projection.
-    expect(JSON.stringify(viewer).length).toBeLessThan(
-      JSON.stringify(full).length / 5,
-    );
+    expect(JSON.stringify(viewer).length).toBeLessThan(JSON.stringify(full).length / 5);
   });
 
   test("keeps more per node than the publish copy, because this one is read", () => {
@@ -509,9 +496,7 @@ for (const shape of [
         if (!e.dangling) expect(keys.has(e.target)).toBe(true);
       }
       expect(published.summary.nodeCount).toBe(thousand.nodes.length);
-      expect(published.nodes.length + published.truncated!.nodes).toBe(
-        thousand.nodes.length,
-      );
+      expect(published.nodes.length + published.truncated!.nodes).toBe(thousand.nodes.length);
     });
 
     test("does not get less representative as the crawl grows", () => {
@@ -523,16 +508,12 @@ for (const shape of [
         expect(types.Offer).toBeGreaterThan(0);
         expect(types.Product).toBeGreaterThan(0);
         expect(types.Organization).toBe(1);
-        expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
-          ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
-        );
+        expect(JSON.stringify(slim).length).toBeLessThanOrEqual(ENTITY_MAP_PUBLISH_LIMITS.maxBytes);
       }
     }, 30_000);
 
     test("is deterministic", () => {
-      expect(JSON.stringify(slimEntityMapForPublish(thousand))).toBe(
-        JSON.stringify(published),
-      );
+      expect(JSON.stringify(slimEntityMapForPublish(thousand))).toBe(JSON.stringify(published));
     });
   });
 }
@@ -685,7 +666,10 @@ describe("problem nodes survive the publish sample", () => {
     expect(kept(keysOf([...crowd("Offer"), orphan()]))).toContain("id:https://example.com/#orphan");
 
     // Referenced by another node: not an orphan, sampled out.
-    const referenced = map([...crowd("Offer"), orphan()], [edge("id:crowd-0000", "id:https://example.com/#orphan")]);
+    const referenced = map(
+      [...crowd("Offer"), orphan()],
+      [edge("id:crowd-0000", "id:https://example.com/#orphan")],
+    );
     expect(kept(referenced)).not.toContain("id:https://example.com/#orphan");
 
     // A page subject is expected to be unreferenced.
@@ -712,12 +696,10 @@ describe("problem nodes survive the publish sample", () => {
     // the budget reach, so only the reservation can keep it.
     const primary = (properties: EntityMapNode["properties"]) =>
       node("id:primary", 1, { types: ["Organization"], properties });
-    expect(kept(keysOf([...crowd(), primary({})]))).toContain(
+    expect(kept(keysOf([...crowd(), primary({})]))).toContain("id:primary");
+    expect(kept(keysOf([...crowd(), primary({ sameAs: ["https://x.com/a"] })]))).not.toContain(
       "id:primary",
     );
-    expect(
-      kept(keysOf([...crowd(), primary({ sameAs: ["https://x.com/a"] })])),
-    ).not.toContain("id:primary");
   });
 
   test("an outlier publisher survives, a lone consistent publisher does not", () => {
@@ -731,14 +713,20 @@ describe("problem nodes survive the publish sample", () => {
     const stray = node("id:pub-stray", 1, { types: ["Organization"], properties: sameAs });
     const base = crowd();
 
-    const withStray = map([...base, main, stray], [
-      publisherEdge("id:crowd-0000", "id:pub-main", 9),
-      publisherEdge("id:crowd-0001", "id:pub-stray", 1),
-    ]);
+    const withStray = map(
+      [...base, main, stray],
+      [
+        publisherEdge("id:crowd-0000", "id:pub-main", 9),
+        publisherEdge("id:crowd-0001", "id:pub-stray", 1),
+      ],
+    );
     expect(kept(withStray)).toContain("id:pub-stray");
 
     // Negative control: the same stray node with no publisher reference at all.
-    const noStray = map([...base, main, stray], [publisherEdge("id:crowd-0000", "id:pub-main", 10)]);
+    const noStray = map(
+      [...base, main, stray],
+      [publisherEdge("id:crowd-0000", "id:pub-main", 10)],
+    );
     expect(kept(noStray)).not.toContain("id:pub-stray");
   });
 
@@ -751,16 +739,22 @@ describe("problem nodes survive the publish sample", () => {
     const sameAs = { sameAs: ["https://x.com/a"] };
     const main = node("id:pub-main", 1, { types: ["Organization"], properties: sameAs });
     const other = node("id:pub-other", 1, { types: ["Organization"], properties: sameAs });
-    const balanced = map([...crowd(), main, other], [
-      publisherEdge("id:crowd-0000", "id:pub-main", 5),
-      publisherEdge("id:crowd-0001", "id:pub-other", 5),
-    ]);
+    const balanced = map(
+      [...crowd(), main, other],
+      [
+        publisherEdge("id:crowd-0000", "id:pub-main", 5),
+        publisherEdge("id:crowd-0001", "id:pub-other", 5),
+      ],
+    );
     expect(kept(balanced)).not.toContain("id:pub-other");
     // Control: the same two publishers at 9/1 reserve the outlier.
-    const lopsided = map([...crowd(), main, other], [
-      publisherEdge("id:crowd-0000", "id:pub-main", 9),
-      publisherEdge("id:crowd-0001", "id:pub-other", 1),
-    ]);
+    const lopsided = map(
+      [...crowd(), main, other],
+      [
+        publisherEdge("id:crowd-0000", "id:pub-main", 9),
+        publisherEdge("id:crowd-0001", "id:pub-other", 1),
+      ],
+    );
     expect(kept(lopsided)).toContain("id:pub-other");
   });
 
@@ -768,9 +762,9 @@ describe("problem nodes survive the publish sample", () => {
     const person = (properties: EntityMapNode["properties"]) =>
       node("id:person", 1, { types: ["Person"], properties });
     expect(kept(keysOf([...crowd(), person({})]))).toContain("id:person");
-    expect(
-      kept(keysOf([...crowd(), person({ url: "https://example.com/ada" })])),
-    ).not.toContain("id:person");
+    expect(kept(keysOf([...crowd(), person({ url: "https://example.com/ada" })]))).not.toContain(
+      "id:person",
+    );
   });
 
   test("a LocalBusiness declared on nearly every page survives, one on a few does not", () => {
@@ -844,8 +838,15 @@ describe("problem nodes survive the publish sample", () => {
     const classes = [
       node("id:c", 1, { conflicts: [conflict] }),
       node("id:d", 1, { danglingRefs: 1 }),
-      node("anon:n", 2, { types: ["Organization"], pages: ["https://example.com/a", "https://example.com/b"] }),
-      node("id:e", 1, { id: "#relative", types: ["Offer"], pages: ["https://example.com/a", "https://example.com/b"] }),
+      node("anon:n", 2, {
+        types: ["Organization"],
+        pages: ["https://example.com/a", "https://example.com/b"],
+      }),
+      node("id:e", 1, {
+        id: "#relative",
+        types: ["Offer"],
+        pages: ["https://example.com/a", "https://example.com/b"],
+      }),
     ];
     const slim = projectEntityMap(map(classes, []), ENTITY_PUBLISH_TINY, "publish");
     expect(slim.nodes.length).toBeLessThanOrEqual(3);
@@ -920,7 +921,7 @@ describe("edges past maxEdges (#405)", () => {
     expect(slim.truncated?.edges).toBe(edges.length);
   });
 
-    test("under the cap every edge is kept, in map order", () => {
+  test("under the cap every edge is kept, in map order", () => {
     const slim = projectEntityMap(map(nodes, edges), ENTITY_MAP_PUBLISH_LIMITS, "publish");
     expect(pairs(slim)).toEqual(edges.map((e) => `${e.source}>${e.target}`));
   });
@@ -975,7 +976,11 @@ describe("publish page index", () => {
 
 describe("compare after publish projection", () => {
   function pair(extra = 5) {
-    const anon = node("anon:org", 3, { name: "Acme", types: ["Organization"], pages: ["https://example.com/0"] });
+    const anon = node("anon:org", 3, {
+      name: "Acme",
+      types: ["Organization"],
+      pages: ["https://example.com/0"],
+    });
     const withId = node("id:https://example.com/#org", 3, {
       id: "https://example.com/#org",
       name: "Acme",
@@ -995,10 +1000,7 @@ describe("compare after publish projection", () => {
 
   test("proves a gained id from published copies", () => {
     const { older, newer } = pair();
-    const diff = diffEntityMaps(
-      slimEntityMapForPublish(older),
-      slimEntityMapForPublish(newer),
-    );
+    const diff = diffEntityMaps(slimEntityMapForPublish(older), slimEntityMapForPublish(newer));
     expect(diff.gainedId).toHaveLength(1);
     expect(diff.gainedId[0]!.coverage).toBe("proven");
   });
@@ -1006,7 +1008,10 @@ describe("compare after publish projection", () => {
   test("matches the verdict on the uncapped maps when the index is complete", () => {
     const { older, newer } = pair();
     const full = diffEntityMaps(older, newer);
-    const published = diffEntityMaps(slimEntityMapForPublish(older), slimEntityMapForPublish(newer));
+    const published = diffEntityMaps(
+      slimEntityMapForPublish(older),
+      slimEntityMapForPublish(newer),
+    );
     expect(published.gainedId).toEqual(full.gainedId);
   });
 

@@ -9,18 +9,30 @@ import type { Config } from "@squirrelscan/config";
 import type { EntityMap, PageRecord } from "@squirrelscan/core-contracts";
 import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 
-import { generateReportFromStorage, runStreamingRules, type PreFetchedAssets } from "../src/adapter";
+import {
+  generateReportFromStorage,
+  runStreamingRules,
+  type PreFetchedAssets,
+} from "../src/adapter";
 import { entityMapVariantKeys } from "../src/canonical-groups";
 import { foldEntityMapVariants } from "../src/entity-map";
 
-const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> => Effect.runPromise(eff as Effect.Effect<A, never, never>);
+const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> =>
+  Effect.runPromise(eff as Effect.Effect<A, never, never>);
 
 const CONFIG = { rule_options: {}, rules: { enable: ["*"] } } as unknown as Config;
-const ASSETS: PreFetchedAssets = { resourceSizes: { css: [], images: [] }, scripts: [], pdfSizes: [], sitemapUrlStatuses: [] };
+const ASSETS: PreFetchedAssets = {
+  resourceSizes: { css: [], images: [] },
+  scripts: [],
+  pdfSizes: [],
+  sitemapUrlStatuses: [],
+};
 const T = 60_000;
 
 const withCanonical = (html: string, canonical: string): string =>
-  html.replace(/<link[^>]*rel=["']canonical["'][^>]*>/gi, "").replace(/<head([^>]*)>/i, `<head$1><link rel="canonical" href="${canonical}">`);
+  html
+    .replace(/<link[^>]*rel=["']canonical["'][^>]*>/gi, "")
+    .replace(/<head([^>]*)>/i, `<head$1><link rel="canonical" href="${canonical}">`);
 
 async function crawl(withVariants: boolean) {
   const model = generateSiteModel({ seed: 7, pageCount: 12 });
@@ -43,82 +55,120 @@ async function crawl(withVariants: boolean) {
     // Pagination keeps its own canonical: it stays a page of its own.
     await run(storage.upsertPage(crawlId, make(paginated, paginated)));
   }
-  const result = await run(runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 8 }));
+  const result = await run(
+    runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 8 }),
+  );
   return { storage, crawlId, result, base, pageCount: pages.length };
 }
 
 describe("buildV1Report folds query-string variants (#1350)", () => {
-  test("a variant is counted with its canonical; pagination with its own canonical stays; the score does not move", async () => {
-    const { storage, crawlId, result, base, pageCount } = await crawl(true);
-    const unfolded = await run(generateReportFromStorage(storage, crawlId, result));
-    const folded = await run(generateReportFromStorage(storage, crawlId, result, { foldCanonicalVariants: true }));
-    const variant = `${base.url}?subject=Billing`;
+  test(
+    "a variant is counted with its canonical; pagination with its own canonical stays; the score does not move",
+    async () => {
+      const { storage, crawlId, result, base, pageCount } = await crawl(true);
+      const unfolded = await run(generateReportFromStorage(storage, crawlId, result));
+      const folded = await run(
+        generateReportFromStorage(storage, crawlId, result, { foldCanonicalVariants: true }),
+      );
+      const variant = `${base.url}?subject=Billing`;
 
-    expect(unfolded.totalPages).toBe(pageCount + 2);
-    expect(unfolded.canonicalVariants).toBeUndefined();
+      expect(unfolded.totalPages).toBe(pageCount + 2);
+      expect(unfolded.canonicalVariants).toBeUndefined();
 
-    expect(folded.totalPages).toBe(pageCount + 1);
-    expect(folded.canonicalVariants).toBe(1);
-    expect(folded.canonicalVariantPages).toEqual([{ page: variant, canonical: base.url }]);
-    expect(folded.pages.map((p) => p.url)).not.toContain(variant);
-    expect(folded.pages.map((p) => p.url)).toContain(`${base.url}?page=2`);
-    // Nothing a renderer reads names the variant any more, and the page's own checks include its variant's.
-    expect(JSON.stringify([folded.ruleResults, folded.pages, folded.siteChecks])).not.toContain("subject=Billing");
-    const baseChecks = folded.pages.find((p) => p.url === base.url)!.checks.length;
-    const baseBefore = unfolded.pages.find((p) => p.url === base.url)!.checks.length;
-    expect(baseChecks).toBeGreaterThanOrEqual(baseBefore); // capped per page, so never fewer
-    // Every page still has its own checks: tallies and score are unchanged.
-    expect(folded.healthScore).toEqual(unfolded.healthScore);
-    expect({ passed: folded.passed, warnings: folded.warnings, failed: folded.failed }).toEqual({
-      passed: unfolded.passed,
-      warnings: unfolded.warnings,
-      failed: unfolded.failed,
-    });
-    await run(storage.close());
-  }, T);
+      expect(folded.totalPages).toBe(pageCount + 1);
+      expect(folded.canonicalVariants).toBe(1);
+      expect(folded.canonicalVariantPages).toEqual([{ page: variant, canonical: base.url }]);
+      expect(folded.pages.map((p) => p.url)).not.toContain(variant);
+      expect(folded.pages.map((p) => p.url)).toContain(`${base.url}?page=2`);
+      // Nothing a renderer reads names the variant any more, and the page's own checks include its variant's.
+      expect(JSON.stringify([folded.ruleResults, folded.pages, folded.siteChecks])).not.toContain(
+        "subject=Billing",
+      );
+      const baseChecks = folded.pages.find((p) => p.url === base.url)!.checks.length;
+      const baseBefore = unfolded.pages.find((p) => p.url === base.url)!.checks.length;
+      expect(baseChecks).toBeGreaterThanOrEqual(baseBefore); // capped per page, so never fewer
+      // Every page still has its own checks: tallies and score are unchanged.
+      expect(folded.healthScore).toEqual(unfolded.healthScore);
+      expect({ passed: folded.passed, warnings: folded.warnings, failed: folded.failed }).toEqual({
+        passed: unfolded.passed,
+        warnings: unfolded.warnings,
+        failed: unfolded.failed,
+      });
+      await run(storage.close());
+    },
+    T,
+  );
 
-  test("exportCanonicalVariants lists the variants and changes nothing else (the server folds, #1350)", async () => {
-    const { storage, crawlId, result, base } = await crawl(true);
-    const strip = (r: object): string => JSON.stringify({ ...r, timestamp: "", canonicalVariantPages: undefined });
-    const off = await run(generateReportFromStorage(storage, crawlId, result));
-    const exported = await run(generateReportFromStorage(storage, crawlId, result, { exportCanonicalVariants: true }));
-    expect(exported.canonicalVariantPages).toEqual([{ page: `${base.url}?subject=Billing`, canonical: base.url }]);
-    expect(exported.canonicalVariants).toBeUndefined();
-    expect(strip(exported)).toBe(strip(off));
-    await run(storage.close());
-  }, T);
+  test(
+    "exportCanonicalVariants lists the variants and changes nothing else (the server folds, #1350)",
+    async () => {
+      const { storage, crawlId, result, base } = await crawl(true);
+      const strip = (r: object): string =>
+        JSON.stringify({ ...r, timestamp: "", canonicalVariantPages: undefined });
+      const off = await run(generateReportFromStorage(storage, crawlId, result));
+      const exported = await run(
+        generateReportFromStorage(storage, crawlId, result, { exportCanonicalVariants: true }),
+      );
+      expect(exported.canonicalVariantPages).toEqual([
+        { page: `${base.url}?subject=Billing`, canonical: base.url },
+      ]);
+      expect(exported.canonicalVariants).toBeUndefined();
+      expect(strip(exported)).toBe(strip(off));
+      await run(storage.close());
+    },
+    T,
+  );
 
-  test("exportCanonicalVariants on a site with no variants sends an EMPTY list and is otherwise byte-identical", async () => {
-    const { storage, crawlId, result } = await crawl(false);
-    const strip = (r: object): string => JSON.stringify({ ...r, timestamp: "", canonicalVariantPages: undefined });
-    const off = await run(generateReportFromStorage(storage, crawlId, result));
-    const on = await run(generateReportFromStorage(storage, crawlId, result, { exportCanonicalVariants: true }));
-    // The empty list is how a server learns that a page it recorded as a variant is not one any more.
-    expect(on.canonicalVariantPages).toEqual([]);
-    expect(on.canonicalVariantsComplete).toBeUndefined();
-    expect(strip(on)).toBe(strip(off));
-    await run(storage.close());
-  }, T);
+  test(
+    "exportCanonicalVariants on a site with no variants sends an EMPTY list and is otherwise byte-identical",
+    async () => {
+      const { storage, crawlId, result } = await crawl(false);
+      const strip = (r: object): string =>
+        JSON.stringify({ ...r, timestamp: "", canonicalVariantPages: undefined });
+      const off = await run(generateReportFromStorage(storage, crawlId, result));
+      const on = await run(
+        generateReportFromStorage(storage, crawlId, result, { exportCanonicalVariants: true }),
+      );
+      // The empty list is how a server learns that a page it recorded as a variant is not one any more.
+      expect(on.canonicalVariantPages).toEqual([]);
+      expect(on.canonicalVariantsComplete).toBeUndefined();
+      expect(strip(on)).toBe(strip(off));
+      await run(storage.close());
+    },
+    T,
+  );
 
-  test("exportCanonicalVariants on storage that cannot list page features sends no list (unknown, not none)", async () => {
-    const { storage, crawlId, result } = await crawl(true);
-    const blind = new Proxy(storage, {
-      get: (target, prop, receiver) =>
-        prop === "getPageFeaturesPage" ? undefined : Reflect.get(target, prop, receiver),
-    });
-    const on = await run(generateReportFromStorage(blind, crawlId, result, { exportCanonicalVariants: true }));
-    expect(on.canonicalVariantPages).toBeUndefined();
-    await run(storage.close());
-  }, T);
+  test(
+    "exportCanonicalVariants on storage that cannot list page features sends no list (unknown, not none)",
+    async () => {
+      const { storage, crawlId, result } = await crawl(true);
+      const blind = new Proxy(storage, {
+        get: (target, prop, receiver) =>
+          prop === "getPageFeaturesPage" ? undefined : Reflect.get(target, prop, receiver),
+      });
+      const on = await run(
+        generateReportFromStorage(blind, crawlId, result, { exportCanonicalVariants: true }),
+      );
+      expect(on.canonicalVariantPages).toBeUndefined();
+      await run(storage.close());
+    },
+    T,
+  );
 
-  test("a site with no variants reports byte-identically with the fold on or off", async () => {
-    const { storage, crawlId, result } = await crawl(false);
-    const strip = (r: object): string => JSON.stringify({ ...r, timestamp: "" });
-    const off = await run(generateReportFromStorage(storage, crawlId, result));
-    const on = await run(generateReportFromStorage(storage, crawlId, result, { foldCanonicalVariants: true }));
-    expect(strip(on)).toBe(strip(off));
-    await run(storage.close());
-  }, T);
+  test(
+    "a site with no variants reports byte-identically with the fold on or off",
+    async () => {
+      const { storage, crawlId, result } = await crawl(false);
+      const strip = (r: object): string => JSON.stringify({ ...r, timestamp: "" });
+      const off = await run(generateReportFromStorage(storage, crawlId, result));
+      const on = await run(
+        generateReportFromStorage(storage, crawlId, result, { foldCanonicalVariants: true }),
+      );
+      expect(strip(on)).toBe(strip(off));
+      await run(storage.close());
+    },
+    T,
+  );
 });
 
 describe("foldEntityMapVariants (#1350)", () => {
@@ -128,9 +178,45 @@ describe("foldEntityMapVariants (#1350)", () => {
     version: 1,
     site: S,
     generatedAt: "2026-01-01T00:00:00.000Z",
-    summary: { nodeCount: 1, edgeCount: 1, danglingCount: 0, pagesTotal: 3, pagesWithoutEntities: 1, nodesWithStableId: 1, stableIdShare: 1, pageLocalCount: 0, nodesWithoutIdCount: 0, conflictCount: 0, countsByType: { Organization: 1 } },
-    nodes: [{ key: "id:org", id: "org", types: ["Organization"], name: "Acme", properties: {}, occurrences: 3, pages: [`${S}/contact`, `${S}/contact?a=1`, `${S}/`], morePages: 0, conflicts: [], danglingRefs: 0, pageLocal: false }],
-    edges: [{ source: "id:org", predicate: "url", target: "id:org", dangling: false, occurrences: 2, pages: [`${S}/contact`, `${S}/contact?a=1`], morePages: 0 }],
+    summary: {
+      nodeCount: 1,
+      edgeCount: 1,
+      danglingCount: 0,
+      pagesTotal: 3,
+      pagesWithoutEntities: 1,
+      nodesWithStableId: 1,
+      stableIdShare: 1,
+      pageLocalCount: 0,
+      nodesWithoutIdCount: 0,
+      conflictCount: 0,
+      countsByType: { Organization: 1 },
+    },
+    nodes: [
+      {
+        key: "id:org",
+        id: "org",
+        types: ["Organization"],
+        name: "Acme",
+        properties: {},
+        occurrences: 3,
+        pages: [`${S}/contact`, `${S}/contact?a=1`, `${S}/`],
+        morePages: 0,
+        conflicts: [],
+        danglingRefs: 0,
+        pageLocal: false,
+      },
+    ],
+    edges: [
+      {
+        source: "id:org",
+        predicate: "url",
+        target: "id:org",
+        dangling: false,
+        occurrences: 2,
+        pages: [`${S}/contact`, `${S}/contact?a=1`],
+        morePages: 0,
+      },
+    ],
     pages: [
       { url: `${S}/`, declares: ["id:org"], references: [], entityCount: 1 },
       { url: `${S}/contact`, declares: [], references: [], entityCount: 0 },
@@ -143,7 +229,12 @@ describe("foldEntityMapVariants (#1350)", () => {
     expect(folded.pages.map((p) => p.url)).toEqual([`${S}/`, `${S}/contact`]);
     expect(folded.summary.pagesTotal).toBe(2);
     expect(folded.summary.pagesWithoutEntities).toBe(0);
-    expect(folded.pages[1]).toEqual({ url: `${S}/contact`, declares: ["id:org"], references: [], entityCount: 1 });
+    expect(folded.pages[1]).toEqual({
+      url: `${S}/contact`,
+      declares: ["id:org"],
+      references: [],
+      entityCount: 1,
+    });
     expect(folded.nodes[0]!.pages).toEqual([`${S}/`, `${S}/contact`]);
     expect(folded.edges[0]!.pages).toEqual([`${S}/contact`]);
     // The input is not mutated and everything else is unchanged.
@@ -168,11 +259,15 @@ describe("entityMapVariantKeys (#1350)", () => {
   } as never;
 
   test("variant and canonical are keyed by the URL the entity map lists them under", async () => {
-    const out = await run(entityMapVariantKeys(storage, "crawl", new Map([[`${S}/c?a=1`, `${S}/c`]]), 10));
+    const out = await run(
+      entityMapVariantKeys(storage, "crawl", new Map([[`${S}/c?a=1`, `${S}/c`]]), 10),
+    );
     expect([...out]).toEqual([[`${S}/c/?a=1&x=2`, `${S}/c/`]]);
   });
   test("nothing to fold, or storage without the reader, is empty", async () => {
     expect((await run(entityMapVariantKeys(storage, "crawl", new Map(), 10))).size).toBe(0);
-    expect((await run(entityMapVariantKeys({} as never, "crawl", new Map([["a", "b"]]), 10))).size).toBe(0);
+    expect(
+      (await run(entityMapVariantKeys({} as never, "crawl", new Map([["a", "b"]]), 10))).size,
+    ).toBe(0);
   });
 });

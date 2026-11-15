@@ -14,7 +14,7 @@ import { hasWafChallengeEvidence } from "@squirrelscan/utils/waf-markers";
 // number signatures.
 export async function readCappedBytes(
   res: Response,
-  maxBytes: number
+  maxBytes: number,
 ): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   const body = decodedBody(res);
   if (!body) return { bytes: new Uint8Array(0), truncated: false };
@@ -55,7 +55,7 @@ export async function readCappedBytes(
 
 export async function readCapped(
   res: Response,
-  maxBytes: number
+  maxBytes: number,
 ): Promise<{ text: string; truncated: boolean }> {
   const { bytes, truncated } = await readCappedBytes(res, maxBytes);
   return { text: new TextDecoder().decode(bytes), truncated };
@@ -78,7 +78,8 @@ const CHALLENGE_TITLE_RE =
   /<title>\s*(Just a moment\.\.\.|Attention Required! \| Cloudflare|Access denied \| [^<]*Cloudflare|DDoS-Guard)\s*<\/title>/i;
 // Markers only a challenge page carries. Not `/cdn-cgi/challenge-platform/`:
 // Cloudflare injects that script into ordinary pages too.
-const CHALLENGE_BODY_RE = /window\._cf_chl_opt|id="cf-browser-verification"|id="challenge-error-text"/i;
+const CHALLENGE_BODY_RE =
+  /window\._cf_chl_opt|id="cf-browser-verification"|id="challenge-error-text"/i;
 
 /**
  * True when the site pushed back instead of answering: rate limited (HTTP 429),

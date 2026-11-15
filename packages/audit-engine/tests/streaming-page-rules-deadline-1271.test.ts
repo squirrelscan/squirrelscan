@@ -32,7 +32,7 @@ describe("streamPageRules deadlineAt (#1271)", () => {
   test("no deadline: every page runs and none is left", async () => {
     const { storage, crawlId } = await fixture();
     const result = await run(
-      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 8 })
+      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 8 }),
     );
     expect(result.pagesNotEvaluated).toBe(0);
     expect(result.pageUrls.length).toBeGreaterThan(0);
@@ -41,7 +41,7 @@ describe("streamPageRules deadlineAt (#1271)", () => {
   test("a deadline in the past runs no page and counts them all", async () => {
     const { storage, crawlId } = await fixture();
     const universe = new Set(
-      (await run(storage.getPages(crawlId))).map((page) => page.normalizedUrl)
+      (await run(storage.getPages(crawlId))).map((page) => page.normalizedUrl),
     );
     const result = await run(
       streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), {
@@ -49,7 +49,7 @@ describe("streamPageRules deadlineAt (#1271)", () => {
         deadlineAt: Date.now() - 1000,
         pageUniverse: universe,
         totalPages: universe.size,
-      })
+      }),
     );
     expect(result.pageUrls).toEqual([]);
     expect(result.pagesNotEvaluated).toBe(universe.size);
@@ -59,7 +59,7 @@ describe("streamPageRules deadlineAt (#1271)", () => {
   test("a deadline that passes mid-run stops after the pages done and counts the rest", async () => {
     const { storage, crawlId } = await fixture();
     const universe = new Set(
-      (await run(storage.getPages(crawlId))).map((page) => page.normalizedUrl)
+      (await run(storage.getPages(crawlId))).map((page) => page.normalizedUrl),
     );
     const base = Date.now();
     const result = await run(
@@ -75,7 +75,7 @@ describe("streamPageRules deadlineAt (#1271)", () => {
             if (done === 5) setSystemTime(new Date(base + 120_000));
           },
         },
-      })
+      }),
     );
     expect(result.pageUrls.length).toBe(5);
     expect(result.pagesNotEvaluated).toBe(universe.size - 5);

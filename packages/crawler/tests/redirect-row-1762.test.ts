@@ -126,7 +126,6 @@ async function seedFrontier(
   }
 }
 
-
 function row(url: string, over: Partial<PageRecord>): PageRecord {
   return {
     url,
@@ -173,7 +172,11 @@ function row(url: string, over: Partial<PageRecord>): PageRecord {
   } as PageRecord;
 }
 
-function chain(from: string, to: string, over: Partial<NonNullable<PageRecord["redirectChain"]>> = {}) {
+function chain(
+  from: string,
+  to: string,
+  over: Partial<NonNullable<PageRecord["redirectChain"]>> = {},
+) {
   return {
     sourceUrl: from,
     finalUrl: to,
@@ -198,7 +201,11 @@ describe("getPageCount mirrors the engine's redirect marker (#1762)", () => {
     const crawlId = await createCrawlRecord(storage, { ...baseConfig });
     const rows: PageRecord[] = [
       row(U("/page"), { html: "<p>x</p>" }),
-      row(U("/marker"), { status: 301, finalUrl: U("/dest"), redirectChain: chain(U("/marker"), U("/dest")) }),
+      row(U("/marker"), {
+        status: 301,
+        finalUrl: U("/dest"),
+        redirectChain: chain(U("/marker"), U("/dest")),
+      }),
       row(U("/loop"), {
         status: 301,
         finalUrl: U("/loop-b"),
@@ -212,15 +219,24 @@ describe("getPageCount mirrors the engine's redirect marker (#1762)", () => {
       row(U("/one-hop"), {
         status: 301,
         finalUrl: U("/dest"),
-        redirectChain: { ...chain(U("/one-hop"), U("/dest")), hops: [{ url: U("/one-hop"), statusCode: 301, type: "http" as const }] },
+        redirectChain: {
+          ...chain(U("/one-hop"), U("/dest")),
+          hops: [{ url: U("/one-hop"), statusCode: 301, type: "http" as const }],
+        },
       }),
       row(U("/no-chain"), { status: 301, finalUrl: U("/dest") }),
-      row(U("/same"), { status: 302, finalUrl: U("/same"), redirectChain: chain(U("/same"), U("/same")) }),
+      row(U("/same"), {
+        status: 302,
+        finalUrl: U("/same"),
+        redirectChain: chain(U("/same"), U("/same")),
+      }),
     ];
     for (const r of rows) await Effect.runPromise(storage.upsertPage(crawlId, r));
     const count = await Effect.runPromise(storage.getPageCount(crawlId));
     // The same rows through the engine's predicate: only /marker is a redirect.
-    expect(rows.filter((r) => isRedirectSourcePage(r)).map((r) => r.normalizedUrl)).toEqual([U("/marker")]);
+    expect(rows.filter((r) => isRedirectSourcePage(r)).map((r) => r.normalizedUrl)).toEqual([
+      U("/marker"),
+    ]);
     expect(count).toBe(rows.length - 1);
     await Effect.runPromise(storage.close());
   });
@@ -256,7 +272,10 @@ describe("a redirect the crawler kept as a page is not a legacy redirect (#1762)
 
   test("the same row marked keptAsPage stays a page", () => {
     expect(
-      isRedirectSourcePage({ ...legacy, redirectChain: { ...legacy.redirectChain!, keptAsPage: true } }),
+      isRedirectSourcePage({
+        ...legacy,
+        redirectChain: { ...legacy.redirectChain!, keptAsPage: true },
+      }),
     ).toBe(false);
   });
 });
@@ -284,7 +303,12 @@ describe("a cached legacy redirect row is a redirect for the crawl too (#1762)",
     );
 
     const fetched: string[] = [];
-    const cfg2 = { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999 };
+    const cfg2 = {
+      ...baseConfig,
+      incremental: true,
+      useCacheControl: true,
+      maxStalenessSeconds: 999_999,
+    };
     const crawlId2 = await createCrawlRecord(storage, cfg2);
     await seedFrontier(storage, crawlId2, [
       { path: "/", source: "seed" },
@@ -295,7 +319,9 @@ describe("a cached legacy redirect row is a redirect for the crawl too (#1762)",
     );
     await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
 
-    const frontier = (await Effect.runPromise(storage.getAllFrontierEntries(crawlId2))).map((e) => e.normalizedUrl);
+    const frontier = (await Effect.runPromise(storage.getAllFrontierEntries(crawlId2))).map(
+      (e) => e.normalizedUrl,
+    );
     // The destination is crawled once, from the legacy row's redirect.
     expect(frontier).toContain(U("/dest"));
     expect(fetched).toContain(U("/dest"));

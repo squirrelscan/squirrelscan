@@ -91,8 +91,14 @@ function schemaFrom(outcome: GraphqlProbeOutcome): SchemaSummary | null {
   return { types: names.length, apiTypes: names.filter(isApiType).length, truncated: true };
 }
 
-async function probeEndpoint(ctx: RuleContext, candidate: GraphqlCandidate): Promise<EndpointVerdict> {
-  const get = await sendGraphqlProbe(ctx.probe, candidate.url, { op: "introspection", method: "GET" });
+async function probeEndpoint(
+  ctx: RuleContext,
+  candidate: GraphqlCandidate,
+): Promise<EndpointVerdict> {
+  const get = await sendGraphqlProbe(ctx.probe, candidate.url, {
+    op: "introspection",
+    method: "GET",
+  });
   if (!get.sent) return { kind: "not-sent" };
   if ("error" in get) return { kind: "errored" };
   const schema = schemaFrom(get);
@@ -161,7 +167,11 @@ export const graphqlIntrospectionRule: Rule = {
     let graphqlAnswers = 0;
     let errored = 0;
     let budgetStopped = false;
-    const exposed: Array<{ candidate: GraphqlCandidate; method: "GET" | "POST"; schema: SchemaSummary }> = [];
+    const exposed: Array<{
+      candidate: GraphqlCandidate;
+      method: "GET" | "POST";
+      schema: SchemaSummary;
+    }> = [];
     for (const candidate of selection.candidates) {
       const verdict = await probeEndpoint(ctx, candidate);
       if (verdict.kind === "not-sent") {

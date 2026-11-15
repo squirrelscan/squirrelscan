@@ -42,7 +42,9 @@ export const elementHidingRule: Rule = {
     const envelope = readCloudResult<BlocklistCheckResponse>(ctx.cloudResults, "blocklist-check");
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "adblock-elements",
         status: "skipped",

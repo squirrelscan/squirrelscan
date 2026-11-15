@@ -287,14 +287,16 @@ export function parseResolvedAuditSettings(value: unknown): ResolvedAuditSetting
     overrides.crawlStrategy = raw.crawlStrategy as CrawlStrategy;
   }
   if (typeof raw.cloudChecks === "boolean") overrides.cloudChecks = raw.cloudChecks;
-  if (RENDER_POLICIES.includes(raw.render as RenderPolicy)) overrides.render = raw.render as RenderPolicy;
+  if (RENDER_POLICIES.includes(raw.render as RenderPolicy))
+    overrides.render = raw.render as RenderPolicy;
   if (typeof raw.externalLinks === "boolean") overrides.externalLinks = raw.externalLinks;
   if (PROBE_INTENSITIES.includes(raw.probe as ProbeIntensity)) {
     overrides.probe = raw.probe as ProbeIntensity;
   }
   const resolved = resolveAuditSettings(basedOn, overrides);
   const level =
-    v.level === "custom" || (typeof v.level === "string" && (AUDIT_LEVELS as readonly string[]).includes(v.level))
+    v.level === "custom" ||
+    (typeof v.level === "string" && (AUDIT_LEVELS as readonly string[]).includes(v.level))
       ? (v.level as AuditLevelId)
       : resolved.level;
   const changes = Array.isArray(v.changes)

@@ -117,7 +117,8 @@ export const llmsTxtRule: Rule = {
       checks.push({
         name: "llms-txt-present",
         status: "fail",
-        message: "/llms.txt returned 200 but the body is an HTML page (SPA fallback) — not a real llms.txt",
+        message:
+          "/llms.txt returned 200 but the body is an HTML page (SPA fallback) — not a real llms.txt",
         value: "spa-fallback",
       });
       return { checks };

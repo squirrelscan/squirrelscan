@@ -79,7 +79,10 @@ export function lockedRuleReason(rule: LockedRule): LockedRuleReason | undefined
  */
 function plainLine(value: string): string {
   // eslint-disable-next-line no-control-regex
-  return value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** A rule's detail as one short line, or undefined. */
@@ -134,8 +137,10 @@ function groupText(
   const n = rules.length;
   const these = n === 1 ? "This check" : `These ${n} checks`;
   const details = [...new Set(rules.map(lockedRuleDetail).filter((d): d is string => !!d))];
-  const detail = details.length > 0 ? ` ${details.map((d) => (/[.!?]$/.test(d) ? d : `${d}.`)).join(" ")}` : "";
-  if (reason === "plan") return `${these} ${n === 1 ? "is" : "are"} not included in ${PLAN_NAMES[plan]}.${detail}`;
+  const detail =
+    details.length > 0 ? ` ${details.map((d) => (/[.!?]$/.test(d) ? d : `${d}.`)).join(" ")}` : "";
+  if (reason === "plan")
+    return `${these} ${n === 1 ? "is" : "are"} not included in ${PLAN_NAMES[plan]}.${detail}`;
   if (reason === "credits") {
     return `${these} did not run because the audit ran out of credits. Add credits, then re-run the audit to include ${n === 1 ? "it" : "them"}.${detail}`;
   }

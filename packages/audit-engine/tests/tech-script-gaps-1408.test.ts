@@ -16,7 +16,12 @@ const HOME = "https://example.com/";
 const ABOUT = "https://example.com/about";
 
 function inputs(
-  scripts: Array<{ url: string; content?: string | null; error?: string | null; sourcePages?: string[] }>,
+  scripts: Array<{
+    url: string;
+    content?: string | null;
+    error?: string | null;
+    sourcePages?: string[];
+  }>,
   gaps?: { scriptsNotRead?: number },
   limits = DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
 ) {
@@ -31,7 +36,12 @@ function inputs(
   );
 }
 
-const tooLarge = (url: string, sourcePages?: string[]) => ({ url, content: null, error: SCRIPT_TOO_LARGE_ERROR, sourcePages });
+const tooLarge = (url: string, sourcePages?: string[]) => ({
+  url,
+  content: null,
+  error: SCRIPT_TOO_LARGE_ERROR,
+  sourcePages,
+});
 
 describe("a script the crawl dropped for its size", () => {
   test("is counted as script-too-large", () => {
@@ -62,13 +72,19 @@ describe("a script the crawl dropped for its size", () => {
 
   test("bundle_bytes = 0 turns bundle reading off, so nothing is cut", () => {
     const off = { ...DEFAULT_LOCAL_TECH_BUNDLE_LIMITS, bundleBytes: 0 };
-    expect(techInputTruncation(inputs([tooLarge("https://example.com/big.js")], { scriptsNotRead: 4 }, off))).toBeUndefined();
+    expect(
+      techInputTruncation(
+        inputs([tooLarge("https://example.com/big.js")], { scriptsNotRead: 4 }, off),
+      ),
+    ).toBeUndefined();
   });
 });
 
 describe("scripts the audit's script limit left unread", () => {
   test("script-limit with the count, once, on the home page input", () => {
-    const built = inputs([{ url: "https://example.com/a.js", content: "var a=1;" }], { scriptsNotRead: 3 });
+    const built = inputs([{ url: "https://example.com/a.js", content: "var a=1;" }], {
+      scriptsNotRead: 3,
+    });
     expect(built[0]!.truncation).toEqual({ reasons: ["script-limit"], scripts: 3 });
     expect(built[1]?.truncation).toBeUndefined();
     expect(techInputTruncation(built)).toEqual({ reasons: ["script-limit"], scripts: 3 });
@@ -81,7 +97,9 @@ describe("scripts the audit's script limit left unread", () => {
   });
 
   test("adds up with a script dropped for its size", () => {
-    const section = techInputTruncation(inputs([tooLarge("https://example.com/big.js")], { scriptsNotRead: 2 }));
+    const section = techInputTruncation(
+      inputs([tooLarge("https://example.com/big.js")], { scriptsNotRead: 2 }),
+    );
     expect(section?.scripts).toBe(3);
     expect([...(section?.reasons ?? [])].sort()).toEqual(["script-limit", "script-too-large"]);
   });

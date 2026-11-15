@@ -68,5 +68,8 @@ const manifest = {
   featurizerVersion: clean.featurizerVersion,
   heads: ["region", "pageType", "section"].filter((head) => clean[head] !== undefined),
 };
-writeFileSync(join(assets, "classifier-v2.manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+writeFileSync(
+  join(assets, "classifier-v2.manifest.json"),
+  `${JSON.stringify(manifest, null, 2)}\n`,
+);
 console.log(manifest);

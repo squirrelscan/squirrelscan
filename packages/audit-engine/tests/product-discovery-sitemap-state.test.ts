@@ -24,7 +24,11 @@ const CONFIG = {
   rules: { enable: [RULE] },
 } as unknown as Config;
 
-const EMPTY_ASSETS = { css: new Map(), js: new Map(), images: new Map() } as unknown as PreFetchedAssets;
+const EMPTY_ASSETS = {
+  css: new Map(),
+  js: new Map(),
+  images: new Map(),
+} as unknown as PreFetchedAssets;
 
 const BASE_STATS = {
   pagesTotal: 3,
@@ -39,13 +43,20 @@ const BASE_STATS = {
 };
 
 function productHtml(n: number): string {
-  const ld = JSON.stringify({ "@context": "https://schema.org", "@type": "Product", name: `Item ${n}` });
+  const ld = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: `Item ${n}`,
+  });
   return `<!doctype html><html><head><title>Item ${n}</title><script type="application/ld+json">${ld}</script></head><body><h1>Item ${n}</h1></body></html>`;
 }
 
 type Path = "batch" | "streaming";
 
-async function productDiscovery(path: Path, readState?: SitemapReadState): Promise<CheckResult | undefined> {
+async function productDiscovery(
+  path: Path,
+  readState?: SitemapReadState,
+): Promise<CheckResult | undefined> {
   const storage = new SQLiteStorage(":memory:");
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -89,7 +100,10 @@ async function productDiscovery(path: Path, readState?: SitemapReadState): Promi
       });
       yield* storage.addSitemapUrls(
         crawlId,
-        [1, 2, 3].map((n) => ({ sitemapUrl: `${BASE}/sitemap.xml`, loc: `${BASE}/products/item-${n}` })),
+        [1, 2, 3].map((n) => ({
+          sitemapUrl: `${BASE}/sitemap.xml`,
+          loc: `${BASE}/products/item-${n}`,
+        })),
       );
       const result =
         path === "batch"
@@ -98,10 +112,14 @@ async function productDiscovery(path: Path, readState?: SitemapReadState): Promi
               const siteContext = yield* buildSiteContext(pages);
               return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
             })
-          : yield* runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 2 });
+          : yield* runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, {
+              batchSize: 2,
+            });
       return result.ruleResultsMap.get(RULE)?.checks.find((c) => c.name === "product-discovery");
-    }).pipe(// close errors are ignored: some bun versions throw on closing an :memory: db after a run
-    Effect.ensuring(storage.close().pipe(Effect.ignore))),
+    }).pipe(
+      // close errors are ignored: some bun versions throw on closing an :memory: db after a run
+      Effect.ensuring(storage.close().pipe(Effect.ignore)),
+    ),
   );
 }
 

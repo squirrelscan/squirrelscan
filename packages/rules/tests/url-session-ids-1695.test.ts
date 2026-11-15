@@ -22,7 +22,8 @@ function run(pageUrl: string, links: { url: string; isInternal: boolean }[] = []
   return result.checks;
 }
 
-const warnOf = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name && c.status === "warn");
+const warnOf = (checks: CheckResult[], name: string) =>
+  checks.find((c) => c.name === name && c.status === "warn");
 
 describe("sessionParamsOf table", () => {
   const table: [string, string[]][] = [
@@ -120,7 +121,8 @@ describe("two name classes", () => {
 
   test("weak names: only a long generated value, never a label, a counter or a short mixed id", () => {
     for (const name of ["sid", "sessionid"]) {
-      for (const value of [HEX32, ALNUM26, DOTTED, BANG]) expect(flagged(name, value)).toEqual([true, true]);
+      for (const value of [HEX32, ALNUM26, DOTTED, BANG])
+        expect(flagged(name, value)).toEqual([true, true]);
       for (const value of [
         "category-12345",
         "item20241105",
@@ -137,7 +139,9 @@ describe("two name classes", () => {
   });
 
   test("CFID with CFTOKEN keeps its own test: the pair, with a token of 8 or more characters", () => {
-    expect(sessionParamsOf("https://x.test/?CFID=1234567&CFTOKEN=98765432").map((p) => p.name)).toEqual(["CFID", "CFTOKEN"]);
+    expect(
+      sessionParamsOf("https://x.test/?CFID=1234567&CFTOKEN=98765432").map((p) => p.name),
+    ).toEqual(["CFID", "CFTOKEN"]);
     expect(sessionParamsOf("https://x.test/?CFID=1&CFTOKEN=2")).toEqual([]);
   });
 });
@@ -157,7 +161,10 @@ describe("page URL", () => {
   });
 
   test("the session value is masked in the item, the message and the details", () => {
-    const w = warnOf(run(`https://x.test/shop;jsessionid=${SID}?PHPSESSID=${SID}&page=2`), "session-id-in-url");
+    const w = warnOf(
+      run(`https://x.test/shop;jsessionid=${SID}?PHPSESSID=${SID}&page=2`),
+      "session-id-in-url",
+    );
     expect(JSON.stringify(w)).not.toContain(SID);
     expect(w?.items?.[0]?.id).toBe("https://x.test/shop;jsessionid=…?PHPSESSID=…&page=2");
   });
@@ -179,18 +186,28 @@ describe("internal links", () => {
   test("reports the count of distinct links with a masked sample", () => {
     const w = warnOf(run("https://x.test/", links), "session-id-links");
     expect(w?.message).toBe("2 internal link(s) carry a session ID (PHPSESSID, jsessionid)");
-    expect(w?.items?.map((i) => i.id)).toEqual(["https://x.test/a?PHPSESSID=…", "https://x.test/b;jsessionid=…"]);
+    expect(w?.items?.map((i) => i.id)).toEqual([
+      "https://x.test/a?PHPSESSID=…",
+      "https://x.test/b;jsessionid=…",
+    ]);
     expect(w?.details).toMatchObject({ count: 2 });
     expect(JSON.stringify(w)).not.toContain(SID);
   });
 
   test("links to other hosts are not reported", () => {
-    const checks = run("https://x.test/", [{ url: `https://other.test/c?PHPSESSID=${SID}`, isInternal: false }]);
-    expect(checks).toEqual([{ name: "session-ids", status: "pass", message: "No session IDs in URLs" }]);
+    const checks = run("https://x.test/", [
+      { url: `https://other.test/c?PHPSESSID=${SID}`, isInternal: false },
+    ]);
+    expect(checks).toEqual([
+      { name: "session-ids", status: "pass", message: "No session IDs in URLs" },
+    ]);
   });
 
   test("the sample is capped at ten and the rest counted", () => {
-    const many = Array.from({ length: 14 }, (_, i) => ({ url: `https://x.test/p${i}?sid=${SID}`, isInternal: true }));
+    const many = Array.from({ length: 14 }, (_, i) => ({
+      url: `https://x.test/p${i}?sid=${SID}`,
+      isInternal: true,
+    }));
     const w = warnOf(run("https://x.test/", many), "session-id-links");
     expect(w?.items).toHaveLength(10);
     expect(w?.details).toMatchObject({ count: 14, additional: 4 });
@@ -204,12 +221,18 @@ describe("internal links", () => {
 
 describe("clean and deterministic", () => {
   test("a site with no session IDs passes", () => {
-    const checks = run("https://x.test/p?page=2", [{ url: "https://x.test/q?sort=asc", isInternal: true }]);
-    expect(checks).toEqual([{ name: "session-ids", status: "pass", message: "No session IDs in URLs" }]);
+    const checks = run("https://x.test/p?page=2", [
+      { url: "https://x.test/q?sort=asc", isInternal: true },
+    ]);
+    expect(checks).toEqual([
+      { name: "session-ids", status: "pass", message: "No session IDs in URLs" },
+    ]);
   });
 
   test("the same input gives the same result", () => {
     const l = [{ url: `https://x.test/a?sid=${SID}`, isInternal: true }];
-    expect(JSON.stringify(run("https://x.test/", l))).toBe(JSON.stringify(run("https://x.test/", l)));
+    expect(JSON.stringify(run("https://x.test/", l))).toBe(
+      JSON.stringify(run("https://x.test/", l)),
+    );
   });
 });

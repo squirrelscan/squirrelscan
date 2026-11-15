@@ -227,10 +227,16 @@ function withoutUserAgent(
   headers: Record<string, string> | undefined,
 ): Record<string, string> | undefined {
   if (!headers) return headers;
-  return Object.fromEntries(Object.entries(headers).filter(([name]) => name.toLowerCase() !== "user-agent"));
+  return Object.fromEntries(
+    Object.entries(headers).filter(([name]) => name.toLowerCase() !== "user-agent"),
+  );
 }
 
-function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: AbortSignal): ProbeFetch {
+function defaultProbeFetch(
+  timeoutMs: number,
+  egress?: EgressPolicy,
+  cancel?: AbortSignal,
+): ProbeFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -378,9 +384,7 @@ export function runCloakingProbe(
       if (error instanceof ProbeCancelled) return null;
       throw error;
     }
-  }).then(
-    (results) => results.filter((r): r is CloakingProbeData => r !== null),
-  );
+  }).then((results) => results.filter((r): r is CloakingProbeData => r !== null));
 }
 
 // ── adapter entry point ─────────────────────────────────────────────

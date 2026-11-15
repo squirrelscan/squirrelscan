@@ -300,17 +300,23 @@ describe("block scope (#1655)", () => {
     const blocked = { status: 429, headers: new Headers() };
     const log = new RefusalLog("https://example.com/");
     expect(log.observe(blocked, "https://cdn.example.net/s.xml")).toBe(false);
-    expect(log.observe({ ...blocked, url: "https://other.test/x" }, "https://example.com/s.xml")).toBe(false);
+    expect(
+      log.observe({ ...blocked, url: "https://other.test/x" }, "https://example.com/s.xml"),
+    ).toBe(false);
     expect(log.blocked).toBe(false);
     expect(log.observe(blocked, "https://www.example.com/s.xml")).toBe(true);
     expect(log.blocked).toBe(true);
   });
 
   test("a block signal on an agent access probe stops the probes after it, not its siblings", async () => {
-    const origin = serve((path) => (path === "/" ? new Response("slow", { status: 429 }) : undefined));
+    const origin = serve((path) =>
+      path === "/" ? new Response("slow", { status: 429 }) : undefined,
+    );
     const refusals = new RefusalLog(origin.url);
     const budget = createPhaseBudget(30_000, Date.now(), refusals);
-    const data = await Effect.runPromise(probeAgentAccess(origin.url, "browser-ua", undefined, budget));
+    const data = await Effect.runPromise(
+      probeAgentAccess(origin.url, "browser-ua", undefined, budget),
+    );
     expect(data.probes.map((p) => p.status)).toEqual([429, 429, 429]);
     expect(refusals.blocked).toBe(true);
   }, 20_000);

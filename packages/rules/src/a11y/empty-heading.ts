@@ -81,10 +81,7 @@ export const emptyHeadingRule: Rule = {
         status: "warn",
         message: `${emptyHeadings.length} empty heading(s) found`,
         items: emptyHeadings.slice(0, 10),
-        details:
-          emptyHeadings.length > 10
-            ? { additional: emptyHeadings.length - 10 }
-            : undefined,
+        details: emptyHeadings.length > 10 ? { additional: emptyHeadings.length - 10 } : undefined,
       });
     }
     if (unnamed.unconfirmed.length > 0) {

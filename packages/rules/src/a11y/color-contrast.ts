@@ -95,12 +95,12 @@ export const colorContrastRule: Rule = {
     const resolver = createBackgroundResolver(
       doc,
       ctx.page.finalUrl ?? ctx.page.url,
-      ctx.site?.stylesheetBackgrounds
+      ctx.site?.stylesheetBackgrounds,
     );
 
     for (const el of doc.querySelectorAll("[style]")) {
       const color = winner(
-        parseDeclarations(el.getAttribute("style") || "").filter((d) => d.property === "color")
+        parseDeclarations(el.getAttribute("style") || "").filter((d) => d.property === "color"),
       );
       if (!color || CSS_WIDE_KEYWORDS.has(color.value.toLowerCase())) continue;
       if (!el.textContent?.trim()) continue;
@@ -135,8 +135,8 @@ export const colorContrastRule: Rule = {
       const uniqueIssues = [
         ...new Set(
           lowContrast.map(
-            (issue) => `${issue.element}: ${issue.fg} on ${issue.bg} (${issue.ratio.toFixed(2)}:1)`
-          )
+            (issue) => `${issue.element}: ${issue.fg} on ${issue.bg} (${issue.ratio.toFixed(2)}:1)`,
+          ),
         ),
       ];
 
@@ -197,7 +197,14 @@ export const colorContrastRule: Rule = {
 };
 
 const WHITE: Rgb = [255, 255, 255];
-const CSS_WIDE_KEYWORDS = new Set(["inherit", "initial", "unset", "revert", "revert-layer", "currentcolor"]);
+const CSS_WIDE_KEYWORDS = new Set([
+  "inherit",
+  "initial",
+  "unset",
+  "revert",
+  "revert-layer",
+  "currentcolor",
+]);
 
 type UnresolvedReason = "stylesheet" | "image" | "color";
 
@@ -226,10 +233,10 @@ const NO_BACKGROUND: Background = { kind: "none" };
  */
 function backgroundOf(declarations: Declaration[]): Background {
   const background = winner(
-    declarations.filter((d) => d.property === "background" || d.property === "background-color")
+    declarations.filter((d) => d.property === "background" || d.property === "background-color"),
   );
   const image = winner(
-    declarations.filter((d) => d.property === "background" || d.property === "background-image")
+    declarations.filter((d) => d.property === "background" || d.property === "background-image"),
   );
   if (!background && !image) return NO_BACKGROUND;
   // A one-color `background` shorthand resets the image to none; any other
@@ -264,7 +271,10 @@ const MAX_AT_RULE_DEPTH = 8;
 /** Selector matches the guard may spend per page before the rest is read as not provable. */
 const GUARD_MATCH_BUDGET = 50_000;
 
-function styleBlockRules(css: string, level = 0): {
+function styleBlockRules(
+  css: string,
+  level = 0,
+): {
   html: Declaration[];
   body: Declaration[];
   otherBackground: boolean;
@@ -314,7 +324,8 @@ function styleBlockRules(css: string, level = 0): {
           const inner = styleBlockRules(block, level + 1);
           const sets = (d: Declaration[]): boolean =>
             d.some((x) => /^background(-color|-image)?$/.test(x.property));
-          if (sets(inner.html) || sets(inner.body) || inner.atRuleRootBackground) atRuleRootBackground = true;
+          if (sets(inner.html) || sets(inner.body) || inner.atRuleRootBackground)
+            atRuleRootBackground = true;
           if (mentionsBackground) {
             for (const sel of inner.otherSelectors) {
               if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
@@ -330,7 +341,8 @@ function styleBlockRules(css: string, level = 0): {
       const target = part.trim().toLowerCase();
       // Looped, not spread: a block with a few hundred thousand declarations would overflow the call's arguments.
       if (target === "body") for (const d of parseDeclarations(block)) body.push(d);
-      else if (target === "html" || target === ":root") for (const d of parseDeclarations(block)) html.push(d);
+      else if (target === "html" || target === ":root")
+        for (const d of parseDeclarations(block)) html.push(d);
       else if (/background/i.test(block)) {
         otherBackground = true;
         if (part.trim()) {
@@ -340,7 +352,14 @@ function styleBlockRules(css: string, level = 0): {
       }
     }
   }
-  return { html, body, otherBackground, atRuleRootBackground, otherSelectors, otherSelectorsTruncated };
+  return {
+    html,
+    body,
+    otherBackground,
+    atRuleRootBackground,
+    otherSelectors,
+    otherSelectorsTruncated,
+  };
 }
 
 function stripCssComments(css: string): string {
@@ -382,7 +401,10 @@ export function stylesheetBackgroundOf(css: string): StylesheetBackground {
  * container such as `.hero { background: #111 }` can paint under text whose own color is light. The
  * resolver does not read their colors; it treats text that sits inside a match as not measurable.
  */
-export function stylesheetBackgroundSelectorsOf(css: string): { selectors: string[]; truncated: boolean } {
+export function stylesheetBackgroundSelectorsOf(css: string): {
+  selectors: string[];
+  truncated: boolean;
+} {
   const rules = styleBlockRules(stripCssComments(css));
   return { selectors: rules.otherSelectors, truncated: rules.otherSelectorsTruncated };
 }
@@ -390,7 +412,7 @@ export function stylesheetBackgroundSelectorsOf(css: string): { selectors: strin
 function createBackgroundResolver(
   doc: Document,
   pageUrl: string,
-  stylesheets: StylesheetBackgroundData[] | undefined
+  stylesheets: StylesheetBackgroundData[] | undefined,
 ): { resolve(el: Element): ResolvedBackground } {
   const memo = new Map<Element, ResolvedBackground>();
   let page: ResolvedBackground | null = null;
@@ -441,7 +463,7 @@ function createBackgroundResolver(
   const pageBackground = (): ResolvedBackground => {
     if (page) return page;
     const sheets = Array.from(doc.querySelectorAll("style"), (el) =>
-      stripCssComments(el.textContent || "")
+      stripCssComments(el.textContent || ""),
     ).join("\n");
     // A stylesheet in <noscript> never loads for a browser running scripts.
     const linkedUrls: string[] = [];
@@ -459,7 +481,7 @@ function createBackgroundResolver(
     const setsBackground = /background/i.test(sheets);
     const rules = styleBlockRules(sheets);
     const fromStyle = [backgroundOf(rules.body), backgroundOf(rules.html)].find(
-      (b): b is ResolvedBackground => b.kind !== "none"
+      (b): b is ResolvedBackground => b.kind !== "none",
     );
     // Another rule's background could override or sit under what an html/body
     // rule says, so only a page whose sole background is that rule is resolved
@@ -682,7 +704,7 @@ function relativeLuminance(rgb: [number, number, number]): number {
  */
 function calculateContrastRatio(
   fg: [number, number, number],
-  bg: [number, number, number]
+  bg: [number, number, number],
 ): number {
   const l1 = relativeLuminance(fg);
   const l2 = relativeLuminance(bg);

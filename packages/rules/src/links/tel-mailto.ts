@@ -118,11 +118,7 @@ const MIN_INTL_DISPLAY_DIGITS = 7;
 export function withoutOptionalTrunkZero(text: string): string | null {
   const m = OPTIONAL_TRUNK_ZERO.exec(text);
   if (!m || !TRUNK_ZERO_CALLING_CODES.has(m[1])) return null;
-  return (
-    text.slice(0, m.index) +
-    `+${m[1]} ` +
-    text.slice(m.index + m[0].length)
-  ).trim();
+  return (text.slice(0, m.index) + `+${m[1]} ` + text.slice(m.index + m[0].length)).trim();
 }
 
 /**
@@ -177,7 +173,7 @@ export const telMailtoRule: Rule = {
       addSection(
         sectionsByContact,
         `${contact.scheme}\n${contact.value}\n${contact.text}`,
-        contact.section
+        contact.section,
       );
     }
     // The parse keeps the first MAX_CONTACT_LINKS contact anchors only. Past that, an anchor's
@@ -189,9 +185,13 @@ export const telMailtoRule: Rule = {
       scheme: "tel" | "mailto",
       href: string,
       text: string,
-      anchor: Element
+      anchor: Element,
     ): CheckItem => {
-      const value = href.trim().slice(scheme.length + 1).split(/[?;]/)[0] ?? "";
+      const value =
+        href
+          .trim()
+          .slice(scheme.length + 1)
+          .split(/[?;]/)[0] ?? "";
       let sections = sectionsByContact.get(`${scheme}\n${value}\n${text}`);
       if (!sections && contactsCapped) {
         const own: SectionCounts = {};
@@ -248,8 +248,8 @@ export const telMailtoRule: Rule = {
               "tel",
               href,
               text,
-              link
-            )
+              link,
+            ),
           );
         } else if (/\d{3,}/.test(text) && !phoneNumbersMatch(phone, text)) {
           telMismatches.push(
@@ -262,8 +262,8 @@ export const telMailtoRule: Rule = {
               "tel",
               href,
               text,
-              link
-            )
+              link,
+            ),
           );
         }
       }
@@ -295,8 +295,8 @@ export const telMailtoRule: Rule = {
               "mailto",
               href,
               text,
-              link
-            )
+              link,
+            ),
           );
         }
       }

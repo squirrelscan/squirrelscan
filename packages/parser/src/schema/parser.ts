@@ -46,7 +46,7 @@ export function parseSchemas(doc: Document): SchemaCollection {
     allErrors,
     rawParts.length > 0 ? rawParts.join("\n\n") : null,
     validationIssues,
-    untypedNodes
+    untypedNodes,
   );
 }
 
@@ -62,7 +62,7 @@ function extractSchemas(
   obj: unknown,
   schemas: ParsedSchema[],
   untypedNodes: Record<string, unknown>[],
-  parentContext?: unknown
+  parentContext?: unknown,
 ): void {
   if (!obj || typeof obj !== "object") return;
 
@@ -112,15 +112,14 @@ function extractSchemas(
  */
 function normalizeSchema(
   obj: Record<string, unknown>,
-  parentContext?: unknown
+  parentContext?: unknown,
 ): ParsedSchema | null {
   const type = obj["@type"];
   if (!type) return null;
 
   // Validate type is string or string[] (no normalization - preserve all types)
   if (typeof type !== "string" && !Array.isArray(type)) return null;
-  if (Array.isArray(type) && !type.every((t) => typeof t === "string"))
-    return null;
+  if (Array.isArray(type) && !type.every((t) => typeof t === "string")) return null;
 
   // Inject parent @context if item lacks its own
   const context = obj["@context"] ?? parentContext;

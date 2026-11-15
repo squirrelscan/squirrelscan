@@ -141,9 +141,10 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
         results: [{ url: URL_A, status: null, error: "render failed" }],
       }),
     } as unknown as CloudServicesClient;
-    await createCloudDocumentFetcher(failingClient, { ...fastPolling, fallback: early.fetcher }).fetch(
-      { url: URL_A, timeoutMs: OUTER_MS },
-    );
+    await createCloudDocumentFetcher(failingClient, {
+      ...fastPolling,
+      fallback: early.fetcher,
+    }).fetch({ url: URL_A, timeoutMs: OUTER_MS });
     expect(early.requests).toHaveLength(1);
     expect(early.requests[0]!.timeoutMs).toBeLessThanOrEqual(OUTER_MS);
     expect(early.requests[0]!.timeoutMs).toBeGreaterThan(OUTER_MS - 100);
@@ -206,7 +207,10 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
               results: [{ url: URL_A, status: 200, html: "<html>late render</html>", headers: {} }],
             },
     } as unknown as CloudServicesClient;
-    const fetcher = createCloudDocumentFetcher(client, { ...fastPolling, fallback: fallback.fetcher });
+    const fetcher = createCloudDocumentFetcher(client, {
+      ...fastPolling,
+      fallback: fallback.fetcher,
+    });
 
     const resp = await fetcher.fetch({ url: URL_A, timeoutMs: OUTER_MS });
 
@@ -244,7 +248,10 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
               results: [{ url: URL_A, status: null, error: "render failed" }],
             },
     } as unknown as CloudServicesClient;
-    const fetcher = createCloudDocumentFetcher(client, { ...fastPolling, fallback: fallback.fetcher });
+    const fetcher = createCloudDocumentFetcher(client, {
+      ...fastPolling,
+      fallback: fallback.fetcher,
+    });
 
     const resp = await fetcher.fetch({ url: URL_A, timeoutMs: OUTER_MS });
 

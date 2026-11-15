@@ -58,11 +58,7 @@ export {
   type Soft404Confirmation,
 } from "./soft404";
 
-export {
-  extractVisibleMeta,
-  EMPTY_VISIBLE_META,
-  type VisibleMeta,
-} from "./visible-meta";
+export { extractVisibleMeta, EMPTY_VISIBLE_META, type VisibleMeta } from "./visible-meta";
 
 export {
   parseSchemas,
@@ -78,7 +74,12 @@ export { SchemaCollection } from "./schema/collection";
 // Re-export extractor types and functions
 export * from "./extractors";
 
-export { AUDITED_EMPTY_NOTICE_SUFFIX, auditedEmpty, noticesAuditedEmpty, parseNotices } from "./dom";
+export {
+  AUDITED_EMPTY_NOTICE_SUFFIX,
+  auditedEmpty,
+  noticesAuditedEmpty,
+  parseNotices,
+} from "./dom";
 
 // Parse HTML string into Document (single parse, reused by all extractors)
 export function parseDocument(html: string): ReturnType<typeof parseHTML>["document"] {

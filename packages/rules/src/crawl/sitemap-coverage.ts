@@ -20,11 +20,12 @@ function normalizedOrNull(url: string): string | null {
 // discovery stopped early) leaves URLs the site does list out of the corpus, so a crawled
 // page's absence from it is unknown, not a defect (#1760). An absent readState predates the
 // field and keeps the old behaviour.
-function sitemapCorpusIncomplete(sitemaps: {
-  truncated?: boolean;
-  readState?: string;
-}): boolean {
-  return sitemaps.truncated === true || sitemaps.readState === "partial" || sitemaps.readState === "unreadable";
+function sitemapCorpusIncomplete(sitemaps: { truncated?: boolean; readState?: string }): boolean {
+  return (
+    sitemaps.truncated === true ||
+    sitemaps.readState === "partial" ||
+    sitemaps.readState === "unreadable"
+  );
 }
 
 const coverageRule: Rule = {
@@ -177,7 +178,10 @@ const coverageRule: Rule = {
     // whether it is linked or reachable is unknown (#1639). Those are moved to
     // their own info check, keeping the URLs and statuses as evidence, instead of
     // being dropped or reported as actionable.
-    const deniedByUrl = new Map<string, { status: number; reason: "rate_limited" | "waf_challenge" }>();
+    const deniedByUrl = new Map<
+      string,
+      { status: number; reason: "rate_limited" | "waf_challenge" }
+    >();
     for (const target of ctx.site?.fetchedTargets ?? []) {
       if (!target.rateLimited && !target.wafChallenge) continue;
       const key = normalizedOrNull(target.url);
@@ -198,7 +202,7 @@ const coverageRule: Rule = {
     // The engine's total counts every orphan, denied ones included.
     const orphanTotal = Math.max(
       (sitemaps.orphanPagesTotal ?? 0) - denied.length,
-      actionableOrphans.length
+      actionableOrphans.length,
     );
     if (denied.length > 0) {
       checks.push({
@@ -230,7 +234,7 @@ const coverageRule: Rule = {
       // thousands of items on a large sitemap (repo#2320).
       const { items, truncation } = sampleUrlItems(
         actionableOrphans.map((url) => ({ id: url })),
-        orphanTotal
+        orphanTotal,
       );
       // A crawl that stopped with URLs still queued (time limit, crawl-phase
       // backstop) may simply not have reached these: unknown, not an orphan.

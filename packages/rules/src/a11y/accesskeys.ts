@@ -23,11 +23,7 @@ export const accesskeysRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const elementsWithAccesskey = querySelectorAllByAttrCI(
-      doc,
-      "*",
-      "accesskey"
-    );
+    const elementsWithAccesskey = querySelectorAllByAttrCI(doc, "*", "accesskey");
     const accesskeyMap = new Map<string, string[]>();
 
     for (const el of elementsWithAccesskey) {

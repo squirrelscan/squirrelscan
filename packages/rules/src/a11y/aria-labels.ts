@@ -47,10 +47,7 @@ export const ariaLabelsRule: Rule = {
         const imgWithAlt = button.querySelector("img[alt]");
         const svgWithTitle = button.querySelector("svg title");
         if (!imgWithAlt && !svgWithTitle) {
-          const id =
-            button.getAttribute("id") ||
-            button.getAttribute("class") ||
-            "button";
+          const id = button.getAttribute("id") || button.getAttribute("class") || "button";
           unlabeled.add(button, id.substring(0, 30));
         }
       }
@@ -67,25 +64,16 @@ export const ariaLabelsRule: Rule = {
     }
     if (unlabeled.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow(
-          "aria-buttons",
-          "button(s) without accessible names",
-          unlabeled.unconfirmed
-        )
+        unconfirmedRow("aria-buttons", "button(s) without accessible names", unlabeled.unconfirmed),
       );
     }
-    if (
-      unlabeledButtons.length === 0 &&
-      unlabeled.unconfirmed.length === 0 &&
-      buttons.length > 0
-    ) {
+    if (unlabeledButtons.length === 0 && unlabeled.unconfirmed.length === 0 && buttons.length > 0) {
       checks.push({
         name: "aria-buttons",
         status: "pass",
         ...(unlabeled.hidden > 0
           ? {
-              message:
-                "All buttons in the accessibility tree have accessible names",
+              message: "All buttons in the accessibility tree have accessible names",
               details: {
                 buttonsChecked: buttons.length,
                 hiddenWithoutName: unlabeled.hidden,
@@ -104,7 +92,7 @@ export const ariaLabelsRule: Rule = {
     const interactiveSvgs = Array.from(allSvgs).filter(
       (svg) =>
         (hasAttrCI(svg, "onclick") || hasAttrCI(svg, "tabindex")) &&
-        visibility.visibility(svg).state !== "hidden"
+        visibility.visibility(svg).state !== "hidden",
     );
     const unlabeledSvgs: number = Array.from(interactiveSvgs).filter((svg) => {
       const ariaLabel = svg.getAttribute("aria-label");

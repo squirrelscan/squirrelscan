@@ -293,8 +293,7 @@ describe("detach at the production boundaries", () => {
       marginBytes: 150 * MB,
       ratio: 4,
       label:
-        `external-link occurrences over ${PAGES} pages of ` +
-        `${(PAGE_BYTES / MB).toFixed(0)} MB`,
+        `external-link occurrences over ${PAGES} pages of ` + `${(PAGE_BYTES / MB).toFixed(0)} MB`,
     });
   }, 300_000);
 });
@@ -325,7 +324,10 @@ function externalLinkPage(i: number, fillerChars: number): SiteContextPage[] {
     `<a href="https://partner-${i}.example.com/ref/${i}">Partner ${i} anchor text</a>` +
     `<a href="/local/${i}">Local ${i}</a></body></html>`;
   return [
-    { page: { normalizedUrl: url, finalUrl: url, html } as never, parsed: parseHtmlForRules(html, url) },
+    {
+      page: { normalizedUrl: url, finalUrl: url, html } as never,
+      parsed: parseHtmlForRules(html, url),
+    },
   ] as unknown as SiteContextPage[];
 }
 

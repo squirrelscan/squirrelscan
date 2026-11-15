@@ -19,7 +19,7 @@ describe("rule-filter core (shared by the CLI and the cloud API, private#3785)",
   test("findUnmatchedRulePatterns lists exactly the dead patterns (typo'd rule id, same category)", () => {
     const ids = [...loadAllRules().keys()];
     expect(
-      findUnmatchedRulePatterns(["ax/*", "core/robots-meta", "core/robots-metaa", "ax/nope"], ids)
+      findUnmatchedRulePatterns(["ax/*", "core/robots-meta", "core/robots-metaa", "ax/nope"], ids),
     ).toEqual(["core/robots-metaa", "ax/nope"]);
     expect(findUnmatchedRulePatterns([], ids)).toEqual([]);
   });

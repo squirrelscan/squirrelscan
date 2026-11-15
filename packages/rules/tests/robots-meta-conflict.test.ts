@@ -61,7 +61,12 @@ describe("crawl/robots-meta-conflict (pub#556)", () => {
   });
 
   test("an allowed page with noindex, meta or header, is not reported", async () => {
-    expect(await redundant([page("/open", { meta: NOINDEX_META }), page("/open-h", { header: "noindex" })])).toBeUndefined();
+    expect(
+      await redundant([
+        page("/open", { meta: NOINDEX_META }),
+        page("/open-h", { header: "noindex" }),
+      ]),
+    ).toBeUndefined();
   });
 
   test("a URL a longer Allow wins for is not blocked, and a wildcard Disallow is", async () => {
@@ -73,7 +78,12 @@ describe("crawl/robots-meta-conflict (pub#556)", () => {
   });
 
   test("a blocked page that could not be parsed is not counted as noindex", async () => {
-    const unparsed = { url: `${BASE}/blocked-x`, statusCode: 200, headers: {}, parsed: null as unknown as ParsedPage };
+    const unparsed = {
+      url: `${BASE}/blocked-x`,
+      statusCode: 200,
+      headers: {},
+      parsed: null as unknown as ParsedPage,
+    };
     const { checks } = await Promise.resolve(robotsMetaConflictRule.run(ctx([unparsed as never])));
     expect((checks as CheckResult[]).find((c) => c.name === "redundant-noindex")).toBeUndefined();
   });
@@ -82,10 +92,16 @@ describe("crawl/robots-meta-conflict (pub#556)", () => {
     const paths = ["/blocked-a", "/dir/ok", "/dir/other", "/x.php", "/open"];
     // robots-meta-conflict lists blocked pages WITH noindex; indexability-
     // conflicts lists blocked pages WITHOUT it. Same pages, both shapes.
-    const withNoindex = (await redundant(paths.map((p) => page(p, { meta: NOINDEX_META }))))?.pages ?? [];
-    const { checks } = await Promise.resolve(indexabilityConflicts.run(ctx(paths.map((p) => page(p)))));
-    const withoutNoindex = (checks as CheckResult[]).find((c) => c.name === "robots-block-without-noindex")?.pages ?? [];
+    const withNoindex =
+      (await redundant(paths.map((p) => page(p, { meta: NOINDEX_META }))))?.pages ?? [];
+    const { checks } = await Promise.resolve(
+      indexabilityConflicts.run(ctx(paths.map((p) => page(p)))),
+    );
+    const withoutNoindex =
+      (checks as CheckResult[]).find((c) => c.name === "robots-block-without-noindex")?.pages ?? [];
     expect([...withNoindex].sort()).toEqual([...withoutNoindex].sort());
-    expect([...withNoindex].sort()).toEqual([`${BASE}/blocked-a`, `${BASE}/dir/other`, `${BASE}/x.php`].sort());
+    expect([...withNoindex].sort()).toEqual(
+      [`${BASE}/blocked-a`, `${BASE}/dir/other`, `${BASE}/x.php`].sort(),
+    );
   });
 });

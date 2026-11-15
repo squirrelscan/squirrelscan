@@ -30,7 +30,16 @@ export const redirectChainsRule: Rule = {
       { name: "links-to-redirect", outcome: "problem" },
       { name: "redirect-chain-multi-hop", outcome: "problem" },
       { name: "canonical-redirects", outcome: "problem" },
-      { name: "redirect-chains", outcome: "clean", clears: ["redirect-pages", "links-to-redirect", "redirect-chain-multi-hop", "canonical-redirects"] },
+      {
+        name: "redirect-chains",
+        outcome: "clean",
+        clears: [
+          "redirect-pages",
+          "links-to-redirect",
+          "redirect-chain-multi-hop",
+          "canonical-redirects",
+        ],
+      },
       { name: "redirect-chains", outcome: "skipped" },
     ],
   },
@@ -181,9 +190,18 @@ export const redirectChainsRule: Rule = {
     // A page whose canonical names a URL that redirected to it (#1762). The redirecting URL is not
     // a page of its own, so this is where the canonical-names-a-redirect finding lives now.
     if (redirectTargets.size > 0) {
-      const byRequest = new Map<string, (typeof redirectTargets extends Map<string, infer V> ? V : never)>();
-      for (const target of redirectTargets.values()) byRequest.set(requestTarget(target.originalUrl), target);
-      const canonicalToRedirect: Array<{ page: string; canonical: string; label: string; chain?: RedirectChain }> = [];
+      const byRequest = new Map<
+        string,
+        typeof redirectTargets extends Map<string, infer V> ? V : never
+      >();
+      for (const target of redirectTargets.values())
+        byRequest.set(requestTarget(target.originalUrl), target);
+      const canonicalToRedirect: Array<{
+        page: string;
+        canonical: string;
+        label: string;
+        chain?: RedirectChain;
+      }> = [];
       for (const page of pages) {
         const canonical = page.parsed?.meta?.canonical;
         if (!canonical || page.redirectSource) continue;
@@ -191,7 +209,12 @@ export const redirectChainsRule: Rule = {
           const absolute = new URL(canonical, page.url).href;
           const redirect = byRequest.get(requestTarget(absolute));
           if (redirect && requestTarget(redirect.finalUrl) === requestTarget(page.url)) {
-            canonicalToRedirect.push({ page: page.url, canonical: absolute, label: redirect.chainLabel, chain: redirect.chain });
+            canonicalToRedirect.push({
+              page: page.url,
+              canonical: absolute,
+              label: redirect.chainLabel,
+              chain: redirect.chain,
+            });
           }
         } catch {
           continue;

@@ -56,7 +56,7 @@ function pageRow(
   normalizedUrl: string,
   status: number,
   contentType: string | null,
-  links: LinkData[] | null
+  links: LinkData[] | null,
 ): PageRecord {
   return {
     url: normalizedUrl,

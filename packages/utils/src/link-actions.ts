@@ -15,13 +15,7 @@ import { isHttpOrHttpsUrl } from "./safe-fetch";
  */
 
 /** Verbs that never mean a page, matched anywhere, even run together (`/UserLogout.aspx`, `/dologout`). */
-const RUN_TOGETHER_ACTIONS = [
-  "logout",
-  "logoff",
-  "signout",
-  "signoff",
-  "unsubscribe",
-];
+const RUN_TOGETHER_ACTIONS = ["logout", "logoff", "signout", "signoff", "unsubscribe"];
 
 /** Words that are an action anywhere in a URL. */
 const ANYWHERE_ACTION_WORDS = new Set(["unsub", "optout"]);
@@ -31,14 +25,7 @@ const ANYWHERE_ACTION_WORDS = new Set(["unsub", "optout"]);
  * segment of at most four words or a query. A server-script extension is not
  * counted as a word (`/MyAccountLogOut.aspx` is four).
  */
-const ACTION_PAIRS = new Set([
-  "log out",
-  "log off",
-  "sign out",
-  "sign off",
-  "opt out",
-  "add to",
-]);
+const ACTION_PAIRS = new Set(["log out", "log off", "sign out", "sign off", "opt out", "add to"]);
 
 /**
  * The sign-out pairs, which reach a segment of five words
@@ -195,16 +182,7 @@ export function isCredentialParam(name: string, value = ""): boolean {
 /** A session id in the URL, anywhere. */
 const SESSION_ID_WORDS = new Set(["jsessionid", "phpsessid", "sessionid"]);
 /** Whole query keys that carry a secret: `?code=` (OAuth), `?key=`, `?hash=`, `?auth=`. */
-const SECRET_KEYS = new Set([
-  "code",
-  "key",
-  "hash",
-  "auth",
-  "session",
-  "sid",
-  "ticket",
-  "state",
-]);
+const SECRET_KEYS = new Set(["code", "key", "hash", "auth", "session", "sid", "ticket", "state"]);
 
 /** Words that say a path token is a credential (`/magic-login/<jwt>`, `/login/token/<hex>`). */
 const CREDENTIAL_CONTEXT_WORDS = new Set([
@@ -264,7 +242,8 @@ function decode(text: string): string | null {
 function looksLikeAToken(value: string): boolean {
   if (/^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/.test(value)) return true;
   if (/^[a-f0-9]{16,}$/i.test(value)) return true;
-  if (/^[A-Za-z0-9]{20,}$/.test(value) && /[0-9]/.test(value) && /[A-Za-z]/.test(value)) return true;
+  if (/^[A-Za-z0-9]{20,}$/.test(value) && /[0-9]/.test(value) && /[A-Za-z]/.test(value))
+    return true;
   return (
     /^[A-Za-z0-9_-]{20,}={0,2}$/.test(value) &&
     /[0-9]/.test(value) &&
@@ -312,7 +291,10 @@ function fragmentCarriesCredential(hash: string): boolean {
   for (const [rawKey, rawValue] of new URLSearchParams(fragment)) {
     const key = rawKey.toLowerCase();
     const keyWords = words(rawKey);
-    if (SECRET_KEYS.has(key) || keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))) {
+    if (
+      SECRET_KEYS.has(key) ||
+      keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))
+    ) {
       return true;
     }
     if (isCredentialParam(rawKey) || looksLikeAToken(rawValue)) return true;
@@ -383,7 +365,10 @@ export function looksLikeAnAction(url: string): boolean {
     const keyWords = words(rawKey);
     const valueWords = words(rawValue);
     allWords.push(...keyWords, ...valueWords);
-    if (SECRET_KEYS.has(key) || keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))) {
+    if (
+      SECRET_KEYS.has(key) ||
+      keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))
+    ) {
       return true;
     }
     if (isCredentialParam(rawKey)) return true;
@@ -428,9 +413,37 @@ export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): bool
  * are also top-level domains.
  */
 const ASSET_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp", "tif", "tiff",
-  "css", "js", "mjs", "json", "xml", "txt", "html", "htm", "pdf",
-  "woff", "woff2", "ttf", "otf", "eot", "mp4", "webm", "mp3", "wav", "ogg", "gz",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "avif",
+  "svg",
+  "ico",
+  "bmp",
+  "tif",
+  "tiff",
+  "css",
+  "js",
+  "mjs",
+  "json",
+  "xml",
+  "txt",
+  "html",
+  "htm",
+  "pdf",
+  "woff",
+  "woff2",
+  "ttf",
+  "otf",
+  "eot",
+  "mp4",
+  "webm",
+  "mp3",
+  "wav",
+  "ogg",
+  "gz",
 ]);
 
 /**
@@ -460,7 +473,8 @@ function looksLikeAnId(value: string): boolean {
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return true;
   if (/\.[a-z0-9]{2,5}$/i.test(value)) return false;
   // A slug with a word in it (`top-10-tips`, `iphone-15-pro`) names a page.
-  if (/[-_]/.test(value) && value.split(/[-_]/).some((part) => /^[a-z]{3,}$/i.test(part))) return false;
+  if (/[-_]/.test(value) && value.split(/[-_]/).some((part) => /^[a-z]{3,}$/i.test(part)))
+    return false;
   return value.length >= 8 && /[0-9]/.test(value) && /[a-z]/i.test(value);
 }
 

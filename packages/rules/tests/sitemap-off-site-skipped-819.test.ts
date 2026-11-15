@@ -35,7 +35,9 @@ function ctx(failed: Array<{ url: string; source: "robots.txt" | "common"; error
   } as unknown as RuleContext;
 }
 
-const skipped = [{ url: OFF_SITE, source: "robots.txt" as const, error: SITEMAP_OFF_SITE_SKIPPED_ERROR }];
+const skipped = [
+  { url: OFF_SITE, source: "robots.txt" as const, error: SITEMAP_OFF_SITE_SKIPPED_ERROR },
+];
 
 describe("crawl/sitemap-exists", () => {
   test("a sitemap named on another site and not requested is info, never 'No XML sitemap found'", async () => {

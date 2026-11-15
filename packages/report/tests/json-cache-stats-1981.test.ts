@@ -35,7 +35,9 @@ const crawl = (over: Record<string, unknown>) =>
 describe("renderJson cacheStats (#1981)", () => {
   test("a warm audit's JSON carries cacheStats and a cold audit's does not", () => {
     const cold = JSON.parse(
-      renderJson(baseReport({ cacheStats: buildCacheStats(crawl({ pagesFetched: 10 })) ?? undefined })),
+      renderJson(
+        baseReport({ cacheStats: buildCacheStats(crawl({ pagesFetched: 10 })) ?? undefined }),
+      ),
     );
     const warmStats = buildCacheStats(
       crawl({ pagesUnchanged: 10, cacheHitsByReason: { "stale-while-revalidate": 10 } }),

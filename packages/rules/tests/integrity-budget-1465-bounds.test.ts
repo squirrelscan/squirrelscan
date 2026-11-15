@@ -9,17 +9,23 @@ import { run } from "./integrity-budget-fixture";
 
 type Check = { details?: Record<string, unknown> };
 /** The `controlsUnread` the page reports, or 0 when it reports none. */
-const unread = (checks: Check[]): number => Number(checks.find((c) => c.details?.scanTruncated === true)?.details?.controlsUnread ?? 0);
+const unread = (checks: Check[]): number =>
+  Number(checks.find((c) => c.details?.scanTruncated === true)?.details?.controlsUnread ?? 0);
 
 /** A label with 40 windows past its first that hold a cue word: the most one attribute adds. */
-const LABEL = Array.from({ length: 700 }, () => "sign in ").join("").slice(0, 6_200);
+const LABEL = Array.from({ length: 700 }, () => "sign in ")
+  .join("")
+  .slice(0, 6_200);
 
 test("the default window budgets are the ones the page documents", () => {
   expect(integrityLimits).toEqual({ sequentialWindows: 10_000, sharedWindows: 10_000 });
 });
 
 test("600 controls with 40 cue windows each: the two budgets serve 250 in full and share the rest, so the rest are counted unread", async () => {
-  const body = Array.from({ length: 600 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${LABEL}">x</a>`).join("");
+  const body = Array.from(
+    { length: 600 },
+    (_, i) => `<a href="https://p.invalid/${i}" aria-label="${LABEL}">x</a>`,
+  ).join("");
   const found = unread((await run(body)).checks);
   // Without either budget every control is served in full and nothing is unread; with only the ordered budget
   // (250 controls) the other 350 are all cut; the shared budget gives each of those 28 of its 40, still short.
@@ -29,7 +35,10 @@ test("600 controls with 40 cue windows each: the two budgets serve 250 in full a
 
 test("a page with half the budgets reports more unread than the default, and none with ample ones", async () => {
   const saved = { ...integrityLimits };
-  const body = Array.from({ length: 300 }, (_, i) => `<a href="https://p.invalid/${i}" aria-label="${LABEL}">x</a>`).join("");
+  const body = Array.from(
+    { length: 300 },
+    (_, i) => `<a href="https://p.invalid/${i}" aria-label="${LABEL}">x</a>`,
+  ).join("");
   try {
     const defaults = unread((await run(body)).checks);
     integrityLimits.sequentialWindows = 2_000;
@@ -58,7 +67,10 @@ test("one control whose attributes ask for more than 160 windows is cut at 160 a
 
 test("3,000 controls of about 200 nodes each spend the page's visits: each read is cut short of its nodes and counted", async () => {
   const kids = Array.from({ length: 100 }, () => "<b>x</b>").join("");
-  const body = Array.from({ length: 3_000 }, (_, i) => `<a href="https://p.invalid/${i}">${kids}</a>`).join("");
+  const body = Array.from(
+    { length: 3_000 },
+    (_, i) => `<a href="https://p.invalid/${i}">${kids}</a>`,
+  ).join("");
   // 400,000 visits over 3,000 controls is about 133 each, under the 200 nodes a control has (100 elements, each with a text node): all are cut. Were the page's
   // budget not there every control would get its full 256 and none would be cut.
   expect(unread((await run(body)).checks)).toBeGreaterThan(2_000);

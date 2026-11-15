@@ -117,12 +117,7 @@ export const charsetRule: Rule = {
     }
 
     // Check for <meta http-equiv="Content-Type" ...> (case-insensitive for React SSR's httpEquiv)
-    const httpEquivMeta = querySelectorByAttrValueCI(
-      doc,
-      "meta",
-      "http-equiv",
-      "Content-Type"
-    );
+    const httpEquivMeta = querySelectorByAttrValueCI(doc, "meta", "http-equiv", "Content-Type");
     const contentValue = httpEquivMeta?.getAttribute("content") || "";
     const httpEquivCharset = charsetParam(contentValue);
 
@@ -135,11 +130,7 @@ export const charsetRule: Rule = {
     // reads the transport encoding before it prescans for a meta (pub#659).
     const declaredCharset = headerCharset || pageCharset;
 
-    if (
-      headerCharset &&
-      pageCharset &&
-      isUtf8(headerCharset) !== isUtf8(pageCharset)
-    ) {
+    if (headerCharset && pageCharset && isUtf8(headerCharset) !== isUtf8(pageCharset)) {
       // Both non-UTF-8 under different labels (iso-8859-1 vs windows-1252) is
       // not reported as a conflict: the labels can name one encoding, and the
       // Non-UTF-8 warning below already covers the page.
@@ -187,8 +178,7 @@ export const charsetRule: Rule = {
           const firstChild = head?.firstElementChild;
           const isFirst =
             firstChild === charsetMeta ||
-            (firstChild?.tagName === "TITLE" &&
-              firstChild?.nextElementSibling === charsetMeta);
+            (firstChild?.tagName === "TITLE" && firstChild?.nextElementSibling === charsetMeta);
 
           if (isFirst) {
             checks.push({

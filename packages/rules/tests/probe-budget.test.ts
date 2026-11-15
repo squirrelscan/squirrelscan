@@ -88,7 +88,12 @@ describe("ctx.probe through the RuleRunner", () => {
   const PAGE_RULE = "test/probe-page";
   const SITE_RULE = "test/probe-site";
 
-  function probingRule(id: string, scope: "page" | "site", seen: Array<ProbeBudget | undefined>, clock?: { advance: (ms: number) => void }): Rule {
+  function probingRule(
+    id: string,
+    scope: "page" | "site",
+    seen: Array<ProbeBudget | undefined>,
+    clock?: { advance: (ms: number) => void },
+  ): Rule {
     return {
       meta: {
         id,
@@ -113,7 +118,10 @@ describe("ctx.probe through the RuleRunner", () => {
   }
 
   function runner(rules: Rule[], probe?: ProbeBudget): RuleRunner {
-    const config: RulesConfig = { rule_options: {}, rules: { enable: rules.map((r) => r.meta.id) } };
+    const config: RulesConfig = {
+      rule_options: {},
+      rules: { enable: rules.map((r) => r.meta.id) },
+    };
     const ns: RuleNamespace = { name: "test", rules };
     return new RuleRunner({ config, additionalNamespaces: [ns], ...(probe ? { probe } : {}) });
   }
@@ -135,7 +143,10 @@ describe("ctx.probe through the RuleRunner", () => {
   test("page and site rules see the same budget object", async () => {
     const seen: Array<ProbeBudget | undefined> = [];
     const probe = createProbeBudget({ level: "active", budgetMs: 30_000 });
-    const r = runner([probingRule(PAGE_RULE, "page", seen), probingRule(SITE_RULE, "site", seen)], probe);
+    const r = runner(
+      [probingRule(PAGE_RULE, "page", seen), probingRule(SITE_RULE, "site", seen)],
+      probe,
+    );
     await r.runPageRules(page, site);
     await r.runSiteRules(site);
     expect(seen).toHaveLength(2);
@@ -147,7 +158,10 @@ describe("ctx.probe through the RuleRunner", () => {
     const seen: Array<ProbeBudget | undefined> = [];
     const clock = fakeClock();
     const probe = createProbeBudget({ level: "active", budgetMs: 1_000, now: clock.now });
-    const r = runner([probingRule(PAGE_RULE, "page", seen, clock), probingRule(SITE_RULE, "site", seen, clock)], probe);
+    const r = runner(
+      [probingRule(PAGE_RULE, "page", seen, clock), probingRule(SITE_RULE, "site", seen, clock)],
+      probe,
+    );
     // Two pages: the first probe spends 600 ms, the second spends 600 more,
     // so the site rule finds the budget gone.
     const first = await r.runPageRules(page, site);

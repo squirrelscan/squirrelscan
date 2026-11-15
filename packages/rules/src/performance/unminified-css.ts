@@ -16,9 +16,7 @@ export const optionsSchema = z.object({
   newline_ratio_threshold: z
     .number()
     .default(0.01)
-    .describe(
-      "Newlines per character ratio threshold for unminified detection"
-    ),
+    .describe("Newlines per character ratio threshold for unminified detection"),
 });
 
 // Thresholds for detecting unminified CSS
@@ -64,15 +62,10 @@ function analyzeCss(css: string): {
   const whitespaceRatio = whitespace.length / css.length;
 
   if (whitespaceRatio > WHITESPACE_RATIO_THRESHOLD) {
-    issues.push(
-      `excessive whitespace (${(whitespaceRatio * 100).toFixed(1)}%)`
-    );
+    issues.push(`excessive whitespace (${(whitespaceRatio * 100).toFixed(1)}%)`);
     // Estimate savings: whitespace minus 1 space per occurrence
     const whitespaceMatches = css.match(/\s+/g) || [];
-    potentialSavings += whitespaceMatches.reduce(
-      (sum, ws) => sum + Math.max(0, ws.length - 1),
-      0
-    );
+    potentialSavings += whitespaceMatches.reduce((sum, ws) => sum + Math.max(0, ws.length - 1), 0);
   }
 
   // Check for formatting patterns common in unminified CSS
@@ -156,9 +149,7 @@ export const unminifiedCssRule: Rule = {
 
         // Check filename patterns suggesting unminified
         const hasMinIndicator =
-          filename.includes(".min.") ||
-          filename.includes("-min.") ||
-          filename.includes(".prod.");
+          filename.includes(".min.") || filename.includes("-min.") || filename.includes(".prod.");
 
         // Check for hash patterns (bundler output is usually minified)
         const hasHash = /[.-][a-f0-9]{8,}\./i.test(filename);
@@ -195,9 +186,7 @@ export const unminifiedCssRule: Rule = {
       const filename = href.split("/").pop()?.split("?")[0] || href;
 
       const hasMinIndicator =
-        filename.includes(".min.") ||
-        filename.includes("-min.") ||
-        filename.includes(".prod.");
+        filename.includes(".min.") || filename.includes("-min.") || filename.includes(".prod.");
 
       const hasHash = /[.-][a-f0-9]{8,}\./i.test(filename);
 
@@ -220,18 +209,11 @@ export const unminifiedCssRule: Rule = {
     }
 
     // Report findings
-    const confirmedUnminified = unminifiedItems.filter(
-      (i) => i.reason !== "no .min indicator"
-    );
-    const suspectedUnminified = unminifiedItems.filter(
-      (i) => i.reason === "no .min indicator"
-    );
+    const confirmedUnminified = unminifiedItems.filter((i) => i.reason !== "no .min indicator");
+    const suspectedUnminified = unminifiedItems.filter((i) => i.reason === "no .min indicator");
 
     if (confirmedUnminified.length > 0) {
-      const totalSavingsKb = confirmedUnminified.reduce(
-        (sum, i) => sum + i.savingsKb,
-        0
-      );
+      const totalSavingsKb = confirmedUnminified.reduce((sum, i) => sum + i.savingsKb, 0);
       checks.push({
         name: "unminified-css",
         status: "warn",
@@ -243,9 +225,7 @@ export const unminifiedCssRule: Rule = {
         })),
         details: {
           totalPotentialSavingsKb: totalSavingsKb.toFixed(1),
-          ...(confirmedUnminified.length > 5
-            ? { additional: confirmedUnminified.length - 5 }
-            : {}),
+          ...(confirmedUnminified.length > 5 ? { additional: confirmedUnminified.length - 5 } : {}),
         },
       });
     }

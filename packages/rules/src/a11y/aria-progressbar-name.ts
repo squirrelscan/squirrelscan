@@ -83,7 +83,13 @@ export const ariaProgressbarNameRule: Rule = {
       });
     }
     if (unnamed.unconfirmed.length > 0) {
-      checks.push(unconfirmedRow("aria-progressbar-name", "progressbar element(s) without accessible names", unnamed.unconfirmed));
+      checks.push(
+        unconfirmedRow(
+          "aria-progressbar-name",
+          "progressbar element(s) without accessible names",
+          unnamed.unconfirmed,
+        ),
+      );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
       if (progressRoles.length > 0 || progressElements.length > 0) {

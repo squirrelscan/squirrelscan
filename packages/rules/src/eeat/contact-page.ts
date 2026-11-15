@@ -106,7 +106,9 @@ export const contactPageRule: Rule = {
       }
       // pub#740: a Contact page the pages link to but the crawl never fetched
       // is unverified, not missing. Its contact methods cannot be read.
-      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: (url) => isContactPath(url, paths) }) : null;
+      const linked = ctx.site
+        ? findLinkedUncrawledPage(ctx.site, { href: (url) => isContactPath(url, paths) })
+        : null;
       checks.push(
         linked
           ? linkedUncrawledCheck("contact-page", "Contact page", linked)

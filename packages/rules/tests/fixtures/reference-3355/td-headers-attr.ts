@@ -31,9 +31,7 @@ export const referenceTdHeadersAttrRule: Rule = {
     for (const table of tables) {
       // Get all th ids in this table
       const thElements = table.querySelectorAll("th[id]");
-      const validIds = new Set(
-        Array.from(thElements).map((th) => th.getAttribute("id"))
-      );
+      const validIds = new Set(Array.from(thElements).map((th) => th.getAttribute("id")));
 
       // Check all td elements with headers attribute
       const tdWithHeaders = table.querySelectorAll("td[headers]");
@@ -46,7 +44,7 @@ export const referenceTdHeadersAttrRule: Rule = {
           if (!validIds.has(headerId)) {
             const cellContent = td.textContent?.trim().slice(0, 15) || "";
             invalidReferences.push(
-              `td references non-existent header "${headerId}"${cellContent ? ` (content: "${cellContent}...")` : ""}`
+              `td references non-existent header "${headerId}"${cellContent ? ` (content: "${cellContent}...")` : ""}`,
             );
           }
         }
@@ -62,9 +60,7 @@ export const referenceTdHeadersAttrRule: Rule = {
         message: `${invalidReferences.length} invalid header reference(s) in table cells`,
         items: invalidReferences.slice(0, 10).map((id) => ({ id })),
         details:
-          invalidReferences.length > 10
-            ? { additional: invalidReferences.length - 10 }
-            : undefined,
+          invalidReferences.length > 10 ? { additional: invalidReferences.length - 10 } : undefined,
       });
     } else if (tdWithHeadersCount > 0) {
       checks.push({

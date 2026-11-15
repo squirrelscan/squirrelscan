@@ -34,7 +34,7 @@ export function isPageIndexable(
   parsed: ParsedPage | null,
   headers?: Record<string, string>,
   url?: string,
-  robotsTxt?: RobotsTxtData | null
+  robotsTxt?: RobotsTxtData | null,
 ): IndexabilityCheck {
   const reasons: string[] = [];
 

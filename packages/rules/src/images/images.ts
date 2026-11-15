@@ -54,9 +54,7 @@ export function validateImages(images: ImageData[]): CheckResult[] {
 
   // Dimension checks (for CLS)
   if (missingDimensions.length > 0 && images.length > 0) {
-    const percentage = Math.round(
-      (missingDimensions.length / images.length) * 100
-    );
+    const percentage = Math.round((missingDimensions.length / images.length) * 100);
     if (percentage > 50) {
       checks.push({
         name: "image-dimensions",

@@ -56,7 +56,7 @@ function ctx(pages: PageSpec[], extra: Record<string, unknown> = {}): RuleContex
 }
 
 async function check(pages: PageSpec[], extra?: Record<string, unknown>): Promise<CheckResult> {
-  const result = (await anchorMismatchRule.run(ctx(pages, extra)));
+  const result = await anchorMismatchRule.run(ctx(pages, extra));
   return (result as { checks: CheckResult[] }).checks[0]!;
 }
 
@@ -75,13 +75,13 @@ describe("links/anchor-mismatch tokens", () => {
 
 describe("links/anchor-mismatch hyphenated compounds (#1598)", () => {
   test("Online-Shop Umsetzung -> /onlineshop-agentur does not warn (German pair from the report)", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/onlineshop-agentur", "Online-Shop Umsetzung")] },
       {
         url: "https://example.com/onlineshop-agentur",
         title: "Onlineshop Agentur: Shopsystem, Relaunch, Betreuung | ONEDOT",
       },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
@@ -90,35 +90,35 @@ describe("links/anchor-mismatch hyphenated compounds (#1598)", () => {
       ["E-Mail Versand", "Email Marketing Tool"],
       ["Web-Seite erstellen", "Webseite Baukasten"],
     ] as const) {
-      const c = (await check([
+      const c = await check([
         { ...HOME, links: [body("/t", anchor)] },
         { url: "https://example.com/t", title },
-      ]));
+      ]);
       expect(c.status).toBe("pass");
     }
   });
 
   test("the reverse: a closed anchor word matches a hyphenated title word", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/shop", "Onlineshop Umsetzung")] },
       { url: "https://example.com/shop", title: "Online-Shop Agentur Berlin" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
   test("the reverse against a hyphenated slug inside a longer slug", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/online-shop-agentur", "Onlineshop")] },
       { url: "https://example.com/online-shop-agentur", title: "Ihre Agentur" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
   test("a hyphenated anchor that only shares a short prefix still warns", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/onlineshop-agentur", "Online-Marketing Umsetzung")] },
       { url: "https://example.com/onlineshop-agentur", title: "Onlineshop Agentur" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
   });
 
@@ -135,29 +135,29 @@ describe("links/anchor-mismatch hyphenated compounds (#1598)", () => {
 
   test("a joined form matches by equality only, never by prefix or suffix", async () => {
     // "foobar" is neither part of the target, and is not equal to its word "foobarxyz".
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/t", "Foo-Bar")] },
       { url: "https://example.com/t", title: "Foobarxyz" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
     // The reverse: a hyphenated target word must equal the anchor word.
-    const r = (await check([
+    const r = await check([
       { ...HOME, links: [body("/t", "Foobarxyz")] },
       { url: "https://example.com/t", title: "Foo-Bar" },
-    ]));
+    ]);
     expect(r.status).toBe("warn");
   });
 
   test("a joined form still equals a closed word, and an ordinary token keeps its tolerance", async () => {
-    const eq = (await check([
+    const eq = await check([
       { ...HOME, links: [body("/t", "Foo-Bar")] },
       { url: "https://example.com/t", title: "Foobar" },
-    ]));
+    ]);
     expect(eq.status).toBe("pass");
-    const tol = (await check([
+    const tol = await check([
       { ...HOME, links: [body("/t", "Fridges")] },
       { url: "https://example.com/t", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(tol.status).toBe("pass");
   });
 });
@@ -167,32 +167,32 @@ describe("links/anchor-mismatch joined forms are whole compounds (#1598)", () =>
     const nine = "one-two-three-four-five-six-sev-ate-nin";
     expect(tokenize(nine).joined).toEqual([]);
     expect(tokenize(nine, { slug: true }).joined).not.toContain("onetwothreefourfivesixsevate");
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/t", nine)] },
       { url: "https://example.com/t", title: "Onetwothreefourfivesixsevate" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
   });
 
   test("adjacent-pair joins are for URL slugs only, not anchors or titles", async () => {
     expect(tokenize("Online-Shop-Software").joined).toEqual(["onlineshopsoftware"]);
-    const anchor = (await check([
+    const anchor = await check([
       { ...HOME, links: [body("/t", "Online-Shop-Software")] },
       { url: "https://example.com/t", title: "Onlineshop" },
-    ]));
+    ]);
     expect(anchor.status).toBe("warn");
-    const title = (await check([
+    const title = await check([
       { ...HOME, links: [body("/t", "Onlineshop")] },
       { url: "https://example.com/t", title: "Online-Shop-Software" },
-    ]));
+    ]);
     expect(title.status).toBe("warn");
   });
 
   test("a hyphenated URL slug still joins neighbouring parts, kept apart from the tokens", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/online-shop-agentur", "Onlineshop")] },
       { url: "https://example.com/online-shop-agentur", title: "Ihre Agentur" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     expect(meaningfulTokens("online-shop-agentur")).toEqual(["online", "shop", "agentur"]);
   });
@@ -231,23 +231,23 @@ describe("links/anchor-mismatch hyphen scan stays linear (#1598)", () => {
 
 describe("links/anchor-mismatch", () => {
   test("Fridges -> Fridge repairs at /repairs/fridge does not warn", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/repairs/fridge", "Fridges")] },
       { url: "https://example.com/repairs/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
   test("LG -> /brands/lg does not warn", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/brands/lg", "LG")] },
       { url: "https://example.com/brands/lg", title: "Appliance brand" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
   test("/privacy linked as Privacy from every page does not warn", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/privacy", "Legal notes"), body("/fridge", "Fridge")] },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
       {
@@ -257,17 +257,17 @@ describe("links/anchor-mismatch", () => {
       },
       { url: "https://example.com/privacy", title: "Our data promise" },
       { url: "https://example.com/contact", title: "Reach us" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     // Only the fridge pair was judged: the privacy pairs are not targets at all.
     expect((c.details as { judged: number }).judged).toBe(1);
   });
 
   test("click here -> Commercial freezer repairs warns and names anchor, URL and title", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/freezers", "click here")] },
       { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
     expect(c.items?.[0]?.label).toContain('"click here"');
     expect(c.items?.[0]?.label).toContain("https://example.com/freezers");
@@ -276,10 +276,10 @@ describe("links/anchor-mismatch", () => {
 
   // #1729: the item id is the "source -> target" pair; the affected PAGE is the source only.
   test("each item names the source page alone as its page, the target stays in the label", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/freezers", "click here")] },
       { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
-    ]));
+    ]);
     const item = c.items![0]!;
     expect(item.sourcePages).toEqual([HOME.url]);
     expect(item.sourcePages!.join(" ")).not.toContain("->");
@@ -288,17 +288,17 @@ describe("links/anchor-mismatch", () => {
   });
 
   test("chrome links are excluded entirely", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [chrome("/freezers", "click here"), body("/fridge", "Fridge")] },
       { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     expect((c.details as { judged: number }).judged).toBe(1);
   });
 
   test("the pair's combined anchor text is judged, per pair not per link", async () => {
-    const c = (await check([
+    const c = await check([
       {
         ...HOME,
         links: [
@@ -308,45 +308,45 @@ describe("links/anchor-mismatch", () => {
         ],
       },
       { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
   test("a card text with child nodes already separated matches the H1", async () => {
-    const c = (await check([
+    const c = await check([
       {
         ...HOME,
         links: [body("/carpentry", "Carpentry Structural & finish carpentry See details")],
       },
       { url: "https://example.com/carpentry", title: "Services", h1: ["Carpentry"] },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
   test("escalates when the mismatch is the only contextual anchor text", async () => {
-    const only = (await check([
+    const only = await check([
       { ...HOME, links: [body("/engage", "how I work")] },
       { url: "https://example.com/a", title: "Alpha", links: [body("/engage", "how I work")] },
       { url: "https://example.com/engage", title: "Engage a consultant" },
-    ]));
+    ]);
     expect(only.status).toBe("warn");
     expect(only.message).toContain("only contextual anchor text");
     expect(only.items?.length).toBe(2);
 
-    const mixed = (await check([
+    const mixed = await check([
       { ...HOME, links: [body("/engage", "how I work")] },
       { url: "https://example.com/a", title: "Alpha", links: [body("/engage", "go there")] },
       { url: "https://example.com/engage", title: "Engage a consultant" },
-    ]));
+    ]);
     expect(mixed.status).toBe("warn");
     expect(mixed.message).not.toContain("only contextual anchor text");
   });
 
   test("stop-word-only anchors are counted as not judged, not dropped", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/freezers", "the")] },
       { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("skipped");
     expect((c.details as { notJudged: number }).notJudged).toBe(1);
   });
@@ -356,49 +356,49 @@ describe("links/anchor-mismatch", () => {
   });
 
   test("skips, not a vacuous pass, when nothing was judged", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/privacy", "Legal")] },
       { url: "https://example.com/privacy", title: "Our data promise" },
-    ]));
+    ]);
     expect(c.status).toBe("skipped");
   });
 
   test("non-Latin text is not judged by shared words", async () => {
-    const cjk = (await check([
+    const cjk = await check([
       { ...HOME, links: [body("/tokyo", "东京")] },
       { url: "https://example.com/tokyo", title: "东京旅行指南 | 旅行网站" },
-    ]));
+    ]);
     expect(cjk.status).toBe("skipped");
     expect((cjk.details as { notJudged: number }).notJudged).toBe(1);
 
-    const ja = (await check([
+    const ja = await check([
       { ...HOME, links: [body("/plans", "料金")] },
       { url: "https://example.com/plans", title: "料金プラン" },
-    ]));
+    ]);
     expect(ja.status).toBe("skipped");
 
-    const th = (await check([
+    const th = await check([
       { ...HOME, links: [body("/menu", "เมนูอาหาร")] },
       { url: "https://example.com/menu", title: "เมนูอาหารไทย" },
-    ]));
+    ]);
     expect(th.status).toBe("skipped");
   });
 
   test("diacritics are folded", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/menu", "Café")] },
       { url: "https://example.com/menu", title: "Cafe menu" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     expect(meaningfulTokens("Café Zürich")).toEqual(["cafe", "zurich"]);
   });
 
   test("a matching word past the display clip still counts", async () => {
     const long = `${"filler ".repeat(40)}freezer repairs`;
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/freezers", long)] },
       { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
@@ -414,17 +414,17 @@ describe("links/anchor-mismatch", () => {
     };
     const card =
       '<main><a href="/carpentry"><h3>Carpentry</h3><p>Structural &amp; finish</p></a></main>';
-    const good = (await check([
+    const good = await check([
       page(BASE, `<html><head><title>Home</title></head><body>${card}</body></html>`),
       page(
         "https://example.com/carpentry",
         "<html><head><title>Structural work</title></head><body><h1>Finish</h1></body></html>",
       ),
-    ]));
+    ]);
     // "Structural" is a whole word only because the extractor separated the child nodes.
     expect(good.status).toBe("pass");
 
-    const bad = (await check([
+    const bad = await check([
       page(
         BASE,
         '<html><head><title>Home</title></head><body><main><a href="/freezers"><div>click</div><div>here</div></a></main></body></html>',
@@ -433,7 +433,7 @@ describe("links/anchor-mismatch", () => {
         "https://example.com/freezers",
         "<html><head><title>Commercial freezer repairs</title></head><body></body></html>",
       ),
-    ]));
+    ]);
     expect(bad.status).toBe("warn");
     expect(bad.items?.[0]?.label).toContain('"click here"');
   }, 30_000);
@@ -467,7 +467,7 @@ describe("links/anchor-mismatch", () => {
       { url: "https://example.com/freezer", title: "Freezer repairs" },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
     ];
-    const c = (await check(pages(`${filler} freezer`)));
+    const c = await check(pages(`${filler} freezer`));
     expect(c.status).toBe("pass");
     const d = c.details as { judged: number; notJudged: number };
     expect(d.notJudged).toBe(1);
@@ -492,20 +492,20 @@ describe("links/anchor-mismatch", () => {
   });
 
   test("mixed-script anchor or target title is not judged", async () => {
-    const mixedAnchor = (await check([
+    const mixedAnchor = await check([
       { ...HOME, links: [body("/services", "お問い合わせ Contact us")] },
       { url: "https://example.com/services", title: "サービス一覧" },
-    ]));
+    ]);
     expect(mixedAnchor.status).toBe("skipped");
-    const jaTitle = (await check([
+    const jaTitle = await check([
       { ...HOME, links: [body("/p/123", "Read article")] },
       { url: "https://example.com/p/123", title: "東京の旅行ガイド" },
-    ]));
+    ]);
     expect(jaTitle.status).toBe("skipped");
-    const latinAnchorJaTitleSlug = (await check([
+    const latinAnchorJaTitleSlug = await check([
       { ...HOME, links: [body("/services", "Services")] },
       { url: "https://example.com/services", title: "サービス一覧" },
-    ]));
+    ]);
     expect(latinAnchorJaTitleSlug.status).toBe("skipped");
     expect(meaningfulTokens("Łódź Øre Straße Æble")).toEqual(["lodz", "ore", "strasse", "aeble"]);
   });
@@ -537,7 +537,7 @@ describe("links/anchor-mismatch", () => {
   });
 
   test("fragment links, pagination and nofollow links are not compared", async () => {
-    const c = (await check([
+    const c = await check([
       {
         ...HOME,
         links: [
@@ -555,18 +555,18 @@ describe("links/anchor-mismatch", () => {
       { url: "https://example.com/list", title: "Listing" },
       { url: "https://example.com/promo", title: "Promotion" },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     expect((c.details as { judged: number }).judged).toBe(1);
   });
 
   test("two different long anchors stay two anchors for the only-anchor escalation", async () => {
     const prefix = "filler ".repeat(25);
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/engage", `${prefix} alpha`)] },
       { url: "https://example.com/a", title: "Alpha", links: [body("/engage", `${prefix} beta`)] },
       { url: "https://example.com/engage", title: "Engage a consultant" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
     expect(c.message).not.toContain("only contextual anchor text");
   });
@@ -584,11 +584,11 @@ describe("links/anchor-mismatch", () => {
   });
 
   test("a bare numeric slug with no title is not judged", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/p/123", "Read article"), body("/fridge", "Fridge")] },
       { url: "https://example.com/p/123" },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     expect(c.details as { judged: number; notJudged: number }).toMatchObject({
       judged: 1,
@@ -634,7 +634,7 @@ describe("links/anchor-mismatch", () => {
   });
 
   test("pages that differ only by query are separate targets", async () => {
-    const c = (await check([
+    const c = await check([
       {
         url: BASE,
         title: "Home",
@@ -642,22 +642,22 @@ describe("links/anchor-mismatch", () => {
       },
       { url: "https://example.com/p?id=1", title: "Red apple" },
       { url: "https://example.com/p?id=2", title: "Blue car" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     expect((c.details as { judged: number }).judged).toBe(2);
   });
 
   test("the full title and every H1 are tokenised, not the clipped copies", async () => {
     const longTitle = `${"word ".repeat(70)}carpentry`;
-    const longTitleCheck = (await check([
+    const longTitleCheck = await check([
       { ...HOME, links: [body("/c", "carpentry"), body("/fridge", "Fridge")] },
       { url: "https://example.com/c", title: longTitle },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(longTitleCheck.status).toBe("pass");
     expect((longTitleCheck.details as { judged: number }).judged).toBe(2);
 
-    const sixthH1 = (await check([
+    const sixthH1 = await check([
       { ...HOME, links: [body("/c", "carpentry"), body("/fridge", "Fridge")] },
       {
         url: "https://example.com/c",
@@ -665,14 +665,14 @@ describe("links/anchor-mismatch", () => {
         h1: ["a1", "b2", "c3", "d4", "e5", "Carpentry"],
       },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(sixthH1.status).toBe("pass");
 
-    const repeated = (await check([
+    const repeated = await check([
       { ...HOME, links: [body("/p/123", "Freezer"), body("/fridge", "Fridge")] },
       { url: "https://example.com/p/123", title: `${"Company services ".repeat(25)}Freezer` },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(repeated.status).toBe("pass");
   });
 
@@ -681,11 +681,11 @@ describe("links/anchor-mismatch", () => {
       { length: 100 },
       (_, i) => `term${String.fromCharCode(97 + (i % 26))}${i}x`,
     );
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/t", "click here"), body("/fridge", "Fridge")] },
       { url: "https://example.com/t", title: words.join(" ") },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     expect(c.details as { judged: number; notJudged: number }).toMatchObject({
       judged: 1,
@@ -695,11 +695,11 @@ describe("links/anchor-mismatch", () => {
 
   test("an over-long word is dropped and the pair is not judged; the character budget bites", async () => {
     const huge = "x".repeat(5_000);
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/freezers", `${huge} thing`), body("/fridge", "Fridge")] },
       { url: "https://example.com/freezers", title: "Commercial freezer repairs" },
       { url: "https://example.com/fridge", title: "Fridge repairs" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     expect((c.details as { notJudged: number }).notJudged).toBe(1);
     expect(tokenize(`${huge} word`)).toEqual({ tokens: ["word"], joined: [], lost: true });
@@ -744,59 +744,66 @@ describe("links/anchor-mismatch", () => {
       { url: "https://example.com/fridge", title: "Fridge repairs" },
     ];
     // The parser cut the first part at 200 characters: "LG" was in the lost tail.
-    const clipped = (await check(pages(glued([head.slice(0, MAX_ANCHOR_PART_LENGTH), "See details"]))));
+    const clipped = await check(
+      pages(glued([head.slice(0, MAX_ANCHOR_PART_LENGTH), "See details"])),
+    );
     expect(clipped.status).toBe("pass");
     expect((clipped.details as { notJudged: number }).notJudged).toBe(1);
     // A part that fits in full is complete evidence, so the same pair warns.
     expect((await check(pages(glued(["item", "See details"])))).status).toBe("warn");
     // A list at the part cap may have dropped later parts.
-    const full = Array.from({ length: MAX_ANCHOR_PARTS }, (_, i) => `piece${String.fromCharCode(97 + i)}`);
+    const full = Array.from(
+      { length: MAX_ANCHOR_PARTS },
+      (_, i) => `piece${String.fromCharCode(97 + i)}`,
+    );
     expect((await check(pages(glued(full)))).status).toBe("pass");
     // A clipped part that still holds the match is a judged pair.
-    const matched = (await check(pages(glued([`LG ${head}`.slice(0, MAX_ANCHOR_PART_LENGTH), "See details"]))));
+    const matched = await check(
+      pages(glued([`LG ${head}`.slice(0, MAX_ANCHOR_PART_LENGTH), "See details"])),
+    );
     expect((matched.details as { judged: number }).judged).toBe(2);
   });
 
   test("a front door path with a query string is a page, not the homepage", async () => {
     for (const target of ["/?p=123", "/?page_id=5"]) {
-      const c = (await check([
+      const c = await check([
         { ...HOME, links: [body(target, "click here")] },
         { url: `https://example.com${target}`, title: "Freezer repairs" },
-      ]));
+      ]);
       expect(c.status).toBe("warn");
     }
     // The bare front door, and an entry page that carries a query, stay unjudged.
-    const home = (await check([
+    const home = await check([
       { ...HOME, links: [body("/", "click here"), body("/about", "About")] },
       { url: "https://example.com/about", title: "About us" },
-    ]));
+    ]);
     expect(home.status).toBe("pass");
-    const entry = (await check(
+    const entry = await check(
       [
         { ...HOME, links: [body("/?lang=en", "click here"), body("/about", "About")] },
         { url: "https://example.com/?lang=en", title: "Freezer repairs" },
         { url: "https://example.com/about", title: "About us" },
       ],
       { entryUrls: ["https://example.com/?lang=en"] },
-    ));
+    );
     expect(entry.status).toBe("pass");
   });
 
   test("?p=123 is a real WordPress permalink, not pagination", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/blog?p=123", "click here")] },
       { url: "https://example.com/blog?p=123", title: "Freezer maintenance" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
   });
 
   test("blank and stop-word-only anchors do not hide the only-anchor escalation", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/engage", "how I work")] },
       { url: "https://example.com/a", title: "Alpha", links: [body("/engage", "")] },
       { url: "https://example.com/b", title: "Beta", links: [body("/engage", "the")] },
       { url: "https://example.com/engage", title: "Engage a consultant" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
     expect(c.message).toContain("only contextual anchor text");
   });
@@ -804,43 +811,43 @@ describe("links/anchor-mismatch", () => {
 
 describe("links/anchor-mismatch compounds and listing labels (#1626)", () => {
   test("Handschuhe -> Fahrradhandschuhe does not warn (suffix compound)", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/gloves", "Handschuhe")] },
       { url: "https://example.com/gloves", title: "Fahrradhandschuhe" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
   });
 
   test("the target's word inside a longer anchor word is not a compound match", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/gloves", "Fahrradhandschuhe")] },
       { url: "https://example.com/gloves", title: "Handschuhe" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
   });
 
   test("a short ending or a short prefix is not a compound", async () => {
     expect(tokensMatch("care", "healthcare")).toBe(false);
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/health", "Care")] },
       { url: "https://example.com/health", title: "Healthcare plans" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
     // A two-character prefix is too little in front of the ending.
     expect(tokensMatch("shoes", "ab" + "shoes")).toBe(false);
-    const d = (await check([
+    const d = await check([
       { ...HOME, links: [body("/x", "Shoes")] },
       { url: "https://example.com/x", title: "Abshoes" },
-    ]));
+    ]);
     expect(d.status).toBe("warn");
   });
 
   test("Alle Artikel -> an article listing is not judged, not a mismatch", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/articles", "Alle Artikel"), body("/gloves", "Handschuhe")] },
       { url: "https://example.com/articles", title: "Tipps & Tricks rund ums Radfahren" },
       { url: "https://example.com/gloves", title: "Fahrradhandschuhe" },
-    ]));
+    ]);
     expect(c.status).toBe("pass");
     const details = c.details as { judged: number; notJudged: number };
     expect(details.judged).toBe(1);
@@ -848,35 +855,35 @@ describe("links/anchor-mismatch compounds and listing labels (#1626)", () => {
   });
 
   test("View all posts -> /blog is not judged; alone it skips rather than passes", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/blog", "View all posts")] },
       { url: "https://example.com/blog", title: "Notes from the workshop" },
-    ]));
+    ]);
     expect(c.status).toBe("skipped");
     expect((c.details as { notJudged: number }).notJudged).toBe(1);
   });
 
   test("a listing label pointing at a page that is not a listing still warns", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/gloves", "Alle Artikel")] },
       { url: "https://example.com/gloves", title: "Fahrradhandschuhe" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
   });
 
   test("positive control: an unrelated visible anchor on a listing page still warns", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/articles", "Gartenmoebel")] },
       { url: "https://example.com/articles", title: "Tipps & Tricks rund ums Radfahren" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
   });
 
   test("a listing word mixed with an unrelated word is still judged", async () => {
-    const c = (await check([
+    const c = await check([
       { ...HOME, links: [body("/articles", "Gartenmoebel Artikel")] },
       { url: "https://example.com/articles", title: "Tipps & Tricks rund ums Radfahren" },
-    ]));
+    ]);
     expect(c.status).toBe("warn");
   });
 
@@ -887,20 +894,20 @@ describe("links/anchor-mismatch compounds and listing labels (#1626)", () => {
       ["More news", "/products/blog-widget", "Blog widget"],
     ];
     for (const [text, path, title] of cases) {
-      const c = (await check([
+      const c = await check([
         { ...HOME, links: [body(path, text)] },
         { url: `https://example.com${path}`, title },
-      ]));
+      ]);
       expect(c.status).toBe("warn");
     }
   });
 
   test("a listing may carry a page number or a trailing slash (/page/N is dropped before this as pagination)", async () => {
     for (const path of ["/blog/", "/blog/2", "/articles.html", "/en/news"]) {
-      const c = (await check([
+      const c = await check([
         { ...HOME, links: [body(path, "View all posts")] },
         { url: `https://example.com${path}`, title: "Notes from the workshop" },
-      ]));
+      ]);
       expect([path, (c.details as { notJudged: number }).notJudged]).toEqual([path, 1]);
     }
   });
@@ -913,10 +920,10 @@ describe("links/anchor-mismatch compounds and listing labels (#1626)", () => {
       ["Stand", "Understand taxes"],
       ["Board", "Dashboard tour"],
     ] as const) {
-      const c = (await check([
+      const c = await check([
         { ...HOME, links: [body("/t", text)] },
         { url: "https://example.com/t", title },
-      ]));
+      ]);
       expect(c.status).toBe("pass");
     }
   });

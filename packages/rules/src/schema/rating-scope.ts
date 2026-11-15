@@ -348,9 +348,7 @@ function firstObject(raw: unknown): Record<string, unknown> | null {
   const candidate = Array.isArray(raw)
     ? raw.find((r) => r && typeof r === "object" && !Array.isArray(r))
     : raw;
-  return candidate && typeof candidate === "object"
-    ? (candidate as Record<string, unknown>)
-    : null;
+  return candidate && typeof candidate === "object" ? (candidate as Record<string, unknown>) : null;
 }
 
 function readString(value: unknown): string | null {

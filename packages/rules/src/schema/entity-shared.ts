@@ -49,10 +49,6 @@ export const ENTITY_ITEM_CAP = 10;
 /** Declaring pages listed against one item. */
 export const ENTITY_PAGE_CAP = 5;
 
-
-
-
-
 /** What to call an entity in a message: its name, else its type, else its key. */
 export function entityLabel(node: EntityMapNode): string {
   if (node.name) return node.name;
@@ -61,10 +57,7 @@ export function entityLabel(node: EntityMapNode): string {
 }
 
 /** One item per entity, carrying the pages a reader needs to go and look at. */
-export function entityItem(
-  node: EntityMapNode,
-  extra?: Record<string, unknown>
-): CheckItem {
+export function entityItem(node: EntityMapNode, extra?: Record<string, unknown>): CheckItem {
   return {
     id: node.key,
     label: `${entityLabel(node)} (${node.types.join(", ") || "no @type"})`,
@@ -112,9 +105,7 @@ export function moreSuffix(hidden: number, noun = "entities"): string {
 export const ENTITY_VALUE_MAX = 300;
 
 export function clipValue(value: string): string {
-  return value.length <= ENTITY_VALUE_MAX
-    ? value
-    : `${value.slice(0, ENTITY_VALUE_MAX - 1)}…`;
+  return value.length <= ENTITY_VALUE_MAX ? value : `${value.slice(0, ENTITY_VALUE_MAX - 1)}…`;
 }
 
 /**
@@ -157,7 +148,7 @@ export function noEntitiesInfo(checkName: string): CheckResult {
  */
 export function requireMap(
   map: EntityMap | undefined,
-  checkName: string
+  checkName: string,
 ): { map: EntityMap } | { checks: CheckResult[] } {
   if (!map) return { checks: [noMapSkip(checkName)] };
   if (map.nodes.length === 0) return { checks: [noEntitiesInfo(checkName)] };
@@ -165,7 +156,7 @@ export function requireMap(
 }
 
 export function isMapResolved(
-  result: { map: EntityMap } | { checks: CheckResult[] }
+  result: { map: EntityMap } | { checks: CheckResult[] },
 ): result is { map: EntityMap } {
   return "map" in result;
 }

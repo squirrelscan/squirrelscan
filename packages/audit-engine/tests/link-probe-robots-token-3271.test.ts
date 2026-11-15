@@ -35,7 +35,10 @@ function serveSite(): { origin: string; seen: string[] } {
           "text/plain",
         );
       }
-      return new Response(html("Not found"), { status: 404, headers: { "content-type": "text/html" } });
+      return new Response(html("Not found"), {
+        status: 404,
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   servers.push(server);
@@ -73,7 +76,9 @@ describe("the internal link probe reads robots.txt as the crawl did (#3271)", ()
       external_links: { enabled: false, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
       internal_links: { enabled: true },
     } as unknown as Config;
-    await Effect.runPromise(runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}));
+    await Effect.runPromise(
+      runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}),
+    );
     expect(site.seen.slice(crawlEnd)).not.toContain("/members/old");
   });
 });

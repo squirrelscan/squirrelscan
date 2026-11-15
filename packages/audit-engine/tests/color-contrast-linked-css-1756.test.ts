@@ -39,8 +39,10 @@ beforeAll(() => {
     port: 0,
     fetch(req) {
       const { pathname } = new URL(req.url);
-      if (pathname === "/light.css") return new Response("body { margin: 0; background: #ffffff; }", { headers: CSS });
-      if (pathname === "/dark.css") return new Response("body { background-color: #111111 }", { headers: CSS });
+      if (pathname === "/light.css")
+        return new Response("body { margin: 0; background: #ffffff; }", { headers: CSS });
+      if (pathname === "/dark.css")
+        return new Response("body { background-color: #111111 }", { headers: CSS });
       if (pathname === "/plain.css") return new Response("p { margin: 0 }", { headers: CSS });
       if (pathname === "/dark-mode.css") {
         return new Response(
@@ -49,7 +51,10 @@ beforeAll(() => {
         );
       }
       if (pathname === "/hero.css") {
-        return new Response("body { background: #ffffff } .hero { background: #111111; padding: 2rem }", { headers: CSS });
+        return new Response(
+          "body { background: #ffffff } .hero { background: #111111; padding: 2rem }",
+          { headers: CSS },
+        );
       }
       if (pathname === "/boom.css") return new Response("boom", { status: 500 });
       if (pathname === "/soft404.css") {
@@ -80,25 +85,34 @@ async function contrastFor(
   const occurrences = emptySiteAssetOccurrences();
   absorbResourceOccurrences(
     occurrences,
-    [{ url, finalUrl: url, parsed: { document, images: [] } as unknown as ParsedPage, hasCsp: false }],
+    [
+      {
+        url,
+        finalUrl: url,
+        parsed: { document, images: [] } as unknown as ParsedPage,
+        hasCsp: false,
+      },
+    ],
     base,
   );
   occurrences.pageCount = 1;
   const assets = await Effect.runPromise(
     fetchAssetsFromOccurrences(storageFor(base), "fixture-crawl", occurrences, config, undefined),
   );
-  return (colorContrastRule.run({
-    page: { url, html: markup, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: { document } as never,
-    site: {
-      baseUrl: base,
-      pages: [],
-      robotsTxt: null,
-      sitemaps: null,
-      stylesheetBackgrounds: assets.stylesheetBackgrounds,
-    },
-    options: {},
-  }) as { checks: CheckResult[] }).checks;
+  return (
+    colorContrastRule.run({
+      page: { url, html: markup, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: { document } as never,
+      site: {
+        baseUrl: base,
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+        stylesheetBackgrounds: assets.stylesheetBackgrounds,
+      },
+      options: {},
+    }) as { checks: CheckResult[] }
+  ).checks;
 }
 
 const named = (checks: CheckResult[], name: string) => checks.filter((c) => c.name === name);
@@ -124,11 +138,19 @@ describe("a11y/color-contrast reads same-site linked stylesheets (#1756)", () =>
 
   test("light text inside a container a linked sheet paints dark is unresolved, not a warning", async () => {
     // body is light in the same sheet, so measured against the page it would warn: the .hero rule says why not.
-    const inside = await contrastFor(["/hero.css"], CONFIG, `<div class="hero"><section>${TAGLINE}</section></div>`);
+    const inside = await contrastFor(
+      ["/hero.css"],
+      CONFIG,
+      `<div class="hero"><section>${TAGLINE}</section></div>`,
+    );
     expect(named(inside, "color-contrast").some((c) => c.status === "warn")).toBe(false);
     expect(named(inside, "color-contrast-unresolved")).toHaveLength(1);
     // The same sheet and the same text outside the container is still measured against the light body.
-    const outside = await contrastFor(["/hero.css"], CONFIG, `<div class="hero"><p>Title</p></div>${TAGLINE}`);
+    const outside = await contrastFor(
+      ["/hero.css"],
+      CONFIG,
+      `<div class="hero"><p>Title</p></div>${TAGLINE}`,
+    );
     expect(named(outside, "color-contrast").some((c) => c.status === "warn")).toBe(true);
   });
 
@@ -158,13 +180,24 @@ describe("a11y/color-contrast reads same-site linked stylesheets (#1756)", () =>
   });
 
   test("with the rule disabled no stylesheet is requested", async () => {
-    const config = { rules: { enable: ["*"], disable: ["a11y/color-contrast"] } } as unknown as Config;
+    const config = {
+      rules: { enable: ["*"], disable: ["a11y/color-contrast"] },
+    } as unknown as Config;
     const url = `${base}/`;
-    const document = parseDocument(`<html><head><link rel="stylesheet" href="/light.css"></head><body></body></html>`);
+    const document = parseDocument(
+      `<html><head><link rel="stylesheet" href="/light.css"></head><body></body></html>`,
+    );
     const occurrences = emptySiteAssetOccurrences();
     absorbResourceOccurrences(
       occurrences,
-      [{ url, finalUrl: url, parsed: { document, images: [] } as unknown as ParsedPage, hasCsp: false }],
+      [
+        {
+          url,
+          finalUrl: url,
+          parsed: { document, images: [] } as unknown as ParsedPage,
+          hasCsp: false,
+        },
+      ],
       base,
     );
     occurrences.pageCount = 1;

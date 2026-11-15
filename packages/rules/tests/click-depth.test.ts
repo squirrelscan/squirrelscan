@@ -67,7 +67,7 @@ const CHAIN: Spec[] = [
 
 describe("links/click-depth", () => {
   test("lists pages deeper than 3 with depth, deepest first, total and deepest stated", async () => {
-    const c = (await run(ctx(CHAIN)));
+    const c = await run(ctx(CHAIN));
     expect(c.status).toBe("warn");
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("e"), P("d")]);
     expect((c.items ?? []).map((i) => i.meta?.depth)).toEqual([5, 4]);
@@ -77,7 +77,7 @@ describe("links/click-depth", () => {
   });
 
   test("the threshold option changes the listing and is stated", async () => {
-    const c = (await run(ctx(CHAIN, { maxDepth: 4 })));
+    const c = await run(ctx(CHAIN, { maxDepth: 4 }));
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("e")]);
     expect(c.message).toContain("more than 4 clicks");
     expect(c.details?.threshold).toBe(4);
@@ -93,7 +93,7 @@ describe("links/click-depth", () => {
       { url: P("a"), links: ["/b"] },
       { url: BASE, links: ["/a", "/deep"] },
     ];
-    const c = (await run(ctx(pages, { maxDepth: 1 })));
+    const c = await run(ctx(pages, { maxDepth: 1 }));
     expect((c.items ?? []).map((i) => [i.id, i.meta?.depth])).toEqual([
       [P("c"), 3],
       [P("b"), 2],
@@ -101,7 +101,7 @@ describe("links/click-depth", () => {
   });
 
   test("a sitemap-only page with no link path gets no depth", async () => {
-    const c = (await run(ctx([...CHAIN, { url: P("sitemap-only") }], { maxDepth: 1 })));
+    const c = await run(ctx([...CHAIN, { url: P("sitemap-only") }], { maxDepth: 1 }));
     expect((c.items ?? []).map((i) => i.id)).not.toContain(P("sitemap-only"));
   });
 
@@ -115,7 +115,7 @@ describe("links/click-depth", () => {
       { url: P("gone"), status: 404 },
       { url: P("ok") },
     ];
-    const c = (await run(ctx(pages, { maxDepth: 2 })));
+    const c = await run(ctx(pages, { maxDepth: 2 }));
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("ok")]);
   });
 
@@ -145,7 +145,7 @@ describe("links/click-depth", () => {
   });
 
   test("a capped crawl says depths are a lower bound", async () => {
-    const c = (await run(ctx(CHAIN, {}, { crawlLimits: { pagesCrawled: 6, maxPages: 6 } })));
+    const c = await run(ctx(CHAIN, {}, { crawlLimits: { pagesCrawled: 6, maxPages: 6 } }));
     expect(c.status).toBe("warn");
     expect(c.message).toContain("lower bound");
     expect(c.details?.lowerBound).toBe(true);
@@ -153,13 +153,13 @@ describe("links/click-depth", () => {
   });
 
   test("a single-page audit is skipped with a reason", async () => {
-    const c = (await run(ctx([{ url: BASE }])));
+    const c = await run(ctx([{ url: BASE }]));
     expect(c.status).toBe("skipped");
     expect(c.skipReason).toBeTruthy();
   });
 
   test("skips when the homepage was not crawled", async () => {
-    const c = (await run(ctx([{ url: P("a") }, { url: P("b") }])));
+    const c = await run(ctx([{ url: P("a") }, { url: P("b") }]));
     expect(c.status).toBe("skipped");
   });
 
@@ -169,9 +169,9 @@ describe("links/click-depth", () => {
       { url: P("a"), links: ["/b"] },
       { url: P("b") },
     ];
-    const c = (await run(
+    const c = await run(
       ctx(pages, { maxDepth: 1 }, { baseUrl: "https://example.com/", entryUrls: [P("en/")] }),
-    ));
+    );
     expect(c.items?.map((i) => i.id)).toEqual([P("b")]);
   });
 
@@ -185,7 +185,7 @@ describe("links/click-depth", () => {
     const pages: Spec[] = [{ url: BASE, links: ["/p0"] }];
     for (let i = 0; i < 2000; i++) pages.push({ url: P(`p${i}`), links: [`/p${i + 1}`, "/"] });
     pages.push({ url: P("p2000") });
-    const c = (await run(ctx(pages)));
+    const c = await run(ctx(pages));
     expect(c.details?.deepest).toBe(2001);
   }, 20_000);
 

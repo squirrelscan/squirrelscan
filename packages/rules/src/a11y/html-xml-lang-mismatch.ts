@@ -6,8 +6,7 @@ export const htmlXmlLangMismatchRule: Rule = {
   meta: {
     id: "a11y/html-xml-lang-mismatch",
     name: "HTML XML Lang Mismatch",
-    description:
-      "Checks that lang and xml:lang attributes match on html element",
+    description: "Checks that lang and xml:lang attributes match on html element",
     solution:
       "If both lang and xml:lang are present on the <html> element, they must have the same base language. Mismatches can cause screen readers to announce content in the wrong language. Typically, you only need lang for HTML5 documents.",
     category: "a11y",

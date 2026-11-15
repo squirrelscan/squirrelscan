@@ -84,7 +84,9 @@ function rowsForPage(p: number): PageFindingRecord[] {
       value: `observed-value-${i}`,
       expected: `expected-value-${i}`,
       payload: JSON.stringify({
-        items: [{ id: `item-${i}`, label: `Element #${i} in the document body`, sourcePages: [url] }],
+        items: [
+          { id: `item-${i}`, label: `Element #${i} in the document body`, sourcePages: [url] },
+        ],
         details: { additional: i % 7 },
         i,
       }),

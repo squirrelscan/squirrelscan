@@ -58,14 +58,24 @@ describe("canonicalVariantMap", () => {
 
 describe("foldChecksToCanonical", () => {
   const map = new Map([[`${S}/contact?subject=Billing`, `${S}/contact`]]);
-  const check = (extra: Partial<CheckResult>): CheckResult => ({ name: "c", status: "fail", message: "m", ...extra });
+  const check = (extra: Partial<CheckResult>): CheckResult => ({
+    name: "c",
+    status: "fail",
+    message: "m",
+    ...extra,
+  });
 
   test("a page and its variant failing the same check are one affected page, in pageUrl, pages and item pages", () => {
     const checks = [
       check({ pageUrl: `${S}/contact` }),
       check({ pageUrl: `${S}/contact?subject=Billing` }),
       check({ pages: [`${S}/contact`, `${S}/contact?subject=Billing`, `${S}/about`] }),
-      check({ items: [{ id: "x", sourcePages: [`${S}/contact?subject=Billing`, `${S}/contact`] }, { id: `${S}/contact?subject=Billing` }] }),
+      check({
+        items: [
+          { id: "x", sourcePages: [`${S}/contact?subject=Billing`, `${S}/contact`] },
+          { id: `${S}/contact?subject=Billing` },
+        ],
+      }),
     ];
     expect(foldChecksToCanonical(checks, map)).toBe(3);
     expect(checks[1]!.pageUrl).toBe(`${S}/contact`);
@@ -85,7 +95,10 @@ describe("foldChecksToCanonical", () => {
     expect(c.items!.map((i) => i.id)).toEqual([`${S}/contact`, `${S}/about`]);
     expect(c.details).toMatchObject({ count: 2, occurrences: 2, keep: "x" });
     // a count that did not equal the list is left alone
-    const d = check({ items: [{ id: `${S}/contact` }, { id: `${S}/contact?subject=Billing` }], details: { count: 9 } });
+    const d = check({
+      items: [{ id: `${S}/contact` }, { id: `${S}/contact?subject=Billing` }],
+      details: { count: 9 },
+    });
     foldChecksToCanonical([d], map);
     expect(d.details).toMatchObject({ count: 9 });
   });
@@ -93,7 +106,11 @@ describe("foldChecksToCanonical", () => {
   test("distinct items that share an id are all kept: only an item the fold rewrote can be a duplicate", () => {
     const c = check({
       pageUrl: `${S}/contact?subject=Billing`,
-      items: [{ id: "img", snippet: "<img src=a>" }, { id: "img", snippet: "<img src=b>" }, { id: "a.js" }],
+      items: [
+        { id: "img", snippet: "<img src=a>" },
+        { id: "img", snippet: "<img src=b>" },
+        { id: "a.js" },
+      ],
       details: { count: 3 },
     });
     foldChecksToCanonical([c], map);
@@ -101,7 +118,14 @@ describe("foldChecksToCanonical", () => {
     expect(c.items!.map((i) => i.snippet ?? i.id)).toEqual(["<img src=a>", "<img src=b>", "a.js"]);
     expect(c.details).toMatchObject({ count: 3 });
     // a rewritten item that duplicates an existing one (same id AND content) still collapses
-    const d = check({ items: [{ id: `${S}/contact`, label: "x" }, { id: `${S}/contact?subject=Billing`, label: "x" }, { id: `${S}/contact?subject=Billing`, label: "y" }], details: { count: 3 } });
+    const d = check({
+      items: [
+        { id: `${S}/contact`, label: "x" },
+        { id: `${S}/contact?subject=Billing`, label: "x" },
+        { id: `${S}/contact?subject=Billing`, label: "y" },
+      ],
+      details: { count: 3 },
+    });
     foldChecksToCanonical([d], map);
     expect(d.items!.map((i) => `${i.id}|${i.label}`)).toEqual([`${S}/contact|x`, `${S}/contact|y`]);
     expect(d.details).toMatchObject({ count: 2 });
@@ -116,7 +140,10 @@ describe("foldChecksToCanonical", () => {
 
 describe("canonicalVariantMap at scale", () => {
   test("a 10,000-page chain resolves in linear time, to the last page", () => {
-    const pages = Array.from({ length: 10_000 }, (_, i) => ({ url: `${S}/p?n=${i}`, canonical: i === 9_999 ? null : `${S}/p?n=${i + 1}` }));
+    const pages = Array.from({ length: 10_000 }, (_, i) => ({
+      url: `${S}/p?n=${i}`,
+      canonical: i === 9_999 ? null : `${S}/p?n=${i + 1}`,
+    }));
     const started = performance.now();
     const map = canonicalVariantMap(pages);
     expect(performance.now() - started).toBeLessThan(500);
@@ -126,10 +153,16 @@ describe("canonicalVariantMap at scale", () => {
   });
 
   test("a flat page set is linear too, and a long loop folds nothing", () => {
-    const flat = [{ url: `${S}/p`, canonical: null }, ...Array.from({ length: 10_000 }, (_, i) => ({ url: `${S}/p?n=${i}`, canonical: `${S}/p` }))];
+    const flat = [
+      { url: `${S}/p`, canonical: null },
+      ...Array.from({ length: 10_000 }, (_, i) => ({ url: `${S}/p?n=${i}`, canonical: `${S}/p` })),
+    ];
     const started = performance.now();
     expect(canonicalVariantMap(flat).size).toBe(10_000);
-    const loop = Array.from({ length: 10_000 }, (_, i) => ({ url: `${S}/q?n=${i}`, canonical: `${S}/q?n=${(i + 1) % 10_000}` }));
+    const loop = Array.from({ length: 10_000 }, (_, i) => ({
+      url: `${S}/q?n=${i}`,
+      canonical: `${S}/q?n=${(i + 1) % 10_000}`,
+    }));
     expect(canonicalVariantMap(loop).size).toBe(0);
     expect(performance.now() - started).toBeLessThan(1000);
   });

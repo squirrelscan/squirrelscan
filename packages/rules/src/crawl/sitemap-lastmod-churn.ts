@@ -96,7 +96,8 @@ export const sitemapLastmodChurnRule: Rule = {
       // in a sitemap that is behaving exactly as specified.
       const newsOnly = urlsWithLastmod === 0 && newsUrlsWithLastmod > 0 && coarseLastmods === 0;
       // Too coarse, not too small: counting them would have been enough.
-      const coarseOnly = coarseLastmods > 0 && urlsWithLastmod + coarseLastmods >= MIN_URLS_WITH_LASTMOD;
+      const coarseOnly =
+        coarseLastmods > 0 && urlsWithLastmod + coarseLastmods >= MIN_URLS_WITH_LASTMOD;
       // Unreadable, not too few: counting them would have been enough.
       const unreadable =
         !coarseOnly &&
@@ -112,7 +113,7 @@ export const sitemapLastmodChurnRule: Rule = {
             : unreadable
               ? `${unreadableLastmods} sitemap lastmod value(s) are not dates squirrel can read the same way on every machine; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
               : // Year and month values carry a lastmod too: counting only the
-              // day-level ones read "Only 0" for a sitemap of coarse values.
+                // day-level ones read "Only 0" for a sitemap of coarse values.
                 `Only ${urlsWithLastmod + coarseLastmods + unreadableLastmods} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
         skipReason: newsOnly
           ? "Only news-sitemap lastmod values"

@@ -63,7 +63,11 @@ const N = Number.parseInt(arg("pages", "400"), 10);
 const WEIGHT = Number.parseFloat(arg("weight", "1"));
 const BASE = "https://bench.test";
 
-const pad = (s: string, n: number) => s.padEnd(Math.max(s.length, n), " lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod ");
+const pad = (s: string, n: number) =>
+  s.padEnd(
+    Math.max(s.length, n),
+    " lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod ",
+  );
 const pathFor = (i: number) => (i === 0 ? "/" : `/p/${String(i).padStart(5, "0")}`);
 const scale = (n: number) => Math.round(n * WEIGHT);
 
@@ -183,13 +187,20 @@ function build(i: number): Page {
       // weight is inline script, which is what the DOM scanners walk.
       const scripts = Array.from(
         { length: Math.max(1, scale(20)) },
-        (_, k) => `<script>var b${k}=${JSON.stringify(`payload ${i}-${k} `.padEnd(2000, "abcdefghij"))};</script>`,
+        (_, k) =>
+          `<script>var b${k}=${JSON.stringify(`payload ${i}-${k} `.padEnd(2000, "abcdefghij"))};</script>`,
       ).join("");
       return {
         title: `Product ${i} | Bench Store`,
         description: `Buy product ${i % Math.max(1, Math.floor(N / 2))} at Bench Store`,
-        body: pad(`<h1>Product ${i}</h1>${schema("Product", `,"offers":{"@type":"Offer","price":"${10 + (i % 90)}.00","priceCurrency":"USD"}`)}${scripts}`, scale(20_000)),
-        status, noindex, canonical, outLinks,
+        body: pad(
+          `<h1>Product ${i}</h1>${schema("Product", `,"offers":{"@type":"Offer","price":"${10 + (i % 90)}.00","priceCurrency":"USD"}`)}${scripts}`,
+          scale(20_000),
+        ),
+        status,
+        noindex,
+        canonical,
+        outLinks,
       };
     }
     case "collection":
@@ -197,28 +208,46 @@ function build(i: number): Page {
         title: `Collection ${i} | Bench Store`,
         description: `Shop the ${i % 40} collection`,
         body: pad(`<h1>Collection ${i}</h1>${schema("CollectionPage", "")}`, scale(16_000)),
-        status, noindex, canonical, outLinks,
+        status,
+        noindex,
+        canonical,
+        outLinks,
       };
     case "docs":
       return {
         title: `Docs page ${i}`,
         description: `Reference documentation for topic ${i % Math.max(1, Math.floor(N / 2))}`,
-        body: pad(`<h1>Docs ${i}</h1><h2>Section</h2><h3>Detail</h3>${schema("TechArticle", "")}`, scale(12_000)),
-        status, noindex, canonical, outLinks,
+        body: pad(
+          `<h1>Docs ${i}</h1><h2>Section</h2><h3>Detail</h3>${schema("TechArticle", "")}`,
+          scale(12_000),
+        ),
+        status,
+        noindex,
+        canonical,
+        outLinks,
       };
     case "blog":
       return {
         title: `Blog post ${i}`,
         description: `Post ${i % Math.max(1, Math.floor(N / 2))} on the Bench blog`,
-        body: pad(`<h1>Post ${i}</h1><article>text</article>${schema("BlogPosting", `,"datePublished":"2026-0${1 + (i % 9)}-01"`)}`, scale(10_000)),
-        status, noindex, canonical, outLinks,
+        body: pad(
+          `<h1>Post ${i}</h1><article>text</article>${schema("BlogPosting", `,"datePublished":"2026-0${1 + (i % 9)}-01"`)}`,
+          scale(10_000),
+        ),
+        status,
+        noindex,
+        canonical,
+        outLinks,
       };
     case "listing":
       return {
         title: `Listing ${i}`,
         description: `Listing page ${i % 25}`,
         body: pad(`<h1>Listing ${i}</h1>`, scale(6_000)),
-        status, noindex, canonical, outLinks,
+        status,
+        noindex,
+        canonical,
+        outLinks,
       };
     default:
       // One large duplicate group: 10% of the corpus shares a title AND a
@@ -227,7 +256,10 @@ function build(i: number): Page {
         title: "Thin page",
         description: "A thin page with very little content",
         body: `<h1>Thin</h1><p>short</p>`,
-        status, noindex, canonical, outLinks: 2,
+        status,
+        noindex,
+        canonical,
+        outLinks: 2,
       };
   }
 }
@@ -250,8 +282,15 @@ const crawlId = await run(
     status: "completed",
     config: {},
     stats: {
-      pagesTotal: N, pagesFetched: N, pagesFailed: 0, pagesSkipped: 0,
-      pagesUnchanged: 0, linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0,
+      pagesTotal: N,
+      pagesFetched: N,
+      pagesFailed: 0,
+      pagesSkipped: 0,
+      pagesUnchanged: 0,
+      linksTotal: 0,
+      imagesTotal: 0,
+      bytesTotal: 0,
+      avgLoadTimeMs: 0,
     },
   } as never),
 );
@@ -278,7 +317,8 @@ for (let i = 0; i < N; i++) {
   const t = theme(i);
   const images = Array.from(
     { length: i % 13 === 0 ? 24 : 6 },
-    (_, k) => `<img src="${t.imageHost}/img/${i}/${k}.jpg"${k % 5 === 0 ? "" : ` alt="Image ${k} for ${i}"`}>`,
+    (_, k) =>
+      `<img src="${t.imageHost}/img/${i}/${k}.jpg"${k % 5 === 0 ? "" : ` alt="Image ${k} for ${i}"`}>`,
   ).join("");
   const external = `<a href="https://partner-${i % 50}.example.com/r">Partner</a>`;
   const robots = p.noindex ? `<meta name="robots" content="noindex,follow">` : "";
@@ -295,20 +335,45 @@ for (let i = 0; i < N; i++) {
   const { document: _document, ...rest } = parsed;
   await run(
     storage.upsertPage(crawlId, {
-      url, normalizedUrl: url, finalUrl: url, depth: i === 0 ? 0 : 1,
-      status: p.status, contentType: "text/html",
-      sizeBytes: Buffer.byteLength(html, "utf8"), loadTimeMs: 100, fetchedAt: Date.now(),
-      etag: null, lastModified: null, contentHash: `mix-${i}`, html,
+      url,
+      normalizedUrl: url,
+      finalUrl: url,
+      depth: i === 0 ? 0 : 1,
+      status: p.status,
+      contentType: "text/html",
+      sizeBytes: Buffer.byteLength(html, "utf8"),
+      loadTimeMs: 100,
+      fetchedAt: Date.now(),
+      etag: null,
+      lastModified: null,
+      contentHash: `mix-${i}`,
+      html,
       parsedData: JSON.stringify(rest),
       headers: {
-        contentType: "text/html", contentEncoding: null, cacheControl: null, vary: null,
-        etag: null, server: "bench", lastModified: null, link: null, serverTiming: null,
-        age: null, xCache: null, cfCacheStatus: null, xVercelCache: null, altSvc: null,
+        contentType: "text/html",
+        contentEncoding: null,
+        cacheControl: null,
+        vary: null,
+        etag: null,
+        server: "bench",
+        lastModified: null,
+        link: null,
+        serverTiming: null,
+        age: null,
+        xCache: null,
+        cfCacheStatus: null,
+        xVercelCache: null,
+        altSvc: null,
         acceptRanges: null,
       },
       securityHeaders: {
-        hsts: null, csp: null, xFrameOptions: null, xContentTypeOptions: null,
-        referrerPolicy: null, permissionsPolicy: null, xRobotsTag: null,
+        hsts: null,
+        csp: null,
+        xFrameOptions: null,
+        xContentTypeOptions: null,
+        referrerPolicy: null,
+        permissionsPolicy: null,
+        xRobotsTag: null,
       },
     } as never),
   );

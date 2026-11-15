@@ -59,28 +59,25 @@ describe("isCrawlAbandoned: no usable lease keeps the #945 rule", () => {
     const lease = { heartbeat_at: null, owner_pid: null, owner_host: null };
     test(`NULL lease (written by an older CLI), legacy=${legacy}`, () => {
       expect(isCrawlAbandoned(row({ ...lease, legacy_abandoned: legacy }), env())).toBe(
-        legacy === 1
+        legacy === 1,
       );
     });
     test(`released lease (owner cleared, heartbeat kept), legacy=${legacy}`, () => {
       expect(
         isCrawlAbandoned(
           row({ owner_pid: null, owner_host: null, legacy_abandoned: legacy }),
-          env()
-        )
+          env(),
+        ),
       ).toBe(legacy === 1);
     });
     test(`unreadable heartbeat (text), legacy=${legacy}`, () => {
-      expect(
-        isCrawlAbandoned(row({ heartbeat_at: "soon", legacy_abandoned: legacy }), env())
-      ).toBe(legacy === 1);
+      expect(isCrawlAbandoned(row({ heartbeat_at: "soon", legacy_abandoned: legacy }), env())).toBe(
+        legacy === 1,
+      );
     });
     test(`heartbeat more than a day in the future, legacy=${legacy}`, () => {
       expect(
-        isCrawlAbandoned(
-          row({ heartbeat_at: NOW + DAY + MIN, legacy_abandoned: legacy }),
-          env()
-        )
+        isCrawlAbandoned(row({ heartbeat_at: NOW + DAY + MIN, legacy_abandoned: legacy }), env()),
       ).toBe(legacy === 1);
     });
   }
@@ -91,32 +88,26 @@ describe("isCrawlAbandoned: a live lease is never abandoned", () => {
     expect(
       isCrawlAbandoned(
         row({ heartbeat_at: NOW - (STALE - 1), legacy_abandoned: 1, status: "running" }),
-        env()
-      )
+        env(),
+      ),
     ).toBe(false);
   });
   test("negative age (clock stepped back, heartbeat in the near future) is fresh", () => {
     expect(
-      isCrawlAbandoned(
-        row({ heartbeat_at: NOW + 3_600_000, legacy_abandoned: 1 }),
-        env()
-      )
+      isCrawlAbandoned(row({ heartbeat_at: NOW + 3_600_000, legacy_abandoned: 1 }), env()),
     ).toBe(false);
   });
   test("stale heartbeat, same host, pid alive, under 24 h: live", () => {
     expect(
       isCrawlAbandoned(
         row({ heartbeat_at: NOW - 3_600_000, legacy_abandoned: 1 }),
-        env({ pidAlive: (p) => p === 100 })
-      )
+        env({ pidAlive: (p) => p === 100 }),
+      ),
     ).toBe(false);
   });
   test("pid alive is trusted for at most 24 h (pid reuse bound)", () => {
     expect(
-      isCrawlAbandoned(
-        row({ heartbeat_at: NOW - DAY - MIN }),
-        env({ pidAlive: () => true })
-      )
+      isCrawlAbandoned(row({ heartbeat_at: NOW - DAY - MIN }), env({ pidAlive: () => true })),
     ).toBe(true);
   });
   test("a different host is never pid-probed and is live until the stale window", () => {
@@ -127,10 +118,10 @@ describe("isCrawlAbandoned: a live lease is never abandoned", () => {
     });
     const other = { owner_host: "elsewhere", legacy_abandoned: 1 };
     expect(isCrawlAbandoned(row({ ...other, heartbeat_at: NOW - (STALE - MIN) }), probe)).toBe(
-      false
+      false,
     );
     expect(isCrawlAbandoned(row({ ...other, heartbeat_at: NOW - (STALE + MIN) }), probe)).toBe(
-      true
+      true,
     );
   });
   test("an unreadable owner (no pid, host only) is live until the stale window, never probed", () => {
@@ -149,7 +140,7 @@ describe("isCrawlAbandoned: a dead lease", () => {
   const dead = env({ pidAlive: () => false });
   test("a killed `crawled` crawl is abandoned once stale, with no newer audit", () => {
     expect(
-      isCrawlAbandoned(row({ status: "crawled", heartbeat_at: NOW - (STALE + MIN) }), dead)
+      isCrawlAbandoned(row({ status: "crawled", heartbeat_at: NOW - (STALE + MIN) }), dead),
     ).toBe(true);
   });
   // stopped / paused / failed are resumable: a dead or unreleased lease must
@@ -213,7 +204,7 @@ const STATS = {
 
 async function openStore(
   clock: { t: number },
-  alive: Set<number>
+  alive: Set<number>,
 ): Promise<{ s: SQLiteStorage; path: string }> {
   const path = tempDbPath();
   const s = new SQLiteStorage(path);
@@ -229,7 +220,7 @@ async function openStore(
 async function mk(
   s: SQLiteStorage,
   startedAt: number,
-  status: CrawlMetadata["status"]
+  status: CrawlMetadata["status"],
 ): Promise<string> {
   return run(
     s.createCrawl({
@@ -238,7 +229,7 @@ async function mk(
       status,
       config: {} as CrawlMetadata["config"],
       stats: STATS,
-    } as Omit<CrawlMetadata, "id">)
+    } as Omit<CrawlMetadata, "id">),
   );
 }
 
@@ -247,12 +238,15 @@ function setLease(
   id: string,
   pid: number | null,
   host: string | null,
-  hb: number | null
+  hb: number | null,
 ): void {
   const db = new Database(path);
-  db.query(
-    "UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?"
-  ).run(pid, host, hb, id);
+  db.query("UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?").run(
+    pid,
+    host,
+    hb,
+    id,
+  );
   db.close();
 }
 
@@ -343,7 +337,7 @@ describe("retirement reads the lease", () => {
     expect(await run(s.listAbandonedCrawls())).toEqual([]);
     clock.t = NOW + 2 * MIN; // 6 min since the beat: stale
     expect((await run(s.listAbandonedCrawls())).map((c) => c.id).sort()).toEqual(
-      [foreign, garbled].sort()
+      [foreign, garbled].sort(),
     );
     expect(done).toBeTruthy();
     await run(s.close());

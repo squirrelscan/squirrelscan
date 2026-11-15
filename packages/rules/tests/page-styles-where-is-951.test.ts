@@ -93,19 +93,23 @@ describe("a11y/button-name with Tailwind v4's preflight inlined (pub#951)", () =
 
   test("a bare :where() rule that can hide keeps every button unconfirmed", async () => {
     expect(
-      (await statuses(page(":where(.a, .b) { display: none }", '<button class="y"></button>'))),
+      await statuses(page(":where(.a, .b) { display: none }", '<button class="y"></button>')),
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 
   test("a hiding rule narrowed to a class leaves other buttons failing", async () => {
     expect(
-      (await statuses(page("button.x:where(.open) { display: none }", '<button class="y"></button>'))),
+      await statuses(
+        page("button.x:where(.open) { display: none }", '<button class="y"></button>'),
+      ),
     ).toEqual({ "button-name": "fail" });
   });
 
   test("the same narrowed rule still makes a button it could reach unconfirmed", async () => {
     expect(
-      (await statuses(page("button.x:where(.open) { display: none }", '<button class="x"></button>'))),
+      await statuses(
+        page("button.x:where(.open) { display: none }", '<button class="x"></button>'),
+      ),
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 });

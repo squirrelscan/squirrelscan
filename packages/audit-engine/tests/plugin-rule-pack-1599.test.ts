@@ -98,7 +98,9 @@ function pack(seen: Seen): Rule[] {
       run: (ctx: RuleContext) => {
         seen.siteCloud.push(ctx.cloudResults);
         seen.siteHtml.push(ctx.page.html);
-        seen.siteDocument.push(Boolean((ctx.site?.pages[0]?.parsed as { document?: unknown } | undefined)?.document));
+        seen.siteDocument.push(
+          Boolean((ctx.site?.pages[0]?.parsed as { document?: unknown } | undefined)?.document),
+        );
         return { checks: [{ name: "site-note", status: "warn", message: "site note" }] };
       },
     },
@@ -106,7 +108,10 @@ function pack(seen: Seen): Rule[] {
 }
 
 const newSeen = (): Seen => ({ pageCloud: [], siteCloud: [], siteHtml: [], siteDocument: [] });
-const snapshot = (rules: Rule[], listeners = new Map()): PluginRegistrySnapshot => ({ rules, listeners });
+const snapshot = (rules: Rule[], listeners = new Map()): PluginRegistrySnapshot => ({
+  rules,
+  listeners,
+});
 
 async function audit(
   config: Config,
@@ -137,8 +142,15 @@ async function audit(
         },
       } as never);
       for (const path of ["/", "/a"]) yield* storage.upsertPage(crawlId, pageRecord(path));
-      return yield* runStreamingRules(storage, crawlId, config, EMPTY_ASSETS, scope, { batchSize: 1, ...opts });
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))) as Effect.Effect<Streamed, never, never>,
+      return yield* runStreamingRules(storage, crawlId, config, EMPTY_ASSETS, scope, {
+        batchSize: 1,
+        ...opts,
+      });
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))) as Effect.Effect<
+      Streamed,
+      never,
+      never
+    >,
   );
 }
 
@@ -172,24 +184,34 @@ describe("runStreamingRules with a plugin snapshot (#1599)", () => {
   }, 60_000);
 
   test("[rules] disable of the plugin namespace and an [[ignore]] entry suppress plugin findings", async () => {
-    const off = await audit(config({ rules: { enable: ["core/h1", "acme/*"], disable: ["acme/*"] } }), {
-      plugins: snapshot(pack(newSeen())),
-    });
+    const off = await audit(
+      config({ rules: { enable: ["core/h1", "acme/*"], disable: ["acme/*"] } }),
+      {
+        plugins: snapshot(pack(newSeen())),
+      },
+    );
     expect(pageChecks(off, "page-note").length).toBe(0);
     expect(off.tallies.has("acme/page-note")).toBe(false);
 
     // [[ignore]] waives items inside a check, the same way it does for a built-in rule.
     const ignored = await audit(
-      config({ ignore: [{ rule: "acme/page-note", items: ["alpha", "beta"], reason: "accepted" }] }),
+      config({
+        ignore: [{ rule: "acme/page-note", items: ["alpha", "beta"], reason: "accepted" }],
+      }),
       { plugins: snapshot(pack(newSeen())) },
     );
     const notes = pageChecks(ignored, "page-note");
     expect(notes.length).toBe(2);
     expect(notes.every((c) => c.status === "pass")).toBe(true);
-    const partial = await audit(config({ ignore: [{ rule: "acme/page-note", items: ["alpha"] }] }), {
-      plugins: snapshot(pack(newSeen())),
-    });
-    expect(pageChecks(partial, "page-note").every((c) => c.status === "warn" && c.items?.length === 1)).toBe(true);
+    const partial = await audit(
+      config({ ignore: [{ rule: "acme/page-note", items: ["alpha"] }] }),
+      {
+        plugins: snapshot(pack(newSeen())),
+      },
+    );
+    expect(
+      pageChecks(partial, "page-note").every((c) => c.status === "warn" && c.items?.length === 1),
+    ).toBe(true);
   }, 60_000);
 
   test("no plugins, an undefined snapshot and an empty one give byte-identical output", async () => {

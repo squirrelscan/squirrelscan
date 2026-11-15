@@ -223,7 +223,14 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
           return Reflect.get(target, key, receiver);
         },
       });
-    const entry = (path: string, header: { naturalWidth: number | null; naturalHeight: number | null; animated: boolean | null }) =>
+    const entry = (
+      path: string,
+      header: {
+        naturalWidth: number | null;
+        naturalHeight: number | null;
+        animated: boolean | null;
+      },
+    ) =>
       recordFields({
         url: `http://synthetic.example.com/${path}`,
         status: 206,
@@ -276,15 +283,16 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
         loadTime: 10,
         headers: { "content-type": "text/html" },
       },
-      siteData
+      siteData,
     );
     // Not vacuous: the rule took both paths, and read the header fields to do it.
     const findings = result.ruleResults.get("images/responsive-size")?.checks ?? [];
-    expect(findings.find((c) => c.name === "images-possibly-oversized")?.items?.map((i) => i.id)).toEqual([
-      "pixels.jpg (64x64, no srcset)",
-      "bytes.jpg (64x64, no srcset)",
-    ]);
-    expect([...reads]).toEqual(expect.arrayContaining(["naturalWidth", "naturalHeight", "animated"]));
+    expect(
+      findings.find((c) => c.name === "images-possibly-oversized")?.items?.map((i) => i.id),
+    ).toEqual(["pixels.jpg (64x64, no srcset)", "bytes.jpg (64x64, no srcset)"]);
+    expect([...reads]).toEqual(
+      expect.arrayContaining(["naturalWidth", "naturalHeight", "animated"]),
+    );
     const undeclared = [...reads].filter(
       (key) => !(PAGE_RULE_RESOURCE_FIELDS as readonly string[]).includes(key),
     );

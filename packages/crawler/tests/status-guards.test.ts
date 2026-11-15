@@ -158,8 +158,13 @@ describe("a provider's challenge at any status (#1253)", () => {
   });
 
   test("an AWS WAF challenge (202, header only) and CAPTCHA (405) are blocked", async () => {
-    expect((await wafGuard(202, { headers: { "x-amzn-waf-action": "challenge" } }))?.wafBlock?.providerId).toBe("aws-waf");
-    expect((await wafGuard(405, { headers: { "x-amzn-waf-action": "captcha" } }))?.status).toBe(405);
+    expect(
+      (await wafGuard(202, { headers: { "x-amzn-waf-action": "challenge" } }))?.wafBlock
+        ?.providerId,
+    ).toBe("aws-waf");
+    expect((await wafGuard(405, { headers: { "x-amzn-waf-action": "captcha" } }))?.status).toBe(
+      405,
+    );
   });
 
   test("ordinary 200, 202, 405 and 429 responses pass the WAF guard", async () => {

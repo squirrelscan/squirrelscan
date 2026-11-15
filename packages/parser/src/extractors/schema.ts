@@ -91,9 +91,7 @@ export function extractSchema(doc: Document): SchemaData {
  */
 export function hasSchemaType(doc: Document, type: string): boolean {
   const schema = extractSchema(doc);
-  return schema.types.some(
-    (t) => t.toLowerCase() === type.toLowerCase() || t.includes(type)
-  );
+  return schema.types.some((t) => t.toLowerCase() === type.toLowerCase() || t.includes(type));
 }
 
 /**
@@ -120,11 +118,8 @@ export function getRichResultTypes(doc: Document): string[] {
     "SearchAction",
   ];
 
-  return schema.types.filter((type) =>
-    richResultTypes.some((rt) => type.includes(rt))
-  );
+  return schema.types.filter((type) => richResultTypes.some((rt) => type.includes(rt)));
 }
 
 // Effect version for concurrent execution
-export const extractSchemaEffect = (doc: Document) =>
-  Effect.sync(() => extractSchema(doc));
+export const extractSchemaEffect = (doc: Document) => Effect.sync(() => extractSchema(doc));

@@ -3,10 +3,7 @@
 // off (the report carries no `coverage` and no carried checks).
 
 import type { CheckTally } from "@squirrelscan/core-contracts";
-import {
-  AUDIT_LEVEL_COPY,
-  AUDIT_SETTING_COPY,
-} from "@squirrelscan/core-contracts/audit-levels";
+import { AUDIT_LEVEL_COPY, AUDIT_SETTING_COPY } from "@squirrelscan/core-contracts/audit-levels";
 import {
   offSiteRedirectFollowUp,
   type OffSiteRedirectFollowUp,
@@ -63,19 +60,17 @@ export function coverageLine(report: AuditReport): string | null {
   if (!c) return null;
   const notes: string[] = [];
   if (c.carriedFindings > 0) {
-    notes.push(
-      `${c.carriedFindings} finding${c.carriedFindings === 1 ? "" : "s"} carried forward`
-    );
+    notes.push(`${c.carriedFindings} finding${c.carriedFindings === 1 ? "" : "s"} carried forward`);
   }
   const unrendered = c.unrenderedFindings ?? 0;
   if (unrendered > 0) {
-    notes.push(
-      `${unrendered} finding${unrendered === 1 ? "" : "s"} on pages not yet rendered`
-    );
+    notes.push(`${unrendered} finding${unrendered === 1 ? "" : "s"} on pages not yet rendered`);
   }
   const stale = c.pagesWithStaleCarry ?? 0;
   if (Number.isSafeInteger(stale) && stale > 0) {
-    notes.push(`${stale} re-crawled page${stale === 1 ? "" : "s"} still carry${stale === 1 ? "s" : ""} earlier findings`);
+    notes.push(
+      `${stale} re-crawled page${stale === 1 ? "" : "s"} still carry${stale === 1 ? "s" : ""} earlier findings`,
+    );
   }
   const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
   const seeds = seedVerificationLine(c.seedVerification);
@@ -120,14 +115,20 @@ export function isVersionLike(value: unknown): value is string {
  * " 4 query-string variants counted with their canonical." (#858), or "". Read off stored reports of
  * any origin: anything but a positive whole number counts as none.
  */
-export function canonicalVariantCount(report: Pick<AuditReport, "canonicalVariants" | "scanScope">): number {
+export function canonicalVariantCount(
+  report: Pick<AuditReport, "canonicalVariants" | "scanScope">,
+): number {
   const raw = report.canonicalVariants ?? report.scanScope?.canonicalVariants;
   return typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0 ? raw : 0;
 }
 
-export function canonicalVariantsNote(report: Pick<AuditReport, "canonicalVariants" | "scanScope">): string {
+export function canonicalVariantsNote(
+  report: Pick<AuditReport, "canonicalVariants" | "scanScope">,
+): string {
   const n = canonicalVariantCount(report);
-  return n > 0 ? ` ${n} query-string variant${n === 1 ? "" : "s"} counted with ${n === 1 ? "its" : "their"} canonical.` : "";
+  return n > 0
+    ? ` ${n} query-string variant${n === 1 ? "" : "s"} counted with ${n === 1 ? "its" : "their"} canonical.`
+    : "";
 }
 
 /**
@@ -141,7 +142,10 @@ export function robotsScope(
   if (!scope || typeof scope.respectRobots !== "boolean") return null;
   const n: unknown = scope.robotsBlockedPages;
   const blocked = typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0;
-  return { respectRobots: scope.respectRobots, robotsBlockedPages: scope.respectRobots ? blocked : 0 };
+  return {
+    respectRobots: scope.respectRobots,
+    robotsBlockedPages: scope.respectRobots ? blocked : 0,
+  };
 }
 
 /**
@@ -204,9 +208,7 @@ export function scanScopeLine(report: AuditReport): string | null {
  * that is not a short code reads as `other`, and the list is cut at 100 rows (`requested - audited` stays
  * the true count).
  */
-export function scanScopeTargeted(
-  report: Pick<AuditReport, "scanScope">,
-): {
+export function scanScopeTargeted(report: Pick<AuditReport, "scanScope">): {
   requested: number;
   audited: number;
   overLimit?: number;
@@ -224,7 +226,10 @@ export function scanScopeTargeted(
   for (const r of rows) {
     if (unaudited.length >= 100) break;
     if (typeof r?.url !== "string") continue;
-    const reason = typeof r.reason === "string" && /^[A-Za-z0-9_:. -]{1,60}$/.test(r.reason) ? r.reason : "other";
+    const reason =
+      typeof r.reason === "string" && /^[A-Za-z0-9_:. -]{1,60}$/.test(r.reason)
+        ? r.reason
+        : "other";
     unaudited.push({
       url: r.url.slice(0, 2048),
       reason,
@@ -285,7 +290,9 @@ export function pageTypeCoverageLine(report: Pick<AuditReport, "scanScope">): st
   const named = rows.filter((r) => r.type !== "unknown");
   const shown = named.slice(0, PAGE_TYPE_LINE_ROWS);
   const other = [...named.slice(PAGE_TYPE_LINE_ROWS), ...rows.filter((r) => r.type === "unknown")];
-  const parts = shown.map((r) => `${r.audited} of ${r.discovered} ${r.type} page${r.discovered === 1 ? "" : "s"}`);
+  const parts = shown.map(
+    (r) => `${r.audited} of ${r.discovered} ${r.type} page${r.discovered === 1 ? "" : "s"}`,
+  );
   if (other.length > 0) {
     const discovered = other.reduce((n, r) => n + r.discovered, 0);
     const audited = other.reduce((n, r) => n + r.audited, 0);
@@ -519,7 +526,6 @@ export function seedRedirectFollowUp(report: AuditReport): OffSiteRedirectFollow
   return target ? offSiteRedirectFollowUp(target) : null;
 }
 
-
 // Start URL redirects (#1281)
 const MAX_LISTED_HOPS = 10;
 const UNPRINTABLE = "(unprintable URL)";
@@ -544,7 +550,10 @@ export function printableReportUrl(value: unknown): string {
   const canonical = typeof value === "string" ? canonicalizeReportUrl(value) : null;
   if (canonical === null) return UNPRINTABLE;
   const redacted = redactUrl(canonical);
-  return redacted.replace(/[`[\]()<>"'\\{}|^$]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return redacted.replace(
+    /[`[\]()<>"'\\{}|^$]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 export function safeChain(chain: unknown): SeedRedirectHop[] {
@@ -568,7 +577,8 @@ export function followedStartRedirect(report: AuditReport): FollowedStartRedirec
   if (typeof report.originalUrl !== "string" || report.originalUrl.trim() === "") return null;
   const chain = safeChain(report.redirectChain);
   const originalUrl = printableReportUrl(report.originalUrl);
-  const finalUrl = chain.length > 0 ? chain[chain.length - 1]!.url : printableReportUrl(report.baseUrl);
+  const finalUrl =
+    chain.length > 0 ? chain[chain.length - 1]!.url : printableReportUrl(report.baseUrl);
   const hops = Math.max(chain.length - 1, 1);
   return {
     originalUrl,
@@ -582,7 +592,6 @@ export function followedStartRedirect(report: AuditReport): FollowedStartRedirec
 export function startRedirectLine(report: AuditReport): string | null {
   return followedStartRedirect(report)?.note ?? null;
 }
-
 
 /**
  * Canonicalize a site-controlled URL for display, or `null` for a value we are
@@ -725,7 +734,8 @@ export function carriedTag(check: GroupedCheck, now: number = Date.now()): strin
  */
 export function checkCarriedLabel(check: GroupedCheck, now: number = Date.now()): string | null {
   if (!check.carriedCount || check.carriedCount < check.count) return null;
-  const seen = check.lastSeenAt !== undefined ? ` — last verified ${timeAgo(check.lastSeenAt, now)}` : "";
+  const seen =
+    check.lastSeenAt !== undefined ? ` — last verified ${timeAgo(check.lastSeenAt, now)}` : "";
   return `Not re-checked this run${seen}.`;
 }
 

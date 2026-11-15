@@ -91,7 +91,7 @@ export const entityPublisherMismatchRule: Rule = {
         id: key,
         label: `${label(key)} — named as publisher ${count} ${count === 1 ? "time" : "times"}`,
         meta: { key, occurrences: count },
-      }))
+      })),
     );
 
     // Drift looks like a clear majority and a few strays. An even split does
@@ -116,7 +116,7 @@ export const entityPublisherMismatchRule: Rule = {
             `${label(canonical)} (${ranked[0]![1]}) vs ${outliers
               .slice(0, ENTITY_ITEM_CAP)
               .map(([key, count]) => `${label(key)} (${count})`)
-              .join(", ")}`
+              .join(", ")}`,
           ),
           expected: looksLikeDrift
             ? "one publisher, referenced by @id"

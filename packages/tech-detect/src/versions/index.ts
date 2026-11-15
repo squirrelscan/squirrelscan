@@ -19,8 +19,6 @@ export type { SoftwareAdvisory };
  * each tech's resolved `version` against a cached advisory dataset and emit
  * `SoftwareAdvisory` records. Detections without a resolved version are skipped.
  */
-export function checkVersionAdvisories(
-  _detected: DetectedTechnology[],
-): SoftwareAdvisory[] {
+export function checkVersionAdvisories(_detected: DetectedTechnology[]): SoftwareAdvisory[] {
   return [];
 }

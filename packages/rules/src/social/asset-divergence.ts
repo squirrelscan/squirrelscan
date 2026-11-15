@@ -211,7 +211,7 @@ function declaredThemeColor(doc: Document): string | null {
  */
 export function extractSiteChromeSignal(
   parsed: ParsedPage | null | undefined,
-  baseUrl: string
+  baseUrl: string,
 ): SiteChromeSignal {
   const signal = emptySiteChromeSignal();
   if (!parsed) return signal;
@@ -514,20 +514,20 @@ function buildChecks(rollup: ChromeRollup, crawlPageCount: number): CheckResult[
   if (sitePageCount < ASSET_NORM_MIN_PAGES) {
     return [
       skip(
-        `Only ${sitePageCount} page(s) crawled; ${ASSET_NORM_MIN_PAGES} needed to establish a site-asset norm`
+        `Only ${sitePageCount} page(s) crawled; ${ASSET_NORM_MIN_PAGES} needed to establish a site-asset norm`,
       ),
     ];
   }
 
   clusterByHreflang(rollup);
   const verdicts = AXES.map((axis) => judgeAxis(axis, rollup.samples)).filter(
-    (verdict): verdict is AxisVerdict => verdict !== null
+    (verdict): verdict is AxisVerdict => verdict !== null,
   );
 
   if (verdicts.length === 0) {
     return [
       skip(
-        `No favicon, theme-color or default OG image is declared by ${ASSET_NORM_MIN_SAMPLE} page(s) with ${pct(ASSET_NORM_MIN_AGREEMENT)}% agreement`
+        `No favicon, theme-color or default OG image is declared by ${ASSET_NORM_MIN_SAMPLE} page(s) with ${pct(ASSET_NORM_MIN_AGREEMENT)}% agreement`,
       ),
     ];
   }
@@ -542,9 +542,7 @@ function buildChecks(rollup: ChromeRollup, crawlPageCount: number): CheckResult[
     for (const deviant of verdict.deviants) flaggedPages.add(deviant.url);
   }
 
-  const normSummary = verdicts
-    .map((v) => `${v.axis.label} ${pct(v.share)}%`)
-    .join(", ");
+  const normSummary = verdicts.map((v) => `${v.axis.label} ${pct(v.share)}%`).join(", ");
   const details: Record<string, unknown> = {
     judgedPages: judgedPages.size,
     flaggedPages: flaggedPages.size,
@@ -596,7 +594,7 @@ function buildChecks(rollup: ChromeRollup, crawlPageCount: number): CheckResult[
     (a, b) =>
       b.urls.length - a.urls.length ||
       AXES.indexOf(a.axis) - AXES.indexOf(b.axis) ||
-      (a.value < b.value ? -1 : a.value > b.value ? 1 : 0)
+      (a.value < b.value ? -1 : a.value > b.value ? 1 : 0),
   );
 
   const items: CheckItem[] = ordered.slice(0, ASSET_NORM_MAX_ITEMS).map((group) => ({

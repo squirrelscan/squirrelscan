@@ -32,9 +32,7 @@ function compareStrings(a: string, b: string): number {
 
 /** Nodes by reach, so a truncated export keeps the entities that matter. */
 function byReach(nodes: EntityMapNode[]): EntityMapNode[] {
-  return [...nodes].sort(
-    (a, b) => b.occurrences - a.occurrences || compareStrings(a.key, b.key),
-  );
+  return [...nodes].sort((a, b) => b.occurrences - a.occurrences || compareStrings(a.key, b.key));
 }
 
 // ── CSV ────────────────────────────────────────────────────────────
@@ -107,9 +105,7 @@ export function renderEntitiesCsv(map: EntityMap): string {
   lines.push("");
   lines.push(csvRow(["source", "predicate", "target", "dangling", "occurrences"]));
   for (const edge of map.edges) {
-    lines.push(
-      csvRow([edge.source, edge.predicate, edge.target, edge.dangling, edge.occurrences]),
-    );
+    lines.push(csvRow([edge.source, edge.predicate, edge.target, edge.dangling, edge.occurrences]));
   }
 
   return `${lines.join("\n")}\n`;
@@ -187,22 +183,24 @@ export function renderEntitiesDot(map: EntityMap): string {
  * Dropping is the only option that keeps the file openable.
  */
 function xmlText(value: string): string {
-  return value
-    // XML 1.0 has no representation for these at all, not even as a numeric
-    // reference, so a parser rejects the whole document. Dropping is the only
-    // option that keeps the file openable.
-    // Not just the C0 controls: U+FFFE and U+FFFF are permanently unassigned
-    // non-characters, and an unpaired surrogate is not a character at all, so a
-    // parser rejects all three the same way a control byte is rejected.
-    .replace(
-      /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
-      ""
-    )
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+  return (
+    value
+      // XML 1.0 has no representation for these at all, not even as a numeric
+      // reference, so a parser rejects the whole document. Dropping is the only
+      // option that keeps the file openable.
+      // Not just the C0 controls: U+FFFE and U+FFFF are permanently unassigned
+      // non-characters, and an unpaired surrogate is not a character at all, so a
+      // parser rejects all three the same way a control byte is rejected.
+      .replace(
+        /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+        "",
+      )
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;")
+  );
 }
 
 /** GraphML for Gephi, yEd and networkx. */
@@ -307,9 +305,11 @@ export function renderEntitiesMermaid(map: EntityMap): string {
   const keptKeys = new Set(kept.map((node) => node.key));
   const ids = new Map<string, string>();
   // Document order for the ids, so the same map always yields the same source.
-  map.nodes.filter((node) => keptKeys.has(node.key)).forEach((node, index) => {
-    ids.set(node.key, `n${index}`);
-  });
+  map.nodes
+    .filter((node) => keptKeys.has(node.key))
+    .forEach((node, index) => {
+      ids.set(node.key, `n${index}`);
+    });
 
   const lines: string[] = [];
   if (map.nodes.length > MERMAID_NODE_CAP) {

@@ -41,7 +41,11 @@ function labelledByResolves(doc: Document, value: string): boolean {
 /** What `a11y/aria-labels` reads for a clickable svg: it reports one with none of these, so this rule leaves it to it. */
 function ariaLabelsReportsIt(svg: Element): boolean {
   if (!hasAttrCI(svg, "onclick") && !hasAttrCI(svg, "tabindex")) return false;
-  return !svg.getAttribute("aria-label") && !svg.getAttribute("aria-labelledby") && !svg.querySelector("title");
+  return (
+    !svg.getAttribute("aria-label") &&
+    !svg.getAttribute("aria-labelledby") &&
+    !svg.querySelector("title")
+  );
 }
 
 /** The opening tag of the svg, cut: the attributes are what locates it, not its content. */
@@ -53,7 +57,10 @@ function openingTag(svg: Element): string {
 }
 
 /** Why an svg has no name, or null when it has one. */
-export function svgNameProblem(doc: Document, svg: Element): "no-name" | "labelledby-missing" | null {
+export function svgNameProblem(
+  doc: Document,
+  svg: Element,
+): "no-name" | "labelledby-missing" | null {
   if (hasDirectTitle(svg)) return null;
   if ((svg.getAttribute("aria-label") ?? "").trim() !== "") return null;
   const labelledBy = svg.getAttribute("aria-labelledby");
@@ -84,7 +91,12 @@ export const svgImgAltRule: Rule = {
     const checks: CheckResult[] = [];
 
     const visibility = createStaticVisibility({ ariaHidden: true });
-    const unnamed = sortUnnamedControls<{ id: string; snippet: string; label: string; selector?: string }>(visibility);
+    const unnamed = sortUnnamedControls<{
+      id: string;
+      snippet: string;
+      label: string;
+      selector?: string;
+    }>(visibility);
     let assessed = 0;
 
     for (const svg of doc.querySelectorAll("svg")) {
@@ -117,11 +129,19 @@ export const svgImgAltRule: Rule = {
         message: `${unnamed.failures.length} <svg role="img"> element(s) without an accessible name`,
         value: unnamed.failures.length,
         items: unnamed.failures.slice(0, 10),
-        ...(unnamed.failures.length > 10 ? { details: { additional: unnamed.failures.length - 10 } } : {}),
+        ...(unnamed.failures.length > 10
+          ? { details: { additional: unnamed.failures.length - 10 } }
+          : {}),
       });
     }
     if (unnamed.unconfirmed.length > 0) {
-      checks.push(unconfirmedRow(CHECK, '<svg role="img"> element(s) without an accessible name', unnamed.unconfirmed));
+      checks.push(
+        unconfirmedRow(
+          CHECK,
+          '<svg role="img"> element(s) without an accessible name',
+          unnamed.unconfirmed,
+        ),
+      );
     }
     if (assessed > 0 && unnamed.failures.length === 0 && unnamed.unconfirmed.length === 0) {
       checks.push({

@@ -46,7 +46,9 @@ function sizedItem(resource: SizedImage): CheckItem {
       contentType: resource.contentType ?? undefined,
       pageCount: pages.length,
       ...(pages.length > 0 ? { pages: pages.slice(0, MAX_PAGES_IN_META) } : {}),
-      ...(pages.length > MAX_PAGES_IN_META ? { pagesNotListed: pages.length - MAX_PAGES_IN_META } : {}),
+      ...(pages.length > MAX_PAGES_IN_META
+        ? { pagesNotListed: pages.length - MAX_PAGES_IN_META }
+        : {}),
     },
   };
 }
@@ -94,13 +96,11 @@ export const imageFileSizeRule: Rule = {
     }
 
     const errorFiles = resources.filter(
-      (r) => r.sizeBytes !== null && r.sizeBytes > opts.error_bytes
+      (r) => r.sizeBytes !== null && r.sizeBytes > opts.error_bytes,
     );
     const warnFiles = resources.filter(
       (r) =>
-        r.sizeBytes !== null &&
-        r.sizeBytes > opts.warn_bytes &&
-        r.sizeBytes <= opts.error_bytes
+        r.sizeBytes !== null && r.sizeBytes > opts.warn_bytes && r.sizeBytes <= opts.error_bytes,
     );
 
     if (errorFiles.length > 0) {

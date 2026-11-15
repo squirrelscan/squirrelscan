@@ -73,37 +73,37 @@ describe("#2231 counts widen into a range", () => {
 
   test("a count alone in parentheses widens", () => {
     expect(merged(["Multiple H1 tags found (3)", "Multiple H1 tags found (6)"])).toBe(
-      "Multiple H1 tags found (3 to 6)"
+      "Multiple H1 tags found (3 to 6)",
     );
   });
 
   test("a threshold every page agrees on keeps its own value", () => {
     expect(merged(["Thin content: 143 words (min 300)", "Thin content: 87 words (min 300)"])).toBe(
-      "Thin content: 87 to 143 words (min 300)"
+      "Thin content: 87 to 143 words (min 300)",
     );
   });
 
   test("a configured threshold glued to a unit survives", () => {
-    expect(
-      merged(["2 large inline SVG(s) (>4KB each)", "7 large inline SVG(s) (>4KB each)"])
-    ).toBe("2 to 7 large inline SVG(s) (>4KB each)");
+    expect(merged(["2 large inline SVG(s) (>4KB each)", "7 large inline SVG(s) (>4KB each)"])).toBe(
+      "2 to 7 large inline SVG(s) (>4KB each)",
+    );
   });
 
   test("one page is left exactly as the rule wrote it", () => {
     expect(merged(["9 image(s) missing width/height (causes CLS)"])).toBe(
-      "9 image(s) missing width/height (causes CLS)"
+      "9 image(s) missing width/height (causes CLS)",
     );
   });
 
   test("pages that agree on every count are left exactly as written", () => {
     expect(merged(["Element with 7 children found", "Element with 7 children found"])).toBe(
-      "Element with 7 children found"
+      "Element with 7 children found",
     );
   });
 
   test("a message with no numbers merges unchanged", () => {
     expect(merged(["No Content-Security-Policy header", "No Content-Security-Policy header"])).toBe(
-      "No Content-Security-Policy header"
+      "No Content-Security-Policy header",
     );
   });
 
@@ -123,7 +123,7 @@ describe("#2231 a token that is not a count never widens", () => {
       split([
         "The URL says 2019 but the Article schema dates are from 2018",
         "The URL says 2024 but the Article schema dates are from 2023",
-      ])
+      ]),
     ).toEqual([
       "The URL says 2019 but the Article schema dates are from 2018",
       "The URL says 2024 but the Article schema dates are from 2023",
@@ -138,7 +138,7 @@ describe("#2231 a token that is not a count never widens", () => {
       split([
         "The URL says 2019 but the schema disagrees",
         "The URL says 2024 but the schema disagrees",
-      ])
+      ]),
     ).toEqual([
       "The URL says 2019 but the schema disagrees",
       "The URL says 2024 but the schema disagrees",
@@ -158,7 +158,7 @@ describe("#2231 a token that is not a count never widens", () => {
       split([
         "HTML is 4.3MB, which exceeds the Googlebot 2MB limit",
         "HTML is 7.1MB, which exceeds the Googlebot 2MB limit",
-      ])
+      ]),
     ).toEqual([
       "HTML is 4.3MB, which exceeds the Googlebot 2MB limit",
       "HTML is 7.1MB, which exceeds the Googlebot 2MB limit",
@@ -325,7 +325,9 @@ describe("#2231 guard: every rule's message templates survive a merge", () => {
   test("no merged message carries a bare N", () => {
     const offenders: string[] = [];
     for (const { file, template } of templates) {
-      for (const message of grouped([fill(template, 3), fill(template, 17)]).map((c) => c.message)) {
+      for (const message of grouped([fill(template, 3), fill(template, 17)]).map(
+        (c) => c.message,
+      )) {
         if (BARE_N.test(message)) offenders.push(`${file}: ${message}`);
       }
     }

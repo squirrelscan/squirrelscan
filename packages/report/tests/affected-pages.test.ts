@@ -101,15 +101,11 @@ describe("ruleAffectedPageCount", () => {
     ];
     // Union of {/, /about} and {/} = 2 unique pages.
     expect(ruleAffectedPageCount(checks)).toBe(2);
-    expect(ruleAffectedPages(checks)).toEqual(
-      new Set(["https://e.com/", "https://e.com/about"]),
-    );
+    expect(ruleAffectedPages(checks)).toEqual(new Set(["https://e.com/", "https://e.com/about"]));
   });
 
   test("returns 0 when nothing references a page", () => {
     expect(ruleAffectedPageCount([])).toBe(0);
-    expect(
-      ruleAffectedPageCount([{ name: "x", status: "warn", message: "m" }]),
-    ).toBe(0);
+    expect(ruleAffectedPageCount([{ name: "x", status: "warn", message: "m" }])).toBe(0);
   });
 });

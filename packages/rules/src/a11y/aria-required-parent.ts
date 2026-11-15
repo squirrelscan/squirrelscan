@@ -196,8 +196,7 @@ export const ariaRequiredParentRule: Rule = {
   meta: {
     id: "a11y/aria-required-parent",
     name: "ARIA Required Parent",
-    description:
-      "Checks that elements with certain roles have required parent roles",
+    description: "Checks that elements with certain roles have required parent roles",
     solution:
       "Some ARIA roles must be contained within specific parent roles. For example, role='listitem' must be within role='list', role='option' must be within role='listbox'. Restructure your markup to ensure proper parent-child relationships.",
     category: "a11y",
@@ -215,16 +214,14 @@ export const ariaRequiredParentRule: Rule = {
     const missingParent: string[] = [];
 
     // Check elements with explicit roles
-    for (const [childRole, parentRoles] of Object.entries(
-      requiredParentByRole
-    )) {
+    for (const [childRole, parentRoles] of Object.entries(requiredParentByRole)) {
       const elements = elementsWithAttribute(doc, "role", childRole);
 
       for (const el of elements) {
         if (!hasRequiredParent(el, parentRoles)) {
           const tagName = el.tagName.toLowerCase();
           missingParent.push(
-            `${tagName}[role="${childRole}"]: needs parent with role=${parentRoles.join("|")}`
+            `${tagName}[role="${childRole}"]: needs parent with role=${parentRoles.join("|")}`,
           );
         }
       }
@@ -273,7 +270,7 @@ export const ariaRequiredParentRule: Rule = {
           // Only flag if it seems like an actual misuse
           // e.g., <article role="listitem"> would be caught, but plain <li> outside list is a different issue
           missingParent.push(
-            `${tagName} (implicit role="${check.role}"): needs parent with role=${check.parentRoles.join("|")}`
+            `${tagName} (implicit role="${check.role}"): needs parent with role=${check.parentRoles.join("|")}`,
           );
         }
       }
@@ -285,10 +282,7 @@ export const ariaRequiredParentRule: Rule = {
         status: "fail",
         message: `${missingParent.length} element(s) missing required parent role`,
         items: missingParent.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingParent.length > 10
-            ? { additional: missingParent.length - 10 }
-            : undefined,
+        details: missingParent.length > 10 ? { additional: missingParent.length - 10 } : undefined,
       });
     } else {
       checks.push({

@@ -22,8 +22,7 @@ function run(body: string): CheckResult {
     options: {},
   } as unknown as RuleContext;
   const result = ariaRequiredParentRule.run(ctx);
-  if (result instanceof Promise)
-    throw new Error("aria-required-parent is async");
+  if (result instanceof Promise) throw new Error("aria-required-parent is async");
   const check = result.checks.find((c) => c.name === "aria-required-parent");
   if (!check) throw new Error("no aria-required-parent check");
   return check;
@@ -39,7 +38,7 @@ describe("#1640 presentational-children ancestors", () => {
       `<ol role="progressbar" aria-label="Bundle progress" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0">` +
         `<li>One</li><li>Two</li><li>Three</li><li>Four</li></ol>` +
         `<ul><li>Valid list control</li></ul>` +
-        `<li>True orphan control</li>`
+        `<li>True orphan control</li>`,
     );
     expect(check.status).toBe("fail");
     expect(check.message).toBe("1 element(s) missing required parent role");
@@ -66,87 +65,67 @@ describe("#1640 presentational-children ancestors", () => {
     const check = run(
       `<div role="${role}" aria-label="x">` +
         `<li>a</li><table><tr><td>c</td><th>h</th></tr></table>` +
-        `<tr><td>row</td></tr><tbody></tbody><option>o</option></div>`
+        `<tr><td>row</td></tr><tbody></tbody><option>o</option></div>`,
     );
     expect(check.status).toBe("pass");
   });
 
   test("native <progress> and <meter> fallback content is not flagged", () => {
-    expect(
-      run(`<progress value="1" max="4"><li>fallback</li></progress>`).status
-    ).toBe("pass");
-    expect(
-      run(`<meter value="1" max="4"><li>fallback</li></meter>`).status
-    ).toBe("pass");
+    expect(run(`<progress value="1" max="4"><li>fallback</li></progress>`).status).toBe("pass");
+    expect(run(`<meter value="1" max="4"><li>fallback</li></meter>`).status).toBe("pass");
   });
 
   test.each([
     ["tabindex", `<li tabindex="0">Focusable</li>`],
     ["tabindex=-1", `<li tabindex="-1">Focusable</li>`],
     ["contenteditable", `<li contenteditable="true">Editable</li>`],
-  ])(
-    "a focusable li (%s) under a progressbar is still evaluated",
-    (_label, li) => {
-      const check = run(
-        `<ol role="progressbar" aria-label="x">${li}<li>Plain</li></ol>`
-      );
-      expect(check.status).toBe("fail");
-      expect(check.items).toEqual([ORPHAN_LI]);
-    }
-  );
+  ])("a focusable li (%s) under a progressbar is still evaluated", (_label, li) => {
+    const check = run(`<ol role="progressbar" aria-label="x">${li}<li>Plain</li></ol>`);
+    expect(check.status).toBe("fail");
+    expect(check.items).toEqual([ORPHAN_LI]);
+  });
 
   test('contenteditable="false" does not make the li focusable', () => {
     expect(
-      run(
-        `<ol role="progressbar" aria-label="x"><li contenteditable="false">x</li></ol>`
-      ).status
+      run(`<ol role="progressbar" aria-label="x"><li contenteditable="false">x</li></ol>`).status,
     ).toBe("pass");
   });
 
   test("an implicit button (summary, native button) does not exempt its descendants", () => {
-    expect(run(`<div><summary><li>Orphan</li></summary></div>`).items).toEqual([
-      ORPHAN_LI,
-    ]);
+    expect(run(`<div><summary><li>Orphan</li></summary></div>`).items).toEqual([ORPHAN_LI]);
     expect(run(`<button><li>Orphan</li></button>`).items).toEqual([ORPHAN_LI]);
   });
 
   test("a role=tab ancestor inside a tablist exempts its implicit descendants", () => {
-    expect(
-      run(`<div role="tablist"><div role="tab"><li>a</li></div></div>`).status
-    ).toBe("pass");
+    expect(run(`<div role="tablist"><div role="tab"><li>a</li></div></div>`).status).toBe("pass");
   });
 
   test("an unrelated role (region) does not exempt its descendants", () => {
-    expect(
-      run(`<div role="region" aria-label="x"><li>Orphan</li></div>`).items
-    ).toEqual([ORPHAN_LI]);
+    expect(run(`<div role="region" aria-label="x"><li>Orphan</li></div>`).items).toEqual([
+      ORPHAN_LI,
+    ]);
   });
 
   test("a presentational ancestor exempts every descendant, not only direct children", () => {
     // WAI-ARIA 1.2: all descendants of a role with presentational children are presentational.
     expect(
-      run(
-        `<div role="progressbar" aria-label="x"><div role="region"><li>a</li></div></div>`
-      ).status
+      run(`<div role="progressbar" aria-label="x"><div role="region"><li>a</li></div></div>`)
+        .status,
     ).toBe("pass");
   });
 
   test("a <progress> or <meter> with an unrelated explicit role does not grant the exception", () => {
     // The author overrode the native role, so the explicit role decides.
-    expect(
-      run(`<progress role="region" aria-label="x"><li>a</li></progress>`).items
-    ).toEqual([ORPHAN_LI]);
-    expect(
-      run(`<meter role="region" aria-label="x"><li>a</li></meter>`).items
-    ).toEqual([ORPHAN_LI]);
+    expect(run(`<progress role="region" aria-label="x"><li>a</li></progress>`).items).toEqual([
+      ORPHAN_LI,
+    ]);
+    expect(run(`<meter role="region" aria-label="x"><li>a</li></meter>`).items).toEqual([
+      ORPHAN_LI,
+    ]);
   });
 
   test("explicit child roles under a progressbar are still checked", () => {
-    const check = run(
-      `<div role="progressbar" aria-label="x"><span role="tab">t</span></div>`
-    );
-    expect(check.items).toEqual([
-      { id: 'span[role="tab"]: needs parent with role=tablist' },
-    ]);
+    const check = run(`<div role="progressbar" aria-label="x"><span role="tab">t</span></div>`);
+    expect(check.items).toEqual([{ id: 'span[role="tab"]: needs parent with role=tablist' }]);
   });
 });

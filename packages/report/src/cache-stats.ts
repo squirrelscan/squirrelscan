@@ -44,10 +44,9 @@ export function cacheStatsSummaryLine(stats: CacheStats): string {
 
 /** Ordered, non-zero reason rows for breakdown rendering. */
 export function cacheReasonRows(
-  stats: CacheStats
+  stats: CacheStats,
 ): Array<{ reason: CacheHitReason; label: string; count: number }> {
-  const rows: Array<{ reason: CacheHitReason; label: string; count: number }> =
-    [];
+  const rows: Array<{ reason: CacheHitReason; label: string; count: number }> = [];
   for (const reason of REASON_ORDER) {
     const count = stats.hitsByReason[reason] ?? 0;
     if (count > 0) rows.push({ reason, label: REASON_LABELS[reason], count });

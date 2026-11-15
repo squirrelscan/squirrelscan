@@ -5,14 +5,8 @@ import { z } from "zod";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const optionsSchema = z.object({
-  warn_threshold: z
-    .number()
-    .default(1500)
-    .describe("Warning threshold for total nodes"),
-  error_threshold: z
-    .number()
-    .default(3000)
-    .describe("Error threshold for total nodes"),
+  warn_threshold: z.number().default(1500).describe("Warning threshold for total nodes"),
+  error_threshold: z.number().default(3000).describe("Error threshold for total nodes"),
   max_depth: z.number().default(32).describe("Maximum DOM depth"),
   max_children: z.number().default(60).describe("Maximum children per element"),
 });

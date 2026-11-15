@@ -65,10 +65,10 @@ bun run scripts/check-common-misspellings.ts <scratch>/node_modules/wordlist-eng
 The two word lists are used only by the check. They are not dependencies of this
 repo and nothing from them is shipped:
 
-| Input | Version | Licence |
-| --- | --- | --- |
-| [`wordlist-english`](https://github.com/jacksonrayhamilton/wordlist-english) | 1.2.1 | MIT package. Its words are [SCOWL](http://wordlist.aspell.net/) 2016 lists, Copyright Kevin Atkinson, under SCOWL's permissive notice (its `Copyright` file). |
-| [`an-array-of-english-words`](https://github.com/words/an-array-of-english-words) | 2.0.0 | MIT package. Its words come from the [Letterpress word list](https://github.com/lorenbrichter/Words), CC0. |
+| Input                                                                             | Version | Licence                                                                                                                                                       |
+| --------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`wordlist-english`](https://github.com/jacksonrayhamilton/wordlist-english)      | 1.2.1   | MIT package. Its words are [SCOWL](http://wordlist.aspell.net/) 2016 lists, Copyright Kevin Atkinson, under SCOWL's permissive notice (its `Copyright` file). |
+| [`an-array-of-english-words`](https://github.com/words/an-array-of-english-words) | 2.0.0   | MIT package. Its words come from the [Letterpress word list](https://github.com/lorenbrichter/Words), CC0.                                                    |
 
 Adding an entry: write it yourself (do not copy from a published list), keep the
 file sorted, run the check, and update the entry count pinned in

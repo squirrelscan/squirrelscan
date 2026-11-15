@@ -19,7 +19,10 @@ export function expectDeclaredChecks(rule: Rule, checks: readonly CheckResult[])
   if (!declared) return;
   for (const check of checks) {
     const outcomes = declared.filter((d) => d.name === check.name).map((d) => d.outcome);
-    expect(outcomes.length, `${rule.meta.id} emitted undeclared check "${check.name}"`).toBeGreaterThan(0);
+    expect(
+      outcomes.length,
+      `${rule.meta.id} emitted undeclared check "${check.name}"`,
+    ).toBeGreaterThan(0);
     const wanted = OUTCOME_OF_STATUS[check.status] ?? "any";
     if (wanted !== "any") {
       expect(

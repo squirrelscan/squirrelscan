@@ -36,7 +36,8 @@ export function compileSelector(text: string): SelectorMatcher | string {
   const source = text.trim();
   if (!source) return "an empty selector";
   if (source.length > MAX_SELECTOR_CHARS) return `a selector over ${MAX_SELECTOR_CHARS} characters`;
-  if (/[[\]:,+~()'"\\]/.test(source)) return "a selector with an attribute, pseudo-class, sibling combinator or list (only tags, #ids, .classes, spaces and > are supported)";
+  if (/[[\]:,+~()'"\\]/.test(source))
+    return "a selector with an attribute, pseudo-class, sibling combinator or list (only tags, #ids, .classes, spaces and > are supported)";
   const tokens = source.replace(/>/g, " > ").split(/\s+/).filter(Boolean);
   const parts: Compound[] = [];
   let combinator: " " | ">" = " ";
@@ -49,7 +50,8 @@ export function compileSelector(text: string): SelectorMatcher | string {
       continue;
     }
     const match = COMPOUND.exec(token);
-    if (!match || (match[1] === undefined && match[2] === "")) return `"${token.slice(0, 40)}" is not a tag, #id or .class selector`;
+    if (!match || (match[1] === undefined && match[2] === ""))
+      return `"${token.slice(0, 40)}" is not a tag, #id or .class selector`;
     const rest = match[2] ?? "";
     const classes: string[] = [];
     let id: string | null = null;
@@ -58,12 +60,18 @@ export function compileSelector(text: string): SelectorMatcher | string {
       else if (id !== null) return `"${token.slice(0, 40)}" has two ids`;
       else id = piece.slice(1);
     }
-    parts.push({ tag: match[1] && match[1] !== "*" ? match[1].toLowerCase() : null, id, classes, combinator });
+    parts.push({
+      tag: match[1] && match[1] !== "*" ? match[1].toLowerCase() : null,
+      id,
+      classes,
+      combinator,
+    });
     combinator = " ";
     expectCompound = false;
   }
   if (parts.length === 0 || expectCompound) return "a selector that ends in a combinator";
-  if (parts.length > MAX_SELECTOR_PARTS) return `a selector of more than ${MAX_SELECTOR_PARTS} parts`;
+  if (parts.length > MAX_SELECTOR_PARTS)
+    return `a selector of more than ${MAX_SELECTOR_PARTS} parts`;
   return { parts: parts.length, test: (path) => matchPath(parts, path) };
 }
 
@@ -108,7 +116,8 @@ function matchPath(parts: readonly Compound[], segments: readonly Segment[]): bo
     let result = false;
     if (matches(parts[partIndex]!, segments[segmentIndex]!)) {
       if (partIndex === 0) result = true;
-      else if (parts[partIndex]!.combinator === ">") result = segmentIndex > 0 && walk(partIndex - 1, segmentIndex - 1);
+      else if (parts[partIndex]!.combinator === ">")
+        result = segmentIndex > 0 && walk(partIndex - 1, segmentIndex - 1);
       else for (let k = segmentIndex - 1; k >= 0 && !result; k--) result = walk(partIndex - 1, k);
     }
     memo.set(key, result);

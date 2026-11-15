@@ -230,7 +230,7 @@ function takeProblems(buckets: EntityMapNode[][], budget: number): EntityMapNode
   const taken: EntityMapNode[] = [];
   const seen = new Set<string>();
   const cursors = buckets.map(() => 0);
-  for (let progressed = true; progressed && taken.length < budget;) {
+  for (let progressed = true; progressed && taken.length < budget; ) {
     progressed = false;
     for (const [i, bucket] of buckets.entries()) {
       if (taken.length >= budget) break;

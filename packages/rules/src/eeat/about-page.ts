@@ -13,7 +13,12 @@ import {
   findInPageSection,
   inPageSectionsUnmeasured,
 } from "../shared/inpage-section";
-import { eeatPathsSchema, matchesConfiguredPaths, probedConfiguredPages, probedNote } from "../shared/eeat-paths";
+import {
+  eeatPathsSchema,
+  matchesConfiguredPaths,
+  probedConfiguredPages,
+  probedNote,
+} from "../shared/eeat-paths";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 
 export const optionsSchema = z.object({ paths: eeatPathsSchema });
@@ -115,7 +120,9 @@ export const aboutPageRule: Rule = {
       // (an excluded path, or past the page budget) is unverified, not missing.
       const probed = probedConfiguredPages(ctx.site, paths);
       const probedFound = probed.find((p) => p.outcome === "found");
-      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: (url) => isAboutPath(url, paths) }) : null;
+      const linked = ctx.site
+        ? findLinkedUncrawledPage(ctx.site, { href: (url) => isAboutPath(url, paths) })
+        : null;
       if (probedFound) {
         // #1428: the crawl did not reach it, the probe did.
         const words = probedFound.wordCount;
@@ -143,9 +150,14 @@ export const aboutPageRule: Rule = {
             : {
                 name: "about-page",
                 status: "warn",
-                message: probed.length > 0 ? `No About page found ${probedNote(probed)}` : "No About page found",
+                message:
+                  probed.length > 0
+                    ? `No About page found ${probedNote(probed)}`
+                    : "No About page found",
                 value: "Create /about or /about-us page",
-                ...(probed.length > 0 ? { details: { probed: true, paths: probed.map((p) => p.path) } } : {}),
+                ...(probed.length > 0
+                  ? { details: { probed: true, paths: probed.map((p) => p.path) } }
+                  : {}),
               },
         );
       }

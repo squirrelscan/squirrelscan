@@ -97,7 +97,11 @@ describe("every hop of the external check goes through the egress guard", () => 
   test("each hop is vetted by its own name and pinned to the vetted address, Host kept", async () => {
     const port = serve();
     const [result] = await Effect.runPromise(
-      checkExternalLinks([`http://public-a.example.com:${port}/hop-public`], null, options(publicSite())),
+      checkExternalLinks(
+        [`http://public-a.example.com:${port}/hop-public`],
+        null,
+        options(publicSite()),
+      ),
     );
     expect(result).toMatchObject({
       status: 200,
@@ -162,7 +166,11 @@ describe("every hop of the external check goes through the egress guard", () => 
   test("no request carries anything but User-Agent and Accept", async () => {
     const port = serve();
     await Effect.runPromise(
-      checkExternalLinks([`http://public-a.example.com:${port}/hop-public`], null, options(publicSite())),
+      checkExternalLinks(
+        [`http://public-a.example.com:${port}/hop-public`],
+        null,
+        options(publicSite()),
+      ),
     );
     expect(seen.length).toBeGreaterThan(0);
     for (const r of seen) {

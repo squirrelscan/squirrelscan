@@ -65,14 +65,13 @@ export const frameTitleRule: Rule = {
         status: "fail",
         message: `${missingTitles.length} iframe(s) without title attribute`,
         items: missingTitles.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingTitles.length > 10
-            ? { additional: missingTitles.length - 10 }
-            : undefined,
+        details: missingTitles.length > 10 ? { additional: missingTitles.length - 10 } : undefined,
       });
     }
     if (unnamed.unconfirmed.length > 0) {
-      checks.push(unconfirmedRow("frame-title", "iframe(s) without title attribute", unnamed.unconfirmed));
+      checks.push(
+        unconfirmedRow("frame-title", "iframe(s) without title attribute", unnamed.unconfirmed),
+      );
     }
     if (missingTitles.length === 0 && unnamed.unconfirmed.length === 0) {
       if (frames.length > 0) {

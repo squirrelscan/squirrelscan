@@ -13,17 +13,11 @@ import {
 
 const originalFetch = globalThis.fetch;
 
-const createFetchStub = (
-  responses: Record<string, { status?: number; body?: string }>
-) => {
+const createFetchStub = (responses: Record<string, { status?: number; body?: string }>) => {
   const calls: string[] = [];
   const fetchStub = async (input: RequestInfo | URL): Promise<Response> => {
     const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
+      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     calls.push(url);
     const response = responses[url];
     if (!response) {
@@ -95,12 +89,8 @@ describe("parseSitemap", () => {
 
     expect(result.type).toBe("index");
     expect(result.childSitemaps.length).toBe(2);
-    expect(result.childSitemaps).toContain(
-      "https://example.com/sitemap-posts.xml"
-    );
-    expect(result.childSitemaps).toContain(
-      "https://example.com/sitemap-pages.xml"
-    );
+    expect(result.childSitemaps).toContain("https://example.com/sitemap-posts.xml");
+    expect(result.childSitemaps).toContain("https://example.com/sitemap-pages.xml");
     expect(result.urls.length).toBe(0);
     expect(result.urlCount).toBe(0);
   });
@@ -182,7 +172,7 @@ describe("parseSitemap", () => {
   it("handles large sitemaps", () => {
     const urls = Array.from(
       { length: 1000 },
-      (_, i) => `<url><loc>https://example.com/page${i}</loc></url>`
+      (_, i) => `<url><loc>https://example.com/page${i}</loc></url>`,
     ).join("\n");
 
     const content = `<?xml version="1.0" encoding="UTF-8"?>
@@ -232,10 +222,7 @@ describe("getUrlsFromSitemaps", () => {
       {
         url: "https://example.com/sitemap1.xml",
         type: "urlset" as const,
-        urls: [
-          { loc: "https://example.com/page1" },
-          { loc: "https://example.com/page2" },
-        ],
+        urls: [{ loc: "https://example.com/page1" }, { loc: "https://example.com/page2" }],
         childSitemaps: [],
         errors: [],
         urlCount: 2,
@@ -334,7 +321,7 @@ describe("fetchSitemapsRecursive", () => {
     globalThis.fetch = fetchStub as typeof fetch;
 
     const result = await Effect.runPromise(
-      fetchSitemapsRecursive([indexUrl, childUrl, childUrl], "SquirrelTest")
+      fetchSitemapsRecursive([indexUrl, childUrl, childUrl], "SquirrelTest"),
     );
 
     const urls = result.filter((r) => r.success).map((r) => r.data.url);
@@ -379,15 +366,11 @@ describe("discoverSitemaps", () => {
       errors: [],
     };
 
-    const result = await Effect.runPromise(
-      discoverSitemaps(baseUrl, robotsTxt, "SquirrelTest")
-    );
+    const result = await Effect.runPromise(discoverSitemaps(baseUrl, robotsTxt, "SquirrelTest"));
 
     expect(result.discovered.length).toBe(1);
     expect(result.discovered[0].url).toBe(indexUrl);
     expect(result.all.map((sitemap) => sitemap.url)).toContain(childUrl);
-    expect(result.discovered.map((sitemap) => sitemap.url)).not.toContain(
-      childUrl
-    );
+    expect(result.discovered.map((sitemap) => sitemap.url)).not.toContain(childUrl);
   });
 });

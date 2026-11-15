@@ -85,7 +85,7 @@ function lastSegment(url: string): string {
 function recordedImageUrls(
   imgs: ImgLike[],
   recorded: ReadonlyArray<{ src: string }>,
-  pageUrl: string
+  pageUrl: string,
 ): Map<ImgLike, string> {
   const urls = new Map<ImgLike, string>();
   let next = 0;
@@ -139,8 +139,7 @@ export const responsiveSizeRule: Rule = {
   meta: {
     id: "images/responsive-size",
     name: "Responsive Image Size",
-    description:
-      "Checks whether small images serve files heavier than their displayed size needs",
+    description: "Checks whether small images serve files heavier than their displayed size needs",
     solution:
       "Serve images at the size they are displayed. A thumbnail shown at 64x64 needs at most a 128x128 file for high-density screens; a file much heavier than that wastes bandwidth and slows the page. Generate a thumbnail-sized variant and reference it, or list 1x and 2x candidates in srcset so the browser picks the smallest sharp one. Image CDNs can resize on the fly.",
     category: "images",
@@ -177,14 +176,13 @@ export const responsiveSizeRule: Rule = {
       return { checks };
     }
 
-    const oversizedImages: Array<{ id: string; label: string; meta: Record<string, unknown> }> =
-      [];
+    const oversizedImages: Array<{ id: string; label: string; meta: Record<string, unknown> }> = [];
     let imagesWithSizeInfo = 0;
     const measurements = imageMeasurementIndex(ctx.site?.resourceSizes?.images ?? []);
     const recordedUrls = recordedImageUrls(
       querySelectorAllOutsideNoscript(doc, "img"),
       ctx.parsed.images ?? [],
-      ctx.page.finalUrl ?? ctx.page.url
+      ctx.page.finalUrl ?? ctx.page.url,
     );
 
     for (const img of images) {
@@ -233,8 +231,7 @@ export const responsiveSizeRule: Rule = {
 
       const filename = src.split("/").pop()?.split("?")[0] || src;
       const id = `${filename} (${displayWidth}x${displayHeight}, no srcset)`;
-      const usedPixels =
-        displayWidth * DEVICE_PIXEL_RATIO * displayHeight * DEVICE_PIXEL_RATIO;
+      const usedPixels = displayWidth * DEVICE_PIXEL_RATIO * displayHeight * DEVICE_PIXEL_RATIO;
 
       if (natural) {
         // Pixels a 2x screen never draws in the box, as a share of the file.

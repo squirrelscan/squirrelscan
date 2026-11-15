@@ -23,7 +23,7 @@ function rule(
   category: string,
   severity: "error" | "warning" | "info",
   checks: ReportRuleResult["checks"],
-  weight = 5
+  weight = 5,
 ): ReportRuleResult {
   return {
     meta: { id, name: id, description: "", category, scope: "page", severity, weight },
@@ -144,7 +144,15 @@ function reportAcrossSeverities(): AuditReport {
           failed: 0,
           total: 1,
         },
-        { group: "ai", name: "AI Readiness", score: 40, passed: 0, warnings: 1, failed: 0, total: 1 },
+        {
+          group: "ai",
+          name: "AI Readiness",
+          score: 40,
+          passed: 0,
+          warnings: 1,
+          failed: 0,
+          total: 1,
+        },
       ],
       errorCount: 1,
       warningCount: 2,

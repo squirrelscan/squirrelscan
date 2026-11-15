@@ -748,15 +748,12 @@ export const devLeakageRule: Rule = {
     // artifact is a broken reference a visitor can hit right now, so it fails. A
     // mention in copy is embarrassing rather than broken, and a preview host
     // that could belong to anyone is a judgement call, so both warn.
-    const broken = hits.some(
-      (h) => h.source === "attribute" && h.own,
-    );
+    const broken = hits.some((h) => h.source === "attribute" && h.own);
     const status = broken ? "fail" : "warn";
 
     // Lead with the row that decided the status, so the example line is the
     // clickable reference rather than whichever mention came first.
-    const leading =
-      rows.find((r) => r.inAttribute) ?? (rows[0] as DevLeakageSummaryRow);
+    const leading = rows.find((r) => r.inAttribute) ?? (rows[0] as DevLeakageSummaryRow);
 
     checks.push({
       name,

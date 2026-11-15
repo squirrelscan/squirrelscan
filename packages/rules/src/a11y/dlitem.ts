@@ -58,10 +58,7 @@ export const dlitemRule: Rule = {
         status: "fail",
         message: `${orphaned.length} dt/dd element(s) not inside a dl`,
         items: orphaned.slice(0, 10).map((id) => ({ id })),
-        details:
-          orphaned.length > 10
-            ? { additional: orphaned.length - 10 }
-            : undefined,
+        details: orphaned.length > 10 ? { additional: orphaned.length - 10 } : undefined,
       });
     } else if (dtElements.length + ddElements.length > 0) {
       checks.push({

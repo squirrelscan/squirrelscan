@@ -28,7 +28,12 @@ describe("a sitemap with a namespace-prefixed root (#759)", () => {
     expect(result.type).toBe("urlset");
     expect(result.urls).toEqual([
       { loc: "https://example.com/a", lastmod: "2024-09-10", changefreq: "weekly", priority: 0.8 },
-      { loc: "https://example.com/b?x=1&y=2", lastmod: undefined, changefreq: undefined, priority: undefined },
+      {
+        loc: "https://example.com/b?x=1&y=2",
+        lastmod: undefined,
+        changefreq: undefined,
+        priority: undefined,
+      },
     ]);
     expect(result).toEqual({ ...parseSitemap(plain, URL_), isNewsSitemap: false });
   });
@@ -104,7 +109,10 @@ describe("a sitemap with a namespace-prefixed root (#759)", () => {
       `<ns0:urlset xmlns:ns0="${NS}" xmlns="${NS}"><ns0:url><ns0:loc>https://example.com/a</ns0:loc><loc>https://example.com/b</loc></ns0:url><ns0:url><ns0:loc>https://example.com/c</ns0:loc></ns0:url><url><loc>https://example.com/d</loc></url></ns0:urlset>`,
       URL_,
     );
-    expect(result.urls.map((u) => u.loc)).toEqual(["https://example.com/c", "https://example.com/d"]);
+    expect(result.urls.map((u) => u.loc)).toEqual([
+      "https://example.com/c",
+      "https://example.com/d",
+    ]);
     expect(result.errors.join(" ")).toContain("skipped");
   });
 

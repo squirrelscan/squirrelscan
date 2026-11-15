@@ -21,10 +21,7 @@ function ctx(html: string, pageUrl = "https://example.test/p"): RuleContext {
 
 describe("region evidence is linear in the number of faulty elements", () => {
   test("a 5,000-link nav does not re-walk the region per link", async () => {
-    const links = Array.from(
-      { length: 5000 },
-      (_, i) => `<a href="/t${i}">Read more</a>`,
-    ).join("");
+    const links = Array.from({ length: 5000 }, (_, i) => `<a href="/t${i}">Read more</a>`).join("");
     const started = performance.now();
     const checks = (await linkTextRule.run(ctx(`<footer><nav>${links}</nav></footer>`))).checks;
     const elapsed = performance.now() - started;
@@ -64,7 +61,13 @@ describe("content nested BELOW a chrome region is not site chrome", () => {
     );
     const target = document.querySelector("p") as unknown as Element;
     const occurrence = componentOccurrence(
-      { pageUrl: "https://example.test/p", rendered: false, element: target, kind: "stale-copyright", values: {} },
+      {
+        pageUrl: "https://example.test/p",
+        rendered: false,
+        element: target,
+        kind: "stale-copyright",
+        values: {},
+      },
       new ComponentOccurrenceCache(),
     );
     expect(occurrence.groupable).toBe(false);
@@ -78,7 +81,9 @@ describe("stale-copyright detection is byte-identical to the baseline", () => {
   // That duplication is load-bearing: the pattern needs the © marker BEFORE a
   // year, and only the seam between the two copies supplies it.
   test("an element matching two selectors still warns", async () => {
-    const checks = (await staleCopyrightRule.run(ctx('<footer class="footer">2025 &copy;</footer>'))).checks;
+    const checks = (
+      await staleCopyrightRule.run(ctx('<footer class="footer">2025 &copy;</footer>'))
+    ).checks;
     expect(checks[0]).toMatchObject({
       name: "footer-copyright-year",
       status: "warn",
@@ -91,7 +96,8 @@ describe("stale-copyright detection is byte-identical to the baseline", () => {
     // the two copies, so no single element's text asserts it. The finding must
     // still stand (parity), and evidence must stay empty rather than blaming an
     // element that does not say what the finding claims.
-    const check = (await staleCopyrightRule.run(ctx('<footer class="footer">2025 &copy;</footer>'))).checks[0]!;
+    const check = (await staleCopyrightRule.run(ctx('<footer class="footer">2025 &copy;</footer>')))
+      .checks[0]!;
     expect(check.status).toBe("warn");
     expect(check.componentOccurrences ?? []).toHaveLength(0);
   });

@@ -12,7 +12,12 @@ import {
 } from "@squirrelscan/core-contracts";
 
 import { isRedundantPageItem } from "./affected-pages";
-import { checkPageTypeScope, hasCarriedPages, pageTypeScopeLine, type PageTypeScopeCheck } from "./page-type-scope";
+import {
+  checkPageTypeScope,
+  hasCarriedPages,
+  pageTypeScopeLine,
+  type PageTypeScopeCheck,
+} from "./page-type-scope";
 import { structureNumber } from "./structure";
 
 /**

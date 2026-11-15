@@ -9,10 +9,7 @@
 
 import { Effect } from "effect";
 
-import type {
-  CacheHitReason,
-  CachedResourceRecord,
-} from "@squirrelscan/core-contracts";
+import type { CacheHitReason, CachedResourceRecord } from "@squirrelscan/core-contracts";
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
 import { calculateFreshness } from "@squirrelscan/crawler";
 import {
@@ -193,7 +190,7 @@ function parseContentRangeTotal(value: string | null): number | null {
 
 function validateContentType(
   contentType: string | null,
-  expectedPrefix: string | undefined
+  expectedPrefix: string | undefined,
 ): boolean {
   if (!expectedPrefix || !contentType) return true;
   return contentType.toLowerCase().startsWith(expectedPrefix.toLowerCase());
@@ -285,7 +282,7 @@ async function readCappedBody(
   response: Response,
   cap: number,
   measureRest: boolean,
-  abort: () => void
+  abort: () => void,
 ): Promise<CappedBody> {
   // Decoded as it is read (#2717): every request here is fetched undecoded, so
   // a Content-Encoding bomb is inflated no further than this read goes.
@@ -337,7 +334,7 @@ async function readCappedBody(
  */
 async function measureUnrangedSize(
   url: string,
-  options: ResourceCheckerOptions
+  options: ResourceCheckerOptions,
 ): Promise<number | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
@@ -347,22 +344,30 @@ async function measureUnrangedSize(
   );
   try {
     try {
-      const { response } = await fetchResource(url, {
-        method: "HEAD",
-        headers,
-        signal: controller.signal,
-      }, options);
+      const { response } = await fetchResource(
+        url,
+        {
+          method: "HEAD",
+          headers,
+          signal: controller.signal,
+        },
+        options,
+      );
       const length =
         response.status < 400 ? parseHeaderInt(response.headers.get("content-length")) : null;
       if (length !== null) return length;
     } catch {
       // Fall through to the counted read, as the HEAD path above does.
     }
-    const { response } = await fetchResource(url, {
-      method: "GET",
-      headers,
-      signal: controller.signal,
-    }, options);
+    const { response } = await fetchResource(
+      url,
+      {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      },
+      options,
+    );
     const declared = parseHeaderInt(response.headers.get("content-length"));
     if (!response.ok || declared !== null) {
       controller.abort();
@@ -408,7 +413,7 @@ function readHeaderInfo(head: Uint8Array): ImageHeaderInfo | null {
  */
 function tryOriginFreshReuse(
   prior: CachedResourceRecord | undefined,
-  maxStalenessSeconds: number | undefined
+  maxStalenessSeconds: number | undefined,
 ): ResourceCheckResult | null {
   if (!prior || !prior.cacheControl) return null;
   // Only reuse what was a real success previously.
@@ -422,7 +427,7 @@ function tryOriginFreshReuse(
       age: null,
       fetchedAt: prior.fetchedAt,
     },
-    maxStalenessSeconds !== undefined ? { maxStalenessSeconds } : {}
+    maxStalenessSeconds !== undefined ? { maxStalenessSeconds } : {},
   );
   if (freshness.state !== "fresh") return null;
   // calculateFreshness only emits a FreshReason in the "fresh" state, all of
@@ -454,7 +459,7 @@ function tryOriginFreshReuse(
 async function checkSingleResourceAsync(
   url: string,
   options: ResourceCheckerOptions,
-  retryCount = 0
+  retryCount = 0,
 ): Promise<ResourceCheckResult> {
   const readHeader = options.readImageHeader === true;
   const known = options.priorByUrl?.get(url);
@@ -498,12 +503,7 @@ async function checkSingleResourceAsync(
   //    variant-keyed (Vary) — a 304 only proves the variant we'd send matches,
   //    which we can't guarantee for a Vary-keyed response.
   const conditional: Record<string, string> = {};
-  if (
-    prior &&
-    prior.status != null &&
-    prior.status < 400 &&
-    !varyForbidsReuse(prior.vary)
-  ) {
+  if (prior && prior.status != null && prior.status < 400 && !varyForbidsReuse(prior.vary)) {
     if (prior.etag) conditional["If-None-Match"] = prior.etag;
     if (prior.lastModified) conditional["If-Modified-Since"] = prior.lastModified;
   }
@@ -525,15 +525,19 @@ async function checkSingleResourceAsync(
         // #1395: follow redirects manually so per hop the http/https scheme
         // allowlist applies and secret customHeaders are stripped on a cross-origin
         // redirect (native redirect:"follow" replays them to the redirect target).
-        const { response: headResponse, finalUrl: headFinalUrl } = await fetchResource(url, {
-          method: "HEAD",
-          headers: mergeHeaderRecords(
-            { "User-Agent": options.userAgent, Accept: "*/*" },
-            customHeadersFor(url, options.customHeaders, options.headerScope),
-            conditional,
-          ),
-          signal: controller.signal,
-        }, options);
+        const { response: headResponse, finalUrl: headFinalUrl } = await fetchResource(
+          url,
+          {
+            method: "HEAD",
+            headers: mergeHeaderRecords(
+              { "User-Agent": options.userAgent, Accept: "*/*" },
+              customHeadersFor(url, options.customHeaders, options.headerScope),
+              conditional,
+            ),
+            signal: controller.signal,
+          },
+          options,
+        );
 
         defaultResult.rateLimited =
           isRateLimitedResponse(headResponse.status, headResponse.headers.get("retry-after")) ||
@@ -577,9 +581,7 @@ async function checkSingleResourceAsync(
         }
 
         const meta = extractMeta(headResponse);
-        const sizeBytes = parseHeaderInt(
-          headResponse.headers.get("content-length")
-        );
+        const sizeBytes = parseHeaderInt(headResponse.headers.get("content-length"));
 
         if (
           options.validateContentType &&
@@ -643,21 +645,25 @@ async function checkSingleResourceAsync(
     // #1395: manual redirects — scheme allowlist + strip secret customHeaders on
     // cross-origin redirects (see the HEAD path above).
     let getController = readHeader ? requestController(controller) : controller;
-    let { response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
-      method: "GET",
-      headers: mergeHeaderRecords(
-        { "User-Agent": options.userAgent, Accept: "*/*" },
-        customHeadersFor(url, options.customHeaders, options.headerScope),
-        conditional,
-        // The size check reads this range and no more: never the caller's.
-        {
-          Range: readHeader
-            ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
-            : "bytes=0-0",
-        },
-      ),
-      signal: getController.signal,
-    }, options);
+    let { response: getResponse, finalUrl: getFinalUrl } = await fetchResource(
+      url,
+      {
+        method: "GET",
+        headers: mergeHeaderRecords(
+          { "User-Agent": options.userAgent, Accept: "*/*" },
+          customHeadersFor(url, options.customHeaders, options.headerScope),
+          conditional,
+          // The size check reads this range and no more: never the caller's.
+          {
+            Range: readHeader
+              ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
+              : "bytes=0-0",
+          },
+        ),
+        signal: getController.signal,
+      },
+      options,
+    );
 
     // Servers that reject Range answer 416 (Range Not Satisfiable). That is a
     // Range-rejection, not the resource's real status — recording it surfaced
@@ -670,15 +676,19 @@ async function checkSingleResourceAsync(
       if (readHeader) getController.abort();
       getResponse.body?.cancel().catch(() => {});
       getController = readHeader ? requestController(controller) : controller;
-      ({ response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
-        method: "GET",
-        headers: mergeHeaderRecords(
-          { "User-Agent": options.userAgent, Accept: "*/*" },
-          customHeadersFor(url, options.customHeaders, options.headerScope),
-          conditional,
-        ),
-        signal: getController.signal,
-      }, options));
+      ({ response: getResponse, finalUrl: getFinalUrl } = await fetchResource(
+        url,
+        {
+          method: "GET",
+          headers: mergeHeaderRecords(
+            { "User-Agent": options.userAgent, Accept: "*/*" },
+            customHeadersFor(url, options.customHeaders, options.headerScope),
+            conditional,
+          ),
+          signal: getController.signal,
+        },
+        options,
+      ));
     }
 
     // 304 Not Modified on the GET fallback → validator hit.
@@ -723,9 +733,7 @@ async function checkSingleResourceAsync(
     }
     const contentRange = getResponse.headers.get("content-range");
     const sizeFromRange = parseContentRangeTotal(contentRange);
-    const sizeFromLength = parseHeaderInt(
-      getResponse.headers.get("content-length")
-    );
+    const sizeFromLength = parseHeaderInt(getResponse.headers.get("content-length"));
 
     // #9: a ranged 206 is no more conclusive than the HEAD was — many origins
     // and CDNs skip compression for range requests specifically, so `Range:
@@ -754,20 +762,22 @@ async function checkSingleResourceAsync(
       // arrive: a cancel alone lets the whole file download (#470).
       const confirmController = readHeader ? requestController(controller) : controller;
       try {
-        const { response: confirmResponse } = await fetchResource(url, {
-          method: "GET",
-          headers: mergeHeaderRecords(
-            { "User-Agent": options.userAgent, Accept: "*/*" },
-            customHeadersFor(url, options.customHeaders, options.headerScope),
-          ),
-          signal: confirmController.signal,
-        }, options);
+        const { response: confirmResponse } = await fetchResource(
+          url,
+          {
+            method: "GET",
+            headers: mergeHeaderRecords(
+              { "User-Agent": options.userAgent, Accept: "*/*" },
+              customHeadersFor(url, options.customHeaders, options.headerScope),
+            ),
+            signal: confirmController.signal,
+          },
+          options,
+        );
         if (readHeader) confirmController.abort();
         confirmResponse.body?.cancel().catch(() => {});
         if (confirmResponse.status < 400) {
-          resolvedEncoding = normalizeEncoding(
-            confirmResponse.headers.get("content-encoding")
-          );
+          resolvedEncoding = normalizeEncoding(confirmResponse.headers.get("content-encoding"));
         }
       } catch {
         // Leave it unknown; a failed confirmation must not invent a finding,
@@ -880,12 +890,8 @@ async function checkSingleResourceAsync(
       return { ...defaultResult, error: ASSET_FETCH_REFUSED_ERROR };
     }
 
-    if (
-      retryCount < RESOURCE_SIZE_LIMITS.MAX_RETRIES &&
-      (error as Error).name !== "AbortError"
-    ) {
-      const delay =
-        RESOURCE_SIZE_LIMITS.RETRY_DELAY_MS * Math.pow(2, retryCount);
+    if (retryCount < RESOURCE_SIZE_LIMITS.MAX_RETRIES && (error as Error).name !== "AbortError") {
+      const delay = RESOURCE_SIZE_LIMITS.RETRY_DELAY_MS * Math.pow(2, retryCount);
       await new Promise((resolve) => setTimeout(resolve, delay));
       return checkSingleResourceAsync(url, options, retryCount + 1);
     }
@@ -910,7 +916,7 @@ function resourceOutcome(result: ResourceCheckResult): FetchOutcome {
 
 function checkSingleResource(
   url: string,
-  options: ResourceCheckerOptions
+  options: ResourceCheckerOptions,
 ): Effect.Effect<ResourceCheckResult, never, never> {
   return Effect.promise(async () => {
     // #1252: skip before launching once the budget is spent or the host is
@@ -949,7 +955,7 @@ function checkSingleResource(
 
 export function checkResourceSizes(
   urls: string[],
-  options?: Partial<ResourceCheckerOptions>
+  options?: Partial<ResourceCheckerOptions>,
 ): Effect.Effect<ResourceCheckResult[], never, never> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   opts.concurrency = Math.max(1, opts.concurrency);

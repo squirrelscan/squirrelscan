@@ -29,7 +29,8 @@ const CONFIG: Partial<CrawlerConfig> = {
 };
 
 /** The seed page of a crawl: the one whose path is exactly `/` (an exact comparison on the parsed URL, not a substring). */
-const seedOf = (pages: Array<{ normalizedUrl: string }>) => pages.find((p) => new URL(p.normalizedUrl).pathname === "/")!;
+const seedOf = (pages: Array<{ normalizedUrl: string }>) =>
+  pages.find((p) => new URL(p.normalizedUrl).pathname === "/")!;
 
 const servers: Array<{ stop: (force?: boolean) => void }> = [];
 afterEach(() => {
@@ -45,10 +46,19 @@ function serve(body: string, { gzip }: { gzip: boolean }): string {
     port: 0,
     fetch(req) {
       const path = new URL(req.url).pathname;
-      if (path !== "/") return new Response("<!doctype html><title>l</title><p>leaf</p>", { headers: { "content-type": "text/html" } });
+      if (path !== "/")
+        return new Response("<!doctype html><title>l</title><p>leaf</p>", {
+          headers: { "content-type": "text/html" },
+        });
       if (!gzip) return new Response(body, { headers: { "content-type": "text/html" } });
       const packed = gzipSync(body);
-      return new Response(packed, { headers: { "content-type": "text/html", "content-encoding": "gzip", "content-length": String(packed.length) } });
+      return new Response(packed, {
+        headers: {
+          "content-type": "text/html",
+          "content-encoding": "gzip",
+          "content-length": String(packed.length),
+        },
+      });
     },
   });
   servers.push(server);
@@ -93,7 +103,9 @@ describe("the parse cap judges the decoded page (#1332)", () => {
 
   test("a multi-byte page whose character count is under the cap but whose bytes are over it is not parsed", async () => {
     // 30,000 three-byte characters: 30 K characters, 90 KB of bytes.
-    const pages = await crawl(serve(html(20, 0).replace("</p>", `${"中".repeat(30_000)}</p>`), { gzip: true }));
+    const pages = await crawl(
+      serve(html(20, 0).replace("</p>", `${"中".repeat(30_000)}</p>`), { gzip: true }),
+    );
     expect(seedOf(pages).parsedData).toBeNull();
   }, 30_000);
 

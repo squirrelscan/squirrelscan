@@ -210,7 +210,11 @@ export const conflictingIndexSignalsRule: Rule = {
     checks: [
       { name: "conflicting-index-signals", outcome: "problem" },
       { name: "site-wide-noindex", outcome: "skipped" },
-      { name: "conflicting-index-signals", outcome: "clean", clears: ["conflicting-index-signals"] },
+      {
+        name: "conflicting-index-signals",
+        outcome: "clean",
+        clears: ["conflicting-index-signals"],
+      },
       { name: "conflicting-index-signals", outcome: "skipped" },
     ],
   },

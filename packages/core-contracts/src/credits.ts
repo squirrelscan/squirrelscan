@@ -189,7 +189,8 @@ export const clampAuditPages = (input: {
       : pagesFor(input.balance);
   const byCap = input.cap != null && input.cap > 0 ? pagesFor(input.cap) : Number.POSITIVE_INFINITY;
   const maxPages = Math.min(requested, byBalance, byCap);
-  if (maxPages >= requested) return { maxPages: requested, requestedMaxPages: requested, clamped: false };
+  if (maxPages >= requested)
+    return { maxPages: requested, requestedMaxPages: requested, clamped: false };
   return {
     maxPages,
     requestedMaxPages: requested,
@@ -265,7 +266,13 @@ export const topupQuote = (usd: number): TopupQuote => {
   // may differ in the last bits across engines (browser, workerd, Bun); the toFixed(6) step keeps the floored
   // credits identical, and tests/fixtures/topup-total-credits.json pins every whole dollar so a drift shows as a diff.
   const bonusCredits = Math.floor(Number(((baseCredits * bonusPercent) / 100).toFixed(6)));
-  return { usd: amount, baseCredits, bonusCredits, totalCredits: baseCredits + bonusCredits, bonusPercent };
+  return {
+    usd: amount,
+    baseCredits,
+    bonusCredits,
+    totalCredits: baseCredits + bonusCredits,
+    bonusPercent,
+  };
 };
 
 /** Credits granted for a whole-dollar top-up amount (base plus bonus). */

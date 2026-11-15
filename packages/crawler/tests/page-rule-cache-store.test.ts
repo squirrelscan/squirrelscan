@@ -46,8 +46,7 @@ async function withStorage<T>(fn: (s: SQLiteStorage, crawlId: string) => Promise
   const storage = new SQLiteStorage(dir);
   try {
     await run(storage.init());
-    const crawlId = await run(
-      storage.createCrawl(crawlMeta(1_000)));
+    const crawlId = await run(storage.createCrawl(crawlMeta(1_000)));
     return await fn(storage, crawlId);
   } finally {
     await run(storage.close());
@@ -58,11 +57,14 @@ async function withStorage<T>(fn: (s: SQLiteStorage, crawlId: string) => Promise
 describe("page_rule_cache storage", () => {
   test("round-trips a payload through gzip", async () => {
     await withStorage(async (storage, crawlId) => {
-      const payload = JSON.stringify({ ruleResults: [["core/meta-title", []]], big: "x".repeat(5000) });
+      const payload = JSON.stringify({
+        ruleResults: [["core/meta-title", []]],
+        big: "x".repeat(5000),
+      });
       await run(
         storage.savePageRuleCacheBatch(crawlId, [
           { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload },
-        ])
+        ]),
       );
       const loaded = await run(storage.loadPageRuleCache(["k1", "missing"]));
       expect(loaded.get("k1")).toBe(payload);
@@ -82,14 +84,13 @@ describe("page_rule_cache storage", () => {
       await run(
         storage.savePageRuleCacheBatch(firstCrawl, [
           { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload },
-        ])
+        ]),
       );
-      const secondCrawl = await run(
-        storage.createCrawl(crawlMeta(2_000)));
+      const secondCrawl = await run(storage.createCrawl(crawlMeta(2_000)));
       await run(
         storage.carryForwardPageRuleCache(secondCrawl, [
           { normalizedUrl: "http://x.test/a", cacheKey: "k1" },
-        ])
+        ]),
       );
       // Retiring the crawl the entry came FROM must not lose it: that is the whole
       // point of carrying it forward.
@@ -104,7 +105,7 @@ describe("page_rule_cache storage", () => {
       await run(
         storage.carryForwardPageRuleCache(crawlId, [
           { normalizedUrl: "http://x.test/gone", cacheKey: "never-stored" },
-        ])
+        ]),
       );
       expect((await run(storage.loadPageRuleCache(["never-stored"]))).size).toBe(0);
     });
@@ -116,7 +117,7 @@ describe("page_rule_cache storage", () => {
         storage.savePageRuleCacheBatch(crawlId, [
           { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload: "{}" },
           { normalizedUrl: "http://x.test/b", cacheKey: "k2", payload: "{}" },
-        ])
+        ]),
       );
       const preview = await run(storage.previewRetireCrawls([crawlId]));
       expect(preview.rowsByTable.page_rule_cache).toBe(2);
@@ -152,7 +153,7 @@ describe("page_rule_cache storage", () => {
           storage.savePageRuleCacheBatch(crawlId, [
             { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload },
             { normalizedUrl: "http://x.test/b", cacheKey: "k2", payload },
-          ])
+          ]),
         );
       }
       const loaded = await run(storage.loadPageRuleCache(["k1", "k2"]));

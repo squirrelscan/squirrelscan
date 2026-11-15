@@ -47,9 +47,12 @@ beforeAll(() => {
       }
       if (pathname === "/robots.txt") return new Response("User-agent: *\nAllow: /\n");
       if (pathname === "/") {
-        return new Response("<!doctype html><html><head><title>F</title></head><body>hi</body></html>", {
-          headers: { "content-type": "text/html" },
-        });
+        return new Response(
+          "<!doctype html><html><head><title>F</title></head><body>hi</body></html>",
+          {
+            headers: { "content-type": "text/html" },
+          },
+        );
       }
       return new Response("not found", { status: 404 });
     },
@@ -68,7 +71,9 @@ async function crawl(config: Partial<CrawlerConfig>): Promise<void> {
     Effect.gen(function* () {
       yield* storage.init();
       const crawler = yield* createCrawler({ config: { ...CONFIG, ...config }, storage });
-      const events = Effect.runFork(Stream.runForEach(crawler.events, (_e: CrawlerEvent) => Effect.void));
+      const events = Effect.runFork(
+        Stream.runForEach(crawler.events, (_e: CrawlerEvent) => Effect.void),
+      );
       yield* crawler.start(`${base}/`, `${base}/`);
       yield* Fiber.interrupt(events);
     }),

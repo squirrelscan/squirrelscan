@@ -68,7 +68,7 @@ describe("nonPublicHostLabel", () => {
     "unusable input %p is not classified here",
     (url) => {
       expect(nonPublicHostLabel(url)).toBeNull();
-    }
+    },
   );
 
   // The name cases a private-IP check alone cannot see.
@@ -140,11 +140,28 @@ describe("nonPublicHostLabel", () => {
   });
 
   test("the narrow label (the grant) does not name them: a start URL there is not allowed private-network egress", () => {
-    for (const url of ["http://[64:ff9b::a00:1]/", "http://[2002:a00:1::]/", "http://[2001::1]/", "http://203.0.113.10/", "http://[fec0::1]/", "http://224.0.0.1/"]) {
-      expect([url, privateNetworkHostLabel(url), isPrivateNetworkUrl(url)]).toEqual([url, null, false]);
+    for (const url of [
+      "http://[64:ff9b::a00:1]/",
+      "http://[2002:a00:1::]/",
+      "http://[2001::1]/",
+      "http://203.0.113.10/",
+      "http://[fec0::1]/",
+      "http://224.0.0.1/",
+    ]) {
+      expect([url, privateNetworkHostLabel(url), isPrivateNetworkUrl(url)]).toEqual([
+        url,
+        null,
+        false,
+      ]);
     }
     // and it keeps what it always named
-    for (const url of ["http://localhost:3000", "http://10.0.0.5/", "http://[::1]:5173/", "http://box.local/", "http://169.254.169.254/"]) {
+    for (const url of [
+      "http://localhost:3000",
+      "http://10.0.0.5/",
+      "http://[::1]:5173/",
+      "http://box.local/",
+      "http://169.254.169.254/",
+    ]) {
       expect([url, privateNetworkHostLabel(url) !== null]).toEqual([url, true]);
     }
   });

@@ -119,10 +119,14 @@ describe("buildHeadersMap", () => {
   // them joined, as the server sent them. A record stored before the field
   // existed has no key and reads as before.
   test("content-type carries the stored charset; a record without one reads as before", () => {
-    expect(buildHeadersMap(page({ contentType: "text/html", contentTypeCharset: "UTF-8" }))["content-type"]).toBe(
-      "text/html; charset=UTF-8"
-    );
-    expect(buildHeadersMap(page({ contentType: "text/html", contentTypeCharset: null }))["content-type"]).toBe("text/html");
+    expect(
+      buildHeadersMap(page({ contentType: "text/html", contentTypeCharset: "UTF-8" }))[
+        "content-type"
+      ],
+    ).toBe("text/html; charset=UTF-8");
+    expect(
+      buildHeadersMap(page({ contentType: "text/html", contentTypeCharset: null }))["content-type"],
+    ).toBe("text/html");
     expect(buildHeadersMap(page({ contentType: "text/html" }))["content-type"]).toBe("text/html");
     // No media type, no content-type at all, charset or not.
     expect(buildHeadersMap(page({ contentTypeCharset: "utf-8" }))["content-type"]).toBeUndefined();

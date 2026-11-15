@@ -36,10 +36,7 @@ export const inputImageAltRule: Rule = {
         const name = input.getAttribute("name") || "";
         const src = input.getAttribute("src") || "";
         const filename = src.split("/").pop()?.split("?")[0] || "";
-        unnamed.add(
-          input,
-          name ? `input[name="${name}"]` : filename || "input[type=image]"
-        );
+        unnamed.add(input, name ? `input[name="${name}"]` : filename || "input[type=image]");
       }
     }
 

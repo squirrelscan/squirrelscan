@@ -4,10 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type {
-  CrawlMetadata,
-  ResourceSizeRecord,
-} from "../src/storage/types";
+import type { CrawlMetadata, ResourceSizeRecord } from "../src/storage/types";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -63,7 +60,9 @@ describe("getCachedResources", () => {
     const curId = await run(store.createCrawl(crawlMeta(3000)));
 
     await run(store.saveResourceSizes(oldId, [res({ sizeBytes: 100 })]));
-    await run(store.saveResourceSizes(newId, [res({ sizeBytes: 200, cacheControl: "max-age=60" })]));
+    await run(
+      store.saveResourceSizes(newId, [res({ sizeBytes: 200, cacheControl: "max-age=60" })]),
+    );
     // The current crawl also has the resource — it must NOT be returned.
     await run(store.saveResourceSizes(curId, [res({ sizeBytes: 999 })]));
 
@@ -95,13 +94,13 @@ describe("getCachedResources", () => {
       store.saveResourceSizes(priorId, [
         res({ type: "css", url: "https://example.com/a.css", sizeBytes: 11 }),
         res({ type: "image", url: "https://example.com/b.png", sizeBytes: 22 }),
-      ])
+      ]),
     );
     const curId = await run(store.createCrawl(crawlMeta(2000)));
     const cached = await run(store.getCachedResources(curId));
     expect(cached).toHaveLength(2);
     expect(new Set(cached.map((c) => c.url))).toEqual(
-      new Set(["https://example.com/a.css", "https://example.com/b.png"])
+      new Set(["https://example.com/a.css", "https://example.com/b.png"]),
     );
   });
 

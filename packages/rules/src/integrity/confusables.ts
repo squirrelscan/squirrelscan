@@ -20,13 +20,90 @@ export const INVISIBLE = /\p{Default_Ignorable_Code_Point}|⠀/gu;
  */
 export const CONFUSABLES: Readonly<Record<string, string>> = Object.fromEntries([
   // Cyrillic
-  ...Object.entries({ а: "a", е: "e", о: "o", р: "p", с: "c", у: "y", х: "x", і: "i", ј: "j", ѕ: "s", ԁ: "d", һ: "h", ԛ: "q", ԝ: "w", ӏ: "l", ѵ: "v", ѡ: "w", ԍ: "g", к: "k", т: "t", н: "h", м: "m", ү: "y", ь: "b", в: "b", п: "n", г: "r" }),
+  ...Object.entries({
+    а: "a",
+    е: "e",
+    о: "o",
+    р: "p",
+    с: "c",
+    у: "y",
+    х: "x",
+    і: "i",
+    ј: "j",
+    ѕ: "s",
+    ԁ: "d",
+    һ: "h",
+    ԛ: "q",
+    ԝ: "w",
+    ӏ: "l",
+    ѵ: "v",
+    ѡ: "w",
+    ԍ: "g",
+    к: "k",
+    т: "t",
+    н: "h",
+    м: "m",
+    ү: "y",
+    ь: "b",
+    в: "b",
+    п: "n",
+    г: "r",
+  }),
   // Greek (NFKC turns the lunate sigma U+03F2 into the final sigma U+03C2, so both map to c)
-  ...Object.entries({ ο: "o", α: "a", ι: "i", ν: "v", ρ: "p", υ: "u", χ: "x", ε: "e", κ: "k", τ: "t", β: "b", η: "n", ω: "w", μ: "u", γ: "y", ϲ: "c", ς: "c" }),
+  ...Object.entries({
+    ο: "o",
+    α: "a",
+    ι: "i",
+    ν: "v",
+    ρ: "p",
+    υ: "u",
+    χ: "x",
+    ε: "e",
+    κ: "k",
+    τ: "t",
+    β: "b",
+    η: "n",
+    ω: "w",
+    μ: "u",
+    γ: "y",
+    ϲ: "c",
+    ς: "c",
+  }),
   // Armenian
   ...Object.entries({ օ: "o", ս: "u", ո: "n", հ: "h", ց: "g", ք: "p", ա: "a" }),
   // Latin look-alikes and small capitals
-  ...Object.entries({ ɡ: "g", ı: "i", ɩ: "i", ɑ: "a", ᴀ: "a", ʙ: "b", ᴄ: "c", ᴅ: "d", ᴇ: "e", ꜰ: "f", ɢ: "g", ʜ: "h", ɪ: "i", ᴊ: "j", ᴋ: "k", ʟ: "l", ᴍ: "m", ɴ: "n", ᴏ: "o", ᴘ: "p", ʀ: "r", ꜱ: "s", ᴛ: "t", ᴜ: "u", ᴠ: "v", ᴡ: "w", ʏ: "y", ᴢ: "z", ǝ: "e", ȷ: "j" }),
+  ...Object.entries({
+    ɡ: "g",
+    ı: "i",
+    ɩ: "i",
+    ɑ: "a",
+    ᴀ: "a",
+    ʙ: "b",
+    ᴄ: "c",
+    ᴅ: "d",
+    ᴇ: "e",
+    ꜰ: "f",
+    ɢ: "g",
+    ʜ: "h",
+    ɪ: "i",
+    ᴊ: "j",
+    ᴋ: "k",
+    ʟ: "l",
+    ᴍ: "m",
+    ɴ: "n",
+    ᴏ: "o",
+    ᴘ: "p",
+    ʀ: "r",
+    ꜱ: "s",
+    ᴛ: "t",
+    ᴜ: "u",
+    ᴠ: "v",
+    ᴡ: "w",
+    ʏ: "y",
+    ᴢ: "z",
+    ǝ: "e",
+    ȷ: "j",
+  }),
 ]);
 export const CONFUSABLE_RUN = new RegExp(`[${Object.keys(CONFUSABLES).join("")}]`, "g");
 
@@ -40,13 +117,19 @@ const LETTER = /\p{L}/u;
 
 /** The words the cues are made of, from the lists the rules match: a swapped digit is resolved to the reading that is one of them. */
 const CUE_WORDS: ReadonlySet<string> = new Set(
-  [...AUTH_CUE_PHRASES, ...BRAND_SPECS.flatMap((spec) => [...spec.lexicon, ...spec.actionCues]), "with", "account"].flatMap((phrase) => phrase.split(" ")),
+  [
+    ...AUTH_CUE_PHRASES,
+    ...BRAND_SPECS.flatMap((spec) => [...spec.lexicon, ...spec.actionCues]),
+    "with",
+    "account",
+  ].flatMap((phrase) => phrase.split(" ")),
 );
 
 /** The cue words by length: a swapped-digit token can only be a cue word of its own length. */
 const CUE_WORDS_BY_LENGTH: ReadonlyMap<number, string[]> = (() => {
   const byLength = new Map<number, string[]>();
-  for (const word of CUE_WORDS) byLength.set(word.length, [...(byLength.get(word.length) ?? []), word]);
+  for (const word of CUE_WORDS)
+    byLength.set(word.length, [...(byLength.get(word.length) ?? []), word]);
   return byLength;
 })();
 

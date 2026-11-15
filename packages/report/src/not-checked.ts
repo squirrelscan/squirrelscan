@@ -74,13 +74,11 @@ const HINTS: Record<string, string> = {
     "Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.",
   [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON]:
     "Raise the limit with external_links.max_links, or audit more pages, to check them.",
-  [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON]:
-    "Run the audit again to check them.",
+  [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON]: "Run the audit again to check them.",
   [RULE_TIMED_OUT_SKIP_REASON]:
     "A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.",
   // #1269: `squirrel analyze` makes no live request.
-  "analyze-offline":
-    "Run `squirrel audit` to probe the live site.",
+  "analyze-offline": "Run `squirrel audit` to probe the live site.",
   // #1932: a probing rule below its level, or one the site throttled or the budget cut short.
   "probe-level-too-low":
     "Run the audit with --probe aggressive (or --pentest) to send these probes, on a site you own or may test.",
@@ -168,11 +166,19 @@ function causeOf(check: { details?: Record<string, unknown> }): {
   // escaped by each renderer, which already escapes the not-checked lines.
   // eslint-disable-next-line no-control-regex
   const detail =
-    typeof raw === "string" ? raw.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim() : "";
+    typeof raw === "string"
+      ? raw
+          .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      : "";
   return {
     cause,
     ...(detail
-      ? { causeDetail: detail.length > MAX_CAUSE_DETAIL ? `${detail.slice(0, MAX_CAUSE_DETAIL - 1)}…` : detail }
+      ? {
+          causeDetail:
+            detail.length > MAX_CAUSE_DETAIL ? `${detail.slice(0, MAX_CAUSE_DETAIL - 1)}…` : detail,
+        }
       : {}),
   };
 }
@@ -233,7 +239,9 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
     const num = (value: unknown): number | undefined =>
       typeof value === "number" && Number.isFinite(value) ? value : undefined;
     const errored = skipped.some((c) => classifyRuleOutcome(c) === "errored");
-    const summary = result.checks.find((c) => c.name === `${ruleId}-${errored ? "errors" : "timeouts"}`);
+    const summary = result.checks.find(
+      (c) => c.name === `${ruleId}-${errored ? "errors" : "timeouts"}`,
+    );
     // The summary's count is final. Without it (a published report may have cut the
     // row) the most any skipped row says: a fold keeps the pages it covered in
     // `occurrences` / `pagesTruncated`, a live row its running `pages`, else the
@@ -261,7 +269,9 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
         ? {
             errored: true,
             ...(summary?.details?.site === true ? { site: true } : {}),
-            ...(typeof skipped[0]!.details?.error === "string" ? { error: skipped[0]!.details.error } : {}),
+            ...(typeof skipped[0]!.details?.error === "string"
+              ? { error: skipped[0]!.details.error }
+              : {}),
           }
         : {}),
     });
@@ -273,10 +283,12 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
 export function timedOutMessage(rule: TimedOutRule): string {
   if (rule.errored) {
     const first = rule.error ? ` (first error: ${rule.error})` : "";
-    if (rule.site) return `${rule.name} hit an internal squirrelscan error and was not evaluated for the site${first}`;
+    if (rule.site)
+      return `${rule.name} hit an internal squirrelscan error and was not evaluated for the site${first}`;
     return `${rule.name} hit an internal squirrelscan error on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and was not evaluated${first}`;
   }
-  const budget = rule.budgetMs !== undefined ? ` (exceeded its ${rule.budgetMs} ms time budget)` : "";
+  const budget =
+    rule.budgetMs !== undefined ? ` (exceeded its ${rule.budgetMs} ms time budget)` : "";
   return `${rule.name} timed out on ${rule.pages} page${rule.pages === 1 ? "" : "s"}${budget}`;
 }
 

@@ -248,9 +248,7 @@ export function stallWindowForPhaseMs(phase: string | null | undefined): number 
  * reading a run that has not reported one yet — and that therefore cannot pick a
  * window. Derived so adding a longer phase moves it.
  */
-export const MAX_STALL_WINDOW_MS = Math.max(
-  ...Object.values(AUDIT_RUNTIME.stallWindowMsByPhase),
-);
+export const MAX_STALL_WINDOW_MS = Math.max(...Object.values(AUDIT_RUNTIME.stallWindowMsByPhase));
 
 // ── Fix Runner ──────────────────────────────────────────────────
 export const FIX_DEFAULTS = {

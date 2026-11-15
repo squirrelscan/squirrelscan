@@ -107,7 +107,11 @@ describe("selectSuspiciousPaths", () => {
         ...[1, 2, 3, 4, 5].map((i) =>
           candidate({ url: `${SITE}/y${i}`, normalizedUrl: `${SITE}/y${i}`, lastmod: "2026" }),
         ),
-        candidate({ url: `${SITE}/yesterday`, normalizedUrl: `${SITE}/yesterday`, lastmod: day(1) }),
+        candidate({
+          url: `${SITE}/yesterday`,
+          normalizedUrl: `${SITE}/yesterday`,
+          lastmod: day(1),
+        }),
         candidate({ url: `${SITE}/today`, normalizedUrl: `${SITE}/today`, lastmod: day(0) }),
       ],
       { maxPages: 3, recentDays: 14, hasSitemap: true, now: NOW },

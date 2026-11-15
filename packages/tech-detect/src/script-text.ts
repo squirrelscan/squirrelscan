@@ -56,7 +56,8 @@ function enclosingBrace(text: string, pos: number): number {
   let depth = 0;
   for (let i = pos - 1; i >= 0; i--) {
     const c = text.charCodeAt(i);
-    if (c === 125 || c === 93 || c === 41) depth++; // } ] )
+    if (c === 125 || c === 93 || c === 41)
+      depth++; // } ] )
     else if (c === 123) {
       if (depth === 0) return i;
       depth--;
@@ -140,7 +141,8 @@ export function isScriptTextString(
   if (brace === -1) return false;
   if (isChildren) return scriptProps(code, view, base, brace);
   // `{__html:...}` is the value of `dangerouslySetInnerHTML` on the props of the element.
-  if (!INNER_HTML_KEY.test(code.slice(Math.max(0, base + brace - KEY_CHARS), base + brace))) return false;
+  if (!INNER_HTML_KEY.test(code.slice(Math.max(0, base + brace - KEY_CHARS), base + brace)))
+    return false;
   const props = enclosingBrace(view, brace);
   return props !== -1 && scriptProps(code, view, base, props);
 }

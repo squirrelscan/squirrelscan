@@ -23,7 +23,11 @@ import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import { classifyWafResponse } from "@squirrelscan/utils/waf";
 import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
-import { COVERAGE_PAGE_LIMITS, MAX_TARGET_URLS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import {
+  COVERAGE_PAGE_LIMITS,
+  MAX_TARGET_URLS,
+  REPORT_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
 
 import { extractCrawlableUrls, mergeServerOnlyScripts } from "@squirrelscan/parser/extractors";
 import {
@@ -103,12 +107,7 @@ import {
   type FetchOptions,
   type RateLimitControl,
 } from "../fetcher";
-import {
-  isInScope,
-  isOffSiteFinalUrl,
-  normalizeUrl,
-  resolveSeedRedirect,
-} from "../frontier";
+import { isInScope, isOffSiteFinalUrl, normalizeUrl, resolveSeedRedirect } from "../frontier";
 import { isRedirectSourcePage } from "../redirect-row";
 import {
   buildConditionalHeaders,
@@ -263,7 +262,9 @@ function failureHostOf(url: string): string | undefined {
  * keeps only what names the cause.
  */
 function storageFailureSummary(error: StorageError): string {
-  if (/database is locked|database table is locked|sqlite_busy|busy \(locked\)/i.test(error.message)) {
+  if (
+    /database is locked|database table is locked|sqlite_busy|busy \(locked\)/i.test(error.message)
+  ) {
     return "it was locked by another squirrel process";
   }
   return error.cause instanceof Error ? error.cause.message : error.message;
@@ -324,9 +325,15 @@ const PREAMBLE_TOTAL_BUDGET_MS = 45_000;
 const PREAMBLE_BUDGET_REQUESTS = 3;
 
 /** The preamble's wall-clock allowance, cut to the discovery deadline when one is set (#1271). */
-export function discoveryBudgetMs(timeoutMs: number, discoveryDeadlineAt?: number, now: number = Date.now()): number {
+export function discoveryBudgetMs(
+  timeoutMs: number,
+  discoveryDeadlineAt?: number,
+  now: number = Date.now(),
+): number {
   const base = preambleBudgetMs(timeoutMs);
-  return discoveryDeadlineAt === undefined ? base : Math.max(1, Math.min(base, discoveryDeadlineAt - now));
+  return discoveryDeadlineAt === undefined
+    ? base
+    : Math.max(1, Math.min(base, discoveryDeadlineAt - now));
 }
 
 /**
@@ -1225,7 +1232,13 @@ export function createCrawler(
     ): Effect.Effect<void, StorageError, never> =>
       Effect.gen(function* () {
         if (!isTargetedRun()) {
-          yield* enqueueUrl(crawlId, redirectTarget, entry.depth, entry.normalizedUrl, "discovered");
+          yield* enqueueUrl(
+            crawlId,
+            redirectTarget,
+            entry.depth,
+            entry.normalizedUrl,
+            "discovered",
+          );
           return;
         }
         const destination = normalizeAndCheckScope(redirectTarget).normalized;
@@ -1312,7 +1325,9 @@ export function createCrawler(
                 // internal; it is an email address, never a page to queue.
                 .filter(
                   (link) =>
-                    link.isInternal && !link.isNofollow && !isCloudflareEmailProtectionUrl(link.url),
+                    link.isInternal &&
+                    !link.isNofollow &&
+                    !isCloudflareEmailProtectionUrl(link.url),
                 )
                 .map((link) => {
                   try {
@@ -1771,7 +1786,8 @@ export function createCrawler(
               // and it waits at most 3 s, inside what the URL's watchdog has left.
               rootFailure: yield* Effect.promise(() => {
                 const detail = crawlErrorToFailureDetail(error, failureSourceFor(entry.source));
-                if (preferRootFailure(rootFailure, detail) !== detail) return Promise.resolve(detail);
+                if (preferRootFailure(rootFailure, detail) !== detail)
+                  return Promise.resolve(detail);
                 return withTlsCause(
                   detail,
                   entry.normalizedUrl,
@@ -2078,7 +2094,11 @@ export function createCrawler(
           // destination twice and file its findings against a URL the owner cannot fix
           // them on. The destination is queued so it is audited once even when nothing
           // else links to it (a no-op when it is already known or out of scope).
-          const redirectTarget = redirectTargetOf(entry.normalizedUrl, result.finalUrl, result.redirectChain);
+          const redirectTarget = redirectTargetOf(
+            entry.normalizedUrl,
+            result.finalUrl,
+            result.redirectChain,
+          );
           if (redirectTarget) {
             yield* storage.upsertPage(crawlId, {
               url: entry.rawUrl,
@@ -2141,11 +2161,18 @@ export function createCrawler(
               (!result.contentType && looksLikeHtml(result.body))) &&
             // #1332: a budgeted run does not parse a page it could not stop parsing. The size is the decoded body's, not the
             // Content-Length (the encoded size): a small gzip body can inflate past the cap.
-            !(config.maxParseBytes !== undefined && decodedPageBytes(result.sizeBytes, result.body) > config.maxParseBytes)
+            !(
+              config.maxParseBytes !== undefined &&
+              decodedPageBytes(result.sizeBytes, result.body) > config.maxParseBytes
+            )
           ) {
             // Parse page data once (includes parseDocument internally)
             if (result.serverHtml) {
-              pageHtml = mergeServerOnlyScripts(result.body, result.serverHtml, result.finalUrl).html;
+              pageHtml = mergeServerOnlyScripts(
+                result.body,
+                result.serverHtml,
+                result.finalUrl,
+              ).html;
             }
             const parsed = parsePage(pageHtml, result.finalUrl, { classify: options.classify });
 
@@ -2717,7 +2744,10 @@ export function createCrawler(
         // The crawl drained on its own (not stopped): ask for the configured pages it did not reach (#1428).
         if (isRunning && !stopRequested) yield* probeConfiguredPages(crawlId);
         else if ((config.configuredPagePaths?.length ?? 0) > 0) {
-          logger.debug("configured pages not probed", "the crawl was stopped (a --max-duration or a manual stop), so the configured pages it did not reach were not requested");
+          logger.debug(
+            "configured pages not probed",
+            "the crawl was stopped (a --max-duration or a manual stop), so the configured pages it did not reach were not requested",
+          );
         }
 
         // Crawl loop exited. Distinguish a clean drain from a backstop
@@ -2863,7 +2893,9 @@ export function createCrawler(
                       {
                         method: "GET",
                         signal,
-                        ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
+                        ...(config.userAgent
+                          ? { headers: { "User-Agent": config.userAgent } }
+                          : {}),
                       },
                       seedSend,
                     ).then(({ response, finalUrl }) => {
@@ -2982,7 +3014,9 @@ export function createCrawler(
         if (wanted.length === 0) return;
         const targets: string[] = [];
         for (const path of wanted) {
-          const { normalized, decision } = normalizeAndCheckScope(new URL(path, baseUrl).toString());
+          const { normalized, decision } = normalizeAndCheckScope(
+            new URL(path, baseUrl).toString(),
+          );
           if (!normalized || !decision.allowed) continue;
           if (yield* storage.hasPage(crawlId, normalized)) continue;
           targets.push(path);
@@ -3003,15 +3037,22 @@ export function createCrawler(
               customHeaders: customHeadersFor(baseUrl),
               budget,
               gate,
-              ...(config.respectRobots && robots ? { robotsAllows: (url: string) => robots!.isAllowed(url) } : {}),
+              ...(config.respectRobots && robots
+                ? { robotsAllows: (url: string) => robots!.isAllowed(url) }
+                : {}),
             }),
           ),
           { concurrency: "unbounded" },
         ).pipe(Effect.onInterrupt(() => Effect.sync(() => interrupted.abort())));
         // Appended to the well-known row (one request per path, so a path is never recorded twice).
         const existing = yield* storage.getWellKnownProbe(crawlId);
-        const kept = (existing?.probes ?? []).filter((p) => !(p.configuredPage && targets.includes(p.path)));
-        yield* storage.setWellKnownProbe(crawlId, { probes: [...kept, ...probes], fetchedAt: existing?.fetchedAt ?? Date.now() });
+        const kept = (existing?.probes ?? []).filter(
+          (p) => !(p.configuredPage && targets.includes(p.path)),
+        );
+        yield* storage.setWellKnownProbe(crawlId, {
+          probes: [...kept, ...probes],
+          fetchedAt: existing?.fetchedAt ?? Date.now(),
+        });
       });
 
     /**
@@ -3031,12 +3072,17 @@ export function createCrawler(
         const wants = (probe: DiscoveryProbe): boolean => !selected || selected.includes(probe);
         const gate = probeGate(preamble, interrupted.signal);
         if (selected && selected.length === 0) {
-          logger.debug("discovery probes off", "no llms, markdown, well-known, agent or RSL requests");
+          logger.debug(
+            "discovery probes off",
+            "no llms, markdown, well-known, agent or RSL requests",
+          );
         }
 
         // The allowlist over the path-shaped probes (#1655). A probe the rules selected but the
         // allowlist left out is not sent; it stores a "path not approved" record instead.
-        const approvedPaths = config.discoveryProbePaths ? new Set(config.discoveryProbePaths) : null;
+        const approvedPaths = config.discoveryProbePaths
+          ? new Set(config.discoveryProbePaths)
+          : null;
         const approved = (path: string): boolean => !approvedPaths || approvedPaths.has(path);
         const notApproved: WellKnownProbe[] = [];
 
@@ -3113,11 +3159,17 @@ export function createCrawler(
         if (sentPaths.length > 0 || notApproved.length > 0) {
           const wellKnown =
             sentPaths.length > 0
-              ? yield* probeWellKnown(baseUrl, config.userAgent, customHeadersFor(baseUrl), preamble, {
-                  paths: sentPaths,
-                  gate,
-                  pathLocked: approvedPaths !== null,
-                })
+              ? yield* probeWellKnown(
+                  baseUrl,
+                  config.userAgent,
+                  customHeadersFor(baseUrl),
+                  preamble,
+                  {
+                    paths: sentPaths,
+                    gate,
+                    pathLocked: approvedPaths !== null,
+                  },
+                )
               : { probes: [] };
           yield* storage.setWellKnownProbe(crawlId, {
             probes: [...wellKnown.probes, ...notApproved],
@@ -3168,7 +3220,11 @@ export function createCrawler(
         // site refused; persisted below so the rules say "refused", not "absent".
         const refusals = new RefusalLog(targetUrl);
         crawlRefusals = refusals;
-        const seedPhase = createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), refusals);
+        const seedPhase = createPhaseBudget(
+          discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
+          Date.now(),
+          refusals,
+        );
 
         // Follow redirects to get final URL (both HTTP and client-side)
         // A targeted run (#1777) asks for exactly the URLs it was given: the start URL is the site's base,
@@ -3211,7 +3267,9 @@ export function createCrawler(
         headerSeed = userProvidedUrl;
         crawlEgress = egressFor(baseUrl);
         // The same budget and refusal log, now with the crawl's egress policy.
-        const preamble: PhaseBudget = crawlEgress ? { ...seedPhase, egress: crawlEgress } : seedPhase;
+        const preamble: PhaseBudget = crawlEgress
+          ? { ...seedPhase, egress: crawlEgress }
+          : seedPhase;
         if (seedResolution.offSite) {
           logger.warn(
             "off-site redirect refused",
@@ -3261,7 +3319,9 @@ export function createCrawler(
             allowQueryParams: config.allowQueryParams,
             dropQueryPrefixes: config.dropQueryPrefixes,
             allowedDomains: config.allowedDomains,
-            ...(isTargetedRun() ? { targetUrls: config.targetUrls!.slice(0, MAX_TARGET_URLS) } : {}),
+            ...(isTargetedRun()
+              ? { targetUrls: config.targetUrls!.slice(0, MAX_TARGET_URLS) }
+              : {}),
           },
           stats: {
             pagesTotal: 0,
@@ -3391,7 +3451,10 @@ export function createCrawler(
             if ((yield* storage.getPendingCount(crawlId)) > before) accepted++;
           }
           if (accepted === 0) {
-            logger.warn("nothing to crawl", "every target URL was refused (scope, robots or length)");
+            logger.warn(
+              "nothing to crawl",
+              "every target URL was refused (scope, robots or length)",
+            );
           }
           yield* runCrawlLoop(crawlId);
           return crawlId;
@@ -3700,7 +3763,12 @@ export function createCrawler(
             config.userAgent,
             true,
             customHeadersFor(baseUrl),
-            createPhaseBudget(discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt), Date.now(), undefined, crawlEgress),
+            createPhaseBudget(
+              discoveryBudgetMs(config.timeoutMs, config.discoveryDeadlineAt),
+              Date.now(),
+              undefined,
+              crawlEgress,
+            ),
             config.robotsUserAgent,
           ),
         );

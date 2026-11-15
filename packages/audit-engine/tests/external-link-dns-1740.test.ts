@@ -19,10 +19,17 @@ import { checkExternalLinks, type ExternalCheckResult } from "../src/external-ch
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const dnsError = (code: string, hostname: string) =>
-  Object.assign(new Error(`getaddrinfo ${code} ${hostname}`), { code, hostname, syscall: "getaddrinfo" });
+  Object.assign(new Error(`getaddrinfo ${code} ${hostname}`), {
+    code,
+    hostname,
+    syscall: "getaddrinfo",
+  });
 
 /** A resolver that answers from a script, one entry per lookup of the host, in order. */
-function scripted(answers: Array<"nxdomain" | "empty" | "temporary" | string[]>): { resolve: ResolveHost; asked: string[] } {
+function scripted(answers: Array<"nxdomain" | "empty" | "temporary" | string[]>): {
+  resolve: ResolveHost;
+  asked: string[];
+} {
   const asked: string[] = [];
   const queue = [...answers];
   const resolve: ResolveHost = async (hostname) => {
@@ -104,30 +111,38 @@ describe("a resolver that did not answer is never a broken link (#1740)", () => 
   });
 
   test("NXDOMAIN once and an answer on the second lookup: one hiccup does not mark a live host dead", async () => {
-    const r = await check("https://flaky.example-live.net/", scripted(["nxdomain", ["93.184.216.34"]]).resolve);
+    const r = await check(
+      "https://flaky.example-live.net/",
+      scripted(["nxdomain", ["93.184.216.34"]]).resolve,
+    );
     expect(r.error).toBeNull();
     expect(r.wafBlocked).toBe(true);
     expect(r.unverifiedReason).toBe("unreachable");
   });
 
   test("NXDOMAIN once and a resolver failure on the second: unverifiable, not broken", async () => {
-    const r = await check("https://flaky2.example-live.net/", scripted(["nxdomain", "temporary"]).resolve);
+    const r = await check(
+      "https://flaky2.example-live.net/",
+      scripted(["nxdomain", "temporary"]).resolve,
+    );
     expect(r.error).toBeNull();
     expect(r.wafBlocked).toBe(true);
   });
 });
 
 describe("addresses the policy refuses are still never requested (#1740)", () => {
-  test.each(["http://10.0.0.5/admin", "http://192.168.1.1/", "http://169.254.169.254/latest/", "http://localhost:8080/"])(
-    "%s is refused, not broken and not requested",
-    async (href) => {
-      const dns = scripted([["10.0.0.5"]]);
-      const r = await check(href, dns.resolve);
-      expect(r.refused).toBe(true);
-      expect(r.error).toBeNull();
-      expect(dns.asked).toEqual([]);
-    },
-  );
+  test.each([
+    "http://10.0.0.5/admin",
+    "http://192.168.1.1/",
+    "http://169.254.169.254/latest/",
+    "http://localhost:8080/",
+  ])("%s is refused, not broken and not requested", async (href) => {
+    const dns = scripted([["10.0.0.5"]]);
+    const r = await check(href, dns.resolve);
+    expect(r.refused).toBe(true);
+    expect(r.error).toBeNull();
+    expect(dns.asked).toEqual([]);
+  });
 
   test("a public name that resolves to a private address is refused, not broken", async () => {
     const r = await check("https://rebind.example-live.net/", scripted([["10.1.2.3"]]).resolve);
@@ -163,7 +178,13 @@ describe("engine: a dead host reaches links/broken-external-links as a failure (
         urls.map((href) => [
           href,
           href.includes("example-gone")
-            ? { href, status: null, error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR, redirectTarget: null, fromCache: false }
+            ? {
+                href,
+                status: null,
+                error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR,
+                redirectTarget: null,
+                fromCache: false,
+              }
             : { href, status: 200, error: null, redirectTarget: null, fromCache: false },
         ]),
       );
@@ -203,11 +224,12 @@ describe("engine: a dead host reaches links/broken-external-links as a failure (
       "https://partner.example-live.net/",
     ]);
     const ran = await Effect.runPromise(
-      runStreamingRules(crawler.storage as SQLiteStorage, crawlId, config, preRules.assets) as Effect.Effect<
-        { siteRuleResults: Map<string, CheckResult[]> },
-        never,
-        never
-      >,
+      runStreamingRules(
+        crawler.storage as SQLiteStorage,
+        crawlId,
+        config,
+        preRules.assets,
+      ) as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
     );
     const checks = ran.siteRuleResults.get("links/broken-external-links") ?? [];
     const failing = checks.find((c) => c.name === "broken-external-links")!;

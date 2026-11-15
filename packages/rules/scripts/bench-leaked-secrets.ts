@@ -53,14 +53,19 @@ function minifiedFiller(r: Rng, bytes: number): string {
     else if (kind === 2) chunk = `${a}.${b}=function(e){for(var n=0;n<e.length;n++)e[n]&&e[n]()};`;
     else if (kind === 3) chunk = `${a}["${runOf(r, LOWER, 6)}"]=${Math.floor(r() * 1e6)};`;
     else if (kind === 4) chunk = `if(${a}!==${b}){${a}=${b}.slice(0,${1 + Math.floor(r() * 9)})}`;
-    else chunk = `${a}.push({id:"${runOf(r, LOWER, 4)}-${runOf(r, "0123456789", 3)}",label:"${runOf(r, LOWER, 5)} ${runOf(r, LOWER, 7)}"});`;
+    else
+      chunk = `${a}.push({id:"${runOf(r, LOWER, 4)}-${runOf(r, "0123456789", 3)}",label:"${runOf(r, LOWER, 5)} ${runOf(r, LOWER, 7)}"});`;
     // A brand keyword every ~2 KB, inside ordinary code so the window path runs
     // and finds nothing: a comment, a string, a property name.
     if (++n % 40 === 0) {
       const kw = KEYWORDS[n % KEYWORDS.length]!;
       const form = n % 3;
       chunk +=
-        form === 0 ? `/* ${kw} integration */` : form === 1 ? `${a}.provider="${kw}";` : `${a}.${kw}Enabled=!0;`;
+        form === 0
+          ? `/* ${kw} integration */`
+          : form === 1
+            ? `${a}.provider="${kw}";`
+            : `${a}.${kw}Enabled=!0;`;
     }
     parts.push(chunk);
     size += chunk.length;
@@ -119,8 +124,13 @@ function buildCorpus(): { bodies: Body[]; bytes: number; pages: number; scripts:
   for (let i = 0; i < 3; i++) {
     const mb = 2 + Math.floor(r() * 4);
     let text = minifiedFiller(r, mb * 1024 * 1024);
-    if (i === 0) text += `var t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}${mixedRun(r, 36)}"};`;
-    bodies.push({ location: "external-script", text, url: `https://bench.test/static/vendor-${i}.js` });
+    if (i === 0)
+      text += `var t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}${mixedRun(r, 36)}"};`;
+    bodies.push({
+      location: "external-script",
+      text,
+      url: `https://bench.test/static/vendor-${i}.js`,
+    });
     scripts++;
   }
 

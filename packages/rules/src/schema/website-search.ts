@@ -27,9 +27,7 @@ export const websiteSearchSchemaRule: Rule = {
     // This is typically on homepage
     const isHomepage = url.pathname === "/" || url.pathname === "";
 
-    const schemaScripts = doc.querySelectorAll(
-      'script[type="application/ld+json"]'
-    );
+    const schemaScripts = doc.querySelectorAll('script[type="application/ld+json"]');
     let websiteSchema: Record<string, unknown> | null = null;
     const pageNodes: Record<string, unknown>[] = [];
 
@@ -44,10 +42,7 @@ export const websiteSearchSchemaRule: Rule = {
 
       for (const schema of schemas) {
         const type = schema["@type"];
-        if (
-          type === "WebSite" ||
-          (Array.isArray(type) && type.includes("WebSite"))
-        ) {
+        if (type === "WebSite" || (Array.isArray(type) && type.includes("WebSite"))) {
           websiteSchema = schema;
           break;
         }
@@ -89,7 +84,9 @@ export const websiteSearchSchemaRule: Rule = {
     const ids = indexJsonLdIds(pageNodes, ctx.page.url);
     const actions = (Array.isArray(potentialAction) ? potentialAction : [potentialAction])
       .map((a: unknown) => resolveJsonLdRef(a, ids, ctx.page.url))
-      .filter((a): a is Record<string, unknown> => !!a && typeof a === "object" && !Array.isArray(a));
+      .filter(
+        (a): a is Record<string, unknown> => !!a && typeof a === "object" && !Array.isArray(a),
+      );
     const searchAction = actions.find((a) => a["@type"] === "SearchAction");
 
     if (!searchAction) {

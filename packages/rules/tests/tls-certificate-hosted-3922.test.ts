@@ -79,9 +79,15 @@ describe("hosted wording of a TLS certificate that was not checked (#3922)", () 
     expect((await checkWith(undefined, false)).message).toBe(
       "TLS certificate not checked: this environment does not open TLS connections for the audit",
     );
-    expect((await checkWith(PROXY, false)).message).toBe(`TLS certificate not checked: ${PROXY.message}`);
-    expect((await checkWith(OFFLINE, false)).message).toBe(`TLS certificate not checked: ${OFFLINE.reason}`);
-    expect((await checkWith(REFUSED, false)).message).toBe(`TLS certificate not checked: ${REFUSED.message}`);
+    expect((await checkWith(PROXY, false)).message).toBe(
+      `TLS certificate not checked: ${PROXY.message}`,
+    );
+    expect((await checkWith(OFFLINE, false)).message).toBe(
+      `TLS certificate not checked: ${OFFLINE.reason}`,
+    );
+    expect((await checkWith(REFUSED, false)).message).toBe(
+      `TLS certificate not checked: ${REFUSED.message}`,
+    );
     expect((await checkWith(TIMEOUT, false)).message).toBe(
       "TLS certificate not checked: no TLS handshake with example.com, error ETIMEDOUT",
     );

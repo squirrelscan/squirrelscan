@@ -28,7 +28,14 @@ export const MAX_SERVER_ONLY_INLINE_BYTES = 256 * 1024;
 /** Total inline bytes added to one page. */
 export const MAX_SERVER_ONLY_INLINE_TOTAL_BYTES = 1024 * 1024;
 
-const JS_TYPES = new Set(["", "module", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript"]);
+const JS_TYPES = new Set([
+  "",
+  "module",
+  "text/javascript",
+  "application/javascript",
+  "text/ecmascript",
+  "application/ecmascript",
+]);
 
 function isExecutableScript(type: string | null): boolean {
   return JS_TYPES.has((type ?? "").trim().toLowerCase());
@@ -64,14 +71,14 @@ export interface ServerScriptMerge {
 export function mergeServerOnlyScripts(
   renderedHtml: string,
   serverHtml: string | undefined | null,
-  baseUrl: string
+  baseUrl: string,
 ): ServerScriptMerge {
   const unchanged: ServerScriptMerge = { html: renderedHtml, added: 0, omitted: 0 };
   if (!serverHtml || !/<script/i.test(serverHtml)) return unchanged;
 
   const server = parseHTML(serverHtml).document;
   const serverScripts = querySelectorAllOutsideNoscript(server, "script").filter((el) =>
-    isExecutableScript(el.getAttribute("type"))
+    isExecutableScript(el.getAttribute("type")),
   );
   if (serverScripts.length === 0) return unchanged;
 
@@ -115,7 +122,9 @@ export function mergeServerOnlyScripts(
     const size = Buffer.byteLength(text);
     if (
       added >= MAX_SERVER_ONLY_SCRIPTS ||
-      (isInline && (size > MAX_SERVER_ONLY_INLINE_BYTES || inlineBytes + size > MAX_SERVER_ONLY_INLINE_TOTAL_BYTES))
+      (isInline &&
+        (size > MAX_SERVER_ONLY_INLINE_BYTES ||
+          inlineBytes + size > MAX_SERVER_ONLY_INLINE_TOTAL_BYTES))
     ) {
       omitted++;
       continue;
@@ -135,6 +144,7 @@ export function mergeServerOnlyScripts(
   }
 
   if (added === 0 && omitted === 0) return unchanged;
-  if (omitted > 0) rendered.documentElement?.setAttribute(SERVER_SCRIPTS_OMITTED_ATTR, String(omitted));
+  if (omitted > 0)
+    rendered.documentElement?.setAttribute(SERVER_SCRIPTS_OMITTED_ATTR, String(omitted));
   return { html: rendered.toString(), added, omitted };
 }

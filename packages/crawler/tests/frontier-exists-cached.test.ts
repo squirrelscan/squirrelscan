@@ -61,7 +61,7 @@ async function seed(
   store: SQLiteStorage,
   crawlId: string,
   url: string,
-  status: FrontierRecord["status"] = "pending"
+  status: FrontierRecord["status"] = "pending",
 ): Promise<void> {
   const entry: FrontierRecord = {
     normalizedUrl: url,

@@ -20,14 +20,20 @@ function parse(css: string) {
 }
 const fires = (css: string): boolean => {
   const { html, parsed } = parse(css);
-  const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
+  const ctx = {
+    page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+    parsed,
+    options: {},
+  } as unknown as RuleContext;
   return detectFakeAuthOverlay(ctx) !== null;
 };
 /** The tokens reading only: the other two split nested rules at their first `}`. */
 const nestedCover = (css: string): boolean => {
   const doc = parse(css).parsed.document!;
   const el = doc.querySelector("iframe")!;
-  return (["decided", "all"] as const).some((mode) => isCover(overlayGeometryFor(doc, el, "tokens", mode)));
+  return (["decided", "all"] as const).some((mode) =>
+    isCover(overlayGeometryFor(doc, el, "tokens", mode)),
+  );
 };
 
 /** Certain syntax errors in every engine. */
@@ -96,7 +102,40 @@ const INVALID = [
   "::slotted(a,b)",
 ];
 /** Names a browser may accept (Chrome does not support the media-state ones): read as undecided, never as an error. */
-const DOUBTFUL = ["::before:not(:is(.a))", "::after:not(:is(.a))", "::before:not(:where(.a))", "::marker:not(:is(.a))", "::before:not(:is(:hover))", ":nth-child(2n+1 of :bogus)", ":playing", ":muted", ":seeking", ":buffering", ":stalled", ":current(.a)", ":dir(foo)", ":nth-child(\\32 n)", ":nth-child(2n+1 Of .a)", ":host(a, b)", ":host(a,b)", ":host(.a), :host-context(.b)", ":host-context(.a)", ":host-context(.a, .b)", ":host-context(.a:hover)", ":lang(en, fr)", ':lang("en")', ':lang("")', ":lang(*-Latn)", "::part(x):first-child", "::slotted(a):hover", "::selection:hover", "::highlight(x):hover", "::view-transition-old(root):hover", ":paused", ":volume-locked"];
+const DOUBTFUL = [
+  "::before:not(:is(.a))",
+  "::after:not(:is(.a))",
+  "::before:not(:where(.a))",
+  "::marker:not(:is(.a))",
+  "::before:not(:is(:hover))",
+  ":nth-child(2n+1 of :bogus)",
+  ":playing",
+  ":muted",
+  ":seeking",
+  ":buffering",
+  ":stalled",
+  ":current(.a)",
+  ":dir(foo)",
+  ":nth-child(\\32 n)",
+  ":nth-child(2n+1 Of .a)",
+  ":host(a, b)",
+  ":host(a,b)",
+  ":host(.a), :host-context(.b)",
+  ":host-context(.a)",
+  ":host-context(.a, .b)",
+  ":host-context(.a:hover)",
+  ":lang(en, fr)",
+  ':lang("en")',
+  ':lang("")',
+  ":lang(*-Latn)",
+  "::part(x):first-child",
+  "::slotted(a):hover",
+  "::selection:hover",
+  "::highlight(x):hover",
+  "::view-transition-old(root):hover",
+  ":paused",
+  ":volume-locked",
+];
 /** Valid in Chrome (checked in headless Chrome 151). */
 const VALID = [
   "::before::marker",
@@ -151,7 +190,8 @@ const VALID = [
 describe("an invalid functional pseudo argument or a selector after a pseudo-element is a certain syntax error (#1581)", () => {
   test("the selector check reads each input", () => {
     for (const s of INVALID) expect(selectorListState(s, false), s).toBe("invalid");
-    for (const s of INVALID) expect(selectorListState(`.a, ${s}`, false), `list ${s}`).toBe("invalid");
+    for (const s of INVALID)
+      expect(selectorListState(`.a, ${s}`, false), `list ${s}`).toBe("invalid");
     for (const s of DOUBTFUL) expect(selectorListState(s, false), s).toBe("doubtful");
     for (const s of VALID) expect(selectorListState(s, false), s).toBe("valid");
   }, 30_000);
@@ -184,7 +224,10 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
     for (const s of DOUBTFUL) {
       expect(fires(`${COVER}.cover, ${s}{${STATIC}}`), s).toBe(true);
       expect(fires(`${COVER}@media screen{.cover, ${s}{${STATIC}}}`), `@media ${s}`).toBe(true);
-      expect(fires(`${COVER}@media screen{@media (min-width:1px){.cover, ${s}{${STATIC}}}}`), `nested @media ${s}`).toBe(true);
+      expect(
+        fires(`${COVER}@media screen{@media (min-width:1px){.cover, ${s}{${STATIC}}}}`),
+        `nested @media ${s}`,
+      ).toBe(true);
       expect(nestedCover(`.cover{${FIXED};&, ${s}{${STATIC}}}`), `nested ${s}`).toBe(true);
       expect(fires(`.cover, ${s}{${FIXED}}`), `cover ${s}`).toBe(true);
       expect(fires(`@media screen{.cover, ${s}{${FIXED}}}`), `cover @media ${s}`).toBe(true);
@@ -192,19 +235,34 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
   }, 30_000);
 
   test("a :host() or :host-context() list, and any :host-context(), stays undecided at top level, in @media and nested: a decoy cannot hide the cover, a cover rule is not silent", () => {
-    const HOST = [":host(a, b)", ":host-context(.a)", ":host-context(.a, .b)", ":host(.a), :host-context(.b)", ".x, :host-context(.a)"];
+    const HOST = [
+      ":host(a, b)",
+      ":host-context(.a)",
+      ":host-context(.a, .b)",
+      ":host(.a), :host-context(.b)",
+      ".x, :host-context(.a)",
+    ];
     for (const s of HOST) {
       expect(selectorListState(s, false), s).toBe("doubtful");
       expect(fires(`${COVER}.cover, ${s}{${STATIC}}`), s).toBe(true);
       expect(fires(`${COVER}@media screen{.cover, ${s}{${STATIC}}}`), `@media ${s}`).toBe(true);
-      expect(fires(`${COVER}@media screen{@media (min-width:1px){.cover, ${s}{${STATIC}}}}`), `nested @media ${s}`).toBe(true);
+      expect(
+        fires(`${COVER}@media screen{@media (min-width:1px){.cover, ${s}{${STATIC}}}}`),
+        `nested @media ${s}`,
+      ).toBe(true);
       expect(nestedCover(`.cover{${FIXED};&, ${s}{${STATIC}}}`), `nested ${s}`).toBe(true);
       expect(fires(`.cover, ${s}{${FIXED}}`), `cover ${s}`).toBe(true);
     }
   }, 30_000);
 
   test("a case or escape variant of a pseudo-element is read as the pseudo-element it is", () => {
-    for (const s of ["::SELECTION::BEFORE", "::\\73 election::before", "::Before::After", "::slotted(a,b)", "::SLOTTED(a, b)"]) {
+    for (const s of [
+      "::SELECTION::BEFORE",
+      "::\\73 election::before",
+      "::Before::After",
+      "::slotted(a,b)",
+      "::SLOTTED(a, b)",
+    ]) {
       expect(selectorListState(s, false), s).toBe("invalid");
       expect(fires(`${COVER}.cover, ${s}{${STATIC}}`), s).toBe(true);
     }
@@ -225,7 +283,11 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
     for (const sel of VALID.filter((v) => /of[.#[:*]|:is\(|:where\(|\\\*-Latn/.test(v))) {
       expect(fires(`.cover, ${sel}{${FIXED}}`), sel).toBe(true);
       expect(fires(`@media screen{.cover, ${sel}{${FIXED}}}`), `@media ${sel}`).toBe(true);
-      expect(nestedCover(`main{${STATIC};${sel}{${FIXED}}}`) || nestedCover(`.cover{${STATIC};&, ${sel}{${FIXED}}}`), `nested ${sel}`).toBe(true);
+      expect(
+        nestedCover(`main{${STATIC};${sel}{${FIXED}}}`) ||
+          nestedCover(`.cover{${STATIC};&, ${sel}{${FIXED}}}`),
+        `nested ${sel}`,
+      ).toBe(true);
     }
   }, 30_000);
 
@@ -238,18 +300,38 @@ describe("an invalid functional pseudo argument or a selector after a pseudo-ele
   }, 30_000);
 
   test(":is() and :where() after a pseudo-element are not an error, any other pseudo-class still is", () => {
-    for (const el of ["before", "after", "marker", "placeholder", "backdrop", "first-line", "first-letter"]) {
-      for (const f of ["is", "where"]) expect(selectorListState(`::${el}:${f}(.a)`, false), `${el} ${f}`).toBe("valid");
+    for (const el of [
+      "before",
+      "after",
+      "marker",
+      "placeholder",
+      "backdrop",
+      "first-line",
+      "first-letter",
+    ]) {
+      for (const f of ["is", "where"])
+        expect(selectorListState(`::${el}:${f}(.a)`, false), `${el} ${f}`).toBe("valid");
       expect(selectorListState(`::${el}:hover`, false), el).toBe("invalid");
     }
   }, 30_000);
 
   test("a pseudo-element inside the `of` list of :nth-child() is doubtful: a cover rule using it is never silent and a decoy using it cannot hide a cover", () => {
-    const OF_LISTS = [":nth-child(2 of ::before)", ":nth-child(2n+1 of .a::before)", ":nth-child(2n+1 of .a, ::before)", ":nth-child(2 of :before)", ":nth-last-child(2 of ::part(x))", ":nth-child(2 of ::selection)", ":nth-child(2 of ::marker)"];
+    const OF_LISTS = [
+      ":nth-child(2 of ::before)",
+      ":nth-child(2n+1 of .a::before)",
+      ":nth-child(2n+1 of .a, ::before)",
+      ":nth-child(2 of :before)",
+      ":nth-last-child(2 of ::part(x))",
+      ":nth-child(2 of ::selection)",
+      ":nth-child(2 of ::marker)",
+    ];
     for (const sel of OF_LISTS) {
       expect(fires(`.cover, ${sel}{${FIXED}}`), sel).toBe(true);
       // doubtful, not valid: a browser may reject a pseudo-element in an `of` list, so a decoy using it cannot hide the cover
-      expect(fires(`${COVER}.cover, ${sel}{${STATIC}}`), `a decoy with ${sel} must not hide the cover`).toBe(true);
+      expect(
+        fires(`${COVER}.cover, ${sel}{${STATIC}}`),
+        `a decoy with ${sel} must not hide the cover`,
+      ).toBe(true);
     }
   }, 30_000);
 

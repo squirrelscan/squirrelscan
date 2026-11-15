@@ -222,19 +222,16 @@ describe("runner private-target gate: site rules", () => {
     ["http://[64:ff9b::a00:1]"],
     ["http://[2002:a00:1::]"],
     ["http://203.0.113.10"],
-  ])(
-    "%s: every gated site rule emits exactly one private-target skip",
-    async (baseUrl) => {
-      const checks = await runSite(baseUrl);
-      for (const id of SITE_GATED) {
-        expect(checks(id)).toEqual([{ ...PRIVATE_SKIP, name: id }]);
-      }
-      for (const id of UNGATED_SITE) {
-        expect(checks(id).length).toBeGreaterThan(0);
-        expect(checks(id).some(isPrivateSkip)).toBe(false);
-      }
-    },
-  );
+  ])("%s: every gated site rule emits exactly one private-target skip", async (baseUrl) => {
+    const checks = await runSite(baseUrl);
+    for (const id of SITE_GATED) {
+      expect(checks(id)).toEqual([{ ...PRIVATE_SKIP, name: id }]);
+    }
+    for (const id of UNGATED_SITE) {
+      expect(checks(id).length).toBeGreaterThan(0);
+      expect(checks(id).some(isPrivateSkip)).toBe(false);
+    }
+  });
 
   test("a public IP literal runs them (the wide classifier does not call a public address private)", async () => {
     const checks = await runSite("http://93.184.216.34");
@@ -254,7 +251,7 @@ describe("runner private-target gate: site rules", () => {
     // It judged the pages. The freshness check is info since pub#633
     // (perf/cache-headers scores it), so read the verdict from its message.
     expect(
-      checks("perf/bad-caching").find((c) => c.name === "bad-caching-freshness")?.message
+      checks("perf/bad-caching").find((c) => c.name === "bad-caching-freshness")?.message,
     ).toContain("set no caching policy");
   });
 });

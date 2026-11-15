@@ -35,16 +35,8 @@ const libraryPatterns: LibraryPattern[] = [
   // === Core Frameworks ===
   {
     name: "jQuery",
-    urlPatterns: [
-      /jquery[.-]?(\d+\.\d+\.\d+)?\.(?:min\.)?js/i,
-      /jquery@/i,
-      /\/jquery\//i,
-    ],
-    inlinePatterns: [
-      /jQuery\.fn\.jquery/,
-      /\$\.fn\.jquery/,
-      /["']jquery["']\s*:/i,
-    ],
+    urlPatterns: [/jquery[.-]?(\d+\.\d+\.\d+)?\.(?:min\.)?js/i, /jquery@/i, /\/jquery\//i],
+    inlinePatterns: [/jQuery\.fn\.jquery/, /\$\.fn\.jquery/, /["']jquery["']\s*:/i],
     versionPatterns: [
       /jquery[.-]v?(\d+\.\d+\.\d+)/i,
       /jQuery\s+v?(\d+\.\d+\.\d+)/,
@@ -85,22 +77,12 @@ const libraryPatterns: LibraryPattern[] = [
   {
     name: "Vue.js",
     urlPatterns: [/vue[.-]?(\d+)?\.(?:min\.)?js/i, /vue@/i, /\/vue\//i],
-    inlinePatterns: [
-      /__VUE__/,
-      /__vue__/,
-      /Vue\.version/,
-      /vue\.runtime/i,
-      /\$mount\(/,
-    ],
+    inlinePatterns: [/__VUE__/, /__vue__/, /Vue\.version/, /vue\.runtime/i, /\$mount\(/],
     versionPatterns: [/vue\/(\d+\.\d+\.\d+)/i, /vue@(\d+\.\d+\.\d+)/i],
   },
   {
     name: "Angular",
-    urlPatterns: [
-      /angular[.-]?(\d+)?\.(?:min\.)?js/i,
-      /@angular\/core/i,
-      /angular@/i,
-    ],
+    urlPatterns: [/angular[.-]?(\d+)?\.(?:min\.)?js/i, /@angular\/core/i, /angular@/i],
     inlinePatterns: [
       /ng-version/,
       /getAllAngularRootElements/,
@@ -135,16 +117,9 @@ const libraryPatterns: LibraryPattern[] = [
   // === UI Frameworks ===
   {
     name: "Bootstrap",
-    urlPatterns: [
-      /bootstrap[.-]?(\d+)?\.(?:min\.)?js/i,
-      /bootstrap\.bundle/i,
-      /bootstrap@/i,
-    ],
+    urlPatterns: [/bootstrap[.-]?(\d+)?\.(?:min\.)?js/i, /bootstrap\.bundle/i, /bootstrap@/i],
     inlinePatterns: [/bootstrap\/js/, /\.modal\(/, /\.tooltip\(/],
-    versionPatterns: [
-      /bootstrap\/(\d+\.\d+\.\d+)/i,
-      /bootstrap@(\d+\.\d+\.\d+)/i,
-    ],
+    versionPatterns: [/bootstrap\/(\d+\.\d+\.\d+)/i, /bootstrap@(\d+\.\d+\.\d+)/i],
     vulnerability: [
       {
         maxVersion: "4.3.1",
@@ -158,10 +133,7 @@ const libraryPatterns: LibraryPattern[] = [
     name: "Tailwind CSS",
     urlPatterns: [/tailwind[.-]?(\d+)?\.(?:min\.)?(?:css|js)/i, /tailwindcss/i],
     inlinePatterns: [], // Tailwind is typically CSS-only or build-time
-    versionPatterns: [
-      /tailwindcss\/(\d+\.\d+\.\d+)/i,
-      /tailwindcss@(\d+\.\d+\.\d+)/i,
-    ],
+    versionPatterns: [/tailwindcss\/(\d+\.\d+\.\d+)/i, /tailwindcss@(\d+\.\d+\.\d+)/i],
   },
 
   // === Utility Libraries ===
@@ -193,11 +165,7 @@ const libraryPatterns: LibraryPattern[] = [
   // === Date/Time ===
   {
     name: "Moment.js",
-    urlPatterns: [
-      /moment[.-]?(\d+)?\.(?:min\.)?js/i,
-      /moment-with-locales/i,
-      /moment@/i,
-    ],
+    urlPatterns: [/moment[.-]?(\d+)?\.(?:min\.)?js/i, /moment-with-locales/i, /moment@/i],
     inlinePatterns: [/moment\.version/, /moment\(/, /\.locale\(/],
     versionPatterns: [/moment\/(\d+\.\d+\.\d+)/i, /moment@(\d+\.\d+\.\d+)/i],
   },
@@ -220,11 +188,7 @@ const libraryPatterns: LibraryPattern[] = [
   {
     name: "Redux",
     urlPatterns: [/redux[.-]?(\d+)?\.(?:min\.)?js/i, /redux@/i],
-    inlinePatterns: [
-      /__REDUX_DEVTOOLS_EXTENSION__/,
-      /createStore/,
-      /combineReducers/,
-    ],
+    inlinePatterns: [/__REDUX_DEVTOOLS_EXTENSION__/, /createStore/, /combineReducers/],
     versionPatterns: [/redux\/(\d+\.\d+\.\d+)/i, /redux@(\d+\.\d+\.\d+)/i],
   },
 
@@ -239,10 +203,7 @@ const libraryPatterns: LibraryPattern[] = [
     name: "Chart.js",
     urlPatterns: [/chart[.-]?(\d+)?\.(?:min\.)?js/i, /chart\.js/i],
     inlinePatterns: [/new Chart\(/, /Chart\.register/],
-    versionPatterns: [
-      /chart\.js\/(\d+\.\d+\.\d+)/i,
-      /chart\.js@(\d+\.\d+\.\d+)/i,
-    ],
+    versionPatterns: [/chart\.js\/(\d+\.\d+\.\d+)/i, /chart\.js@(\d+\.\d+\.\d+)/i],
   },
   {
     name: "Three.js",
@@ -323,15 +284,14 @@ const PREFILTERED_LIBRARIES = libraryPatterns.map((lib) => ({
 /** Exported for tests/literal-prefilter.test.ts, which proves the derived
  *  literals really are mandatory for every one of these. */
 export const LIBRARY_INLINE_PATTERNS: readonly RegExp[] = libraryPatterns.flatMap(
-  (lib) => lib.inlinePatterns
+  (lib) => lib.inlinePatterns,
 );
 
 export const jsLibrariesRule: Rule = {
   meta: {
     id: "perf/js-libraries",
     name: "JS Libraries",
-    description:
-      "Detects JavaScript libraries and checks for known vulnerabilities",
+    description: "Detects JavaScript libraries and checks for known vulnerabilities",
     solution:
       "Keep JavaScript libraries updated to their latest versions. Outdated libraries may contain security vulnerabilities that attackers can exploit. Consider replacing large libraries like jQuery with modern vanilla JavaScript or smaller alternatives. Use npm audit or Snyk to monitor dependencies for vulnerabilities.",
     category: "perf",

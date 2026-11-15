@@ -2,7 +2,12 @@ import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
-import { optionalProbeTimeoutMs, safeFetchWithDeadline, samePathRedirect, ungated } from "./deadline";
+import {
+  optionalProbeTimeoutMs,
+  safeFetchWithDeadline,
+  samePathRedirect,
+  ungated,
+} from "./deadline";
 import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";

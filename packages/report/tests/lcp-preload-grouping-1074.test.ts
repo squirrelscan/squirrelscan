@@ -56,8 +56,14 @@ describe("perf/lcp-hints grouped evidence (#1074)", () => {
       preloads: [],
       additionalPreloads: 0,
       pageEvidence: [
-        { page: "https://example.com/a", candidates: [{ src: "https://example.com/a.jpg", reason: "candidate" }] },
-        { page: "https://example.com/b", candidates: [{ src: "https://example.com/b.jpg", reason: "candidate" }] },
+        {
+          page: "https://example.com/a",
+          candidates: [{ src: "https://example.com/a.jpg", reason: "candidate" }],
+        },
+        {
+          page: "https://example.com/b",
+          candidates: [{ src: "https://example.com/b.jpg", reason: "candidate" }],
+        },
       ],
       pageEvidenceOmittedPages: 0,
     });
@@ -66,7 +72,10 @@ describe("perf/lcp-hints grouped evidence (#1074)", () => {
   test("each page keeps only its own image, whatever the merge order", () => {
     const check = groupIssuesByCategory({ "perf/lcp-hints": lcpResult(["z", "a"]) })[0]!.rules[0]!
       .checks[0]!;
-    const evidence = check.details!.pageEvidence as { page: string; candidates: { src: string }[] }[];
+    const evidence = check.details!.pageEvidence as {
+      page: string;
+      candidates: { src: string }[];
+    }[];
     expect(evidence.map((e) => e.page)).toEqual(["https://example.com/a", "https://example.com/z"]);
     for (const entry of evidence) {
       const slug = entry.page.split("/").pop();
@@ -85,33 +94,46 @@ describe("perf/lcp-hints grouped evidence (#1074)", () => {
     expect(check.pages).toHaveLength(400);
     expect(details.pageEvidence.length).toBeGreaterThan(0);
     expect(details.pageEvidence.length).toBeLessThanOrEqual(LCP_PAGE_EVIDENCE.maxPages);
-    expect(JSON.stringify(details.pageEvidence).length).toBeLessThanOrEqual(LCP_PAGE_EVIDENCE.maxBytes);
+    expect(JSON.stringify(details.pageEvidence).length).toBeLessThanOrEqual(
+      LCP_PAGE_EVIDENCE.maxBytes,
+    );
     expect(details.pageEvidenceOmittedPages).toBe(400 - details.pageEvidence.length);
     for (const entry of details.pageEvidence) {
       expect(entry.candidates).toHaveLength(LCP_PAGE_EVIDENCE.maxCandidatesPerPage);
     }
   });
 
-  test("2048-char page and image URLs stay inside the finding payload cap", { timeout: 20_000 }, () => {
-    const longPart = "x".repeat(2000);
-    const slugs = Array.from({ length: 60 }, (_, i) => `${String(i).padStart(3, "0")}-${longPart}`);
-    const check = groupIssuesByCategory({ "perf/lcp-hints": lcpResult(slugs, 3) })[0]!.rules[0]!
-      .checks[0]!;
-    const details = check.details as {
-      pageEvidence: { page: string; candidates: { src: string }[] }[];
-      pageEvidenceOmittedPages: number;
-    };
-    expect(JSON.stringify(details.pageEvidence).length).toBeLessThanOrEqual(LCP_PAGE_EVIDENCE.maxBytes);
-    expect(JSON.stringify(details).length).toBeLessThan(REPORT_LIMITS.maxFindingPayload);
-    expect(details.pageEvidence.length).toBeLessThan(slugs.length);
-    expect(details.pageEvidence.length + details.pageEvidenceOmittedPages).toBe(slugs.length);
-    // The kept pages are the URL-sorted prefix, each with its own image only.
-    const sorted = slugs.map((s) => `https://example.com/${s}`).sort();
-    expect(details.pageEvidence.map((e) => e.page)).toEqual(sorted.slice(0, details.pageEvidence.length));
-    for (const entry of details.pageEvidence) {
-      for (const c of entry.candidates) expect(c.src.startsWith(entry.page)).toBe(true);
-    }
-  });
+  test(
+    "2048-char page and image URLs stay inside the finding payload cap",
+    { timeout: 20_000 },
+    () => {
+      const longPart = "x".repeat(2000);
+      const slugs = Array.from(
+        { length: 60 },
+        (_, i) => `${String(i).padStart(3, "0")}-${longPart}`,
+      );
+      const check = groupIssuesByCategory({ "perf/lcp-hints": lcpResult(slugs, 3) })[0]!.rules[0]!
+        .checks[0]!;
+      const details = check.details as {
+        pageEvidence: { page: string; candidates: { src: string }[] }[];
+        pageEvidenceOmittedPages: number;
+      };
+      expect(JSON.stringify(details.pageEvidence).length).toBeLessThanOrEqual(
+        LCP_PAGE_EVIDENCE.maxBytes,
+      );
+      expect(JSON.stringify(details).length).toBeLessThan(REPORT_LIMITS.maxFindingPayload);
+      expect(details.pageEvidence.length).toBeLessThan(slugs.length);
+      expect(details.pageEvidence.length + details.pageEvidenceOmittedPages).toBe(slugs.length);
+      // The kept pages are the URL-sorted prefix, each with its own image only.
+      const sorted = slugs.map((s) => `https://example.com/${s}`).sort();
+      expect(details.pageEvidence.map((e) => e.page)).toEqual(
+        sorted.slice(0, details.pageEvidence.length),
+      );
+      for (const entry of details.pageEvidence) {
+        for (const c of entry.candidates) expect(c.src.startsWith(entry.page)).toBe(true);
+      }
+    },
+  );
 });
 
 function lcpResult(slugs: string[], candidatesPerPage = 1): ReportRuleResult {

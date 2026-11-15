@@ -25,16 +25,32 @@ const REDOS_HTML = readFileSync(join(import.meta.dir, "fixtures/redos-page.html"
 // Deliberate catastrophic-backtracking test fixture. The pattern is read from a
 // fixture file, like the page, so the static analyser does not flag a test input
 // as a ReDoS in product code.
-const CATASTROPHIC = new RegExp(readFileSync(join(import.meta.dir, "fixtures/redos-pattern.txt"), "utf8"));
+const CATASTROPHIC = new RegExp(
+  readFileSync(join(import.meta.dir, "fixtures/redos-pattern.txt"), "utf8"),
+);
 
-function rule(id: string, scope: "page" | "site", run: (ctx: RuleContext) => RuleResult | Promise<RuleResult>): Rule {
+function rule(
+  id: string,
+  scope: "page" | "site",
+  run: (ctx: RuleContext) => RuleResult | Promise<RuleResult>,
+): Rule {
   return {
-    meta: { id, name: id, description: "test rule", category: "core", scope, severity: "info", weight: 1 },
+    meta: {
+      id,
+      name: id,
+      description: "test rule",
+      category: "core",
+      scope,
+      severity: "info",
+      weight: 1,
+    },
     run,
   };
 }
 
-const pass = (id: string): RuleResult => ({ checks: [{ name: id, status: "pass", message: "ok" }] });
+const pass = (id: string): RuleResult => ({
+  checks: [{ name: id, status: "pass", message: "ok" }],
+});
 
 /** Runs the catastrophic regex over every `<p class="evil">` on the page. */
 const redosRule = rule("test/redos", "page", (ctx) => {
@@ -53,7 +69,13 @@ function makeRunner(rules: Rule[], ruleTimeBudgetMs?: number): RuleRunner {
 
 function redosPage(): PageData {
   // No `parsed`: the runner parses the fixture html itself, as for a real page.
-  return { url: "https://example.com/evil", html: REDOS_HTML, statusCode: 200, loadTime: 0, headers: {} };
+  return {
+    url: "https://example.com/evil",
+    html: REDOS_HTML,
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  };
 }
 
 function siteData(pageCount = 1): SiteData {
@@ -89,7 +111,7 @@ describe("canary: the vm watchdog still fires", () => {
     const elapsedMs = performance.now() - started;
     if (!(error instanceof RuleTimeoutError)) {
       throw new Error(
-        `vm watchdog did NOT interrupt ${label} on Bun ${bunVersion} (ran ${Math.round(elapsedMs)} ms against a ${budgetMs} ms budget): the per-rule time budget is a no-op`
+        `vm watchdog did NOT interrupt ${label} on Bun ${bunVersion} (ran ${Math.round(elapsedMs)} ms against a ${budgetMs} ms budget): the per-rule time budget is a no-op`,
       );
     }
     expect(error.budgetMs).toBe(budgetMs);
@@ -105,7 +127,7 @@ describe("canary: the vm watchdog still fires", () => {
           // spin
         }
       },
-      100
+      100,
     );
   });
 
@@ -118,56 +140,54 @@ describe("canary: the vm watchdog still fires", () => {
       () => {
         for (const text of texts) CATASTROPHIC.test(text);
       },
-      200
+      200,
     );
   }, 30_000);
 });
 
 describe("per-rule time budget", () => {
-  test(
-    "a catastrophic regex on a crafted page is abandoned within the budget and the audit carries on",
-    async () => {
-      const runner = makeRunner([
-        rule("test/before", "page", () => pass("test/before")),
-        redosRule,
-        rule("test/after", "page", () => pass("test/after")),
-        rule("test/site", "site", () => pass("test/site")),
-      ]);
+  test("a catastrophic regex on a crafted page is abandoned within the budget and the audit carries on", async () => {
+    const runner = makeRunner([
+      rule("test/before", "page", () => pass("test/before")),
+      redosRule,
+      rule("test/after", "page", () => pass("test/after")),
+      rule("test/site", "site", () => pass("test/site")),
+    ]);
 
-      const started = performance.now();
-      const pageResult = await runner.runPageRules(redosPage(), siteData());
-      const siteResult = await runner.runSiteRules(siteData());
-      const elapsedMs = performance.now() - started;
+    const started = performance.now();
+    const pageResult = await runner.runPageRules(redosPage(), siteData());
+    const siteResult = await runner.runSiteRules(siteData());
+    const elapsedMs = performance.now() - started;
 
-      // Unbounded, 30 paragraphs at the engine's per-match backtracking cap is
-      // over 20 s. Bounded: the default budget plus at most one runaway match.
-      expect(elapsedMs).toBeLessThan(RULE_TIME_BUDGET_MS + 2_000);
+    // Unbounded, 30 paragraphs at the engine's per-match backtracking cap is
+    // over 20 s. Bounded: the default budget plus at most one runaway match.
+    expect(elapsedMs).toBeLessThan(RULE_TIME_BUDGET_MS + 2_000);
 
-      const err = byName(pageResult.checks, "test/redos-error");
-      expect(err).toBeDefined();
-      // Not evaluated, never a failed finding (pub#960).
-      expect(err!.status).toBe("skipped");
-      expect(err!.skipReason).toBe("rule-timed-out");
-      expect(err!.message).toContain(`exceeded its ${RULE_TIME_BUDGET_MS} ms time budget`);
-      expect(err!.details).toEqual({
-        timedOut: true,
-        ruleId: "test/redos",
-        budgetMs: RULE_TIME_BUDGET_MS,
-        elapsedMs: expect.any(Number),
-        pages: 1,
-      });
-      // Observed, and at least the budget it overran (pub#960).
-      expect((err!.details as { elapsedMs: number }).elapsedMs).toBeGreaterThanOrEqual(RULE_TIME_BUDGET_MS - 5);
-      expect(byName(pageResult.checks, "test/redos")).toBeUndefined();
-      expect(pageResult.ruleResults.get("test/redos")?.checks).toEqual([err!]);
+    const err = byName(pageResult.checks, "test/redos-error");
+    expect(err).toBeDefined();
+    // Not evaluated, never a failed finding (pub#960).
+    expect(err!.status).toBe("skipped");
+    expect(err!.skipReason).toBe("rule-timed-out");
+    expect(err!.message).toContain(`exceeded its ${RULE_TIME_BUDGET_MS} ms time budget`);
+    expect(err!.details).toEqual({
+      timedOut: true,
+      ruleId: "test/redos",
+      budgetMs: RULE_TIME_BUDGET_MS,
+      elapsedMs: expect.any(Number),
+      pages: 1,
+    });
+    // Observed, and at least the budget it overran (pub#960).
+    expect((err!.details as { elapsedMs: number }).elapsedMs).toBeGreaterThanOrEqual(
+      RULE_TIME_BUDGET_MS - 5,
+    );
+    expect(byName(pageResult.checks, "test/redos")).toBeUndefined();
+    expect(pageResult.ruleResults.get("test/redos")?.checks).toEqual([err!]);
 
-      // Rules before and after it, and the site pass, all still ran.
-      expect(byName(pageResult.checks, "test/before")?.status).toBe("pass");
-      expect(byName(pageResult.checks, "test/after")?.status).toBe("pass");
-      expect(byName(siteResult.checks, "test/site")?.status).toBe("pass");
-    },
-    30_000
-  );
+    // Rules before and after it, and the site pass, all still ran.
+    expect(byName(pageResult.checks, "test/before")?.status).toBe("pass");
+    expect(byName(pageResult.checks, "test/after")?.status).toBe("pass");
+    expect(byName(siteResult.checks, "test/site")?.status).toBe("pass");
+  }, 30_000);
 
   test("a real backtracking rule on the ReDoS fixture times out through RuleRunner and the audit completes", async () => {
     // Mirrors how real rules run a regex: a module-level helper (main realm)
@@ -184,7 +204,7 @@ describe("per-rule time budget", () => {
         }),
         rule("test/after-backtrack", "page", () => pass("test/after-backtrack")),
       ],
-      200
+      200,
     );
     const started = performance.now();
     const { checks } = await runner.runPageRules(redosPage(), siteData());
@@ -212,7 +232,7 @@ describe("per-rule time budget", () => {
           return pass("test/swallow");
         }),
       ],
-      100
+      100,
     );
     const { checks } = await runner.runPageRules(redosPage());
     expect(checks.map((c) => c.name)).toEqual(["test/swallow-error"]);
@@ -257,10 +277,19 @@ describe("per-rule time budget", () => {
     const config: RulesConfig = { rule_options: {}, rules: { enable: ["test/slow-cap"] } };
     const ns: RuleNamespace = { name: "test", rules: [slow] };
     // 100 ms per page x 50 pages would allow it; the 100 ms ceiling does not.
-    const capped = new RuleRunner({ config, additionalNamespaces: [ns], ruleTimeBudgetMs: 100, siteRuleBudgetCapMs: 100 });
-    expect((await capped.runSiteRules(siteData(50))).checks.map((c) => c.name)).toEqual(["test/slow-cap-error"]);
+    const capped = new RuleRunner({
+      config,
+      additionalNamespaces: [ns],
+      ruleTimeBudgetMs: 100,
+      siteRuleBudgetCapMs: 100,
+    });
+    expect((await capped.runSiteRules(siteData(50))).checks.map((c) => c.name)).toEqual([
+      "test/slow-cap-error",
+    ]);
     const open = new RuleRunner({ config, additionalNamespaces: [ns], ruleTimeBudgetMs: 100 });
-    expect((await open.runSiteRules(siteData(50))).checks.map((c) => c.name)).toEqual(["test/slow-cap"]);
+    expect((await open.runSiteRules(siteData(50))).checks.map((c) => c.name)).toEqual([
+      "test/slow-cap",
+    ]);
   }, 30_000);
 
   test("a nested call runs under the outer budget and leaves the slot intact", () => {
@@ -269,9 +298,12 @@ describe("per-rule time budget", () => {
       return inner + runWithinBudget(() => 2, 1000);
     }, 1000);
     expect(out).toBe(3);
-    expect(() => runWithinBudget(() => runWithinBudget(() => CATASTROPHIC.test("a".repeat(40) + "!"), 1000), 50)).toThrow(
-      RuleTimeoutError
-    );
+    expect(() =>
+      runWithinBudget(
+        () => runWithinBudget(() => CATASTROPHIC.test("a".repeat(40) + "!"), 1000),
+        50,
+      ),
+    ).toThrow(RuleTimeoutError);
     expect(runWithinBudget(() => "ok", 1000)).toBe("ok");
   });
 
@@ -286,7 +318,7 @@ describe("per-rule time budget", () => {
           // spin past the outer 50 ms budget
         }
         return "outer finished";
-      }, 50)
+      }, 50),
     ).toThrow(RuleTimeoutError);
     // And the slot is free again afterwards.
     expect(runWithinBudget(() => "next", 1000)).toBe("next");
@@ -304,12 +336,19 @@ describe("per-rule time budget", () => {
     const results = [];
     for (const i of [1, 2, 3]) {
       results.push(
-        (await runner.runPageRules({ ...redosPage(), url: `https://example.com/p${i}` }, siteData())).checks
+        (
+          await runner.runPageRules(
+            { ...redosPage(), url: `https://example.com/p${i}` },
+            siteData(),
+          )
+        ).checks,
       );
     }
     const all = results.flat();
     expect(all.map((c) => c.status)).toEqual(["skipped", "skipped", "skipped"]);
-    expect(all.every((c) => c.name === "test/slow-page-error" && c.details?.["timedOut"] === true)).toBe(true);
+    expect(
+      all.every((c) => c.name === "test/slow-page-error" && c.details?.["timedOut"] === true),
+    ).toBe(true);
     expect(all.every((c) => c.skipReason === "rule-timed-out")).toBe(true);
     // The first check carries the running count of pages.
     expect(all[0].details?.["pages"]).toBe(3);
@@ -328,8 +367,14 @@ describe("per-rule time budget", () => {
     });
     // The fast second page must not time out on a starved runner: a wide budget, and a slow page far past it.
     const runner = makeRunner([flaky], 250);
-    const first = await runner.runPageRules({ ...redosPage(), url: "https://example.com/a" }, siteData());
-    const second = await runner.runPageRules({ ...redosPage(), url: "https://example.com/b" }, siteData());
+    const first = await runner.runPageRules(
+      { ...redosPage(), url: "https://example.com/a" },
+      siteData(),
+    );
+    const second = await runner.runPageRules(
+      { ...redosPage(), url: "https://example.com/b" },
+      siteData(),
+    );
     expect(first.checks.map((c) => c.name)).toEqual(["test/flaky-error"]);
     expect(second.checks).toEqual([{ name: "test/flaky", status: "pass", message: "ok" }]);
   }, 30_000);
@@ -346,7 +391,10 @@ describe("per-rule time budget", () => {
     const runner = makeRunner([slow], 50);
     let firstSnapshot = "";
     for (const i of [1, 2, 3]) {
-      const { checks } = await runner.runPageRules({ ...redosPage(), url: `https://example.com/s${i}` }, siteData());
+      const { checks } = await runner.runPageRules(
+        { ...redosPage(), url: `https://example.com/s${i}` },
+        siteData(),
+      );
       // What a page-result sink holds the moment the page finishes.
       if (i === 1) firstSnapshot = JSON.stringify(checks);
     }
@@ -355,7 +403,12 @@ describe("per-rule time budget", () => {
     // ...so the total is its own check, in the site results.
     const { checks } = await runner.runSiteRules(siteData(3));
     const summary = byName(checks, "test/slow-sec-timeouts");
-    expect(summary?.details).toMatchObject({ timedOut: true, ruleId: "test/slow-sec", budgetMs: 50, pagesNotChecked: 3 });
+    expect(summary?.details).toMatchObject({
+      timedOut: true,
+      ruleId: "test/slow-sec",
+      budgetMs: 50,
+      pagesNotChecked: 3,
+    });
     // The longest observed run, for telling a slow rule from a starved host (pub#960).
     expect((summary?.details as { maxElapsedMs: number }).maxElapsedMs).toBeGreaterThanOrEqual(45);
     expect(summary?.message).toContain("3 pages not checked");
@@ -419,7 +472,7 @@ describe("per-rule time budget", () => {
           return pass("test/async");
         }),
       ],
-      20
+      20,
     );
     const { checks } = await runner.runPageRules(redosPage());
     expect(checks.map((c) => c.name)).toEqual(["test/async"]);
@@ -434,7 +487,7 @@ describe("per-rule time budget", () => {
     expect(() =>
       runWithinBudget(() => {
         throw new RangeError("passes through");
-      }, 5_000)
+      }, 5_000),
     ).toThrow(RangeError);
   });
 });
@@ -446,7 +499,11 @@ describe("page-time collectors run under the budget", () => {
         { ...emptySignal("https://example.com/a") },
         {
           ...emptySignal("https://example.com/b"),
-          timedOut: { budgetMs: 1000, ruleIds: ["test/collected", "test/gated"], elapsedMs: { "test/collected": 1234, "test/gated": 1100 } },
+          timedOut: {
+            budgetMs: 1000,
+            ruleIds: ["test/collected", "test/gated"],
+            elapsedMs: { "test/collected": 1234, "test/gated": 1100 },
+          },
         },
       ],
     };
@@ -472,7 +529,13 @@ describe("page-time collectors run under the budget", () => {
       expect.objectContaining({
         name: "test/collected-timeouts",
         status: "info",
-        details: { timedOut: true, ruleId: "test/collected", budgetMs: 1000, pagesNotChecked: 1, maxElapsedMs: 1234 },
+        details: {
+          timedOut: true,
+          ruleId: "test/collected",
+          budgetMs: 1000,
+          pagesNotChecked: 1,
+          maxElapsedMs: 1234,
+        },
       }),
     ]);
     expect(ruleResults.get("test/other")?.checks).toHaveLength(1);
@@ -485,7 +548,11 @@ describe("page-time collectors run under the budget", () => {
     const collected: CollectedSiteSignals = {
       pages: (["a", "b", "c"] as const).map((p) => ({
         ...emptySignal(`https://example.com/${p}`),
-        timedOut: { budgetMs: 1000, ruleIds: ["test/collected"], elapsedMs: { "test/collected": elapsed[p] } },
+        timedOut: {
+          budgetMs: 1000,
+          ruleIds: ["test/collected"],
+          elapsedMs: { "test/collected": elapsed[p] },
+        },
       })),
     };
     const runner = makeRunner([rule("test/collected", "site", () => pass("test/collected"))]);
@@ -501,14 +568,25 @@ describe("page-time collectors run under the budget", () => {
     expect(checks.filter((c) => c.name === "test/collected-timeouts")).toEqual([
       expect.objectContaining({
         status: "info",
-        details: { timedOut: true, ruleId: "test/collected", budgetMs: 1000, pagesNotChecked: 3, maxElapsedMs: 1500 },
+        details: {
+          timedOut: true,
+          ruleId: "test/collected",
+          budgetMs: 1000,
+          pagesNotChecked: 3,
+          maxElapsedMs: 1500,
+        },
       }),
     ]);
   });
 
   test("a site rule that itself timed out still gets its extractor timeouts recorded", async () => {
     const collected: CollectedSiteSignals = {
-      pages: [{ ...emptySignal("https://example.com/a"), timedOut: { budgetMs: 50, ruleIds: ["test/slow-site"] } }],
+      pages: [
+        {
+          ...emptySignal("https://example.com/a"),
+          timedOut: { budgetMs: 50, ruleIds: ["test/slow-site"] },
+        },
+      ],
     };
     const slow = rule("test/slow-site", "site", () => {
       const until = performance.now() + 200;
@@ -517,7 +595,11 @@ describe("page-time collectors run under the budget", () => {
       }
       return pass("test/slow-site");
     });
-    const { ruleResults } = await makeRunner([slow], 50).runSiteRules(siteData(1), undefined, collected);
+    const { ruleResults } = await makeRunner([slow], 50).runSiteRules(
+      siteData(1),
+      undefined,
+      collected,
+    );
     const names = ruleResults.get("test/slow-site")!.checks.map((c) => `${c.name}:${c.status}`);
     expect(names).toContain("test/slow-site-timeouts:info");
     expect(names.filter((n) => n.startsWith("test/slow-site-error:skipped")).length).toBe(2);
@@ -527,11 +609,21 @@ describe("page-time collectors run under the budget", () => {
     const collected: CollectedSiteSignals = {
       pages: [
         emptySignal("https://example.com/a"),
-        { ...emptySignal("https://example.com/b"), timedOut: { budgetMs: 1000, ruleIds: ["security/leaked-secrets"] } },
+        {
+          ...emptySignal("https://example.com/b"),
+          timedOut: { budgetMs: 1000, ruleIds: ["security/leaked-secrets"] },
+        },
       ],
     };
-    const config: RulesConfig = { rule_options: {}, rules: { enable: ["security/leaked-secrets"] } };
-    const { checks } = await new RuleRunner({ config }).runSiteRules(siteData(2), undefined, collected);
+    const config: RulesConfig = {
+      rule_options: {},
+      rules: { enable: ["security/leaked-secrets"] },
+    };
+    const { checks } = await new RuleRunner({ config }).runSiteRules(
+      siteData(2),
+      undefined,
+      collected,
+    );
 
     // No "pass / No leaked API keys or secrets detected" for a run that skipped a page.
     expect(checks.some((c) => c.status === "pass")).toBe(false);

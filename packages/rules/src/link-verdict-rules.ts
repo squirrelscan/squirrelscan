@@ -18,4 +18,3 @@ export const LINK_VERDICT_RULE_IDS: ReadonlySet<string> = new Set([
   "integrity/known-malicious-url",
   "reliability/broken-forms",
 ]);
-

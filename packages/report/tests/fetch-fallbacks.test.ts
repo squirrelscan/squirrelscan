@@ -30,10 +30,10 @@ describe("fetchFallbacksLine (#512)", () => {
 
   test("pluralizes the recovered count", () => {
     expect(fetchFallbacksLine(baseReport({ fetchFallbacks: { recovered: 1 } }))).toBe(
-      "1 page recovered via direct fetch after a render block."
+      "1 page recovered via direct fetch after a render block.",
     );
     expect(fetchFallbacksLine(baseReport({ fetchFallbacks: { recovered: 3 } }))).toBe(
-      "3 pages recovered via direct fetch after a render block."
+      "3 pages recovered via direct fetch after a render block.",
     );
   });
 

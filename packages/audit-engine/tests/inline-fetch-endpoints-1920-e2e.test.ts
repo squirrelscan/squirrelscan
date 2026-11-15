@@ -31,7 +31,14 @@ import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 // Every value the two endpoints return that must never be echoed. Field names may be.
 const PASSWORD = ["hazel", "nut-", "Wq7Ry2", "Zt5Kb9"].join("");
-const PEOPLE = ["Ada Hazel", "Ben Walnut", "Cara Pecan", "Dev Almond", "Eli Cashew", "Fay Pistachio"];
+const PEOPLE = [
+  "Ada Hazel",
+  "Ben Walnut",
+  "Cara Pecan",
+  "Dev Almond",
+  "Eli Cashew",
+  "Fay Pistachio",
+];
 const USERS = PEOPLE.map((name, i) => ({
   id: 1001 + i,
   name,
@@ -39,7 +46,13 @@ const USERS = PEOPLE.map((name, i) => ({
   phone: `+61 400 000 ${100 + i}`,
   role: i === 0 ? "admin" : "customer",
 }));
-const ACCOUNT = { id: 1001, username: "ada.hazel", email: "ada.hazel@example.com", password: PASSWORD, plan: "demo" };
+const ACCOUNT = {
+  id: 1001,
+  username: "ada.hazel",
+  email: "ada.hazel@example.com",
+  password: PASSWORD,
+  plan: "demo",
+};
 const SECRET_VALUES = [PASSWORD, ...USERS.flatMap((u) => [u.name, u.email, u.phone])];
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -50,7 +63,9 @@ afterEach(() => {
 // Everything the engine and the rules log during the run, to check no value leaks there.
 const logged: string[] = [];
 const record = (...args: unknown[]): void => {
-  logged.push(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a) ?? String(a))).join(" "));
+  logged.push(
+    args.map((a) => (typeof a === "string" ? a : (JSON.stringify(a) ?? String(a)))).join(" "),
+  );
 };
 const capturingLogger: AdapterLogger = {
   trace: record,
@@ -96,9 +111,12 @@ function serve(): Fixture {
     fetch(req) {
       const { pathname } = new URL(req.url);
       hits.push(`${req.method} ${pathname}`);
-      const html = (body: string) => new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
+      const html = (body: string) =>
+        new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
       const json = (body: unknown) =>
-        new Response(JSON.stringify(body, null, 2), { headers: { "content-type": "application/json; charset=utf-8" } });
+        new Response(JSON.stringify(body, null, 2), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        });
       switch (pathname) {
         case "/":
           return html(page("Home", ""));
@@ -145,7 +163,9 @@ async function crawl(fixture: Fixture) {
       } as never,
     }),
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${fixture.origin}/`, `${fixture.origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${fixture.origin}/`, `${fixture.origin}/`),
+  );
   const storage = crawler.storage as SQLiteStorage;
   const pages = await Effect.runPromise(storage.getPages(crawlId));
   return { crawlId, storage, pages };
@@ -181,7 +201,10 @@ describe("an open JSON API called only from an inline script is found and probed
     expect(pages.length).toBeGreaterThan(0);
     expect(pages.filter((p) => isRenderedFetch(p.fetcherId))).toEqual([]);
 
-    const collector = createEndpointCollector({ headersOf: buildHeadersMap, entryUrl: `${fixture.origin}/` });
+    const collector = createEndpointCollector({
+      headersOf: buildHeadersMap,
+      entryUrl: `${fixture.origin}/`,
+    });
     for (const p of pages) {
       if (!p.html) continue;
       collector.collect(p, parseHtmlForRules(p.html, p.finalUrl || p.url));
@@ -212,21 +235,36 @@ describe("an open JSON API called only from an inline script is found and probed
       const api = results.get("security/unauthenticated-api") ?? [];
       const sensitive = api.find((c) => c.name === "unauthenticated-api-sensitive");
       expect(sensitive?.status).toBe("fail");
-      const flagged = new Map((sensitive?.items ?? []).map((i) => [i.id, i.meta as Record<string, unknown>]));
-      expect([...flagged.keys()].sort()).toEqual([`${fixture.origin}/api/account`, `${fixture.origin}/api/users`]);
+      const flagged = new Map(
+        (sensitive?.items ?? []).map((i) => [i.id, i.meta as Record<string, unknown>]),
+      );
+      expect([...flagged.keys()].sort()).toEqual([
+        `${fixture.origin}/api/account`,
+        `${fixture.origin}/api/users`,
+      ]);
       expect(flagged.get(`${fixture.origin}/api/users`)).toMatchObject({
         records: USERS.length,
         source: "static-html",
         discoveredVia: "fetch",
       });
-      expect(flagged.get(`${fixture.origin}/api/users`)?.personal).toEqual(expect.arrayContaining(["email", "phone"]));
+      expect(flagged.get(`${fixture.origin}/api/users`)?.personal).toEqual(
+        expect.arrayContaining(["email", "phone"]),
+      );
 
       const json = results.get("security/json-sensitive-fields") ?? [];
       const credential = json.find((c) => c.name === "json-sensitive-fields");
       expect(credential?.status).toBe("fail");
-      expect(credential?.details).toMatchObject({ endpoint: `${fixture.origin}/api/account`, discoveredVia: "fetch", fields: 1 });
+      expect(credential?.details).toMatchObject({
+        endpoint: `${fixture.origin}/api/account`,
+        discoveredVia: "fetch",
+        fields: 1,
+      });
       expect(credential?.items?.map((i) => i.meta)).toEqual([
-        expect.objectContaining({ endpoint: `${fixture.origin}/api/account`, path: "$.password", records: 1 }),
+        expect.objectContaining({
+          endpoint: `${fixture.origin}/api/account`,
+          path: "$.password",
+          records: 1,
+        }),
       ]);
       // The user list is reported by counts of each kind of personal data, not by value.
       const bulk = json.find((c) => c.name === "json-bulk-pii");
@@ -235,7 +273,9 @@ describe("an open JSON API called only from an inline script is found and probed
       expect(bulk?.message).toContain(`${USERS.length} distinct phone number(s)`);
 
       // The snippet names the field and the value's length, never the value.
-      expect(credential?.items?.[0]?.snippet).toBe(`$.password = <redacted, ${PASSWORD.length} chars>`);
+      expect(credential?.items?.[0]?.snippet).toBe(
+        `$.password = <redacted, ${PASSWORD.length} chars>`,
+      );
 
       // No email, phone, name or password from either response anywhere in a finding,
       // its details or items, or in anything the engine or the rules logged.

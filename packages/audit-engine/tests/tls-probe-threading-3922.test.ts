@@ -37,7 +37,10 @@ const CONFIG = {
 
 async function auditChecks(tlsProbe?: TlsProbeFn, hosted = false): Promise<CheckResult[]> {
   const model = generateSiteModel({ seed: "tls-threading-3922", pageCount: 3, templateCount: 1 });
-  const dbPath = join(tmpDir, `${tlsProbe ? "with" : "without"}-probe-${hosted ? "hosted" : "local"}.sqlite`);
+  const dbPath = join(
+    tmpDir,
+    `${tlsProbe ? "with" : "without"}-probe-${hosted ? "hosted" : "local"}.sqlite`,
+  );
   const { storage: writer } = await writeCrawlToStorage(model, dbPath, {
     baseUrl: `https://${HOST}`,
   });

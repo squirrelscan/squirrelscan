@@ -10,11 +10,21 @@ import type { PageRecord } from "@squirrelscan/core-contracts";
 import { extractPageFeatures } from "../src/index";
 
 const URL_ = "https://example.com/a";
-const record = { url: URL_, normalizedUrl: URL_, finalUrl: URL_, depth: 1, status: 200, sizeBytes: 1, headers: {}, securityHeaders: {} } as unknown as PageRecord;
+const record = {
+  url: URL_,
+  normalizedUrl: URL_,
+  finalUrl: URL_,
+  depth: 1,
+  status: 200,
+  sizeBytes: 1,
+  headers: {},
+  securityHeaders: {},
+} as unknown as PageRecord;
 
 describe("extractPageFeatures: readingLevel", () => {
   test("equals content/reading-level's score for a page with enough text", () => {
-    const text = "Every customer receives careful support during the first week of service. ".repeat(12);
+    const text =
+      "Every customer receives careful support during the first week of service. ".repeat(12);
     const parsed = parsePage(`<html><body><main><p>${text}</p></main></body></html>`, URL_);
     const level = extractPageFeatures(record, parsed).readingLevel;
     expect(level).toBe(pageReadingLevel(parsed));

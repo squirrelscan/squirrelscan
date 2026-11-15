@@ -63,7 +63,9 @@ describe("technologies truncated (#1387)", () => {
     const r = report(section({ truncated: cut }));
     expect(String(renderText(r as never))).toContain("Detection was cut short");
     expect(String(renderMarkdown(r as never))).toContain("Detection was cut short");
-    expect(String(renderText(report(section({})) as never))).not.toContain("Detection was cut short");
+    expect(String(renderText(report(section({})) as never))).not.toContain(
+      "Detection was cut short",
+    );
   });
 
   test("the JSON report carries truncated with the reasons", () => {
@@ -134,6 +136,8 @@ describe("an empty technologies section that was cut short (#1408)", () => {
     const withCut = String(renderHtml(report(cutEmpty) as never));
     expect(withCut).toContain("Tech stack");
     expect(withCut).toContain("Detection was cut short");
-    expect(String(renderHtml(report(emptyClean) as never))).not.toContain("Detection was cut short");
+    expect(String(renderHtml(report(emptyClean) as never))).not.toContain(
+      "Detection was cut short",
+    );
   });
 });

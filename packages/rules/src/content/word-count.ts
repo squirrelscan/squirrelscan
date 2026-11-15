@@ -13,10 +13,7 @@ export const WORD_COUNT_MIN_WORDS = 300;
 
 export const optionsSchema = z.object({
   min_words: z.number().default(WORD_COUNT_MIN_WORDS).describe("Minimum word count"),
-  warn_threshold: z
-    .number()
-    .default(500)
-    .describe("Word count for optimal content"),
+  warn_threshold: z.number().default(500).describe("Word count for optimal content"),
 });
 
 export const wordCountRule: Rule = {

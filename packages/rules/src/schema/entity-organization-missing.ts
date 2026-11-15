@@ -35,9 +35,8 @@ export const entityOrganizationMissingRule: Rule = {
 
     const organizations = map.nodes.filter((node) =>
       node.types.some(
-        (type) =>
-          type === "Organization" || type === "Corporation" || isLocalBusinessType(type)
-      )
+        (type) => type === "Organization" || type === "Corporation" || isLocalBusinessType(type),
+      ),
     );
 
     if (organizations.length > 0) {
@@ -57,7 +56,7 @@ export const entityOrganizationMissingRule: Rule = {
     // telling it to invent one would be advice to add markup that is not true.
     const signals: string[] = [];
     const businessPages = map.nodes.filter((node) =>
-      node.types.some((type) => BUSINESS_PAGE_TYPES.includes(type))
+      node.types.some((type) => BUSINESS_PAGE_TYPES.includes(type)),
     );
     if (businessPages.length > 0) {
       signals.push(
@@ -66,17 +65,17 @@ export const entityOrganizationMissingRule: Rule = {
         ]
           .filter((type) => BUSINESS_PAGE_TYPES.includes(type))
           .sort()
-          .join(" / ")}`
+          .join(" / ")}`,
       );
     }
     // A Product or an Offer without a seller is the other common shape: the
     // site is transacting and nothing says who with.
     const commerce = map.nodes.filter((node) =>
-      node.types.some((type) => type === "Product" || type === "Offer")
+      node.types.some((type) => type === "Product" || type === "Offer"),
     );
     if (commerce.length > 0) {
       signals.push(
-        `${commerce.length} product or offer ${commerce.length === 1 ? "entity" : "entities"}`
+        `${commerce.length} product or offer ${commerce.length === 1 ? "entity" : "entities"}`,
       );
     }
 
@@ -98,10 +97,10 @@ export const entityOrganizationMissingRule: Rule = {
     // one would be advice to publish markup that is not true, so a site that
     // presents a named Person and no commerce is left alone.
     const commerceSignal = map.nodes.some((node) =>
-      node.types.some((type) => type === "Product" || type === "Offer")
+      node.types.some((type) => type === "Product" || type === "Offer"),
     );
     const namedPerson = map.nodes.some(
-      (node) => node.types.includes("Person") && node.name !== null
+      (node) => node.types.includes("Person") && node.name !== null,
     );
     if (namedPerson && !commerceSignal) {
       return {
@@ -121,7 +120,8 @@ export const entityOrganizationMissingRule: Rule = {
         {
           name: CHECK,
           status: "info",
-          message: "This site presents as a business but declares no Organization or LocalBusiness entity",
+          message:
+            "This site presents as a business but declares no Organization or LocalBusiness entity",
           value: clipValue(signals.join(", ")),
           expected: "one Organization or LocalBusiness with @id, name, url, logo and sameAs",
         },

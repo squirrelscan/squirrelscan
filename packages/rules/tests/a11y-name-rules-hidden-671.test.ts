@@ -67,7 +67,7 @@ for (const { rule, check } of RULES) {
       ["an inline display:none", `<div style="display:none">${BAD}</div>`],
     ] as const) {
       test(`${name} on an ancestor: not reported`, async () => {
-        const result = (await statuses(rule, body));
+        const result = await statuses(rule, body);
         expect(Object.values(result)).not.toContain("fail");
         expect(Object.values(result)).not.toContain("warn");
         expect(result[check]).toBe("pass");
@@ -89,13 +89,16 @@ for (const { rule, check } of RULES) {
         `<style>.closed{visibility:hidden}</style><div class="closed">${BAD}</div>`,
         `<div style="visibility:hidden">${BAD}</div>`,
       ]) {
-        const result = (await statuses(rule, body));
+        const result = await statuses(rule, body);
         expect(Object.values(result)).not.toContain("fail");
         expect(Object.values(result)).not.toContain("warn");
       }
       // With an external stylesheet it is unconfirmed, not a failure.
       expect(
-        (await statuses(rule, `<link rel="stylesheet" href="/x.css"><style>.closed{display:none}</style><div class="closed">${BAD}</div>`)),
+        await statuses(
+          rule,
+          `<link rel="stylesheet" href="/x.css"><style>.closed{display:none}</style><div class="closed">${BAD}</div>`,
+        ),
       ).toEqual({ [`${check}-unconfirmed`]: "warn" });
     });
 
@@ -109,7 +112,7 @@ for (const { rule, check } of RULES) {
 
 describe("details and messages", () => {
   test("a hidden unnamed control is counted, and the pass says it covers the accessibility tree", async () => {
-    const [checked] = (await run(ariaInputFieldNameRule, `<div hidden><input type="text"></div>`));
+    const [checked] = await run(ariaInputFieldNameRule, `<div hidden><input type="text"></div>`);
     expect(checked).toMatchObject({
       name: "aria-input-field-name",
       status: "pass",
@@ -120,12 +123,15 @@ describe("details and messages", () => {
 
   test("a hidden and a visible unnamed field: only the visible one fails", async () => {
     expect(
-      (await run(formLabelsRule, '<div hidden><input name="zoom"></div><input name="email">')),
+      await run(formLabelsRule, '<div hidden><input name="zoom"></div><input name="email">'),
     ).toEqual([expect.objectContaining({ status: "fail", items: [{ id: "email" }] })]);
   });
 
   test("unconfirmed items say why", async () => {
-    const rows = (await run(ariaCommandNameRule, '<div style="display:var(--d)"><button class="zoom-in"></button></div>'));
+    const rows = await run(
+      ariaCommandNameRule,
+      '<div style="display:var(--d)"><button class="zoom-in"></button></div>',
+    );
     expect(rows).toEqual([
       expect.objectContaining({
         name: "aria-command-name-unconfirmed",
@@ -156,7 +162,7 @@ describe("a11y/aria-dialog-name: the reporter's closed modal (pub#671)", () => {
       // A role=dialog inside a closed native dialog is out of the tree.
       '<dialog aria-label="Shell"><div role="dialog">Body</div></dialog>',
     ]) {
-      const result = (await statuses(ariaDialogNameRule, body));
+      const result = await statuses(ariaDialogNameRule, body);
       expect(Object.values(result)).not.toContain("fail");
       expect(Object.values(result)).not.toContain("warn");
     }
@@ -166,16 +172,18 @@ describe("a11y/aria-dialog-name: the reporter's closed modal (pub#671)", () => {
     expect(await statuses(ariaDialogNameRule, '<dialog role="dialog">Body</dialog>')).toEqual({
       "aria-dialog-name": "fail",
     });
-    expect(await statuses(ariaDialogNameRule, '<div hidden><dialog role="dialog">Body</dialog></div>')).toEqual({
+    expect(
+      await statuses(ariaDialogNameRule, '<div hidden><dialog role="dialog">Body</dialog></div>'),
+    ).toEqual({
       "aria-dialog-name": "pass",
     });
   });
 
   test("an item keeps its ordinal id when an earlier same-named dialog is hidden", async () => {
-    const rows = (await run(
+    const rows = await run(
       ariaDialogNameRule,
       '<div role="dialog" class="drawer" hidden></div><div role="dialog" class="drawer"></div>',
-    ));
+    );
     expect(rows).toEqual([
       expect.objectContaining({
         name: "aria-dialog-name",

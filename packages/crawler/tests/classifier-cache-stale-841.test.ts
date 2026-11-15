@@ -127,7 +127,6 @@ async function seedFrontier(
   }
 }
 
-
 function hookFor(version: string): PageClassifierHook {
   const hook = () => ({
     classification: {
@@ -156,7 +155,12 @@ async function run(first: string | undefined, second: string | undefined) {
   await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
 
   const fetched: string[] = [];
-  const cfg2 = { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999 };
+  const cfg2 = {
+    ...baseConfig,
+    incremental: true,
+    useCacheControl: true,
+    maxStalenessSeconds: 999_999,
+  };
   const crawlId2 = await createCrawlRecord(storage, cfg2);
   await seedFrontier(storage, crawlId2, [{ path: "/", source: "seed" }]);
   const crawler2 = await Effect.runPromise(
@@ -182,15 +186,28 @@ describe("a cached page is reclassified when the classifier changed", () => {
     const crawlId1 = await createCrawlRecord(storage, cfg1);
     await seedFrontier(storage, crawlId1, [{ path: "/", source: "seed" }]);
     const crawler1 = await Effect.runPromise(
-      createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([]) }, storage, classify: nullHook }),
+      createCrawler({
+        config: { ...cfg1, documentFetcher: fetcherFor([]) },
+        storage,
+        classify: nullHook,
+      }),
     );
     await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
     const fetched: string[] = [];
-    const cfg2 = { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999 };
+    const cfg2 = {
+      ...baseConfig,
+      incremental: true,
+      useCacheControl: true,
+      maxStalenessSeconds: 999_999,
+    };
     const crawlId2 = await createCrawlRecord(storage, cfg2);
     await seedFrontier(storage, crawlId2, [{ path: "/", source: "seed" }]);
     const crawler2 = await Effect.runPromise(
-      createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched) }, storage, classify: nullHook }),
+      createCrawler({
+        config: { ...cfg2, documentFetcher: fetcherFor(fetched) },
+        storage,
+        classify: nullHook,
+      }),
     );
     await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
     await Effect.runPromise(storage.close());
@@ -223,18 +240,30 @@ describe("a cached page is reclassified when the classifier changed", () => {
     const crawlId1 = await createCrawlRecord(storage, cfg1);
     await seedFrontier(storage, crawlId1, [{ path: "/", source: "seed" }]);
     const crawler1 = await Effect.runPromise(
-      createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([]) }, storage, classify: unversioned }),
+      createCrawler({
+        config: { ...cfg1, documentFetcher: fetcherFor([]) },
+        storage,
+        classify: unversioned,
+      }),
     );
     await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
     const fetched: string[] = [];
-    const cfg2 = { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999 };
+    const cfg2 = {
+      ...baseConfig,
+      incremental: true,
+      useCacheControl: true,
+      maxStalenessSeconds: 999_999,
+    };
     const crawlId2 = await createCrawlRecord(storage, cfg2);
     await seedFrontier(storage, crawlId2, [{ path: "/", source: "seed" }]);
     const crawler2 = await Effect.runPromise(
       createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched) }, storage }),
     );
     await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
-    const stored = (await Effect.runPromise(storage.getPages(crawlId2))).find((p) => p.normalizedUrl === `${ORIGIN}/`)?.parsedData ?? "";
+    const stored =
+      (await Effect.runPromise(storage.getPages(crawlId2))).find(
+        (p) => p.normalizedUrl === `${ORIGIN}/`,
+      )?.parsedData ?? "";
     await Effect.runPromise(storage.close());
     expect(fetched).toContain(`${ORIGIN}/`);
     expect(stored.includes('"classification"')).toBe(false);
@@ -249,8 +278,15 @@ describe("a cached page is reclassified when the classifier changed", () => {
 
 describe("cachedClassificationIsStale", () => {
   const stamped = (version: string) =>
-    JSON.stringify({ classifierVersion: version, meta: {}, classification: { pageType: { label: "x" }, degraded: "" } });
-  const unstampedWithLabel = JSON.stringify({ meta: {}, classification: { pageType: { label: "x" }, degraded: "" } });
+    JSON.stringify({
+      classifierVersion: version,
+      meta: {},
+      classification: { pageType: { label: "x" }, degraded: "" },
+    });
+  const unstampedWithLabel = JSON.stringify({
+    meta: {},
+    classification: { pageType: { label: "x" }, degraded: "" },
+  });
   test("compares the stored stamp with the running classifier's", () => {
     expect(cachedClassificationIsStale(stamped("a"), "a")).toBe(false);
     expect(cachedClassificationIsStale(stamped("a"), "b")).toBe(true);
@@ -259,10 +295,16 @@ describe("cachedClassificationIsStale", () => {
     expect(cachedClassificationIsStale(JSON.stringify({ meta: {} }), undefined)).toBe(false);
   });
   test("a page the classifier answered nothing for is stamped, so it caches (no refetch every run)", () => {
-    expect(cachedClassificationIsStale(JSON.stringify({ classifierVersion: "a", meta: {} }), "a")).toBe(false);
+    expect(
+      cachedClassificationIsStale(JSON.stringify({ classifierVersion: "a", meta: {} }), "a"),
+    ).toBe(false);
   });
   test("a nested classifierVersion in the page's own data is not the stamp, before or after the real one", () => {
-    const nested = { schema: { all: [{ "@type": "Thing", classifierVersion: "evil", classification: { model: "evil" } }] } };
+    const nested = {
+      schema: {
+        all: [{ "@type": "Thing", classifierVersion: "evil", classification: { model: "evil" } }],
+      },
+    };
     const real = JSON.stringify({ classifierVersion: "a", meta: {}, ...nested });
     expect(cachedClassificationIsStale(real, "a")).toBe(false);
     expect(cachedClassificationIsStale(real, "evil")).toBe(true);

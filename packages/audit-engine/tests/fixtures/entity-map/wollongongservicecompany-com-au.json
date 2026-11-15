@@ -23,15 +23,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/aeg#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -39,15 +35,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/asko#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -55,15 +47,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/beko#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -71,15 +59,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/blanco#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -87,15 +71,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/bosch#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -103,15 +83,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/electrolux#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -119,15 +95,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/euromaid#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -135,15 +107,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/fisher-paykel#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -151,15 +119,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/haier#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -167,15 +131,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/hisense#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -183,15 +143,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/kelvinator#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -199,15 +155,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/lg#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -215,15 +167,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/omega#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -231,15 +179,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/samsung#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -247,15 +191,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/smeg#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -263,15 +203,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/brands/westinghouse#3",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -279,15 +215,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/faq#1",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -295,15 +227,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/suburbs/albion-park-rail#1",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/albion-park-rail"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/albion-park-rail"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -311,15 +239,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/suburbs/dapto#1",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/dapto"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/dapto"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -327,15 +251,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/suburbs/huskisson#1",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/huskisson"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/huskisson"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -343,15 +263,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/suburbs/port-kembla#1",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/port-kembla"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/port-kembla"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -359,15 +275,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/suburbs/thirroul#1",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/thirroul"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/thirroul"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -375,15 +287,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/suburbs/vincentia#1",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/vincentia"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/vincentia"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -391,15 +299,11 @@
     {
       "key": "anon:https://wollongongservicecompany.com.au/suburbs/wollongong#1",
       "id": null,
-      "types": [
-        "FAQPage"
-      ],
+      "types": ["FAQPage"],
       "name": null,
       "properties": {},
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/wollongong"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/wollongong"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -407,17 +311,13 @@
     {
       "key": "id:https://wollongongservicecompany.com.au/#business",
       "id": "https://wollongongservicecompany.com.au/#business",
-      "types": [
-        "LocalBusiness"
-      ],
+      "types": ["LocalBusiness"],
       "name": "Wollongong Service Company",
       "properties": {
         "name": "Wollongong Service Company",
         "url": "https://wollongongservicecompany.com.au/",
         "logo": "https://wollongongservicecompany.com.au/logo.webp",
-        "image": [
-          "https://wollongongservicecompany.com.au/images/wsc_main.jpeg"
-        ],
+        "image": ["https://wollongongservicecompany.com.au/images/wsc_main.jpeg"],
         "sameAs": [
           "https://www.facebook.com/wollongongservicecompany/",
           "https://www.instagram.com/wollongongservicecompany/",
@@ -487,17 +387,13 @@
     {
       "key": "syn:Brand|name:aeg",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "AEG",
       "properties": {
         "name": "AEG"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -505,17 +401,13 @@
     {
       "key": "syn:Brand|name:asko",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Asko",
       "properties": {
         "name": "Asko"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -523,17 +415,13 @@
     {
       "key": "syn:Brand|name:beko",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Beko",
       "properties": {
         "name": "Beko"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -541,17 +429,13 @@
     {
       "key": "syn:Brand|name:blanco",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Blanco",
       "properties": {
         "name": "Blanco"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -559,17 +443,13 @@
     {
       "key": "syn:Brand|name:bosch",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Bosch",
       "properties": {
         "name": "Bosch"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -577,17 +457,13 @@
     {
       "key": "syn:Brand|name:electrolux",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Electrolux",
       "properties": {
         "name": "Electrolux"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -595,17 +471,13 @@
     {
       "key": "syn:Brand|name:euromaid",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Euromaid",
       "properties": {
         "name": "Euromaid"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -613,17 +485,13 @@
     {
       "key": "syn:Brand|name:fisher & paykel",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Fisher & Paykel",
       "properties": {
         "name": "Fisher & Paykel"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -631,17 +499,13 @@
     {
       "key": "syn:Brand|name:haier",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Haier",
       "properties": {
         "name": "Haier"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -649,17 +513,13 @@
     {
       "key": "syn:Brand|name:hisense",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "HiSense",
       "properties": {
         "name": "HiSense"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -667,17 +527,13 @@
     {
       "key": "syn:Brand|name:kelvinator",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Kelvinator",
       "properties": {
         "name": "Kelvinator"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -685,17 +541,13 @@
     {
       "key": "syn:Brand|name:lg",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "LG",
       "properties": {
         "name": "LG"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -703,17 +555,13 @@
     {
       "key": "syn:Brand|name:omega",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Omega",
       "properties": {
         "name": "Omega"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -721,17 +569,13 @@
     {
       "key": "syn:Brand|name:samsung",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Samsung",
       "properties": {
         "name": "Samsung"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -739,17 +583,13 @@
     {
       "key": "syn:Brand|name:smeg",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Smeg",
       "properties": {
         "name": "Smeg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -757,17 +597,13 @@
     {
       "key": "syn:Brand|name:westinghouse",
       "id": null,
-      "types": [
-        "Brand"
-      ],
+      "types": ["Brand"],
       "name": "Westinghouse",
       "properties": {
         "name": "Westinghouse"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -775,17 +611,13 @@
     {
       "key": "syn:Question|name:are asko appliances expensive to repair?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are Asko appliances expensive to repair?",
       "properties": {
         "name": "Are Asko appliances expensive to repair?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -793,17 +625,13 @@
     {
       "key": "syn:Question|name:are bosch appliances worth repairing?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are Bosch appliances worth repairing?",
       "properties": {
         "name": "Are Bosch appliances worth repairing?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -811,17 +639,13 @@
     {
       "key": "syn:Question|name:are you a plumber in huskisson?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you a plumber in Huskisson?",
       "properties": {
         "name": "Are you a plumber in Huskisson?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/huskisson"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/huskisson"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -829,17 +653,13 @@
     {
       "key": "syn:Question|name:are you a samsung authorised repair centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you a Samsung authorised repair centre?",
       "properties": {
         "name": "Are you a Samsung authorised repair centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -847,17 +667,13 @@
     {
       "key": "syn:Question|name:are you a smeg authorised repairer?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you a Smeg authorised repairer?",
       "properties": {
         "name": "Are you a Smeg authorised repairer?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -865,17 +681,13 @@
     {
       "key": "syn:Question|name:are you a westinghouse service centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you a Westinghouse service centre?",
       "properties": {
         "name": "Are you a Westinghouse service centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -883,17 +695,13 @@
     {
       "key": "syn:Question|name:are you an aeg service centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you an AEG service centre?",
       "properties": {
         "name": "Are you an AEG service centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -901,17 +709,13 @@
     {
       "key": "syn:Question|name:are you an authorised repair centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you an authorised repair centre?",
       "properties": {
         "name": "Are you an authorised repair centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -919,17 +723,13 @@
     {
       "key": "syn:Question|name:are you an lg authorised service centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you an LG authorised service centre?",
       "properties": {
         "name": "Are you an LG authorised service centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -937,17 +737,13 @@
     {
       "key": "syn:Question|name:are you asko's service centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you Asko's service centre?",
       "properties": {
         "name": "Are you Asko's service centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -955,17 +751,13 @@
     {
       "key": "syn:Question|name:are you beko customer service or an authorised beko repairer?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you Beko customer service or an authorised Beko repairer?",
       "properties": {
         "name": "Are you Beko customer service or an authorised Beko repairer?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -973,17 +765,13 @@
     {
       "key": "syn:Question|name:are you blanco's service centre or customer service in australia?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you Blanco's service centre or customer service in Australia?",
       "properties": {
         "name": "Are you Blanco's service centre or customer service in Australia?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -991,17 +779,13 @@
     {
       "key": "syn:Question|name:are you electricians in vincentia?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you electricians in Vincentia?",
       "properties": {
         "name": "Are you electricians in Vincentia?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/vincentia"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/vincentia"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1009,17 +793,13 @@
     {
       "key": "syn:Question|name:are you fisher & paykel's service centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you Fisher & Paykel's service centre?",
       "properties": {
         "name": "Are you Fisher & Paykel's service centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1027,17 +807,13 @@
     {
       "key": "syn:Question|name:are you hisense customer service or an authorised hisense repairer?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you Hisense customer service or an authorised Hisense repairer?",
       "properties": {
         "name": "Are you Hisense customer service or an authorised Hisense repairer?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1045,17 +821,13 @@
     {
       "key": "syn:Question|name:are you the kelvinator service centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Are you the Kelvinator service centre?",
       "properties": {
         "name": "Are you the Kelvinator service centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1063,17 +835,13 @@
     {
       "key": "syn:Question|name:can an out-of-town owner arrange a vincentia repair by phone?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Can an out-of-town owner arrange a Vincentia repair by phone?",
       "properties": {
         "name": "Can an out-of-town owner arrange a Vincentia repair by phone?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/vincentia"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/vincentia"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1081,17 +849,13 @@
     {
       "key": "syn:Question|name:can cockroaches damage my appliances?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Can cockroaches damage my appliances?",
       "properties": {
         "name": "Can cockroaches damage my appliances?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1099,17 +863,13 @@
     {
       "key": "syn:Question|name:can i pay for a port kembla appliance repair with afterpay?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Can I pay for a Port Kembla appliance repair with Afterpay?",
       "properties": {
         "name": "Can I pay for a Port Kembla appliance repair with Afterpay?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/port-kembla"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/port-kembla"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1117,17 +877,13 @@
     {
       "key": "syn:Question|name:can you fix a dead fridge before a huskisson changeover weekend?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Can you fix a dead fridge before a Huskisson changeover weekend?",
       "properties": {
         "name": "Can you fix a dead fridge before a Huskisson changeover weekend?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/huskisson"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/huskisson"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1135,17 +891,13 @@
     {
       "key": "syn:Question|name:can you repair a bar fridge in a huskisson holiday house?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Can you repair a bar fridge in a Huskisson holiday house?",
       "properties": {
         "name": "Can you repair a bar fridge in a Huskisson holiday house?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/huskisson"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/huskisson"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1153,17 +905,13 @@
     {
       "key": "syn:Question|name:can you repair showers, taps or hot water systems in albion park rail?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Can you repair showers, taps or hot water systems in Albion Park Rail?",
       "properties": {
         "name": "Can you repair showers, taps or hot water systems in Albion Park Rail?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/albion-park-rail"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/albion-park-rail"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1171,17 +919,13 @@
     {
       "key": "syn:Question|name:can you still get parts for old westinghouse ovens?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Can you still get parts for old Westinghouse ovens?",
       "properties": {
         "name": "Can you still get parts for old Westinghouse ovens?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1189,17 +933,13 @@
     {
       "key": "syn:Question|name:do washing machines need servicing?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do washing machines need servicing?",
       "properties": {
         "name": "Do washing machines need servicing?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1207,17 +947,13 @@
     {
       "key": "syn:Question|name:do you come to me, or do i bring the appliance in?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you come to me, or do I bring the appliance in?",
       "properties": {
         "name": "Do you come to me, or do I bring the appliance in?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1225,17 +961,13 @@
     {
       "key": "syn:Question|name:do you do electrical repairs or appliance installation in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you do electrical repairs or appliance installation in Wollongong?",
       "properties": {
         "name": "Do you do electrical repairs or appliance installation in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/wollongong"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/wollongong"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1243,17 +975,13 @@
     {
       "key": "syn:Question|name:do you fix air conditioning in dapto?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you fix air conditioning in Dapto?",
       "properties": {
         "name": "Do you fix air conditioning in Dapto?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/dapto"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/dapto"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1261,17 +989,13 @@
     {
       "key": "syn:Question|name:do you have a warranty?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you have a warranty?",
       "properties": {
         "name": "Do you have a warranty?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1279,17 +1003,13 @@
     {
       "key": "syn:Question|name:do you install or repair ducted air conditioning in thirroul?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you install or repair ducted air conditioning in Thirroul?",
       "properties": {
         "name": "Do you install or repair ducted air conditioning in Thirroul?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/thirroul"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/thirroul"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1297,17 +1017,13 @@
     {
       "key": "syn:Question|name:do you repair aeg cookers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair AEG cookers?",
       "properties": {
         "name": "Do you repair AEG cookers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1315,17 +1031,13 @@
     {
       "key": "syn:Question|name:do you repair aeg dishwashers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair AEG dishwashers?",
       "properties": {
         "name": "Do you repair AEG dishwashers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1333,17 +1045,13 @@
     {
       "key": "syn:Question|name:do you repair air conditioners in port kembla?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair air conditioners in Port Kembla?",
       "properties": {
         "name": "Do you repair air conditioners in Port Kembla?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/port-kembla"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/port-kembla"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1351,17 +1059,13 @@
     {
       "key": "syn:Question|name:do you repair asko dryers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Asko dryers?",
       "properties": {
         "name": "Do you repair Asko dryers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1369,17 +1073,13 @@
     {
       "key": "syn:Question|name:do you repair beko dishwashers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Beko dishwashers?",
       "properties": {
         "name": "Do you repair Beko dishwashers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1387,17 +1087,13 @@
     {
       "key": "syn:Question|name:do you repair beko fridges and freezers in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Beko fridges and freezers in Wollongong?",
       "properties": {
         "name": "Do you repair Beko fridges and freezers in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1405,17 +1101,13 @@
     {
       "key": "syn:Question|name:do you repair beko ovens and dryers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Beko ovens and dryers?",
       "properties": {
         "name": "Do you repair Beko ovens and dryers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1423,17 +1115,13 @@
     {
       "key": "syn:Question|name:do you repair blanco dishwashers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Blanco dishwashers?",
       "properties": {
         "name": "Do you repair Blanco dishwashers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1441,17 +1129,13 @@
     {
       "key": "syn:Question|name:do you repair blanco ovens in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Blanco ovens in Wollongong?",
       "properties": {
         "name": "Do you repair Blanco ovens in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1459,17 +1143,13 @@
     {
       "key": "syn:Question|name:do you repair electrolux dishwashers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Electrolux dishwashers?",
       "properties": {
         "name": "Do you repair Electrolux dishwashers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1477,17 +1157,13 @@
     {
       "key": "syn:Question|name:do you repair electrolux dryers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Electrolux dryers?",
       "properties": {
         "name": "Do you repair Electrolux dryers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1495,17 +1171,13 @@
     {
       "key": "syn:Question|name:do you repair electrolux ovens?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Electrolux ovens?",
       "properties": {
         "name": "Do you repair Electrolux ovens?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1513,17 +1185,13 @@
     {
       "key": "syn:Question|name:do you repair euromaid ovens and cooktops?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Euromaid ovens and cooktops?",
       "properties": {
         "name": "Do you repair Euromaid ovens and cooktops?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1531,17 +1199,13 @@
     {
       "key": "syn:Question|name:do you repair fisher & paykel dishdrawers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Fisher & Paykel DishDrawers?",
       "properties": {
         "name": "Do you repair Fisher & Paykel DishDrawers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1549,17 +1213,13 @@
     {
       "key": "syn:Question|name:do you repair fisher & paykel ovens and cooktops?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Fisher & Paykel ovens and cooktops?",
       "properties": {
         "name": "Do you repair Fisher & Paykel ovens and cooktops?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1567,17 +1227,13 @@
     {
       "key": "syn:Question|name:do you repair fisher & paykel washing machines?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Fisher & Paykel washing machines?",
       "properties": {
         "name": "Do you repair Fisher & Paykel washing machines?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1585,17 +1241,13 @@
     {
       "key": "syn:Question|name:do you repair haier dishwashers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Haier dishwashers?",
       "properties": {
         "name": "Do you repair Haier dishwashers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1603,17 +1255,13 @@
     {
       "key": "syn:Question|name:do you repair haier dryers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Haier dryers?",
       "properties": {
         "name": "Do you repair Haier dryers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1621,17 +1269,13 @@
     {
       "key": "syn:Question|name:do you repair haier fridges and freezers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Haier fridges and freezers?",
       "properties": {
         "name": "Do you repair Haier fridges and freezers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1639,17 +1283,13 @@
     {
       "key": "syn:Question|name:do you repair hisense fridges and freezers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Hisense fridges and freezers?",
       "properties": {
         "name": "Do you repair Hisense fridges and freezers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1657,17 +1297,13 @@
     {
       "key": "syn:Question|name:do you repair hisense washing machines and dryers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Hisense washing machines and dryers?",
       "properties": {
         "name": "Do you repair Hisense washing machines and dryers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1675,17 +1311,13 @@
     {
       "key": "syn:Question|name:do you repair integrated dishwashers in wollongong apartments?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair integrated dishwashers in Wollongong apartments?",
       "properties": {
         "name": "Do you repair integrated dishwashers in Wollongong apartments?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/wollongong"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/wollongong"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1693,17 +1325,13 @@
     {
       "key": "syn:Question|name:do you repair kelvinator air conditioners?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Kelvinator air conditioners?",
       "properties": {
         "name": "Do you repair Kelvinator air conditioners?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1711,17 +1339,13 @@
     {
       "key": "syn:Question|name:do you repair kelvinator fridges and freezers in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Kelvinator fridges and freezers in Wollongong?",
       "properties": {
         "name": "Do you repair Kelvinator fridges and freezers in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1729,17 +1353,13 @@
     {
       "key": "syn:Question|name:do you repair lg fridges?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair LG fridges?",
       "properties": {
         "name": "Do you repair LG fridges?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1747,17 +1367,13 @@
     {
       "key": "syn:Question|name:do you repair lg washing machines?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair LG washing machines?",
       "properties": {
         "name": "Do you repair LG washing machines?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1765,17 +1381,13 @@
     {
       "key": "syn:Question|name:do you repair my brand?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair my brand?",
       "properties": {
         "name": "Do you repair my brand?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1783,17 +1395,13 @@
     {
       "key": "syn:Question|name:do you repair omega dishwashers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Omega dishwashers?",
       "properties": {
         "name": "Do you repair Omega dishwashers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1801,17 +1409,13 @@
     {
       "key": "syn:Question|name:do you repair omega ovens in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Omega ovens in Wollongong?",
       "properties": {
         "name": "Do you repair Omega ovens in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1819,17 +1423,13 @@
     {
       "key": "syn:Question|name:do you repair samsung fridges?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Samsung fridges?",
       "properties": {
         "name": "Do you repair Samsung fridges?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1837,17 +1437,13 @@
     {
       "key": "syn:Question|name:do you repair samsung stoves, ovens and cooktops?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Samsung stoves, ovens and cooktops?",
       "properties": {
         "name": "Do you repair Samsung stoves, ovens and cooktops?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1855,17 +1451,13 @@
     {
       "key": "syn:Question|name:do you repair samsung washing machines?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Samsung washing machines?",
       "properties": {
         "name": "Do you repair Samsung washing machines?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1873,17 +1465,13 @@
     {
       "key": "syn:Question|name:do you repair smeg dishwashers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Smeg dishwashers?",
       "properties": {
         "name": "Do you repair Smeg dishwashers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1891,17 +1479,13 @@
     {
       "key": "syn:Question|name:do you repair smeg ovens and cooktops?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Smeg ovens and cooktops?",
       "properties": {
         "name": "Do you repair Smeg ovens and cooktops?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1909,17 +1493,13 @@
     {
       "key": "syn:Question|name:do you repair washing machines in dapto rental properties?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair washing machines in Dapto rental properties?",
       "properties": {
         "name": "Do you repair washing machines in Dapto rental properties?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/dapto"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/dapto"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1927,17 +1507,13 @@
     {
       "key": "syn:Question|name:do you repair westinghouse cooktops?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Westinghouse cooktops?",
       "properties": {
         "name": "Do you repair Westinghouse cooktops?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1945,17 +1521,13 @@
     {
       "key": "syn:Question|name:do you repair westinghouse dishwashers?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you repair Westinghouse dishwashers?",
       "properties": {
         "name": "Do you repair Westinghouse dishwashers?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1963,17 +1535,13 @@
     {
       "key": "syn:Question|name:do you service euromaid appliances in the illawarra?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you service Euromaid appliances in the Illawarra?",
       "properties": {
         "name": "Do you service Euromaid appliances in the Illawarra?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1981,17 +1549,13 @@
     {
       "key": "syn:Question|name:do you service omega gas heaters?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you service Omega gas heaters?",
       "properties": {
         "name": "Do you service Omega gas heaters?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -1999,17 +1563,13 @@
     {
       "key": "syn:Question|name:do you work with property managers and strata in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Do you work with property managers and strata in Wollongong?",
       "properties": {
         "name": "Do you work with property managers and strata in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/wollongong"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/wollongong"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2017,17 +1577,13 @@
     {
       "key": "syn:Question|name:does an integrated bosch or smeg appliance in thirroul have to go to a workshop?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Does an integrated Bosch or Smeg appliance in Thirroul have to go to a workshop?",
       "properties": {
         "name": "Does an integrated Bosch or Smeg appliance in Thirroul have to go to a workshop?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/thirroul"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/thirroul"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2035,17 +1591,13 @@
     {
       "key": "syn:Question|name:does living near the beach affect my appliances?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Does living near the beach affect my appliances?",
       "properties": {
         "name": "Does living near the beach affect my appliances?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2053,17 +1605,13 @@
     {
       "key": "syn:Question|name:how do i book a haier service, and when should i ring haier instead?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How do I book a Haier service, and when should I ring Haier instead?",
       "properties": {
         "name": "How do I book a Haier service, and when should I ring Haier instead?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2071,17 +1619,13 @@
     {
       "key": "syn:Question|name:how do i book an aeg repair?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How do I book an AEG repair?",
       "properties": {
         "name": "How do I book an AEG repair?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2089,17 +1633,13 @@
     {
       "key": "syn:Question|name:how do i contact you?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How do I contact you?",
       "properties": {
         "name": "How do I contact you?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2107,17 +1647,13 @@
     {
       "key": "syn:Question|name:how long do asko parts take to arrive?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How long do Asko parts take to arrive?",
       "properties": {
         "name": "How long do Asko parts take to arrive?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2125,17 +1661,13 @@
     {
       "key": "syn:Question|name:how long will it take to fix my appliance?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How long will it take to fix my appliance?",
       "properties": {
         "name": "How long will it take to fix my appliance?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2143,17 +1675,13 @@
     {
       "key": "syn:Question|name:how much does a bosch repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does a Bosch repair cost in Wollongong?",
       "properties": {
         "name": "How much does a Bosch repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2161,17 +1689,13 @@
     {
       "key": "syn:Question|name:how much does a fisher & paykel repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does a Fisher & Paykel repair cost in Wollongong?",
       "properties": {
         "name": "How much does a Fisher & Paykel repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2179,17 +1703,13 @@
     {
       "key": "syn:Question|name:how much does a hisense repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does a Hisense repair cost in Wollongong?",
       "properties": {
         "name": "How much does a Hisense repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2197,17 +1717,13 @@
     {
       "key": "syn:Question|name:how much does a samsung repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does a Samsung repair cost in Wollongong?",
       "properties": {
         "name": "How much does a Samsung repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2215,17 +1731,13 @@
     {
       "key": "syn:Question|name:how much does a smeg repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does a Smeg repair cost in Wollongong?",
       "properties": {
         "name": "How much does a Smeg repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2233,17 +1745,13 @@
     {
       "key": "syn:Question|name:how much does a westinghouse repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does a Westinghouse repair cost in Wollongong?",
       "properties": {
         "name": "How much does a Westinghouse repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2251,17 +1759,13 @@
     {
       "key": "syn:Question|name:how much does an aeg repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does an AEG repair cost in Wollongong?",
       "properties": {
         "name": "How much does an AEG repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2269,17 +1773,13 @@
     {
       "key": "syn:Question|name:how much does an asko repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does an Asko repair cost in Wollongong?",
       "properties": {
         "name": "How much does an Asko repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2287,17 +1787,13 @@
     {
       "key": "syn:Question|name:how much does an electrolux repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does an Electrolux repair cost in Wollongong?",
       "properties": {
         "name": "How much does an Electrolux repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2305,17 +1801,13 @@
     {
       "key": "syn:Question|name:how much does an lg repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "How much does an LG repair cost in Wollongong?",
       "properties": {
         "name": "How much does an LG repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2323,17 +1815,13 @@
     {
       "key": "syn:Question|name:is a westinghouse oven worth repairing?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Is a Westinghouse oven worth repairing?",
       "properties": {
         "name": "Is a Westinghouse oven worth repairing?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2341,17 +1829,13 @@
     {
       "key": "syn:Question|name:is it worth repairing, or should i replace it?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Is it worth repairing, or should I replace it?",
       "properties": {
         "name": "Is it worth repairing, or should I replace it?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2359,17 +1843,13 @@
     {
       "key": "syn:Question|name:is powder or liquid detergent better?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Is powder or liquid detergent better?",
       "properties": {
         "name": "Is powder or liquid detergent better?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2377,17 +1857,13 @@
     {
       "key": "syn:Question|name:is wollongong service company an authorised bosch service centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Is Wollongong Service Company an authorised Bosch service centre?",
       "properties": {
         "name": "Is Wollongong Service Company an authorised Bosch service centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2395,17 +1871,13 @@
     {
       "key": "syn:Question|name:is wollongong service company an electrolux service centre?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Is Wollongong Service Company an Electrolux service centre?",
       "properties": {
         "name": "Is Wollongong Service Company an Electrolux service centre?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2413,17 +1885,13 @@
     {
       "key": "syn:Question|name:my euromaid is still under warranty - who do i ring?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "My Euromaid is still under warranty - who do I ring?",
       "properties": {
         "name": "My Euromaid is still under warranty - who do I ring?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2431,17 +1899,13 @@
     {
       "key": "syn:Question|name:what does a beko repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does a Beko repair cost in Wollongong?",
       "properties": {
         "name": "What does a Beko repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2449,17 +1913,13 @@
     {
       "key": "syn:Question|name:what does a blanco repair cost, and where do you come?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does a Blanco repair cost, and where do you come?",
       "properties": {
         "name": "What does a Blanco repair cost, and where do you come?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2467,17 +1927,13 @@
     {
       "key": "syn:Question|name:what does a callout cost?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does a callout cost?",
       "properties": {
         "name": "What does a callout cost?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2485,17 +1941,13 @@
     {
       "key": "syn:Question|name:what does a westinghouse fridge or oven service involve?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does a Westinghouse fridge or oven service involve?",
       "properties": {
         "name": "What does a Westinghouse fridge or oven service involve?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2503,17 +1955,13 @@
     {
       "key": "syn:Question|name:what does an omega repair cost in wollongong?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does an Omega repair cost in Wollongong?",
       "properties": {
         "name": "What does an Omega repair cost in Wollongong?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2521,17 +1969,13 @@
     {
       "key": "syn:Question|name:what does e15 mean on a bosch dishwasher?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does E15 mean on a Bosch dishwasher?",
       "properties": {
         "name": "What does E15 mean on a Bosch dishwasher?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2539,17 +1983,13 @@
     {
       "key": "syn:Question|name:what does e18 mean on a bosch dishwasher?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does E18 mean on a Bosch dishwasher?",
       "properties": {
         "name": "What does E18 mean on a Bosch dishwasher?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2557,17 +1997,13 @@
     {
       "key": "syn:Question|name:what does f21 mean on a bosch washing machine?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does F21 mean on a Bosch washing machine?",
       "properties": {
         "name": "What does F21 mean on a Bosch washing machine?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2575,17 +2011,13 @@
     {
       "key": "syn:Question|name:what does the $145 assessment fee in vincentia cover?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What does the $145 assessment fee in Vincentia cover?",
       "properties": {
         "name": "What does the $145 assessment fee in Vincentia cover?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/vincentia"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/vincentia"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2593,17 +2025,13 @@
     {
       "key": "syn:Question|name:what happens on an asko service call?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What happens on an Asko service call?",
       "properties": {
         "name": "What happens on an Asko service call?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2611,17 +2039,13 @@
     {
       "key": "syn:Question|name:what payments do you accept?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What payments do you accept?",
       "properties": {
         "name": "What payments do you accept?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2629,17 +2053,13 @@
     {
       "key": "syn:Question|name:what should i check before booking a washer repair in albion park rail?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "What should I check before booking a washer repair in Albion Park Rail?",
       "properties": {
         "name": "What should I check before booking a washer repair in Albion Park Rail?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/albion-park-rail"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/albion-park-rail"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2647,17 +2067,13 @@
     {
       "key": "syn:Question|name:where do you repair fisher & paykel appliances?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Where do you repair Fisher & Paykel appliances?",
       "properties": {
         "name": "Where do you repair Fisher & Paykel appliances?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2665,17 +2081,13 @@
     {
       "key": "syn:Question|name:where do you repair kelvinator appliances, and what does it cost?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Where do you repair Kelvinator appliances, and what does it cost?",
       "properties": {
         "name": "Where do you repair Kelvinator appliances, and what does it cost?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2683,17 +2095,13 @@
     {
       "key": "syn:Question|name:which suburbs do you cover?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Which suburbs do you cover?",
       "properties": {
         "name": "Which suburbs do you cover?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2701,17 +2109,13 @@
     {
       "key": "syn:Question|name:why do garage fridges in port kembla corrode so fast?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Why do garage fridges in Port Kembla corrode so fast?",
       "properties": {
         "name": "Why do garage fridges in Port Kembla corrode so fast?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/port-kembla"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/port-kembla"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2719,17 +2123,13 @@
     {
       "key": "syn:Question|name:why do outdoor fridges and washers in thirroul rust sooner?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Why do outdoor fridges and washers in Thirroul rust sooner?",
       "properties": {
         "name": "Why do outdoor fridges and washers in Thirroul rust sooner?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/thirroul"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/thirroul"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2737,17 +2137,13 @@
     {
       "key": "syn:Question|name:why does my dryer in albion park rail run but stay cold?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Why does my dryer in Albion Park Rail run but stay cold?",
       "properties": {
         "name": "Why does my dryer in Albion Park Rail run but stay cold?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/albion-park-rail"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/albion-park-rail"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2755,17 +2151,13 @@
     {
       "key": "syn:Question|name:why has my westinghouse oven stopped heating?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Why has my Westinghouse oven stopped heating?",
       "properties": {
         "name": "Why has my Westinghouse oven stopped heating?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2773,17 +2165,13 @@
     {
       "key": "syn:Question|name:why is my westinghouse fridge not cooling but the freezer works?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Why is my Westinghouse fridge not cooling but the freezer works?",
       "properties": {
         "name": "Why is my Westinghouse fridge not cooling but the freezer works?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2791,17 +2179,13 @@
     {
       "key": "syn:Question|name:why won't my asko washing machine drain?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Why won't my Asko washing machine drain?",
       "properties": {
         "name": "Why won't my Asko washing machine drain?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2809,17 +2193,13 @@
     {
       "key": "syn:Question|name:why won't my asko washing machine spin?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Why won't my Asko washing machine spin?",
       "properties": {
         "name": "Why won't my Asko washing machine spin?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2827,17 +2207,13 @@
     {
       "key": "syn:Question|name:will i be surprised by the bill?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Will I be surprised by the bill?",
       "properties": {
         "name": "Will I be surprised by the bill?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2845,17 +2221,13 @@
     {
       "key": "syn:Question|name:will you be able to fix my problem?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Will you be able to fix my problem?",
       "properties": {
         "name": "Will you be able to fix my problem?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2863,17 +2235,13 @@
     {
       "key": "syn:Question|name:will you quote a dapto repair before doing the work?",
       "id": null,
-      "types": [
-        "Question"
-      ],
+      "types": ["Question"],
       "name": "Will you quote a Dapto repair before doing the work?",
       "properties": {
         "name": "Will you quote a Dapto repair before doing the work?"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/dapto"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/dapto"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2881,18 +2249,14 @@
     {
       "key": "syn:Service|name:aeg appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "AEG appliance repair",
       "properties": {
         "name": "AEG appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/aeg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2900,18 +2264,14 @@
     {
       "key": "syn:Service|name:asko appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Asko appliance repair",
       "properties": {
         "name": "Asko appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/asko"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2919,18 +2279,14 @@
     {
       "key": "syn:Service|name:beko appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Beko appliance repair",
       "properties": {
         "name": "Beko appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/beko"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2938,18 +2294,14 @@
     {
       "key": "syn:Service|name:blanco appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Blanco appliance repair",
       "properties": {
         "name": "Blanco appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/blanco"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2957,18 +2309,14 @@
     {
       "key": "syn:Service|name:bosch appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Bosch appliance repair",
       "properties": {
         "name": "Bosch appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/bosch"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2976,18 +2324,14 @@
     {
       "key": "syn:Service|name:electrolux appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Electrolux appliance repair",
       "properties": {
         "name": "Electrolux appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/electrolux"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -2995,18 +2339,14 @@
     {
       "key": "syn:Service|name:euromaid appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Euromaid appliance repair",
       "properties": {
         "name": "Euromaid appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/euromaid"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3014,18 +2354,14 @@
     {
       "key": "syn:Service|name:fisher & paykel appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Fisher & Paykel appliance repair",
       "properties": {
         "name": "Fisher & Paykel appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/fisher-paykel"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3033,18 +2369,14 @@
     {
       "key": "syn:Service|name:haier appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Haier appliance repair",
       "properties": {
         "name": "Haier appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/haier"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3052,18 +2384,14 @@
     {
       "key": "syn:Service|name:hisense appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "HiSense appliance repair",
       "properties": {
         "name": "HiSense appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/hisense"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3071,18 +2399,14 @@
     {
       "key": "syn:Service|name:kelvinator appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Kelvinator appliance repair",
       "properties": {
         "name": "Kelvinator appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/kelvinator"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3090,18 +2414,14 @@
     {
       "key": "syn:Service|name:lg appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "LG appliance repair",
       "properties": {
         "name": "LG appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/lg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3109,18 +2429,14 @@
     {
       "key": "syn:Service|name:omega appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Omega appliance repair",
       "properties": {
         "name": "Omega appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/omega"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3128,18 +2444,14 @@
     {
       "key": "syn:Service|name:samsung appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Samsung appliance repair",
       "properties": {
         "name": "Samsung appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/samsung"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3147,18 +2459,14 @@
     {
       "key": "syn:Service|name:smeg appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Smeg appliance repair",
       "properties": {
         "name": "Smeg appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/smeg"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3166,18 +2474,14 @@
     {
       "key": "syn:Service|name:westinghouse appliance repair",
       "id": null,
-      "types": [
-        "Service"
-      ],
+      "types": ["Service"],
       "name": "Westinghouse appliance repair",
       "properties": {
         "name": "Westinghouse appliance repair",
         "url": "https://wollongongservicecompany.com.au/brands/westinghouse"
       },
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0,
       "conflicts": [],
       "danglingRefs": 0
@@ -3190,9 +2494,7 @@
       "target": "syn:Question|name:are you an aeg service centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0
     },
     {
@@ -3201,9 +2503,7 @@
       "target": "syn:Question|name:do you repair aeg cookers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0
     },
     {
@@ -3212,9 +2512,7 @@
       "target": "syn:Question|name:do you repair aeg dishwashers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0
     },
     {
@@ -3223,9 +2521,7 @@
       "target": "syn:Question|name:how do i book an aeg repair?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0
     },
     {
@@ -3234,9 +2530,7 @@
       "target": "syn:Question|name:how much does an aeg repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0
     },
     {
@@ -3245,9 +2539,7 @@
       "target": "syn:Question|name:are asko appliances expensive to repair?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -3256,9 +2548,7 @@
       "target": "syn:Question|name:are you asko's service centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -3267,9 +2557,7 @@
       "target": "syn:Question|name:do you repair asko dryers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -3278,9 +2566,7 @@
       "target": "syn:Question|name:how long do asko parts take to arrive?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -3289,9 +2575,7 @@
       "target": "syn:Question|name:how much does an asko repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -3300,9 +2584,7 @@
       "target": "syn:Question|name:what happens on an asko service call?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -3311,9 +2593,7 @@
       "target": "syn:Question|name:why won't my asko washing machine drain?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -3322,9 +2602,7 @@
       "target": "syn:Question|name:why won't my asko washing machine spin?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -3333,9 +2611,7 @@
       "target": "syn:Question|name:are you beko customer service or an authorised beko repairer?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0
     },
     {
@@ -3344,9 +2620,7 @@
       "target": "syn:Question|name:do you repair beko dishwashers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0
     },
     {
@@ -3355,9 +2629,7 @@
       "target": "syn:Question|name:do you repair beko fridges and freezers in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0
     },
     {
@@ -3366,9 +2638,7 @@
       "target": "syn:Question|name:do you repair beko ovens and dryers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0
     },
     {
@@ -3377,9 +2647,7 @@
       "target": "syn:Question|name:what does a beko repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0
     },
     {
@@ -3388,9 +2656,7 @@
       "target": "syn:Question|name:are you blanco's service centre or customer service in australia?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0
     },
     {
@@ -3399,9 +2665,7 @@
       "target": "syn:Question|name:do you repair blanco dishwashers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0
     },
     {
@@ -3410,9 +2674,7 @@
       "target": "syn:Question|name:do you repair blanco ovens in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0
     },
     {
@@ -3421,9 +2683,7 @@
       "target": "syn:Question|name:what does a blanco repair cost, and where do you come?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0
     },
     {
@@ -3432,9 +2692,7 @@
       "target": "syn:Question|name:are bosch appliances worth repairing?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0
     },
     {
@@ -3443,9 +2701,7 @@
       "target": "syn:Question|name:how much does a bosch repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0
     },
     {
@@ -3454,9 +2710,7 @@
       "target": "syn:Question|name:is wollongong service company an authorised bosch service centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0
     },
     {
@@ -3465,9 +2719,7 @@
       "target": "syn:Question|name:what does e15 mean on a bosch dishwasher?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0
     },
     {
@@ -3476,9 +2728,7 @@
       "target": "syn:Question|name:what does e18 mean on a bosch dishwasher?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0
     },
     {
@@ -3487,9 +2737,7 @@
       "target": "syn:Question|name:what does f21 mean on a bosch washing machine?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0
     },
     {
@@ -3498,9 +2746,7 @@
       "target": "syn:Question|name:do you repair electrolux dishwashers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0
     },
     {
@@ -3509,9 +2755,7 @@
       "target": "syn:Question|name:do you repair electrolux dryers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0
     },
     {
@@ -3520,9 +2764,7 @@
       "target": "syn:Question|name:do you repair electrolux ovens?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0
     },
     {
@@ -3531,9 +2773,7 @@
       "target": "syn:Question|name:how much does an electrolux repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0
     },
     {
@@ -3542,9 +2782,7 @@
       "target": "syn:Question|name:is wollongong service company an electrolux service centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0
     },
     {
@@ -3553,9 +2791,7 @@
       "target": "syn:Question|name:do you repair euromaid ovens and cooktops?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0
     },
     {
@@ -3564,9 +2800,7 @@
       "target": "syn:Question|name:do you service euromaid appliances in the illawarra?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0
     },
     {
@@ -3575,9 +2809,7 @@
       "target": "syn:Question|name:my euromaid is still under warranty - who do i ring?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0
     },
     {
@@ -3586,9 +2818,7 @@
       "target": "syn:Question|name:are you fisher & paykel's service centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0
     },
     {
@@ -3597,9 +2827,7 @@
       "target": "syn:Question|name:do you repair fisher & paykel dishdrawers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0
     },
     {
@@ -3608,9 +2836,7 @@
       "target": "syn:Question|name:do you repair fisher & paykel ovens and cooktops?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0
     },
     {
@@ -3619,9 +2845,7 @@
       "target": "syn:Question|name:do you repair fisher & paykel washing machines?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0
     },
     {
@@ -3630,9 +2854,7 @@
       "target": "syn:Question|name:how much does a fisher & paykel repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0
     },
     {
@@ -3641,9 +2863,7 @@
       "target": "syn:Question|name:where do you repair fisher & paykel appliances?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0
     },
     {
@@ -3652,9 +2872,7 @@
       "target": "syn:Question|name:do you repair haier dishwashers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0
     },
     {
@@ -3663,9 +2881,7 @@
       "target": "syn:Question|name:do you repair haier dryers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0
     },
     {
@@ -3674,9 +2890,7 @@
       "target": "syn:Question|name:do you repair haier fridges and freezers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0
     },
     {
@@ -3685,9 +2899,7 @@
       "target": "syn:Question|name:how do i book a haier service, and when should i ring haier instead?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0
     },
     {
@@ -3696,9 +2908,7 @@
       "target": "syn:Question|name:are you hisense customer service or an authorised hisense repairer?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0
     },
     {
@@ -3707,9 +2917,7 @@
       "target": "syn:Question|name:do you repair hisense fridges and freezers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0
     },
     {
@@ -3718,9 +2926,7 @@
       "target": "syn:Question|name:do you repair hisense washing machines and dryers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0
     },
     {
@@ -3729,9 +2935,7 @@
       "target": "syn:Question|name:how much does a hisense repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0
     },
     {
@@ -3740,9 +2944,7 @@
       "target": "syn:Question|name:are you the kelvinator service centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0
     },
     {
@@ -3751,9 +2953,7 @@
       "target": "syn:Question|name:do you repair kelvinator air conditioners?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0
     },
     {
@@ -3762,9 +2962,7 @@
       "target": "syn:Question|name:do you repair kelvinator fridges and freezers in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0
     },
     {
@@ -3773,9 +2971,7 @@
       "target": "syn:Question|name:where do you repair kelvinator appliances, and what does it cost?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0
     },
     {
@@ -3784,9 +2980,7 @@
       "target": "syn:Question|name:are you an lg authorised service centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0
     },
     {
@@ -3795,9 +2989,7 @@
       "target": "syn:Question|name:do you repair lg fridges?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0
     },
     {
@@ -3806,9 +2998,7 @@
       "target": "syn:Question|name:do you repair lg washing machines?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0
     },
     {
@@ -3817,9 +3007,7 @@
       "target": "syn:Question|name:how much does an lg repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0
     },
     {
@@ -3828,9 +3016,7 @@
       "target": "syn:Question|name:do you repair omega dishwashers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0
     },
     {
@@ -3839,9 +3025,7 @@
       "target": "syn:Question|name:do you repair omega ovens in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0
     },
     {
@@ -3850,9 +3034,7 @@
       "target": "syn:Question|name:do you service omega gas heaters?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0
     },
     {
@@ -3861,9 +3043,7 @@
       "target": "syn:Question|name:what does an omega repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0
     },
     {
@@ -3872,9 +3052,7 @@
       "target": "syn:Question|name:are you a samsung authorised repair centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0
     },
     {
@@ -3883,9 +3061,7 @@
       "target": "syn:Question|name:do you repair samsung fridges?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0
     },
     {
@@ -3894,9 +3070,7 @@
       "target": "syn:Question|name:do you repair samsung stoves, ovens and cooktops?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0
     },
     {
@@ -3905,9 +3079,7 @@
       "target": "syn:Question|name:do you repair samsung washing machines?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0
     },
     {
@@ -3916,9 +3088,7 @@
       "target": "syn:Question|name:how much does a samsung repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0
     },
     {
@@ -3927,9 +3097,7 @@
       "target": "syn:Question|name:are you a smeg authorised repairer?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0
     },
     {
@@ -3938,9 +3106,7 @@
       "target": "syn:Question|name:do you repair smeg dishwashers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0
     },
     {
@@ -3949,9 +3115,7 @@
       "target": "syn:Question|name:do you repair smeg ovens and cooktops?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0
     },
     {
@@ -3960,9 +3124,7 @@
       "target": "syn:Question|name:how much does a smeg repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0
     },
     {
@@ -3971,9 +3133,7 @@
       "target": "syn:Question|name:are you a westinghouse service centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -3982,9 +3142,7 @@
       "target": "syn:Question|name:can you still get parts for old westinghouse ovens?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -3993,9 +3151,7 @@
       "target": "syn:Question|name:do you repair westinghouse cooktops?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -4004,9 +3160,7 @@
       "target": "syn:Question|name:do you repair westinghouse dishwashers?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -4015,9 +3169,7 @@
       "target": "syn:Question|name:how much does a westinghouse repair cost in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -4026,9 +3178,7 @@
       "target": "syn:Question|name:is a westinghouse oven worth repairing?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -4037,9 +3187,7 @@
       "target": "syn:Question|name:what does a westinghouse fridge or oven service involve?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -4048,9 +3196,7 @@
       "target": "syn:Question|name:why has my westinghouse oven stopped heating?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -4059,9 +3205,7 @@
       "target": "syn:Question|name:why is my westinghouse fridge not cooling but the freezer works?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -4070,9 +3214,7 @@
       "target": "syn:Question|name:are you an authorised repair centre?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4081,9 +3223,7 @@
       "target": "syn:Question|name:can cockroaches damage my appliances?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4092,9 +3232,7 @@
       "target": "syn:Question|name:do washing machines need servicing?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4103,9 +3241,7 @@
       "target": "syn:Question|name:do you come to me, or do i bring the appliance in?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4114,9 +3250,7 @@
       "target": "syn:Question|name:do you have a warranty?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4125,9 +3259,7 @@
       "target": "syn:Question|name:do you repair my brand?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4136,9 +3268,7 @@
       "target": "syn:Question|name:does living near the beach affect my appliances?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4147,9 +3277,7 @@
       "target": "syn:Question|name:how do i contact you?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4158,9 +3286,7 @@
       "target": "syn:Question|name:how long will it take to fix my appliance?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4169,9 +3295,7 @@
       "target": "syn:Question|name:is it worth repairing, or should i replace it?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4180,9 +3304,7 @@
       "target": "syn:Question|name:is powder or liquid detergent better?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4191,9 +3313,7 @@
       "target": "syn:Question|name:what does a callout cost?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4202,9 +3322,7 @@
       "target": "syn:Question|name:what payments do you accept?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4213,9 +3331,7 @@
       "target": "syn:Question|name:which suburbs do you cover?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4224,9 +3340,7 @@
       "target": "syn:Question|name:will i be surprised by the bill?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4235,9 +3349,7 @@
       "target": "syn:Question|name:will you be able to fix my problem?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/faq"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/faq"],
       "morePages": 0
     },
     {
@@ -4246,9 +3358,7 @@
       "target": "syn:Question|name:can you repair showers, taps or hot water systems in albion park rail?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/albion-park-rail"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/albion-park-rail"],
       "morePages": 0
     },
     {
@@ -4257,9 +3367,7 @@
       "target": "syn:Question|name:what should i check before booking a washer repair in albion park rail?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/albion-park-rail"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/albion-park-rail"],
       "morePages": 0
     },
     {
@@ -4268,9 +3376,7 @@
       "target": "syn:Question|name:why does my dryer in albion park rail run but stay cold?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/albion-park-rail"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/albion-park-rail"],
       "morePages": 0
     },
     {
@@ -4279,9 +3385,7 @@
       "target": "syn:Question|name:do you fix air conditioning in dapto?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/dapto"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/dapto"],
       "morePages": 0
     },
     {
@@ -4290,9 +3394,7 @@
       "target": "syn:Question|name:do you repair washing machines in dapto rental properties?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/dapto"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/dapto"],
       "morePages": 0
     },
     {
@@ -4301,9 +3403,7 @@
       "target": "syn:Question|name:will you quote a dapto repair before doing the work?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/dapto"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/dapto"],
       "morePages": 0
     },
     {
@@ -4312,9 +3412,7 @@
       "target": "syn:Question|name:are you a plumber in huskisson?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/huskisson"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/huskisson"],
       "morePages": 0
     },
     {
@@ -4323,9 +3421,7 @@
       "target": "syn:Question|name:can you fix a dead fridge before a huskisson changeover weekend?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/huskisson"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/huskisson"],
       "morePages": 0
     },
     {
@@ -4334,9 +3430,7 @@
       "target": "syn:Question|name:can you repair a bar fridge in a huskisson holiday house?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/huskisson"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/huskisson"],
       "morePages": 0
     },
     {
@@ -4345,9 +3439,7 @@
       "target": "syn:Question|name:can i pay for a port kembla appliance repair with afterpay?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/port-kembla"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/port-kembla"],
       "morePages": 0
     },
     {
@@ -4356,9 +3448,7 @@
       "target": "syn:Question|name:do you repair air conditioners in port kembla?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/port-kembla"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/port-kembla"],
       "morePages": 0
     },
     {
@@ -4367,9 +3457,7 @@
       "target": "syn:Question|name:why do garage fridges in port kembla corrode so fast?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/port-kembla"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/port-kembla"],
       "morePages": 0
     },
     {
@@ -4378,9 +3466,7 @@
       "target": "syn:Question|name:do you install or repair ducted air conditioning in thirroul?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/thirroul"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/thirroul"],
       "morePages": 0
     },
     {
@@ -4389,9 +3475,7 @@
       "target": "syn:Question|name:does an integrated bosch or smeg appliance in thirroul have to go to a workshop?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/thirroul"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/thirroul"],
       "morePages": 0
     },
     {
@@ -4400,9 +3484,7 @@
       "target": "syn:Question|name:why do outdoor fridges and washers in thirroul rust sooner?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/thirroul"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/thirroul"],
       "morePages": 0
     },
     {
@@ -4411,9 +3493,7 @@
       "target": "syn:Question|name:are you electricians in vincentia?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/vincentia"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/vincentia"],
       "morePages": 0
     },
     {
@@ -4422,9 +3502,7 @@
       "target": "syn:Question|name:can an out-of-town owner arrange a vincentia repair by phone?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/vincentia"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/vincentia"],
       "morePages": 0
     },
     {
@@ -4433,9 +3511,7 @@
       "target": "syn:Question|name:what does the $145 assessment fee in vincentia cover?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/vincentia"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/vincentia"],
       "morePages": 0
     },
     {
@@ -4444,9 +3520,7 @@
       "target": "syn:Question|name:do you do electrical repairs or appliance installation in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/wollongong"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/wollongong"],
       "morePages": 0
     },
     {
@@ -4455,9 +3529,7 @@
       "target": "syn:Question|name:do you repair integrated dishwashers in wollongong apartments?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/wollongong"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/wollongong"],
       "morePages": 0
     },
     {
@@ -4466,9 +3538,7 @@
       "target": "syn:Question|name:do you work with property managers and strata in wollongong?",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/suburbs/wollongong"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/suburbs/wollongong"],
       "morePages": 0
     },
     {
@@ -4477,9 +3547,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0
     },
     {
@@ -4488,9 +3556,7 @@
       "target": "syn:Brand|name:aeg",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/aeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/aeg"],
       "morePages": 0
     },
     {
@@ -4499,9 +3565,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -4510,9 +3574,7 @@
       "target": "syn:Brand|name:asko",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/asko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/asko"],
       "morePages": 0
     },
     {
@@ -4521,9 +3583,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0
     },
     {
@@ -4532,9 +3592,7 @@
       "target": "syn:Brand|name:beko",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/beko"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/beko"],
       "morePages": 0
     },
     {
@@ -4543,9 +3601,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0
     },
     {
@@ -4554,9 +3610,7 @@
       "target": "syn:Brand|name:blanco",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/blanco"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/blanco"],
       "morePages": 0
     },
     {
@@ -4565,9 +3619,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0
     },
     {
@@ -4576,9 +3628,7 @@
       "target": "syn:Brand|name:bosch",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/bosch"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/bosch"],
       "morePages": 0
     },
     {
@@ -4587,9 +3637,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0
     },
     {
@@ -4598,9 +3646,7 @@
       "target": "syn:Brand|name:electrolux",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/electrolux"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/electrolux"],
       "morePages": 0
     },
     {
@@ -4609,9 +3655,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0
     },
     {
@@ -4620,9 +3664,7 @@
       "target": "syn:Brand|name:euromaid",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/euromaid"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/euromaid"],
       "morePages": 0
     },
     {
@@ -4631,9 +3673,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0
     },
     {
@@ -4642,9 +3682,7 @@
       "target": "syn:Brand|name:fisher & paykel",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/fisher-paykel"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/fisher-paykel"],
       "morePages": 0
     },
     {
@@ -4653,9 +3691,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0
     },
     {
@@ -4664,9 +3700,7 @@
       "target": "syn:Brand|name:haier",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/haier"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/haier"],
       "morePages": 0
     },
     {
@@ -4675,9 +3709,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0
     },
     {
@@ -4686,9 +3718,7 @@
       "target": "syn:Brand|name:hisense",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/hisense"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/hisense"],
       "morePages": 0
     },
     {
@@ -4697,9 +3727,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0
     },
     {
@@ -4708,9 +3736,7 @@
       "target": "syn:Brand|name:kelvinator",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/kelvinator"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/kelvinator"],
       "morePages": 0
     },
     {
@@ -4719,9 +3745,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0
     },
     {
@@ -4730,9 +3754,7 @@
       "target": "syn:Brand|name:lg",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/lg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/lg"],
       "morePages": 0
     },
     {
@@ -4741,9 +3763,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0
     },
     {
@@ -4752,9 +3772,7 @@
       "target": "syn:Brand|name:omega",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/omega"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/omega"],
       "morePages": 0
     },
     {
@@ -4763,9 +3781,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0
     },
     {
@@ -4774,9 +3790,7 @@
       "target": "syn:Brand|name:samsung",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/samsung"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/samsung"],
       "morePages": 0
     },
     {
@@ -4785,9 +3799,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0
     },
     {
@@ -4796,9 +3808,7 @@
       "target": "syn:Brand|name:smeg",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/smeg"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/smeg"],
       "morePages": 0
     },
     {
@@ -4807,9 +3817,7 @@
       "target": "id:https://wollongongservicecompany.com.au/#business",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     },
     {
@@ -4818,42 +3826,32 @@
       "target": "syn:Brand|name:westinghouse",
       "dangling": false,
       "occurrences": 1,
-      "pages": [
-        "https://wollongongservicecompany.com.au/brands/westinghouse"
-      ],
+      "pages": ["https://wollongongservicecompany.com.au/brands/westinghouse"],
       "morePages": 0
     }
   ],
   "pages": [
     {
       "url": "https://wollongongservicecompany.com.au/",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/about-us",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/book-a-repair",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/brands",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
@@ -5115,9 +4113,7 @@
     },
     {
       "url": "https://wollongongservicecompany.com.au/contact-us",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
@@ -5148,105 +4144,79 @@
     },
     {
       "url": "https://wollongongservicecompany.com.au/news",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/privacy",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/cooktop",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/dishwasher",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/dryer",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/freezer",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/fridge",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/microwave",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/oven",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/rangehood",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/repairs/washing-machine",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
@@ -5264,65 +4234,49 @@
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/balgownie",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/berkeley",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/blackbutt",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/brooks-reach",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/calderwood",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/coledale",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/coniston",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/cringila",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
@@ -5340,49 +4294,37 @@
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/fernhill",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/figtree",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/flinders",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/gerroa",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/gwynneville",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/helensburgh",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
@@ -5400,17 +4342,13 @@
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/keiraville",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/north-wollongong",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
@@ -5452,9 +4390,7 @@
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/warilla",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     },
@@ -5472,9 +4408,7 @@
     },
     {
       "url": "https://wollongongservicecompany.com.au/suburbs/wongawilli",
-      "declares": [
-        "id:https://wollongongservicecompany.com.au/#business"
-      ],
+      "declares": ["id:https://wollongongservicecompany.com.au/#business"],
       "references": [],
       "entityCount": 1
     }

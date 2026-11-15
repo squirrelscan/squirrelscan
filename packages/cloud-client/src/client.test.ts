@@ -391,7 +391,10 @@ describe("cloud-client stalled response body (#1214)", () => {
             controller.enqueue(new TextEncoder().encode('{"partial":'));
           },
         });
-        return new Response(stream, { status: 500, headers: { "Content-Type": "application/json" } });
+        return new Response(stream, {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
       },
     });
     try {

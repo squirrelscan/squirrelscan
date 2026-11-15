@@ -322,7 +322,9 @@ describe("fixPrompt / fixPlanPrompt: model text stays fenced, one line per field
     const capped = coverageGap({ scanned: 200, discovered: 200, capped: true, timeStopped: false });
     expect(capped).toMatchObject({ scanned: 200, discovered: 200, moreKnown: 0 });
     const none = fixPrompt(fix, ctxFor(report(), { gap: capped }));
-    expect(none).toContain("Coverage: this audit scanned 200 pages and may not cover the whole site,");
+    expect(none).toContain(
+      "Coverage: this audit scanned 200 pages and may not cover the whole site,",
+    );
     expect(none).not.toContain("0+");
     expect(none).not.toContain("200 of 200");
     const known = coverageGap({ scanned: 10, discovered: 40, capped: true, timeStopped: false });

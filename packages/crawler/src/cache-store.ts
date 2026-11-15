@@ -20,10 +20,7 @@ import { Effect } from "effect";
 
 import type { CrawlStorage, PageRecord, StorageError } from "./storage/types";
 import { calculateFreshness, varyMatches } from "./incremental";
-import type {
-  FreshnessOptions,
-  FreshnessResult,
-} from "./incremental";
+import type { FreshnessOptions, FreshnessResult } from "./incremental";
 
 /**
  * Request headers we vary the cache on. We send a small, stable set, so this is
@@ -64,14 +61,11 @@ export interface CacheStore {
   lookup(
     normalizedUrl: string,
     ctx: CacheRequestContext,
-    options?: FreshnessOptions
+    options?: FreshnessOptions,
   ): Effect.Effect<CacheLookup, StorageError, never>;
 
   /** Persist a freshly fetched response for future audits. */
-  store(
-    crawlId: string,
-    page: PageRecord
-  ): Effect.Effect<void, StorageError, never>;
+  store(crawlId: string, page: PageRecord): Effect.Effect<void, StorageError, never>;
 }
 
 /**
@@ -85,7 +79,7 @@ export class StorageCacheStore implements CacheStore {
   lookup(
     normalizedUrl: string,
     ctx: CacheRequestContext,
-    options: FreshnessOptions = {}
+    options: FreshnessOptions = {},
   ): Effect.Effect<CacheLookup, StorageError, never> {
     return Effect.gen(this, function* () {
       // NOTE: getCachedPage returns the single most-recent row for this URL.
@@ -100,11 +94,7 @@ export class StorageCacheStore implements CacheStore {
       // Vary keying: if the stored response's Vary constraints aren't satisfied
       // by the current request headers, treat it as a miss (never reuse).
       if (
-        !varyMatches(
-          entry.headers.vary ?? null,
-          entry.requestHeaders ?? null,
-          ctx.requestHeaders
-        )
+        !varyMatches(entry.headers.vary ?? null, entry.requestHeaders ?? null, ctx.requestHeaders)
       ) {
         return { entry: null };
       }
@@ -116,17 +106,14 @@ export class StorageCacheStore implements CacheStore {
           age: entry.headers.age ?? null,
           fetchedAt: entry.fetchedAt,
         },
-        options
+        options,
       );
 
       return { entry, freshness };
     });
   }
 
-  store(
-    crawlId: string,
-    page: PageRecord
-  ): Effect.Effect<void, StorageError, never> {
+  store(crawlId: string, page: PageRecord): Effect.Effect<void, StorageError, never> {
     return this.storage.upsertPage(crawlId, page);
   }
 }

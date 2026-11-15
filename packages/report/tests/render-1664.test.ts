@@ -46,7 +46,11 @@ describe("render in the JSON report", () => {
 
 describe("render in the LLM report", () => {
   const llm = (r: AuditReport) =>
-    renderLlm(r as Parameters<typeof renderLlm>[0], { version: "0.0.0", includePassed: false, includeInfo: false });
+    renderLlm(r as Parameters<typeof renderLlm>[0], {
+      version: "0.0.0",
+      includePassed: false,
+      includeInfo: false,
+    });
 
   test("a <render> element with the mode, the split and the reason", () => {
     expect(llm(report({ render: fellBack }))).toContain(

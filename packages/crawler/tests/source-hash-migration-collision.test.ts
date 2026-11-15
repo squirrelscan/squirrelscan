@@ -220,9 +220,11 @@ describe("source_hash migration collision self-heal (#839)", () => {
     await run(store.close());
 
     const snap = new Database(path);
-    const colsFirst = (snap.prepare("PRAGMA table_info(pages)").all() as Array<{
-      name: string;
-    }>).map((c) => c.name);
+    const colsFirst = (
+      snap.prepare("PRAGMA table_info(pages)").all() as Array<{
+        name: string;
+      }>
+    ).map((c) => c.name);
     snap.close();
 
     // Re-open: runMigrations + reconcile run again on an already-healthy DB.
@@ -233,9 +235,11 @@ describe("source_hash migration collision self-heal (#839)", () => {
     await run(store2.close());
 
     const snap2 = new Database(path);
-    const colsSecond = (snap2.prepare("PRAGMA table_info(pages)").all() as Array<{
-      name: string;
-    }>).map((c) => c.name);
+    const colsSecond = (
+      snap2.prepare("PRAGMA table_info(pages)").all() as Array<{
+        name: string;
+      }>
+    ).map((c) => c.name);
     snap2.close();
 
     // No duplicate/extra columns from a second reconcile pass.

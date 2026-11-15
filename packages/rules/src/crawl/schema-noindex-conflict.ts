@@ -28,7 +28,7 @@ function buildCheck(unsorted: Conflict[]): CheckResult {
         (c) =>
           `${getPathname(c.url)}\n` +
           `  Schema: ${c.schemaTypes.join(", ")}\n` +
-          `  Blocked by: ${c.blockSource.join(", ")}`
+          `  Blocked by: ${c.blockSource.join(", ")}`,
       )
       .join("\n\n");
     const suffix = conflicts.length > 5 ? `\n\n+${conflicts.length - 5} more` : "";
@@ -48,7 +48,11 @@ function buildCheck(unsorted: Conflict[]): CheckResult {
       value: details + suffix,
       pages: sample.items.map((item) => item.id),
       items: sample.items,
-      details: { occurrences: conflicts.length, pagesTruncated: conflicts.length, ...sample.truncation },
+      details: {
+        occurrences: conflicts.length,
+        pagesTruncated: conflicts.length,
+        ...sample.truncation,
+      },
     };
   }
   return {
@@ -63,7 +67,7 @@ function buildCheck(unsorted: Conflict[]): CheckResult {
 function fullReasons(
   storedReasons: string[],
   url: string,
-  robotsTxt: RobotsTxtData | null | undefined
+  robotsTxt: RobotsTxtData | null | undefined,
 ): string[] {
   const reasons = [...storedReasons];
   if (robotsTxt && isRobotsTxtDisallowed(url, robotsTxt)) {
@@ -74,7 +78,7 @@ function fullReasons(
 
 async function runViaSiteQuery(
   siteQuery: SiteQuery,
-  robotsTxt: RobotsTxtData | null | undefined
+  robotsTxt: RobotsTxtData | null | undefined,
 ): Promise<RuleResult> {
   const conflicts: Conflict[] = [];
   for await (const row of siteQuery.pagesMatching(() => true)) {
@@ -92,8 +96,7 @@ export const schemaNoindexConflict: Rule = {
   meta: {
     id: "crawl/schema-noindex-conflict",
     name: "Schema + Noindex Conflict",
-    description:
-      "Detects pages with rich result schema that are blocked from indexing",
+    description: "Detects pages with rich result schema that are blocked from indexing",
     solution:
       "Pages with rich result schemas (Article, Product, Recipe, Event, etc.) should be indexed so search engines can display rich results. Having schema markup on noindexed pages wastes effort and prevents rich results from appearing. Remove noindex directive or remove schema markup if page shouldn't be indexed.",
     category: "crawl",

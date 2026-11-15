@@ -159,10 +159,7 @@ export const PAGE_RULE_RESOURCE_FIELDS = [
 ] as const;
 
 /** Keep only `fields`, in a fixed order, from each entry of `entries`. */
-function projectEntries(
-  entries: unknown,
-  fields: readonly string[]
-): Array<Array<unknown>> | null {
+function projectEntries(entries: unknown, fields: readonly string[]): Array<Array<unknown>> | null {
   if (!Array.isArray(entries)) return null;
   return entries.map((entry) => {
     const record = (entry ?? {}) as Record<string, unknown>;
@@ -198,7 +195,12 @@ export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown>
     // distinct so the key says exactly what the run saw.
     siteIndexable: siteData.siteIndexable ?? null,
     // Only what the rule reads of each stylesheet: its url and the background it sets (#1756).
-    stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [s.url, s.background, s.selectors ?? null, s.selectorsTruncated === true]),
+    stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [
+      s.url,
+      s.background,
+      s.selectors ?? null,
+      s.selectorsTruncated === true,
+    ]),
     scripts: projectEntries(siteData.scripts, PAGE_RULE_SCRIPT_FIELDS),
     preloadedScripts: projectEntries(siteData.preloadedScripts, PAGE_RULE_SCRIPT_FIELDS),
     resourceSizes: resourceSizes
@@ -320,7 +322,9 @@ export function canonicalJson(value: unknown, seen: Set<unknown> = new Set()): s
     }
     const keys = Object.keys(value as Record<string, unknown>).sort();
     const body = keys
-      .map((k) => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k], seen)}`)
+      .map(
+        (k) => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k], seen)}`,
+      )
       .join(",");
     return `{${body}}`;
   } finally {
@@ -412,7 +416,7 @@ function pageRuleKey(r: { id: string; options: unknown; ignore?: string }): unkn
 }
 
 export async function computeRunContextHash(
-  input: RunContextInput
+  input: RunContextInput,
 ): Promise<{ hash: string } | { disabled: RuleCacheDisabledReason }> {
   try {
     const projection = pageRuleSiteContext(input.siteData);
@@ -475,7 +479,7 @@ export async function computeRunContextHash(
 export async function computePageCacheKey(
   runContextHash: string,
   page: PageRecord,
-  soft404Confirmation: ParsedPage["soft404Confirmation"] | undefined
+  soft404Confirmation: ParsedPage["soft404Confirmation"] | undefined,
 ): Promise<string | null> {
   if (!page.htmlHash) return null;
   const canonical = canonicalJson([
@@ -579,7 +583,10 @@ export function decodeCacheValue(value: unknown): unknown {
   if ("$s" in obj) return new Set((obj.$s as unknown[]).map(decodeCacheValue));
   if ("$m" in obj) {
     return new Map(
-      (obj.$m as Array<[unknown, unknown]>).map(([k, v]) => [decodeCacheValue(k), decodeCacheValue(v)])
+      (obj.$m as Array<[unknown, unknown]>).map(([k, v]) => [
+        decodeCacheValue(k),
+        decodeCacheValue(v),
+      ]),
     );
   }
   // An escaped object's OWN keys start with "$", so its values must be decoded
@@ -663,7 +670,7 @@ export interface StreamRuleCache {
   /** Key for this page, or null if it cannot participate. */
   keyFor(
     page: PageRecord,
-    soft404Confirmation: ParsedPage["soft404Confirmation"] | undefined
+    soft404Confirmation: ParsedPage["soft404Confirmation"] | undefined,
   ): Promise<string | null>;
   /** Entries for whichever of `keys` are cached. */
   load(keys: readonly string[]): Promise<ReadonlyMap<string, PageRuleCacheEntry>>;
@@ -700,7 +707,12 @@ export interface RuleCacheStats {
 
 /** The stats a run with no cache reports. */
 export function emptyRuleCacheStats(disabledReason?: RuleCacheDisabledReason): RuleCacheStats {
-  return { freshPages: 0, replayedPages: 0, storedEntries: 0, ...(disabledReason ? { disabledReason } : {}) };
+  return {
+    freshPages: 0,
+    replayedPages: 0,
+    storedEntries: 0,
+    ...(disabledReason ? { disabledReason } : {}),
+  };
 }
 
 /**
@@ -754,7 +766,10 @@ export function bindRuleCache(store: RuleCacheStore, runContextHash: string): St
  * the one the list gives with its full budget, and replaying it would hide the
  * timeout notice and keep the partial verdict. Loading and carrying forward are unchanged.
  */
-export function withoutStoringAfterIgnoreTimeout(cache: StreamRuleCache, timedOut: () => number): StreamRuleCache {
+export function withoutStoringAfterIgnoreTimeout(
+  cache: StreamRuleCache,
+  timedOut: () => number,
+): StreamRuleCache {
   return {
     ...cache,
     putFresh(key, page, entry) {
@@ -771,7 +786,7 @@ export function withoutStoringAfterIgnoreTimeout(cache: StreamRuleCache, timedOu
  */
 export function pageRuleSelection(
   rules: ReadonlyArray<{ meta: RuleMeta }>,
-  optionsOf: (rule: { meta: RuleMeta }) => unknown
+  optionsOf: (rule: { meta: RuleMeta }) => unknown,
 ): Array<{ id: string; options: unknown }> {
   return rules
     .filter((r) => r.meta.scope === "page")

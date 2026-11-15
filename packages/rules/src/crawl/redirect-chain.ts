@@ -58,9 +58,7 @@ export const redirectChainRule: Rule = {
       if (!chain || chain.hops.length <= maxHops) continue;
 
       // Build readable chain representation: url1 (301) → url2 (301) → url3 (200)
-      const chainParts = chain.hops.map((hop) =>
-        formatRedirectHop(hop, getPathname(hop.url))
-      );
+      const chainParts = chain.hops.map((hop) => formatRedirectHop(hop, getPathname(hop.url)));
       // Add final URL if different from last hop
       if (chain.finalUrl && chain.hops.length > 0) {
         const lastHop = chain.hops[chain.hops.length - 1];
@@ -90,7 +88,7 @@ export const redirectChainRule: Rule = {
           const chain = entryPage.redirectChain;
           if (chain && chain.hops.length > 0) {
             const chainParts = chain.hops.map((hop) =>
-              formatRedirectHop(hop, getPathname(hop.url))
+              formatRedirectHop(hop, getPathname(hop.url)),
             );
             if (chain.finalUrl) {
               chainParts.push(getPathname(chain.finalUrl) + " (200)");
@@ -112,9 +110,7 @@ export const redirectChainRule: Rule = {
 
     // Separate entry URL redirects from other chains
     const entryUrlChains = longChains.filter((c) => c.isEntryUrl);
-    const otherChains = longChains.filter(
-      (c) => !c.isEntryUrl && c.hops > maxHops
-    );
+    const otherChains = longChains.filter((c) => !c.isEntryUrl && c.hops > maxHops);
 
     // Report entry URL redirects (special case - even 1 hop is notable)
     if (entryUrlChains.length > 0) {
@@ -145,8 +141,7 @@ export const redirectChainRule: Rule = {
         .map((item) => `${getPathname(item.url)} (${item.hops} hops)`)
         .join("\n");
 
-      const suffix =
-        otherChains.length > 5 ? `\n+${otherChains.length - 5} more` : "";
+      const suffix = otherChains.length > 5 ? `\n+${otherChains.length - 5} more` : "";
 
       checks.push({
         name: "redirect-chain",

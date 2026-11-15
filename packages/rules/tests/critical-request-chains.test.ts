@@ -23,21 +23,23 @@ function makeCtx(style: string): RuleContext {
 }
 
 async function run(style: string): Promise<CheckResult> {
-  const { checks } = (await criticalRequestChainsRule.run(makeCtx(style))) as { checks: CheckResult[] };
+  const { checks } = (await criticalRequestChainsRule.run(makeCtx(style))) as {
+    checks: CheckResult[];
+  };
   expect(checks).toHaveLength(1);
   return checks[0]!;
 }
 
 describe("perf/critical-request-chains @import counting", () => {
   test("the reporter's comment-only page has no import and passes", async () => {
-    const c = (await run('/* @import url("/comment-only.css"); */ body { color: black; }'));
+    const c = await run('/* @import url("/comment-only.css"); */ body { color: black; }');
     expect(c.status).toBe("pass");
     expect(c.message).toBe("No render-blocking resource hints found in static HTML");
     expect(c.observation).toMatchObject({ mode: "static", applicability: "applicable" });
   });
 
   test("a real @import still counts and warns", async () => {
-    const c = (await run('@import url("/real-import.css");'));
+    const c = await run('@import url("/real-import.css");');
     expect(c.status).toBe("warn");
     expect(c.details?.importCount).toBe(1);
     expect(c.message).toContain("static HTML");
@@ -49,7 +51,7 @@ describe("perf/critical-request-chains @import counting", () => {
   });
 
   test("an import after comments and whitespace still counts", async () => {
-    const c = (await run('\n  /* reset */\n\t@import url("/a.css");'));
+    const c = await run('\n  /* reset */\n\t@import url("/a.css");');
     expect(c.details?.importCount).toBe(1);
   });
 
@@ -59,7 +61,7 @@ describe("perf/critical-request-chains @import counting", () => {
   });
 
   test("a commented import followed by a real one counts once", async () => {
-    const c = (await run('/* @import url("/a.css"); */ @import url("/b.css");'));
+    const c = await run('/* @import url("/a.css"); */ @import url("/b.css");');
     expect(c.status).toBe("warn");
     expect(c.details?.importCount).toBe(1);
   });

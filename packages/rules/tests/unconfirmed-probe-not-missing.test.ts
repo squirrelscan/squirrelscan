@@ -71,7 +71,8 @@ describe("crawl/robots-txt does not report a missing file it never confirmed", (
     // Anything the crawler records a reason for: a budget-skipped fetch, a
     // timeout, a 5xx. None of them establish that robots.txt is absent.
     for (const reason of ["crawl phase budget exhausted", "The operation timed out", "HTTP 503"]) {
-      const checks = (await robotsTxtRule.run(ctx({ robotsTxt: robots({ errors: [reason] }) }))).checks;
+      const checks = (await robotsTxtRule.run(ctx({ robotsTxt: robots({ errors: [reason] }) })))
+        .checks;
       const check = byName(checks, "robots-txt-exists");
 
       expect(check?.status).toBe("info");
@@ -95,9 +96,11 @@ describe("crawl/robots-txt does not report a missing file it never confirmed", (
 
 describe("crawl/sitemap-exists does not report a missing sitemap it never looked for", () => {
   test("a truncated discovery reports unknown, not a failure", async () => {
-    const checks = (await sitemapExistsRule.run(
-      ctx({ sitemaps: sitemaps({ truncated: true }), robotsTxt: robots() }),
-    )).checks;
+    const checks = (
+      await sitemapExistsRule.run(
+        ctx({ sitemaps: sitemaps({ truncated: true }), robotsTxt: robots() }),
+      )
+    ).checks;
     const check = byName(checks, "sitemap-exists");
 
     expect(check?.status).toBe("info");
@@ -105,9 +108,11 @@ describe("crawl/sitemap-exists does not report a missing sitemap it never looked
   });
 
   test("a completed discovery that found nothing still fails", async () => {
-    const checks = (await sitemapExistsRule.run(
-      ctx({ sitemaps: sitemaps({ truncated: false }), robotsTxt: robots() }),
-    )).checks;
+    const checks = (
+      await sitemapExistsRule.run(
+        ctx({ sitemaps: sitemaps({ truncated: false }), robotsTxt: robots() }),
+      )
+    ).checks;
     const check = byName(checks, "sitemap-exists");
 
     expect(check?.status).toBe("fail");
@@ -116,7 +121,8 @@ describe("crawl/sitemap-exists does not report a missing sitemap it never looked
 
   test("an absent `truncated` (older reports) reads as a completed walk", async () => {
     // The field is optional so pre-#1733 persisted reports still score the same.
-    const checks = (await sitemapExistsRule.run(ctx({ sitemaps: sitemaps(), robotsTxt: robots() }))).checks;
+    const checks = (await sitemapExistsRule.run(ctx({ sitemaps: sitemaps(), robotsTxt: robots() })))
+      .checks;
 
     expect(byName(checks, "sitemap-exists")?.status).toBe("fail");
   });

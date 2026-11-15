@@ -63,7 +63,7 @@ describe("ax/content-without-js", () => {
   });
 
   test("skips when no render result was prefetched (CLI-only audit)", async () => {
-    const c = (await only(makeCtx(page(300)))); // no cloudResults
+    const c = await only(makeCtx(page(300))); // no cloudResults
     expect(c.status).toBe("skipped");
     expect(c.skipReason).toBeTruthy();
   });
@@ -73,7 +73,7 @@ describe("ax/content-without-js", () => {
     // the raw-vs-rendered diff is meaningless → skip before comparing (design-wrinkle gate).
     const ctx = makeCtx(page(300), renderEnvelope(page(300)));
     ctx.page.rendered = true;
-    const c = (await only(ctx));
+    const c = await only(ctx);
     expect(c.status).toBe("skipped");
     expect(c.skipReason).toMatch(/render/i);
     expect(c.details).toBeUndefined(); // gated out before any word-count comparison
@@ -84,35 +84,35 @@ describe("ax/content-without-js", () => {
       ["render", new Map([[URL, { status: "skipped", skipReason: "insufficient-credits" }]])],
     ]);
     const parsed = parsePage(page(300), URL);
-    const c = (await only({
+    const c = await only({
       page: { url: URL, html: page(300), statusCode: 200, loadTime: 0, headers: {}, parsed },
       parsed,
       cloudResults: store,
       options: {},
-    }));
+    });
     expect(c.status).toBe("skipped");
   });
 
   test("skips when the render returned no HTML", async () => {
-    const c = (await only(makeCtx(page(300), renderEnvelope(undefined))));
+    const c = await only(makeCtx(page(300), renderEnvelope(undefined)));
     expect(c.status).toBe("skipped");
   });
 
   test("skips when the ok envelope carries no data payload", async () => {
-    const c = (await only(makeCtx(page(300), { status: "ok" })));
+    const c = await only(makeCtx(page(300), { status: "ok" }));
     expect(c.status).toBe("skipped");
   });
 
   test("passes (clamped) when raw HTML has more words than rendered", async () => {
     // 400 raw vs 200 rendered (e.g. noscript stripped) → no negative jsOnlyPct.
-    const c = (await only(makeCtx(page(400), renderEnvelope(page(200)))));
+    const c = await only(makeCtx(page(400), renderEnvelope(page(200))));
     expect(c.status).toBe("pass");
     expect(c.details?.jsOnlyWords).toBe(0);
     expect(c.details?.jsOnlyPct).toBe(0);
   });
 
   test("flags (info) when substantial content is JS-only (SPA shell)", async () => {
-    const c = (await only(makeCtx(SHELL, renderEnvelope(page(300)))));
+    const c = await only(makeCtx(SHELL, renderEnvelope(page(300))));
     expect(c.status).toBe("info");
     expect(c.details?.rawWords).toBe(0);
     expect(c.details?.renderedWords).toBe(300);
@@ -122,20 +122,20 @@ describe("ax/content-without-js", () => {
 
   test("passes when raw HTML already carries the content (SSR — raw == rendered)", async () => {
     const html = page(300);
-    const c = (await only(makeCtx(html, renderEnvelope(html))));
+    const c = await only(makeCtx(html, renderEnvelope(html)));
     expect(c.status).toBe("pass");
     expect(c.details?.jsOnlyWords).toBe(0);
   });
 
   test("passes when the JS-only delta is below the floor", async () => {
     // 250 raw vs 300 rendered → 50 JS-only words (< 100 floor) → not flagged.
-    const c = (await only(makeCtx(page(250), renderEnvelope(page(300)))));
+    const c = await only(makeCtx(page(250), renderEnvelope(page(300))));
     expect(c.status).toBe("pass");
   });
 
   test("passes when raw coverage stays above the threshold", async () => {
     // 200 raw vs 300 rendered → 100 JS-only (meets floor) but 67% coverage (> 60%) → pass.
-    const c = (await only(makeCtx(page(200), renderEnvelope(page(300)))));
+    const c = await only(makeCtx(page(200), renderEnvelope(page(300))));
     expect(c.status).toBe("pass");
   });
 });

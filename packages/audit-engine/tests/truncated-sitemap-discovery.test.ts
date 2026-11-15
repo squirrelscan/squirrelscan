@@ -28,7 +28,11 @@ const CONFIG = {
   rules: { enable: [EXISTS_RULE, VALID_RULE] },
 } as unknown as Config;
 
-const EMPTY_ASSETS = { css: new Map(), js: new Map(), images: new Map() } as unknown as PreFetchedAssets;
+const EMPTY_ASSETS = {
+  css: new Map(),
+  js: new Map(),
+  images: new Map(),
+} as unknown as PreFetchedAssets;
 
 const PAGE_HTML = "<!doctype html><html><head><title>t</title></head><body>x</body></html>";
 

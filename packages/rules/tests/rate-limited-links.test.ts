@@ -191,12 +191,12 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
   });
 
   test("429 and 430 are inside the 4xx band but are not sitemap rot", async () => {
-    const { checks } = (await sitemap4xxRule.run(
+    const { checks } = await sitemap4xxRule.run(
       sitemapCtx([
         entry({ url: `${BASE}/a`, status: 429 }),
         entry({ url: `${BASE}/b`, status: 430 }),
       ]),
-    ));
+    );
     expect(check(checks, "sitemap-4xx")!.status).toBe("pass");
     const info = check(checks, "sitemap-rate-limited")!;
     expect(info.status).toBe("info");
@@ -204,20 +204,20 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
   });
 
   test("a Retry-After 503 flagged by the checker is excluded too", async () => {
-    const { checks } = (await sitemap4xxRule.run(
+    const { checks } = await sitemap4xxRule.run(
       sitemapCtx([entry({ url: `${BASE}/a`, status: 503, rateLimited: true })]),
-    ));
+    );
     expect(check(checks, "sitemap-4xx")!.status).toBe("pass");
     expect(check(checks, "sitemap-rate-limited")!.status).toBe("info");
   });
 
   test("a genuine 404 in the sitemap is still reported", async () => {
-    const { checks } = (await sitemap4xxRule.run(
+    const { checks } = await sitemap4xxRule.run(
       sitemapCtx([
         entry({ url: `${BASE}/gone`, status: 404 }),
         entry({ url: `${BASE}/slow`, status: 429 }),
       ]),
-    ));
+    );
     const bad = check(checks, "sitemap-4xx")!;
     expect(bad.status).toBe("warn");
     expect(bad.items?.length).toBe(1);
@@ -282,7 +282,8 @@ describe("links/redirects — a chain ending in a rate limit (#1829)", () => {
     expect(message(404)).toBe("Redirect chain ends in error (HTTP 404)");
     expect(message(500)).toBe("Redirect chain ends in error (HTTP 500)");
     expect(
-      check(validateRedirectChain(chain({ endsRateLimited: true })), "redirect-rate-limited")!.message,
+      check(validateRedirectChain(chain({ endsRateLimited: true })), "redirect-rate-limited")!
+        .message,
     ).toContain("(HTTP 429)");
   });
 });
@@ -322,7 +323,9 @@ describe("links/broken-external-links — link sections (#2307)", () => {
     );
     const item = check(checks, "broken-external-links")!.items![0]!;
 
-    expect(item.label).toBe("https://gone.example/ (404), linked in the footer and the page content");
+    expect(item.label).toBe(
+      "https://gone.example/ (404), linked in the footer and the page content",
+    );
     expect(item.meta).toEqual({ status: 404, error: null, sections: { footer: 2, content: 1 } });
   });
 
@@ -330,7 +333,12 @@ describe("links/broken-external-links — link sections (#2307)", () => {
     const { checks } = await brokenExternalLinksRule.run(
       sectionedCtx(
         [
-          link({ href: "https://wall.example/", status: 403, wafBlocked: true, wafProvider: "Cloudflare" }),
+          link({
+            href: "https://wall.example/",
+            status: 403,
+            wafBlocked: true,
+            wafProvider: "Cloudflare",
+          }),
           link({ href: "https://slow.example/", status: 429 }),
         ],
         { "https://wall.example/": ["navigation"], "https://slow.example/": ["sidebar"] },

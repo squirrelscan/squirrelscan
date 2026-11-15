@@ -42,7 +42,9 @@ export const archiveIndexingRule: Rule = {
     const envelope = readCloudResult<ArchiveIndexingResponse>(ctx.cloudResults, "archive-indexing");
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "archive-indexing",
         status: "skipped",

@@ -97,7 +97,7 @@ describe("detectSoft404", () => {
     "matches broadened cannot-be-found phrasing: %j",
     (title) => {
       expect(looksLikeNotFoundText(title)).toBe(true);
-    }
+    },
   );
 
   test.each(["How to Fix File Not Found Errors", "This Item Is No Longer Available"])(
@@ -113,7 +113,7 @@ describe("detectSoft404", () => {
       });
       expect(result.isSoft404).toBe(false);
       expect(result.signals.some((s) => s.strong)).toBe(false);
-    }
+    },
   );
 
   test("does NOT flag a real 404 response (status 404)", () => {

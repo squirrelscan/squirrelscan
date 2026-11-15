@@ -54,12 +54,7 @@ class MemStore implements SmartAuditStore {
   refuseWholeRead = false;
   upsertCalls = 0;
 
-  private key(f: {
-    normalizedUrl: string;
-    ruleId: string;
-    checkName: string;
-    locator: string;
-  }) {
+  private key(f: { normalizedUrl: string; ruleId: string; checkName: string; locator: string }) {
     return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
   }
   async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
@@ -197,7 +192,6 @@ async function* freshPagesOf(store: MemStore, auditId: string) {
   }
 }
 
-
 describeSitePagesContract("canonical-variants-merge-1350.test.ts MemStore", () => new MemStore());
 
 const NOW = 1_700_000_000_000;
@@ -259,95 +253,110 @@ async function run(
   });
 }
 
-describe.each(["sampled", "streamed"] as const)("canonical variants in the merge, %s path (#1350)", (mode) => {
-  const seed = (variantStored: boolean): MemStore => {
-    const store = new MemStore();
-    for (const u of [A, AV, B, C]) store.pages.set(u, active(u, variantStored && u === AV ? A : undefined));
-    // The variant and the canonical page both carry the same finding; B and C are clean.
-    for (const u of [A, AV]) {
-      store.findings.set(findingKey(u, RULE, CHECK, ""), row(u, "", PRIOR_AUDIT));
-    }
-    return store;
-  };
+describe.each(["sampled", "streamed"] as const)(
+  "canonical variants in the merge, %s path (#1350)",
+  (mode) => {
+    const seed = (variantStored: boolean): MemStore => {
+      const store = new MemStore();
+      for (const u of [A, AV, B, C])
+        store.pages.set(u, active(u, variantStored && u === AV ? A : undefined));
+      // The variant and the canonical page both carry the same finding; B and C are clean.
+      for (const u of [A, AV]) {
+        store.findings.set(findingKey(u, RULE, CHECK, ""), row(u, "", PRIOR_AUDIT));
+      }
+      return store;
+    };
 
-  test("a stored variant folds out of knownPages and the carried page count", async () => {
-    const store = seed(true);
-    // Only B is re-crawled: A and AV (and C) are carried.
-    const r = await run(store, mode, [B], [], { countCarriedPagesOutsideCrawl: true });
-    expect(r.canonicalVariantOf.get(AV)).toBe(A);
-    expect(r.canonicalVariantOf.size).toBe(1);
-    expect(r.coverage.auditedPages).toBe(1);
-    expect(r.coverage.knownPages).toBe(3); // A, B, C: the variant counts with A
-    // A and AV carry a finding: one page once folded.
-    expect(r.coverage.carriedPagesOutsideCrawl).toBe(1);
-  });
-
-  test("without variants the result is the one it always was", async () => {
-    const r = await run(seed(false), mode, [B], []);
-    expect(r.canonicalVariantOf.size).toBe(0);
-    expect(r.coverage.knownPages).toBe(4);
-    expect(r.coverage).not.toHaveProperty("carriedPagesOutsideCrawl");
-    const plain = await run(seed(false), mode, [B], [], { canonicalVariantPages: undefined });
-    expect(plain.coverage).toEqual(r.coverage);
-  });
-
-  test("auditedPages, the score tallies and the union are the same with and without variants (billing)", async () => {
-    const storeV = seed(true);
-    const store0 = seed(false);
-    const withVariants = await run(storeV, mode, [A, AV, B], [A, AV], {
-      canonicalVariantPages: VARIANTS,
+    test("a stored variant folds out of knownPages and the carried page count", async () => {
+      const store = seed(true);
+      // Only B is re-crawled: A and AV (and C) are carried.
+      const r = await run(store, mode, [B], [], { countCarriedPagesOutsideCrawl: true });
+      expect(r.canonicalVariantOf.get(AV)).toBe(A);
+      expect(r.canonicalVariantOf.size).toBe(1);
+      expect(r.coverage.auditedPages).toBe(1);
+      expect(r.coverage.knownPages).toBe(3); // A, B, C: the variant counts with A
+      // A and AV carry a finding: one page once folded.
+      expect(r.coverage.carriedPagesOutsideCrawl).toBe(1);
     });
-    const without = await run(store0, mode, [A, AV, B], [A, AV]);
-    expect(withVariants.coverage.auditedPages).toBe(3);
-    expect(withVariants.coverage.auditedPages).toBe(without.coverage.auditedPages);
-    expect(withVariants.canonicalVariantOf.get(AV)).toBe(A);
-    expect(withVariants.coverage.knownPages).toBe(without.coverage.knownPages - 1);
-    expect(withVariants.persistedFindings).toBe(without.persistedFindings);
-    expect(withVariants.unionRuleResults).toEqual(without.unionRuleResults);
-    // Both undefined on the sampled path, equal maps on the streamed one.
-    expect(withVariants.scoringTallies).toEqual(without.scoringTallies);
-    expect(withVariants.reportTotals).toEqual(without.reportTotals);
-    // The findings the store holds, row for row (the count alone would miss a rekeyed one).
-    const rowsOf = (st: MemStore) =>
-      [...st.findings.values()]
-        .map((f) => JSON.stringify([f.normalizedUrl, f.ruleId, f.checkName, f.locator, f.state, f.provenance, f.fingerprint, f.lastSeenCrawlId]))
-        .sort();
-    expect(rowsOf(storeV)).toEqual(rowsOf(store0));
-  });
 
-  test("a crawled variant is recorded on its page row, and cleared by a complete list that no longer has it", async () => {
-    const store = seed(false);
-    await run(store, mode, [A, AV, B], [A, AV], { canonicalVariantPages: VARIANTS });
-    expect(store.pages.get(AV)?.canonical).toBe(A);
-    expect(store.pages.get(A)).not.toHaveProperty("canonical");
-    // Next run: the crawl found no variants at all. An EMPTY list is a report that there are none.
-    const later = await run(store, mode, [A, AV, B], [A, AV], { canonicalVariantPages: [] });
-    expect(store.pages.get(AV)?.canonical).toBeNull();
-    expect(later.canonicalVariantOf.size).toBe(0);
-    expect(later.coverage.knownPages).toBe(4); // A, AV, B, C: the variant is a page of its own again
-  });
-
-  test("a clipped list only adds: a crawled page missing from it keeps what it had", async () => {
-    const store = seed(true); // AV is stored as a variant of A
-    const clipped = await run(store, mode, [A, AV, B], [A, AV], {
-      canonicalVariantPages: [{ page: C, canonical: A }],
-      canonicalVariantsComplete: false,
+    test("without variants the result is the one it always was", async () => {
+      const r = await run(seed(false), mode, [B], []);
+      expect(r.canonicalVariantOf.size).toBe(0);
+      expect(r.coverage.knownPages).toBe(4);
+      expect(r.coverage).not.toHaveProperty("carriedPagesOutsideCrawl");
+      const plain = await run(seed(false), mode, [B], [], { canonicalVariantPages: undefined });
+      expect(plain.coverage).toEqual(r.coverage);
     });
-    expect(store.pages.get(AV)?.canonical).toBe(A); // not cleared: the list was clipped
-    expect(clipped.canonicalVariantOf.get(AV)).toBe(A);
-    // ...and the same list, complete, would have cleared it.
-    const complete = await run(seed(true), mode, [A, AV, B], [A, AV], {
-      canonicalVariantPages: [{ page: C, canonical: A }],
-    });
-    expect(complete.canonicalVariantOf.has(AV)).toBe(false);
-  });
 
-  test("a producer that reports no variants keeps what is stored", async () => {
-    const store = seed(true);
-    await run(store, mode, [A, AV, B], [A, AV]);
-    expect(store.pages.get(AV)?.canonical).toBe(A);
-  });
-});
+    test("auditedPages, the score tallies and the union are the same with and without variants (billing)", async () => {
+      const storeV = seed(true);
+      const store0 = seed(false);
+      const withVariants = await run(storeV, mode, [A, AV, B], [A, AV], {
+        canonicalVariantPages: VARIANTS,
+      });
+      const without = await run(store0, mode, [A, AV, B], [A, AV]);
+      expect(withVariants.coverage.auditedPages).toBe(3);
+      expect(withVariants.coverage.auditedPages).toBe(without.coverage.auditedPages);
+      expect(withVariants.canonicalVariantOf.get(AV)).toBe(A);
+      expect(withVariants.coverage.knownPages).toBe(without.coverage.knownPages - 1);
+      expect(withVariants.persistedFindings).toBe(without.persistedFindings);
+      expect(withVariants.unionRuleResults).toEqual(without.unionRuleResults);
+      // Both undefined on the sampled path, equal maps on the streamed one.
+      expect(withVariants.scoringTallies).toEqual(without.scoringTallies);
+      expect(withVariants.reportTotals).toEqual(without.reportTotals);
+      // The findings the store holds, row for row (the count alone would miss a rekeyed one).
+      const rowsOf = (st: MemStore) =>
+        [...st.findings.values()]
+          .map((f) =>
+            JSON.stringify([
+              f.normalizedUrl,
+              f.ruleId,
+              f.checkName,
+              f.locator,
+              f.state,
+              f.provenance,
+              f.fingerprint,
+              f.lastSeenCrawlId,
+            ]),
+          )
+          .sort();
+      expect(rowsOf(storeV)).toEqual(rowsOf(store0));
+    });
+
+    test("a crawled variant is recorded on its page row, and cleared by a complete list that no longer has it", async () => {
+      const store = seed(false);
+      await run(store, mode, [A, AV, B], [A, AV], { canonicalVariantPages: VARIANTS });
+      expect(store.pages.get(AV)?.canonical).toBe(A);
+      expect(store.pages.get(A)).not.toHaveProperty("canonical");
+      // Next run: the crawl found no variants at all. An EMPTY list is a report that there are none.
+      const later = await run(store, mode, [A, AV, B], [A, AV], { canonicalVariantPages: [] });
+      expect(store.pages.get(AV)?.canonical).toBeNull();
+      expect(later.canonicalVariantOf.size).toBe(0);
+      expect(later.coverage.knownPages).toBe(4); // A, AV, B, C: the variant is a page of its own again
+    });
+
+    test("a clipped list only adds: a crawled page missing from it keeps what it had", async () => {
+      const store = seed(true); // AV is stored as a variant of A
+      const clipped = await run(store, mode, [A, AV, B], [A, AV], {
+        canonicalVariantPages: [{ page: C, canonical: A }],
+        canonicalVariantsComplete: false,
+      });
+      expect(store.pages.get(AV)?.canonical).toBe(A); // not cleared: the list was clipped
+      expect(clipped.canonicalVariantOf.get(AV)).toBe(A);
+      // ...and the same list, complete, would have cleared it.
+      const complete = await run(seed(true), mode, [A, AV, B], [A, AV], {
+        canonicalVariantPages: [{ page: C, canonical: A }],
+      });
+      expect(complete.canonicalVariantOf.has(AV)).toBe(false);
+    });
+
+    test("a producer that reports no variants keeps what is stored", async () => {
+      const store = seed(true);
+      await run(store, mode, [A, AV, B], [A, AV]);
+      expect(store.pages.get(AV)?.canonical).toBe(A);
+    });
+  },
+);
 
 describe("an untouched split counts its pages as the provider says (#1031)", () => {
   test("a provider that does not count pages leaves the count out", async () => {

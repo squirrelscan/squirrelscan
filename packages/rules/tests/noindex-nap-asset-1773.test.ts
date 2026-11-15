@@ -189,17 +189,22 @@ describe("local/nap-consistency noindex pages (#1773)", () => {
     }));
 
   test("meta noindex pages with a different phone are not reported or counted", async () => {
-    const checks = await bothPaths(napConsistencyRule, [...indexable(), ...noisy({ noindex: true })], true);
+    const checks = await bothPaths(
+      napConsistencyRule,
+      [...indexable(), ...noisy({ noindex: true })],
+      true,
+    );
     const phone = named(checks, "phone-consistency");
     expect(phone.status).toBe("pass");
     expect(phone.message).toContain("12 pages");
   });
 
   test("X-Robots-Tag noindex pages are left out too", async () => {
-    const checks = await bothPaths(napConsistencyRule, [
-      ...indexable(),
-      ...noisy({ headerNoindex: true }),
-    ], true);
+    const checks = await bothPaths(
+      napConsistencyRule,
+      [...indexable(), ...noisy({ headerNoindex: true })],
+      true,
+    );
     expect(named(checks, "phone-consistency").status).toBe("pass");
   });
 
@@ -243,16 +248,21 @@ describe("social/asset-divergence noindex pages (#1773)", () => {
     }));
 
   test("meta noindex pages with another favicon are not reported or counted", async () => {
-    const checks = await bothPaths(assetDivergenceRule, [...indexable(), ...stale({ noindex: true })], true);
+    const checks = await bothPaths(
+      assetDivergenceRule,
+      [...indexable(), ...stale({ noindex: true })],
+      true,
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
   });
 
   test("X-Robots-Tag noindex pages are left out too", async () => {
-    const checks = await bothPaths(assetDivergenceRule, [
-      ...indexable(),
-      ...stale({ headerNoindex: true }),
-    ], true);
+    const checks = await bothPaths(
+      assetDivergenceRule,
+      [...indexable(), ...stale({ headerNoindex: true })],
+      true,
+    );
     expect(checks[0]!.status).toBe("pass");
   });
 
@@ -262,10 +272,11 @@ describe("social/asset-divergence noindex pages (#1773)", () => {
   });
 
   test("noindex pages do not count toward the site floor", async () => {
-    const checks = await bothPaths(assetDivergenceRule, [
-      ...indexable(8),
-      ...stale({ noindex: true }),
-    ], true);
+    const checks = await bothPaths(
+      assetDivergenceRule,
+      [...indexable(8), ...stale({ noindex: true })],
+      true,
+    );
     expect(checks[0]!.status).toBe("skipped");
     expect(checks[0]!.message).toContain("Only 8 page(s) crawled");
   });

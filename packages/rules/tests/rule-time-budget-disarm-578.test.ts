@@ -10,10 +10,13 @@ import { join } from "node:path";
 
 describe("runWithinBudget leaves no deadline behind (#578)", () => {
   test("work past the budget after a fast call still runs, sync and in a microtask", async () => {
-    const child = Bun.spawn([process.execPath, join(import.meta.dir, "fixtures/watchdog-after-call.ts")], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const child = Bun.spawn(
+      [process.execPath, join(import.meta.dir, "fixtures/watchdog-after-call.ts")],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     const killer = setTimeout(() => child.kill(), 15_000);
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(child.stdout).text(),

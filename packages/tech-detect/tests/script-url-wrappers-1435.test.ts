@@ -8,7 +8,7 @@ import { detectTechnologies } from "../src";
 import { pageMarkup } from "../src/detect";
 
 const SNIPPET =
-  '(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;' +
+  "(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;" +
   't.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","abc123");';
 
 // Built at run time: a literal hex run in a fixture is flagged by the secret scanner.
@@ -17,13 +17,22 @@ const HASH = "0123456789abcdef".repeat(2).slice(0, 24);
 const page = (head: string, body = "<p>Hello</p>") =>
   `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
 const BODIES = [{ url: "https://example.com/assets/app.js", content: "var a=1;" }];
-const ids = (html: string, scripts: Array<{ url: string; content?: string }> | undefined = BODIES): string[] =>
-  detectTechnologies({ url: "https://example.com/", headers: {}, html, ...(scripts ? { scripts } : {}) }).map((t) => t.id);
+const ids = (
+  html: string,
+  scripts: Array<{ url: string; content?: string }> | undefined = BODIES,
+): string[] =>
+  detectTechnologies({
+    url: "https://example.com/",
+    headers: {},
+    html,
+    ...(scripts ? { scripts } : {}),
+  }).map((t) => t.id);
 const both = (html: string): string[][] => [ids(html), ids(html, undefined)];
 
 describe("a loader wrapped by a cache or CDN is still read", () => {
   test("LiteSpeed Cache: type=litespeed/javascript", () => {
-    for (const found of both(page(`<script type="litespeed/javascript">${SNIPPET}</script>`))) expect(found).toContain("clarity");
+    for (const found of both(page(`<script type="litespeed/javascript">${SNIPPET}</script>`)))
+      expect(found).toContain("clarity");
   });
 
   test("Cloudflare Rocket Loader: type=<hash>-text/javascript", () => {
@@ -36,7 +45,9 @@ describe("a loader wrapped by a cache or CDN is still read", () => {
       expect(ids(page(`<script type="${type}">${SNIPPET}</script>`))).toContain("clarity");
     }
     // #1550: a MIME parameter is not part of a JavaScript essence (Chrome does not run it), so this type is data, not a wrapper.
-    expect(ids(page(`<script type="application/javascript; charset=utf-8">${SNIPPET}</script>`))).not.toContain("clarity");
+    expect(
+      ids(page(`<script type="application/javascript; charset=utf-8">${SNIPPET}</script>`)),
+    ).not.toContain("clarity");
   });
 });
 
@@ -59,7 +70,8 @@ describe("a Next.js App Router flight script over 16 KB", () => {
   test("an untyped script over 16 KB that is not a flight payload is a bundle and is not read", () => {
     const bundle = `var s=${JSON.stringify(SNIPPET)};${"x=1;".repeat(8_000)}`;
     expect(bundle.length).toBeGreaterThan(16 * 1024);
-    for (const found of both(page(`<script>${bundle}</script>`))) expect(found).not.toContain("clarity");
+    for (const found of both(page(`<script>${bundle}</script>`)))
+      expect(found).not.toContain("clarity");
   });
 });
 
@@ -78,19 +90,32 @@ describe("still not read", () => {
   });
 
   test("template, shader and binary types are data too", () => {
-    for (const type of ["text/x-handlebars-template", "text/x-mustache", "x-shader/x-fragment", "application/octet-stream", "text/x-jsrender"]) {
+    for (const type of [
+      "text/x-handlebars-template",
+      "text/x-mustache",
+      "x-shader/x-fragment",
+      "application/octet-stream",
+      "text/x-jsrender",
+    ]) {
       expect(ids(page(`<script type="${type}">${SNIPPET}</script>`))).not.toContain("clarity");
     }
   });
 
   test("a data type with a wrapper-like prefix is still data", () => {
-    expect(ids(page(`<script type="${HASH}-application/json">{"u":"https://www.clarity.ms/x"}</script>`))).not.toContain("clarity");
+    expect(
+      ids(
+        page(`<script type="${HASH}-application/json">{"u":"https://www.clarity.ms/x"}</script>`),
+      ),
+    ).not.toContain("clarity");
   });
 });
 
 describe("cost", () => {
   test("a 5 MB tag-heavy page with many scripts stays fast and bounded", () => {
-    const html = page("", `${'<div class="a" data-x="1"><img src="/i.png" alt="x"><a href="/y">y</a><script>var z=1;</script></div>'.repeat(40_000)}`);
+    const html = page(
+      "",
+      `${'<div class="a" data-x="1"><img src="/i.png" alt="x"><a href="/y">y</a><script>var z=1;</script></div>'.repeat(40_000)}`,
+    );
     expect(html.length).toBeGreaterThan(3_000_000);
     const started = performance.now();
     const markup = pageMarkup(html);
@@ -100,7 +125,10 @@ describe("cost", () => {
 
   test("inline script text is capped per page", () => {
     const flight = `self.__next_f.push([1,"${"a".repeat(1_900_000)}"])`;
-    const html = page(Array.from({ length: 8 }, () => `<script>${flight}</script>`).join("") + `<script>${SNIPPET}</script>`);
+    const html = page(
+      Array.from({ length: 8 }, () => `<script>${flight}</script>`).join("") +
+        `<script>${SNIPPET}</script>`,
+    );
     const markup = pageMarkup(html);
     expect(markup.length).toBeLessThan(9 * 1024 * 1024);
   });

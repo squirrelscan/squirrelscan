@@ -32,7 +32,9 @@ async function buttonChecks(rules: number): Promise<string[]> {
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   };
-  return ((await buttonNameRule.run(ctx)).checks as CheckResult[]).map((c) => `${c.name}:${c.status}`);
+  return ((await buttonNameRule.run(ctx)).checks as CheckResult[]).map(
+    (c) => `${c.name}:${c.status}`,
+  );
 }
 
 function stateOf(css: string, body: string, id = "t"): string {

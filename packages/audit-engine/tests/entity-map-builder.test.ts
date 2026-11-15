@@ -88,7 +88,10 @@ describe("buildEntityMap", () => {
       ],
     });
 
-    const map = build([page("https://example.com/", graph("/")), page("https://example.com/a", graph("/a"))]);
+    const map = build([
+      page("https://example.com/", graph("/")),
+      page("https://example.com/a", graph("/a")),
+    ]);
 
     expect(Value.Check(EntityMapSchema, map)).toBe(true);
     // Two WebPages (page-scoped @id) plus one WebSite and one Organization.
@@ -250,10 +253,7 @@ describe("buildEntityMap", () => {
       "@id": "#organization",
       name: "Acme",
     };
-    const map = build([
-      page("https://example.com/a", graph),
-      page("https://example.com/b", graph),
-    ]);
+    const map = build([page("https://example.com/a", graph), page("https://example.com/b", graph)]);
 
     expect(map.nodes).toHaveLength(2);
     expect(map.nodes.map((n) => n.id)).toEqual([
@@ -332,10 +332,7 @@ describe("buildEntityMap", () => {
       "@id": "_:b0",
       name: "Acme",
     };
-    const map = build([
-      page("https://example.com/a", graph),
-      page("https://example.com/b", graph),
-    ]);
+    const map = build([page("https://example.com/a", graph), page("https://example.com/b", graph)]);
 
     expect(map.nodes).toHaveLength(2);
     expect(map.nodes.every((node) => node.id === null)).toBe(true);
@@ -406,7 +403,11 @@ describe("buildEntityMap", () => {
 
   test("counts pages that declare no entities", () => {
     const map = build([
-      page("https://example.com/", { "@context": "https://schema.org", "@type": "WebSite", name: "S" }),
+      page("https://example.com/", {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: "S",
+      }),
       { url: "https://example.com/empty", raw: null },
       { url: "https://example.com/broken", raw: "{not json" },
     ]);
@@ -424,7 +425,12 @@ describe("buildEntityMap", () => {
             "@type": "BreadcrumbList",
             "@id": "https://example.com/a#breadcrumb",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: { "@id": "https://example.com/#home" } },
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: { "@id": "https://example.com/#home" },
+              },
               { "@type": "ListItem", position: 2, name: "A" },
             ],
           },
@@ -483,7 +489,9 @@ describe("toJsonLd", () => {
     expect(jsonLd["@context"]).toBe("https://schema.org");
     expect(jsonLd["@graph"]).toHaveLength(map.nodes.length);
 
-    const article = jsonLd["@graph"].find((member) => member["@id"] === "https://example.com/post#article");
+    const article = jsonLd["@graph"].find(
+      (member) => member["@id"] === "https://example.com/post#article",
+    );
     expect(article?.["@type"]).toBe("Article");
     expect(article?.publisher).toEqual({ "@id": "https://example.com/#organization" });
 
@@ -557,7 +565,7 @@ describe("conflict values are bounded and order-independent", () => {
         "@type": "Organization",
         "@id": `${SITE}#organization`,
         name: `Example ${String(i).padStart(4, "0")}`,
-      })
+      }),
     );
 
   test("the same pages in any order produce the same conflict values", () => {
@@ -576,7 +584,7 @@ describe("conflict values are bounded and order-independent", () => {
   test("it keeps the lowest-sorted values rather than the first seen", () => {
     const map = build([...many(80)].reverse());
     const names = map.nodes[0]!.conflicts.find((c) => c.property === "name")!.values.map(
-      (v) => v.value
+      (v) => v.value,
     );
     // 80 distinct names, capped at 50. Reversed input means "Example 0079"
     // arrived first, and it is not kept; "Example 0000" arrived last, and is.

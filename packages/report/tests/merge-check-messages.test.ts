@@ -28,7 +28,7 @@ describe("mergeCheckMessages", () => {
 
   test("a count they disagree on becomes the range it covers", () => {
     expect(mergeCheckMessages([thin(197), thin(233)])).toBe(
-      "Thin content: 197 to 233 words (min 300)"
+      "Thin content: 197 to 233 words (min 300)",
     );
   });
 
@@ -38,13 +38,13 @@ describe("mergeCheckMessages", () => {
     const h1 = (exposed: number, raw: number) =>
       `Multiple H1 tags found (${exposed} exposed, ${raw} in the HTML; an HTTP-only audit cannot resolve CSS or script visibility)`;
     expect(mergeCheckMessages([h1(1, 3), h1(2, 3), h1(1, 4)])).toBe(
-      "Multiple H1 tags found (1 to 2 exposed, 3 to 4 in the HTML; an HTTP-only audit cannot resolve CSS or script visibility)"
+      "Multiple H1 tags found (1 to 2 exposed, 3 to 4 in the HTML; an HTTP-only audit cannot resolve CSS or script visibility)",
     );
   });
 
   test("the range spans every message, not just the first and last", () => {
     expect(mergeCheckMessages([thin(233), thin(197), thin(400)])).toBe(
-      "Thin content: 197 to 400 words (min 300)"
+      "Thin content: 197 to 400 words (min 300)",
     );
   });
 
@@ -54,12 +54,12 @@ describe("mergeCheckMessages", () => {
   // would exclude 197 while reading as though it covered everything.
   test("the range is numeric, not lexicographic, across digit lengths", () => {
     expect(mergeCheckMessages([thin(10000), thin(197), thin(400)])).toBe(
-      "Thin content: 197 to 10000 words (min 300)"
+      "Thin content: 197 to 10000 words (min 300)",
     );
     // The pair a lexicographic min/max hands it, on its own, is a range that
     // does not cover 197. The input matters, not just the helper.
     expect(mergeCheckMessages([thin(10000), thin(400)])).toBe(
-      "Thin content: 400 to 10000 words (min 300)"
+      "Thin content: 400 to 10000 words (min 300)",
     );
   });
 
@@ -73,7 +73,7 @@ describe("mergeCheckMessages", () => {
     expect(messageMergeKey(thin(197))).not.toBe(messageMergeKey(thin(1200)));
     // Either side of the band is a count again.
     expect(mergeCheckMessages([thin(197), thin(3200)])).toBe(
-      "Thin content: 197 to 3200 words (min 300)"
+      "Thin content: 197 to 3200 words (min 300)",
     );
   });
 
@@ -89,7 +89,7 @@ describe("mergeCheckMessages", () => {
       mergeCheckMessages([
         "Title too long (65 chars, max 60)",
         "Title too long (114 chars, max 60)",
-      ])
+      ]),
     ).toBe("Title too long (65 to 114 chars, max 60)");
   });
 
@@ -97,45 +97,35 @@ describe("mergeCheckMessages", () => {
     // Not re-rendered through Number: a leading-zero or padded form that every
     // page agrees on comes back byte-identical.
     expect(mergeCheckMessages(["Code 007 seen 3 times", "Code 007 seen 5 times"])).toBe(
-      "Code 007 seen 3 to 5 times"
+      "Code 007 seen 3 to 5 times",
     );
   });
 
   describe("messages that must not merge come back null", () => {
     test("a year is not a count", () => {
-      expect(
-        mergeCheckMessages(["The URL says 2019", "The URL says 2024"])
-      ).toBeNull();
+      expect(mergeCheckMessages(["The URL says 2019", "The URL says 2024"])).toBeNull();
     });
 
     test("a digit inside a word is not a count", () => {
-      expect(
-        mergeCheckMessages(["Multiple H1 tags found", "Multiple H2 tags found"])
-      ).toBeNull();
+      expect(mergeCheckMessages(["Multiple H1 tags found", "Multiple H2 tags found"])).toBeNull();
     });
 
     test("a decimal is not a count", () => {
-      expect(
-        mergeCheckMessages(["HTML is 4.3MB", "HTML is 7.1MB"])
-      ).toBeNull();
+      expect(mergeCheckMessages(["HTML is 4.3MB", "HTML is 7.1MB"])).toBeNull();
     });
 
     test("a ratio is not a count", () => {
-      expect(
-        mergeCheckMessages(["4/10 pages blocked", "7/10 pages blocked"])
-      ).toBeNull();
+      expect(mergeCheckMessages(["4/10 pages blocked", "7/10 pages blocked"])).toBeNull();
     });
 
     test("different wording is not a disagreement about a count", () => {
       expect(
-        mergeCheckMessages(["Thin content: 197 words", "Sparse content: 197 words"])
+        mergeCheckMessages(["Thin content: 197 words", "Sparse content: 197 words"]),
       ).toBeNull();
     });
 
     test("one message out of many is enough to refuse", () => {
-      expect(
-        mergeCheckMessages([thin(197), thin(233), "The URL says 2019"])
-      ).toBeNull();
+      expect(mergeCheckMessages([thin(197), thin(233), "The URL says 2019"])).toBeNull();
     });
   });
 });
@@ -147,13 +137,11 @@ describe("messageMergeKey", () => {
 
   test("messages that differ in anything else do not", () => {
     expect(messageMergeKey("Multiple H1 tags found")).not.toBe(
-      messageMergeKey("Multiple H2 tags found")
+      messageMergeKey("Multiple H2 tags found"),
     );
-    expect(messageMergeKey("The URL says 2019")).not.toBe(
-      messageMergeKey("The URL says 2024")
-    );
+    expect(messageMergeKey("The URL says 2019")).not.toBe(messageMergeKey("The URL says 2024"));
     expect(messageMergeKey("Thin content: 197 words")).not.toBe(
-      messageMergeKey("Sparse content: 197 words")
+      messageMergeKey("Sparse content: 197 words"),
     );
   });
 

@@ -40,9 +40,18 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     icon: "klaviyo",
     detectors: [
       // A listed script URL, direct or passed through a proxy. The pattern stays anchored for CodeQL.
-      { type: "script-url", pattern: new RegExp(`^(?:https?:)?\\/\\/[^\\r\\n]{0,2048}${KLAVIYO_SCRIPT_PATH}`, "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(`^(?:https?:)?\\/\\/[^\\r\\n]{0,2048}${KLAVIYO_SCRIPT_PATH}`, "i"),
+      },
       // pageMarkup strips comments and prose/code samples, then keeps complete resource tags and short inline loaders.
-      { type: "script-url", pattern: new RegExp(`^<script\\b${TAG_BODY}{0,65536}\\s(?:src|data-src)\\s*=\\s*${KLAVIYO_ATTR_VALUE}`, "im") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          `^<script\\b${TAG_BODY}{0,65536}\\s(?:src|data-src)\\s*=\\s*${KLAVIYO_ATTR_VALUE}`,
+          "im",
+        ),
+      },
       // A link only loads the script when it is a preload (a stylesheet or a prefetch hint does not run it); `rel` may
       // sit before or after the `href`.
       {
@@ -62,10 +71,18 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       { type: "script-content", pattern: /_learnq\.push\(/i },
       // The Shopify theme app block of Klaviyo's onsite embed.
       // It sits in a comment (`<!-- BEGIN app block: shopify://apps/... -->`): the one Klaviyo detector that reads comments (#1550).
-      { type: "html", pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i, requires: "shopify://apps/", comments: true },
+      {
+        type: "html",
+        pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i,
+        requires: "shopify://apps/",
+        comments: true,
+      },
       // The inline onsite loader: `window._klOnsite=window._klOnsite||[]` and the `window.klaviyo` proxy.
       { type: "script-content", pattern: /window\._klOnsite\s*=\s*window\._klOnsite\s*\|\|/ },
-      { type: "script-content", pattern: /window\.klaviyo\s*=\s*(?:window\.klaviyo\s*\|\||new\s+Proxy\s*\()/ },
+      {
+        type: "script-content",
+        pattern: /window\.klaviyo\s*=\s*(?:window\.klaviyo\s*\|\||new\s+Proxy\s*\()/,
+      },
     ],
     confidence: "high",
   },
@@ -122,9 +139,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     category: "video",
     website: "https://vimeo.com",
     icon: "vimeo",
-    detectors: [
-      { type: "html", pattern: /player\.vimeo\.com\/video\//i },
-    ],
+    detectors: [{ type: "html", pattern: /player\.vimeo\.com\/video\//i }],
   },
   {
     id: "wistia",
@@ -231,7 +246,10 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://base44.com",
     icon: "base44",
     detectors: [
-      { type: "url-path", pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}base44\.app(?:[:/?#]|$)/i },
+      {
+        type: "url-path",
+        pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}base44\.app(?:[:/?#]|$)/i,
+      },
       inScript(String.raw`base44_access_token`, "base44_access_token"),
       inScript(
         String.raw`\/api\/app-logs\/(?:[0-9a-f]{24}|\$\{\w{1,30}\})\/log-user-in-app`,
@@ -250,7 +268,10 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       // Bolt's app hosting. The page host only: anchored at the URL start, so a
       // look-alike host or a page that links to a .bolt.host app does not match.
-      { type: "url-path", pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}bolt\.host(?:[:/?#]|$)/i },
+      {
+        type: "url-path",
+        pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}bolt\.host(?:[:/?#]|$)/i,
+      },
       // The "Made in Bolt" badge an app can carry: an anchor whose href is the Bolt
       // referral URL AND whose content is the badge (an image or svg, or the words
       // "Made in Bolt"). A plain referral link in a post (`<a href="...?rid=x">try
@@ -275,7 +296,8 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       {
         type: "url-path",
-        pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,6}(?:replit\.app|repl\.co|replit\.dev)(?:[:/?#]|$)/i,
+        pattern:
+          /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,6}(?:replit\.app|repl\.co|replit\.dev)(?:[:/?#]|$)/i,
       },
       ...scriptSrc(String.raw`https:\/\/replit\.com\/public\/js\/replit-dev-banner\.js`),
       resourceAttr("link|script|img|source", "href|src", String.raw`\/__replco\/static\/`),
@@ -379,7 +401,12 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ...scriptSrc(String.raw`https:\/\/[a-z0-9.-]{1,120}\/npm\/@clerk\/clerk-js@`),
       ...scriptSrc(String.raw`https:\/\/[a-z0-9-]{1,63}\.clerk\.accounts\.dev\/`),
       { type: "tag-attr", tags: ["script"], attrs: ["data-clerk-js-script"], pattern: /^/ },
-      { type: "tag-attr", tags: ["script"], attrs: ["data-clerk-publishable-key"], pattern: /^pk_(?:test|live)_/i },
+      {
+        type: "tag-attr",
+        tags: ["script"],
+        attrs: ["data-clerk-publishable-key"],
+        pattern: /^pk_(?:test|live)_/i,
+      },
       // A bundle: the publishable key handed to the provider or client, as an
       // object property (quoted or not), an assignment, or the literal Next.js
       // inlines in place of `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in a
@@ -450,7 +477,9 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://partytown.builder.io",
     icon: "partytown",
     detectors: [
-      ...scriptSrc(String.raw`(?:(?:https?:)?\/\/[^\/?#]+)?\/(?:[^\/?#]+\/)*~partytown\/(?:debug\/)?partytown(?:-[a-z-]+)?\.js(?![\w.-])`),
+      ...scriptSrc(
+        String.raw`(?:(?:https?:)?\/\/[^\/?#]+)?\/(?:[^\/?#]+\/)*~partytown\/(?:debug\/)?partytown(?:-[a-z-]+)?\.js(?![\w.-])`,
+      ),
       { type: "tag-attr", tags: ["script"], attrs: ["type"], pattern: /^text\/partytown$/i },
     ],
     confidence: "high",
@@ -461,7 +490,9 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     category: "analytics",
     website: "https://www.appsflyer.com",
     icon: "appsflyer",
-    detectors: scriptSrc(String.raw`(?:https?:)?\/\/(?:websdk|onelinksmartscript|sdk)\.appsflyer\.com(?:[\/?#]|$)`),
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/(?:websdk|onelinksmartscript|sdk)\.appsflyer\.com(?:[\/?#]|$)`,
+    ),
     confidence: "high",
   },
   {

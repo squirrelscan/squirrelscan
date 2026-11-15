@@ -81,7 +81,12 @@ function ctx(pageHtml: string, url = "https://squirrelscan.com/releases"): RuleC
 
 function findings(checks: Awaited<ReturnType<typeof leakedSecretsRule.run>>["checks"]) {
   return checks
-    .filter((c) => c.name === "leaked-secrets-critical" || c.name === "leaked-secrets-high" || c.name === "leaked-secrets-medium")
+    .filter(
+      (c) =>
+        c.name === "leaked-secrets-critical" ||
+        c.name === "leaked-secrets-high" ||
+        c.name === "leaked-secrets-medium",
+    )
     .flatMap((c) => c.items ?? []);
 }
 
@@ -107,7 +112,7 @@ const COMMIT_ID = `<p>Built from commit <code data-commit="${COMMIT}">${COMMIT}<
 describe("security/leaked-secrets: hex digests are not secrets", () => {
   test("a release page of checksums, an SRI hash and a commit id reports nothing", async () => {
     const page = html(`${RELEASE_PAYLOAD}${CHECKSUM_TABLE}${SRI_TAG}${COMMIT_ID}`);
-    const { checks } = (await leakedSecretsRule.run(ctx(page)));
+    const { checks } = await leakedSecretsRule.run(ctx(page));
 
     expect(findings(checks)).toEqual([]);
     expect(checks.find((c) => c.name === "leaked-secrets")?.status).toBe("pass");
@@ -116,7 +121,7 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
   test("the same page plus a real Together key reports exactly one finding", async () => {
     const leak = `<script>const api_key = "${TOGETHER_KEY}";</script>`; // pragma: allowlist secret
     const page = html(`${RELEASE_PAYLOAD}${CHECKSUM_TABLE}${SRI_TAG}${COMMIT_ID}${leak}`);
-    const { checks } = (await leakedSecretsRule.run(ctx(page)));
+    const { checks } = await leakedSecretsRule.run(ctx(page));
 
     const items = findings(checks);
     expect(items).toHaveLength(1);
@@ -186,9 +191,7 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
     // bounded look-behind (#357) counts raw characters from the brand word,
     // whitespace included, so the gap here is what a formatter leaves.
     const leak = `{"vendor":"together","token"${" ".repeat(20)}:"${TOGETHER_KEY}"}`;
-    expect(scanContent(leak, "inline-script").map((f) => f.type)).toEqual([
-      "Together AI Key",
-    ]);
+    expect(scanContent(leak, "inline-script").map((f) => f.type)).toEqual(["Together AI Key"]);
 
     // The invariant under all of it: the distance between a key and its value
     // is not evidence. A key that names something which is not a credential
@@ -221,7 +224,9 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
     }
     // The same page with a key that does name a credential reports.
     expect(
-      scanContent(`<script>x={vendor:"together",token:"${TOGETHER_KEY}"}</script>`, "html").map((f) => f.value) // pragma: allowlist secret
+      scanContent(`<script>x={vendor:"together",token:"${TOGETHER_KEY}"}</script>`, "html").map(
+        (f) => f.value,
+      ), // pragma: allowlist secret
     ).toEqual([TOGETHER_KEY]);
   });
 });
@@ -317,11 +322,17 @@ describe("security/leaked-secrets: real credentials still report", () => {
     expect(scanContent(spread, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
     // The exception is the TAG's: the same keyword in the next tag, or in
     // text after the value, does not reach back.
-    expect(scanContent(`<meta content="${ALGOLIA_KEY}"><meta name="algolia-api-key">`, "html")).toEqual([]);
+    expect(
+      scanContent(`<meta content="${ALGOLIA_KEY}"><meta name="algolia-api-key">`, "html"),
+    ).toEqual([]);
     expect(scanContent(`<meta content="${ALGOLIA_KEY}"> algolia`, "html")).toEqual([]);
     // And a digest-naming attribute still suppresses in either order.
-    expect(scanContent(`<meta content="${DIGEST}" name="release-sha256"> together`, "html")).toEqual([]);
-    expect(scanContent(`<meta name="together" content="${DIGEST}" data-sha256="x">`, "html")).toEqual([]);
+    expect(
+      scanContent(`<meta content="${DIGEST}" name="release-sha256"> together`, "html"),
+    ).toEqual([]);
+    expect(
+      scanContent(`<meta name="together" content="${DIGEST}" data-sha256="x">`, "html"),
+    ).toEqual([]);
   });
 
   test("the brand word names the value from up to the keyword gap before it, never after (#357)", () => {
@@ -336,12 +347,19 @@ describe("security/leaked-secrets: real credentials still report", () => {
     // 30 characters before the value: fires.
     expect(scanContent(at(30), "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
     // Exactly the gap: fires. One past it: the word is elsewhere on the page.
-    expect(scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
+    expect(scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.value)).toEqual([
+      TOGETHER_KEY,
+    ]);
     expect(scanContent(at(CONTEXT_KEYWORD_GAP + 1), "inline-script")).toEqual([]);
     expect(scanContent(at(60), "inline-script")).toEqual([]);
     // After the value, at any distance: never.
     expect(scanContent(`${assignment}; // together.ai`, "inline-script")).toEqual([]);
-    expect(scanContent(`${assignment};${"x".repeat(SECRET_CONTEXT_WINDOW_SIZE)}together`, "inline-script")).toEqual([]);
+    expect(
+      scanContent(
+        `${assignment};${"x".repeat(SECRET_CONTEXT_WINDOW_SIZE)}together`,
+        "inline-script",
+      ),
+    ).toEqual([]);
   });
 
   test("a long key beginning past the look-back budget still reports", () => {
@@ -352,9 +370,7 @@ describe("security/leaked-secrets: real credentials still report", () => {
     for (const distance of [N, N + 1, N + 2]) {
       const key = `${"z".repeat(distance - "togetherKey".length)}togetherKey`;
       const content = `;${key}="${TOGETHER_KEY}"`; // pragma: allowlist secret
-      expect(scanContent(content, "inline-script").map((f) => f.value)).toContain(
-        TOGETHER_KEY
-      );
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toContain(TOGETHER_KEY);
     }
   });
 
@@ -366,9 +382,9 @@ describe("security/leaked-secrets: real credentials still report", () => {
     const longer = `${TOGETHER_KEY}${"a1b2c3d4".repeat(2)}`;
     expect(scanContent(`togetherKey:"${longer}"`, "inline-script")).toEqual([]);
     expect(scanContent(`twilioAuth:"${TOGETHER_KEY}"`, "inline-script")).toEqual([]);
-    expect(scanContent(`togetherKey:"${TOGETHER_KEY}"`, "inline-script").map((f) => f.value)).toEqual([
-      TOGETHER_KEY,
-    ]);
+    expect(
+      scanContent(`togetherKey:"${TOGETHER_KEY}"`, "inline-script").map((f) => f.value),
+    ).toEqual([TOGETHER_KEY]);
   });
 
   test("a key too long for the look-back cannot invent a digest word", () => {
@@ -383,9 +399,7 @@ describe("security/leaked-secrets: real credentials still report", () => {
     for (const separator of ["_", "-", ".", "7"]) {
       const key = `api_key_${"q".repeat(100)}${separator}${"z".repeat(84)}_xsha256_together`;
       const content = `"${key}"${" ".repeat(20)}:"${TOGETHER_KEY}";`; // pragma: allowlist secret
-      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
-        TOGETHER_KEY,
-      ]);
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
     }
 
     // A digest key the walk does reach the start of still suppresses, so the
@@ -398,7 +412,7 @@ describe("security/leaked-secrets: real credentials still report", () => {
     const page = html(
       `<script>const cfg={apiKey:"AIzaSyD3mQ8xR2vT7pLnK4hW9cB1sE6yU0zJfXa"};</script>`, // pragma: allowlist secret
     );
-    const { checks } = (await leakedSecretsRule.run(ctx(page)));
+    const { checks } = await leakedSecretsRule.run(ctx(page));
 
     expect(findings(checks)).toEqual([]);
     expect(checks.find((c) => c.name === "leaked-secrets-public")?.status).toBe("info");
@@ -455,14 +469,15 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
       const padded = scanContent(`${paddedPrefix}${fixture}\n;\n${PAD}`, "inline-script");
       for (const finding of bare) {
         const same = padded.find(
-          (candidate) => JSON.stringify(withoutOffset(candidate)) === JSON.stringify(withoutOffset(finding))
+          (candidate) =>
+            JSON.stringify(withoutOffset(candidate)) === JSON.stringify(withoutOffset(finding)),
         );
         if (same) {
           expect(same.offset).toBe(finding.offset + paddedPrefix.length);
         } else {
           const near = padded.find((candidate) => candidate.value.includes(finding.value));
           lost.push(
-            `${fixture.slice(0, 40)} → ${JSON.stringify(finding)} became ${JSON.stringify(near)}`
+            `${fixture.slice(0, 40)} → ${JSON.stringify(finding)} became ${JSON.stringify(near)}`,
           );
         }
       }
@@ -531,9 +546,7 @@ describe("classifyKeyContext", () => {
     // fallback operators, where the left side is an expression, mean "none".
     expect(classifyKeyContext(`labels[apiKey]: "`, "together")).toBe("assigned");
     expect(classifyKeyContext(`cfg["apiKey"] || "`, "together")).toBe("credential");
-    expect(classifyKeyContext(`process.env["SECRET_KEY"] || "`, "together")).toBe(
-      "credential"
-    );
+    expect(classifyKeyContext(`process.env["SECRET_KEY"] || "`, "together")).toBe("credential");
   });
 
   test("a minifier's member access names nothing, and nothing is not a credential (#357)", () => {
@@ -563,9 +576,7 @@ describe("classifyKeyContext", () => {
     for (const distance of [N, N + 1, N + 2]) {
       const key = `key${"Z".padEnd(distance - 2 - "key".length, "z")}`;
       const text = `;${key}="`;
-      expect(classifyKeyContext(lookBehind(text, text.length), "together")).toBe(
-        "credential"
-      );
+      expect(classifyKeyContext(lookBehind(text, text.length), "together")).toBe("credential");
     }
   });
 
@@ -608,9 +619,7 @@ describe("classifyKeyContext", () => {
     expect(classify(`{"sha256"${"\u00a0".repeat(100)}:"`)).toBe("digest");
     // Free is not unbounded: past the scan limit the key is out of reach and
     // the look-back is a cut read again, which reports rather than suppresses.
-    expect(classify(`{"sha256"${" ".repeat(SECRET_CONTEXT_WINDOW_SIZE * 4)}:"`)).toBe(
-      "assigned"
-    );
+    expect(classify(`{"sha256"${" ".repeat(SECRET_CONTEXT_WINDOW_SIZE * 4)}:"`)).toBe("assigned");
   });
 
   test("a look-back that opens on a fragment reports the cut", () => {
@@ -621,9 +630,7 @@ describe("classifyKeyContext", () => {
 
     const fragment = readBack(`sha256"${" ".repeat(200)}:"`);
     expect(fragment.cut).toBe(true);
-    expect(classifyKeyContext(fragment.before, "together", undefined, true)).toBe(
-      "assigned"
-    );
+    expect(classifyKeyContext(fragment.before, "together", undefined, true)).toBe("assigned");
     // Read as if it were whole, the same text says "digest" — which is exactly
     // the suppression the flag exists to withhold.
     expect(classifyKeyContext(fragment.before, "together")).toBe("digest");
@@ -631,17 +638,13 @@ describe("classifyKeyContext", () => {
     // A key with its left edge in view is not a fragment.
     const whole = readBack(`{"sha256"${" ".repeat(200)}:"`);
     expect(whole.cut).toBe(false);
-    expect(classifyKeyContext(whole.before, "together", undefined, whole.cut)).toBe(
-      "digest"
-    );
+    expect(classifyKeyContext(whole.before, "together", undefined, whole.cut)).toBe("digest");
 
     // Cutting must not cost the assignment itself: a minified member access at
     // the edge still means the value was assigned, and assigned values report.
     const minified = readBack(`t.a||"`);
     expect(minified.cut).toBe(true);
-    expect(classifyKeyContext(minified.before, "together", undefined, true)).toBe(
-      "assigned"
-    );
+    expect(classifyKeyContext(minified.before, "together", undefined, true)).toBe("assigned");
   });
 
   test("a cut is where the key stops being readable, not where it starts", () => {
@@ -672,34 +675,28 @@ describe("classifyKeyContext", () => {
       classifyKeyContext(
         `<meta name="algolia-api-key" content="`,
         "algolia",
-        tag(`name="algolia-api-key" content="x"`)
-      )
+        tag(`name="algolia-api-key" content="x"`),
+      ),
     ).toBe("credential");
     // content first, name second — the old look-back could never see this.
     expect(
-      classifyKeyContext(
-        `<meta content="`,
-        "algolia",
-        tag(`content="x" name="algolia-api-key"`)
-      )
+      classifyKeyContext(`<meta content="`, "algolia", tag(`content="x" name="algolia-api-key"`)),
     ).toBe("credential");
     expect(
-      classifyKeyContext(`<meta content="`, "together", tag(`content="x" name="release-sha256"`))
+      classifyKeyContext(`<meta content="`, "together", tag(`content="x" name="release-sha256"`)),
     ).toBe("digest");
     // Intervening attributes past the 64-char look-back no longer break it.
     expect(
       classifyKeyContext(
         `" data-testid="release-row" content="`,
         "algolia",
-        tag(`name="algolia-api-key" lang="en" dir="ltr" data-testid="release-row" content="x"`)
-      )
+        tag(`name="algolia-api-key" lang="en" dir="ltr" data-testid="release-row" content="x"`),
+      ),
     ).toBe("credential");
   });
 
   test("reads the key across an env-var fallback", () => {
-    expect(classifyKeyContext(`process.env.SECRET_KEY || "`, "together")).toBe(
-      "credential"
-    );
+    expect(classifyKeyContext(`process.env.SECRET_KEY || "`, "together")).toBe("credential");
     expect(classifyKeyContext(`process.env.TOKEN ?? "`, "together")).toBe("credential");
     expect(classifyKeyContext(`togetherKey||"`, "together")).toBe("credential");
     // The fallback does not launder a digest key into a credential.
@@ -726,7 +723,7 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
 
   test("a quoted JSON key inside a script[type=application/json] block is reported", async () => {
     const page = html(
-      `<script type="application/json">{"x-api-key":"${COMMIT}"}</script>` // pragma: allowlist secret
+      `<script type="application/json">{"x-api-key":"${COMMIT}"}</script>`, // pragma: allowlist secret
     );
     const items = findings((await leakedSecretsRule.run(ctx(page))).checks);
     expect(items).toHaveLength(1);
@@ -780,12 +777,7 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
   });
 
   test("a hyphen joins a key only where the syntax says it does", () => {
-    const hyphenated = [
-      "cache-api-key",
-      "checksum-secret",
-      "integrity-auth-token",
-      "etag-api-key",
-    ];
+    const hyphenated = ["cache-api-key", "checksum-secret", "integrity-auth-token", "etag-api-key"];
     for (const key of hyphenated) {
       // Quoted: a JSON or YAML key, one name, a digest.
       expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
@@ -802,7 +794,7 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // subtraction. `cache-apiKey` is `cache` minus `apiKey`, not a cache key.
     expect(
       scanContent(`const x=cache-apiKey||"${TOGETHER_KEY}"`, "inline-script") // pragma: allowlist secret
-        .some((f) => f.value.includes(TOGETHER_KEY))
+        .some((f) => f.value.includes(TOGETHER_KEY)),
     ).toBe(true);
   });
 
@@ -872,7 +864,10 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // A name in front of the fallback still reports; a minified member is not
     // a name (#357).
     expect(
-      scanContent(`/* together.ai */ const v = cfg.token || "${TOGETHER_KEY}";`, "inline-script").map((f) => f.value) // pragma: allowlist secret
+      scanContent(
+        `/* together.ai */ const v = cfg.token || "${TOGETHER_KEY}";`,
+        "inline-script",
+      ).map((f) => f.value), // pragma: allowlist secret
     ).toEqual([TOGETHER_KEY]);
     expect(scanContent(`/* together.ai */ t.a||"${TOGETHER_KEY}";`, "inline-script")).toEqual([]); // pragma: allowlist secret
   });
@@ -903,9 +898,7 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
       `const v = togetherKey || "${TOGETHER_KEY}";`, // pragma: allowlist secret
       `/* together.ai */ const v = credential ?? "${TOGETHER_KEY}";`, // pragma: allowlist secret
     ]) {
-      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
-        TOGETHER_KEY,
-      ]);
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
     }
     // Same shape, digest key: the published checksum stays silent.
     for (const key of ["cacheKey", "sha256", "etag", "commitHash", "integrityHash"]) {
@@ -960,7 +953,7 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
 
   test("a base64 image data URI reports nothing", async () => {
     const page = html(
-      `<img alt="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg==">`
+      `<img alt="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg==">`,
     );
     expect(findings((await leakedSecretsRule.run(ctx(page))).checks)).toEqual([]);
   });
@@ -1039,22 +1032,28 @@ describe("security/leaked-secrets: overlap suppression", () => {
       for (let i = 0; i < 60; i++) {
         const pickShape = Math.floor(r() * 9);
         let value =
-          pickShape === 0 ? runOf(r, 1 + Math.floor(r() * 11)) // below one window
-          : pickShape === 1 ? `${head}${runOf(r, 1 + Math.floor(r() * 20))}`
-          : pickShape === 2 ? `${runOf(r, 1 + Math.floor(r() * 20))}${tail}`
-          : pickShape === 3 ? `${head}${runOf(r, 10)}${tail}`
-          : pickShape === 4 && kept.length > 0 ? kept[Math.floor(r() * kept.length)]!
-          : pickShape === 5 && kept.length > 0
-            ? (() => {
-                const base = kept[Math.floor(r() * kept.length)]!;
-                return base.slice(Math.floor(r() * base.length)) || base;
-              })()
-          : pickShape === 6 && kept.length > 0
-            ? `${runOf(r, 3)}${kept[Math.floor(r() * kept.length)]!}${runOf(r, 3)}`
-          // Past the length the index will take: a runaway connection-string
-          // match is megabytes, and those are held aside rather than indexed.
-          : pickShape === 7 ? `${head}${runOf(r, 1000 + Math.floor(r() * 60))}`
-            : runOf(r, 12 + Math.floor(r() * 40));
+          pickShape === 0
+            ? runOf(r, 1 + Math.floor(r() * 11)) // below one window
+            : pickShape === 1
+              ? `${head}${runOf(r, 1 + Math.floor(r() * 20))}`
+              : pickShape === 2
+                ? `${runOf(r, 1 + Math.floor(r() * 20))}${tail}`
+                : pickShape === 3
+                  ? `${head}${runOf(r, 10)}${tail}`
+                  : pickShape === 4 && kept.length > 0
+                    ? kept[Math.floor(r() * kept.length)]!
+                    : pickShape === 5 && kept.length > 0
+                      ? (() => {
+                          const base = kept[Math.floor(r() * kept.length)]!;
+                          return base.slice(Math.floor(r() * base.length)) || base;
+                        })()
+                      : pickShape === 6 && kept.length > 0
+                        ? `${runOf(r, 3)}${kept[Math.floor(r() * kept.length)]!}${runOf(r, 3)}`
+                        : // Past the length the index will take: a runaway connection-string
+                          // match is megabytes, and those are held aside rather than indexed.
+                          pickShape === 7
+                          ? `${head}${runOf(r, 1000 + Math.floor(r() * 60))}`
+                          : runOf(r, 12 + Math.floor(r() * 40));
         if (value === "") value = "x";
 
         expect(index.overlaps(value)).toBe(pairwise(kept, value));
@@ -1140,7 +1139,7 @@ const AWS_SHAPE = "AKIA" + "IOSFODNN7EXAMPLE"; // pragma: allowlist secret
 const REAL_SECRET = "sk_live_" + "Zq7mR2xKd9LpV4nB8cT5wY3j"; // pragma: allowlist secret
 
 async function reported(pageHtml: string) {
-  const result = (await leakedSecretsRule.run(ctx(pageHtml)));
+  const result = await leakedSecretsRule.run(ctx(pageHtml));
   return {
     findings: findings(result.checks),
     names: result.checks.map((c) => c.name),
@@ -1150,9 +1149,9 @@ async function reported(pageHtml: string) {
 describe("security/leaked-secrets: vendor public identifiers in URL queries (#574)", () => {
   // The issue's repro, in the shape its reporter saw (a medium finding).
   test("the Mida optimize.js repro reports nothing", async () => {
-    const { findings: items, names } = (await reported(
-      html(`<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>`)
-    ));
+    const { findings: items, names } = await reported(
+      html(`<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>`),
+    );
     expect(items).toEqual([]);
     expect(names).toEqual(["leaked-secrets"]);
   });
@@ -1171,9 +1170,11 @@ describe("security/leaked-secrets: vendor public identifiers in URL queries (#57
   for (const value of [SPACES_SHAPE, AWS_SHAPE]) {
     for (const [vendor, prefix] of VENDOR_CASES) {
       test(`${vendor}: ${value.slice(0, 4)}-shaped value in src and href is not reported`, async () => {
-        const { findings: items, names } = (await reported(
-          html(`<script async src="${prefix}${value}"></script><link rel="preload" as="script" href="${prefix}${value}&x=1">`)
-        ));
+        const { findings: items, names } = await reported(
+          html(
+            `<script async src="${prefix}${value}"></script><link rel="preload" as="script" href="${prefix}${value}&x=1">`,
+          ),
+        );
         expect(items).toEqual([]);
         expect(names).not.toContain("leaked-secrets-public");
       });
@@ -1194,59 +1195,69 @@ describe("security/leaked-secrets: vendor public identifiers in URL queries (#57
   // Same parameter, same shape: not a known vendor, so still a credential.
   const STILL_REPORTED: Array<[string, string]> = [
     ["unknown host, Mida's path and param", "https://cdn.example.net/js/optimize.js?key="],
-    ["unknown host, Klaviyo's path and param", "https://static.example.net/onsite/js/klaviyo.js?company_id="],
+    [
+      "unknown host, Klaviyo's path and param",
+      "https://static.example.net/onsite/js/klaviyo.js?company_id=",
+    ],
     ["lookalike host suffix", "https://cdn.mida.so.evil.test/js/optimize.js?key="],
     ["lookalike host prefix", "https://evilcdn.mida.so/js/optimize.js?key="],
     ["userinfo trick", "https://cdn.mida.so@evil.test/js/optimize.js?key="],
     ["port on the vendor host", "https://cdn.mida.so:8443/js/optimize.js?key="],
-    ["vendor host inside another URL's path", "https://evil.test/redirect//cdn.mida.so/js/optimize.js?key="],
+    [
+      "vendor host inside another URL's path",
+      "https://evil.test/redirect//cdn.mida.so/js/optimize.js?key=",
+    ],
     ["vendor host, other path", "https://cdn.mida.so/js/other.js?key="],
     ["vendor host, other param", "https://cdn.mida.so/js/optimize.js?token="],
     ["vendor param, wrong parameter name case", "https://cdn.mida.so/js/optimize.js?KEY="],
   ];
   for (const [label, prefix] of STILL_REPORTED) {
     test(`still reported: ${label}`, async () => {
-      const { findings: items } = (await reported(html(`<script async src="${prefix}${SPACES_SHAPE}"></script>`)));
+      const { findings: items } = await reported(
+        html(`<script async src="${prefix}${SPACES_SHAPE}"></script>`),
+      );
       expect(items.length).toBe(1);
       expect(items[0]!.id).toContain("DigitalOcean Spaces Key");
     });
   }
 
   test("a vendor URL does not hide a real secret elsewhere on the page", async () => {
-    const { findings: items } = (await reported(
+    const { findings: items } = await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
-          `<script>var cfg = { token: "${REAL_SECRET}" };</script>`
-      )
-    ));
+          `<script>var cfg = { token: "${REAL_SECRET}" };</script>`,
+      ),
+    );
     expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
     expect(items.some((i) => i.id.includes("DigitalOcean"))).toBe(false);
   });
 
   test("the same value outside the vendor URL is still reported", async () => {
-    const { findings: items } = (await reported(
+    const { findings: items } = await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
-          `<p>Spaces key: ${SPACES_SHAPE}</p>`
-      )
-    ));
+          `<p>Spaces key: ${SPACES_SHAPE}</p>`,
+      ),
+    );
     expect(items.length).toBe(1);
   });
 
   test("a longer secret that contains the identifier is not hidden by it", async () => {
-    const { findings: items } = (await reported(
+    const { findings: items } = await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
-          `<script>var u = "postgres://app:${SPACES_SHAPE}@db.internal/prod";</script>`
-      )
-    ));
+          `<script>var u = "postgres://app:${SPACES_SHAPE}@db.internal/prod";</script>`,
+      ),
+    );
     expect(items.map((i) => i.id).join("\n")).toContain("PostgreSQL");
   });
 
   test("a secret in a non-identifier parameter of a vendor URL is still reported", async () => {
-    const { findings: items } = (await reported(
-      html(`<script async src="https://cdn.mida.so/js/optimize.js?key=abc123&auth=${REAL_SECRET}"></script>`)
-    ));
+    const { findings: items } = await reported(
+      html(
+        `<script async src="https://cdn.mida.so/js/optimize.js?key=abc123&auth=${REAL_SECRET}"></script>`,
+      ),
+    );
     expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
   });
 });

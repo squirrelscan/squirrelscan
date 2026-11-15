@@ -265,7 +265,12 @@ describe("render fallback reasons (#1873)", () => {
     } as unknown as CloudServicesClient;
   }
 
-  const opts = { fallback: fallbackFetcher, batchWindowMs: 1, firstPollDelayMs: 1, pollIntervalMs: 5 };
+  const opts = {
+    fallback: fallbackFetcher,
+    batchWindowMs: 1,
+    firstPollDelayMs: 1,
+    pollIntervalMs: 5,
+  };
   const run = (item: Record<string, unknown>) =>
     createCloudDocumentFetcher(clientWith(item), opts).fetch({
       url: "https://example.com/",

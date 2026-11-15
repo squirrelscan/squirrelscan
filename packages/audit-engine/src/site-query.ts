@@ -76,7 +76,7 @@ export function createSiteQuery(
      * `anchorGraph()` is then absent.
      */
     anchorGraph?: boolean;
-  }
+  },
 ): Effect.Effect<SiteQuery, StorageError, never> {
   return Effect.gen(function* () {
     // Incoming internal-link counts — reconstructed from parsed page links, NOT
@@ -167,7 +167,7 @@ function buildIncomingLinkCounts(
   crawlId: string,
   universe: readonly string[] | undefined,
   pageScanBatch: number,
-  collectAnchors: boolean
+  collectAnchors: boolean,
 ): Effect.Effect<
   {
     all: Map<string, number>;
@@ -275,7 +275,7 @@ function buildIncomingLinkCounts(
 /** Page-type index: normalized URLs per page_type, in normalized_url order. */
 function buildPagesByType(
   storage: SQLiteStorage,
-  crawlId: string
+  crawlId: string,
 ): Effect.Effect<Map<string, string[]>, StorageError, never> {
   return Effect.gen(function* () {
     const byType = new Map<string, string[]>();
@@ -316,7 +316,7 @@ function streamPageLinkRows(
   storage: SQLiteStorage,
   crawlId: string,
   batchSize: number,
-  onPage: (page: PageLinkRow) => void
+  onPage: (page: PageLinkRow) => void,
 ): Effect.Effect<void, StorageError, never> {
   return Effect.gen(function* () {
     let offset = 0;
@@ -359,7 +359,7 @@ function parseLinkPage(parsedData: string | null): {
 async function* iteratePagesMatching(
   storage: SQLiteStorage,
   crawlId: string,
-  pred: (row: PageFeatureRow) => boolean
+  pred: (row: PageFeatureRow) => boolean,
 ): AsyncIterable<PageFeatureRow> {
   let after: string | undefined;
   for (;;) {
@@ -367,7 +367,7 @@ async function* iteratePagesMatching(
       storage
         .getPageFeaturesPage(crawlId, { after, limit: FEATURE_SCAN_BATCH })
         // A read failure mid-cursor is a hard error, not a silent truncation.
-        .pipe(Effect.orDie)
+        .pipe(Effect.orDie),
     );
     if (rows.length === 0) return;
     for (const row of rows) {

@@ -31,19 +31,12 @@ export const listitemRule: Rule = {
 
       // Valid parents: ul, ol, menu, or element with role="list"
       const isInList =
-        parentTag === "ul" ||
-        parentTag === "ol" ||
-        parentTag === "menu" ||
-        parentRole === "list";
+        parentTag === "ul" || parentTag === "ol" || parentTag === "menu" || parentRole === "list";
 
       if (!isInList) {
         const text = li.textContent?.trim().slice(0, 20);
         const id = li.getAttribute("id");
-        orphaned.push(
-          id
-            ? `li#${id}`
-            : `li: "${text}${text && text.length >= 20 ? "..." : ""}"`
-        );
+        orphaned.push(id ? `li#${id}` : `li: "${text}${text && text.length >= 20 ? "..." : ""}"`);
       }
     }
 
@@ -53,10 +46,7 @@ export const listitemRule: Rule = {
         status: "fail",
         message: `${orphaned.length} li element(s) not inside a list`,
         items: orphaned.slice(0, 10).map((id) => ({ id })),
-        details:
-          orphaned.length > 10
-            ? { additional: orphaned.length - 10 }
-            : undefined,
+        details: orphaned.length > 10 ? { additional: orphaned.length - 10 } : undefined,
       });
     } else if (listItems.length > 0) {
       checks.push({

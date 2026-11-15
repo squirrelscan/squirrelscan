@@ -39,10 +39,15 @@ describe("LINK_TARGET_SET_RULES covers the link rules' check names (repo#3022)",
     test(`${ruleId}: every check name in the source is in the map`, () => {
       const src = readFileSync(join(import.meta.dir, "..", "src", "links", file), "utf8");
       // A check name is a kebab-case `name:` literal; the rule's own display name has spaces.
-      const names = new Set([...src.matchAll(/\bname:\s*"([a-z]+(?:-[a-z]+)+)"/g)].map((m) => m[1]!));
+      const names = new Set(
+        [...src.matchAll(/\bname:\s*"([a-z]+(?:-[a-z]+)+)"/g)].map((m) => m[1]!),
+      );
       expect(names.size, "found no check names: the pattern is stale").toBeGreaterThan(0);
       const missing = [...names].filter((n) => !mapped(ruleId).has(n));
-      expect(missing, `add these to LINK_TARGET_SET_RULES["${ruleId}"] (broken, sitewide or unverified)`).toEqual([]);
+      expect(
+        missing,
+        `add these to LINK_TARGET_SET_RULES["${ruleId}"] (broken, sitewide or unverified)`,
+      ).toEqual([]);
     });
   }
 
@@ -97,7 +102,12 @@ describe("LINK_TARGET_SET_RULES covers the link rules' check names (repo#3022)",
         externalLinks: [
           link({ href: "https://a.example/gone", status: 404 }),
           link({ href: "https://b.example/flaky", status: 503 }),
-          link({ href: "https://c.example/walled", status: 403, wafBlocked: true, wafProvider: "cloudflare" }),
+          link({
+            href: "https://c.example/walled",
+            status: 403,
+            wafBlocked: true,
+            wafProvider: "cloudflare",
+          }),
           link({
             href: "https://d.example/first",
             status: 404,
@@ -139,5 +149,8 @@ describe("LINK_TARGET_SET_RULES covers the link rules' check names (repo#3022)",
 function expectListedChecksMapped(ruleId: string, checks: CheckResult[]): void {
   const listing = checks.filter((c) => (c.items?.length ?? 0) > 0).map((c) => c.name);
   const unmapped = [...new Set(listing)].filter((n) => !mapped(ruleId).has(n));
-  expect(unmapped, `${ruleId} lists targets under checks missing from LINK_TARGET_SET_RULES`).toEqual([]);
+  expect(
+    unmapped,
+    `${ruleId} lists targets under checks missing from LINK_TARGET_SET_RULES`,
+  ).toEqual([]);
 }

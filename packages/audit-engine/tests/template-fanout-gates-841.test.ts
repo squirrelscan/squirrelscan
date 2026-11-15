@@ -16,7 +16,9 @@ const withMeta = (id: string, extra: Record<string, unknown>) => ({
 
 describe("fannableRules", () => {
   test("a template-scoped rule with no gate is fannable", () => {
-    expect(fannableRules([withMeta("plugin/plain", {})]).map((r) => r.meta.id)).toEqual(["plugin/plain"]);
+    expect(fannableRules([withMeta("plugin/plain", {})]).map((r) => r.meta.id)).toEqual([
+      "plugin/plain",
+    ]);
   });
 
   test.each([

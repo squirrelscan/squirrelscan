@@ -23,7 +23,7 @@ function classify(
   reasons: string[],
   warnPatterns: string[],
   errorPatterns: string[],
-  buckets: Buckets
+  buckets: Buckets,
 ): void {
   if (reasons.length === 0) return; // indexable — nothing to report
   const pageData = { url, sources: reasons };
@@ -99,7 +99,7 @@ function buildChecks(buckets: Buckets): CheckResult[] {
 function fullReasons(
   storedReasons: string[],
   url: string,
-  robotsTxt: RobotsTxtData | null | undefined
+  robotsTxt: RobotsTxtData | null | undefined,
 ): string[] {
   const reasons = [...storedReasons];
   if (robotsTxt && isRobotsTxtDisallowed(url, robotsTxt)) {
@@ -112,7 +112,7 @@ async function runViaSiteQuery(
   siteQuery: SiteQuery,
   robotsTxt: RobotsTxtData | null | undefined,
   warnPatterns: string[],
-  errorPatterns: string[]
+  errorPatterns: string[],
 ): Promise<RuleResult> {
   const buckets: Buckets = { error: [], warn: [], info: [] };
   for await (const row of siteQuery.pagesMatching(() => true)) {
@@ -138,13 +138,13 @@ export const allNoindexPages: Rule = {
         .array(z.string())
         .default([])
         .describe(
-          "URL patterns that should trigger warning severity if noindex (e.g., '/blog/', '/products/')"
+          "URL patterns that should trigger warning severity if noindex (e.g., '/blog/', '/products/')",
         ),
       errorOnPatterns: z
         .array(z.string())
         .default([])
         .describe(
-          "URL patterns that should trigger error severity if noindex (e.g., '/landing-pages/')"
+          "URL patterns that should trigger error severity if noindex (e.g., '/landing-pages/')",
         ),
     }),
   },

@@ -51,7 +51,7 @@ function pageCtx(body: string): RuleContext {
 
 describe("links/tel-mailto with a Cloudflare obfuscated email", () => {
   test("counts it as a mailto link and does not judge it invalid", async () => {
-    const { checks } = (await telMailtoRule.run(pageCtx(`<p>${OBFUSCATED}</p>`)));
+    const { checks } = await telMailtoRule.run(pageCtx(`<p>${OBFUSCATED}</p>`));
     expect(checks.find((c) => c.name === "mailto-links")).toMatchObject({
       status: "pass",
       message: "1 mailto: link(s) found",
@@ -59,67 +59,77 @@ describe("links/tel-mailto with a Cloudflare obfuscated email", () => {
   });
 
   test("an address that cannot be decoded is counted, never reported invalid", async () => {
-    const { checks } = (await telMailtoRule.run(pageCtx(`<a href="/cdn-cgi/l/email-protection#zz">[email&#160;protected]</a>`)));
+    const { checks } = await telMailtoRule.run(
+      pageCtx(`<a href="/cdn-cgi/l/email-protection#zz">[email&#160;protected]</a>`),
+    );
     expect(checks.find((c) => c.name === "mailto-links")?.status).toBe("pass");
   });
 
   test("it sits beside a plain mailto and a tel without disturbing them", async () => {
-    const { checks } = (await telMailtoRule.run(
-      pageCtx(`${OBFUSCATED}<a href="mailto:real@example.com">mail</a><a href="tel:+15551234567">+15551234567</a>`),
-    ));
+    const { checks } = await telMailtoRule.run(
+      pageCtx(
+        `${OBFUSCATED}<a href="mailto:real@example.com">mail</a><a href="tel:+15551234567">+15551234567</a>`,
+      ),
+    );
     expect(checks.find((c) => c.name === "mailto-links")?.message).toBe("2 mailto: link(s) found");
     expect(checks.find((c) => c.name === "tel-links")?.status).toBe("pass");
   });
 
   test("one on another host is read as a mailto too, as the parser reads it (pub#811)", async () => {
-    const { checks } = (await telMailtoRule.run(
+    const { checks } = await telMailtoRule.run(
       pageCtx(`<a href="https://other.example.org/cdn-cgi/l/email-protection#2a4f">x</a>`),
-    ));
+    );
     expect(checks.find((c) => c.name === "mailto-links")?.status).toBe("pass");
   });
 });
 
 describe("raw-anchor link rules do not judge the obfuscation link as a page link", () => {
   test("links/nofollow-internal ignores it but still flags a real nofollowed internal link", async () => {
-    const only = (await nofollowInternalRule.run(
-      pageCtx(`<a rel="nofollow" href="/cdn-cgi/l/email-protection#2a4f">[email&#160;protected]</a>`),
-    ));
+    const only = await nofollowInternalRule.run(
+      pageCtx(
+        `<a rel="nofollow" href="/cdn-cgi/l/email-protection#2a4f">[email&#160;protected]</a>`,
+      ),
+    );
     expect(only.checks.map((c) => c.status)).toEqual(["pass"]);
 
-    const both = (await nofollowInternalRule.run(
+    const both = await nofollowInternalRule.run(
       pageCtx(
         `<a rel="nofollow" href="/cdn-cgi/l/email-protection#2a4f">x</a><a rel="nofollow" href="/private">y</a>`,
       ),
-    ));
+    );
     expect(both.checks[0]?.items?.map((i) => i.id)).toEqual(["/private"]);
   });
 
   test("links/https-downgrade ignores an http:// spelling of it but still flags a real downgrade", async () => {
-    const only = (await httpsDowngradeRule.run(
-      pageCtx(`<a href="http://example.com/cdn-cgi/l/email-protection#2a4f">[email&#160;protected]</a>`),
-    ));
+    const only = await httpsDowngradeRule.run(
+      pageCtx(
+        `<a href="http://example.com/cdn-cgi/l/email-protection#2a4f">[email&#160;protected]</a>`,
+      ),
+    );
     expect(only.checks.map((c) => c.status)).toEqual(["pass"]);
 
-    const both = (await httpsDowngradeRule.run(
+    const both = await httpsDowngradeRule.run(
       pageCtx(
         `<a href="http://example.com/cdn-cgi/l/email-protection#2a4f">x</a><a href="http://example.com/old">y</a>`,
       ),
-    ));
+    );
     expect(both.checks[0]?.items?.map((i) => i.id)).toEqual(["http://example.com/old"]);
   });
 });
 
 describe("links/tel-mailto: an obfuscated address that cannot be decoded", () => {
   test("is not compared with the visible text, so it raises no mismatch", async () => {
-    const { checks } = (await telMailtoRule.run(
+    const { checks } = await telMailtoRule.run(
       pageCtx(`<a href="/cdn-cgi/l/email-protection#zz">hi@example.com</a>`),
-    ));
+    );
     expect(checks.find((c) => c.name === "mailto-mismatch")).toBeUndefined();
     expect(checks.find((c) => c.name === "mailto-links")?.status).toBe("pass");
   });
 
   test("a decoded address is compared with the visible text as any mailto is", async () => {
-    const { checks } = (await telMailtoRule.run(pageCtx(`${OBFUSCATED.replace("[email&#160;protected]", "other@example.com")}`)));
+    const { checks } = await telMailtoRule.run(
+      pageCtx(`${OBFUSCATED.replace("[email&#160;protected]", "other@example.com")}`),
+    );
     expect(checks.find((c) => c.name === "mailto-mismatch")?.status).toBe("warn");
   });
 });

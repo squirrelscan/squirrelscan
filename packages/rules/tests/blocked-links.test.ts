@@ -24,9 +24,7 @@ import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function blocklistStore(data: BlocklistCheckResponse): CloudResultStore {
-  return new Map([
-    ["blocklist-check", new Map([[CLOUD_SITE_KEY, { status: "ok", data }]])],
-  ]);
+  return new Map([["blocklist-check", new Map([[CLOUD_SITE_KEY, { status: "ok", data }]])]]);
 }
 
 function ctxFor(
@@ -73,15 +71,11 @@ function pageWithScripts(url: string, ...srcs: string[]): { url: string; html: s
 describe("describeBlockedResource", () => {
   test("names known vendor by registrable domain", () => {
     expect(describeBlockedResource(TW)).toBe("ads-twitter.com — X/Twitter ad pixel");
-    expect(describeBlockedResource(FB)).toBe(
-      "connect.facebook.net — Meta/Facebook pixel",
-    );
+    expect(describeBlockedResource(FB)).toBe("connect.facebook.net — Meta/Facebook pixel");
   });
 
   test("falls back to hostname for unknown vendors", () => {
-    expect(describeBlockedResource("https://tracker.example.io/a.js")).toBe(
-      "tracker.example.io",
-    );
+    expect(describeBlockedResource("https://tracker.example.io/a.js")).toBe("tracker.example.io");
   });
 
   test("returns the raw value for non-URL input", () => {
@@ -124,10 +118,7 @@ describe("findSourcePages", () => {
         },
       ],
     );
-    expect(findSourcePages(ctx, TW)).toEqual([
-      "https://example.com/p1",
-      "https://example.com/p2",
-    ]);
+    expect(findSourcePages(ctx, TW)).toEqual(["https://example.com/p1", "https://example.com/p2"]);
   });
 
   test("returns empty for an unreferenced resource", () => {

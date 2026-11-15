@@ -3,7 +3,12 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, FindingState, PageFindingRecord, SitePageRecord } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  FindingState,
+  PageFindingRecord,
+  SitePageRecord,
+} from "@squirrelscan/core-contracts";
 import { buildSupersededIndex, judgeSuperseded } from "@squirrelscan/core-contracts/resolution";
 import { parsePage } from "@squirrelscan/parser";
 import { loadAllRules } from "@squirrelscan/rules";
@@ -25,7 +30,8 @@ class MemStore implements SmartAuditStore {
     return [...this.pages.values()];
   }
   async upsertFindings(findings: PageFindingRecord[]) {
-    for (const f of findings) this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+    for (const f of findings)
+      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
   }
   async upsertSitePages(pages: SitePageRecord[]) {
     for (const p of pages) this.pages.set(p.normalizedUrl, { ...p });
@@ -45,7 +51,8 @@ const NOW = 1_780_000_000_000;
 const URL = "https://shop.test/p";
 const RULE = "core/meta-title";
 const FIXED = "A title of a perfectly fine length here";
-const LONG = "Classic trail mix: a generous, hand-mixed blend of nuts, seeds and dried fruit | The Nut Shop";
+const LONG =
+  "Classic trail mix: a generous, hand-mixed blend of nuts, seeds and dried fruit | The Nut Shop";
 
 function titleChecks(title: string | null): CheckResult[] {
   const html = `<!doctype html><html lang="en"><head>${title === null ? "" : `<title>${title}</title>`}</head><body><h1>x</h1></body></html>`;
@@ -60,10 +67,27 @@ function titleChecks(title: string | null): CheckResult[] {
 async function audit(pageChecks: CheckResult[], withNeighbour = false, locator = URL) {
   // A second page that evaluates both successors, so their keys exist in the signal (an absent key resolves everything).
   const other = "https://shop.test/q";
-  const checks = withNeighbour ? [...pageChecks, ...titleChecks(FIXED).map((c) => ({ ...c, pageUrl: other }))] : pageChecks;
+  const checks = withNeighbour
+    ? [...pageChecks, ...titleChecks(FIXED).map((c) => ({ ...c, pageUrl: other }))]
+    : pageChecks;
   const store = new MemStore();
-  if (withNeighbour) store.pages.set(other, { siteKey: SITE, normalizedUrl: other, lastStatus: 200, state: "active", lastSeenCrawlId: "a0", lastSeenAt: NOW - 1000 });
-  store.pages.set(URL, { siteKey: SITE, normalizedUrl: URL, lastStatus: 200, state: "active", lastSeenCrawlId: "a0", lastSeenAt: NOW - 1000 });
+  if (withNeighbour)
+    store.pages.set(other, {
+      siteKey: SITE,
+      normalizedUrl: other,
+      lastStatus: 200,
+      state: "active",
+      lastSeenCrawlId: "a0",
+      lastSeenAt: NOW - 1000,
+    });
+  store.pages.set(URL, {
+    siteKey: SITE,
+    normalizedUrl: URL,
+    lastStatus: 200,
+    state: "active",
+    lastSeenCrawlId: "a0",
+    lastSeenAt: NOW - 1000,
+  });
   // The earlier audit stored the title finding under the old name, keyed by the page url (the item id).
   store.findings.set(findingKey(URL, RULE, "meta-title", locator), {
     siteKey: SITE,
@@ -117,7 +141,9 @@ describe("a finding under a superseded check name follows its successors", () =>
 
   test("a successor that was not checked: the old finding is carried, never resolved", async () => {
     const checks = titleChecks(FIXED).map((c) =>
-      c.name === "meta-title-too-short" ? ({ ...c, status: "skipped", message: "Skipped" } as CheckResult) : c,
+      c.name === "meta-title-too-short"
+        ? ({ ...c, status: "skipped", message: "Skipped" } as CheckResult)
+        : c,
     );
     const store = await audit(checks, true);
     expect(old(store).state).toBe("open");
@@ -169,10 +195,21 @@ describe("a title that is MISSING in both runs is still the old check's finding 
       supersededChecks: buildSupersededIndex([metaTitleRule.meta]),
       statusByUrl: new Map([[URL, 200]]),
       priorFindings: [prior],
-      priorPages: [{ siteKey: SITE, normalizedUrl: URL, lastStatus: 200, state: "active", lastSeenCrawlId: "a0", lastSeenAt: NOW - 1000 }],
+      priorPages: [
+        {
+          siteKey: SITE,
+          normalizedUrl: URL,
+          lastStatus: 200,
+          state: "active",
+          lastSeenCrawlId: "a0",
+          lastSeenAt: NOW - 1000,
+        },
+      ],
       now: NOW,
     });
-    const row = merged.persisted.find((f) => f.checkName === "meta-title" && f.normalizedUrl === URL)!;
+    const row = merged.persisted.find(
+      (f) => f.checkName === "meta-title" && f.normalizedUrl === URL,
+    )!;
     expect(row.state).toBe("open");
     expect(row.firstSeenAt).toBe(NOW - 86_400_000);
   });

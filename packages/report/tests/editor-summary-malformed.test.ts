@@ -46,7 +46,10 @@ const MALFORMED: Array<[string, unknown]> = [
   ["missing prose", { bigTicket: [], verdict: "v", model: "m", generatedAt: "t" }],
   ["the whole body replaced by an envelope", { ok: true }],
   ["prose is not a string", { prose: 42, bigTicket: [], verdict: "", model: "", generatedAt: "" }],
-  ["prose is blank", { prose: "   \n\n  ", bigTicket: [], verdict: "", model: "", generatedAt: "" }],
+  [
+    "prose is blank",
+    { prose: "   \n\n  ", bigTicket: [], verdict: "", model: "", generatedAt: "" },
+  ],
   ["prose is null", { prose: null, bigTicket: [], verdict: "", model: "", generatedAt: "" }],
 ];
 

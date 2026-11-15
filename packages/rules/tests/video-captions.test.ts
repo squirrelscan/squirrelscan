@@ -34,10 +34,10 @@ const REPRO = `<h1>Shop</h1>\n<video src="/v.mp4" muted autoplay loop playsinlin
 
 describe("decorative video exemption", () => {
   test("reporter repro passes in both rules and records the skip", async () => {
-    const c = (await captions(REPRO));
+    const c = await captions(REPRO);
     expect(c.status).toBe("pass");
     expect(c.details).toEqual({ videosChecked: 0, decorativeSkipped: 1 });
-    const a = (await accessible(REPRO));
+    const a = await accessible(REPRO);
     expect(a.status).toBe("pass");
     expect(a.details).toEqual({ videosChecked: 0, decorativeSkipped: 1 });
   });
@@ -66,7 +66,7 @@ describe("decorative video exemption", () => {
     ["autoplay loop, not muted", `<video src="/v.mp4" autoplay loop></video>`],
     ["muted with no autoplay or loop", `<video src="/v.mp4" muted></video>`],
   ])("still warns in both rules: %s", async (_label, body) => {
-    const c = (await captions(body));
+    const c = await captions(body);
     expect(c.status).toBe("warn");
     expect(c.items).toHaveLength(1);
     expect((await accessible(body)).status).toBe("warn");
@@ -74,7 +74,7 @@ describe("decorative video exemption", () => {
 
   test("one decorative video and one with controls and no track: warns with count 1", async () => {
     const body = `${REPRO}\n<video src="/talk.mp4" controls></video>`;
-    const c = (await captions(body));
+    const c = await captions(body);
     expect(c.status).toBe("warn");
     expect(c.message).toBe("1 video(s) without caption tracks");
     expect(c.items).toHaveLength(1);

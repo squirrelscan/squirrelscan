@@ -138,7 +138,12 @@ function buildChecks(rollup: VoiceRollup, sitePageCount: number): CheckResult[] 
   const med = median(rollup.scores);
   const inBand = rollup.scores.filter((s) => Math.abs(s - med) <= VOICE_BAND).length;
   if (inBand / sample < VOICE_MIN_AGREEMENT) {
-    return [skip("The pages' reading levels do not cluster around one norm, so no page is an outlier", rollup)];
+    return [
+      skip(
+        "The pages' reading levels do not cluster around one norm, so no page is an outlier",
+        rollup,
+      ),
+    ];
   }
 
   const mad = median(rollup.scores.map((s) => Math.abs(s - med)));

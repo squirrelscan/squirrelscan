@@ -97,7 +97,7 @@ describe("mobile/web-app-manifest", () => {
 
   test("a manifest that answers 404 is an error naming the manifest URL and the linking pages", async () => {
     const check = only(
-      (await run([
+      await run([
         manifestData({
           status: 404,
           content: null,
@@ -105,7 +105,7 @@ describe("mobile/web-app-manifest", () => {
           contentType: "text/html",
           sourcePages: [PAGE, "https://example.com/about"],
         }),
-      ])),
+      ]),
     );
     expect(check.status).toBe("fail");
     expect(check.message).toContain(MANIFEST_URL);
@@ -119,7 +119,9 @@ describe("mobile/web-app-manifest", () => {
     expect(junk.message).toContain("not a valid JSON object");
 
     const html = only(
-      (await run([manifestData({ content: "<!doctype html><html></html>", contentType: "text/html" })])),
+      await run([
+        manifestData({ content: "<!doctype html><html></html>", contentType: "text/html" }),
+      ]),
     );
     expect(html.status).toBe("fail");
   });
@@ -131,7 +133,7 @@ describe("mobile/web-app-manifest", () => {
     expect(itemText(plain)).toContain("text/plain");
 
     const manifest = only(
-      (await run([manifestData({ contentType: "application/manifest+json; charset=utf-8" })])),
+      await run([manifestData({ contentType: "application/manifest+json; charset=utf-8" })]),
     );
     expect(manifest.status).toBe("pass");
     expect(itemText(manifest)).not.toContain("content-type");
@@ -142,23 +144,27 @@ describe("mobile/web-app-manifest", () => {
 
   test("a manifest missing name and short_name, start_url, or display warns naming each field", async () => {
     const noNames = only(
-      (await run([
+      await run([
         manifestData({
           content: JSON.stringify({ ...VALID_MANIFEST, name: undefined, short_name: undefined }),
         }),
-      ])),
+      ]),
     );
     expect(noNames.status).toBe("warn");
     expect(itemText(noNames)).toContain('"name" and "short_name"');
 
     const noStart = only(
-      (await run([manifestData({ content: JSON.stringify({ ...VALID_MANIFEST, start_url: undefined }) })])),
+      await run([
+        manifestData({ content: JSON.stringify({ ...VALID_MANIFEST, start_url: undefined }) }),
+      ]),
     );
     expect(noStart.status).toBe("warn");
     expect(itemText(noStart)).toContain('"start_url"');
 
     const noDisplay = only(
-      (await run([manifestData({ content: JSON.stringify({ ...VALID_MANIFEST, display: undefined }) })])),
+      await run([
+        manifestData({ content: JSON.stringify({ ...VALID_MANIFEST, display: undefined }) }),
+      ]),
     );
     expect(noDisplay.status).toBe("warn");
     expect(itemText(noDisplay)).toContain('"display"');
@@ -166,31 +172,33 @@ describe("mobile/web-app-manifest", () => {
 
   test("a start_url on another origin warns; the same path on the manifest origin does not", async () => {
     const other = only(
-      (await run([
+      await run([
         manifestData({
           content: JSON.stringify({ ...VALID_MANIFEST, start_url: "https://elsewhere.test/app" }),
         }),
-      ])),
+      ]),
     );
     expect(other.status).toBe("warn");
     expect(itemText(other)).toContain("another origin");
 
     const same = only(
-      (await run([manifestData({ content: JSON.stringify({ ...VALID_MANIFEST, start_url: "/app" }) })])),
+      await run([
+        manifestData({ content: JSON.stringify({ ...VALID_MANIFEST, start_url: "/app" }) }),
+      ]),
     );
     expect(same.status).toBe("pass");
   });
 
   test("a manifest with no 512px PNG icon warns; one with 192px and 512px PNG icons does not", async () => {
     const noBig = only(
-      (await run([
+      await run([
         manifestData({
           content: JSON.stringify({
             ...VALID_MANIFEST,
             icons: [{ src: "/icons/192.png", sizes: "192x192", type: "image/png" }],
           }),
         }),
-      ])),
+      ]),
     );
     expect(noBig.status).toBe("warn");
     expect(itemText(noBig)).toContain("no 512x512 PNG icon");
@@ -202,21 +210,21 @@ describe("mobile/web-app-manifest", () => {
 
   test("an icon declared 512x512 whose file is 256x256 warns showing both sizes; a 404 icon warns naming its URL", async () => {
     const mismatch = only(
-      (await run([
+      await run([
         manifestData({
           icons: [
             okIcon("https://example.com/icons/192.png"),
             okIcon("https://example.com/icons/512.png", [256, 256]),
           ],
         }),
-      ])),
+      ]),
     );
     expect(mismatch.status).toBe("warn");
     expect(itemText(mismatch)).toContain("declared 512x512");
     expect(itemText(mismatch)).toContain("256x256");
 
     const missing = only(
-      (await run([
+      await run([
         manifestData({
           icons: [
             {
@@ -229,7 +237,7 @@ describe("mobile/web-app-manifest", () => {
             okIcon("https://example.com/icons/512.png"),
           ],
         }),
-      ])),
+      ]),
     );
     expect(missing.status).toBe("warn");
     expect(itemText(missing)).toContain("https://example.com/icons/192.png");
@@ -238,13 +246,15 @@ describe("mobile/web-app-manifest", () => {
 
   test("a theme-color that differs from the manifest warns; a light/dark pair where one matches does not", async () => {
     const differs = only(
-      (await run([manifestData({ themeColorsByPage: { [PAGE]: [{ content: "#000", media: null }] } })])),
+      await run([
+        manifestData({ themeColorsByPage: { [PAGE]: [{ content: "#000", media: null }] } }),
+      ]),
     );
     expect(differs.status).toBe("warn");
     expect(itemText(differs)).toContain("theme-color");
 
     const pair = only(
-      (await run([
+      await run([
         manifestData({
           themeColorsByPage: {
             [PAGE]: [
@@ -253,14 +263,14 @@ describe("mobile/web-app-manifest", () => {
             ],
           },
         }),
-      ])),
+      ]),
     );
     expect(pair.status).toBe("pass");
   });
 
   test("a manifest with no maskable icon is an info result, not a warning", async () => {
     const check = only(
-      (await run([
+      await run([
         manifestData({
           content: JSON.stringify({
             ...VALID_MANIFEST,
@@ -270,7 +280,7 @@ describe("mobile/web-app-manifest", () => {
             ],
           }),
         }),
-      ])),
+      ]),
     );
     expect(check.status).toBe("info");
     expect(itemText(check)).toContain("maskable");
@@ -278,21 +288,21 @@ describe("mobile/web-app-manifest", () => {
 
   test("ten pages linking the same manifest produce one finding listing those pages", async () => {
     const pages = Array.from({ length: 10 }, (_, i) => `https://example.com/p${i}`);
-    const checks = (await run([
+    const checks = await run([
       manifestData({
         sourcePages: pages,
         themeColorsByPage: Object.fromEntries(
           pages.map((p) => [p, [{ content: "#ffffff", media: null }]]),
         ),
       }),
-    ]));
+    ]);
     expect(checks).toHaveLength(1);
     expect(checks[0]?.pages).toEqual(pages);
     expect(checks[0]?.status).toBe("pass");
   });
 
   test("one finding per manifest URL when a site links two manifests", async () => {
-    const checks = (await run([
+    const checks = await run([
       manifestData({
         url: "https://example.com/a.webmanifest",
         content: null,
@@ -300,14 +310,14 @@ describe("mobile/web-app-manifest", () => {
         error: "HTTP 500",
       }),
       manifestData({ url: "https://example.com/b.webmanifest" }),
-    ]));
+    ]);
     expect(checks).toHaveLength(2);
     expect(checks[0]?.value).toBe("https://example.com/a.webmanifest");
     expect(checks[1]?.value).toBe("https://example.com/b.webmanifest");
   });
 
   test("the rule never reports a missing apple-touch-icon; that stays with core/favicon", async () => {
-    const checks = (await run([manifestData()]));
+    const checks = await run([manifestData()]);
     expect(JSON.stringify(checks)).not.toContain("apple-touch");
   });
 
@@ -329,12 +339,12 @@ describe("mobile/web-app-manifest", () => {
 
     // start_url "./app" from /static/m.json resolves to /static/app, same origin: no warning.
     const check = only(
-      (await run([
+      await run([
         manifestData({
           url: manifestAt,
           content: JSON.stringify({ ...VALID_MANIFEST, start_url: "./app" }),
         }),
-      ])),
+      ]),
     );
     expect(check.status).toBe("pass");
   });
@@ -348,7 +358,9 @@ describe("mobile/web-app-manifest", () => {
     const rgbManifest = only(await run([manifestData({ content })]));
     expect(itemText(rgbManifest)).not.toContain("theme-color");
     const namedMeta = only(
-      (await run([manifestData({ themeColorsByPage: { [PAGE]: [{ content: "white", media: null }] } })])),
+      await run([
+        manifestData({ themeColorsByPage: { [PAGE]: [{ content: "white", media: null }] } }),
+      ]),
     );
     expect(itemText(namedMeta)).not.toContain("theme-color");
   });
@@ -356,7 +368,9 @@ describe("mobile/web-app-manifest", () => {
   test("site-controlled text in messages is cut at 120 characters", async () => {
     const longStart = `http://[${"a".repeat(400)}`;
     const content = JSON.stringify({ ...VALID_MANIFEST, start_url: longStart });
-    const check = only(await run([manifestData({ content, contentType: `text/${"x".repeat(400)}` })]));
+    const check = only(
+      await run([manifestData({ content, contentType: `text/${"x".repeat(400)}` })]),
+    );
     for (const item of check.items ?? []) expect((item.label ?? "").length).toBeLessThan(220);
     expect(itemText(check)).toContain("...");
   });

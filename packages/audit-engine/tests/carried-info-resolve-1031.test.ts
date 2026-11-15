@@ -25,7 +25,8 @@ class MemStore implements SmartAuditStore {
     return [...this.pages.values()];
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
-    for (const f of findings) this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+    for (const f of findings)
+      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
     for (const p of pages) this.pages.set(p.normalizedUrl, { ...p });
@@ -38,13 +39,22 @@ class MemStore implements SmartAuditStore {
 }
 
 const RULE = "a11y/form-labels";
-const meta = { id: RULE, name: "Form labels", description: "d", category: "a11y", scope: "page" as const, severity: "error" as const, weight: 5 };
+const meta = {
+  id: RULE,
+  name: "Form labels",
+  description: "d",
+  category: "a11y",
+  scope: "page" as const,
+  severity: "error" as const,
+  weight: 5,
+};
 const P = "https://x.test/";
 const Q = "https://x.test/other";
 const items = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `input-${i}` }));
 
 const run = (checks: object[]) => ({ [RULE]: { meta, checks } as never });
-const status = (store: MemStore) => [...store.findings.values()].map((f) => `${f.checkName}:${f.state}`);
+const status = (store: MemStore) =>
+  [...store.findings.values()].map((f) => `${f.checkName}:${f.state}`);
 
 describe("a fresh info result on a re-crawled page resolves the old fail rows (#1031)", () => {
   const crawled = [P, Q].map((url) => ({ url, status: 200 }));
@@ -52,12 +62,32 @@ describe("a fresh info result on a re-crawled page resolves the old fail rows (#
   async function rerun(fresh: object[], signal: boolean) {
     const store = new MemStore();
     const first = run([
-      { name: "form-labels", status: "fail", message: "50 form input(s) without labels", pageUrl: P, items: items(50) },
+      {
+        name: "form-labels",
+        status: "fail",
+        message: "50 form input(s) without labels",
+        pageUrl: P,
+        items: items(50),
+      },
       { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
     ]);
-    await runCloudSmartAudits({ store, siteKey: "web_1", crawlId: "audit_1", ruleResults: first, pageStatuses: crawled, ...(signal ? { resolutionSignal: buildResolutionSignal(first, [P, Q]) } : {}) });
+    await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: first,
+      pageStatuses: crawled,
+      ...(signal ? { resolutionSignal: buildResolutionSignal(first, [P, Q]) } : {}),
+    });
     const second = run(fresh);
-    const r = await runCloudSmartAudits({ store, siteKey: "web_1", crawlId: "audit_2", ruleResults: second, pageStatuses: crawled, ...(signal ? { resolutionSignal: buildResolutionSignal(second, [P, Q]) } : {}) });
+    const r = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_2",
+      ruleResults: second,
+      pageStatuses: crawled,
+      ...(signal ? { resolutionSignal: buildResolutionSignal(second, [P, Q]) } : {}),
+    });
     const open = await store.getFindings("web_1", ["open"]);
     return { open: open.filter((f) => f.checkName === "form-labels"), coverage: r.coverage };
   }
@@ -91,7 +121,13 @@ describe("a fresh info result on a re-crawled page resolves the old fail rows (#
     test(`control: a check explicitly skipped on the page still carries${signal ? " (signal)" : ""}, and coverage names the page`, async () => {
       const { open, coverage } = await rerun(
         [
-          { name: "form-labels", status: "skipped", message: "not evaluated", skipReason: "no_data", pageUrl: P },
+          {
+            name: "form-labels",
+            status: "skipped",
+            message: "not evaluated",
+            skipReason: "no_data",
+            pageUrl: P,
+          },
           { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
         ],
         signal,
@@ -118,7 +154,13 @@ describe("a fresh info result on a re-crawled page resolves the old fail rows (#
     test(`an inconclusive info (could not judge) carries the old fail${signal ? " (signal)" : ""}; a plain info resolves it`, async () => {
       const inconclusive = await rerun(
         [
-          { name: "form-labels", status: "info", message: "Content too short for analysis", pageUrl: P, details: { inconclusive: true } },
+          {
+            name: "form-labels",
+            status: "info",
+            message: "Content too short for analysis",
+            pageUrl: P,
+            details: { inconclusive: true },
+          },
           { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
         ],
         signal,
@@ -133,24 +175,35 @@ describe("a fresh info result on a re-crawled page resolves the old fail rows (#
       );
       expect(plain.open.length).toBe(0);
     });
-
   }
 
-    test("an inconclusive info on a DIFFERENT check of the rule does not make the page clean for the first (signal)", async () => {
-      const r = await rerun(
-        [
-          { name: "form-labels-other", status: "info", message: "unreadable", pageUrl: P, details: { inconclusive: true } },
-          { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
-        ],
-        true,
-      );
-      expect(r.open.length).toBe(50);
-    });
+  test("an inconclusive info on a DIFFERENT check of the rule does not make the page clean for the first (signal)", async () => {
+    const r = await rerun(
+      [
+        {
+          name: "form-labels-other",
+          status: "info",
+          message: "unreadable",
+          pageUrl: P,
+          details: { inconclusive: true },
+        },
+        { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
+      ],
+      true,
+    );
+    expect(r.open.length).toBe(50);
+  });
 
   test("a scan-truncated check on the page still carries, whatever else the rule said there", async () => {
     const r = await rerun(
       [
-        { name: "form-labels", status: "skipped", message: "scan stopped", skipReason: "scan-truncated", pageUrl: P },
+        {
+          name: "form-labels",
+          status: "skipped",
+          message: "scan stopped",
+          skipReason: "scan-truncated",
+          pageUrl: P,
+        },
         { name: "form-labels-other", status: "pass", message: "ok", pageUrl: P },
         { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
       ],
@@ -161,7 +214,13 @@ describe("a fresh info result on a re-crawled page resolves the old fail rows (#
     // the page is in the truncated check's notEvaluated set although the rule passed another check there.
     const signal = buildResolutionSignal(
       run([
-        { name: "form-labels", status: "skipped", message: "scan stopped", skipReason: "scan-truncated", pageUrl: P },
+        {
+          name: "form-labels",
+          status: "skipped",
+          message: "scan stopped",
+          skipReason: "scan-truncated",
+          pageUrl: P,
+        },
         { name: "form-labels-other", status: "pass", message: "ok", pageUrl: P },
         { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
       ]),
@@ -181,13 +240,41 @@ describe("every crawled page inconclusive for a check still carries (#1031)", ()
         { name: "form-labels", status: "fail", message: "bad", pageUrl: P, items: items(3) },
         { name: "form-labels", status: "fail", message: "bad", pageUrl: P2, items: items(3) },
       ]);
-      await runCloudSmartAudits({ store, siteKey: "web_1", crawlId: "audit_1", ruleResults: first, pageStatuses: crawled, ...(signal ? { resolutionSignal: buildResolutionSignal(first, [P, P2]) } : {}) });
+      await runCloudSmartAudits({
+        store,
+        siteKey: "web_1",
+        crawlId: "audit_1",
+        ruleResults: first,
+        pageStatuses: crawled,
+        ...(signal ? { resolutionSignal: buildResolutionSignal(first, [P, P2]) } : {}),
+      });
       const second = run([
-        { name: "form-labels", status: "info", message: "unclassified", pageUrl: P, details: { inconclusive: true } },
-        { name: "form-labels", status: "info", message: "unclassified", pageUrl: P2, details: { inconclusive: true } },
+        {
+          name: "form-labels",
+          status: "info",
+          message: "unclassified",
+          pageUrl: P,
+          details: { inconclusive: true },
+        },
+        {
+          name: "form-labels",
+          status: "info",
+          message: "unclassified",
+          pageUrl: P2,
+          details: { inconclusive: true },
+        },
       ]);
-      const r = await runCloudSmartAudits({ store, siteKey: "web_1", crawlId: "audit_2", ruleResults: second, pageStatuses: crawled, ...(signal ? { resolutionSignal: buildResolutionSignal(second, [P, P2]) } : {}) });
-      const open = (await store.getFindings("web_1", ["open"])).filter((f) => f.checkName === "form-labels");
+      const r = await runCloudSmartAudits({
+        store,
+        siteKey: "web_1",
+        crawlId: "audit_2",
+        ruleResults: second,
+        pageStatuses: crawled,
+        ...(signal ? { resolutionSignal: buildResolutionSignal(second, [P, P2]) } : {}),
+      });
+      const open = (await store.getFindings("web_1", ["open"])).filter(
+        (f) => f.checkName === "form-labels",
+      );
       expect(open.length).toBe(6);
       expect(r.coverage.carriedFindings).toBe(6);
     });

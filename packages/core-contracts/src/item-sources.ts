@@ -68,7 +68,7 @@ export function itemSourceDetail(source: CheckItemSource): string {
  * page-scope rule sets as its item's `regions`; undefined when no section is known.
  */
 export function pageRegions(
-  sections: Iterable<LinkSection | undefined>
+  sections: Iterable<LinkSection | undefined>,
 ): LinkSectionCounts | undefined {
   const regions: LinkSectionCounts = {};
   let any = false;
@@ -83,7 +83,7 @@ export function pageRegions(
 /** `into` plus `from`, section by section; `into` when `from` adds nothing. A new object otherwise. */
 export function addRegions(
   into: LinkSectionCounts | undefined,
-  from: LinkSectionCounts | undefined
+  from: LinkSectionCounts | undefined,
 ): LinkSectionCounts | undefined {
   if (!from) return into;
   const out: LinkSectionCounts = { ...into };

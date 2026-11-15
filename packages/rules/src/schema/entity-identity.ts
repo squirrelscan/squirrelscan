@@ -40,9 +40,7 @@ export const entityIdentityRule: Rule = {
     // Named, multi-page, no `@id`, and of a type a search engine reconciles
     // site-wide. A one-page entity with no `@id` is ordinary, not a problem:
     // there is only one declaration, so there is nothing to tie together.
-    const offenders = map.nodes
-      .filter(isNoIdIdentityNode)
-      .sort(byReach);
+    const offenders = map.nodes.filter(isNoIdIdentityNode).sort(byReach);
 
     if (offenders.length === 0) {
       return {

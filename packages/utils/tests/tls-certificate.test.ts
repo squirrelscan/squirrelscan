@@ -62,16 +62,28 @@ describe("readPeerCertificate", () => {
   });
 
   test("key type, size, curve and signature come from the extras, or from the peer certificate's own fields (#1259)", () => {
-    const base = { issuer: { CN: "CA" }, valid_from: "Jan  1 00:00:00 2025 GMT", valid_to: "Jan  1 00:00:00 2099 GMT" };
-    expect(readPeerCertificate({ ...base, bits: 256, asn1Curve: "prime256v1", nistCurve: "P-256" })).toMatchObject({
+    const base = {
+      issuer: { CN: "CA" },
+      valid_from: "Jan  1 00:00:00 2025 GMT",
+      valid_to: "Jan  1 00:00:00 2099 GMT",
+    };
+    expect(
+      readPeerCertificate({ ...base, bits: 256, asn1Curve: "prime256v1", nistCurve: "P-256" }),
+    ).toMatchObject({
       keyType: "ecdsa",
       keyBits: 256,
       curve: "P-256",
     });
-    const ed = readPeerCertificate({ ...base, bits: 256 }, { keyType: "ed25519", signatureAlgorithm: "ED25519" });
+    const ed = readPeerCertificate(
+      { ...base, bits: 256 },
+      { keyType: "ed25519", signatureAlgorithm: "ED25519" },
+    );
     expect(ed).toMatchObject({ keyType: "ed25519", signatureAlgorithm: "ED25519" });
     expect(ed?.keyBits).toBeUndefined();
-    expect(readPeerCertificate({ ...base }, { keyType: "dsa", keyBits: 1024 })).toMatchObject({ keyType: "dsa", keyBits: 1024 });
+    expect(readPeerCertificate({ ...base }, { keyType: "dsa", keyBits: 1024 })).toMatchObject({
+      keyType: "dsa",
+      keyBits: 1024,
+    });
     expect(readPeerCertificate({ ...base }, { keyType: "ec" })?.keyType).toBe("ecdsa");
     expect(readPeerCertificate({ ...base }, { keyType: "x448" })?.keyType).toBe("other");
     // Nothing known: no key facts at all.
@@ -80,7 +92,11 @@ describe("readPeerCertificate", () => {
 
   test("the signature algorithm and curve are bounded and lose control characters", () => {
     const certificate = readPeerCertificate(
-      { issuer: { CN: "CA" }, valid_from: "Jan  1 00:00:00 2025 GMT", valid_to: "Jan  1 00:00:00 2099 GMT" },
+      {
+        issuer: { CN: "CA" },
+        valid_from: "Jan  1 00:00:00 2025 GMT",
+        valid_to: "Jan  1 00:00:00 2099 GMT",
+      },
       { keyType: "rsa", keyBits: 2048, signatureAlgorithm: `sha1\u001b[31mWith${"x".repeat(200)}` },
     );
     expect(certificate?.signatureAlgorithm).not.toContain("\u001b");
@@ -114,16 +130,21 @@ describe("authorizationErrorCode", () => {
   test("reads a code from an Error, a string, or nothing", () => {
     expect(authorizationErrorCode(undefined)).toBeUndefined();
     expect(authorizationErrorCode(null)).toBeUndefined();
-    expect(authorizationErrorCode("DEPTH_ZERO_SELF_SIGNED_CERT")).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
-    expect(authorizationErrorCode(Object.assign(new Error("x"), { code: "CERT_HAS_EXPIRED" }))).toBe(
-      "CERT_HAS_EXPIRED",
+    expect(authorizationErrorCode("DEPTH_ZERO_SELF_SIGNED_CERT")).toBe(
+      "DEPTH_ZERO_SELF_SIGNED_CERT",
     );
+    expect(
+      authorizationErrorCode(Object.assign(new Error("x"), { code: "CERT_HAS_EXPIRED" })),
+    ).toBe("CERT_HAS_EXPIRED");
     expect(authorizationErrorCode(new Error("plain message"))).toBe("plain message");
   });
 });
 
 describe("certificateProblems", () => {
-  const served = (trustError?: string, names = ["example.com"]): Extract<TlsProbe, { kind: "certificate" }> => ({
+  const served = (
+    trustError?: string,
+    names = ["example.com"],
+  ): Extract<TlsProbe, { kind: "certificate" }> => ({
     kind: "certificate",
     certificate: {
       names,
@@ -140,9 +161,9 @@ describe("certificateProblems", () => {
     expect(certificateProblems(served("DEPTH_ZERO_SELF_SIGNED_CERT"), "example.com", NOW)).toEqual([
       { kind: "self-signed" },
     ]);
-    expect(certificateProblems(served("UNABLE_TO_VERIFY_LEAF_SIGNATURE"), "example.com", NOW)).toEqual([
-      { kind: "incomplete-chain" },
-    ]);
+    expect(
+      certificateProblems(served("UNABLE_TO_VERIFY_LEAF_SIGNATURE"), "example.com", NOW),
+    ).toEqual([{ kind: "incomplete-chain" }]);
     expect(certificateProblems(served("SELF_SIGNED_CERT_IN_CHAIN"), "example.com", NOW)).toEqual([
       { kind: "untrusted-root", code: "SELF_SIGNED_CERT_IN_CHAIN" },
     ]);
@@ -150,7 +171,11 @@ describe("certificateProblems", () => {
 
   test("a name mismatch is reported once, from the names, not again from the chain", () => {
     expect(
-      certificateProblems(served("ERR_TLS_CERT_ALTNAME_INVALID", ["other.test"]), "example.com", NOW),
+      certificateProblems(
+        served("ERR_TLS_CERT_ALTNAME_INVALID", ["other.test"]),
+        "example.com",
+        NOW,
+      ),
     ).toEqual([{ kind: "hostname", hostname: "example.com", names: ["other.test"] }]);
   });
 });
@@ -209,19 +234,27 @@ describe("tlsFailureCause", () => {
   });
 
   test("names the hostname the certificate does not cover", () => {
-    const probe = { ...certAt(new Date("2099-01-01T00:00:00Z"), ["other.test"]), trustError: "ERR_TLS_CERT_ALTNAME_INVALID" };
+    const probe = {
+      ...certAt(new Date("2099-01-01T00:00:00Z"), ["other.test"]),
+      trustError: "ERR_TLS_CERT_ALTNAME_INVALID",
+    };
     expect(tlsFailureCause(probe, "example.com", NOW)).toBe(
       "hostname/IP does not match: the certificate does not cover example.com",
     );
   });
 
   test("names a missing intermediate", () => {
-    const probe = { ...certAt(new Date("2099-01-01T00:00:00Z")), trustError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE" };
+    const probe = {
+      ...certAt(new Date("2099-01-01T00:00:00Z")),
+      trustError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    };
     expect(tlsFailureCause(probe, "example.com", NOW)).toContain("did not send its intermediate");
   });
 
   test("returns nothing when the handshake found no problem or could not look", () => {
-    expect(tlsFailureCause({ kind: "unavailable", reason: "no tls" }, "example.com", NOW)).toBeUndefined();
+    expect(
+      tlsFailureCause({ kind: "unavailable", reason: "no tls" }, "example.com", NOW),
+    ).toBeUndefined();
     const valid = { ...certAt(new Date("2099-01-01T00:00:00Z")), trusted: true };
     expect(tlsFailureCause(valid, "example.com", NOW)).toBeUndefined();
   });
@@ -239,9 +272,9 @@ describe("shared packages open no raw socket", () => {
   // nothing. Tests are not shipped, and their fixture servers are sockets.
   const packagesRoot = join(import.meta.dir, "..", "..");
   const TLS_PROBE_FILE = "tls-probe/src/index.ts";
-  const files = [...new Bun.Glob("*/src/**/*.{ts,tsx,js,mjs,cjs}").scanSync({ cwd: packagesRoot })].filter(
-    (file) => !/\.test\.[cm]?[jt]sx?$/.test(file) && file !== TLS_PROBE_FILE,
-  );
+  const files = [
+    ...new Bun.Glob("*/src/**/*.{ts,tsx,js,mjs,cjs}").scanSync({ cwd: packagesRoot }),
+  ].filter((file) => !/\.test\.[cm]?[jt]sx?$/.test(file) && file !== TLS_PROBE_FILE);
   const SOCKET_MODULE =
     /(?:(?:import|export)\s*(\{[^}]*\}|\*\s+as\s+\w+|\*|\w+)?\s*(?:from\s*)?|import\s*\(\s*|require\s*\(\s*)["'](?:node:)?(tls|net|http2|dgram)["']/g;
   const BUN_SOCKET_IMPORT = /import\s*\{([^}]*)\}\s*from\s*["']bun["']/g;
@@ -306,13 +339,18 @@ describe("shared packages open no raw socket", () => {
 
   test("no shared package imports the probe, and only its own package holds it", () => {
     const importers = files.filter((file) =>
-      /@squirrelscan\/tls-probe|tls-probe\/src|\.\/tls-probe/.test(readFileSync(join(packagesRoot, file), "utf8")),
+      /@squirrelscan\/tls-probe|tls-probe\/src|\.\/tls-probe/.test(
+        readFileSync(join(packagesRoot, file), "utf8"),
+      ),
     );
     expect(importers).toEqual([]);
     for (const pkg of [...new Bun.Glob("*/package.json").scanSync({ cwd: packagesRoot })]) {
       if (pkg === "tls-probe/package.json") continue;
       const manifest = JSON.parse(readFileSync(join(packagesRoot, pkg), "utf8"));
-      expect({ pkg, dep: manifest.dependencies?.["@squirrelscan/tls-probe"] }).toEqual({ pkg, dep: undefined });
+      expect({ pkg, dep: manifest.dependencies?.["@squirrelscan/tls-probe"] }).toEqual({
+        pkg,
+        dep: undefined,
+      });
     }
     const manifest = JSON.parse(readFileSync(join(packagesRoot, "fetchers/package.json"), "utf8"));
     expect(manifest.exports["./tls-probe"]).toBeUndefined();

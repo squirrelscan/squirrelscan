@@ -99,7 +99,11 @@ const FIXTURE: Spec[] = [
   { normalizedUrl: "https://example.com/p06", phone: "+1 (555) 123-4567", street: "123 Main St" },
   { normalizedUrl: "https://example.com/p07", phone: "+1 (555) 123-4567", street: "123 Main St" },
   { normalizedUrl: "https://example.com/p08", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p09", phone: "+1 (555) 123-4567", street: "123 Main Street" },
+  {
+    normalizedUrl: "https://example.com/p09",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main Street",
+  },
   { normalizedUrl: "https://example.com/p10", phone: "555.123.4567", street: "123 Main St" },
   { normalizedUrl: "https://example.com/p11", phone: "555.123.4567", street: "123 Main St" },
   // Genuinely different address, and no phone at all.

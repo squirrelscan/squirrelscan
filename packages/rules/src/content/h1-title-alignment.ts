@@ -61,13 +61,41 @@ const MAX_WORD_CHARS = 40;
 
 /** Words that alone say nothing about a topic: sharing only these is not a match. Per language. */
 const GENERIC_WORDS: Record<string, ReadonlySet<string>> = {
-  en: new Set("free online best new guide tool tools top official home page site website app service services solution solutions about contact pricing features feature blog news faq support help".split(" ")),
-  es: new Set("gratis online mejor nuevo guia herramienta oficial inicio pagina sitio servicio servicios sobre contacto precios blog noticias ayuda".split(" ")),
-  fr: new Set("gratuit gratuite en ligne meilleur nouveau nouvelle guide outil officiel accueil site service services apropos contact tarifs blog actualites aide".split(" ")),
-  de: new Set("kostenlos online beste neu neue anleitung ratgeber werkzeug offiziell startseite seite service ueber kontakt preise blog neuigkeiten hilfe".split(" ")),
-  pt: new Set("gratis online melhor novo guia ferramenta oficial inicio pagina site servico servicos sobre contato precos blog ajuda".split(" ")),
-  it: new Set("gratis online migliore nuovo guida strumento ufficiale home pagina sito servizio servizi contatti prezzi blog aiuto".split(" ")),
-  nl: new Set("gratis online beste nieuw gids hulpmiddel officieel home pagina site dienst diensten contact prijzen blog hulp".split(" ")),
+  en: new Set(
+    "free online best new guide tool tools top official home page site website app service services solution solutions about contact pricing features feature blog news faq support help".split(
+      " ",
+    ),
+  ),
+  es: new Set(
+    "gratis online mejor nuevo guia herramienta oficial inicio pagina sitio servicio servicios sobre contacto precios blog noticias ayuda".split(
+      " ",
+    ),
+  ),
+  fr: new Set(
+    "gratuit gratuite en ligne meilleur nouveau nouvelle guide outil officiel accueil site service services apropos contact tarifs blog actualites aide".split(
+      " ",
+    ),
+  ),
+  de: new Set(
+    "kostenlos online beste neu neue anleitung ratgeber werkzeug offiziell startseite seite service ueber kontakt preise blog neuigkeiten hilfe".split(
+      " ",
+    ),
+  ),
+  pt: new Set(
+    "gratis online melhor novo guia ferramenta oficial inicio pagina site servico servicos sobre contato precos blog ajuda".split(
+      " ",
+    ),
+  ),
+  it: new Set(
+    "gratis online migliore nuovo guida strumento ufficiale home pagina sito servizio servizi contatti prezzi blog aiuto".split(
+      " ",
+    ),
+  ),
+  nl: new Set(
+    "gratis online beste nieuw gids hulpmiddel officieel home pagina site dienst diensten contact prijzen blog hulp".split(
+      " ",
+    ),
+  ),
 };
 
 interface Word {
@@ -87,10 +115,14 @@ interface Word {
 function contentWords(text: string, lang: string, stop: ReadonlySet<string>): Word[] {
   const generic = GENERIC_WORDS[lang];
   const out: Word[] = [];
-  const raw = text.normalize("NFKC").replace(/['\u2019`]s\b/gi, "").replace(/['\u2019`]/g, "");
+  const raw = text
+    .normalize("NFKC")
+    .replace(/['\u2019`]s\b/gi, "")
+    .replace(/['\u2019`]/g, "");
   for (const longPiece of raw.split(/[^\p{L}\p{N}]+/u)) {
     if (longPiece.length === 0) continue;
-    const piece = longPiece.length > MAX_WORD_CHARS ? longPiece.slice(0, MAX_WORD_CHARS) : longPiece;
+    const piece =
+      longPiece.length > MAX_WORD_CHARS ? longPiece.slice(0, MAX_WORD_CHARS) : longPiece;
     const t = fold(piece);
     if (/^\p{N}+$/u.test(t) || stop.has(t)) continue;
     if (t.length < 3 && !(t.length === 2 && /^\p{Lu}{2}$/u.test(piece))) continue;
@@ -224,7 +256,12 @@ function brandForms(ctx: RuleContext): string[] {
     // `shop.brand.co.uk` -> `brand`; `brand.com` -> `brand`.
     const secondLevel = new Set(["co", "com", "org", "net", "gov", "edu", "ac"]);
     let i = labels.length - 2;
-    if (i > 0 && secondLevel.has(labels[i] as string) && (labels[labels.length - 1] as string).length === 2) i--;
+    if (
+      i > 0 &&
+      secondLevel.has(labels[i] as string) &&
+      (labels[labels.length - 1] as string).length === 2
+    )
+      i--;
     const label = labels[Math.max(i, 0)] ?? "";
     if (label.length >= 3) forms.add(label.replace(/[^\p{L}\p{N}]+/gu, ""));
   } catch {
@@ -236,7 +273,10 @@ function brandForms(ctx: RuleContext): string[] {
 
 function namesBrand(segment: string, brands: string[]): boolean {
   const letters = fold(segment).replace(/[^\p{L}\p{N}]+/gu, "");
-  return letters.length > 0 && brands.some((b) => letters.includes(b) || (letters.length >= 3 && b.includes(letters)));
+  return (
+    letters.length > 0 &&
+    brands.some((b) => letters.includes(b) || (letters.length >= 3 && b.includes(letters)))
+  );
 }
 
 /** Paths of generic marketing pages, whose headline is a pitch rather than a restatement of the title. */
@@ -280,7 +320,9 @@ function topicWords(words: Word[]): number {
 /** Path segments below the locale prefix: 0 for a root, 1 for `/pricing`, 2 for `/blog/post`. */
 function pathDepth(url: string): number {
   try {
-    const path = new URL(url).pathname.toLowerCase().replace(/^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/)/, "");
+    const path = new URL(url).pathname
+      .toLowerCase()
+      .replace(/^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/)/, "");
     return path.split("/").filter((x) => x.length > 0).length;
   } catch {
     return 0;
@@ -315,11 +357,19 @@ export const h1TitleAlignmentRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const { h1 } = ctx.parsed;
     // Clipped before anything else runs: a hostile 100,000-letter token must not reach a loop.
-    const title = (ctx.parsed.meta.title ?? "").slice(0, MAX_TEXT_CHARS * 4).replace(/\s+/g, " ").trim().slice(0, MAX_TEXT_CHARS);
+    const title = (ctx.parsed.meta.title ?? "")
+      .slice(0, MAX_TEXT_CHARS * 4)
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, MAX_TEXT_CHARS);
 
     // core/h1 owns a missing, repeated or empty H1; core/meta-title owns a missing title.
     if (h1.count !== 1) return skip(`${h1.count === 0 ? "No" : "Several"} H1: reported by core/h1`);
-    const h1Text = (h1.texts[0] ?? "").slice(0, MAX_TEXT_CHARS * 4).replace(/\s+/g, " ").trim().slice(0, MAX_TEXT_CHARS);
+    const h1Text = (h1.texts[0] ?? "")
+      .slice(0, MAX_TEXT_CHARS * 4)
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, MAX_TEXT_CHARS);
     if (h1Text.length === 0) return skip("Empty H1: reported by core/h1");
     if (title.length === 0) return skip("No title: reported by core/meta-title");
 
@@ -334,19 +384,27 @@ export const h1TitleAlignmentRule: Rule = {
     }
 
     // Stylesheet or script text scraped into the heading (a parser-side issue), not a heading.
-    if (/[{}]|@keyframes|@media/.test(h1Text)) return skip("The H1 text looks like code, not a heading");
+    if (/[{}]|@keyframes|@media/.test(h1Text))
+      return skip("The H1 text looks like code, not a heading");
 
     // A Latin stopword list cannot read a title or heading that is mostly another script.
     if (latinShare(title) < 0.6 || latinShare(h1Text) < 0.6) {
-      return skip("The title or the H1 is mostly non-Latin text, which the stopword list cannot read");
+      return skip(
+        "The title or the H1 is mostly non-Latin text, which the stopword list cannot read",
+      );
     }
     // Heading markup whose pieces ran together has no readable words (a parser-side issue).
     if (looksGlued(h1Text, title, stop)) {
-      return skip("The H1 looks run together (words glued without a space), so its words cannot be read");
+      return skip(
+        "The H1 looks run together (words glued without a space), so its words cannot be read",
+      );
     }
 
     const brands = brandForms(ctx);
-    const segments = title.split(SEGMENT_SPLIT).map((s) => s.trim()).filter((s) => s.length > 0);
+    const segments = title
+      .split(SEGMENT_SPLIT)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     const h1Words = contentWords(h1Text, lang, stop);
 
     // Which segments are the brand affix: one that names the site, or, in a title with
@@ -373,7 +431,10 @@ export const h1TitleAlignmentRule: Rule = {
     // Exact stems first (a Set lookup), then the fuzzy pairs; at most MAX_WORDS per side.
     const titleExact = new Set(titleWordsAll.filter((w) => !w.generic).map((w) => w.stem));
     const shared = h1Words.some(
-      (h) => !h.generic && (titleExact.has(h.stem) || titleWordsAll.some((t) => !t.generic && sameWord(h.stem, t.stem, lang))),
+      (h) =>
+        !h.generic &&
+        (titleExact.has(h.stem) ||
+          titleWordsAll.some((t) => !t.generic && sameWord(h.stem, t.stem, lang))),
     );
     if (shared) {
       // Identical, character for character, on a page whose title carries more than the brand.
@@ -391,7 +452,13 @@ export const h1TitleAlignmentRule: Rule = {
         };
       }
       return {
-        checks: [{ name: CHECK_NAME, status: "pass", message: "The H1 and the title share a meaningful word" }],
+        checks: [
+          {
+            name: CHECK_NAME,
+            status: "pass",
+            message: "The H1 and the title share a meaningful word",
+          },
+        ],
       };
     }
 
@@ -404,7 +471,10 @@ export const h1TitleAlignmentRule: Rule = {
 
     const kind = pageKind(ctx.page.url);
     const confident =
-      !kind && pathDepth(ctx.page.url) >= WARN_MIN_DEPTH && titleCount >= WARN_MIN_WORDS && h1Count >= WARN_MIN_WORDS;
+      !kind &&
+      pathDepth(ctx.page.url) >= WARN_MIN_DEPTH &&
+      titleCount >= WARN_MIN_WORDS &&
+      h1Count >= WARN_MIN_WORDS;
     const check: CheckResult = {
       name: CHECK_NAME,
       // Info only: on 115,000 stored pages the mismatch was a real defect in about a third of the
@@ -414,11 +484,14 @@ export const h1TitleAlignmentRule: Rule = {
       message: "The H1 and the title share no meaningful word",
       value: clip(h1Text),
       expected: "At least one content word in common with the title",
-      items: [
-        { id: `title: ${clip(title)}` },
-        { id: `h1: ${clip(h1Text)}` },
-      ],
-      details: { title: clip(title), h1: clip(h1Text), language: lang, confident, ...(kind ? { pageKind: kind } : {}) },
+      items: [{ id: `title: ${clip(title)}` }, { id: `h1: ${clip(h1Text)}` }],
+      details: {
+        title: clip(title),
+        h1: clip(h1Text),
+        language: lang,
+        confident,
+        ...(kind ? { pageKind: kind } : {}),
+      },
     };
     return { checks: [check] };
   },

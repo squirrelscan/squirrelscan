@@ -113,13 +113,11 @@ const GRAPH = {
 
 /** The same nodes, emitted one per script at the top level. */
 const FLAT_SCRIPTS = (GRAPH["@graph"] as Record<string, unknown>[]).map((node) =>
-  JSON.stringify({ "@context": "https://schema.org", ...node })
+  JSON.stringify({ "@context": "https://schema.org", ...node }),
 );
 
 function html(scripts: string[]): string {
-  const tags = scripts
-    .map((s) => `<script type="application/ld+json">${s}</script>`)
-    .join("\n");
+  const tags = scripts.map((s) => `<script type="application/ld+json">${s}</script>`).join("\n");
   return `<!doctype html><html><head><title>Widget</title>${tags}</head><body><h1>Widget</h1></body></html>`;
 }
 
@@ -168,7 +166,7 @@ describe("@graph-nested JSON-LD is read by every schema rule", () => {
       // Two separate tests rather than one alternation: `^A|B` anchors only
       // the first branch, which is a real bug and not an obvious one.
       const absent = found.filter(
-        (c) => /^No\s/i.test(c.message) || /\bnot found\b/i.test(c.message)
+        (c) => /^No\s/i.test(c.message) || /\bnot found\b/i.test(c.message),
       );
       expect(absent).toEqual([]);
       expect(found.length).toBeGreaterThan(0);

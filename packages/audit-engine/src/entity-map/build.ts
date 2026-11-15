@@ -482,11 +482,7 @@ function registerNode(
  * schema.org puts no meaning on `@type` order and neither should a finding. A
  * node with no `@type` at all records nothing: absence is not disagreement.
  */
-function recordTypeSet(
-  accumulator: NodeAccumulator,
-  types: string[],
-  origin: Origin,
-): void {
+function recordTypeSet(accumulator: NodeAccumulator, types: string[], origin: Origin): void {
   if (types.length === 0) return;
   // JSON.stringify of the sorted set, not a delimiter join: `@type` is a
   // site-controlled string, so `["A, B"]` and `["A","B"]` would otherwise
@@ -605,12 +601,15 @@ function identitySignature(raw: JsonObject, pageUrl: string, index: number): str
       const target = identityTarget(entry, pageUrl, index);
       if (target) targets.add(target);
     }
-    if (targets.size > 0) parts.push(`${predicate}=${[...targets].sort(compareStrings).join(", ")}`);
+    if (targets.size > 0)
+      parts.push(`${predicate}=${[...targets].sort(compareStrings).join(", ")}`);
   }
   if (parts.length === 0) return "(none)";
   const text = parts.join("; ");
   // Bounded as a whole as well as per token: a long member list must not make one huge signature.
-  return text.length <= SIGNATURE_MAX ? text : `${text.slice(0, SIGNATURE_MAX - 20)}#${fnv1a(text)}`;
+  return text.length <= SIGNATURE_MAX
+    ? text
+    : `${text.slice(0, SIGNATURE_MAX - 20)}#${fnv1a(text)}`;
 }
 
 function recordIdentitySignature(
@@ -642,11 +641,7 @@ function recordIdentitySignature(
  * than of the crawl, which is the same guarantee every other part of this
  * builder makes.
  */
-function recordValue(
-  values: Map<string, Set<string>>,
-  text: string,
-  page: string,
-): void {
+function recordValue(values: Map<string, Set<string>>, text: string, page: string): void {
   const existing = values.get(text);
   if (existing) {
     existing.add(page);
@@ -718,7 +713,11 @@ function collectEdges(
       // crumb that carries only a position and a name names no entity at all
       // and is dropped.
       let target: unknown = entry;
-      if (predicate === "itemListElement" && isObject(entry) && readTypes(entry).includes("ListItem")) {
+      if (
+        predicate === "itemListElement" &&
+        isObject(entry) &&
+        readTypes(entry).includes("ListItem")
+      ) {
         if (entry.item === undefined) continue;
         target = entry.item;
       }
@@ -755,17 +754,15 @@ function pushEdge(
     if (readTypes(value).length > 0) {
       // An inline entity — becomes a node of its own and the edge can never
       // dangle.
-      const targetKey = registerNode(
-        value,
-        pageUrl,
-        page,
-        nodes,
-        candidates,
-        counter,
-        depth + 1,
-      );
+      const targetKey = registerNode(value, pageUrl, page, nodes, candidates, counter, depth + 1);
       if (targetKey) {
-        candidates.push({ source: sourceKey, predicate, target: targetKey, kind: "node", page: pageUrl });
+        candidates.push({
+          source: sourceKey,
+          predicate,
+          target: targetKey,
+          kind: "node",
+          page: pageUrl,
+        });
       }
       return;
     }
@@ -797,9 +794,7 @@ function pushEdge(
     candidates.push({
       source: sourceKey,
       predicate,
-      target: isBlankNodeId(value)
-        ? blankKey(value, pageUrl)
-        : idKey(resolveId(value, pageUrl)),
+      target: isBlankNodeId(value) ? blankKey(value, pageUrl) : idKey(resolveId(value, pageUrl)),
       kind: "soft",
       page: pageUrl,
     });

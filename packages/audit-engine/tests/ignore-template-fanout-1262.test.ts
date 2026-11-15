@@ -3,12 +3,21 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { RuleRunner, mayFanOutAcrossTemplate, type IgnoreEntry, type RulesConfig } from "@squirrelscan/rules";
+import {
+  RuleRunner,
+  mayFanOutAcrossTemplate,
+  type IgnoreEntry,
+  type RulesConfig,
+} from "@squirrelscan/rules";
 
 import { createTemplateFanout } from "../src/template-fanout";
 
 function runnerWith(ignore: IgnoreEntry[] | undefined): RuleRunner {
-  const config: RulesConfig = { rule_options: {}, rules: { enable: ["*"], disable: [] }, ...(ignore ? { ignore } : {}) };
+  const config: RulesConfig = {
+    rule_options: {},
+    rules: { enable: ["*"], disable: [] },
+    ...(ignore ? { ignore } : {}),
+  };
   return new RuleRunner({ config });
 }
 
@@ -16,12 +25,19 @@ function runnerWith(ignore: IgnoreEntry[] | undefined): RuleRunner {
 const declared = (runner: RuleRunner): string[] =>
   runner
     .getEnabledRules()
-    .filter((r) => mayFanOutAcrossTemplate(r.meta) && !r.meta.skipOnSoft404 && !r.meta.skipOnNoindex)
+    .filter(
+      (r) => mayFanOutAcrossTemplate(r.meta) && !r.meta.skipOnSoft404 && !r.meta.skipOnNoindex,
+    )
     .map((r) => r.meta.id);
 
 describe("template fan-out", () => {
   const ruleResults = (ids: string[]) =>
-    new Map(ids.map((id) => [id, { meta: { id } as never, checks: [{ name: "c", status: "warn" as const, message: "m" }] }]));
+    new Map(
+      ids.map((id) => [
+        id,
+        { meta: { id } as never, checks: [{ name: "c", status: "warn" as const, message: "m" }] },
+      ]),
+    );
 
   test("copies declared rules between cluster members when no entry depends on the page", () => {
     const runner = runnerWith(undefined);

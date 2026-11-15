@@ -124,7 +124,13 @@ import {
   structureTotalsLine,
 } from "../structure";
 import { hostRows } from "../host";
-import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary, techIconUrl } from "../technologies";
+import {
+  groupTechnologies,
+  isLocalOnlyTech,
+  TECH_LOCAL_MARK,
+  techChangeSummary,
+  techIconUrl,
+} from "../technologies";
 import type { AuditReport } from "../types";
 import { getPathname } from "../url";
 import { formatBytes, sanitizeUrl } from "../utils";
@@ -846,7 +852,11 @@ function PageLinks({
  * label at all) renders the sentence untouched.
  */
 function FixSentence({ unit }: { unit: ReturnType<typeof fixUnits>[number] }) {
-  const sentence = fixRollupLine(unit, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/");
+  const sentence = fixRollupLine(
+    unit,
+    REPORT_SOURCE_PAGES_PREVIEW,
+    (page) => getPathname(page) || "/",
+  );
   const label = describeRoot(unit);
   const at = label ? sentence.indexOf(label) : -1;
   if (!label || at < 0) return <>{sentence}</>;
@@ -1834,9 +1844,17 @@ function ReportPage({
   const blockedNote = blockedSummary
     ? `${blockedSummary}${blockedListed.length > 0 ? ` ${blockedListed.slice(0, 3).join("; ")}` : ""}`
     : null;
-  const notes = [cov, priv, ...notChecked, seed, startRedirect, ignoredNote, ...ignoredEntryNotes, blockedNote, hint].filter(
-    (t): t is string => !!t,
-  );
+  const notes = [
+    cov,
+    priv,
+    ...notChecked,
+    seed,
+    startRedirect,
+    ignoredNote,
+    ...ignoredEntryNotes,
+    blockedNote,
+    hint,
+  ].filter((t): t is string => !!t);
   const reportKey = coverageNoticeKey(report, reportId);
   const byReach = (a: FlatIssue, b: FlatIssue) =>
     reach(b, totalPages).count - reach(a, totalPages).count;
@@ -1925,7 +1943,9 @@ function ReportPage({
                       ]
                     : []),
                   ...(passedRules.length > 0 ? [["#passed", "Passed"]] : []),
-                  ...(report.technologies?.items.length || report.technologies?.truncated || report.siteMetadata
+                  ...(report.technologies?.items.length ||
+                  report.technologies?.truncated ||
+                  report.siteMetadata
                     ? [["#site", "Site"]]
                     : []),
                   ...(report.domainStats ? [["#footprint", "Search"]] : []),
@@ -2156,10 +2176,7 @@ function ReportPage({
                       )}
                     </p>
                     {g.group === "ai" && agentLines.length > 0 && (
-                      <p
-                        className="mt-1.5 text-xs text-muted-foreground"
-                        data-agent-signals
-                      >
+                      <p className="mt-1.5 text-xs text-muted-foreground" data-agent-signals>
                         {agentLines.map((l) => (
                           <span key={l} className="block">
                             {l}

@@ -130,7 +130,11 @@ import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage, detachParsedPage } from "./detach";
 import { resolveCloakingProbes, selectCloakingPaths } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
-import { confirmSoft404Candidates, hasSoft404FetchWork, markUnresolvedSoft404 } from "./soft404-confirm";
+import {
+  confirmSoft404Candidates,
+  hasSoft404FetchWork,
+  markUnresolvedSoft404,
+} from "./soft404-confirm";
 import { headerScopeBase } from "@squirrelscan/utils/headers";
 
 import { createHeaderScope, headersWithheldFrom } from "./lib/header-scope";
@@ -220,7 +224,6 @@ export { setAdapterLogger, type AdapterLogger } from "./adapter-logger";
 // ============================================
 // CONSTANTS
 // ============================================
-
 
 function buildLlmsTxtData(llms: LlmsTxtRecord | null): LlmsTxtData | null {
   if (!llms) return null;
@@ -978,7 +981,10 @@ export function fetchAssetsFromOccurrences(
               scriptRuleLimit(occurrences.pageCount, maxResources),
               Math.min(
                 STORED_SCRIPT_LIMITS.maxScriptsCeiling,
-                Math.max(1, config.storage?.store_scripts_max_scripts ?? STORED_SCRIPT_LIMITS.maxScripts),
+                Math.max(
+                  1,
+                  config.storage?.store_scripts_max_scripts ?? STORED_SCRIPT_LIMITS.maxScripts,
+                ),
               ),
             ),
             maxTotalBytes: STORED_SCRIPT_LIMITS.heldBytes,
@@ -1030,7 +1036,8 @@ export function fetchAssetsFromOccurrences(
     const probeCap = config.internal_links?.max_targets ?? LINK_CHECK_LIMITS.internalTargetProbes;
     // The crawl's own user agent, so the request is UA-equivalent to the crawl
     // (a bot wall that let the crawl through lets this through too).
-    const probeUserAgent = crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT;
+    const probeUserAgent =
+      crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT;
     const respectRobots = config.crawler?.respect_robots ?? true;
     const robotsRecord =
       internalLinksEnabled && respectRobots
@@ -1044,9 +1051,8 @@ export function fetchAssetsFromOccurrences(
             // squirrelscan/repo#3271: the group the crawl was matched as. A crawl
             // row records it ("" or absent: matched on its user agent); only
             // without a row does this run's config say.
-            (crawl?.config
-              ? crawl.config.robotsUserAgent
-              : config.crawler?.robots_user_agent) || probeUserAgent,
+            (crawl?.config ? crawl.config.robotsUserAgent : config.crawler?.robots_user_agent) ||
+              probeUserAgent,
           )
         : null;
     const mayProbe = (url: string): boolean => {
@@ -1129,8 +1135,11 @@ export function fetchAssetsFromOccurrences(
     //    base URL counts as public, the strict side. Each request connects to
     //    the address that was vetted, so DNS rebinding cannot swap it.
     //  - Status only: no body is read, and no prior-crawl cache is consulted.
-    const { customHeaders: _ownHostOnly, priorByUrl: _ownHostCache, ...probeShared } =
-      resourceCheckOptions;
+    const {
+      customHeaders: _ownHostOnly,
+      priorByUrl: _ownHostCache,
+      ...probeShared
+    } = resourceCheckOptions;
     const baseHost = getHostname(baseUrl).replace(/^\[|\]$/g, "");
     let siteOrigin = "";
     try {
@@ -1204,7 +1213,10 @@ export function fetchAssetsFromOccurrences(
           ),
           {
             ...preloadFetchOptions,
-            maxScripts: Math.min(preloadFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT, PRELOAD_CHUNK_FETCH_LIMIT),
+            maxScripts: Math.min(
+              preloadFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT,
+              PRELOAD_CHUNK_FETCH_LIMIT,
+            ),
           },
         ),
         // Only the html/body background is kept (#1756); same egress and budget as the scripts.
@@ -1304,9 +1316,7 @@ export function fetchAssetsFromOccurrences(
     // requests hit their own AbortController. Give this timeout that drain slack
     // over budgetMs so partial results survive; only a fetch whose per-request
     // abort is itself defeated reaches the empty fallback. (#1252)
-    const outerBudgetMs = budgetMs
-      ? budgetMs + resourceCheckOptions.timeoutMs + 5_000
-      : undefined;
+    const outerBudgetMs = budgetMs ? budgetMs + resourceCheckOptions.timeoutMs + 5_000 : undefined;
     const resourceResults = outerBudgetMs
       ? yield* Effect.catchAll(
           Effect.timeoutFail(allResourceChecks, {
@@ -1373,24 +1383,24 @@ export function fetchAssetsFromOccurrences(
     const hostFirst = new Map<string, boolean | undefined>();
     for (const fetch of resourceResults.scripts) hostFirst.set(fetch.url, hostFirstOf(fetch));
     const toScriptData = (fetch: ScriptFetchResult): ScriptContentData => ({
-        url: fetch.url,
-        status: fetch.status,
-        error: fetch.error,
-        contentType: fetch.contentType,
-        sizeBytes: fetch.sizeBytes,
-        content: fetch.content,
-        sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
-        ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
-        ...(fetch.responseMs !== undefined
-          ? { responseMs: fetch.responseMs, ...(hostFirst.get(fetch.url) ? { hostFirst: true } : {}) }
-          : {}),
-        rateLimited: fetch.rateLimited,
-        wafBlocked: fetch.wafBlocked,
-        ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),
-        redirected: fetch.redirected,
-        finalUrl: fetch.finalUrl,
-        sourceMapHeader: fetch.sourceMapHeader,
-        contentEncoding: fetch.contentEncoding,
+      url: fetch.url,
+      status: fetch.status,
+      error: fetch.error,
+      contentType: fetch.contentType,
+      sizeBytes: fetch.sizeBytes,
+      content: fetch.content,
+      sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
+      ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
+      ...(fetch.responseMs !== undefined
+        ? { responseMs: fetch.responseMs, ...(hostFirst.get(fetch.url) ? { hostFirst: true } : {}) }
+        : {}),
+      rateLimited: fetch.rateLimited,
+      wafBlocked: fetch.wafBlocked,
+      ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),
+      redirected: fetch.redirected,
+      finalUrl: fetch.finalUrl,
+      sourceMapHeader: fetch.sourceMapHeader,
+      contentEncoding: fetch.contentEncoding,
     });
 
     const result: PreFetchedAssets = {
@@ -1411,7 +1421,9 @@ export function fetchAssetsFromOccurrences(
           sourcePages: Array.from(resourceOccurrences.css.get(check.url) ?? []),
           rateLimited: check.rateLimited,
           wafBlocked: check.wafBlocked,
-          ...(withheld(check.url, check.status, check.redirectTarget) ? { headersWithheld: true } : {}),
+          ...(withheld(check.url, check.status, check.redirectTarget)
+            ? { headersWithheld: true }
+            : {}),
           contentEncoding: check.contentEncoding,
           transferBytes: check.transferBytes,
           cacheControl: check.cacheControl,
@@ -1450,7 +1462,9 @@ export function fetchAssetsFromOccurrences(
           sourcePages: Array.from(resourceOccurrences.fonts.get(check.url) ?? []),
           rateLimited: check.rateLimited,
           wafBlocked: check.wafBlocked,
-          ...(withheld(check.url, check.status, check.redirectTarget) ? { headersWithheld: true } : {}),
+          ...(withheld(check.url, check.status, check.redirectTarget)
+            ? { headersWithheld: true }
+            : {}),
         })),
       },
       // Absent, not empty, when the rule is off: nothing was measured.
@@ -1496,7 +1510,9 @@ export function fetchAssetsFromOccurrences(
         ? {
             stylesheetBackgrounds: resourceResults.stylesheets.map((fetch) => {
               const readable = fetch.content !== null && !/html/i.test(fetch.contentType ?? "");
-              const other = readable ? stylesheetBackgroundSelectorsOf(fetch.content as string) : null;
+              const other = readable
+                ? stylesheetBackgroundSelectorsOf(fetch.content as string)
+                : null;
               return {
                 url: fetch.url,
                 status: fetch.status,
@@ -1509,13 +1525,22 @@ export function fetchAssetsFromOccurrences(
           }
         : {}),
       ...(storedOnlyScripts.length > 0
-        ? { scriptsNotReadUrls: storedOnlyScripts.slice(0, SCRIPTS_NOT_READ_URLS_CAP).map((f) => f.url) }
+        ? {
+            scriptsNotReadUrls: storedOnlyScripts
+              .slice(0, SCRIPTS_NOT_READ_URLS_CAP)
+              .map((f) => f.url),
+          }
         : {}),
       ...(storedOnlyScripts.length > 0
         ? { storedOnlyScripts: storedOnlyScripts.map(toScriptData) }
         : {}),
       ...(storeScripts
-        ? { storedScriptsNotFetched: Math.max(0, resourceOccurrences.scripts.size - resourceResults.scripts.length) }
+        ? {
+            storedScriptsNotFetched: Math.max(
+              0,
+              resourceOccurrences.scripts.size - resourceResults.scripts.length,
+            ),
+          }
         : {}),
       preloadedScripts: resourceResults.preloads.map((fetch) => ({
         url: fetch.url,
@@ -1856,7 +1881,13 @@ export function runRulesOnStorage(
         // repo#2759: never requested this audit. A row for one can still be
         // here, a verdict an earlier engine wrote and an incremental crawl
         // copied over with the page; it is not this audit's answer.
-        if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
+        if (
+          isNotRequestedExternalLink(
+            link.href,
+            appearances.map((a) => a.anchorText ?? ""),
+          )
+        )
+          continue;
         // pub#770: nor one the external check refuses on its address.
         if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
         // Nor any row this run did not write: an incremental crawl copies a
@@ -1984,11 +2015,13 @@ export function runRulesOnStorage(
         {
           baseUrl: crawl?.baseUrl ?? "",
           entryUrls: crawlEntryUrls(crawl),
-          pages: parsedPages.filter((p) => !p.redirectSource).map((p) => ({
-            url: p.url,
-            statusCode: p.statusCode,
-            parsed: { links: p.parsed.links },
-          })),
+          pages: parsedPages
+            .filter((p) => !p.redirectSource)
+            .map((p) => ({
+              url: p.url,
+              statusCode: p.statusCode,
+              parsed: { links: p.parsed.links },
+            })),
           sitemapUrls: sitemapDiscovery.discovered.flatMap((s) =>
             s.urls.map((u) => ({ loc: u.loc, lastmod: u.lastmod })),
           ),
@@ -2639,7 +2672,9 @@ function streamParsedUniverse(
       // A read failure mid-stream is a HARD error, not end-of-crawl — orDie so a
       // transient batch failure crashes the audit loud rather than truncating the
       // page set silently (see streamPageRules; keeps the error channel `never`).
-      const batch = yield* storage.getPages(crawlId, { limit: batchSize, offset }).pipe(Effect.orDie);
+      const batch = yield* storage
+        .getPages(crawlId, { limit: batchSize, offset })
+        .pipe(Effect.orDie);
       if (batch.length === 0) break;
       totalPageCount += batch.length;
 
@@ -2682,7 +2717,8 @@ export async function withinDeadline<T>(
   work: (cancel: AbortSignal) => Promise<T>,
   deadlineAt: number | undefined,
 ): Promise<{ timedOut: false; value: T } | { timedOut: true; started: boolean }> {
-  if (deadlineAt === undefined) return { timedOut: false, value: await work(new AbortController().signal) };
+  if (deadlineAt === undefined)
+    return { timedOut: false, value: await work(new AbortController().signal) };
   const remaining = deadlineAt - Date.now();
   if (remaining <= 0) return { timedOut: true, started: false };
   const controller = new AbortController();
@@ -2698,7 +2734,10 @@ export async function withinDeadline<T>(
     const pending = work(controller.signal);
     // The abandoned work may still reject later: that must not become unhandled.
     pending.catch(() => undefined);
-    return await Promise.race([pending.then((value) => ({ timedOut: false as const, value })), expired]);
+    return await Promise.race([
+      pending.then((value) => ({ timedOut: false as const, value })),
+      expired,
+    ]);
   } finally {
     clearTimeout(timer);
   }
@@ -2757,7 +2796,13 @@ export function readExternalLinkVerdicts(
       if (!link.isInternal) {
         const appearances = linkAppearancesByHref.get(link.href) ?? [];
         // repo#2759: never requested this audit; see the v1 builder.
-        if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
+        if (
+          isNotRequestedExternalLink(
+            link.href,
+            appearances.map((a) => a.anchorText ?? ""),
+          )
+        )
+          continue;
         // pub#770: nor one the external check refuses on its address.
         if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
         // Nor any row this run did not write: an incremental crawl copies a
@@ -2812,7 +2857,9 @@ function buildStreamingSiteData(
     const robots = yield* storage
       .getRobotsTxt(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const llms = yield* storage.getLlmsTxt(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const llms = yield* storage
+      .getLlmsTxt(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
     const markdownProbe = yield* storage
       .getMarkdownProbe(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
@@ -2822,14 +2869,22 @@ function buildStreamingSiteData(
     const agentAccessProbe = yield* storage
       .getAgentAccess(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const rslProbe = yield* storage.getRsl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const rslProbe = yield* storage
+      .getRsl(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
     const sitemaps = yield* storage
       .getSitemaps(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed([])));
-    const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const crawl = yield* storage
+      .getCrawl(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
 
     // repo#2144: the same reader the late-binding link view uses.
-    const { externalLinks: externalLinksData } = yield* readExternalLinkVerdicts(storage, crawlId, crawl);
+    const { externalLinks: externalLinksData } = yield* readExternalLinkVerdicts(
+      storage,
+      crawlId,
+      crawl,
+    );
 
     const robotsData = buildRobotsData(robots);
     const llmsData = buildLlmsTxtData(llms);
@@ -2912,40 +2967,49 @@ function buildStreamingSiteData(
     const cloakingSite = {
       baseUrl: crawl?.baseUrl ?? "",
       entryUrls: crawlEntryUrls(crawl),
-      pages: parsedPages.filter((p) => !p.redirectSource).map((p) => ({
-        url: p.url,
-        statusCode: p.statusCode,
-        parsed: { links: p.parsed.links },
-      })),
+      pages: parsedPages
+        .filter((p) => !p.redirectSource)
+        .map((p) => ({
+          url: p.url,
+          statusCode: p.statusCode,
+          parsed: { links: p.parsed.links },
+        })),
       sitemapUrls: sitemapDiscovery.discovered.flatMap((s) =>
         s.urls.map((u) => ({ loc: u.loc, lastmod: u.lastmod })),
       ),
     };
     const cloaking = yield* Effect.promise(() =>
-      withinDeadline((cancel) => resolveCloakingProbes(
-        config.integrity?.cloaking_probe,
-        cloakingSite,
-        {
-          defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
-          customHeaders: config.crawler?.headers,
-          headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(
-            crawl?.baseUrl ?? "",
-            config,
-            egressPinnedByTransport,
-            pinOwnHosts,
-            ownSiteOnly,
-          ),
-          signal: cancel,
-        },
-      ), probes?.deadlineAt),
+      withinDeadline(
+        (cancel) =>
+          resolveCloakingProbes(config.integrity?.cloaking_probe, cloakingSite, {
+            defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
+            customHeaders: config.crawler?.headers,
+            headerScope: headerScopeOf(crawl, config),
+            egress: probeEgress(
+              crawl?.baseUrl ?? "",
+              config,
+              egressPinnedByTransport,
+              pinOwnHosts,
+              ownSiteOnly,
+            ),
+            signal: cancel,
+          }),
+        probes?.deadlineAt,
+      ),
     );
     // A cloaking probe cut at its deadline leaves the rule with no data (it no-ops), same as the probe being off.
     // Skipped only when it had a path to fetch: one cut while running did; one that never started is checked.
     if (
       cloaking.timedOut &&
       config.integrity?.cloaking_probe?.enabled &&
-      (cloaking.started || selectCloakingPaths(cloakingSite, config.integrity.cloaking_probe && { maxPages: config.integrity.cloaking_probe.max_pages, recentDays: config.integrity.cloaking_probe.recent_days }).length > 0)
+      (cloaking.started ||
+        selectCloakingPaths(
+          cloakingSite,
+          config.integrity.cloaking_probe && {
+            maxPages: config.integrity.cloaking_probe.max_pages,
+            recentDays: config.integrity.cloaking_probe.recent_days,
+          },
+        ).length > 0)
     ) {
       probes?.onSkipped?.("cloaking-probe");
     }
@@ -2961,28 +3025,28 @@ function buildStreamingSiteData(
       rendered: isRenderedFetch(page.fetcherId),
     }));
     const soft404 = yield* Effect.promise(() =>
-      withinDeadline((cancel) =>
-      confirmSoft404Candidates(
-        soft404Pages,
-        {
-          enabled: config.integrity?.soft404_confirm?.enabled ?? true,
-          maxConfirmations: config.integrity?.soft404_confirm?.max_confirmations,
-          wallBudgetMs: config.integrity?.soft404_confirm?.budget_ms,
-          userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
-          customHeaders: config.crawler?.headers,
-          headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(
-            crawl?.baseUrl ?? "",
-            config,
-            egressPinnedByTransport,
-            pinOwnHosts,
-            ownSiteOnly,
-          ),
-          perHostDelayMs: config.crawler?.per_host_delay_ms,
-          maxParseBytes: probes?.maxParseBytes,
-          signal: cancel,
-        },
-      ).catch((): undefined => undefined), probes?.deadlineAt),
+      withinDeadline(
+        (cancel) =>
+          confirmSoft404Candidates(soft404Pages, {
+            enabled: config.integrity?.soft404_confirm?.enabled ?? true,
+            maxConfirmations: config.integrity?.soft404_confirm?.max_confirmations,
+            wallBudgetMs: config.integrity?.soft404_confirm?.budget_ms,
+            userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
+            customHeaders: config.crawler?.headers,
+            headerScope: headerScopeOf(crawl, config),
+            egress: probeEgress(
+              crawl?.baseUrl ?? "",
+              config,
+              egressPinnedByTransport,
+              pinOwnHosts,
+              ownSiteOnly,
+            ),
+            perHostDelayMs: config.crawler?.per_host_delay_ms,
+            maxParseBytes: probes?.maxParseBytes,
+            signal: cancel,
+          }).catch((): undefined => undefined),
+        probes?.deadlineAt,
+      ),
     );
     if (soft404.timedOut) {
       // Skipped only when it had a re-fetch to do: no candidate, or the pass off, is not a skip.
@@ -3095,7 +3159,13 @@ function runSitePass(
     // identical to v1: identical scalar universe, collectors reproduce the per-page
     // DOM signal, and siteQuery's universe is reconciled to v1's site.pages.
     const siteResult = yield* Effect.promise(() =>
-      runner.runSiteRules(siteData, siteQuery, collectedSignals, endpointSurface, only ? { only } : undefined),
+      runner.runSiteRules(
+        siteData,
+        siteQuery,
+        collectedSignals,
+        endpointSurface,
+        only ? { only } : undefined,
+      ),
     );
 
     const siteRuleResults = new Map<string, CheckResult[]>();
@@ -3468,7 +3538,7 @@ export function runStreamingRules(
           notifyPluginListeners(pluginListeners, "audit:rules-phase", { phase: name, boundary });
         }
       : userOnPhase;
-    const phase = <T,>(name: StreamingRulePhase, body: () => Effect.Effect<T, never, never>) =>
+    const phase = <T>(name: StreamingRulePhase, body: () => Effect.Effect<T, never, never>) =>
       Effect.gen(function* () {
         onPhase?.(name, "start");
         const out = yield* body();
@@ -3498,7 +3568,9 @@ export function runStreamingRules(
       wafBlockedPages,
       rateLimitedPages,
       fetchedTargets,
-    } = yield* phase("universe", () => streamParsedUniverse(storage, crawlId, batchSize, opts?.maxPageBytes));
+    } = yield* phase("universe", () =>
+      streamParsedUniverse(storage, crawlId, batchSize, opts?.maxPageBytes),
+    );
 
     // Steps 2+3: site-fetch phase + soft-404 verdict map.
     const { siteDataForPageRules, soft404Map } = yield* phase("site-fetch", () =>
@@ -3514,7 +3586,11 @@ export function runStreamingRules(
         opts?.egressPinnedByTransport,
         opts?.pinOwnHosts,
         opts?.ownSiteOnly,
-        { deadlineAt: opts?.probesDeadlineAt, onSkipped: opts?.onProbeSkipped, maxParseBytes: opts?.maxPageBytes },
+        {
+          deadlineAt: opts?.probesDeadlineAt,
+          onSkipped: opts?.onProbeSkipped,
+          maxParseBytes: opts?.maxPageBytes,
+        },
       ),
     );
 
@@ -3621,23 +3697,23 @@ export function runStreamingRules(
     });
     const streamed = yield* phase("page-rules", () =>
       streamPageRules(storage, crawlId, runner, siteDataForPageRules, {
-      batchSize,
-      soft404Confirmations: soft404Map,
-      collectors: [signalCollector, endpointCollector],
-      hooks: opts?.hooks,
-      signal: opts?.signal,
-      deadlineAt: opts?.deadlineAt,
-      maxPageBytes: opts?.maxPageBytes,
-      // v1's page-rule universe verbatim (its `pageDataMap` keys), so the streamed
-      // pass can't drift from it — notably it excludes rate-limited pages, which
-      // `isAuditablePage` alone does not (#1829).
-      pageUniverse: new Set(pageDataMap.keys()),
-      totalPages: pageDataMap.size,
-      pageLoopHooks: opts?.pageLoopHooks,
-      templateFanout: opts?.templateFanout,
-      ruleCache,
-      pageSink: opts?.pageSink,
-      retainPageResults: opts?.retainPageResults,
+        batchSize,
+        soft404Confirmations: soft404Map,
+        collectors: [signalCollector, endpointCollector],
+        hooks: opts?.hooks,
+        signal: opts?.signal,
+        deadlineAt: opts?.deadlineAt,
+        maxPageBytes: opts?.maxPageBytes,
+        // v1's page-rule universe verbatim (its `pageDataMap` keys), so the streamed
+        // pass can't drift from it — notably it excludes rate-limited pages, which
+        // `isAuditablePage` alone does not (#1829).
+        pageUniverse: new Set(pageDataMap.keys()),
+        totalPages: pageDataMap.size,
+        pageLoopHooks: opts?.pageLoopHooks,
+        templateFanout: opts?.templateFanout,
+        ruleCache,
+        pageSink: opts?.pageSink,
+        retainPageResults: opts?.retainPageResults,
       }),
     );
     const collectedSignals: CollectedSiteSignals = { pages: collectedPages, secretsBudget };
@@ -3711,8 +3787,10 @@ export function runStreamingRules(
           endpointSurface,
           readsLinkVerdicts,
         );
-        for (const [ruleId, checks] of late.siteRuleResults) first.siteRuleResults.set(ruleId, checks);
-        for (const [ruleId, rr] of late.siteRuleRunResults) first.siteRuleRunResults.set(ruleId, rr);
+        for (const [ruleId, checks] of late.siteRuleResults)
+          first.siteRuleResults.set(ruleId, checks);
+        for (const [ruleId, rr] of late.siteRuleRunResults)
+          first.siteRuleRunResults.set(ruleId, rr);
         return {
           siteResults: [...first.siteResults, ...late.siteResults],
           siteRuleResults: first.siteRuleResults,
@@ -3948,7 +4026,9 @@ function nofollowActionTargets(page: {
     if (!rel.includes("nofollow")) continue;
     if (!linkTextLooksLikeAnAction(anchor.textContent ?? "", true)) continue;
     try {
-      out.add(normalizeUrl(new URL(anchor.getAttribute("href") ?? "", page.finalUrl ?? page.url).href));
+      out.add(
+        normalizeUrl(new URL(anchor.getAttribute("href") ?? "", page.finalUrl ?? page.url).href),
+      );
     } catch {
       // An href that does not resolve is not a link the probe could request.
     }
@@ -4052,7 +4132,12 @@ export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurren
   const requestable: ExternalLinkOccurrences = new Map();
   const skipped: Array<{ href: string; pages: string[] }> = [];
   for (const [href, occs] of occurrences) {
-    if (!isNotRequestedExternalLink(href, occs.map((o) => o.text))) {
+    if (
+      !isNotRequestedExternalLink(
+        href,
+        occs.map((o) => o.text),
+      )
+    ) {
       requestable.set(href, occs);
       continue;
     }
@@ -4069,7 +4154,10 @@ function sampleExternalLinks(
   occurrences: ExternalLinkOccurrences,
 ): Array<{ href: string; sourcePages: string[]; pageCount: number }> {
   return sampleLinkPages(
-    [...occurrences].map(([href, occs]) => ({ href, pages: [...new Set(occs.map((o) => o.pageUrl))] })),
+    [...occurrences].map(([href, occs]) => ({
+      href,
+      pages: [...new Set(occs.map((o) => o.pageUrl))],
+    })),
   );
 }
 
@@ -4232,7 +4320,9 @@ export function externalLinkBudgetDeadline(
   now: number,
 ): number | undefined {
   const budgetMs = limits?.budgetMs;
-  return budgetMs !== undefined && Number.isFinite(budgetMs) && budgetMs > 0 ? now + budgetMs : undefined;
+  return budgetMs !== undefined && Number.isFinite(budgetMs) && budgetMs > 0
+    ? now + budgetMs
+    : undefined;
 }
 
 /**
@@ -4265,7 +4355,9 @@ export function planExternalLinkCheck(
     // public addresses only (private ones too when the audited site is itself
     // on a private network), never link-local or cloud metadata, and connected
     // to the address that was vetted. No custom headers ever go with it.
-    const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const crawl = yield* storage
+      .getCrawl(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
     const egress = externalLinkEgress(
       crawl?.baseUrl ?? "",
       options.egressPinnedByTransport,
@@ -4289,7 +4381,9 @@ export function planExternalLinkCheck(
       if (refusedWithoutLookup(href, egress)) refusedByUrl.push(href);
       else requestable.set(href, occs);
     }
-    const notRequestedHrefs = [...externalLinkOccurrences.keys()].filter((href) => !requestable.has(href));
+    const notRequestedHrefs = [...externalLinkOccurrences.keys()].filter(
+      (href) => !requestable.has(href),
+    );
 
     // repo#2729: a site can link out to tens of thousands of URLs, and in the
     // cloud each link is a credit, so an audit checks at most `max_links` of
@@ -4328,17 +4422,15 @@ export function recordExternalLinkCoverage(
   crawlId: string,
   externalLinkCheck: ExternalLinkCheckPlan["externalLinkCheck"],
 ): Effect.Effect<void, never, never> {
-  return storage
-    .updateStats(crawlId, { externalLinkCheck })
-    .pipe(
-      // Without the stat the over-limit "Not checked" line cannot be shown,
-      // so say so rather than read as a complete check.
-      Effect.catchAll((error) =>
-        Effect.sync(() =>
-          logger.warn("could not record external link check coverage", { error: String(error) }),
-        ),
+  return storage.updateStats(crawlId, { externalLinkCheck }).pipe(
+    // Without the stat the over-limit "Not checked" line cannot be shown,
+    // so say so rather than read as a complete check.
+    Effect.catchAll((error) =>
+      Effect.sync(() =>
+        logger.warn("could not record external link check coverage", { error: String(error) }),
       ),
-    );
+    ),
+  );
 }
 
 /** The checker options a plan runs with. */
@@ -4363,7 +4455,11 @@ export function externalLinkCheckerOptions(
     ...(run.maxWaitMs !== undefined ? { maxWaitMs: run.maxWaitMs } : {}),
     ...(run.onVerdict ? { onVerdict: run.onVerdict } : {}),
     onProgress: (progress) =>
-      run.onProgress?.({ checked: progress.done, total: plan.hrefs.length, fromCache: progress.fromCache }),
+      run.onProgress?.({
+        checked: progress.done,
+        total: plan.hrefs.length,
+        fromCache: progress.fromCache,
+      }),
   };
 }
 
@@ -4402,7 +4498,10 @@ export function persistExternalLinkResults(
           externalLinkCheck: {
             ...externalLinkCheck,
             ...(refusedHrefs.length > 0
-              ? { refused: refusedHrefs.length, refusedLinks: sampleExternalLinks(refusedOccurrences) }
+              ? {
+                  refused: refusedHrefs.length,
+                  refusedLinks: sampleExternalLinks(refusedOccurrences),
+                }
               : {}),
             ...(outOfTime > 0 ? { outOfTime } : {}),
           },
@@ -4512,7 +4611,8 @@ interface ResourceOccurrenceMap {
 function hasMetaCsp(doc: Document | null): boolean {
   if (!doc) return false;
   for (const meta of doc.querySelectorAll("meta[http-equiv]")) {
-    if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "content-security-policy") return true;
+    if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "content-security-policy")
+      return true;
   }
   return false;
 }

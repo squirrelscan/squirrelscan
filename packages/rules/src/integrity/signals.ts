@@ -161,7 +161,12 @@ function hostMatches(host: string, hosts: string[]): boolean {
 }
 
 /** Whether a destination is one of the brand's own: a sign-in host, or an endpoint host on the paths that are its sign-in (#1418). */
-function isLegitDestination(spec: BrandSpec, host: string, path: string, self: Set<string>): boolean {
+function isLegitDestination(
+  spec: BrandSpec,
+  host: string,
+  path: string,
+  self: Set<string>,
+): boolean {
   if (hostMatches(host, spec.legitHosts)) return true;
   return (spec.legitEndpoints ?? []).some(
     (e) =>
@@ -210,15 +215,19 @@ function hrefHost(raw: string | null, base: string): string | null {
 /** The provider names a broker's own query uses, for Google and for Microsoft (`google-oauth2`, `windowslive`, `azure`, ...). */
 const PROVIDER_NAMES: Record<string, RegExp> = {
   Google: /^google(?:[-_.]?(?:oauth2|workspace|apps|com))?$/i,
-  Microsoft: /^(?:windowslive|windows-live|microsoft(?:account)?|azure(?:ad|-ad)?|azuread(?:-oauth2)?|office365|microsoftonline|live)(?:-oauth2)?(?:\.com)?$/i,
+  Microsoft:
+    /^(?:windowslive|windows-live|microsoft(?:account)?|azure(?:ad|-ad)?|azuread(?:-oauth2)?|office365|microsoftonline|live)(?:-oauth2)?(?:\.com)?$/i,
 };
 /** A query parameter of the endpoint names the provider the control's label does. */
-const names = (param: string) => (query: URLSearchParams, brand: string): boolean => {
-  const pattern = PROVIDER_NAMES[brand];
-  return pattern !== undefined && query.getAll(param).some((value) => pattern.test(value.trim()));
-};
+const names =
+  (param: string) =>
+  (query: URLSearchParams, brand: string): boolean => {
+    const pattern = PROVIDER_NAMES[brand];
+    return pattern !== undefined && query.getAll(param).some((value) => pattern.test(value.trim()));
+  };
 /** Okta names a configured identity provider by an opaque id: the parameter must be there, its value cannot be read as a provider. */
-const hasIdp = (query: URLSearchParams): boolean => query.getAll("idp").some((value) => value.trim() !== "");
+const hasIdp = (query: URLSearchParams): boolean =>
+  query.getAll("idp").some((value) => value.trim() !== "");
 
 const OKTA_PATH = /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/;
 /**
@@ -233,7 +242,12 @@ const IDENTITY_BROKER_ENDPOINTS: Array<{
   hint: (query: URLSearchParams, brand: string) => boolean;
   rest?: RegExp;
 }> = [
-  { host: "auth0.com", path: /^\/authorize(?:\/|$)/, hint: names("connection"), rest: /^\.(?:(?:us|eu|au|jp|uk)\.)?auth0\.com$/ },
+  {
+    host: "auth0.com",
+    path: /^\/authorize(?:\/|$)/,
+    hint: names("connection"),
+    rest: /^\.(?:(?:us|eu|au|jp|uk)\.)?auth0\.com$/,
+  },
   { host: "okta.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.okta\.com$/ },
   { host: "oktapreview.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.oktapreview\.com$/ },
   { host: "okta-emea.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.okta-emea\.com$/ },
@@ -251,7 +265,17 @@ const IDENTITY_BROKER_ENDPOINTS: Array<{
 const BROKERED_BRANDS = new Set(["Google", "Microsoft"]);
 
 /** Environment suffixes a site's own tenant may carry (`acme-prod`). Never words an attacker would pick (`login`, `sso`, `secure`, `support`, `eu`). */
-const TENANT_ENVIRONMENTS = new Set(["prod", "production", "dev", "staging", "stage", "test", "qa", "uat", "preview"]);
+const TENANT_ENVIRONMENTS = new Set([
+  "prod",
+  "production",
+  "dev",
+  "staging",
+  "stage",
+  "test",
+  "qa",
+  "uat",
+  "preview",
+]);
 /** Shortest site name a tenant is matched against: a one- or two-letter name matches too much (documented limit: such sites are never spared). */
 const MIN_TENANT_NAME = 3;
 /** Longest query read for a hint: a hint pushed past it is not found, which reads as unhinted (more reporting, never less). */
@@ -267,7 +291,11 @@ function brokerShaped(host: string, path: string): boolean {
  * hosted-login case, `acme.okta.com` for `acme.com`), `"environment"` when it is the name plus a hyphenated
  * environment (`acme-prod`), else `undefined` (somebody else's tenant, or one an attacker can name freely).
  */
-function tenantRelation(host: string, rest: RegExp, self: Set<string>): "exact" | "environment" | undefined {
+function tenantRelation(
+  host: string,
+  rest: RegExp,
+  self: Set<string>,
+): "exact" | "environment" | undefined {
   const dot = host.indexOf(".");
   if (dot <= 0 || !rest.test(host.slice(dot))) return undefined;
   const tenant = host.slice(0, dot);
@@ -276,7 +304,8 @@ function tenantRelation(host: string, rest: RegExp, self: Set<string>): "exact" 
     const name = registrableDomain(own).split(".")[0] ?? "";
     if (name.length < MIN_TENANT_NAME) continue;
     if (tenant === name) return "exact";
-    if (tenant.startsWith(`${name}-`) && TENANT_ENVIRONMENTS.has(tenant.slice(name.length + 1))) relation = "environment";
+    if (tenant.startsWith(`${name}-`) && TENANT_ENVIRONMENTS.has(tenant.slice(name.length + 1)))
+      relation = "environment";
   }
   return relation;
 }
@@ -288,7 +317,13 @@ function tenantRelation(host: string, rest: RegExp, self: Set<string>): "exact" 
  * look-alike or deeper label, a tenant with a free-form suffix, and another provider are judged like any other off-brand
  * host (#1494).
  */
-function isBrokerEndpoint(brand: string, host: string, path: string, query: string, self: Set<string>): boolean {
+function isBrokerEndpoint(
+  brand: string,
+  host: string,
+  path: string,
+  query: string,
+  self: Set<string>,
+): boolean {
   if (!BROKERED_BRANDS.has(brand)) return false;
   for (const e of IDENTITY_BROKER_ENDPOINTS) {
     if (!hostMatches(host, [e.host]) || !e.path.test(path)) continue;
@@ -354,12 +389,17 @@ function hasPhrase(label: string, phrase: string): boolean {
  * The URL relative links resolve against: the page's own, unless the document has a `<base href>` (the first one, as a browser reads
  * it) that resolves to an http(s) URL. A link `/signin` under `<base href="https://evil.example/">` leaves the site (#1423).
  */
-export function documentBase(doc: NonNullable<RuleContext["parsed"]["document"]>, pageUrl: string): string {
+export function documentBase(
+  doc: NonNullable<RuleContext["parsed"]["document"]>,
+  pageUrl: string,
+): string {
   const href = documentBaseHref(doc);
   if (!href) return pageUrl;
   try {
     const resolved = new URL(href.trim(), pageUrl);
-    return resolved.protocol === "http:" || resolved.protocol === "https:" ? resolved.href : pageUrl;
+    return resolved.protocol === "http:" || resolved.protocol === "https:"
+      ? resolved.href
+      : pageUrl;
   } catch {
     return pageUrl;
   }
@@ -380,27 +420,37 @@ function credentialDestinations(
     const host = hrefHost(action, base) ?? hrefHost(pageUrl, pageUrl);
     if (host) {
       const path = hrefPath(action, base);
-      out.push({ host, path, query: brokerShaped(host, path) ? hrefQuery(action, base) : "", brandLabeled: "", signIn: false });
+      out.push({
+        host,
+        path,
+        query: brokerShaped(host, path) ? hrefQuery(action, base) : "",
+        brandLabeled: "",
+        signIn: false,
+      });
     }
   }
 
   // Auth-labeled controls: only those whose own label is a sign-in affordance (wording in ./cues).
   for (const control of collectControls(doc)) {
     const { labels } = control;
-    const providerButton =
-      labels.some((label) => PROVIDER_BUTTON.test(label));
+    const providerButton = labels.some((label) => PROVIDER_BUTTON.test(label));
     if (!providerButton && !labels.some((label) => AUTH_LABEL.test(label))) continue;
     // A link's destination is its href; a button's is its formaction or its form's action. A control with
     // neither (a script-driven button) has no destination to judge.
     // An empty link href resolves to the `<base>` (a browser's reading); an empty form action is the page itself.
-    const emptyLink = control.href !== null && control.href.trim() === "" && control.element.tagName.toLowerCase() === "a";
+    const emptyLink =
+      control.href !== null &&
+      control.href.trim() === "" &&
+      control.element.tagName.toLowerCase() === "a";
     const host =
-      control.href === null ? null : emptyLink ? hrefHost(base, base) : (hrefHost(control.href, base) ?? hrefHost(pageUrl, pageUrl));
+      control.href === null
+        ? null
+        : emptyLink
+          ? hrefHost(base, base)
+          : (hrefHost(control.href, base) ?? hrefHost(pageUrl, pageUrl));
     if (!host) continue;
     const brandSpec = BRAND_SPECS.find((s) =>
-      s.lexicon.some(
-        (p) => labels.some((label) => hasPhrase(label, p))
-      )
+      s.lexicon.some((p) => labels.some((label) => hasPhrase(label, p))),
     );
     const brand = brandSpec?.brand ?? "";
     // "Continue with Google" is the provider's own button wording: a control that names the brand in an
@@ -408,7 +458,13 @@ function credentialDestinations(
     const signIn = providerButton || labels.some((label) => SIGN_IN_LABEL.test(label));
     const path = hrefPath(control.href, base);
     // The query is read only for a broker-shaped destination: a long query on any other link costs nothing.
-    out.push({ host, path, query: brokerShaped(host, path) ? hrefQuery(control.href, base) : "", brandLabeled: brand, signIn });
+    out.push({
+      host,
+      path,
+      query: brokerShaped(host, path) ? hrefQuery(control.href, base) : "",
+      brandLabeled: brand,
+      signIn,
+    });
   }
 
   return out;
@@ -422,9 +478,7 @@ function credentialDestinations(
  * and a legit "Sign in with Google" → accounts.google.com is spared even if the
  * page also links to unrelated third parties (footer/social links are ignored).
  */
-export function detectBrandImpersonation(
-  ctx: PageSignalContext
-): BrandImpersonationHit | null {
+export function detectBrandImpersonation(ctx: PageSignalContext): BrandImpersonationHit | null {
   const doc = ctx.parsed.document;
   if (!doc) return null;
 
@@ -440,9 +494,7 @@ export function detectBrandImpersonation(
   const hasCredentialAffordance =
     doc.querySelector('input[type="password"]') !== null ||
     credDests.some((d) => d.signIn) ||
-    /\b(sign in|log in|login|enter your password|verify your account)\b/.test(
-      haystack
-    );
+    /\b(sign in|log in|login|enter your password|verify your account)\b/.test(haystack);
   if (!hasCredentialAffordance) return null;
 
   for (const spec of BRAND_SPECS) {
@@ -465,11 +517,9 @@ export function detectBrandImpersonation(
       (d) =>
         !isLegitDestination(spec, d.host, d.path, self) &&
         !isBrokerEndpoint(spec.brand, d.host, d.path, d.query, self) &&
-        !isSelfOrSameSite(d.host, self)
+        !isSelfOrSameSite(d.host, self),
     );
-    const brandLabeledOffBrand = offBrandDests.filter(
-      (d) => d.brandLabeled === spec.brand
-    );
+    const brandLabeledOffBrand = offBrandDests.filter((d) => d.brandLabeled === spec.brand);
 
     if (brandLabeledOffBrand.length > 0) {
       const where = `"${spec.brand}" sign-in control targets off-brand host(s): ${brandLabeledOffBrand
@@ -529,7 +579,7 @@ export function detectObfuscatedScript(
   opts: { minBytes: number; minEntropy: number } = {
     minBytes: 4096,
     minEntropy: 4.5,
-  }
+  },
 ): ObfuscatedScriptHit | null {
   const doc = ctx.parsed.document;
   if (!doc) return null;
@@ -565,7 +615,8 @@ function safeSrc(src: string, base: string): string {
   if (!src) return "";
   try {
     const url = new URL(src, base);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return `(${url.protocol.replace(":", "")} source)`;
+    if (url.protocol !== "http:" && url.protocol !== "https:")
+      return `(${url.protocol.replace(":", "")} source)`;
     return `${url.origin}${url.pathname}`.slice(0, 120);
   } catch {
     return "(unparsed source)";
@@ -606,9 +657,7 @@ export interface FakeAuthOverlayHit {
  * — a fixed cookie-banner iframe won't match (it lacks the viewport-filling
  * dimensions + the auth affordance).
  */
-export function detectFakeAuthOverlay(
-  ctx: PageSignalContext
-): FakeAuthOverlayHit | null {
+export function detectFakeAuthOverlay(ctx: PageSignalContext): FakeAuthOverlayHit | null {
   const doc = ctx.parsed.document;
   if (!doc) return null;
 
@@ -619,9 +668,7 @@ export function detectFakeAuthOverlay(
   const haystack = authHaystack(ctx);
   const pageHasAuthAffordance =
     doc.querySelector('input[type="password"]') !== null ||
-    /\b(sign in|log in|enter your password|verify your account)\b/.test(
-      haystack
-    );
+    /\b(sign in|log in|enter your password|verify your account)\b/.test(haystack);
 
   // 1) Full-viewport fixed high-z iframe overlay. To avoid flagging legitimate
   // full-page app shells/portals, require BOTH the overlay geometry AND auth
@@ -638,9 +685,8 @@ export function detectFakeAuthOverlay(
 
     // Auth-suggestive identifier (the injected `#google-auth` pattern).
     const authIdentifier =
-      /(auth|login|signin|sign-in|oauth|verify|credential)/.test(
-        `${id} ${cls}`
-      ) || /(auth|login|signin|sign-in|oauth|verify)/.test(src.toLowerCase());
+      /(auth|login|signin|sign-in|oauth|verify|credential)/.test(`${id} ${cls}`) ||
+      /(auth|login|signin|sign-in|oauth|verify)/.test(src.toLowerCase());
 
     // Fire only when the overlay carries auth intent: either an auth-suggestive identifier, or it loads an
     // off-self source AND the page shows auth copy. A frame with neither cannot fire, so its CSS is never
@@ -791,9 +837,6 @@ export function detectPageSignals(ctx: PageSignalContext): Set<IntegritySignal> 
  * `own` should escalate to high severity. Escalate only when >=2 DISTINCT
  * signals fire (the owning rule's signal counts as one). A lone signal → `info`.
  */
-export function shouldEscalate(
-  signals: Set<IntegritySignal>,
-  own: IntegritySignal
-): boolean {
+export function shouldEscalate(signals: Set<IntegritySignal>, own: IntegritySignal): boolean {
   return signals.has(own) && signals.size >= CORRELATION_THRESHOLD;
 }

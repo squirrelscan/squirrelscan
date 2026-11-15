@@ -34,7 +34,10 @@ describe("crawl/pagination — the first page (pub#826)", () => {
       `${B}/blog/page/1`,
       `${B}/blog/page/1/`,
     ]) {
-      expect({ url, status: (await canonicalCheck(url, `${B}/blog`))?.status }).toEqual({ url, status: "pass" });
+      expect({ url, status: (await canonicalCheck(url, `${B}/blog`))?.status }).toEqual({
+        url,
+        status: "pass",
+      });
     }
   });
 
@@ -52,7 +55,10 @@ describe("crawl/pagination — the first page (pub#826)", () => {
       `${B}/blog?page=0.5`,
       `${B}/blog?page=-Infinity`,
     ]) {
-      expect({ url, status: (await canonicalCheck(url, `${B}/blog`))?.status }).toEqual({ url, status: "warn" });
+      expect({ url, status: (await canonicalCheck(url, `${B}/blog`))?.status }).toEqual({
+        url,
+        status: "warn",
+      });
     }
   });
 
@@ -61,18 +67,30 @@ describe("crawl/pagination — the first page (pub#826)", () => {
     expect((await canonicalCheck(`${B}/blog?page=1`, `${B}/`))?.status).toBe("warn");
     expect((await canonicalCheck(`${B}/blog/page/1`, `${B}/news`))?.status).toBe("warn");
     // Other query params belong to the resource: they must match.
-    expect((await canonicalCheck(`${B}/blog?tag=css&page=1`, `${B}/blog?tag=css`))?.status).toBe("pass");
+    expect((await canonicalCheck(`${B}/blog?tag=css&page=1`, `${B}/blog?tag=css`))?.status).toBe(
+      "pass",
+    );
     expect((await canonicalCheck(`${B}/blog?tag=css&page=1`, `${B}/blog`))?.status).toBe("warn");
     // Pairs are compared as pairs, and a key's values in order.
-    expect((await canonicalCheck(`${B}/blog?page=1&tag=a%26type%3Db`, `${B}/blog?tag=a&type=b`))?.status).toBe("warn");
-    expect((await canonicalCheck(`${B}/blog?page=1&tag=a&tag=b`, `${B}/blog?tag=b&tag=a`))?.status).toBe("warn");
-    expect((await canonicalCheck(`${B}/blog?page=1&tag=a&sort=new`, `${B}/blog?sort=new&tag=a`))?.status).toBe("pass");
+    expect(
+      (await canonicalCheck(`${B}/blog?page=1&tag=a%26type%3Db`, `${B}/blog?tag=a&type=b`))?.status,
+    ).toBe("warn");
+    expect(
+      (await canonicalCheck(`${B}/blog?page=1&tag=a&tag=b`, `${B}/blog?tag=b&tag=a`))?.status,
+    ).toBe("warn");
+    expect(
+      (await canonicalCheck(`${B}/blog?page=1&tag=a&sort=new`, `${B}/blog?sort=new&tag=a`))?.status,
+    ).toBe("pass");
     // A trailing slash and a fragment do not make it another resource.
     expect((await canonicalCheck(`${B}/blog/page/1/`, `${B}/blog/`))?.status).toBe("pass");
     expect((await canonicalCheck(`${B}/blog?page=1`, `${B}/blog#top`))?.status).toBe("pass");
     // Another scheme or host is another resource.
-    expect((await canonicalCheck(`${B}/blog?page=1`, "http://example.com/blog"))?.status).toBe("warn");
-    expect((await canonicalCheck(`${B}/blog?page=1`, "https://www.example.com/blog"))?.status).toBe("warn");
+    expect((await canonicalCheck(`${B}/blog?page=1`, "http://example.com/blog"))?.status).toBe(
+      "warn",
+    );
+    expect((await canonicalCheck(`${B}/blog?page=1`, "https://www.example.com/blog"))?.status).toBe(
+      "warn",
+    );
   });
 
   test("upper-case keys, repeated params and mixed markers are read the same way", async () => {

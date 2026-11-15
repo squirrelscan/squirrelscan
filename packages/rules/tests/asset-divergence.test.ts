@@ -407,7 +407,7 @@ describe("social/asset-divergence — findings", () => {
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
     expect(itemFor(check, "og-image")?.meta?.norm).toBe(
-      "https://cdn.example.com/default-share.png"
+      "https://cdn.example.com/default-share.png",
     );
   });
 
@@ -453,7 +453,10 @@ describe("social/asset-divergence — hreflang alternates are one og-image voter
   test("a one-way hreflang claim does not merge pages", async () => {
     const cluster = localeCluster("loc", 16, ENTITY_OG);
     // Only the first page lists the others; none link back.
-    const oneWay = cluster.map((spec, i) => ({ ...spec, alternates: i === 0 ? spec.alternates : [] }));
+    const oneWay = cluster.map((spec, i) => ({
+      ...spec,
+      alternates: i === 0 ? spec.alternates : [],
+    }));
     const check = await bothPaths([...uniformSite(60), ...oneWay]);
     expect(itemFor(check, "og-image")?.meta?.pageCount).toBe(16);
   });
@@ -527,14 +530,14 @@ describe("social/asset-divergence — extraction", () => {
 
   test("resolves a root-relative favicon so depth does not matter", () => {
     expect(chrome('<link rel="icon" href="/favicon.ico">').faviconHref).toBe(
-      "https://example.com/favicon.ico"
+      "https://example.com/favicon.ico",
     );
   });
 
   test("apple-touch and mask icons never stand in for the favicon", () => {
     const signal = chrome(
       '<link rel="apple-touch-icon" href="/touch.png"><link rel="mask-icon" href="/mask.svg">' +
-        '<link rel="shortcut icon" href="/real.ico">'
+        '<link rel="shortcut icon" href="/real.ico">',
     );
     expect(signal.faviconHref).toBe("https://example.com/real.ico");
   });
@@ -542,7 +545,7 @@ describe("social/asset-divergence — extraction", () => {
   test("a light/dark theme-color pair reads as the unscoped declaration", () => {
     const signal = chrome(
       '<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">' +
-        '<meta name="theme-color" content="#0a5c36">'
+        '<meta name="theme-color" content="#0a5c36">',
     );
     expect(signal.themeColor).toBe("#0a5c36");
   });
@@ -550,7 +553,7 @@ describe("social/asset-divergence — extraction", () => {
   test("a media-scoped-only page falls back to its first declaration", () => {
     const signal = chrome(
       '<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">' +
-        '<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">'
+        '<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">',
     );
     expect(signal.themeColor).toBe("#ffffff");
   });

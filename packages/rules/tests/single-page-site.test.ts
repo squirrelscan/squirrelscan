@@ -16,8 +16,7 @@ const SECTIONS = `
   <nav><a href="#about">About</a><a href="#services">Services</a><a href="#contact">Contact</a></nav>
   <section id="about">a</section><section id="services">s</section><section id="contact">c</section>`;
 
-const page = (body: string) =>
-  `<html><head><title>t</title></head><body>${body}</body></html>`;
+const page = (body: string) => `<html><head><title>t</title></head><body>${body}</body></html>`;
 
 interface Over {
   html?: string;
@@ -39,12 +38,21 @@ function build(over: Over, streaming: boolean): RuleContext {
   for (let i = 0; i < (over.extraPages ?? 0); i++) pages.push(make(`/p${i}`));
   const site = {
     baseUrl: BASE,
-    pages: streaming ? pages.map((p) => ({ ...p, parsed: { ...p.parsed, document: null } })) : pages,
+    pages: streaming
+      ? pages.map((p) => ({ ...p, parsed: { ...p.parsed, document: null } }))
+      : pages,
     robotsTxt: null,
     sitemaps: over.sitemapUrls
       ? {
           discovered: [
-            { url: `${BASE}/sitemap.xml`, type: "urlset", urls: over.sitemapUrls.map((loc) => ({ loc })), childSitemaps: [], errors: [], urlCount: over.sitemapUrls.length },
+            {
+              url: `${BASE}/sitemap.xml`,
+              type: "urlset",
+              urls: over.sitemapUrls.map((loc) => ({ loc })),
+              childSitemaps: [],
+              errors: [],
+              urlCount: over.sitemapUrls.length,
+            },
           ],
           sources: { robotsTxt: [], commonLocations: [] },
           totalUrls: over.sitemapUrls.length,
@@ -74,10 +82,11 @@ const ENGINES: Array<[string, boolean]> = [
 ];
 
 describe.each(ENGINES)("crawl/single-page-site (%s)", (_name, streaming) => {
-  const run = async (over: Over = {}) => (await singlePageSiteRule.run(build(over, streaming))).checks;
+  const run = async (over: Over = {}) =>
+    (await singlePageSiteRule.run(build(over, streaming))).checks;
 
   test("fires on one page with 3+ section links and lists the ids", async () => {
-    const checks = (await run());
+    const checks = await run();
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("info");
     expect(checks[0]!.items?.map((i) => i.id)).toEqual(["#about", "#services", "#contact"]);
@@ -122,9 +131,7 @@ describe.each(ENGINES)("crawl/single-page-site (%s)", (_name, streaming) => {
   });
 
   test("no finding with fewer than 3 section links", async () => {
-    const html = page(
-      `<a href="#a">a</a><a href="#b">b</a><div id="a"></div><div id="b"></div>`,
-    );
+    const html = page(`<a href="#a">a</a><a href="#b">b</a><div id="a"></div><div id="b"></div>`);
     expect(await run({ html })).toEqual([]);
   });
 
@@ -149,7 +156,7 @@ describe.each(ENGINES)("crawl/single-page-site (%s)", (_name, streaming) => {
       ids.map((id) => `<a href="#${id}">${id}</a>`).join("") +
         ids.map((id) => `<div id="${id}"></div>`).join(""),
     );
-    const [c] = (await run({ html }));
+    const [c] = await run({ html });
     expect(c!.items).toHaveLength(10);
     expect(c!.details).toMatchObject({ sections: 13, additional: 3 });
   });

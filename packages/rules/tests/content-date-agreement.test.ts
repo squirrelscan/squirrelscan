@@ -45,9 +45,7 @@ function check(checks: CheckResult[], name: string): CheckResult | undefined {
 }
 
 function page(schema: unknown, body: string, title = "A post about caching"): string {
-  const ld = schema
-    ? `<script type="application/ld+json">${JSON.stringify(schema)}</script>`
-    : "";
+  const ld = schema ? `<script type="application/ld+json">${JSON.stringify(schema)}</script>` : "";
   return `<html><head><title>${title}</title>${ld}</head><body>${body}</body></html>`;
 }
 
@@ -190,7 +188,7 @@ describe("content/date-agreement — must not fire", () => {
       [SITEWIDE_APP, article("2025-11-04")],
       `<main><article><p class="byline">Published on November 4, 2025 by Nik</p>${PROSE}</article></main>`,
     );
-    const checks = (await run(html));
+    const checks = await run(html);
 
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
     expect(check(checks, "byline-vs-schema-date")?.status).toBe("pass");
@@ -205,7 +203,7 @@ describe("content/date-agreement — must not fire", () => {
         "<p>INP replaced FID on March 12, 2024, and the threshold has not moved since.</p>" +
         `<p class="byline">Published on February 10, 2026</p>${PROSE}</article></main>`,
     );
-    const checks = (await run(html));
+    const checks = await run(html);
 
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
     expect(check(checks, "byline-vs-schema-date")?.value).toBe("February 10, 2026");
@@ -226,7 +224,7 @@ describe("content/date-agreement — must not fire", () => {
     const html = page(
       article("2026-02-10"),
       "<main><article><h1>Interaction to Next Paint</h1>" +
-        "<p class=\"byline\">Data: February 10, 2026</p>" +
+        '<p class="byline">Data: February 10, 2026</p>' +
         `${PROSE}</article></main>`,
     );
 
@@ -242,7 +240,7 @@ describe("content/date-agreement — must not fire", () => {
         article("2026-02-10"),
         `<main><article><h1>Release notes</h1>${markup}${PROSE}</article></main>`,
       );
-      const checks = (await run(html));
+      const checks = await run(html);
 
       expect(check(checks, "byline-vs-schema-date")).toBeUndefined();
       expect(checks.every((c) => c.status !== "warn")).toBe(true);
@@ -269,7 +267,7 @@ describe("content/date-agreement — must not fire", () => {
         '<p>Announced <a href="https://web.dev/blog/inp-cwv">March 12, 2024</a>.</p>' +
         `${PROSE}</article></main>`,
     );
-    const checks = (await run(html));
+    const checks = await run(html);
 
     // Not a disagreement with the citation's date, and not "no date at all"
     // either: the page does print a date, this rule just declines to read it as
@@ -290,7 +288,7 @@ describe("content/date-agreement — must not fire", () => {
         '<p>Published <a href="https://web.dev/">March 12, 2024</a></p>' +
         `${PROSE}</article></main>`,
     );
-    const checks = (await run(html));
+    const checks = await run(html);
 
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
     expect(check(checks, "byline-vs-schema-date")).toBeUndefined();
@@ -331,16 +329,19 @@ describe("content/date-agreement — must not fire", () => {
     ["numeric, day first", "Published on 08/01/2026"],
     ["numeric, month first", "Published on 01/08/2026"],
     ["numeric with dots", "8.1.2026"],
-  ])("a %s byline that agrees with the schema date is not reported as missing", async (_name, text) => {
-    const html = page(
-      article("2026-01-08"),
-      `<main><article><p class="byline">${text}</p>${PROSE}</article></main>`,
-    );
-    const checks = (await run(html));
+  ])(
+    "a %s byline that agrees with the schema date is not reported as missing",
+    async (_name, text) => {
+      const html = page(
+        article("2026-01-08"),
+        `<main><article><p class="byline">${text}</p>${PROSE}</article></main>`,
+      );
+      const checks = await run(html);
 
-    expect(checks.every((c) => c.status !== "warn")).toBe(true);
-    expect(check(checks, "visible-date-missing")).toBeUndefined();
-  });
+      expect(checks.every((c) => c.status !== "warn")).toBe(true);
+      expect(check(checks, "visible-date-missing")).toBeUndefined();
+    },
+  );
 
   test("a non-English byline without byline markup is read from its opening word", async () => {
     const html = page(
@@ -379,7 +380,7 @@ describe("content/date-agreement — must not fire", () => {
       "/2024-13-02-not-a-month",
       "/2024-12-45-not-a-day",
     ]) {
-      const checks = (await run(html, `https://example.com${slug}`));
+      const checks = await run(html, `https://example.com${slug}`);
       expect(check(checks, "url-title-year")).toBeUndefined();
       expect(checks.every((c) => c.status !== "warn")).toBe(true);
     }
@@ -388,8 +389,10 @@ describe("content/date-agreement — must not fire", () => {
   test("a long nav above the content does not push the byline out of the zone", async () => {
     // With no <article>/<main> the walk starts at <body>; chrome is skipped
     // whole so a menu cannot spend the whole byline zone before the byline.
-    const nav = Array.from({ length: 40 }, (_, i) => `<a href="/p/${i}">Section number ${i}</a>`)
-      .join("");
+    const nav = Array.from(
+      { length: 40 },
+      (_, i) => `<a href="/p/${i}">Section number ${i}</a>`,
+    ).join("");
     const html = page(
       article("2026-01-08"),
       `<header><nav>${nav}</nav></header>` +
@@ -409,7 +412,7 @@ describe("content/date-agreement — must not fire", () => {
       "Contact us",
     );
 
-    const out = (await run(html, "https://example.com/contact"));
+    const out = await run(html, "https://example.com/contact");
     expect(findings(out).length).toBe(0);
     // Evaluated and found nothing to report: a clean check, not an empty list (#1741).
     expect(out.map((c) => [c.name, c.status])).toEqual([["date-agreement", "pass"]]);
@@ -425,7 +428,9 @@ describe("content/date-agreement — must not fire", () => {
       "Blog archive",
     );
 
-    expect((await run(html, "https://example.com/blog")).every((c) => c.status !== "warn")).toBe(true);
+    expect((await run(html, "https://example.com/blog")).every((c) => c.status !== "warn")).toBe(
+      true,
+    );
   });
 
   test("a Published date and an Updated date, only one of which matches", async () => {
@@ -440,7 +445,7 @@ describe("content/date-agreement — must not fire", () => {
   });
 
   test("a page with no date signals at all stays silent", async () => {
-    const none = (await run(page(null, `<main><h1>Hello</h1>${PROSE}</main>`)));
+    const none = await run(page(null, `<main><h1>Hello</h1>${PROSE}</main>`));
     expect(findings(none).length).toBe(0);
     // Nothing to compare is said, not left empty (#1741).
     expect(none.map((c) => [c.name, c.status, c.skipReason])).toEqual([
@@ -492,8 +497,7 @@ describe("content/date-agreement — disagreements", () => {
   test("a reference number after a Published opener is not read as a byline date", async () => {
     const html = page(
       article("2026-03-20"),
-      '<main><article><p>Published: ref 3.4.2019 for the archive</p>' +
-        `${PROSE}</article></main>`,
+      "<main><article><p>Published: ref 3.4.2019 for the archive</p>" + `${PROSE}</article></main>`,
     );
 
     expect(check(await run(html), "byline-vs-schema-date")).toBeUndefined();
@@ -502,8 +506,7 @@ describe("content/date-agreement — disagreements", () => {
   test("a numeric byline that matches neither reading of the schema date warns", async () => {
     const html = page(
       article("2026-03-20"),
-      '<main><article><p class="byline">Published on 08/01/2026</p>' +
-        `${PROSE}</article></main>`,
+      '<main><article><p class="byline">Published on 08/01/2026</p>' + `${PROSE}</article></main>`,
     );
 
     expect(check(await run(html), "byline-vs-schema-date")?.status).toBe("warn");
@@ -522,7 +525,9 @@ describe("content/date-agreement — disagreements", () => {
       "/blog/2024-03",
       "/2024/03/caching",
     ]) {
-      expect(check(await run(html, `https://example.com${path}`), "url-title-year")?.status).toBe("warn");
+      expect(check(await run(html, `https://example.com${path}`), "url-title-year")?.status).toBe(
+        "warn",
+      );
     }
   });
 
@@ -530,14 +535,21 @@ describe("content/date-agreement — disagreements", () => {
     const body = (visible: string) =>
       `<main><article><time datetime="${visible}">${visible}</time>${PROSE}</article></main>`;
 
-    expect(check(await run(page(article("2026-01-08"), body("2026-01-09"))), "byline-vs-schema-date")
-      ?.status).toBe("pass");
-    expect(check(await run(page(article("2026-01-08"), body("2026-01-10"))), "byline-vs-schema-date")
-      ?.status).toBe("warn");
+    expect(
+      check(await run(page(article("2026-01-08"), body("2026-01-09"))), "byline-vs-schema-date")
+        ?.status,
+    ).toBe("pass");
+    expect(
+      check(await run(page(article("2026-01-08"), body("2026-01-10"))), "byline-vs-schema-date")
+        ?.status,
+    ).toBe("warn");
   });
 
   test("schema dates with no visible date anywhere warns", async () => {
-    const html = page(article("2026-01-08", "2026-02-01"), `<main><article>${PROSE}</article></main>`);
+    const html = page(
+      article("2026-01-08", "2026-02-01"),
+      `<main><article>${PROSE}</article></main>`,
+    );
     const warn = check(await run(html), "visible-date-missing");
 
     expect(warn?.status).toBe("warn");
@@ -560,7 +572,10 @@ describe("content/date-agreement — disagreements", () => {
       '<main><article><p class="byline">Published on January 8, 2026</p>' +
         `${PROSE}</article></main>`,
     );
-    const warn = check(await run(html, "https://example.com/blog/2024/03/caching"), "url-title-year");
+    const warn = check(
+      await run(html, "https://example.com/blog/2024/03/caching"),
+      "url-title-year",
+    );
 
     expect(warn?.status).toBe("warn");
     expect(warn?.message).toContain("URL says 2024");
@@ -587,8 +602,9 @@ describe("content/date-agreement — disagreements", () => {
         `${PROSE}</article></main>`,
     );
 
-    expect(check(await run(html, "https://example.com/blog/2026/01/caching"), "url-title-year")?.status)
-      .toBe("pass");
+    expect(
+      check(await run(html, "https://example.com/blog/2026/01/caching"), "url-title-year")?.status,
+    ).toBe("pass");
   });
 });
 
@@ -601,7 +617,7 @@ describe("content/date-agreement — schema date source", () => {
       '<main><article><p class="byline">Published on November 4, 2025</p>' +
         `${PROSE}</article></main>`,
     );
-    const checks = (await run(html));
+    const checks = await run(html);
     const info = check(checks, "schema-date-source");
 
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
@@ -625,9 +641,9 @@ describe("content/date-agreement — agreement", () => {
       '<main><article><p class="byline">Published on January 8, 2026 by Nik</p>' +
         `${PROSE}</article></main>`,
     );
-    const checks = (await run(html, "https://example.com/blog/caching", {
+    const checks = await run(html, "https://example.com/blog/caching", {
       "last-modified": "Thu, 08 Jan 2026 10:00:00 GMT",
-    }));
+    });
     const pass = check(checks, "byline-vs-schema-date");
 
     expect(checks.every((c) => c.status !== "warn")).toBe(true);

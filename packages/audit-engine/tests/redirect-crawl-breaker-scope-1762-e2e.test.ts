@@ -61,7 +61,8 @@ describe("redirect rows and the crawl's own bookkeeping (#1762)", () => {
     const names = Array.from({ length: 10 }, (_, i) => `s${i}`);
     const origin = serve((url, o) => {
       // The seed redirects too, so no page is stored before the ten redirecting sitemap URLs have been tried.
-      if (url.pathname === "/") return new Response(null, { status: 301, headers: { location: "/home/" } });
+      if (url.pathname === "/")
+        return new Response(null, { status: 301, headers: { location: "/home/" } });
       if (url.pathname === "/home/") return new Response(page("Home"), { headers: HTML });
       if (url.pathname === "/sitemap.xml") {
         const locs = names.map((n) => `<url><loc>${o}/${n}</loc></url>`).join("");
@@ -86,9 +87,12 @@ describe("redirect rows and the crawl's own bookkeeping (#1762)", () => {
 
   test("a redirect to a destination the crawl would not visit (excluded) stays an ordinary page, not a redirect with nothing behind it", async () => {
     const origin = serve((url) => {
-      if (url.pathname === "/") return new Response(page("Home", `<a href="/docs/">Docs</a>`), { headers: HTML });
-      if (url.pathname === "/docs/") return new Response(null, { status: 301, headers: { location: "/documentation/" } });
-      if (url.pathname === "/documentation/") return new Response(page("Documentation"), { headers: HTML });
+      if (url.pathname === "/")
+        return new Response(page("Home", `<a href="/docs/">Docs</a>`), { headers: HTML });
+      if (url.pathname === "/docs/")
+        return new Response(null, { status: 301, headers: { location: "/documentation/" } });
+      if (url.pathname === "/documentation/")
+        return new Response(page("Documentation"), { headers: HTML });
       return null;
     });
     const { pages } = await crawl(origin, { exclude: ["/documentation/**"] });

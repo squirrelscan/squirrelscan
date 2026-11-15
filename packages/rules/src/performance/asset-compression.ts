@@ -56,12 +56,10 @@ function isKnownUncompressed(encoding: string | null | undefined): boolean {
   // `identity, gzip` is still compressed. The fetchers normalize a lone
   // `identity` to null, but they match one token, so a list reaches this
   // function verbatim.
-  return encoding
-    .split(",")
-    .every((token) => {
-      const coding = token.trim().toLowerCase();
-      return coding === "" || coding === "identity";
-    });
+  return encoding.split(",").every((token) => {
+    const coding = token.trim().toLowerCase();
+    return coding === "" || coding === "identity";
+  });
 }
 
 interface Candidate {
@@ -136,7 +134,7 @@ export const assetCompressionRule: Rule = {
         c.error === null &&
         (c.cacheReason ?? null) === null &&
         c.contentEncoding !== undefined &&
-        isCompressibleContentType(c.contentType)
+        isCompressibleContentType(c.contentType),
     );
 
     if (observed.length === 0) {
@@ -153,7 +151,7 @@ export const assetCompressionRule: Rule = {
       (c) =>
         isKnownUncompressed(c.contentEncoding) &&
         c.sizeBytes !== null &&
-        c.sizeBytes > opts.min_bytes
+        c.sizeBytes > opts.min_bytes,
     );
 
     if (uncompressed.length === 0) {
@@ -166,9 +164,7 @@ export const assetCompressionRule: Rule = {
     }
 
     // Biggest first: the top of the list is where the bandwidth actually is.
-    const sorted = [...uncompressed].sort(
-      (a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0)
-    );
+    const sorted = [...uncompressed].sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0));
     const wastedBytes = sorted.reduce((sum, c) => sum + (c.sizeBytes ?? 0), 0);
 
     checks.push({

@@ -84,8 +84,10 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     });
 
     test("near-miss: a look-alike host and a page that links to one", () => {
-    expect(ids(input({ url: "https://evilbase44.app.attacker.example/" }))).not.toContain("base44");
-    expect(ids(input({ url: "https://base44.app.attacker.example/" }))).not.toContain("base44");
+      expect(ids(input({ url: "https://evilbase44.app.attacker.example/" }))).not.toContain(
+        "base44",
+      );
+      expect(ids(input({ url: "https://base44.app.attacker.example/" }))).not.toContain("base44");
       expect(ids(input({ url: "https://base44.app.example.com/" }))).not.toContain("base44");
       const html = `<a href="https://my-tool.base44.app/">demo</a>`;
       expect(ids(input({ html }))).not.toContain("base44");
@@ -101,9 +103,9 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
 
     test("dev banner script and platform static path", () => {
       const src = "https://replit.com/public/js/replit-dev-banner.js";
-      expect(ids(input({ html: `<script src="${src}"></script>`, scripts: [{ url: src }] }))).toContain(
-        "replit",
-      );
+      expect(
+        ids(input({ html: `<script src="${src}"></script>`, scripts: [{ url: src }] })),
+      ).toContain("replit");
       const html = `<style>@font-face{src:url("/__replco/static/fonts/ReplitDiatypeVariable.woff2")}</style>`;
       expect(ids(input({ html }))).toContain("replit");
     });
@@ -111,7 +113,9 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     test("near-miss: a look-alike host, and replit.com itself without the markers", () => {
       expect(ids(input({ url: "https://replit.app.evil.example/" }))).not.toContain("replit");
       expect(ids(input({ url: "https://notreplit.app/" }))).not.toContain("replit");
-      expect(ids(input({ url: "https://my-app.replit.app.attacker.example/" }))).not.toContain("replit");
+      expect(ids(input({ url: "https://my-app.replit.app.attacker.example/" }))).not.toContain(
+        "replit",
+      );
       expect(ids(input({ url: "https://evilrepl.co.attacker.example/" }))).not.toContain("replit");
     });
   });
@@ -175,7 +179,8 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     });
 
     test("dev instance host", () => {
-      const src = "https://sunny-owl-12.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+      const src =
+        "https://sunny-owl-12.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
       expect(ids(input({ html: "", scripts: [{ url: src }] }))).toContain("clerk");
     });
 
@@ -198,9 +203,9 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
 
     test("Hosting reserved init script and inline web config", () => {
       const src = "/__/firebase/init.js";
-      expect(ids(input({ html: `<script src="${src}"></script>`, scripts: [{ url: src }] }))).toContain(
-        "firebase",
-      );
+      expect(
+        ids(input({ html: `<script src="${src}"></script>`, scripts: [{ url: src }] })),
+      ).toContain("firebase");
       const cfg = `<script>const firebaseConfig = { apiKey: "x", authDomain: "my-app-1234.firebaseapp.com", projectId: "my-app-1234" };</script>`;
       expect(ids(input({ html: cfg }))).toContain("firebase");
     });
@@ -251,9 +256,9 @@ fetch(\`/api/app-logs/\${appId}/log-user-in-app/\${page}\`)</pre>
     const commented = `<!-- <script src="https://www.gstatic.com/firebasejs/9.13.0/firebase-app.js"></script>
 <script src="https://clerk.example.com/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script> -->`;
     expect(found(commented)).toEqual([]);
-    expect(found(`<!-- note --><meta name="generator" content="x">${lazy.replace("data-src", "src")}`)).toEqual([
-      "firebase",
-    ]);
+    expect(
+      found(`<!-- note --><meta name="generator" content="x">${lazy.replace("data-src", "src")}`),
+    ).toEqual(["firebase"]);
   });
 
   test("an unterminated comment is kept, not dropped", () => {
@@ -344,7 +349,8 @@ describe("vibe-coding fingerprints: late config and meta URL position", () => {
 
   test("hostile flood with every trigger literal present stays fast", () => {
     const html =
-      "<script>".repeat(20_000) + "<style>".repeat(20_000) +
+      "<script>".repeat(20_000) +
+      "<style>".repeat(20_000) +
       " .supabase.co .firebaseapp.com base44_access_token /api/app-logs/ #lovable-badge /__replco/static/";
     const start = performance.now();
     detectTechnologies({ url: "https://example.com/", headers: {}, html });

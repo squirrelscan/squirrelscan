@@ -14,7 +14,10 @@ function urlset(attrs: string, body = "<url><loc>https://example.com/a</loc></ur
 
 describe("news-sitemap detection", () => {
   test("xmlns:news marks the sitemap as a news sitemap", () => {
-    const data = parseSitemap(urlset(` xmlns:news="${NEWS_NS}"`), "https://example.com/sitemap.xml");
+    const data = parseSitemap(
+      urlset(` xmlns:news="${NEWS_NS}"`),
+      "https://example.com/sitemap.xml",
+    );
     expect(data.isNewsSitemap).toBe(true);
   });
 
@@ -29,7 +32,10 @@ describe("news-sitemap detection", () => {
   });
 
   test("the namespace counts wherever the sitemap is served from", () => {
-    const data = parseSitemap(urlset(` xmlns:news="${NEWS_NS}"`), "https://example.com/feeds/2.xml");
+    const data = parseSitemap(
+      urlset(` xmlns:news="${NEWS_NS}"`),
+      "https://example.com/feeds/2.xml",
+    );
     expect(data.isNewsSitemap).toBe(true);
   });
 

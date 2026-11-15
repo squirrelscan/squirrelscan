@@ -173,9 +173,7 @@ describe("merge session site pages == the copies they replace (#497)", () => {
       for (const p of session.changedSitePages) stored.set(p.normalizedUrl, p);
       expect(new Map(stored)).toEqual(new Map(ref.sitePages.map((p) => [p.normalizedUrl, p])));
       expect(session.changedSitePages.length).toBeLessThanOrEqual(
-        input.crawledUrls.size +
-          input.removedUrls.size +
-          (input.resolution?.crawledUrls.size ?? 0),
+        input.crawledUrls.size + input.removedUrls.size + (input.resolution?.crawledUrls.size ?? 0),
       );
     });
   }
@@ -203,7 +201,8 @@ function pageMapStore(
 describe("a publish writes the run's pages, not the site's (#497)", () => {
   test("5,000 known pages, 20 crawled, 2 removed: 20 page rows upserted", async () => {
     const pages = new Map<string, SitePageRecord>();
-    for (let i = 0; i < 5_000; i++) pages.set(url(i), page(url(i), i % 9 === 0 ? "removed" : "active", i));
+    for (let i = 0; i < 5_000; i++)
+      pages.set(url(i), page(url(i), i % 9 === 0 ? "removed" : "active", i));
     const upserted: SitePageRecord[] = [];
     const store = pageMapStore(pages, upserted);
     const crawled = Array.from({ length: 20 }, (_, i) => url(i * 250 + 1));
@@ -268,7 +267,12 @@ class KeyedUpsertStore implements SmartAuditStore {
     this.upserted += pages.length;
     for (const p of pages) this.rows.set(this.key(p.siteKey, p.normalizedUrl), { ...p });
   }
-  async markPageRemoved(siteKey: string, normalizedUrl: string, crawlId: string, lastStatus: number) {
+  async markPageRemoved(
+    siteKey: string,
+    normalizedUrl: string,
+    crawlId: string,
+    lastStatus: number,
+  ) {
     await this.markPagesRemoved(siteKey, [{ normalizedUrl, lastStatus }], crawlId);
   }
   async markPagesRemoved(
@@ -348,7 +352,9 @@ describe("upsertSitePages as a keyed upsert: changed rows only == every row (#49
         removed.map((u) => ({ normalizedUrl: u, lastStatus: statusByUrl.get(u) ?? 404 })),
         CRAWL,
       );
-      await full.upsertSitePages(session.sitePages.filter((p) => !removedUrls.has(p.normalizedUrl)));
+      await full.upsertSitePages(
+        session.sitePages.filter((p) => !removedUrls.has(p.normalizedUrl)),
+      );
 
       expect(delta.snapshot()).toEqual(full.snapshot());
       // And it got there writing the run's pages, not the site's.
@@ -358,5 +364,10 @@ describe("upsertSitePages as a keyed upsert: changed rows only == every row (#49
   }
 });
 
-describeSitePagesContract("merge-session-pages.test.ts pageMapStore", () => pageMapStore(new Map()));
-describeSitePagesContract("merge-session-pages.test.ts KeyedUpsertStore", () => new KeyedUpsertStore());
+describeSitePagesContract("merge-session-pages.test.ts pageMapStore", () =>
+  pageMapStore(new Map()),
+);
+describeSitePagesContract(
+  "merge-session-pages.test.ts KeyedUpsertStore",
+  () => new KeyedUpsertStore(),
+);

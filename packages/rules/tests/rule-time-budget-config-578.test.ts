@@ -11,7 +11,15 @@ import type { PageData, Rule } from "../src/types";
 /** A page rule that spins for `ms` of wall-clock time. */
 function spinRule(id: string, ms: number): Rule {
   return {
-    meta: { id, name: id, description: "test rule", category: "core", scope: "page", severity: "info", weight: 1 },
+    meta: {
+      id,
+      name: id,
+      description: "test rule",
+      category: "core",
+      scope: "page",
+      severity: "info",
+      weight: 1,
+    },
     run: () => {
       const until = performance.now() + ms;
       while (performance.now() < until) {
@@ -25,7 +33,10 @@ function spinRule(id: string, ms: number): Rule {
 function makeRunner(rule: Rule, timeBudgetMs?: number, optionBudgetMs?: number): RuleRunner {
   const config: RulesConfig = {
     rule_options: {},
-    rules: { enable: [rule.meta.id], ...(timeBudgetMs === undefined ? {} : { time_budget_ms: timeBudgetMs }) },
+    rules: {
+      enable: [rule.meta.id],
+      ...(timeBudgetMs === undefined ? {} : { time_budget_ms: timeBudgetMs }),
+    },
   };
   const ns: RuleNamespace = { name: "test", rules: [rule] };
   return new RuleRunner({ config, additionalNamespaces: [ns], ruleTimeBudgetMs: optionBudgetMs });

@@ -9,12 +9,17 @@ import type { RuleContext } from "../src/types";
 // cases the fix must not change (below the divider).
 
 const url = "https://example.com/";
-const overlay = '<iframe id="google-auth" srcdoc="" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999"></iframe>';
+const overlay =
+  '<iframe id="google-auth" srcdoc="" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999"></iframe>';
 const link = '<a href="https://credential-fixture.invalid/signin">Sign in with Google</a>';
 function context(body: string): RuleContext {
   const html = `<!doctype html><html><head><title>Applicability fixture</title></head><body><main><h1>Applicability fixture</h1>${body}</main></body></html>`;
   const parsed = parsePage(html, url);
-  return { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} };
+  return {
+    page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+    parsed,
+    options: {},
+  };
 }
 
 test("control: whitespace-separated correlated signals produce two failures", async () => {
@@ -39,7 +44,9 @@ test("control: a lone overlay remains info", async () => {
 });
 
 test("control: an ordinary iframe has no compromise signal", async () => {
-  const ctx = context(' <iframe title="Ordinary content" srcdoc="" style="width:300px;height:150px"></iframe>');
+  const ctx = context(
+    ' <iframe title="Ordinary content" srcdoc="" style="width:300px;height:150px"></iframe>',
+  );
   expect([...detectPageSignals(ctx)]).toEqual([]);
   expect((await fakeAuthOverlayRule.run(ctx)).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
   expect((await brandImpersonationRule.run(ctx)).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
@@ -48,7 +55,9 @@ test("control: an ordinary iframe has no compromise signal", async () => {
 // ── what the fix must not change ────────────────────────────────────
 
 test("a compact, legitimate Sign in with Google link is not impersonation", async () => {
-  const ctx = context('<a href="https://accounts.google.com/o/oauth2/auth">Sign in with Google</a>');
+  const ctx = context(
+    '<a href="https://accounts.google.com/o/oauth2/auth">Sign in with Google</a>',
+  );
   expect(detectPageSignals(ctx).has("brand-impersonation")).toBe(false);
   expect((await brandImpersonationRule.run(ctx)).checks.map((c) => c.status)).toEqual(["pass"]); // clean, not empty (#1741)
 });

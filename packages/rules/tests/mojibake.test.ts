@@ -64,14 +64,14 @@ describe("uppercase Portuguese words ending in Ã (#1617)", () => {
   });
 
   test("the rule passes a page with the uppercase words", async () => {
-    const [check] = (await run(page("<p>Abrimos de MANHÃ e à tarde. IRMÃ e MAÇÃ.</p>")));
+    const [check] = await run(page("<p>Abrimos de MANHÃ e à tarde. IRMÃ e MAÇÃ.</p>"));
     expect(check?.status).toBe("pass");
   });
 
   test("genuine mojibake for à (Ã then U+00A0) is still reported", async () => {
     const found = findMojibake("cafÃ  au lait");
     expect(found.find((f) => f.kind === "utf8-as-latin1")?.count).toBe(1);
-    const [check] = (await run(page("<p>Itâ€™s cafÃ  time</p>")));
+    const [check] = await run(page("<p>Itâ€™s cafÃ  time</p>"));
     expect(check?.status).toBe("warn");
     expect(check?.value).toBe(2);
   });
@@ -108,47 +108,47 @@ describe("mojibakeRule", () => {
 
   test("legitimate accented copy declared as utf-8 stays clean", async () => {
     // A rule that flagged this would be unusable on any non-English site.
-    const [check] = (await run(
+    const [check] = await run(
       page("<p>Un café à Paris. Grüße aus Köln. El niño jugó. 25° © 2026 “élan”</p>"),
-    ));
+    );
     expect(check?.status).toBe("pass");
   });
 
   test("mojibake warns", async () => {
-    const [check] = (await run(page("<p>Itâ€™s a cafÃ©</p>")));
+    const [check] = await run(page("<p>Itâ€™s a cafÃ©</p>"));
     expect(check?.status).toBe("warn");
     expect(check?.value).toBe(2);
   });
 
   test("the replacement character escalates to fail", async () => {
     // U+FFFD is not arguable: the decoder already gave up.
-    const [check] = (await run(page("<p>caf�</p>")));
+    const [check] = await run(page("<p>caf�</p>"));
     expect(check?.status).toBe("fail");
   });
 
   test("cause is attributed: missing charset names the declaration fix", async () => {
-    const [check] = (await run(page("<p>Itâ€™s</p>", "")));
+    const [check] = await run(page("<p>Itâ€™s</p>", ""));
     expect(check?.message).toMatch(/no charset is declared/i);
     expect(check?.message).toMatch(/meta charset/i);
     expect((check?.details as { charset: string | null } | undefined)?.charset).toBeNull();
   });
 
   test("cause is attributed: correct utf-8 points at a double-encoded source", async () => {
-    const [check] = (await run(page("<p>Itâ€™s</p>")));
+    const [check] = await run(page("<p>Itâ€™s</p>"));
     expect(check?.message).toMatch(/double-encoded/i);
     expect(check?.message).toMatch(/re-import/i);
   });
 
   test("cause is attributed: a wrong charset names the declaration", async () => {
-    const [check] = (await run(page("<p>Itâ€™s</p>", '<meta charset="iso-8859-1">')));
+    const [check] = await run(page("<p>Itâ€™s</p>", '<meta charset="iso-8859-1">'));
     expect(check?.message).toMatch(/iso-8859-1/);
     expect(check?.message).toMatch(/not utf-8/i);
   });
 
   test("script and style contents are not visible text", async () => {
-    const [check] = (await run(
+    const [check] = await run(
       page('<script>var s = "Itâ€™s";</script><style>/* cafÃ© */</style><p>Clean.</p>'),
-    ));
+    );
     expect(check?.status).toBe("pass");
   });
 
@@ -157,44 +157,44 @@ describe("mojibakeRule", () => {
   // literal": the page is documenting the corruption, not suffering from it.
   describe("code-like elements are quoted literals, not prose", () => {
     test("mojibake only inside <code> passes", async () => {
-      const [check] = (await run(page("<p>Catches garbled sequences like <code>â€™</code>.</p>")));
+      const [check] = await run(page("<p>Catches garbled sequences like <code>â€™</code>.</p>"));
       expect(check?.status).toBe("pass");
     });
 
     test("mojibake only inside <pre> passes", async () => {
-      const [check] = (await run(page("<pre>Itâ€™s a cafÃ©</pre>")));
+      const [check] = await run(page("<pre>Itâ€™s a cafÃ©</pre>"));
       expect(check?.status).toBe("pass");
     });
 
     test("<samp> and <kbd> are excluded too", async () => {
-      const [check] = (await run(page("<p><samp>cafÃ©</samp> then <kbd>â€œ</kbd></p>")));
+      const [check] = await run(page("<p><samp>cafÃ©</samp> then <kbd>â€œ</kbd></p>"));
       expect(check?.status).toBe("pass");
     });
 
     test("a <code> span nested mid-sentence does not leak into the prose scan", async () => {
-      const [check] = (await run(page("<p>text <code>Ã©</code> more</p>")));
+      const [check] = await run(page("<p>text <code>Ã©</code> more</p>"));
       expect(check?.status).toBe("pass");
     });
 
     test("a quoted <code> sample plus one real prose hit counts exactly one", async () => {
-      const [check] = (await run(page("<p>Quotes <code>â€™</code> but Itâ€™s broken here.</p>")));
+      const [check] = await run(page("<p>Quotes <code>â€™</code> but Itâ€™s broken here.</p>"));
       expect(check?.status).toBe("warn");
       expect(check?.value).toBe(1);
     });
 
     test("code exclusion applies to the whole subtree, not just direct text", async () => {
-      const [check] = (await run(page("<pre><span><em>Itâ€™s</em></span></pre><p>Clean.</p>")));
+      const [check] = await run(page("<pre><span><em>Itâ€™s</em></span></pre><p>Clean.</p>"));
       expect(check?.status).toBe("pass");
     });
 
     test("prose siblings of a code block are still read", async () => {
-      const [check] = (await run(page("<pre>clean sample</pre><p>Itâ€™s broken</p>")));
+      const [check] = await run(page("<pre>clean sample</pre><p>Itâ€™s broken</p>"));
       expect(check?.status).toBe("warn");
       expect(check?.value).toBe(1);
     });
 
     test("the replacement character inside code does not escalate to fail", async () => {
-      const [check] = (await run(page("<p>Renders as <code>caf�</code>.</p>")));
+      const [check] = await run(page("<p>Renders as <code>caf�</code>.</p>"));
       expect(check?.status).toBe("pass");
     });
 
@@ -202,7 +202,7 @@ describe("mojibakeRule", () => {
     // the code span and the `©` after it concatenate into `Ã©` — a sequence present
     // in neither fragment. Excluding code must not invent corruption.
     test("skipping a code span does not glue its neighbours into a sequence", async () => {
-      const [check] = (await run(page("<p>Ã<code>literal</code>©</p>")));
+      const [check] = await run(page("<p>Ã<code>literal</code>©</p>"));
       expect(check?.status).toBe("pass");
     });
 
@@ -230,7 +230,7 @@ describe("mojibakeRule", () => {
   // does reach the rule with nothing to read. Skipped, not passed — "we could not look"
   // must never be recorded as "we looked and it was fine".
   test("no body is skipped, not passed", async () => {
-    const [check] = (await run("<html><head><meta charset='utf-8'></head></html>"));
+    const [check] = await run("<html><head><meta charset='utf-8'></head></html>");
     expect(check?.status).toBe("skipped");
     expect(check?.skipReason).toBe("no-body");
   });
@@ -248,7 +248,8 @@ describe("mojibakeRule", () => {
 
 // pub#216: the same rendered prose content/placeholder-text reads.
 describe("mojibakeRule — what a reader never sees", () => {
-  const status = async (body: string) => (await run(page(body))).find((c) => c.name === "encoding-corruption")?.status;
+  const status = async (body: string) =>
+    (await run(page(body))).find((c) => c.name === "encoding-corruption")?.status;
 
   test("a sequence only inside a <template> is not reported", async () => {
     expect(await status("<p>Fine copy.</p><template><p>Itâ€™s broken</p></template>")).toBe("pass");
@@ -257,13 +258,18 @@ describe("mojibakeRule — what a reader never sees", () => {
   test.each(["cm-editor", "monaco-editor", "hljs", "language-html"])(
     "a sequence only inside a %s container is not reported",
     async (cls) => {
-      expect(await status(`<p>Fine copy.</p><div class="${cls}"><span>Itâ€™s broken</span></div>`)).toBe("pass");
+      expect(
+        await status(`<p>Fine copy.</p><div class="${cls}"><span>Itâ€™s broken</span></div>`),
+      ).toBe("pass");
     },
   );
 
   test("mojibake in ordinary prose is reported as before", async () => {
-    const checks = (await run(page("<p>Itâ€™s a cafÃ©.</p>")));
-    expect(checks.find((c) => c.name === "encoding-corruption")).toMatchObject({ status: "warn", value: 2 });
+    const checks = await run(page("<p>Itâ€™s a cafÃ©.</p>"));
+    expect(checks.find((c) => c.name === "encoding-corruption")).toMatchObject({
+      status: "warn",
+      value: 2,
+    });
   });
 
   test("adjacent blocks do not fuse into a sequence", async () => {
@@ -293,7 +299,7 @@ describe("Portuguese and Spanish lowercase accent mojibake (#1623)", () => {
       const hit = found.find((f) => f.kind === "utf8-as-latin1");
       expect(hit?.count).toBe(1);
       expect(hit?.sample).toBe(seq);
-      const [check] = (await run(page(`<p>palavra x${seq}y aqui</p>`)));
+      const [check] = await run(page(`<p>palavra x${seq}y aqui</p>`));
       expect(check?.status).toBe("warn");
     });
   }
@@ -307,7 +313,7 @@ describe("Portuguese and Spanish lowercase accent mojibake (#1623)", () => {
       [],
     );
     expect(findMojibake("Abrimos de MANHÃ. IRMÃ e MAÇÃO, ÁGUA, ÓTIMO, AÇÃO, NÃO")).toEqual([]);
-    const [check] = (await run(page("<p>Não sei. Está aí, você também. MANHÃ ÃO.</p>")));
+    const [check] = await run(page("<p>Não sei. Está aí, você também. MANHÃ ÃO.</p>"));
     expect(check?.status).toBe("pass");
   });
 

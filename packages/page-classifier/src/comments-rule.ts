@@ -229,7 +229,11 @@ function makeRule(indexH1s: boolean): CommentRule {
         // (candidates x h1s) as `h1s.some(contains)` did.
         holders = new Set<object>();
         for (const h1 of root.querySelectorAll("h1")) {
-          for (let up: El | null = h1.parentElement; up && !holders.has(up); up = up.parentElement) {
+          for (
+            let up: El | null = h1.parentElement;
+            up && !holders.has(up);
+            up = up.parentElement
+          ) {
             holders.add(up);
           }
         }
@@ -312,7 +316,11 @@ function makeRule(indexH1s: boolean): CommentRule {
       for (let i = 0; i < path.length; i++) {
         nearest.set(
           path[i]!,
-          base && { container: base.container, dist: base.dist + (path.length - i), token: base.token },
+          base && {
+            container: base.container,
+            dist: base.dist + (path.length - i),
+            token: base.token,
+          },
         );
       }
     }

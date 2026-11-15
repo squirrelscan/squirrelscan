@@ -29,7 +29,7 @@ export interface SampledUrlItems {
 export function sampleUrlItems(
   items: readonly CheckItem[],
   total: number = items.length,
-  distinctTotal: number = total
+  distinctTotal: number = total,
 ): SampledUrlItems {
   const count = Math.max(total, items.length);
   const sample = items.slice(0, URL_ITEM_SAMPLE);

@@ -166,9 +166,7 @@ export interface CloudServicesClient {
    * `mcp`). That wall never reaches a refusal, so the server counts its view
    * of the upgrade offer from this read.
    */
-  getBalance(
-    opts?: Pick<CallOpts, "signal"> & { cta?: "cli" | "mcp" }
-  ): Promise<CreditsResponse>;
+  getBalance(opts?: Pick<CallOpts, "signal"> & { cta?: "cli" | "mcp" }): Promise<CreditsResponse>;
   /** Classify a batch of pages (page type + parsability). */
   aiParse(req: AiParseRequest, opts?: CallOpts): Promise<AiParseResponse>;
   /** Authority signals for a batch of pages. */
@@ -446,7 +444,7 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
     getBalance: (opts) =>
       getJson<CreditsResponse>(
         opts?.cta ? `/v1/credits?cta=${opts.cta}` : "/v1/credits",
-        opts?.signal
+        opts?.signal,
       ),
     aiParse: (req, opts) => postJson<AiParseResponse>("/v1/services/ai-parse", req, opts),
     authoritySignals: (req, opts) =>

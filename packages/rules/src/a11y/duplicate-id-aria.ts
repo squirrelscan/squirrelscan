@@ -74,10 +74,7 @@ export const duplicateIdAriaRule: Rule = {
         status: "fail",
         message: `${duplicateIds.length} problematic ID(s) in ARIA attributes`,
         items: duplicateIds.slice(0, 10).map((id) => ({ id })),
-        details:
-          duplicateIds.length > 10
-            ? { additional: duplicateIds.length - 10 }
-            : undefined,
+        details: duplicateIds.length > 10 ? { additional: duplicateIds.length - 10 } : undefined,
       });
     } else if (referencedIds.size > 0) {
       checks.push({

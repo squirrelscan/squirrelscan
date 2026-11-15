@@ -29,8 +29,7 @@ export const zoomDisabledRule: Rule = {
     // Use double quotes for consistency with other viewport rules
     // Handles both name="viewport" and name='viewport' attribute syntax
     const viewport =
-      doc.querySelector('meta[name="viewport"]') ||
-      doc.querySelector("meta[name='viewport']");
+      doc.querySelector('meta[name="viewport"]') || doc.querySelector("meta[name='viewport']");
 
     if (!viewport) {
       checks.push({
@@ -46,9 +45,7 @@ export const zoomDisabledRule: Rule = {
 
     // Check for user-scalable=no or user-scalable=0 or user-scalable=false
     // Handle various formats: user-scalable=no, user-scalable = no, etc.
-    const userScalableMatch = content.match(
-      /user-scalable\s*=\s*(no|0|false)/i
-    );
+    const userScalableMatch = content.match(/user-scalable\s*=\s*(no|0|false)/i);
     if (userScalableMatch) {
       issues.push(`user-scalable=${userScalableMatch[1]}`);
     }

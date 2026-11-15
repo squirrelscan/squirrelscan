@@ -149,9 +149,7 @@ export function implicitRole(el: RoleElement): string | null {
     case "input":
       return inputRole(el);
     case "section":
-      return el.hasAttribute("aria-label") || el.hasAttribute("aria-labelledby")
-        ? "region"
-        : null;
+      return el.hasAttribute("aria-label") || el.hasAttribute("aria-labelledby") ? "region" : null;
     case "select": {
       const size = Number.parseInt(el.getAttribute("size") ?? "", 10);
       return el.hasAttribute("multiple") || size > 1 ? "listbox" : "combobox";
@@ -173,14 +171,7 @@ export function explicitRole(el: RoleElement): string | null {
   return tokens.find((token) => validAriaRoles.has(token)) ?? null;
 }
 
-const NATIVELY_FOCUSABLE = new Set([
-  "button",
-  "iframe",
-  "input",
-  "select",
-  "summary",
-  "textarea",
-]);
+const NATIVELY_FOCUSABLE = new Set(["button", "iframe", "input", "select", "summary", "textarea"]);
 
 // The HTML rules for parsing an integer: optional leading whitespace and sign.
 const VALID_TABINDEX = /^[\t\n\f\r ]*[+-]?\d/;

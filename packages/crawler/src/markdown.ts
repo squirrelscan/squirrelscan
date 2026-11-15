@@ -13,7 +13,10 @@ const isMarkdown = (ct: string | null): boolean => ct != null && /markdown/i.tes
 
 // Parse a `Link:` response header for a `rel="alternate"; type="text/markdown"`
 // entry and resolve it to an absolute URL. Returns null if none matches.
-export function parseAlternateMarkdownLink(linkHeader: string | null, baseUrl: string): string | null {
+export function parseAlternateMarkdownLink(
+  linkHeader: string | null,
+  baseUrl: string,
+): string | null {
   if (!linkHeader) return null;
   for (const entry of linkHeader.split(/,(?=\s*<)/)) {
     const urlMatch = entry.match(/<([^>]+)>/);
@@ -65,7 +68,9 @@ async function probeOne(
     return await safeFetchWithDeadline(
       url,
       // The negotiation IS the Accept, so it is laid last (repo#3346).
-      { headers: mergeHeaderRecords({ "User-Agent": userAgent }, customHeaders, { Accept: accept }) },
+      {
+        headers: mergeHeaderRecords({ "User-Agent": userAgent }, customHeaders, { Accept: accept }),
+      },
       timeoutMs,
       async (res) => {
         if (noteRefusal(budget?.refusals, url, "markdown", res)) {

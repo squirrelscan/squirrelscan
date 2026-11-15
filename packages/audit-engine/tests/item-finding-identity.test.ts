@@ -107,9 +107,9 @@ describe("#1881 item findings carry their own identity", () => {
     // The message is a function of (page-invariant check text, item id) — the
     // page's own count never survives into it.
     expect(rows.every((r) => r.message.endsWith(`: ${r.locator}`))).toBe(true);
-    expect(rows.every((r) => !/\d/.test(r.message.slice(0, r.message.length - r.locator.length)))).toBe(
-      true,
-    );
+    expect(
+      rows.every((r) => !/\d/.test(r.message.slice(0, r.message.length - r.locator.length))),
+    ).toBe(true);
     expect(rows.every((r) => r.value === null && r.expected === null)).toBe(true);
   });
 
@@ -148,7 +148,9 @@ describe("#1881 item findings carry their own identity", () => {
       "cookie(s) missing the Secure flag: ID",
     );
     // The count varies page to page; the text must not.
-    expect(msg("1 potential source map(s) detected")).toBe(msg("9 potential source map(s) detected"));
+    expect(msg("1 potential source map(s) detected")).toBe(
+      msg("9 potential source map(s) detected"),
+    );
     expect(msg("1,024 image(s) missing width/height")).toBe(msg("7 image(s) missing width/height"));
     // A number in the MIDDLE of the wording is neutralised, not dropped.
     expect(msg("Visible text is under 10% of the page HTML")).toBe(
@@ -286,7 +288,7 @@ describe("#1881 item findings carry their own identity", () => {
     expect(replayed[0]!.items).toEqual([source.items![0]!]);
   });
 
-  test("an empty-id item still restores its aggregate, even though it lands in a locator-\"\" group", () => {
+  test('an empty-id item still restores its aggregate, even though it lands in a locator-"" group', () => {
     // `m` (not the locator) is the restore marker precisely for this case: an
     // item with id "" flattens to locator "", so a locator-gated restore would
     // leave the reconstructed check holding the ITEM's message.

@@ -75,7 +75,13 @@ describe("stripControlCharsPreservingSgr", () => {
 
   test("cursor and screen escapes never survive", () => {
     // The whole security property: colour may pass, movement may not.
-    for (const seq of [`${ESC}[2J`, `${ESC}[1;1H`, `${ESC}[A`, `${ESC}]0;title\x07`, `${ESC}]52;c;x\x07`]) {
+    for (const seq of [
+      `${ESC}[2J`,
+      `${ESC}[1;1H`,
+      `${ESC}[A`,
+      `${ESC}]0;title\x07`,
+      `${ESC}]52;c;x\x07`,
+    ]) {
       const out = stripControlCharsPreservingSgr(`before${seq}after`);
       expect(out).not.toContain(ESC);
     }

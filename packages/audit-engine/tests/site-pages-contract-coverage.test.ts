@@ -68,6 +68,8 @@ describe("upsertSitePages contract coverage", () => {
 
   test("the mapped implementations still exist", () => {
     for (const path of Object.keys(RUN_ELSEWHERE)) expect(found).toContain(path);
-    expect(relative(REPO, join(import.meta.dir, "site-pages-contract-coverage.test.ts"))).toBe(SELF);
+    expect(relative(REPO, join(import.meta.dir, "site-pages-contract-coverage.test.ts"))).toBe(
+      SELF,
+    );
   });
 });

@@ -5,11 +5,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import {
-  detectPageSignals,
-  detectSeoDoorway,
-  shouldEscalate,
-} from "./signals";
+import { detectPageSignals, detectSeoDoorway, shouldEscalate } from "./signals";
 
 export const seoDoorwayRule: Rule = {
   meta: {

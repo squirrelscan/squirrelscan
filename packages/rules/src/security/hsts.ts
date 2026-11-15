@@ -19,7 +19,11 @@ export const hstsRule: Rule = {
       { name: "hsts-malformed", outcome: "problem" },
       { name: "hsts-disabled", outcome: "problem" },
       { name: "hsts-max-age-short", outcome: "problem" },
-      { name: "hsts", outcome: "clean", clears: ["hsts-missing", "hsts-malformed", "hsts-disabled", "hsts-max-age-short"] },
+      {
+        name: "hsts",
+        outcome: "clean",
+        clears: ["hsts-missing", "hsts-malformed", "hsts-disabled", "hsts-max-age-short"],
+      },
       { name: "hsts-no-pages", outcome: "skipped" },
       { name: "hsts-not-applicable", outcome: "skipped" },
     ],

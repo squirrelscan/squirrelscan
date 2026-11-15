@@ -28,7 +28,7 @@ export const formLabelsRule: Rule = {
     const checks: CheckResult[] = [];
 
     const inputs = doc.querySelectorAll(
-      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]), textarea, select'
+      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]), textarea, select',
     );
 
     // pub#671: a field out of the accessibility tree is not reported.
@@ -50,17 +50,15 @@ export const formLabelsRule: Rule = {
         hasAssociatedLabel = label !== null;
       }
 
-      const hasLabel =
-        isInsideLabel ||
-        hasAssociatedLabel ||
-        ariaLabel ||
-        ariaLabelledby ||
-        title;
+      const hasLabel = isInsideLabel || hasAssociatedLabel || ariaLabel || ariaLabelledby || title;
 
       if (!hasLabel) {
         const type = input.getAttribute("type") || input.tagName.toLowerCase();
         const name = input.getAttribute("name") || id || type;
-        unlabeled.add(input, { id: name, ...(ctx.wantsItemSelectors ? { selector: elementSelector(input) } : {}) });
+        unlabeled.add(input, {
+          id: name,
+          ...(ctx.wantsItemSelectors ? { selector: elementSelector(input) } : {}),
+        });
       }
     }
 
@@ -75,11 +73,7 @@ export const formLabelsRule: Rule = {
     }
     if (unlabeled.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow(
-          "form-labels",
-          "form input(s) without labels",
-          unlabeled.unconfirmed
-        )
+        unconfirmedRow("form-labels", "form input(s) without labels", unlabeled.unconfirmed),
       );
     }
     if (unlabeledInputs.length === 0 && unlabeled.unconfirmed.length === 0) {

@@ -226,8 +226,7 @@ export const htmlLangValidRule: Rule = {
   meta: {
     id: "a11y/html-lang-valid",
     name: "HTML Lang Valid",
-    description:
-      "Checks that the html lang attribute has a valid language code",
+    description: "Checks that the html lang attribute has a valid language code",
     solution:
       "The lang attribute on <html> should be a valid BCP 47 language tag. Use two-letter ISO 639-1 codes like 'en' for English, 'es' for Spanish, 'fr' for French. You can add region subtags like 'en-US' or 'en-GB'. This helps screen readers use correct pronunciation.",
     category: "a11y",

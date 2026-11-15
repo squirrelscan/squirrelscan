@@ -41,14 +41,29 @@ describe("renderJson skipped checks (#518)", () => {
         baseReport({
           ruleResults: {
             "core/h1": rule("core/h1", "H1", [
-              { name: "core/h1", status: "skipped", message: "Not evaluated", pageUrl: "https://example.com/unread", skipReason: "unread-page" },
+              {
+                name: "core/h1",
+                status: "skipped",
+                message: "Not evaluated",
+                pageUrl: "https://example.com/unread",
+                skipReason: "unread-page",
+              },
             ]),
           },
         }),
       ),
     );
     expect(parsed.skippedChecks).toEqual([
-      { ruleId: "core/h1", name: "H1", check: "core/h1", reason: "unread-page", outcome: "coverage_gap", pages: ["https://example.com/unread"], pagesCount: 1, pagesHasMore: false },
+      {
+        ruleId: "core/h1",
+        name: "H1",
+        check: "core/h1",
+        reason: "unread-page",
+        outcome: "coverage_gap",
+        pages: ["https://example.com/unread"],
+        pagesCount: 1,
+        pagesHasMore: false,
+      },
     ]);
     expect(parsed.issues).toEqual([]);
   });
@@ -176,7 +191,9 @@ describe("renderJson skipped checks (#518)", () => {
       ),
     );
     expect(parsed.issues).toHaveLength(1);
-    expect(parsed.issues[0].checks.every((c: { status: string }) => c.status === "fail")).toBe(true);
+    expect(parsed.issues[0].checks.every((c: { status: string }) => c.status === "fail")).toBe(
+      true,
+    );
     expect(parsed.skippedChecks[0].pages).toEqual(["https://example.com/big"]);
   });
 

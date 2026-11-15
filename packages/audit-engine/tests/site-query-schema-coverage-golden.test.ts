@@ -104,7 +104,7 @@ describe("SiteQuery dual-path — schema/coverage-outlier", () => {
         coverageOutlierRule.run({
           ...base,
           site: { baseUrl: BASE, pages: legacySitePages(), robotsTxt: null, sitemaps: null },
-        } as RuleContext)
+        } as RuleContext),
       )
     ).checks;
 
@@ -116,7 +116,7 @@ describe("SiteQuery dual-path — schema/coverage-outlier", () => {
           // EMPTY pages — the streaming path must not read them.
           site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null },
           siteQuery,
-        } as RuleContext)
+        } as RuleContext),
       )
     ).checks;
 

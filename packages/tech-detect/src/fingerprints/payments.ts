@@ -11,7 +11,12 @@ export const PAYMENT_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.shopify.com/payments",
     icon: "shopify-payments",
     detectors: [
-      { type: "html", pattern: /"shopifyPaymentsEnabled"\s*:\s*true\b/, requires: "shopifyPaymentsEnabled", dataScripts: true },
+      {
+        type: "html",
+        pattern: /"shopifyPaymentsEnabled"\s*:\s*true\b/,
+        requires: "shopifyPaymentsEnabled",
+        dataScripts: true,
+      },
     ],
     confidence: "medium",
   },

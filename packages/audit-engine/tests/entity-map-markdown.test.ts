@@ -117,9 +117,7 @@ describe("renderEntityMapMarkdown", () => {
     expect(markdown).toContain("Ac\\|me Widgets \\| Inc");
     // The row keeps the five cells its header declared: only the escaped pipes
     // came from the site, and markdown does not treat those as separators.
-    const row = markdown
-      .split("\n")
-      .find((line) => line.includes("Ac\\|me"));
+    const row = markdown.split("\n").find((line) => line.includes("Ac\\|me"));
     expect(row).toBeDefined();
     const separators = row!.replace(/\\\|/g, "").split("|");
     expect(separators.length).toBe(7);

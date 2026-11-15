@@ -21,7 +21,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Config } from "@squirrelscan/config";
-import { type CheckResult, type PageRecord, PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
+import {
+  type CheckResult,
+  type PageRecord,
+  PRIVATE_TARGET_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { getScoreGrade } from "@squirrelscan/report";
 import { loadAllRules } from "@squirrelscan/rules";

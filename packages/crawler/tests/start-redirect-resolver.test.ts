@@ -34,14 +34,27 @@ describe("resolveStartRedirect", () => {
   // #1560: the private-network allowance is a GRANT that follows the start URL, so it stays the narrow classifier. A start URL that is a
   // special-use literal (NAT64, 6to4) is not allowed to redirect around the private network, as a public start URL is not.
   test("a NAT64 or 6to4 start URL is not granted private-network egress; a LAN start URL still is", async () => {
-    for (const start of ["http://[64:ff9b::a00:5]/", "http://[2002:a00:5::]/", "http://203.0.113.10/"]) {
-      const { transport, asked } = table({ [start]: { status: 302, location: "http://10.0.0.5/" }, "http://10.0.0.5/": { status: 200 } });
+    for (const start of [
+      "http://[64:ff9b::a00:5]/",
+      "http://[2002:a00:5::]/",
+      "http://203.0.113.10/",
+    ]) {
+      const { transport, asked } = table({
+        [start]: { status: 302, location: "http://10.0.0.5/" },
+        "http://10.0.0.5/": { status: 200 },
+      });
       const result = await resolveStartRedirect(start, { ...OPTIONS, transport });
       // the guard refuses the literal without a request: nothing was asked, and no chain was followed
       expect([start, result.kind, asked, result.chain]).toEqual([start, "none", [], []]);
     }
-    const lan = table({ "http://192.168.1.2/": { status: 302, location: "http://10.0.0.5/" }, "http://10.0.0.5/": { status: 200 } });
-    const ok = await resolveStartRedirect("http://192.168.1.2/", { ...OPTIONS, transport: lan.transport });
+    const lan = table({
+      "http://192.168.1.2/": { status: 302, location: "http://10.0.0.5/" },
+      "http://10.0.0.5/": { status: 200 },
+    });
+    const ok = await resolveStartRedirect("http://192.168.1.2/", {
+      ...OPTIONS,
+      transport: lan.transport,
+    });
     expect(ok.finalUrl).toBe("http://10.0.0.5/");
   });
 
@@ -98,7 +111,10 @@ describe("resolveStartRedirect", () => {
     });
     const result = await resolveStartRedirect("https://a.example/", { ...OPTIONS, transport });
     expect(result.kind).toBe("loop");
-    expect(result.chain.map((hop) => hop.url)).toEqual(["https://a.example/", "https://b.example/"]);
+    expect(result.chain.map((hop) => hop.url)).toEqual([
+      "https://a.example/",
+      "https://b.example/",
+    ]);
   });
 
   test("more than five hops is reported as too many and the sixth is not requested", async () => {
@@ -118,7 +134,8 @@ describe("resolveStartRedirect", () => {
     const { transport, asked } = table({
       "https://shortener.com/x": { status: 301, location: "https://internal.test-host.com/admin" },
     });
-    const resolve = async (host: string) => (host === "internal.test-host.com" ? ["10.0.0.5"] : ["93.184.216.34"]);
+    const resolve = async (host: string) =>
+      host === "internal.test-host.com" ? ["10.0.0.5"] : ["93.184.216.34"];
     const result = await resolveStartRedirect("https://shortener.com/x", {
       pin: false,
       policy: { resolve },
@@ -131,16 +148,27 @@ describe("resolveStartRedirect", () => {
   });
 
   test("a redirect to a private IP literal or the metadata address is refused", async () => {
-    for (const target of ["http://127.0.0.1:8080/", "http://192.168.1.1/", "http://169.254.169.254/latest/meta-data/"]) {
-      const { transport, asked } = table({ "https://shortener.com/x": { status: 302, location: target } });
-      const result = await resolveStartRedirect("https://shortener.com/x", { ...OPTIONS, transport });
+    for (const target of [
+      "http://127.0.0.1:8080/",
+      "http://192.168.1.1/",
+      "http://169.254.169.254/latest/meta-data/",
+    ]) {
+      const { transport, asked } = table({
+        "https://shortener.com/x": { status: 302, location: target },
+      });
+      const result = await resolveStartRedirect("https://shortener.com/x", {
+        ...OPTIONS,
+        transport,
+      });
       expect(result.kind).toBe("refused");
       expect(asked).toEqual(["https://shortener.com/x"]);
     }
   });
 
   test("a redirect to a non-http scheme is refused", async () => {
-    const { transport } = table({ "https://shortener.com/x": { status: 302, location: "file:///etc/passwd" } });
+    const { transport } = table({
+      "https://shortener.com/x": { status: 302, location: "file:///etc/passwd" },
+    });
     const result = await resolveStartRedirect("https://shortener.com/x", { ...OPTIONS, transport });
     expect(result.kind).toBe("refused");
   });
@@ -150,14 +178,20 @@ describe("resolveStartRedirect", () => {
       "http://localhost:3000/": { status: 302, location: "http://127.0.0.1:3001/" },
       "http://127.0.0.1:3001/": { status: 200 },
     });
-    const ok = await resolveStartRedirect("http://localhost:3000/", { ...OPTIONS, transport: local.transport });
+    const ok = await resolveStartRedirect("http://localhost:3000/", {
+      ...OPTIONS,
+      transport: local.transport,
+    });
     expect(ok.kind).toBe("cross-domain");
     expect(ok.finalUrl).toBe("http://127.0.0.1:3001/");
 
     const meta = table({
       "http://localhost:3000/": { status: 302, location: "http://169.254.169.254/" },
     });
-    const refused = await resolveStartRedirect("http://localhost:3000/", { ...OPTIONS, transport: meta.transport });
+    const refused = await resolveStartRedirect("http://localhost:3000/", {
+      ...OPTIONS,
+      transport: meta.transport,
+    });
     expect(refused.kind).toBe("refused");
   });
 
@@ -195,7 +229,10 @@ describe("resolveStartRedirect", () => {
 
   test("userinfo, query and fragment never reach the result, but the requests carry them", async () => {
     const { transport, asked } = table({
-      "https://bit.ly/x": { status: 301, location: `https://${USERINFO}@app.example.com/login?token=SECRET#frag` },
+      "https://bit.ly/x": {
+        status: 301,
+        location: `https://${USERINFO}@app.example.com/login?token=SECRET#frag`,
+      },
       [`https://${USERINFO}@app.example.com/login?token=SECRET#frag`]: { status: 200 },
     });
     const result = await resolveStartRedirect("https://bit.ly/x", { ...OPTIONS, transport });

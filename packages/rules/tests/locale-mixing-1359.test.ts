@@ -23,17 +23,25 @@ async function run(body: string, lang: string | null = "en-US", alternates = 0) 
 
 describe("i18n/locale-mixing", () => {
   test("pass: a consistently US-spelled page", async () => {
-    const checks = await run("<p>Pick a color, then organize the center panel. Read the license.</p>");
+    const checks = await run(
+      "<p>Pick a color, then organize the center panel. Read the license.</p>",
+    );
     expect(checks.map((c) => [c.name, c.status])).toEqual([["locale-mixing", "pass"]]);
   });
 
   test("pass: an en-GB page using UK spellings alone is not flagged", async () => {
-    const checks = await run("<p>Pick a colour, organise the centre panel, read the licence. Behaviour matters.</p>", "en-GB");
+    const checks = await run(
+      "<p>Pick a colour, organise the centre panel, read the licence. Behaviour matters.</p>",
+      "en-GB",
+    );
     expect(checks.map((c) => [c.name, c.status])).toEqual([["locale-mixing", "pass"]]);
   });
 
   test("pass: a UK page using license as a verb", async () => {
-    const checks = await run("<p>We licence the font and license it to you. Your colour, our centre.</p>", "en-GB");
+    const checks = await run(
+      "<p>We licence the font and license it to you. Your colour, our centre.</p>",
+      "en-GB",
+    );
     expect(checks[0]!.status).toBe("pass");
   });
 
@@ -80,7 +88,9 @@ describe("i18n/locale-mixing", () => {
   });
 
   test("warn: bare $ next to a currency code", async () => {
-    const checks = await run("<p>Plans from $20 a month, or CAD 25 for Canada. 30 AUD in Australia.</p>");
+    const checks = await run(
+      "<p>Plans from $20 a month, or CAD 25 for Canada. 30 AUD in Australia.</p>",
+    );
     const c = checks.find((x) => x.name === "currency-mix")!;
     expect(c.status).toBe("warn");
     expect(c.message).toContain("CAD");
@@ -103,7 +113,7 @@ describe("i18n/locale-mixing", () => {
   });
 
   test("skipped: no body", async () => {
-    const { document } = parseHTML("<html lang=\"en\"></html>");
+    const { document } = parseHTML('<html lang="en"></html>');
     (document as unknown as Document).body?.remove();
     const ctx = {
       page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -114,7 +124,9 @@ describe("i18n/locale-mixing", () => {
   });
 
   test("code and script text is not read", async () => {
-    const checks = await run("<pre><code>color colour</code></pre><script>var colour = 1</script><p>Fine.</p>");
+    const checks = await run(
+      "<pre><code>color colour</code></pre><script>var colour = 1</script><p>Fine.</p>",
+    );
     expect(checks[0]!.status).toBe("pass");
   });
 });

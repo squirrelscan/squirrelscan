@@ -66,7 +66,8 @@ function map(nodes: EntityMapNode[], edges: EntityMapEdge[], pageUrls: string[])
       pagesTotal: pageUrls.length,
       pagesWithoutEntities: 0,
       nodesWithStableId: nodes.filter((n) => n.id !== null).length,
-      stableIdShare: nodes.length === 0 ? 0 : nodes.filter((n) => n.id !== null).length / nodes.length,
+      stableIdShare:
+        nodes.length === 0 ? 0 : nodes.filter((n) => n.id !== null).length / nodes.length,
       pageLocalCount: nodes.filter((n) => n.pageLocal).length,
       nodesWithoutIdCount: nodes.filter((n) => n.id === null && n.pages.length > 1).length,
       conflictCount: nodes.filter((n) => n.conflicts.length > 0).length,
@@ -113,7 +114,12 @@ describe("diffEntityMaps", () => {
   });
 
   test("added: declared in the newer map only", () => {
-    const extra = node({ key: "id:https://example.com/#person", id: "https://example.com/#person", types: ["Person"], name: "Ada" });
+    const extra = node({
+      key: "id:https://example.com/#person",
+      id: "https://example.com/#person",
+      types: ["Person"],
+      name: "Ada",
+    });
     const result = diff(map([node()], [], PAGES), map([node(), extra], [], PAGES));
 
     expect(result.added.map((n) => n.key)).toEqual(["id:https://example.com/#person"]);
@@ -122,7 +128,12 @@ describe("diffEntityMaps", () => {
   });
 
   test("removed: gone, and every declaring page was crawled again", () => {
-    const gone = node({ key: "id:https://example.com/#gone", id: "https://example.com/#gone", name: "Gone", pages: ["https://example.com/a"] });
+    const gone = node({
+      key: "id:https://example.com/#gone",
+      id: "https://example.com/#gone",
+      name: "Gone",
+      pages: ["https://example.com/a"],
+    });
     const result = diff(map([node(), gone], [], PAGES), map([node()], [], PAGES));
 
     expect(result.removed.map((n) => n.key)).toEqual(["id:https://example.com/#gone"]);
@@ -166,7 +177,11 @@ describe("diffEntityMaps", () => {
 
   test("gainedId: matched across the key change, and not double-counted", () => {
     const before = node({ key: "syn:Organization|name:acme", id: null, name: "Acme" });
-    const after = node({ key: "id:https://example.com/#org", id: "https://example.com/#org", name: "Acme" });
+    const after = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+    });
     const result = diff(map([before], [], PAGES), map([after], [], PAGES));
 
     expect(result.gainedId).toHaveLength(1);
@@ -240,7 +255,7 @@ describe("diffEntityMaps", () => {
         "https://example.com/a": [],
         "https://example.com/b": [],
         "https://example.com/c": ["id:https://example.com/#org"],
-      })
+      }),
     );
 
     expect(result.gainedId).toHaveLength(1);
@@ -296,7 +311,11 @@ describe("diffEntityMaps", () => {
   });
 
   test("lostId: the same match in reverse", () => {
-    const before = node({ key: "id:https://example.com/#org", id: "https://example.com/#org", name: "Acme" });
+    const before = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+    });
     const after = node({ key: "syn:Organization|name:acme", id: null, name: "Acme" });
     const result = diff(map([before], [], PAGES), map([after], [], PAGES));
 
@@ -379,7 +398,10 @@ describe("diffEntityMaps", () => {
   });
 
   test("summaryDelta carries every numeric metric", () => {
-    const result = diff(map([node()], [], PAGES), map([node(), node({ key: "b", id: null })], [], PAGES));
+    const result = diff(
+      map([node()], [], PAGES),
+      map([node(), node({ key: "b", id: null })], [], PAGES),
+    );
     expect(result.summaryDelta.nodeCount).toEqual({ before: 1, after: 2, delta: 1 });
     expect(result.summaryDelta.countsByType).toBeUndefined();
     expect(typeof result.summaryDelta.stableIdShare?.delta).toBe("number");
@@ -397,7 +419,10 @@ describe("diffEntityMaps", () => {
 // never applied.
 describe("the coverage page lists are capped", () => {
   const urls = (prefix: string, n: number) =>
-    Array.from({ length: n }, (_, i) => `https://example.com/${prefix}/${String(i).padStart(5, "0")}`);
+    Array.from(
+      { length: n },
+      (_, i) => `https://example.com/${prefix}/${String(i).padStart(5, "0")}`,
+    );
 
   test("samples each side and counts the rest", () => {
     const older = map([], [], urls("old", 5_000));
@@ -463,9 +488,7 @@ describe("coverage is proven, not sampled", () => {
       "https://example.com/b": [],
     });
 
-    expect(diff(older, newer).removed.map((n) => n.key)).toEqual([
-      "id:https://example.com/#wide",
-    ]);
+    expect(diff(older, newer).removed.map((n) => n.key)).toEqual(["id:https://example.com/#wide"]);
   });
 
   test("a trimmed page list with no index refuses to decide", () => {
@@ -483,7 +506,12 @@ describe("coverage is proven, not sampled", () => {
     // the crawl's own page count is what distinguishes them.
     // The clipped index lists only /a, and /a was recrawled. Trusting it would
     // read as full coverage of an entity the crawl saw on 40 pages.
-    const older = mapWith([WIDE], [], { "https://example.com/a": ["id:https://example.com/#wide"] }, 40);
+    const older = mapWith(
+      [WIDE],
+      [],
+      { "https://example.com/a": ["id:https://example.com/#wide"] },
+      40,
+    );
     const newer = mapWith([], [], { "https://example.com/a": [] }, 40);
 
     expect(diff(older, newer).notCrawled).toHaveLength(1);
@@ -560,8 +588,16 @@ describe("identity matching is one-to-one", () => {
     // One anonymous "Acme" and two new "Acme"s with ids. Any pairing is a
     // guess, and a wrong one invents a rename AND a deletion at once.
     const before = node({ key: "syn:Organization|name:acme", id: null, name: "Acme" });
-    const afterA = node({ key: "id:https://example.com/#a", id: "https://example.com/#a", name: "Acme" });
-    const afterB = node({ key: "id:https://example.com/#b", id: "https://example.com/#b", name: "Acme" });
+    const afterA = node({
+      key: "id:https://example.com/#a",
+      id: "https://example.com/#a",
+      name: "Acme",
+    });
+    const afterB = node({
+      key: "id:https://example.com/#b",
+      id: "https://example.com/#b",
+      name: "Acme",
+    });
     const result = diff(map([before], [], PAGES), map([afterA, afterB], [], PAGES));
 
     expect(result.gainedId).toHaveLength(0);
@@ -588,7 +624,12 @@ describe("identity matching is one-to-one", () => {
     // `@type` is site-controlled. Joining the sorted set with "+" makes
     // ["A+B"] and ["A","B"] the same signature and pairs two unrelated things.
     const before = node({ key: "syn:x", id: null, types: ["A+B"], name: "Acme" });
-    const after = node({ key: "id:https://example.com/#z", id: "https://example.com/#z", types: ["A", "B"], name: "Acme" });
+    const after = node({
+      key: "id:https://example.com/#z",
+      id: "https://example.com/#z",
+      types: ["A", "B"],
+      name: "Acme",
+    });
     const result = diff(map([before], [], PAGES), map([after], [], PAGES));
 
     expect(result.gainedId).toHaveLength(0);

@@ -7,7 +7,10 @@
 // address); with none, or when the handshake finds no problem, the fetch's own
 // detail stands.
 
-import { auditFailureDetail, type AuditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
+import {
+  auditFailureDetail,
+  type AuditFailureDetail,
+} from "@squirrelscan/core-contracts/failure-reason";
 import {
   tlsFailureCause,
   type TlsProbe,

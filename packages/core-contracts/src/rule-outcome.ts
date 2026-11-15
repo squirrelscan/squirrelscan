@@ -102,7 +102,8 @@ export function isCoverageGapCheck(check: {
   status: string;
   skipReason?: string | undefined;
 }): boolean {
-  if (check.status === "skipped") return skipReasonClass(check.skipReason)?.outcome === "coverage_gap";
+  if (check.status === "skipped")
+    return skipReasonClass(check.skipReason)?.outcome === "coverage_gap";
   return /-(unscanned|omitted|unfetched)$/.test(check.name);
 }
 

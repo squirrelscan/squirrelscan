@@ -35,8 +35,7 @@ export type AuditFailureReasonCode = (typeof AUDIT_FAILURE_REASON_CODES)[number]
 
 export function isAuditFailureReasonCode(value: unknown): value is AuditFailureReasonCode {
   return (
-    typeof value === "string" &&
-    (AUDIT_FAILURE_REASON_CODES as readonly string[]).includes(value)
+    typeof value === "string" && (AUDIT_FAILURE_REASON_CODES as readonly string[]).includes(value)
   );
 }
 
@@ -569,24 +568,26 @@ export function maxDurationReason(cut: {
   const parts: string[] = [];
   if (cut.unfetchedPages > 0) {
     parts.push(
-      `${cut.unfetchedPages} discovered page${cut.unfetchedPages === 1 ? " was" : "s were"} not fetched`
+      `${cut.unfetchedPages} discovered page${cut.unfetchedPages === 1 ? " was" : "s were"} not fetched`,
     );
   }
   if (cut.pagesNotEvaluated > 0) {
     parts.push(
-      `${cut.pagesNotEvaluated} fetched page${cut.pagesNotEvaluated === 1 ? " was" : "s were"} not evaluated`
+      `${cut.pagesNotEvaluated} fetched page${cut.pagesNotEvaluated === 1 ? " was" : "s were"} not evaluated`,
     );
   }
   if (cut.siteChecksCut) parts.push("site-wide checks did not finish");
   if (cut.resourceChecksCut) parts.push("resource checks were cut short");
   if (cut.probesSkipped && cut.probesSkipped.length > 0) {
-    parts.push(`${cut.probesSkipped.join(", ")} did not finish and ${cut.probesSkipped.length === 1 ? "was" : "were"} skipped`);
+    parts.push(
+      `${cut.probesSkipped.join(", ")} did not finish and ${cut.probesSkipped.length === 1 ? "was" : "were"} skipped`,
+    );
   }
   // Pages too large to parse are a size limit of a budgeted run, not the clock running out.
   const stopped = parts.length > 0;
   if (cut.pagesTooLarge && cut.pagesTooLarge > 0) {
     parts.push(
-      `${cut.pagesTooLarge} page${cut.pagesTooLarge === 1 ? " was" : "s were"} too large to parse within the time limit and not evaluated`
+      `${cut.pagesTooLarge} page${cut.pagesTooLarge === 1 ? " was" : "s were"} too large to parse within the time limit and not evaluated`,
     );
   }
   return `${stopped ? "Stopped at" : "Run under"} the ${cut.seconds} s time limit (--max-duration)${parts.length > 0 ? `: ${parts.join(", ")}` : ""}`;

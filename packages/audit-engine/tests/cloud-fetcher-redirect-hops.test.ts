@@ -72,7 +72,10 @@ describe("mapRenderItemToResponse — redirect hops", () => {
   });
 
   test("an error status is still reported on the page's own hop", () => {
-    const response = map({ url: "https://example.com/gone", status: 404 }, "https://example.com/gone");
+    const response = map(
+      { url: "https://example.com/gone", status: 404 },
+      "https://example.com/gone",
+    );
 
     expect(response.status).toBe(404);
     expect(response.redirectChain!.hops[0]!.statusCode).toBe(404);

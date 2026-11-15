@@ -3,13 +3,7 @@
 
 import { z } from "zod";
 
-import type {
-  CheckResult,
-  ParsedPage,
-  Rule,
-  RuleContext,
-  RuleResult,
-} from "../types";
+import type { CheckResult, ParsedPage, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
@@ -21,9 +15,7 @@ import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
  * HTML already holds them, #668); the external `*Count`s feed the
  * no-resource-data estimate branch (used only for the first page).
  */
-export function extractPageByteSignal(
-  doc: NonNullable<ParsedPage["document"]>,
-): {
+export function extractPageByteSignal(doc: NonNullable<ParsedPage["document"]>): {
   inlineCssLen: number;
   inlineJsLen: number;
   externalCssCount: number;
@@ -36,10 +28,7 @@ export function extractPageByteSignal(
   }
 
   let inlineJsLen = 0;
-  for (const script of querySelectorAllOutsideNoscript(
-    doc,
-    "script:not([src])",
-  )) {
+  for (const script of querySelectorAllOutsideNoscript(doc, "script:not([src])")) {
     // Skip JSON-LD and other data scripts
     const type = script.getAttribute("type") || "";
     if (!type.includes("json") && !type.includes("template")) {
@@ -50,10 +39,7 @@ export function extractPageByteSignal(
   return {
     inlineCssLen,
     inlineJsLen,
-    externalCssCount: querySelectorAllOutsideNoscript(
-      doc,
-      'link[rel="stylesheet"]',
-    ).length,
+    externalCssCount: querySelectorAllOutsideNoscript(doc, 'link[rel="stylesheet"]').length,
     externalJsCount: querySelectorAllOutsideNoscript(doc, "script[src]").length,
     imageCount: querySelectorAllOutsideNoscript(doc, "img[src]").length,
   };
@@ -109,7 +95,14 @@ export const totalByteWeightRule: Rule = {
           // A bodiless error page (one v1 appends per 4xx/5xx it could not parse) has no weight to average in,
           // and the streaming universe has no record of it (#1359).
           .filter((page) => !page.redirectSource)
-          .filter((page) => !(page.statusCode >= 400 && !page.parsed?.document && (!page.parsed?.pageType || page.parsed.pageType === "unknown")))
+          .filter(
+            (page) =>
+              !(
+                page.statusCode >= 400 &&
+                !page.parsed?.document &&
+                (!page.parsed?.pageType || page.parsed.pageType === "unknown")
+              ),
+          )
           .map((page) => {
             const s = page.parsed?.document
               ? extractPageByteSignal(page.parsed.document)
@@ -183,8 +176,7 @@ export const totalByteWeightRule: Rule = {
     attribute("images", ctx.site?.resourceSizes?.images);
     attribute("fonts", ctx.site?.resourceSizes?.fonts);
 
-    const hasExternalResourceData =
-      ctx.site?.resourceSizes || ctx.site?.scripts;
+    const hasExternalResourceData = ctx.site?.resourceSizes || ctx.site?.scripts;
     const sumBucket = (m: Map<string, number> | undefined): number => {
       let n = 0;
       for (const v of m?.values() ?? []) n += v;
@@ -216,16 +208,12 @@ export const totalByteWeightRule: Rule = {
         images: sumBucket(rec.external?.images),
         fonts: sumBucket(rec.external?.fonts),
       };
-      let bytes =
-        parts.html + parts.css + parts.js + parts.images + parts.fonts;
+      let bytes = parts.html + parts.css + parts.js + parts.images + parts.fonts;
       // With no resource measurements at all, estimate the first page only.
       if (!hasExternalResourceData && index === 0) {
         bytes =
           html +
-          (rec.externalCssCount * 30 +
-            rec.externalJsCount * 50 +
-            rec.imageCount * 100) *
-            1024;
+          (rec.externalCssCount * 30 + rec.externalJsCount * 50 + rec.imageCount * 100) * 1024;
       }
       return { rec, kb: bytes / 1024, parts, lazyImages: sumBucket(rec.deferredImages) };
     });
@@ -250,12 +238,8 @@ export const totalByteWeightRule: Rule = {
       (best, cur) => (!best || cur.kb > best.kb ? cur : best),
       undefined,
     );
-    const overWarn = scored.filter(
-      (s) => s.kb >= opts.warn_threshold_kb,
-    ).length;
-    const overError = scored.filter(
-      (s) => s.kb >= opts.error_threshold_kb,
-    ).length;
+    const overWarn = scored.filter((s) => s.kb >= opts.warn_threshold_kb).length;
+    const overError = scored.filter((s) => s.kb >= opts.error_threshold_kb).length;
     const heaviestKb = heaviest?.kb ?? 0;
 
     const details: Record<string, string | number | boolean> = {
@@ -292,8 +276,7 @@ export const totalByteWeightRule: Rule = {
       let siteBytes = 0;
       for (const page of scored) siteBytes += page.parts.html;
       for (const size of siteResources.values()) siteBytes += size;
-      const averageKb =
-        scored.reduce((sum, page) => sum + page.kb, 0) / scored.length;
+      const averageKb = scored.reduce((sum, page) => sum + page.kb, 0) / scored.length;
       details.siteTotalKb = `${(siteBytes / 1024).toFixed(0)}KB`;
       details.pageAverageKb = `${averageKb.toFixed(0)}KB`;
       const pageCount = `${scored.length} page${scored.length === 1 ? "" : "s"}`;

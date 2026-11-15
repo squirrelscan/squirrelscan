@@ -25,7 +25,7 @@ describe("tech-detect meta extraction over untrusted names", () => {
   test("a meta tag named after a prototype member still reaches its detector", () => {
     const detected = detectTechnologies(
       input('<meta name="constructor" content="canary">'),
-      FINGERPRINTS
+      FINGERPRINTS,
     );
     expect(detected.map((d) => d.id)).toEqual(["proto-canary"]);
   });
@@ -35,11 +35,11 @@ describe("tech-detect meta extraction over untrusted names", () => {
     detectTechnologies(
       input(
         '<meta name="__proto__" content="polluted"><meta name="constructor" content="polluted">' +
-          '<meta name="prototype" content="polluted"><meta name="generator" content="WordPress">'
-      )
+          '<meta name="prototype" content="polluted"><meta name="generator" content="WordPress">',
+      ),
     );
     const added = Object.getOwnPropertyNames(Object.prototype).filter(
-      (key) => !before.includes(key)
+      (key) => !before.includes(key),
     );
     for (const key of added) delete (Object.prototype as Record<string, unknown>)[key];
     expect(added).toEqual([]);
@@ -49,7 +49,7 @@ describe("tech-detect meta extraction over untrusted names", () => {
   test("a caller-supplied meta map is still honoured", () => {
     const detected = detectTechnologies(
       { ...input("<html></html>"), meta: { constructor: "canary" } },
-      FINGERPRINTS
+      FINGERPRINTS,
     );
     expect(detected.map((d) => d.id)).toEqual(["proto-canary"]);
   });

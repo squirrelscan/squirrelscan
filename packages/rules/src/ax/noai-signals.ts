@@ -57,7 +57,10 @@ function collectSources(ctx: RuleContext): DirectiveSource[] {
     }
   } else if (ctx.parsed.meta.robots) {
     // No DOM (error page / stored parse) — fall back to the extracted robots meta.
-    sources.push({ origin: '<meta name="robots">', flags: detectAiOptOuts(ctx.parsed.meta.robots) });
+    sources.push({
+      origin: '<meta name="robots">',
+      flags: detectAiOptOuts(ctx.parsed.meta.robots),
+    });
   }
 
   return sources.filter((s) => Object.values(s.flags).some(Boolean));

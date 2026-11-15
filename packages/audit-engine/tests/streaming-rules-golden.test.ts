@@ -24,16 +24,9 @@ import { Effect } from "effect";
 import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
 import type { Config } from "@squirrelscan/config";
-import type {
-  PageRecord,
-  ResponseHeaders,
-  SecurityHeaders,
-} from "@squirrelscan/core-contracts";
+import type { PageRecord, ResponseHeaders, SecurityHeaders } from "@squirrelscan/core-contracts";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
-import {
-  RULE_ID_ROBOTS_TXT,
-  RULE_ID_SITEMAP_EXISTS,
-} from "@squirrelscan/utils/constants";
+import { RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS } from "@squirrelscan/utils/constants";
 
 import {
   buildSiteContext,
@@ -72,7 +65,9 @@ function findingTuples(map: Map<string, RuleRunResult>): string[] {
   const out: string[] = [];
   for (const [ruleId, rr] of map) {
     for (const check of rr.checks) {
-      out.push(`${ruleId}|${check.name}|${check.status}|${check.pageUrl ?? ""}|${check.message}|${check.value ?? ""}|${check.expected ?? ""}`);
+      out.push(
+        `${ruleId}|${check.name}|${check.status}|${check.pageUrl ?? ""}|${check.message}|${check.value ?? ""}|${check.expected ?? ""}`,
+      );
     }
   }
   return out.sort();
@@ -84,10 +79,7 @@ function scoreOf(map: Map<string, RuleRunResult>) {
 
 // Score the streamed tallies the PR-F way: penalty inputs are the two critical
 // rules (robots/sitemap) pulled from the same accumulated ruleResultsMap.
-function talliesScore(
-  tallies: Map<string, RuleTally>,
-  ruleResultsMap: Map<string, RuleRunResult>,
-) {
+function talliesScore(tallies: Map<string, RuleTally>, ruleResultsMap: Map<string, RuleRunResult>) {
   const penalty = new Map<string, RuleRunResult>();
   for (const id of [RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS]) {
     const rr = ruleResultsMap.get(id);
@@ -106,23 +98,20 @@ async function runV2(
   storage: SQLiteStorage,
   crawlId: string,
 ): Promise<StreamingRuleExecutionResult> {
-  return run(runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 8 }));
+  return run(
+    runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 8 }),
+  );
 }
 
 // Assert full byte-identity for one crawl DB: v1 vs v2 ruleResultsMap score +
 // finding set, plus the streamed tally score against v1.
-async function assertParity(
-  storage: SQLiteStorage,
-  crawlId: string,
-) {
+async function assertParity(storage: SQLiteStorage, crawlId: string) {
   const v1 = await runV1(storage, crawlId);
   const v2 = await runV2(storage, crawlId);
 
   const v1Score = scoreOf(v1.ruleResultsMap);
   expect(scoreOf(v2.ruleResultsMap)).toEqual(v1Score);
-  expect(findingTuples(v2.ruleResultsMap)).toEqual(
-    findingTuples(v1.ruleResultsMap),
-  );
+  expect(findingTuples(v2.ruleResultsMap)).toEqual(findingTuples(v1.ruleResultsMap));
   expect(talliesScore(v2.tallies, v2.ruleResultsMap)).toEqual(v1Score);
   return { v1, v2, v1Score };
 }
@@ -183,93 +172,109 @@ function injectedPage(over: Partial<PageRecord> & { url: string; status: number 
 const T = 30_000;
 
 describe("runStreamingRules — GOLDEN INVARIANT vs runRulesOnStorage", () => {
-  test("rich-issue-mix crawl: byte-identical score + findings + tally score", async () => {
-    const model = generateSiteModel({ seed: 3, pageCount: 60 });
-    const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
+  test(
+    "rich-issue-mix crawl: byte-identical score + findings + tally score",
+    async () => {
+      const model = generateSiteModel({ seed: 3, pageCount: 60 });
+      const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
 
-    const { v1Score } = await assertParity(storage, crawlId);
-    // Sanity: the rich model actually produced a scored, non-perfect audit.
-    expect(v1Score.overall).not.toBeNull();
+      const { v1Score } = await assertParity(storage, crawlId);
+      // Sanity: the rich model actually produced a scored, non-perfect audit.
+      expect(v1Score.overall).not.toBeNull();
 
-    await run(storage.close());
-  }, T);
+      await run(storage.close());
+    },
+    T,
+  );
 
-  test("all-clean crawl: byte-identical (every page passes)", async () => {
-    const model = generateSiteModel({
-      seed: 5,
-      pageCount: 40,
-      cleanRatio: 1,
-      issues: {
-        longH1: false,
-        oversizeTitle: false,
-        oversizeDescription: false,
-        longUrls: false,
-        duplicateTitles: false,
-        duplicateDescriptions: false,
-        orphanPages: false,
-        redirectChains: false,
-        brokenLinks: false,
-        noindexInSitemap: false,
-      },
-    });
-    const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
+  test(
+    "all-clean crawl: byte-identical (every page passes)",
+    async () => {
+      const model = generateSiteModel({
+        seed: 5,
+        pageCount: 40,
+        cleanRatio: 1,
+        issues: {
+          longH1: false,
+          oversizeTitle: false,
+          oversizeDescription: false,
+          longUrls: false,
+          duplicateTitles: false,
+          duplicateDescriptions: false,
+          orphanPages: false,
+          redirectChains: false,
+          brokenLinks: false,
+          noindexInSitemap: false,
+        },
+      });
+      const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
 
-    await assertParity(storage, crawlId);
+      await assertParity(storage, crawlId);
 
-    await run(storage.close());
-  }, T);
+      await run(storage.close());
+    },
+    T,
+  );
 
-  test("edge crawl: injected 4xx (EMPTY_PARSED_PAGE append) + 503 WAF page stay byte-identical", async () => {
-    const model = generateSiteModel({ seed: 9, pageCount: 30 });
-    const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
+  test(
+    "edge crawl: injected 4xx (EMPTY_PARSED_PAGE append) + 503 WAF page stay byte-identical",
+    async () => {
+      const model = generateSiteModel({ seed: 9, pageCount: 30 });
+      const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
 
-    // 4xx with no body → non-HTML → appended as an EMPTY_PARSED_PAGE error page.
-    await run(
-      storage.upsertPage(
-        crawlId,
-        injectedPage({ url: "http://synthetic.example.com/missing-page", status: 404 }),
-      ),
-    );
-    // A 503 WAF-challenge interstitial → excluded from page scoring + surfaced as
-    // the advisory "WAF challenge pages detected" site check.
-    await run(
-      storage.upsertPage(
-        crawlId,
-        injectedPage({
-          url: "http://synthetic.example.com/blocked",
-          status: 503,
-          contentType: "text/html",
-          html: "<html><head><title>Just a moment...</title></head><body>Just a moment...</body></html>",
-        }),
-      ),
-    );
+      // 4xx with no body → non-HTML → appended as an EMPTY_PARSED_PAGE error page.
+      await run(
+        storage.upsertPage(
+          crawlId,
+          injectedPage({ url: "http://synthetic.example.com/missing-page", status: 404 }),
+        ),
+      );
+      // A 503 WAF-challenge interstitial → excluded from page scoring + surfaced as
+      // the advisory "WAF challenge pages detected" site check.
+      await run(
+        storage.upsertPage(
+          crawlId,
+          injectedPage({
+            url: "http://synthetic.example.com/blocked",
+            status: 503,
+            contentType: "text/html",
+            html: "<html><head><title>Just a moment...</title></head><body>Just a moment...</body></html>",
+          }),
+        ),
+      );
 
-    // #1359: a bodiless 4xx page is in neither engine's per-page denominator, so every finding matches
-    // exactly (message, value, expected), with no rule exempted.
-    const { v1 } = await assertParity(storage, crawlId);
-    // The WAF advisory check must actually be present (proves the branch ran).
-    expect(v1.ruleResultsMap.has("crawl/waf-challenge-pages")).toBe(true);
+      // #1359: a bodiless 4xx page is in neither engine's per-page denominator, so every finding matches
+      // exactly (message, value, expected), with no rule exempted.
+      const { v1 } = await assertParity(storage, crawlId);
+      // The WAF advisory check must actually be present (proves the branch ran).
+      expect(v1.ruleResultsMap.has("crawl/waf-challenge-pages")).toBe(true);
 
-    await run(storage.close());
-  }, T);
+      await run(storage.close());
+    },
+    T,
+  );
 
-  test("batch size does not change the streamed result (batch 3 ≡ batch 200)", async () => {
-    const model = generateSiteModel({ seed: 12, pageCount: 24 });
-    const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
+  test(
+    "batch size does not change the streamed result (batch 3 ≡ batch 200)",
+    async () => {
+      const model = generateSiteModel({ seed: 12, pageCount: 24 });
+      const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
 
-    const a = await run(
-      runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 3 }),
-    );
-    const b = await run(
-      runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 200 }),
-    );
+      const a = await run(
+        runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 3 }),
+      );
+      const b = await run(
+        runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 200 }),
+      );
 
-    expect(scoreOf(a.ruleResultsMap)).toEqual(scoreOf(b.ruleResultsMap));
-    expect(findingTuples(a.ruleResultsMap)).toEqual(findingTuples(b.ruleResultsMap));
-    // Small batch keeps page-stream DOM residency low; a big batch holds more at once.
-    expect(a.peakLiveDocsPageStream).toBeLessThanOrEqual(3);
-    expect(a.peakLiveDocsPageStream).toBeLessThan(b.peakLiveDocsPageStream);
+      expect(scoreOf(a.ruleResultsMap)).toEqual(scoreOf(b.ruleResultsMap));
+      expect(findingTuples(a.ruleResultsMap)).toEqual(findingTuples(b.ruleResultsMap));
+      // Small batch keeps page-stream DOM residency low; a big batch holds more at once.
+      expect(a.peakLiveDocsPageStream).toBeLessThanOrEqual(3);
+      expect(a.peakLiveDocsPageStream).toBeLessThan(b.peakLiveDocsPageStream);
 
-    await run(storage.close());
-  }, T);
+      await run(storage.close());
+    },
+    T,
+  );
 });

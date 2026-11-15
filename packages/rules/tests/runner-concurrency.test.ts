@@ -35,9 +35,7 @@ function makeDelayedRules(n: number): { rules: Rule[]; ids: string[] } {
         // Earlier rules finish LAST.
         await new Promise((r) => setTimeout(r, (n - k) * 4));
         return {
-          checks: [
-            { name: id, status: "pass", message: `ran ${k}` } as CheckResult,
-          ],
+          checks: [{ name: id, status: "pass", message: `ran ${k}` } as CheckResult],
         };
       },
     });
@@ -99,28 +97,48 @@ describe("runner bounded concurrency", () => {
   test("a rule throwing still yields a deterministic fail check in order", async () => {
     const rules: Rule[] = [
       {
-        meta: { id: "test/ok-a", name: "A", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/ok-a",
+          name: "A",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         run: () => ({ checks: [{ name: "test/ok-a", status: "pass", message: "a" }] }),
       },
       {
-        meta: { id: "test/boom", name: "Boom", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/boom",
+          name: "Boom",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         async run() {
           await new Promise((r) => setTimeout(r, 1));
           throw new Error("kaboom");
         },
       },
       {
-        meta: { id: "test/ok-b", name: "B", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/ok-b",
+          name: "B",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         run: () => ({ checks: [{ name: "test/ok-b", status: "pass", message: "b" }] }),
       },
     ];
 
     const result = await makeRunner(rules, 8).runPageRules(makePage());
-    expect(result.checks.map((c) => c.name)).toEqual([
-      "test/ok-a",
-      "test/boom-error",
-      "test/ok-b",
-    ]);
+    expect(result.checks.map((c) => c.name)).toEqual(["test/ok-a", "test/boom-error", "test/ok-b"]);
     const boom = result.checks.find((c) => c.name === "test/boom-error");
     // A thrown rule is not evaluated, not a failed check (#1291).
     expect(boom?.status).toBe("skipped");
@@ -131,7 +149,15 @@ describe("runner bounded concurrency", () => {
     // All three rules have a sync run() — the common case (#521). Output must be
     // ordered + complete with no awaiting needed for any of them.
     const rules: Rule[] = ["a", "b", "c"].map((k) => ({
-      meta: { id: `test/sync-${k}`, name: k, description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+      meta: {
+        id: `test/sync-${k}`,
+        name: k,
+        description: "",
+        category: "core",
+        scope: "page",
+        severity: "info",
+        weight: 1,
+      },
       run: () => ({ checks: [{ name: `test/sync-${k}`, status: "pass", message: k }] }),
     }));
 
@@ -145,18 +171,42 @@ describe("runner bounded concurrency", () => {
     // fully resolved (not pending Promises) and assembled in registration order.
     const rules: Rule[] = [
       {
-        meta: { id: "test/async-a", name: "A", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/async-a",
+          name: "A",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         async run() {
           await new Promise((r) => setTimeout(r, 4));
           return { checks: [{ name: "test/async-a", status: "pass", message: "a" }] };
         },
       },
       {
-        meta: { id: "test/sync-b", name: "B", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/sync-b",
+          name: "B",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         run: () => ({ checks: [{ name: "test/sync-b", status: "pass", message: "b" }] }),
       },
       {
-        meta: { id: "test/async-c", name: "C", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/async-c",
+          name: "C",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         async run() {
           await new Promise((r) => setTimeout(r, 1));
           return { checks: [{ name: "test/async-c", status: "pass", message: "c" }] };
@@ -165,7 +215,11 @@ describe("runner bounded concurrency", () => {
     ];
 
     const result = await makeRunner(rules, 8).runPageRules(makePage());
-    expect(result.checks.map((c) => c.name)).toEqual(["test/async-a", "test/sync-b", "test/async-c"]);
+    expect(result.checks.map((c) => c.name)).toEqual([
+      "test/async-a",
+      "test/sync-b",
+      "test/async-c",
+    ]);
     expect(result.checks.every((c) => c.status === "pass")).toBe(true);
   });
 

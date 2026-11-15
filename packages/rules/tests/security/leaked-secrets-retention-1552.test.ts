@@ -10,9 +10,10 @@ import { buildCollectedPageSignal } from "../../src/collected-signals";
 import { scanPageForSecrets } from "../../src/security/leaked-secrets";
 
 const j = (...parts: string[]): string => parts.join("");
-const lcg = (seed: number) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+const lcg = (seed: number) => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const run = (next: () => number, n: number, alphabet = ALNUM): string => Array.from({ length: n }, () => alphabet[Math.floor(next() * alphabet.length)]).join("");
+const run = (next: () => number, n: number, alphabet = ALNUM): string =>
+  Array.from({ length: n }, () => alphabet[Math.floor(next() * alphabet.length)]).join("");
 
 /** A page of about `size` characters with nine secret-shaped values in two inline scripts and an attribute. */
 function page(i: number, size: number): string {
@@ -48,13 +49,21 @@ const url = (i: number) => `https://shop.example/p${i}`;
 
 describe("the records kept for a page do not keep the page", () => {
   test("scanPageForSecrets: the heap after a full GC grows by under 1 MB a page across three passes", () => {
-    const { heap } = passes((html, i) => scanPageForSecrets(parsePage(html, url(i)).document!, url(i)));
+    const { heap } = passes((html, i) =>
+      scanPageForSecrets(parsePage(html, url(i)).document!, url(i)),
+    );
     // before the fix: about the page's size a page (2 MB), 48 MB over the two later passes; after: noise
     expect(heap[2]! - heap[0]!, JSON.stringify(heap)).toBeLessThan(PAGES * 1);
   }, 180_000);
 
   test("buildCollectedPageSignal, the streaming collector's per-page entry: the same bound", () => {
-    const { heap } = passes((html, i) => buildCollectedPageSignal({ url: url(i), parsed: parsePage(html, url(i)), htmlBytes: html.length }));
+    const { heap } = passes((html, i) =>
+      buildCollectedPageSignal({
+        url: url(i),
+        parsed: parsePage(html, url(i)),
+        htmlBytes: html.length,
+      }),
+    );
     expect(heap[2]! - heap[0]!, JSON.stringify(heap)).toBeLessThan(PAGES * 1);
   }, 180_000);
 });
@@ -81,6 +90,7 @@ describe("the records are the same, copied", () => {
     const found = scanPageForSecrets(parsePage(html, url(2)).document!, url(2));
     const withLone = found.filter((secret) => secret.value.includes(lone));
     expect(withLone.length).toBeGreaterThan(0);
-    for (const secret of withLone) expect(secret.value.charCodeAt(secret.value.indexOf(lone))).toBe(0xd83d);
+    for (const secret of withLone)
+      expect(secret.value.charCodeAt(secret.value.indexOf(lone))).toBe(0xd83d);
   });
 });

@@ -8,15 +8,23 @@ import { describe, expect, test } from "bun:test";
 import { ALL_FINGERPRINTS, detectTechnologies } from "../src";
 import { assertCollectedTags } from "../src/collected-tags";
 
-const page = (head: string, body = "") => `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
+const page = (head: string, body = "") =>
+  `<!doctype html><html><head><title>t</title>${head}</head><body>${body}</body></html>`;
 const ids = (html: string, scripts?: Array<{ url: string; content?: string }>): string[] =>
-  detectTechnologies({ url: "https://example.com/", headers: {}, html, ...(scripts ? { scripts } : {}) }).map((t) => t.id);
+  detectTechnologies({
+    url: "https://example.com/",
+    headers: {},
+    html,
+    ...(scripts ? { scripts } : {}),
+  }).map((t) => t.id);
 const BODIES = [{ url: "https://example.com/app.js", content: "var a=1;" }];
 /** One detection of a page: the milliseconds it took and how many times the per-page time budget cut the scan short. */
 const timed = (html: string): { ms: number; exceeded: number } => {
   let exceeded = 0;
   const started = performance.now();
-  detectTechnologies({ url: "https://example.com/", headers: {}, html }, ALL_FINGERPRINTS, { onBudgetExceeded: () => exceeded++ });
+  detectTechnologies({ url: "https://example.com/", headers: {}, html }, ALL_FINGERPRINTS, {
+    onBudgetExceeded: () => exceeded++,
+  });
   return { ms: performance.now() - started, exceeded };
 };
 
@@ -39,7 +47,10 @@ describe("script src signatures", () => {
     for (const html of [
       page('<!-- <script src="https://cdn.gpteng.co/lovable.js"></script> -->'),
       page('<script data-src="https://cdn.gpteng.co/lovable.js"></script>'),
-      page("", '<a href="https://cdn.gpteng.co/lovable.js">x</a><p>https://cdn.gpteng.co/lovable.js</p>'),
+      page(
+        "",
+        '<a href="https://cdn.gpteng.co/lovable.js">x</a><p>https://cdn.gpteng.co/lovable.js</p>',
+      ),
     ]) {
       expect(ids(html)).not.toContain("lovable");
       expect(ids(html, BODIES)).not.toContain("lovable");
@@ -49,7 +60,9 @@ describe("script src signatures", () => {
 
 describe("resource attributes and data attributes", () => {
   test("a stylesheet link and a srcset token", () => {
-    expect(ids(page('<link rel="stylesheet" href="https://cdn.example.net/css/bulma.min.css">'))).toContain("bulma");
+    expect(
+      ids(page('<link rel="stylesheet" href="https://cdn.example.net/css/bulma.min.css">')),
+    ).toContain("bulma");
     expect(ids(page('<link href="/static/bulma.css" rel="stylesheet">'))).toContain("bulma");
   });
 
@@ -59,13 +72,21 @@ describe("resource attributes and data attributes", () => {
 
   test("a script's data attribute flags (Clerk, RequireJS)", () => {
     expect(ids(page('<script data-clerk-js-script src="/c.js"></script>'))).toContain("clerk");
-    expect(ids(page('<script data-clerk-publishable-key="pk_test_abc" src="/c.js"></script>'))).toContain("clerk");
-    expect(ids(page('<script data-main="js/app" src="require.js"></script>'))).toContain("requirejs");
-    expect(ids(page('<script data-clerk-publishable-key="nope" src="/c.js"></script>'))).not.toContain("clerk");
+    expect(
+      ids(page('<script data-clerk-publishable-key="pk_test_abc" src="/c.js"></script>')),
+    ).toContain("clerk");
+    expect(ids(page('<script data-main="js/app" src="require.js"></script>'))).toContain(
+      "requirejs",
+    );
+    expect(
+      ids(page('<script data-clerk-publishable-key="nope" src="/c.js"></script>')),
+    ).not.toContain("clerk");
   });
 
   test("Meta Pixel by its script src", () => {
-    expect(ids(page('<script async src="https://connect.facebook.net/en_US/fbevents.js"></script>'))).toContain("facebook-pixel");
+    expect(
+      ids(page('<script async src="https://connect.facebook.net/en_US/fbevents.js"></script>')),
+    ).toContain("facebook-pixel");
   });
 });
 
@@ -77,7 +98,10 @@ test("a tag-attr detector on a tag the page pass does not collect is refused whe
 describe("hostile pages (5 MB)", () => {
   const rep = (unit: string): string => page("", unit.repeat(Math.ceil(5_000_000 / unit.length)));
   for (const tag of ["script", "link", "img", "iframe"]) {
-    for (const [label, unit] of [["unclosed openers", `<${tag} `], ["unbalanced quotes", `<${tag} x="`]] as const) {
+    for (const [label, unit] of [
+      ["unclosed openers", `<${tag} `],
+      ["unbalanced quotes", `<${tag} x="`],
+    ] as const) {
       test(`${tag}: ${label}`, () => {
         const { ms, exceeded } = timed(rep(unit));
         // Minutes before the change (every signature rescanned 400 characters after each opener); 0.2 to 0.55 s now.
@@ -92,7 +116,12 @@ describe("hostile pages (5 MB)", () => {
 describe("bounds (review of #1467)", () => {
   test("hostile openers: a quote then a newline, and a 1 MB attribute value", () => {
     const rep = (unit: string): string => page("", unit.repeat(Math.ceil(5_000_000 / unit.length)));
-    for (const html of [rep('<img a="\n'), rep("<script a='\n"), page("", `<img alt="${"x".repeat(1_000_000)}" src="/a.png">`), page("", `<script src="${"y".repeat(1_000_000)}"></script>`)]) {
+    for (const html of [
+      rep('<img a="\n'),
+      rep("<script a='\n"),
+      page("", `<img alt="${"x".repeat(1_000_000)}" src="/a.png">`),
+      page("", `<script src="${"y".repeat(1_000_000)}"></script>`),
+    ]) {
       const { ms, exceeded } = timed(html);
       // 60 to 380 ms now (the two 5 MB cases the slowest): the bound is over 5 times that.
       expect(ms).toBeLessThan(2_000);
@@ -101,7 +130,8 @@ describe("bounds (review of #1467)", () => {
   }, 120_000);
 
   test("a 5 MB page of closed script, img and link tags is read once for every signature", () => {
-    const unit = '<script src="https://cdn.example.net/a.js"></script><img src="https://cdn.example.net/i.png"><link rel="stylesheet" href="https://cdn.example.net/s.css">';
+    const unit =
+      '<script src="https://cdn.example.net/a.js"></script><img src="https://cdn.example.net/i.png"><link rel="stylesheet" href="https://cdn.example.net/s.css">';
     const { ms, exceeded } = timed(page("", unit.repeat(Math.ceil(5_000_000 / unit.length))));
     // 1.2 to 1.6 s locally and about 1.6 s on a CI runner (2.8 s on a slow one); a rescan of the page for each signature is over the 5 s per-page budget, so 4 s still catches it.
     expect(ms).toBeLessThan(4_000);
@@ -110,7 +140,10 @@ describe("bounds (review of #1467)", () => {
 
   test("a page of tags with 100 attributes each keeps only what a signature reads, and nothing after the call", () => {
     const attributes = Array.from({ length: 100 }, (_, i) => `data-a${i}="value ${i}"`).join(" ");
-    const html = page("", `<img ${attributes} src="/a.png">`.repeat(Math.ceil(8_000_000 / (attributes.length + 20))));
+    const html = page(
+      "",
+      `<img ${attributes} src="/a.png">`.repeat(Math.ceil(8_000_000 / (attributes.length + 20))),
+    );
     Bun.gc(true);
     const before = process.memoryUsage().heapUsed;
     ids(html);
@@ -120,12 +153,26 @@ describe("bounds (review of #1467)", () => {
   }, 120_000);
 
   test("a signature list that reads no tag attribute keeps none, and a custom list reads its own", () => {
-    const custom = [{ id: "x", name: "X", category: "other" as const, detectors: [{ type: "tag-attr" as const, tags: ["img"], attrs: ["data-x"], pattern: /^yes$/ }] }];
-    const found = (html: string) => detectTechnologies({ url: "https://example.com/", headers: {}, html }, custom).map((t) => t.id);
+    const custom = [
+      {
+        id: "x",
+        name: "X",
+        category: "other" as const,
+        detectors: [
+          { type: "tag-attr" as const, tags: ["img"], attrs: ["data-x"], pattern: /^yes$/ },
+        ],
+      },
+    ];
+    const found = (html: string) =>
+      detectTechnologies({ url: "https://example.com/", headers: {}, html }, custom).map(
+        (t) => t.id,
+      );
     expect(found(page("", '<img data-x="yes">'))).toEqual(["x"]);
     expect(found(page("", '<img data-x="no">'))).toEqual([]);
     // The built-in signatures still read theirs afterwards (the attribute set is per call).
-    expect(ids(page('<script src="https://cdn.gpteng.co/lovable.js"></script>'))).toContain("lovable");
+    expect(ids(page('<script src="https://cdn.gpteng.co/lovable.js"></script>'))).toContain(
+      "lovable",
+    );
   });
 });
 
@@ -137,9 +184,16 @@ describe("a real tag with its attributes on separate lines (#1474)", () => {
       ["bulma", '<link\n href="https://cdn.example.net/css/bulma.min.css"\n rel="stylesheet"\n>'],
       ["clerk", '<script\n data-clerk-publishable-key="pk_test_abc"\n src="/c.js"\n></script>'],
       ["requirejs", '<script\n data-main="js/app"\n src="require.js"\n></script>'],
-      ["facebook-pixel", '<script\n async\n src="https://connect.facebook.net/en_US/fbevents.js"\n></script>'],
+      [
+        "facebook-pixel",
+        '<script\n async\n src="https://connect.facebook.net/en_US/fbevents.js"\n></script>',
+      ],
     ] as const) {
-      expect([id, tag.slice(0, 30), ids(page(tag))]).toEqual([id, tag.slice(0, 30), expect.arrayContaining([id])]);
+      expect([id, tag.slice(0, 30), ids(page(tag))]).toEqual([
+        id,
+        tag.slice(0, 30),
+        expect.arrayContaining([id]),
+      ]);
     }
   });
 });

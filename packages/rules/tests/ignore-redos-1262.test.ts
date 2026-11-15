@@ -3,9 +3,24 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { IgnoreTable, MAX_ENTRIES, MAX_MATCHERS_PER_FIELD, MAX_PATTERN_CHARS, MAX_STEPS_PER_AUDIT, MAX_STEPS_PER_ENTRY, MAX_STEPS_PER_TEST, globMatch, type IgnoreEntry } from "../src/ignore";
+import {
+  IgnoreTable,
+  MAX_ENTRIES,
+  MAX_MATCHERS_PER_FIELD,
+  MAX_PATTERN_CHARS,
+  MAX_STEPS_PER_AUDIT,
+  MAX_STEPS_PER_ENTRY,
+  MAX_STEPS_PER_TEST,
+  globMatch,
+  type IgnoreEntry,
+} from "../src/ignore";
 import { checkIgnoreEntries } from "../src/rule-options-check";
-import { compileSafeRegex, MAX_PROGRAM_SIZE, MAX_SET_RANGES, type SafeRegex } from "../src/safe-regex";
+import {
+  compileSafeRegex,
+  MAX_PROGRAM_SIZE,
+  MAX_SET_RANGES,
+  type SafeRegex,
+} from "../src/safe-regex";
 
 const re = (source: string, flags = ""): SafeRegex => {
   const out = compileSafeRegex(source, flags);
@@ -72,7 +87,12 @@ describe("the linear engine", () => {
       ["a*?b", "", "aab"],
     ];
     for (const [source, flags, text] of cases) {
-      expect([source, flags, text, re(source, flags).test(text, 100_000)!.matched]).toEqual([source, flags, text, new RegExp(source, flags).test(text)]);
+      expect([source, flags, text, re(source, flags).test(text, 100_000)!.matched]).toEqual([
+        source,
+        flags,
+        text,
+        new RegExp(source, flags).test(text),
+      ]);
     }
   });
 
@@ -82,7 +102,23 @@ describe("the linear engine", () => {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       return seed % n;
     };
-    const atoms = ["a", "b", "c", ".", "\\d", "\\w", "[ab]", "[^a]", "(a|b)", "(?:ab|c)", "(a*)", "x?", "\\b", "^", "$"];
+    const atoms = [
+      "a",
+      "b",
+      "c",
+      ".",
+      "\\d",
+      "\\w",
+      "[ab]",
+      "[^a]",
+      "(a|b)",
+      "(?:ab|c)",
+      "(a*)",
+      "x?",
+      "\\b",
+      "^",
+      "$",
+    ];
     const quants = ["", "", "*", "+", "?", "{2}", "{1,3}", "{2,}"];
     const alphabet = ["a", "b", "c", "1", " ", "x", "\n"];
     for (let i = 0; i < 400; i++) {
@@ -105,13 +141,36 @@ describe("the linear engine", () => {
       for (let j = 0; j < 8; j++) {
         let text = "";
         for (let k = 0, n = rnd(8); k < n; k++) text += alphabet[rnd(alphabet.length)]!;
-        expect([source, flags, text, compiled.test(text, 1_000_000)!.matched]).toEqual([source, flags, text, native.test(text)]);
+        expect([source, flags, text, compiled.test(text, 1_000_000)!.matched]).toEqual([
+          source,
+          flags,
+          text,
+          native.test(text),
+        ]);
       }
     }
   });
 
   test("refuses what needs backtracking or is unknown", () => {
-    for (const source of ["(a)\\1", "(?=a)b", "(?!a)b", "(?<=a)b", "(?<!a)b", "(?<n>a)\\k<n>", "\\p{L}", "a**", "(", ")", "[a", "a{3,2}", "[z-a]", "\\q", "\\", "*a", "^*"]) {
+    for (const source of [
+      "(a)\\1",
+      "(?=a)b",
+      "(?!a)b",
+      "(?<=a)b",
+      "(?<!a)b",
+      "(?<n>a)\\k<n>",
+      "\\p{L}",
+      "a**",
+      "(",
+      ")",
+      "[a",
+      "a{3,2}",
+      "[z-a]",
+      "\\q",
+      "\\",
+      "*a",
+      "^*",
+    ]) {
       const out = compileSafeRegex(source);
       expect([source, typeof out]).toEqual([source, "string"]);
     }
@@ -161,20 +220,32 @@ describe("the glob matcher", () => {
 });
 
 describe("IgnoreTable under hostile entries", () => {
-  const checks = (id: string) => [{ name: "c", status: "warn" as const, message: "m", items: [{ id }] }];
+  const checks = (id: string) => [
+    { name: "c", status: "warn" as const, message: "m", items: [{ id }] },
+  ];
 
   test("catastrophic item regexes finish and never waive by accident", () => {
     const id = `${"a".repeat(1900)}!`;
     for (const source of evasions) {
-      const out = new IgnoreTable([{ rule: "r/x", items: [`regex:${source}`] }]).filterChecks("r/x", undefined, checks(id));
+      const out = new IgnoreTable([{ rule: "r/x", items: [`regex:${source}`] }]).filterChecks(
+        "r/x",
+        undefined,
+        checks(id),
+      );
       expect(out).toBeDefined();
     }
   });
 
   test("text over 2 KB never matches a regex or glob, and is not truncated into a false match", () => {
     const url = `https://example.com/${"a".repeat(3000)}`;
-    expect(new IgnoreTable([{ rule: "r/x", urls: ["regex:a$"] }]).pageWaiver("r/x", url)).toBeNull();
-    const out = new IgnoreTable([{ rule: "r/x", items: ["glob:*a"] }]).filterChecks("r/x", undefined, checks("a".repeat(3000)));
+    expect(
+      new IgnoreTable([{ rule: "r/x", urls: ["regex:a$"] }]).pageWaiver("r/x", url),
+    ).toBeNull();
+    const out = new IgnoreTable([{ rule: "r/x", items: ["glob:*a"] }]).filterChecks(
+      "r/x",
+      undefined,
+      checks("a".repeat(3000)),
+    );
     expect(out[0]!.items).toHaveLength(1);
   });
 
@@ -187,9 +258,13 @@ describe("IgnoreTable under hostile entries", () => {
 
   test("an entry that exhausts its work budget stops waiving, warns once, and leaves findings visible", () => {
     const messages: string[] = [];
-    const t = new IgnoreTable([{ rule: "r/x", items: ["regex:(?:a|b)*c"] }], { onTimeout: (m) => messages.push(m) });
+    const t = new IgnoreTable([{ rule: "r/x", items: ["regex:(?:a|b)*c"] }], {
+      onTimeout: (m) => messages.push(m),
+    });
     const many = Array.from({ length: 4000 }, (_, i) => ({ id: `${"ab".repeat(1000)}${i}` }));
-    const res = t.filterChecks("r/x", undefined, [{ name: "c", status: "warn", message: "m", items: many }]);
+    const res = t.filterChecks("r/x", undefined, [
+      { name: "c", status: "warn", message: "m", items: many },
+    ]);
     expect(res[0]!.items).toHaveLength(4000);
     expect(t.timedOut).toHaveLength(1);
     expect(messages.filter((m) => m.includes("timed out"))).toHaveLength(1);
@@ -225,24 +300,34 @@ describe("IgnoreTable under hostile entries", () => {
 });
 
 describe("the caps cannot be defeated", () => {
-  const checkOf = (items: { id: string }[]) => [{ name: "c", status: "warn" as const, message: "m", items }];
+  const checkOf = (items: { id: string }[]) => [
+    { name: "c", status: "warn" as const, message: "m", items },
+  ];
 
   test("entry count, matchers per entry and pattern length are enforced at the table, not only the schema", () => {
     const many = Array.from({ length: 10_000 }, () => ({ rule: "r/x", items: ["a"] }));
     const t = new IgnoreTable(many);
     expect(t.problems.some((p) => p.message.includes(`${MAX_ENTRIES} entries`))).toBe(true);
     expect(t.forRule("r/x")).toHaveLength(MAX_ENTRIES);
-    const wide = new IgnoreTable([{ rule: "r/x", items: Array.from({ length: MAX_MATCHERS_PER_FIELD + 1 }, (_, i) => `i${i}`) }]);
+    const wide = new IgnoreTable([
+      { rule: "r/x", items: Array.from({ length: MAX_MATCHERS_PER_FIELD + 1 }, (_, i) => `i${i}`) },
+    ]);
     expect(wide.empty).toBe(true);
     expect(wide.problems).toHaveLength(1);
-    const long = new IgnoreTable([{ rule: "r/x", urls: ["/".repeat(MAX_PATTERN_CHARS + 1)] }, { rule: "r/x", items: ["x".repeat(MAX_PATTERN_CHARS + 1)] }]);
+    const long = new IgnoreTable([
+      { rule: "r/x", urls: ["/".repeat(MAX_PATTERN_CHARS + 1)] },
+      { rule: "r/x", items: ["x".repeat(MAX_PATTERN_CHARS + 1)] },
+    ]);
     expect(long.empty).toBe(true);
   });
 
   test("work is summed across entries: many cheap entries exhaust the audit budget, then none waive (fail closed)", () => {
     const warnings: string[] = [];
     const entries = Array.from({ length: 50 }, () => ({ rule: "r/x", items: ["regex:^zzz"] }));
-    const t = new IgnoreTable([...entries, { rule: "r/x", items: ["glob:target*"] }], { limits: { perAudit: 20_000 }, onTimeout: (m) => warnings.push(m) });
+    const t = new IgnoreTable([...entries, { rule: "r/x", items: ["glob:target*"] }], {
+      limits: { perAudit: 20_000 },
+      onTimeout: (m) => warnings.push(m),
+    });
     const items = Array.from({ length: 400 }, (_, i) => ({ id: `${"q".repeat(100)}${i}` }));
     const out = t.filterChecks("r/x", undefined, checkOf([...items, { id: "target-1" }]));
     // The glob entry would have waived `target-1`; the budget died first, so nothing is waived and every item stays.
@@ -252,19 +337,31 @@ describe("the caps cannot be defeated", () => {
   });
 
   test("a spent entry budget is not reset by later calls or other entries", () => {
-    const t = new IgnoreTable([{ rule: "r/x", items: ["regex:^zzz"] }, { rule: "r/x", items: ["glob:keep*"] }], { limits: { perEntry: 500 } });
+    const t = new IgnoreTable(
+      [
+        { rule: "r/x", items: ["regex:^zzz"] },
+        { rule: "r/x", items: ["glob:keep*"] },
+      ],
+      { limits: { perEntry: 500 } },
+    );
     const filler = Array.from({ length: 50 }, (_, i) => ({ id: `${"q".repeat(40)}${i}` }));
     t.filterChecks("r/x", undefined, checkOf(filler));
     expect(t.timedOut.map((e) => e.entry)).toEqual([0]);
     // entry 0 is dead for good; entry 1 (own budget, glob) still works
-    const out = t.filterChecks("r/x", undefined, checkOf([{ id: "keep-me" }, ...filler.slice(0, 2)]));
+    const out = t.filterChecks(
+      "r/x",
+      undefined,
+      checkOf([{ id: "keep-me" }, ...filler.slice(0, 2)]),
+    );
     expect(out[0]!.items!.some((i) => i.id === "keep-me")).toBe(false);
     const again = t.filterChecks("r/x", undefined, checkOf([{ id: "zzz" }]));
     expect(again[0]!.items).toHaveLength(1); // dead regex entry never matches
   });
 
   test("glob work is metered too", () => {
-    const t = new IgnoreTable([{ rule: "r/x", items: [`glob:${"*a".repeat(200)}*b`] }], { limits: { perEntry: 10_000 } });
+    const t = new IgnoreTable([{ rule: "r/x", items: [`glob:${"*a".repeat(200)}*b`] }], {
+      limits: { perEntry: 10_000 },
+    });
     const items = Array.from({ length: 50 }, () => ({ id: "a".repeat(1000) }));
     const out = t.filterChecks("r/x", undefined, checkOf(items));
     expect(out[0]!.items).toHaveLength(50);
@@ -280,18 +377,26 @@ describe("the caps cannot be defeated", () => {
 
   test("wide or case-folded classes cannot hide cost: merged, capped, and charged per range", () => {
     expect(typeof compileSafeRegex("[\\u0000-\\uffff]")).toBe("object");
-    const scattered = Array.from({ length: MAX_SET_RANGES + 5 }, (_, i) => String.fromCharCode(0x4e00 + i * 3)).join("");
+    const scattered = Array.from({ length: MAX_SET_RANGES + 5 }, (_, i) =>
+      String.fromCharCode(0x4e00 + i * 3),
+    ).join("");
     expect(compileSafeRegex(`[${scattered}]`)).toContain(`${MAX_SET_RANGES}`);
     // case folding only grows the class at compile time; the haystack is never lowercased, so its length cannot grow
     expect(re("[a-z]", "i").test("Q", 100)!.matched).toBe(true);
     const wide = re("[acegikmoqsuwy02468]+@", "i");
     const small = re("a+@");
-    expect(wide.test("a".repeat(500), 1_000_000)!.steps).toBeGreaterThan(small.test("a".repeat(500), 1_000_000)!.steps);
+    expect(wide.test("a".repeat(500), 1_000_000)!.steps).toBeGreaterThan(
+      small.test("a".repeat(500), 1_000_000)!.steps,
+    );
   });
 
   test("surrogate pairs: length is capped in UTF-16 units, matching is by code point", () => {
     const t = new IgnoreTable([{ rule: "r/x", items: ["regex:^.{1,3}$"] }]);
-    const out = t.filterChecks("r/x", undefined, checkOf([{ id: "😀😀😀" }, { id: "😀".repeat(1100) }]));
+    const out = t.filterChecks(
+      "r/x",
+      undefined,
+      checkOf([{ id: "😀😀😀" }, { id: "😀".repeat(1100) }]),
+    );
     expect(out[0]!.items!.map((i) => i.id.length)).toEqual([2200]);
   });
 
@@ -310,7 +415,14 @@ describe("compile-time cost is bounded too (review of #1333)", () => {
   };
 
   test("repeats of something that emits nothing compile at once, however deeply nested", () => {
-    for (const source of ["(((){9999}){9999}){9999}", "(?:){9999}", "a{0}", "(a{0}){9999}b", "((a{0}){9999}){9999}", "(?:|){9999}"]) {
+    for (const source of [
+      "(((){9999}){9999}){9999}",
+      "(?:){9999}",
+      "a{0}",
+      "(a{0}){9999}b",
+      "((a{0}){9999}){9999}",
+      "(?:|){9999}",
+    ]) {
       const { out, ms } = timed(() => compileSafeRegex(source));
       expect([source, ms < 200]).toEqual([source, true]);
       if (typeof out !== "string") expect(out.programSize).toBeLessThanOrEqual(MAX_PROGRAM_SIZE);
@@ -325,7 +437,9 @@ describe("compile-time cost is bounded too (review of #1333)", () => {
     expect(ms).toBeLessThan(200);
     expect(typeof out === "string" || out.programSize <= MAX_PROGRAM_SIZE).toBe(true);
     // 100 such patterns in one entry stay cheap in total
-    const entry = new IgnoreTable([{ rule: "r/x", items: Array.from({ length: 100 }, () => `regex:${klass}{1400}`) }]);
+    const entry = new IgnoreTable([
+      { rule: "r/x", items: Array.from({ length: 100 }, () => `regex:${klass}{1400}`) },
+    ]);
     expect(entry.problems.length + (entry.empty ? 0 : 1)).toBeGreaterThan(0);
   });
 
@@ -369,7 +483,9 @@ describe("audit-wide exhaustion reaches every entry (review of #1333)", () => {
       { limits: { perAudit: 200 }, onTimeout: (_m, entry) => warnings.push(entry) },
     );
     const items = Array.from({ length: 60 }, (_, i) => ({ id: `${"q".repeat(30)}${i}` }));
-    const out = t.filterChecks("r/x", undefined, [{ name: "c", status: "warn", message: "m", items: [...items, { id: "keep-me" }] }]);
+    const out = t.filterChecks("r/x", undefined, [
+      { name: "c", status: "warn", message: "m", items: [...items, { id: "keep-me" }] },
+    ]);
     expect(out[0]!.items).toHaveLength(61);
     expect(warnings.sort()).toEqual([0, 1]);
     expect(t.timedOutEntries().sort()).toEqual([0, 1]);
@@ -382,7 +498,11 @@ describe("review of #1333, round two", () => {
       rule: "r/x",
       urls: Array.from({ length: 100 }, (_, k) => {
         const base = 0x100 + ((e * 100 + k) % 3000);
-        const klass = Array.from({ length: 10 }, (_, c) => `\\u${(base + c * 600).toString(16).padStart(4, "0")}-\\u${(base + c * 600 + 400).toString(16).padStart(4, "0")}`).join("");
+        const klass = Array.from(
+          { length: 10 },
+          (_, c) =>
+            `\\u${(base + c * 600).toString(16).padStart(4, "0")}-\\u${(base + c * 600 + 400).toString(16).padStart(4, "0")}`,
+        ).join("");
         return `regex:^[${klass}]+$:i`;
       }),
     }));
@@ -394,7 +514,10 @@ describe("review of #1333, round two", () => {
 
   test("a regex that matches the empty string matches every text, so it is refused (and `^$` is not)", () => {
     for (const body of ["", "a{0}", "(|)", "a*", "$", "(?:)", "a?"]) {
-      const t = new IgnoreTable([{ rule: "r/x", items: [`regex:${body}`] }, { rule: "r/x", urls: [`regex:${body}`] }]);
+      const t = new IgnoreTable([
+        { rule: "r/x", items: [`regex:${body}`] },
+        { rule: "r/x", urls: [`regex:${body}`] },
+      ]);
       expect([body, t.empty]).toEqual([body, true]);
       expect(t.problems).toHaveLength(2);
     }
@@ -412,7 +535,9 @@ describe("review of #1333, round two", () => {
       ],
       { limits: { perAudit: 0 }, onTimeout: (_m, entry) => reported.push(entry) },
     );
-    const out = t.filterChecks("r/x", undefined, [{ name: "c", status: "warn", message: "m", items: [{ id: "exact" }, { id: "zzz" }] }]);
+    const out = t.filterChecks("r/x", undefined, [
+      { name: "c", status: "warn", message: "m", items: [{ id: "exact" }, { id: "zzz" }] },
+    ]);
     // the exact entry still waives; the regex entry did nothing and is reported; the other rule's entry was never consulted
     expect(out[0]!.items!.map((i) => i.id)).toEqual(["zzz"]);
     expect(reported).toEqual([2]);
@@ -426,7 +551,11 @@ describe("review of #1333, round three", () => {
       rule: "r/x",
       urls: Array.from({ length: 100 }, (_, k) => {
         const base = 0x100 + ((e * 100 + k) % 3000);
-        const klass = Array.from({ length: 10 }, (_, c) => `\\u${(base + c * 600).toString(16).padStart(4, "0")}-\\u${(base + c * 600 + 400).toString(16).padStart(4, "0")}`).join("");
+        const klass = Array.from(
+          { length: 10 },
+          (_, c) =>
+            `\\u${(base + c * 600).toString(16).padStart(4, "0")}-\\u${(base + c * 600 + 400).toString(16).padStart(4, "0")}`,
+        ).join("");
         return `regex:^[${klass}]+$:i`;
       }),
     })) as IgnoreEntry[];
@@ -450,8 +579,13 @@ describe("review of #1333, round three", () => {
 
   test("an entry mixing exact items with a timed-out regex says its exact items still apply", () => {
     const messages: string[] = [];
-    const t = new IgnoreTable([{ rule: "r/x", items: ["exact", "regex:^zz"] }], { limits: { perAudit: 0 }, onTimeout: (m) => messages.push(m) });
-    const out = t.filterChecks("r/x", undefined, [{ name: "c", status: "warn", message: "m", items: [{ id: "exact" }, { id: "zzz" }] }]);
+    const t = new IgnoreTable([{ rule: "r/x", items: ["exact", "regex:^zz"] }], {
+      limits: { perAudit: 0 },
+      onTimeout: (m) => messages.push(m),
+    });
+    const out = t.filterChecks("r/x", undefined, [
+      { name: "c", status: "warn", message: "m", items: [{ id: "exact" }, { id: "zzz" }] },
+    ]);
     expect(out[0]!.items!.map((i) => i.id)).toEqual(["zzz"]);
     expect(messages[0]).toContain("exact items still apply");
   });

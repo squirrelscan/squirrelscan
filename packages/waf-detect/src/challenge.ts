@@ -78,7 +78,12 @@ function buildWafHeaders(page: WafResponse): Headers {
 export function inspectWafChallengePage(page: WafResponse): WafChallengeDetail {
   const block = classifyWafResponse(page);
   if (block.verdict === "blocked") {
-    return { detected: true, provider: block.provider, providerId: block.providerId, signal: block.signal };
+    return {
+      detected: true,
+      provider: block.provider,
+      providerId: block.providerId,
+      signal: block.signal,
+    };
   }
 
   if (!page.html) {
@@ -112,7 +117,12 @@ export function inspectWafChallengePage(page: WafResponse): WafChallengeDetail {
   };
 }
 
-const NOT_DETECTED: WafChallengeDetail = { detected: false, provider: null, providerId: null, signal: null };
+const NOT_DETECTED: WafChallengeDetail = {
+  detected: false,
+  provider: null,
+  providerId: null,
+  signal: null,
+};
 
 /** Detect whether page HTML appears to be a WAF/challenge interstitial. */
 export function detectWafChallengePage(page: WafResponse): WafChallengeResult {

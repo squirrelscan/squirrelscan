@@ -275,7 +275,8 @@ describe("hostile markup stays cheap", () => {
   }
 
   /** About 1 MB of distinct class tokens (a parser folds repeats, so they must differ). */
-  const manyTokens = (): string => Array.from({ length: 130_000 }, (_, i) => `t${i}`).join(" ") + " ";
+  const manyTokens = (): string =>
+    Array.from({ length: 130_000 }, (_, i) => `t${i}`).join(" ") + " ";
 
   const timed = <T>(fn: () => T): { value: T; ms: number } => {
     const started = performance.now();
@@ -416,7 +417,8 @@ describe("comment-class containers around headings (hostile page)", () => {
     expect(ids).not.toContain("wraps-nested");
     // The old and new code agree on a heading that is itself comment-class: it is not "above" itself.
     const withSelf = findCommentSections(
-      parseHTML(`<html><body><h1 class="comments-title" id="h">Comments</h1></body></html>`).document,
+      parseHTML(`<html><body><h1 class="comments-title" id="h">Comments</h1></body></html>`)
+        .document,
     ).map((el) => (el as Element).id);
     expect(withSelf).toEqual(["h"]);
   });

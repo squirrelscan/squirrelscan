@@ -14,9 +14,24 @@ import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 
 const REFUSED: RefusedFetch[] = [
-  { url: "https://example.com/robots.txt", resource: "robots.txt", status: 403, provider: "Cloudflare" },
-  { url: "https://example.com/sitemap.xml", resource: "sitemap", status: 403, provider: "Cloudflare" },
-  { url: "https://example.com/sitemap_index.xml", resource: "sitemap", status: 403, provider: "Cloudflare" },
+  {
+    url: "https://example.com/robots.txt",
+    resource: "robots.txt",
+    status: 403,
+    provider: "Cloudflare",
+  },
+  {
+    url: "https://example.com/sitemap.xml",
+    resource: "sitemap",
+    status: 403,
+    provider: "Cloudflare",
+  },
+  {
+    url: "https://example.com/sitemap_index.xml",
+    resource: "sitemap",
+    status: 403,
+    provider: "Cloudflare",
+  },
 ];
 
 function blocked(refusedFetches?: RefusedFetch[]): AuditReport {

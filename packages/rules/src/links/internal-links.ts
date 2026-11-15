@@ -6,10 +6,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const optionsSchema = z.object({
   min_internal_links: z.number().default(1).describe("Minimum internal links"),
-  max_internal_links: z
-    .number()
-    .default(100)
-    .describe("Maximum internal links"),
+  max_internal_links: z.number().default(100).describe("Maximum internal links"),
 });
 
 export const internalLinksRule: Rule = {

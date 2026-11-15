@@ -7,7 +7,12 @@ import { isLockedRuleReason, LOCKED_RULE_REASONS } from "../src";
 
 describe("LOCKED_RULE_REASONS", () => {
   test("holds credits beside plan, provider_error and unsupported_environment, in the documented order", () => {
-    expect([...LOCKED_RULE_REASONS]).toEqual(["plan", "credits", "provider_error", "unsupported_environment"]);
+    expect([...LOCKED_RULE_REASONS]).toEqual([
+      "plan",
+      "credits",
+      "provider_error",
+      "unsupported_environment",
+    ]);
   });
 
   test("isLockedRuleReason accepts each and nothing else", () => {

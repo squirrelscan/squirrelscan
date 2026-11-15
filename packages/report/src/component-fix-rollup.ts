@@ -165,7 +165,6 @@ export function describeRollupDefect(rollup: ComponentFixRollup): string {
     : `${elementCount} ${noun} ${what} ${tail}`;
 }
 
-
 /** Stable comparison key for a defect's VALUES, not just its kind. */
 function defectValuesKey(group: ComponentFixGroup): string {
   return Object.entries(group.defect.values)
@@ -199,9 +198,7 @@ function componentFamilyKey(group: ComponentFixGroup): string | undefined {
  * Runs AFTER {@link componentFixRollups}: root merging is the stronger claim
  * and must not be pre-empted by this one.
  */
-export function componentFamilyRollups(
-  units: readonly ComponentFixRollup[],
-): ComponentFixRollup[] {
+export function componentFamilyRollups(units: readonly ComponentFixRollup[]): ComponentFixRollup[] {
   const buckets = new Map<string, ComponentFixRollup[]>();
   const order: string[] = [];
 

@@ -23,7 +23,7 @@ const SKIP_CHECK: CheckResult = {
 // byte-identical regardless of how the incoming-link counts were sourced.
 function buildWeakLinksCheck(
   weakPages: string[],
-  sectionsFor?: (url: string) => SectionCounts | undefined
+  sectionsFor?: (url: string) => SectionCounts | undefined,
 ): CheckResult {
   if (weakPages.length > 0) {
     const pathList = weakPages
@@ -31,8 +31,7 @@ function buildWeakLinksCheck(
       .map((url) => getPathname(url))
       .join("\n");
 
-    const suffix =
-      weakPages.length > 5 ? `\n+${weakPages.length - 5} more` : "";
+    const suffix = weakPages.length > 5 ? `\n+${weakPages.length - 5} more` : "";
 
     return {
       name: "weak-internal-links",
@@ -64,7 +63,7 @@ function collectWeakPages(
   entries: Iterable<[string, number]>,
   excludePatterns: string[],
   baseUrl: string,
-  entryUrls: readonly string[]
+  entryUrls: readonly string[],
 ): string[] {
   const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
   const weakPages: string[] = [];
@@ -89,8 +88,7 @@ export const weakInternalLinksRule: Rule = {
   meta: {
     id: "links/weak-internal-links",
     name: "Weak Internal Links",
-    description:
-      "Detects pages with only 1 dofollow internal link pointing to them",
+    description: "Detects pages with only 1 dofollow internal link pointing to them",
     solution:
       "Pages with only a single internal link have weak internal linking support and may struggle to rank. Search engines use internal links to understand page importance and distribute link equity. Add contextual links from related content, include in navigation or sidebar, or link from category/hub pages to strengthen internal link profiles.",
     category: "links",
@@ -137,11 +135,11 @@ export const weakInternalLinksRule: Rule = {
         counts,
         excludePatterns,
         ctx.site?.baseUrl || "",
-        ctx.site?.entryUrls ?? []
+        ctx.site?.entryUrls ?? [],
       );
       const sections = ctx.siteQuery.inboundSectionCounts?.();
       checks.push(
-        buildWeakLinksCheck(weakPages, sections ? (url) => sections.get(url) : undefined)
+        buildWeakLinksCheck(weakPages, sections ? (url) => sections.get(url) : undefined),
       );
       return { checks };
     }
@@ -185,7 +183,7 @@ export const weakInternalLinksRule: Rule = {
           } catch {
             invalidUrlCount++;
             logger.debug(
-              `[weak-internal-links] Invalid internal link URL: "${link.url}" on page ${getPathname(page.url)}`
+              `[weak-internal-links] Invalid internal link URL: "${link.url}" on page ${getPathname(page.url)}`,
             );
           }
         }
@@ -194,7 +192,7 @@ export const weakInternalLinksRule: Rule = {
 
     if (invalidUrlCount > 0) {
       logger.debug(
-        `[weak-internal-links] Found ${invalidUrlCount} invalid internal link URL(s) during link counting`
+        `[weak-internal-links] Found ${invalidUrlCount} invalid internal link URL(s) during link counting`,
       );
     }
 
@@ -205,11 +203,11 @@ export const weakInternalLinksRule: Rule = {
           [page.url, incomingLinkCount.get(normalizedCache.get(page.url)!) ?? 0] as [
             string,
             number,
-          ]
+          ],
       ),
       excludePatterns,
       ctx.site?.baseUrl || "",
-      ctx.site?.entryUrls ?? []
+      ctx.site?.entryUrls ?? [],
     );
 
     // Report results
@@ -217,7 +215,7 @@ export const weakInternalLinksRule: Rule = {
       buildWeakLinksCheck(weakPages, (url) => {
         const key = normalizedCache.get(url);
         return key === undefined ? undefined : sections.get(key);
-      })
+      }),
     );
 
     return { checks };

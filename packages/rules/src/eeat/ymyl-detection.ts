@@ -84,22 +84,14 @@ export const ymylDetectionRule: Rule = {
     let legalPages = 0;
 
     for (const page of pages) {
-      const content = (
-        page.parsed.meta.title +
-        " " +
-        page.parsed.meta.description
-      ).toLowerCase();
+      const content = (page.parsed.meta.title + " " + page.parsed.meta.description).toLowerCase();
       const path = getPathname(page.url).toLowerCase();
 
       // Check categories
-      if (
-        HEALTH_KEYWORDS.some((k) => content.includes(k) || path.includes(k))
-      ) {
+      if (HEALTH_KEYWORDS.some((k) => content.includes(k) || path.includes(k))) {
         healthPages++;
       }
-      if (
-        FINANCE_KEYWORDS.some((k) => content.includes(k) || path.includes(k))
-      ) {
+      if (FINANCE_KEYWORDS.some((k) => content.includes(k) || path.includes(k))) {
         financePages++;
       }
       if (LEGAL_KEYWORDS.some((k) => content.includes(k) || path.includes(k))) {
@@ -109,8 +101,7 @@ export const ymylDetectionRule: Rule = {
 
     const ymylCategories: string[] = [];
     if (healthPages > 0) ymylCategories.push(`Health (${healthPages} pages)`);
-    if (financePages > 0)
-      ymylCategories.push(`Finance (${financePages} pages)`);
+    if (financePages > 0) ymylCategories.push(`Finance (${financePages} pages)`);
     if (legalPages > 0) ymylCategories.push(`Legal (${legalPages} pages)`);
 
     if (ymylCategories.length > 0) {
@@ -124,8 +115,7 @@ export const ymylDetectionRule: Rule = {
       checks.push({
         name: "ymyl-requirements",
         status: "info",
-        message:
-          "YMYL content should have expert authors, disclaimers, and citations",
+        message: "YMYL content should have expert authors, disclaimers, and citations",
       });
     } else {
       checks.push({

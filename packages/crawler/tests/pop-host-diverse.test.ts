@@ -60,7 +60,7 @@ async function seed(
   store: SQLiteStorage,
   crawlId: string,
   url: string,
-  priority: number
+  priority: number,
 ): Promise<void> {
   const entry: FrontierRecord = {
     normalizedUrl: url,

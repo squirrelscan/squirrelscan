@@ -44,10 +44,10 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("a <style> block at 0.875rem on a 16px root warns for each matching field", async () => {
     const check = only(
-      (await run(
+      await run(
         "<style>html { font-size: 16px } input, select { font-size: 0.875rem }</style>",
         '<input name="q"><select name="country"><option>AU</option></select>',
-      )),
+      ),
     );
     expect(check.status).toBe("warn");
     expect(check.items).toEqual([
@@ -59,10 +59,10 @@ describe("mobile/input-zoom (#708)", () => {
   test("the same fields at 16px or 1rem pass", async () => {
     for (const size of ["16px", "1rem", "medium", "12pt"]) {
       const check = only(
-        (await run(
+        await run(
           `<style>input, select, textarea { font-size: ${size} }</style>`,
           "<input><select></select><textarea></textarea>",
-        )),
+        ),
       );
       expect([size, check.status]).toEqual([size, "pass"]);
     }
@@ -87,7 +87,7 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("fields styled only by an external stylesheet are not warned about, and are reported as not read", async () => {
     const check = only(
-      (await run('<link rel="stylesheet" href="/app.css">', '<input class="text-sm" name="email">')),
+      await run('<link rel="stylesheet" href="/app.css">', '<input class="text-sm" name="email">'),
     );
     expect(check.status).toBe("info");
     expect(check.message).toContain("1 more field(s) were not read");
@@ -96,10 +96,10 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("a zoom-blocking viewport still gets the warning, and the finding names the workaround", async () => {
     const check = only(
-      (await run(
+      await run(
         '<meta name="viewport" content="width=device-width, maximum-scale=1">',
         '<input type="email" style="font-size:14px">',
-      )),
+      ),
     );
     expect(check.status).toBe("warn");
     expect(check.message).toContain("maximum-scale=1");
@@ -145,61 +145,63 @@ describe("mobile/input-zoom (#708)", () => {
   test("the cascade order: !important rules beat inline, an !important inline size beats both", async () => {
     expect(
       only(
-        (await run(
+        await run(
           "<style>input { font-size: 16px !important }</style>",
           '<input style="font-size:14px">',
-        )),
+        ),
       ).status,
     ).toBe("pass");
     expect(
       only(
-        (await run(
+        await run(
           "<style>input { font-size: 16px !important }</style>",
           '<input style="font-size:14px !important">',
-        )),
+        ),
       ).status,
     ).toBe("warn");
     // A plain media-query rule loses to the inline size, so it does not matter.
     expect(
       only(
-        (await run(
+        await run(
           "<style>@media (max-width: 600px) { input { font-size: 16px } }</style>",
           '<input style="font-size:14px">',
-        )),
+        ),
       ).status,
     ).toBe("warn");
     // The later of `font` and `font-size` in one block wins.
-    const later = only(await run("<style>input { font: inherit; font-size: 14px }</style>", "<input>"));
+    const later = only(
+      await run("<style>input { font: inherit; font-size: 14px }</style>", "<input>"),
+    );
     expect(later.items).toEqual([{ id: 'input type="text"', label: "14px (<style>: input)" }]);
   });
 
   test("rem resolves against the page's root size, and is not read when an external sheet may set it", async () => {
     const tenPxRoot = only(
-      (await run("<style>html { font-size: 62.5% } input { font-size: 1.4rem }</style>", "<input>")),
+      await run("<style>html { font-size: 62.5% } input { font-size: 1.4rem }</style>", "<input>"),
     );
     expect(tenPxRoot.items).toEqual([{ id: 'input type="text"', label: "14px (<style>: input)" }]);
     const unknownRoot = only(
-      (await run(
+      await run(
         '<link rel="stylesheet" href="/app.css"><style>input { font-size: 0.875rem }</style>',
         "<input>",
-      )),
+      ),
     );
     expect(unknownRoot.status).toBe("info");
     const mediaRoot = only(
-      (await run(
+      await run(
         "<style>@media (max-width: 600px) { html { font-size: 14px } } input { font-size: 1rem }</style>",
         "<input>",
-      )),
+      ),
     );
     expect(mediaRoot.status).toBe("info");
   });
 
   test("an unstyled field on a page with no external CSS gets iOS's own 11px and is reported", async () => {
     const check = only(
-      (await run(
+      await run(
         "<style>body { font-size: 18px }</style>",
         '<input name="q"><textarea name="msg"></textarea>',
-      )),
+      ),
     );
     expect(check.status).toBe("warn");
     expect(check.items).toEqual([
@@ -247,7 +249,7 @@ describe("mobile/input-zoom (#708)", () => {
   test('a <style media="screen"> or "all" block applies like a plain one', async () => {
     for (const media of ["screen", "all"]) {
       const check = only(
-        (await run(`<style media="${media}">input { font-size: 14px }</style>`, "<input>")),
+        await run(`<style media="${media}">input { font-size: 14px }</style>`, "<input>"),
       );
       expect([media, check.status]).toEqual([media, "warn"]);
     }
@@ -255,10 +257,10 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("a stylesheet preloaded and switched on by script counts as external CSS", async () => {
     const check = only(
-      (await run(
+      await run(
         '<link rel="preload" as="style" href="/app.css" onload="this.rel=\'stylesheet\'">',
         "<input>",
-      )),
+      ),
     );
     expect(check.status).toBe("info");
   });
@@ -287,31 +289,31 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("a field a <style> rule hides is not read, and a hidden field part does not count", async () => {
     const hidden = only(
-      (await run(
+      await run(
         "<style>.hp { display: none }</style>",
         '<div class="hp"><input name="trap"></div><input style="font-size:14px">',
-      )),
+      ),
     );
     expect(hidden.details).toMatchObject({ fields: 2, under16px: 1, notRead: 1 });
     const part = only(
-      (await run(
+      await run(
         "<style>input::-webkit-search-cancel-button { display: none } input { font-size: 14px }</style>",
         '<input type="search">',
-      )),
+      ),
     );
     expect(part.status).toBe("warn");
   });
 
   test("an external stylesheet may outrank a <style> rule, so only inline sizes are judged with one", async () => {
     const styled = only(
-      (await run(
+      await run(
         '<link rel="stylesheet" href="/app.css"><style>input { font-size: 14px }</style>',
         "<input>",
-      )),
+      ),
     );
     expect(styled.status).toBe("info");
     const inline = only(
-      (await run('<link rel="stylesheet" href="/app.css">', '<input style="font-size:14px">')),
+      await run('<link rel="stylesheet" href="/app.css">', '<input style="font-size:14px">'),
     );
     expect(inline.status).toBe("warn");
   });
@@ -510,7 +512,7 @@ describe("mobile/input-zoom (#708)", () => {
     for (const [name, make, expected] of cases) {
       test(name, async () => {
         const [head, body] = make();
-        const { ms, check } = (await timed(head, body));
+        const { ms, check } = await timed(head, body);
         expect(ms).toBeLessThan(1000);
         expect(check.details).toMatchObject(expected);
         expect((check.items ?? []).length).toBeLessThanOrEqual(20);
@@ -518,7 +520,10 @@ describe("mobile/input-zoom (#708)", () => {
     }
 
     test("a 1 MB name attribute is cut in the item", async () => {
-      const { check } = (await timed("", `<input name="${"n".repeat(1_000_000)}" style="font-size:12px">`));
+      const { check } = await timed(
+        "",
+        `<input name="${"n".repeat(1_000_000)}" style="font-size:12px">`,
+      );
       expect(check.status).toBe("warn");
       expect(check.items![0]!.id.length).toBeLessThan(120);
     });

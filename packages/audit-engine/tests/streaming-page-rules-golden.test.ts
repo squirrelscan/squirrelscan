@@ -14,10 +14,7 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "../src/adapter";
 import { isAuditablePage } from "../src/page-features";
-import {
-  foldRuleResultIntoTallies,
-  type RuleTally,
-} from "../src/scoring";
+import { foldRuleResultIntoTallies, type RuleTally } from "../src/scoring";
 import { streamPageRules } from "../src/streaming";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -36,7 +33,7 @@ async function runResidentPageRules(
   storage: SQLiteStorage,
   crawlId: string,
   runner: RuleRunner,
-  siteData: SiteData
+  siteData: SiteData,
 ) {
   const pages = await run(storage.getPages(crawlId));
   const ctx = await run(buildSiteContext(pages));
@@ -59,7 +56,7 @@ async function runResidentPageRules(
         redirectChain: page.redirectChain,
         rendered: isRenderedFetch(page.fetcherId),
       },
-      siteData
+      siteData,
     );
     const pageUrl = page.normalizedUrl;
     for (const [ruleId, rr] of result.ruleResults) {
@@ -90,7 +87,7 @@ describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () =>
 
     const resident = await runResidentPageRules(storage, crawlId, runner, siteData());
     const streamed = await run(
-      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 8 })
+      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 8 }),
     );
 
     // Per-rule folded tallies must match exactly.
@@ -100,7 +97,7 @@ describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () =>
     }
     // Per-page flat check lists must match exactly.
     expect([...streamed.pageResults.keys()].sort()).toEqual(
-      [...resident.pageResults.keys()].sort()
+      [...resident.pageResults.keys()].sort(),
     );
     for (const [url, checks] of resident.pageResults) {
       expect(streamed.pageResults.get(url)).toEqual(checks as never);
@@ -117,10 +114,10 @@ describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () =>
   test("batch size does not change results (batch 3 ≡ batch 200)", async () => {
     const { storage, crawlId } = await fixture(11, 25);
     const a = await run(
-      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 3 })
+      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 3 }),
     );
     const b = await run(
-      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 200 })
+      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 200 }),
     );
     for (const [ruleId, rt] of a.tallies) {
       expect(b.tallies.get(ruleId)?.tally).toEqual(rt.tally);

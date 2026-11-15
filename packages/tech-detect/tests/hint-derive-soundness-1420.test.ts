@@ -59,7 +59,13 @@ function parseEscape(src: string, i: number, inClass: boolean): { node: Node; ne
     case "u": {
       if (src[at] === "{") {
         const close = src.indexOf("}", at);
-        return { node: { t: "lit", s: String.fromCodePoint(Number.parseInt(src.slice(at + 1, close), 16)) }, next: close + 1 };
+        return {
+          node: {
+            t: "lit",
+            s: String.fromCodePoint(Number.parseInt(src.slice(at + 1, close), 16)),
+          },
+          next: close + 1,
+        };
       }
       const r = hexChar(src, at, 4);
       return { node: { t: "lit", s: r.s }, next: r.next };
@@ -140,7 +146,7 @@ function parseSeq(src: string, from: number): { node: Node; next: number } {
       const e = parseEscape(src, i, false);
       atom = e.node;
       i = e.next;
-    } else if (c === "." ) {
+    } else if (c === ".") {
       atom = { t: "lit", s: "a" };
       i++;
     } else if (c === "^" || c === "$") {
@@ -167,7 +173,9 @@ function parseSeq(src: string, from: number): { node: Node; next: number } {
       }
     }
     if (src[i] === "?" && (q === "*" || q === "+" || q === "}" || q === "?")) i++;
-    items.push(min === 1 && max === 1 ? atom : { t: "rep", n: atom, min, max: Math.min(max, min + 2) });
+    items.push(
+      min === 1 && max === 1 ? atom : { t: "rep", n: atom, min, max: Math.min(max, min + 2) },
+    );
   }
   return { node: { t: "seq", items }, next: i };
 }
@@ -200,7 +208,13 @@ function makeRng(seed: number): () => number {
 function generate(node: Node, rng: () => number, ci: boolean): string {
   switch (node.t) {
     case "lit":
-      return ci ? [...node.s].map((ch) => (rng() < 0.3 ? (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase()) : ch)).join("") : node.s;
+      return ci
+        ? [...node.s]
+            .map((ch) =>
+              rng() < 0.3 ? (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase()) : ch,
+            )
+            .join("")
+        : node.s;
     case "set": {
       const pool = node.negated ? SAFE.filter((ch) => !node.chars.includes(ch)) : node.chars;
       return pool.length === 0 ? "" : pool[Math.floor(rng() * pool.length)]!;
@@ -237,7 +251,8 @@ function violations(pattern: RegExp, samples = 40): { checked: number; missing: 
       if (!re.test(sample)) continue;
       checked++;
       const haystack = ci ? sample.toLowerCase() : sample;
-      if (!hints.some((h) => haystack.includes(h))) missing.push(`${JSON.stringify(sample)} lacks ${JSON.stringify(hints)} (${alt})`);
+      if (!hints.some((h) => haystack.includes(h)))
+        missing.push(`${JSON.stringify(sample)} lacks ${JSON.stringify(hints)} (${alt})`);
     }
   }
   return { checked, missing };
@@ -268,7 +283,13 @@ describe("derived hints are sound against strings the pattern matches", () => {
     expect(deriveHints(/(?<n>x)\k<n>abcdef/).hints).toEqual(["abcdef"]);
     expect(deriveHints(/(a)\12bcde/).hints).toEqual(["bcde"]);
     expect(deriveHints(/\p{L}abcde/u).hints).toEqual(["abcde"]);
-    for (const re of [/\x60foobar/, new RegExp(String.raw`\u0041bcdef`), new RegExp(String.raw`\u{41}bcdef`, "u"), /ab\cJcdef/, /\p{L}abcde/u]) {
+    for (const re of [
+      /\x60foobar/,
+      new RegExp(String.raw`\u0041bcdef`),
+      new RegExp(String.raw`\u{41}bcdef`, "u"),
+      /ab\cJcdef/,
+      /\p{L}abcde/u,
+    ]) {
       const result = violations(re, 20);
       expect(result.missing).toEqual([]);
       expect([re.source, result.checked > 0]).toEqual([re.source, true]);

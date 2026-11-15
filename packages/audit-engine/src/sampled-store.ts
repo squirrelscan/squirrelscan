@@ -219,7 +219,11 @@ export class SampledStoreEstimator {
     return t && typeof t === "object" ? t : undefined;
   }
 
-  private isSampledRow(row: { normalizedUrl: string; ruleId: string; lastSeenCrawlId: string }): boolean {
+  private isSampledRow(row: {
+    normalizedUrl: string;
+    ruleId: string;
+    lastSeenCrawlId: string;
+  }): boolean {
     return (
       row.lastSeenCrawlId === this.marker.crawlId &&
       this.priorRunPages.has(row.normalizedUrl) &&
@@ -338,11 +342,19 @@ export class SampledStoreEstimator {
           (this.sampledRows.has(f) ? sampled : other).push(f);
         }
         if (sampled.length > 0) {
-          addChecksToTally(replaced, sampled.map((f) => carriedFindingToCheck(f, url)), advisory);
+          addChecksToTally(
+            replaced,
+            sampled.map((f) => carriedFindingToCheck(f, url)),
+            advisory,
+          );
         }
         if (other.length > 0) {
           if (passPageSet.has(url)) otherDirtyPassPages += 1;
-          addChecksToTally(otherAsCounted, other.map((f) => carriedFindingToCheck(f, url)), advisory);
+          addChecksToTally(
+            otherAsCounted,
+            other.map((f) => carriedFindingToCheck(f, url)),
+            advisory,
+          );
           addChecksToTally(
             otherAsFailures,
             other.map((f) => {
@@ -374,7 +386,8 @@ export class SampledStoreEstimator {
         // bounded by the pages that neither passed, failed nor skipped the check.
         classPages += failed + warnings;
         if (advisory) {
-          classPages += n === undefined ? Number.POSITIVE_INFINITY : Math.max(0, n - passed - failed - skipped);
+          classPages +=
+            n === undefined ? Number.POSITIVE_INFINITY : Math.max(0, n - passed - failed - skipped);
         }
         if (!t) continue;
 
@@ -390,12 +403,20 @@ export class SampledStoreEstimator {
         const offCarried = n === undefined ? 0 : Math.max(0, n - carriedPages);
 
         const perPage = failUnits > failed ? ISSUE_PENALTY_ITEM_CAP : 1;
-        const failMass = Math.min(carriedPages * perPage, Math.max(0, Math.max(failed, failUnits) - knownFail));
+        const failMass = Math.min(
+          carriedPages * perPage,
+          Math.max(0, Math.max(failed, failUnits) - knownFail),
+        );
         const warnHi = Math.min(carriedPages, Math.max(0, warnings - knownWarn));
         const warnLo = warnBound ? Math.min(warnHi, Math.max(0, warnings - offCarried)) : 0;
-        const failUnitHi = Math.min(carriedPages * ISSUE_PENALTY_ITEM_CAP, Math.max(0, failUnits - knownFail));
+        const failUnitHi = Math.min(
+          carriedPages * ISSUE_PENALTY_ITEM_CAP,
+          Math.max(0, failUnits - knownFail),
+        );
         const warnUnitHi = Math.min(carriedPages, Math.max(0, warnUnits - knownWarn));
-        const warnUnitLo = warnBound ? Math.min(warnUnitHi, Math.max(0, warnUnits - offCarried)) : 0;
+        const warnUnitLo = warnBound
+          ? Math.min(warnUnitHi, Math.max(0, warnUnits - offCarried))
+          : 0;
 
         estimate.warnings += warnLo;
         estimate.failed += failMass + (warnHi - warnLo);
@@ -426,11 +447,19 @@ export class SampledStoreEstimator {
 
       reportTotals.warnings = Math.max(
         0,
-        reportTotals.warnings - replaced.warnings - otherAsCounted.warnings + otherAsFailures.warnings + estimate.warnings,
+        reportTotals.warnings -
+          replaced.warnings -
+          otherAsCounted.warnings +
+          otherAsFailures.warnings +
+          estimate.warnings,
       );
       reportTotals.failed = Math.max(
         0,
-        reportTotals.failed - replaced.failed - otherAsCounted.failed + otherAsFailures.failed + estimate.failed,
+        reportTotals.failed -
+          replaced.failed -
+          otherAsCounted.failed +
+          otherAsFailures.failed +
+          estimate.failed,
       );
     }
   }

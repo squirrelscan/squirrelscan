@@ -18,22 +18,43 @@ const pageUrl = (i: number) => `${SITE}/p${i}`;
 
 function report(items: CheckItem[], totalPages: number, withPageList = true): AuditReport {
   const check: CheckResult = {
-    name: "contrast", status: "warn", message: `${items.length} item(s)`, items,
+    name: "contrast",
+    status: "warn",
+    message: `${items.length} item(s)`,
+    items,
   };
   const rule: ReportRuleResult = {
     meta: {
-      id: "a11y/color-contrast", name: "Colour contrast", description: "desc", solution: "sol",
-      category: "accessibility", scope: "page", severity: "warning", weight: 1,
+      id: "a11y/color-contrast",
+      name: "Colour contrast",
+      description: "desc",
+      solution: "sol",
+      category: "accessibility",
+      scope: "page",
+      severity: "warning",
+      weight: 1,
     },
     checks: [check],
   };
   return {
-    baseUrl: SITE, timestamp: "2026-09-19T00:00:00.000Z", totalPages,
+    baseUrl: SITE,
+    timestamp: "2026-09-19T00:00:00.000Z",
+    totalPages,
     ...(withPageList
       ? { pages: Array.from({ length: totalPages }, (_, i) => ({ url: pageUrl(i) })) }
       : {}),
-    passed: 0, warnings: 1, failed: 0, ruleResults: { "a11y/color-contrast": rule },
-    healthScore: { overall: 80, categories: [], groups: [], errorCount: 0, warningCount: 1, passedCount: 0 },
+    passed: 0,
+    warnings: 1,
+    failed: 0,
+    ruleResults: { "a11y/color-contrast": rule },
+    healthScore: {
+      overall: 80,
+      categories: [],
+      groups: [],
+      errorCount: 0,
+      warningCount: 1,
+      passedCount: 0,
+    },
   } as unknown as AuditReport;
 }
 
@@ -81,7 +102,11 @@ describe("rendering", () => {
   const collapsible = report([item("#aaa on #bbb", 41)], 45);
 
   test("llm, text and markdown each state the ratio and drop the page list", () => {
-    for (const out of [renderLlm(collapsible), renderText(collapsible), plain(renderMarkdown(collapsible))]) {
+    for (const out of [
+      renderLlm(collapsible),
+      renderText(collapsible),
+      plain(renderMarkdown(collapsible)),
+    ]) {
       expect(out).toContain("Site-wide (41 of 45 pages): #aaa on #bbb");
       // The collapsed list is the whole point: no per-page "from:" lines.
       expect(out).not.toContain("from: /p7");
@@ -171,16 +196,34 @@ describe("no double reporting alongside component fix groups", () => {
     }));
     const rule: ReportRuleResult = {
       meta: {
-        id: "a11y/link-text", name: "Link text", description: "d", solution: "s",
-        category: "accessibility", scope: "page", severity: "warning", weight: 1,
+        id: "a11y/link-text",
+        name: "Link text",
+        description: "d",
+        solution: "s",
+        category: "accessibility",
+        scope: "page",
+        severity: "warning",
+        weight: 1,
       },
       checks,
     };
     return {
-      baseUrl: SITE, timestamp: "2026-09-19T00:00:00.000Z", totalPages,
+      baseUrl: SITE,
+      timestamp: "2026-09-19T00:00:00.000Z",
+      totalPages,
       pages: Array.from({ length: totalPages }, (_, i) => ({ url: pageUrl(i) })),
-      passed: 0, warnings: checks.length, failed: 0, ruleResults: { "a11y/link-text": rule },
-      healthScore: { overall: 80, categories: [], groups: [], errorCount: 0, warningCount: 1, passedCount: 0 },
+      passed: 0,
+      warnings: checks.length,
+      failed: 0,
+      ruleResults: { "a11y/link-text": rule },
+      healthScore: {
+        overall: 80,
+        categories: [],
+        groups: [],
+        errorCount: 0,
+        warningCount: 1,
+        passedCount: 0,
+      },
     } as unknown as AuditReport;
   }
 

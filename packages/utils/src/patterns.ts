@@ -24,10 +24,7 @@ import { getPathname } from "./url";
  * matchesExcludePattern("https://example.com/Blog/post", ["regex:^/blog:i"])  // true (case-insensitive)
  * ```
  */
-export function matchesExcludePattern(
-  url: string,
-  patterns: string[]
-): boolean {
+export function matchesExcludePattern(url: string, patterns: string[]): boolean {
   if (patterns.length === 0) return false;
 
   const pathname = getPathname(url) || url;
@@ -62,11 +59,7 @@ export function matchesExcludePattern(
     }
 
     // Exact segment match: /thank-you/ (must start and end with /)
-    if (
-      pattern.startsWith("/") &&
-      pattern.endsWith("/") &&
-      pattern.length > 1
-    ) {
+    if (pattern.startsWith("/") && pattern.endsWith("/") && pattern.length > 1) {
       const pathToMatch = pattern.slice(0, -1); // Remove trailing slash
       // Match exact path or as directory prefix
       return pathname === pathToMatch || pathname.startsWith(pattern);
@@ -106,12 +99,6 @@ export function excludePatternError(pattern: string): string | null {
  * Common exclusion patterns for pages that are intentionally dead-ends or orphans
  */
 export const COMMON_EXCLUDE_PATTERNS = {
-  deadEnd: [
-    "/thank-you",
-    "/confirmation",
-    "/download",
-    "/success",
-    "/submitted",
-  ],
+  deadEnd: ["/thank-you", "/confirmation", "/download", "/success", "/submitted"],
   orphan: ["/landing-page", "/campaign", "/promo"],
 } as const;

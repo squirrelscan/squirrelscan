@@ -23,10 +23,16 @@ const item = (id: string, origin?: "local") => ({
 });
 
 describe("technologies found only by the local scan, in a cloud section (#1406)", () => {
-  const merged: ReportTechnologies = { ...base, source: "cloud", items: [item("react"), item("svelte", "local"), item("vue", "local")] };
+  const merged: ReportTechnologies = {
+    ...base,
+    source: "cloud",
+    items: [item("react"), item("svelte", "local"), item("vue", "local")],
+  };
 
   test("the summary says how many have no scan history", () => {
-    expect(techLocalOnlyNote(merged)).toBe("2 found only by the local scan of the crawled bundles (no scan history)");
+    expect(techLocalOnlyNote(merged)).toBe(
+      "2 found only by the local scan of the crawled bundles (no scan history)",
+    );
     expect(techChangeSummary(merged)).toContain("No changes since last scan");
     expect(techChangeSummary(merged)).toContain("2 found only by the local scan");
   });
@@ -51,10 +57,7 @@ function report(items: object[]): AuditReport {
 }
 
 describe("every human-readable format marks a local-only technology (#1406)", () => {
-  const r = report([
-    item("react"),
-    { ...item("vue"), name: "Vue", origin: "local" },
-  ]);
+  const r = report([item("react"), { ...item("vue"), name: "Vue", origin: "local" }]);
 
   test("text", () => {
     const out = String(renderText(r as never));
@@ -82,7 +85,10 @@ describe("every human-readable format marks a local-only technology (#1406)", ()
 
 describe("a hostile origin in a loaded report is never emitted (#1406)", () => {
   const hostile = 'local"/><injected/><!--';
-  const r = report([{ ...item("vue"), origin: hostile }, { ...item("react"), origin: "cloud" }]);
+  const r = report([
+    { ...item("vue"), origin: hostile },
+    { ...item("react"), origin: "cloud" },
+  ]);
 
   test("xml and llm emit no origin attribute and no injected element", () => {
     for (const out of [String(renderXml(r as never)), String(renderLlm(r as never))]) {
@@ -132,12 +138,18 @@ describe("a hostile source, truncated reason or first-scan in a loaded report is
 
   test("valid values are kept, hostile reasons dropped", () => {
     const out = String(
-      renderXml(loaded({ source: "local", truncated: { reasons: [evil, "script-limit"], scripts: 1 } })),
+      renderXml(
+        loaded({ source: "local", truncated: { reasons: [evil, "script-limit"], scripts: 1 } }),
+      ),
     );
     expect(out).toContain('<technologies source="local" truncated="script-limit">');
-    const llm = String(renderLlm(loaded({ source: "cloud", firstScan: evil, truncated: undefined })));
+    const llm = String(
+      renderLlm(loaded({ source: "cloud", firstScan: evil, truncated: undefined })),
+    );
     expect(llm).toContain('<technologies source="cloud" first-scan="false"');
-    expect(String(renderLlm(loaded({ source: evil })))).toContain('<technologies first-scan="false"');
+    expect(String(renderLlm(loaded({ source: evil })))).toContain(
+      '<technologies first-scan="false"',
+    );
   });
 
   test("the summary note ignores a reason outside the set", () => {

@@ -189,7 +189,9 @@ export function fetchWebAppManifests(
             naturalHeight: check?.naturalHeight ?? null,
             ...(check?.rateLimited ? { rateLimited: true } : {}),
             ...(check?.wafBlocked ? { wafBlocked: true } : {}),
-            ...(withheld(iconUrl, check?.status, check?.redirectTarget) ? { headersWithheld: true } : {}),
+            ...(withheld(iconUrl, check?.status, check?.redirectTarget)
+              ? { headersWithheld: true }
+              : {}),
           };
         }),
       };

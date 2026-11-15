@@ -122,7 +122,9 @@ const isStatus = (p: Probe, codes: ReadonlySet<number>): boolean => codes.has(p.
  * shell or a form can carry the same markup. A 200 is a block only on wording
  * no ordinary page prints (an Akamai deny reference, an incident id).
  */
-const REFUSAL_STATUS_CODES: ReadonlySet<number> = new Set([...WAF_BLOCK_STATUS_CODES].filter((code) => code !== 200));
+const REFUSAL_STATUS_CODES: ReadonlySet<number> = new Set(
+  [...WAF_BLOCK_STATUS_CODES].filter((code) => code !== 200),
+);
 
 /**
  * The block and challenge shapes a perimeter provider serves, most specific

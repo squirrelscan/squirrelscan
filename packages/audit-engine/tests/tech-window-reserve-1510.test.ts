@@ -5,7 +5,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { buildTechInputs, DEFAULT_TECH_BUNDLE_LIMITS, detectReportTechnologiesMulti } from "../src/technologies";
+import {
+  buildTechInputs,
+  DEFAULT_TECH_BUNDLE_LIMITS,
+  detectReportTechnologiesMulti,
+} from "../src/technologies";
 
 const HOME = "https://example.com/";
 const LOADER = 't.src="https://www.clarity.ms/tag/"+i;';
@@ -38,7 +42,8 @@ function inputsFor({ count, size, target }: Spec, limits = DEFAULT_TECH_BUNDLE_L
 }
 
 const SHAPE: Spec = { count: 36, size: 75_000, target: 31 };
-const ids = (inputs: ReturnType<typeof buildTechInputs>): string[] => detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
+const ids = (inputs: ReturnType<typeof buildTechInputs>): string[] =>
+  detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
 
 describe("a small script late in a crowded page", () => {
   test("its hint literal past the floor head is detected", () => {
@@ -48,13 +53,18 @@ describe("a small script late in a crowded page", () => {
 
   test("it is found wherever it sits in the plan, after the floors would have run out", () => {
     for (const target of [28, 31, 33, 35]) {
-      expect(ids(inputsFor({ ...SHAPE, target }).inputs), `position ${target}`).toContain("clarity");
+      expect(ids(inputsFor({ ...SHAPE, target }).inputs), `position ${target}`).toContain(
+        "clarity",
+      );
     }
   });
 
   test("the page budget still holds: the bodies attached to the page total at most pageBytes", () => {
     const { inputs } = inputsFor(SHAPE);
-    const total = (inputs[0]!.scripts ?? []).reduce((sum, s) => sum + Buffer.byteLength(s.content ?? ""), 0);
+    const total = (inputs[0]!.scripts ?? []).reduce(
+      (sum, s) => sum + Buffer.byteLength(s.content ?? ""),
+      0,
+    );
     expect(total).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
   });
 
@@ -66,9 +76,13 @@ describe("a small script late in a crowded page", () => {
 
   test("it is attached to one page only: a second page that references it does not get a second copy", () => {
     const { scripts } = inputsFor(SHAPE);
-    const html = (src: string[]) => `<!doctype html>${src.map((u) => `<script src="${u}"></script>`).join("")}`;
+    const html = (src: string[]) =>
+      `<!doctype html>${src.map((u) => `<script src="${u}"></script>`).join("")}`;
     const urls = scripts.map((s) => s.url);
-    const withPages = scripts.map((s) => ({ ...s, sourcePages: [HOME, "https://example.com/two"] }));
+    const withPages = scripts.map((s) => ({
+      ...s,
+      sourcePages: [HOME, "https://example.com/two"],
+    }));
     const inputs = buildTechInputs(
       [
         { url: HOME, headers: {}, html: html(urls) },
@@ -86,12 +100,14 @@ describe("a small script late in a crowded page", () => {
 function headed(spec: Spec, limits = DEFAULT_TECH_BUNDLE_LIMITS): number {
   const { inputs, scripts } = inputsFor(spec, limits);
   const bodies = new Map((inputs[0]!.scripts ?? []).map((s) => [s.url, s.content ?? ""]));
-  return scripts.filter((s) => (bodies.get(s.url) ?? "").startsWith(s.content.slice(0, 16 * 1024))).length;
+  return scripts.filter((s) => (bodies.get(s.url) ?? "").startsWith(s.content.slice(0, 16 * 1024)))
+    .length;
 }
 
 describe("the reserve is held only when the floors would not fit (#1510)", () => {
   test("29 to 32 scripts: the floors fit 512 KB (not 448 KB), so every script keeps its head as before", () => {
-    for (const count of [29, 30, 32]) expect(headed({ count, size: 75_000, target: 3 }), `${count} scripts`).toBe(count);
+    for (const count of [29, 30, 32])
+      expect(headed({ count, size: 75_000, target: 3 }), `${count} scripts`).toBe(count);
   });
 
   test("33 scripts do not fit: the reserve holds back 64 KB, so 28 scripts get the head", () => {
@@ -102,8 +118,16 @@ describe("the reserve is held only when the floors would not fit (#1510)", () =>
   test("many small scripts: a script's floor is its own size, so the demand is the real one and the reserve is not held", () => {
     // 40 x 11.5 KB and one big script last: the real floors total 476 KB and fit 512 KB; counting 16 KB for each small
     // script would read 656 KB and hold the reserve, which would starve the last ones.
-    const small = Array.from({ length: 40 }, (_, i) => ({ url: `https://example.com/m${i}.js`, content: filler(11_500, i + 1), sourcePages: [HOME] }));
-    const big = { url: "https://example.com/big.js", content: filler(200_000, 77), sourcePages: [HOME] };
+    const small = Array.from({ length: 40 }, (_, i) => ({
+      url: `https://example.com/m${i}.js`,
+      content: filler(11_500, i + 1),
+      sourcePages: [HOME],
+    }));
+    const big = {
+      url: "https://example.com/big.js",
+      content: filler(200_000, 77),
+      sourcePages: [HOME],
+    };
     const scripts = [...small, big];
     const html = `<!doctype html>${scripts.map((x) => `<script src="${x.url}"></script>`).join("")}`;
     const [home] = buildTechInputs([{ url: HOME, headers: {}, html }], scripts);

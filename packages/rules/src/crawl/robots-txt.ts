@@ -24,7 +24,9 @@ function crawlersStillAllowed(robotsTxt: RobotsTxtData): string[] {
     return [];
   }
   return MAJOR_SEARCH_CRAWLERS.filter((agent) => {
-    const named = robotsTxt.rules.some((group) => group.userAgent.toLowerCase() === agent.toLowerCase());
+    const named = robotsTxt.rules.some(
+      (group) => group.userAgent.toLowerCase() === agent.toLowerCase(),
+    );
     return named && !isRobotsTxtDisallowed(root, robotsTxt, agent);
   });
 }
@@ -181,8 +183,7 @@ export const robotsTxtRule: Rule = {
     // Check for full disallow
     const hasFullDisallow = robotsTxt.rules.some(
       (rule) =>
-        rule.userAgent === "*" &&
-        rule.rules.some((r) => r.type === "disallow" && r.path === "/")
+        rule.userAgent === "*" && rule.rules.some((r) => r.type === "disallow" && r.path === "/"),
     );
 
     const stillAllowed = hasFullDisallow ? crawlersStillAllowed(robotsTxt) : [];
@@ -195,13 +196,15 @@ export const robotsTxtRule: Rule = {
         status: "warn",
         message: "robots.txt blocks crawlers without a group of their own",
         value: `User-agent: * has Disallow: /; still allowed: ${stillAllowed.join(", ")}`,
-        items: stillAllowed.map((agent) => ({ id: agent, label: `User-agent: ${agent} may crawl /` })),
+        items: stillAllowed.map((agent) => ({
+          id: agent,
+          label: `User-agent: ${agent} may crawl /`,
+        })),
       });
     } else if (hasFullDisallow) {
       // Check if there are allow rules that might permit some crawling
       const hasAllowRules = robotsTxt.rules.some(
-        (rule) =>
-          rule.userAgent === "*" && rule.rules.some((r) => r.type === "allow")
+        (rule) => rule.userAgent === "*" && rule.rules.some((r) => r.type === "allow"),
       );
 
       if (!hasAllowRules) {

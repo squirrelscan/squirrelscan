@@ -48,7 +48,9 @@ describe("symbol-only visible text is not a label (#1645)", () => {
     const checks = run('<button aria-label="Gutschein kopieren">HORROR15</button>');
     const fail = failing(checks);
     expect(fail?.message).toBe("1 element(s) where visible text doesn't match accessible name");
-    expect(fail?.items?.[0]?.id).toBe('button: visible="horror15" vs aria-label="gutschein kopieren"');
+    expect(fail?.items?.[0]?.id).toBe(
+      'button: visible="horror15" vs aria-label="gutschein kopieren"',
+    );
   });
 
   test("a page with only a glyph control passes", () => {
@@ -87,7 +89,7 @@ describe("controls that are not rendered are skipped (#1645)", () => {
   test("a control a style may hide but squirrel cannot settle is unconfirmed, not a failure", () => {
     const checks = run(
       `<div class="promo">${mismatch}</div>`,
-      "<style>.promo:hover{display:none}</style>"
+      "<style>.promo:hover{display:none}</style>",
     );
     expect(failing(checks)).toBeUndefined();
     const row = checks.find((c) => c.name === "label-content-name-mismatch-unconfirmed");

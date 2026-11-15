@@ -40,7 +40,12 @@ describe("every format, static and animated", () => {
     const file = fixture("big-icc-46x36.jpg");
     expect(file.length).toBeGreaterThan(32 * 1024);
     // The whole file parses; the first 32 KiB, which is all the check reads, does not.
-    expect(parseImageHeader(file)).toEqual({ format: "jpeg", width: 46, height: 36, animated: false });
+    expect(parseImageHeader(file)).toEqual({
+      format: "jpeg",
+      width: 46,
+      height: 36,
+      animated: false,
+    });
     expect(parseImageHeader(file.subarray(0, 32 * 1024))).toBeNull();
   });
 
@@ -67,19 +72,18 @@ function box(type: string, ...payload: number[][]): number[] {
 }
 
 const FULL_BOX_HEADER = [0, 0, 0, 0];
-const ftyp = (brand: string) => box("ftyp", [...brand].map((c) => c.charCodeAt(0)), u32(0));
+const ftyp = (brand: string) =>
+  box(
+    "ftyp",
+    [...brand].map((c) => c.charCodeAt(0)),
+    u32(0),
+  );
 const ispe = (w: number, h: number) => box("ispe", FULL_BOX_HEADER, u32(w), u32(h));
 
 function avif(opts: { primary?: number; withIpma: boolean }): Uint8Array {
   // Item 1 is a large non-primary item (property 1), item 2 the primary image
   // (property 2): only pitm + ipma can tell them apart.
-  const ipma = box(
-    "ipma",
-    FULL_BOX_HEADER,
-    u32(2),
-    [0, 1, 1, 0x81],
-    [0, 2, 1, 0x82]
-  );
+  const ipma = box("ipma", FULL_BOX_HEADER, u32(2), [0, 1, 1, 0x81], [0, 2, 1, 0x82]);
   const iprp = box("iprp", box("ipco", ispe(400, 300), ispe(41, 27)), opts.withIpma ? ipma : []);
   const pitm = opts.primary ? box("pitm", FULL_BOX_HEADER, [0, opts.primary]) : [];
   return new Uint8Array([...ftyp("avif"), ...box("meta", FULL_BOX_HEADER, pitm, iprp)]);
@@ -101,7 +105,11 @@ describe("AVIF item selection", () => {
   test("an ipma pushed past the bytes read does not hand over another item's size", () => {
     // A large property after the ispes (an ICC profile in `colr`) moves ipma
     // beyond the 32 KiB the check reads, while both ispes stay readable.
-    const colr = box("colr", [..."prof"].map((c) => c.charCodeAt(0)), new Array(40_000).fill(0));
+    const colr = box(
+      "colr",
+      [..."prof"].map((c) => c.charCodeAt(0)),
+      new Array(40_000).fill(0),
+    );
     const ipma = box("ipma", FULL_BOX_HEADER, u32(2), [0, 1, 1, 0x81], [0, 2, 1, 0x82]);
     const iprp = box("iprp", box("ipco", ispe(400, 300), ispe(41, 27), colr), ipma);
     const pitm = box("pitm", FULL_BOX_HEADER, [0, 2]);
@@ -121,13 +129,23 @@ describe("AVIF item selection", () => {
     // Rename the meta box to `free`, so only moov/trak/tkhd is left to read.
     const at = Buffer.from(file).indexOf("meta");
     expect(at).toBeGreaterThan(0);
-    file.set([..."free"].map((c) => c.charCodeAt(0)), at);
-    expect(parseImageHeader(file)).toEqual({ format: "avif", width: 26, height: 14, animated: true });
+    file.set(
+      [..."free"].map((c) => c.charCodeAt(0)),
+      at,
+    );
+    expect(parseImageHeader(file)).toEqual({
+      format: "avif",
+      width: 26,
+      height: 14,
+      animated: true,
+    });
   });
 
   test("an ISO BMFF file that is not AVIF is null", () => {
     expect(parseImageHeader(new Uint8Array([...ftyp("isom"), ...box("moov")]))).toBeNull();
-    expect(parseImageHeader(new Uint8Array([...ftyp("heic"), ...box("meta", FULL_BOX_HEADER)]))).toBeNull();
+    expect(
+      parseImageHeader(new Uint8Array([...ftyp("heic"), ...box("meta", FULL_BOX_HEADER)])),
+    ).toBeNull();
   });
 });
 
@@ -187,7 +205,8 @@ describe("the parser is total", () => {
         if (partial === null) continue;
         expect([partial.width, partial.height]).toEqual([whole.width, whole.height]);
         // Animation is either settled the same way or left open.
-        if (partial.animated !== null) expect<boolean | null>(partial.animated).toBe(whole.animated);
+        if (partial.animated !== null)
+          expect<boolean | null>(partial.animated).toBe(whole.animated);
       }
     }
   });
@@ -202,7 +221,9 @@ describe("the parser is total", () => {
         const flips = 1 + Math.floor(next() * 8);
         for (let f = 0; f < flips; f++) {
           // Bias toward the header, where the parser actually reads.
-          const at = Math.floor(next() * Math.min(mutated.length, next() < 0.8 ? 64 : mutated.length));
+          const at = Math.floor(
+            next() * Math.min(mutated.length, next() < 0.8 ? 64 : mutated.length),
+          );
           mutated[at] = Math.floor(next() * 256);
         }
         expectWellFormed(parseImageHeader(mutated));
@@ -240,7 +261,11 @@ describe("the parser is total", () => {
 
   test("hostile lengths: zero-size and 64-bit boxes, huge PNG chunks, endless GIF blocks", () => {
     // A box claiming size 0 (to end of file) and one claiming 2^64 - 1.
-    const zero = new Uint8Array([...ftyp("avif"), ...u32(0), ...[..."meta"].map((c) => c.charCodeAt(0))]);
+    const zero = new Uint8Array([
+      ...ftyp("avif"),
+      ...u32(0),
+      ...[..."meta"].map((c) => c.charCodeAt(0)),
+    ]);
     expectWellFormed(parseImageHeader(zero));
     const huge = new Uint8Array([
       ...ftyp("avif"),
@@ -254,11 +279,19 @@ describe("the parser is total", () => {
     // A PNG whose second chunk claims 4 GiB.
     const png = fixture("static-37x23.png").slice(0, 33);
     const bigChunk = new Uint8Array([...png, ...u32(0xffffffff), 0x74, 0x45, 0x58, 0x74]);
-    expect(parseImageHeader(bigChunk)).toEqual({ format: "png", width: 37, height: 23, animated: null });
+    expect(parseImageHeader(bigChunk)).toEqual({
+      format: "png",
+      width: 37,
+      height: 23,
+      animated: null,
+    });
 
     // A GIF that is nothing but extension blocks with no terminator.
     const gif = fixture("static-17x9.gif").slice(0, 13);
-    const blocks = new Uint8Array([...gif, ...Array.from({ length: 2000 }, (_, i) => (i % 3 === 0 ? 0x21 : 0xf9))]);
+    const blocks = new Uint8Array([
+      ...gif,
+      ...Array.from({ length: 2000 }, (_, i) => (i % 3 === 0 ? 0x21 : 0xf9)),
+    ]);
     expectWellFormed(parseImageHeader(blocks));
 
     // A JPEG of nothing but fill bytes.

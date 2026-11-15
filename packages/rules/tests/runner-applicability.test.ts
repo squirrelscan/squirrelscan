@@ -33,7 +33,7 @@ const testNamespace: RuleNamespace = { name: "test", rules: [gatedRule] };
 
 function makeRunner(
   siteMetadata?: SiteMetadata,
-  config: Partial<RulesConfig["rules"]> = {}
+  config: Partial<RulesConfig["rules"]> = {},
 ): RuleRunner {
   const config_: RulesConfig = {
     rule_options: {},

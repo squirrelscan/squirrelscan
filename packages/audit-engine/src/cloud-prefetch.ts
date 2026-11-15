@@ -338,11 +338,7 @@ export class CloudPrefetchAccumulator {
   private nextCallId = 0;
 
   /** @internal Record a call as dispatched; pass the id to {@link endCall} when it returns. */
-  beginCall(
-    service: CloudServiceId,
-    units: number,
-    batch?: { index: number; of: number },
-  ): number {
+  beginCall(service: CloudServiceId, units: number, batch?: { index: number; of: number }): number {
     const id = this.nextCallId++;
     this.openCalls.set(id, { service, units, startedAt: Date.now(), ...(batch ? { batch } : {}) });
     return id;

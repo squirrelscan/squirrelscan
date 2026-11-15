@@ -38,18 +38,24 @@ describe("selectDiscoveryProbes (#409)", () => {
   // they stay on when only ax is excluded.
   test("excluding the ax category sends only the security.txt probes and the configured-pages probe", () => {
     // `configured-pages` is read by eeat/about-page and eeat/privacy-policy (#1428).
-    const securityTxt: DiscoveryProbe[] = ["/.well-known/security.txt", "/security.txt", "configured-pages"];
-    expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ax/*"] } })).toEqual(
-      securityTxt,
-    );
+    const securityTxt: DiscoveryProbe[] = [
+      "/.well-known/security.txt",
+      "/security.txt",
+      "configured-pages",
+    ];
+    expect(
+      selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ax/*"] } }),
+    ).toEqual(securityTxt);
     // The legacy `ai` code is an alias of `ax`.
-    expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ai/*"] } })).toEqual(
-      securityTxt,
-    );
+    expect(
+      selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ai/*"] } }),
+    ).toEqual(securityTxt);
   });
 
   test("including only other categories sends none", () => {
-    expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["core/*", "perf/*"] } })).toEqual([]);
+    expect(
+      selectDiscoveryProbes({ enabled: true, rules: { enable: ["core/*", "perf/*"] } }),
+    ).toEqual([]);
   });
 
   test("excluding ax/api-discovery drops only the paths it reads", () => {
@@ -74,7 +80,10 @@ describe("selectDiscoveryProbes (#409)", () => {
     const both = selectDiscoveryProbes({
       enabled: true,
       rules: ALL,
-      ruleOptions: { "ax/agent-blocking": { enabled: false }, "ax/pay-per-crawl": { enabled: false } },
+      ruleOptions: {
+        "ax/agent-blocking": { enabled: false },
+        "ax/pay-per-crawl": { enabled: false },
+      },
     });
     expect(both).not.toContain("agent-access");
   });
@@ -117,7 +126,17 @@ describe("configuredPagePaths (#1428)", () => {
   test("only a pattern that names one path can be requested", () => {
     expect(
       configuredPagePaths({
-        "eeat/about-page": { paths: ["/agentur", "agentur", "regex:^/a", "//evil.test/x", "/with space", "/a?b=1", "/ok/"] },
+        "eeat/about-page": {
+          paths: [
+            "/agentur",
+            "agentur",
+            "regex:^/a",
+            "//evil.test/x",
+            "/with space",
+            "/a?b=1",
+            "/ok/",
+          ],
+        },
         "eeat/privacy-policy": { paths: ["/policies/privacy-policy", "/agentur"] },
         "eeat/contact-page": { paths: ["/kontakt"] },
       }),

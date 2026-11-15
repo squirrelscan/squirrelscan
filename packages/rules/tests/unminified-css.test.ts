@@ -21,7 +21,10 @@ function ctx(css: string): RuleContext {
   } as unknown as RuleContext;
 }
 
-function checkNamed(checks: Awaited<ReturnType<typeof unminifiedCssRule.run>>["checks"], name: string) {
+function checkNamed(
+  checks: Awaited<ReturnType<typeof unminifiedCssRule.run>>["checks"],
+  name: string,
+) {
   return checks.find((c) => c.name === name);
 }
 
@@ -37,14 +40,14 @@ describe("perf/unminified-css — string-aware comment detection (#142)", () => 
       { length: 5 },
       (_, i) => `.s${i}::before{content:"/* not a comment ${i} */"}`,
     ).join("");
-    const { checks } = (await unminifiedCssRule.run(ctx(`${strings}${PADDING}`)));
+    const { checks } = await unminifiedCssRule.run(ctx(`${strings}${PADDING}`));
     expect(checkNamed(checks, "unminified-css")).toBeUndefined();
     expect(checkNamed(checks, "minified-css")?.status).toBe("pass");
   });
 
   test("true positive preserved: real CSS comments are still counted and flagged", async () => {
     const comments = Array.from({ length: 5 }, (_, i) => `/* section ${i} */`).join("");
-    const { checks } = (await unminifiedCssRule.run(ctx(`${comments}${PADDING}`)));
+    const { checks } = await unminifiedCssRule.run(ctx(`${comments}${PADDING}`));
     const warn = checkNamed(checks, "unminified-css");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.[0]?.meta?.reason).toBe("5 comments");
@@ -55,7 +58,7 @@ describe("perf/unminified-css — string-aware comment detection (#142)", () => 
       { length: 5 },
       (_, i) => `.m${i}::after{content:"/* x */"}/* real ${i} */`,
     ).join("");
-    const { checks } = (await unminifiedCssRule.run(ctx(`${mixed}${PADDING}`)));
+    const { checks } = await unminifiedCssRule.run(ctx(`${mixed}${PADDING}`));
     const warn = checkNamed(checks, "unminified-css");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.[0]?.meta?.reason).toBe("5 comments");

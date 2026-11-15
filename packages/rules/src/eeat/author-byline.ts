@@ -67,9 +67,7 @@ export const authorBylineRule: Rule = {
       // checks miss Yoast-style @graph sites).
       let hasAuthor = page.parsed.author !== null;
       if (!hasAuthor && page.parsed.schema.raw) {
-        hasAuthor = flattenJsonLdNodes(page.parsed.schema.raw).some(
-          (s) => s["author"]
-        );
+        hasAuthor = flattenJsonLdNodes(page.parsed.schema.raw).some((s) => s["author"]);
       }
       // Fall back to visible byline markup (hCard `.author.vcard .fn`,
       // `rel="author"`, etc.) for themes (Kadence et al.) that omit JSON-LD

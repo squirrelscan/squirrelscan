@@ -189,7 +189,7 @@ export const optionsSchema = z.object({
     .array(z.string())
     .default([])
     .describe(
-      "Hosts whose images are not hotlinks (your own CDN or a partner). An entry matches the host itself and its subdomains, e.g. images.example-partner.com"
+      "Hosts whose images are not hotlinks (your own CDN or a partner). An entry matches the host itself and its subdomains, e.g. images.example-partner.com",
     ),
   check_social_images: z
     .boolean()
@@ -278,7 +278,16 @@ function connectedHosts(doc: Document, base: string): Set<string> {
   for (const el of doc.querySelectorAll("script[src]")) add(el.getAttribute("src"));
   for (const el of doc.querySelectorAll("link[href]")) {
     const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
-    if (rel.some((r) => r === "stylesheet" || r === "preconnect" || r === "dns-prefetch" || r === "preload" || r === "modulepreload")) {
+    if (
+      rel.some(
+        (r) =>
+          r === "stylesheet" ||
+          r === "preconnect" ||
+          r === "dns-prefetch" ||
+          r === "preload" ||
+          r === "modulepreload",
+      )
+    ) {
       add(el.getAttribute("href"));
     }
   }
@@ -311,7 +320,15 @@ export const hotlinkedRule: Rule = {
     if (!pageHost) return { checks: [] };
     // A page on localhost or a loopback address is a dev server: every image host is "another site".
     if (isLoopbackHost(pageHost)) {
-      return { checks: [{ name: "hotlinked-images", status: "skipped", message: "Page is served from a local address" }] };
+      return {
+        checks: [
+          {
+            name: "hotlinked-images",
+            status: "skipped",
+            message: "Page is served from a local address",
+          },
+        ],
+      };
     }
     // Image URLs resolve against `<base href>` when the page sets one.
     let base = pageUrl;
@@ -334,8 +351,14 @@ export const hotlinkedRule: Rule = {
     const isHotlinkHost = (host: string, path = "/"): boolean => {
       if (firstParty.has(registrableDomain(host))) return false;
       if (matchesAny(host, KNOWN_IMAGE_HOSTS) || matchesAny(host, allowed)) return false;
-      if (matchesAny(host, AVATAR_HOSTS) || matchesAny(host, BADGE_HOSTS) || matchesAny(host, TRACKING_HOSTS)) return false;
-      if (TRACKING_PIXEL_PATHS.some(([h, re]) => hostMatches(host, h) && re.test(path))) return false;
+      if (
+        matchesAny(host, AVATAR_HOSTS) ||
+        matchesAny(host, BADGE_HOSTS) ||
+        matchesAny(host, TRACKING_HOSTS)
+      )
+        return false;
+      if (TRACKING_PIXEL_PATHS.some(([h, re]) => hostMatches(host, h) && re.test(path)))
+        return false;
       if (connected.has(host)) return false;
       return true;
     };
@@ -348,7 +371,8 @@ export const hotlinkedRule: Rule = {
       // A badge, widget or seal is served live by the other site on purpose.
       if (BADGE_WORDS.test(image.path) || BADGE_WORDS.test(alt)) return true;
       contentImages++;
-      if (isHotlinkHost(image.host, image.path)) perHost.set(image.host, (perHost.get(image.host) ?? 0) + 1);
+      if (isHotlinkHost(image.host, image.path))
+        perHost.set(image.host, (perHost.get(image.host) ?? 0) + 1);
       return true;
     };
 
@@ -413,7 +437,8 @@ export const hotlinkedRule: Rule = {
       const hotlinked: Array<{ id: string; label: string }> = [];
       for (const [name, raw] of shared) {
         const image = raw ? parseImage(raw, base) : null;
-        if (image && isHotlinkHost(image.host, image.path)) hotlinked.push({ id: image.host, label: name });
+        if (image && isHotlinkHost(image.host, image.path))
+          hotlinked.push({ id: image.host, label: name });
       }
       if (hotlinked.length > 0) {
         checks.push({

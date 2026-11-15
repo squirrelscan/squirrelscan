@@ -3,12 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set(["gif", "jpeg", "jpg", "png", "webp"]);
-const SUPPORTED_IMAGE_TYPES = new Set([
-  "image/gif",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+const SUPPORTED_IMAGE_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 
 function imageExtension(imageUrl: string, pageUrl: string): string | null {
   try {
@@ -115,9 +110,7 @@ export const ogImageSizeRule: Rule = {
 
       // Always include which image we're talking about — a bare page-level
       // warning leaves the user hunting for the offending file
-      const imageItem = imageUrl
-        ? [{ id: imageUrl, label: `og:image: ${imageUrl}` }]
-        : undefined;
+      const imageItem = imageUrl ? [{ id: imageUrl, label: `og:image: ${imageUrl}` }] : undefined;
 
       if (width > 0 && height > 0) {
         if (width >= 1200 && height >= 630) {

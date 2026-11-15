@@ -71,7 +71,13 @@ const count = (haystack: string, needle: string) => haystack.split(needle).lengt
 describe("a11y item source rows (pub#837)", () => {
   test("no format points at a list elsewhere", () => {
     for (const r of [PER_PAGE, PUBLISHED]) {
-      for (const out of [renderHtml(r), renderMarkdown(r), renderText(r), renderLlm(r), renderXml(r)]) {
+      for (const out of [
+        renderHtml(r),
+        renderMarkdown(r),
+        renderText(r),
+        renderLlm(r),
+        renderXml(r),
+      ]) {
         expect(out).not.toContain("see full list");
       }
     }

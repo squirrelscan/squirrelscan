@@ -7,7 +7,11 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 import { parsePage } from "@squirrelscan/parser";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 
-import { conflictingIndexSignalsRule, evaluateIndexSignals, sitemapUrlSet } from "../src/crawl/conflicting-index-signals";
+import {
+  conflictingIndexSignalsRule,
+  evaluateIndexSignals,
+  sitemapUrlSet,
+} from "../src/crawl/conflicting-index-signals";
 import { noindexInSitemapRule } from "../src/crawl/noindex-in-sitemap";
 import type { ParsedPage, RuleContext } from "../src/types";
 
@@ -150,7 +154,13 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
 describe("the sitemap is matched on normalized URLs (both engines share this)", () => {
   test("a sitemap entry with a trailing slash, a fragment or a different slash form still matches the page", () => {
     const sitemaps = {
-      discovered: [{ url: "https://x.test/sitemap.xml", type: "urlset", urls: [{ loc: "https://x.test/a/" }, { loc: "https://x.test/b#top" }] }],
+      discovered: [
+        {
+          url: "https://x.test/sitemap.xml",
+          type: "urlset",
+          urls: [{ loc: "https://x.test/a/" }, { loc: "https://x.test/b#top" }],
+        },
+      ],
     } as never;
     const urls = sitemapUrlSet(sitemaps);
     const page = (url: string) => ({
@@ -166,4 +176,3 @@ describe("the sitemap is matched on normalized URLs (both engines share this)", 
     expect(evaluateIndexSignals([page("https://x.test/c")], urls, null).kind).toBe("none");
   });
 });
-

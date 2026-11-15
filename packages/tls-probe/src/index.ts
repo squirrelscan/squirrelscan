@@ -137,8 +137,8 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
     ...(site
       ? {
           allowPrivateTarget: (url: URL) =>
-            url.hostname.replace(/^\[|\]$/g, "").toLowerCase() ===
-              site.hostname && portOf(url) === site.port,
+            url.hostname.replace(/^\[|\]$/g, "").toLowerCase() === site.hostname &&
+            portOf(url) === site.port,
         }
       : {}),
   };
@@ -152,8 +152,7 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
       };
     }
     const port = target.port ?? 443;
-    const timeoutMs =
-      target.timeoutMs ?? options.timeoutMs ?? TLS_PROBE_TIMEOUT_MS;
+    const timeoutMs = target.timeoutMs ?? options.timeoutMs ?? TLS_PROBE_TIMEOUT_MS;
     const proxy = proxyForTarget(hostname, port, options.proxyUrl);
     if (options.requireProxy === true && proxy.kind === "direct") {
       return {
@@ -254,11 +253,7 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
         timeoutMs: remainingMs,
         ca: options.ca,
       });
-      if (
-        result.kind !== "unreachable" ||
-        !CONNECT_FAILURE_CODES.has(result.code)
-      )
-        return result;
+      if (result.kind !== "unreachable" || !CONNECT_FAILURE_CODES.has(result.code)) return result;
     }
     return (
       result ?? {
@@ -290,7 +285,7 @@ async function vetAddresses(
   hostname: string,
   port: number,
   policy: EgressPolicy,
-  signal: AbortSignal
+  signal: AbortSignal,
 ): Promise<string[]> {
   const literal = isIP(hostname) === 6 ? `[${hostname}]` : hostname;
   const target = `https://${literal}:${port}/`;
@@ -314,9 +309,7 @@ async function vetAddresses(
   }
   const vetted = await vetEgressTarget(target, policy, signal);
   if (vetted === null) return [parsed.hostname.replace(/^\[|\]$/g, "")];
-  return vetted.urls.map((url) =>
-    new URL(url).hostname.replace(/^\[|\]$/g, "")
-  );
+  return vetted.urls.map((url) => new URL(url).hostname.replace(/^\[|\]$/g, ""));
 }
 
 function handshake(args: {
@@ -344,7 +337,7 @@ function handshake(args: {
           code: "ETIMEDOUT",
           message: `no TLS handshake with ${hostname} within ${timeoutMs}ms`,
         }),
-      timeoutMs
+      timeoutMs,
     );
 
     let open: TLSSocket;
@@ -401,9 +394,7 @@ function connectForFacts(options: {
  * type or signature algorithm. Undefined fields when the runtime cannot parse the certificate (the facts
  * the peer certificate itself holds still apply).
  */
-function certificateExtras(
-  raw: Uint8Array | undefined
-): TlsCertificateExtras | undefined {
+function certificateExtras(raw: Uint8Array | undefined): TlsCertificateExtras | undefined {
   if (!raw) return undefined;
   try {
     const x509 = new X509Certificate(raw);
@@ -411,11 +402,8 @@ function certificateExtras(
     const details = key.asymmetricKeyDetails;
     return {
       keyType: key.asymmetricKeyType,
-      ...(typeof details?.modulusLength === "number"
-        ? { keyBits: details.modulusLength }
-        : {}),
-      signatureAlgorithm: (x509 as unknown as { signatureAlgorithm?: string })
-        .signatureAlgorithm,
+      ...(typeof details?.modulusLength === "number" ? { keyBits: details.modulusLength } : {}),
+      signatureAlgorithm: (x509 as unknown as { signatureAlgorithm?: string }).signatureAlgorithm,
     };
   } catch {
     return undefined;
@@ -430,15 +418,14 @@ function certificateExtras(
 function readServedCertificate(
   open: TLSSocket,
   hostname: string,
-  finish: (result: TlsProbe) => void
+  finish: (result: TlsProbe) => void,
 ): void {
   open.once("secureConnect", () => {
     let certificate: ReturnType<typeof readPeerCertificate>;
     try {
-      const peer =
-        open.getPeerCertificate() as unknown as RawPeerCertificate & {
-          raw?: Uint8Array;
-        };
+      const peer = open.getPeerCertificate() as unknown as RawPeerCertificate & {
+        raw?: Uint8Array;
+      };
       certificate = readPeerCertificate(peer, certificateExtras(peer.raw));
     } catch (error) {
       finish({
@@ -463,8 +450,7 @@ function readServedCertificate(
       certificate,
       trusted: open.authorized === true,
       ...(trustError !== undefined ? { trustError } : {}),
-      ...(typeof protocol === "string" &&
-      /^TLSv1(\.[0-3])?$|^SSLv3$/.test(protocol)
+      ...(typeof protocol === "string" && /^TLSv1(\.[0-3])?$|^SSLv3$/.test(protocol)
         ? { protocol }
         : {}),
     });
@@ -487,12 +473,7 @@ type ProxyDecision =
   | { kind: "unsupported"; reason: string };
 
 /** The proxy variables a TLS target consults, in the order the runtime's fetch reads them. */
-const PROXY_ENV_NAMES = [
-  "HTTPS_PROXY",
-  "https_proxy",
-  "HTTP_PROXY",
-  "http_proxy",
-] as const;
+const PROXY_ENV_NAMES = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"] as const;
 
 /**
  * Whether the handshake to `hostname:port` goes through an environment proxy,
@@ -500,17 +481,11 @@ const PROXY_ENV_NAMES = [
  * because the proxy is not one this probe speaks to. A tunnel needs an
  * `http:` proxy URL; `https:` and `socks` proxies are reported, not guessed at.
  */
-export function proxyForTarget(
-  hostname: string,
-  port: number,
-  proxyUrl?: string
-): ProxyDecision {
+export function proxyForTarget(hostname: string, port: number, proxyUrl?: string): ProxyDecision {
   const explicit = proxyUrl !== undefined && proxyUrl.trim() !== "";
   const raw = explicit
     ? proxyUrl.trim()
-    : PROXY_ENV_NAMES.map((name) => (process.env[name] ?? "").trim()).find(
-        (value) => value !== ""
-      );
+    : PROXY_ENV_NAMES.map((name) => (process.env[name] ?? "").trim()).find((value) => value !== "");
   if (raw === undefined) return { kind: "direct" };
   if (!explicit && noProxyMatches(hostname, port)) return { kind: "direct" };
   const where = explicit ? "configured" : "set in the environment";
@@ -551,11 +526,7 @@ function noProxyMatches(hostname: string, port: number): boolean {
     if (entry === "*") return true;
     let entryPort: number | undefined;
     const portMatch = /^(.*):(\d{1,5})$/.exec(entry);
-    if (
-      portMatch?.[1] !== undefined &&
-      portMatch[2] !== undefined &&
-      isIP(entry) === 0
-    ) {
+    if (portMatch?.[1] !== undefined && portMatch[2] !== undefined && isIP(entry) === 0) {
       entry = portMatch[1];
       entryPort = Number(portMatch[2]);
     }
@@ -599,8 +570,7 @@ function tunnelHandshake(args: {
       raw?.destroy();
       resolve(result);
     };
-    const fail = (code: string, message: string) =>
-      finish({ kind: "unreachable", code, message });
+    const fail = (code: string, message: string) => finish({ kind: "unreachable", code, message });
     // Two stalls, told apart by PHASE: the proxy never answered CONNECT (the proxy's), or the tunnel
     // was up and the handshake through it never finished (the audited host's).
     const timer = setTimeout(
@@ -608,17 +578,16 @@ function tunnelHandshake(args: {
         secure
           ? fail(
               "PROXY_TLS_TIMEOUT",
-              `no TLS handshake with ${hostname} through the proxy ${proxyName} within ${timeoutMs}ms`
+              `no TLS handshake with ${hostname} through the proxy ${proxyName} within ${timeoutMs}ms`,
             )
           : fail(
               "PROXY_CONNECT_TIMEOUT",
-              `the proxy ${proxyName} did not answer CONNECT within ${timeoutMs}ms`
+              `the proxy ${proxyName} did not answer CONNECT within ${timeoutMs}ms`,
             ),
-      timeoutMs
+      timeoutMs,
     );
 
-    const authority =
-      isIP(address) === 6 ? `[${address}]:${port}` : `${address}:${port}`;
+    const authority = isIP(address) === 6 ? `[${address}]:${port}` : `${address}:${port}`;
     let credentials = "";
     if (proxy.username !== "") {
       try {
@@ -627,7 +596,7 @@ function tunnelHandshake(args: {
         // A malformed percent escape in the proxy URL: the rule says so, it does not throw.
         fail(
           "PROXY_BAD_URL",
-          "the proxy URL in the environment has credentials that cannot be decoded"
+          "the proxy URL in the environment has credentials that cannot be decoded",
         );
         return;
       }
@@ -641,12 +610,12 @@ function tunnelHandshake(args: {
       if (secure) return; // the TLS layer reports its own errors
       fail(
         "PROXY_UNREACHABLE",
-        `the proxy ${proxyName} could not be reached: ${error.code ?? error.message}`
+        `the proxy ${proxyName} could not be reached: ${error.code ?? error.message}`,
       );
     });
     socket.once("connect", () => {
       socket.write(
-        `CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n${credentials}Proxy-Connection: keep-alive\r\n\r\n`
+        `CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n${credentials}Proxy-Connection: keep-alive\r\n\r\n`,
       );
     });
 
@@ -656,36 +625,27 @@ function tunnelHandshake(args: {
       const end = head.indexOf("\r\n\r\n");
       if (end === -1) {
         if (head.length > MAX_CONNECT_REPLY_BYTES) {
-          fail(
-            "PROXY_BAD_REPLY",
-            `the proxy ${proxyName} sent an unreadable answer to CONNECT`
-          );
+          fail("PROXY_BAD_REPLY", `the proxy ${proxyName} sent an unreadable answer to CONNECT`);
         }
         return;
       }
       socket.off("data", onData);
       const status = /^HTTP\/1\.[01] (\d{3})/.exec(head);
       if (!status) {
-        fail(
-          "PROXY_BAD_REPLY",
-          `the proxy ${proxyName} sent an unreadable answer to CONNECT`
-        );
+        fail("PROXY_BAD_REPLY", `the proxy ${proxyName} sent an unreadable answer to CONNECT`);
         return;
       }
       const code = Number(status[1]);
       if (code < 200 || code > 299) {
         fail(
           `PROXY_CONNECT_${code}`,
-          `the proxy ${proxyName} refused CONNECT to ${authority} with status ${code}`
+          `the proxy ${proxyName} refused CONNECT to ${authority} with status ${code}`,
         );
         return;
       }
       // Bytes after the reply head would belong to the tunnel; a proxy sends none before TLS.
       if (head.length > end + 4) {
-        fail(
-          "PROXY_BAD_REPLY",
-          `the proxy ${proxyName} sent data before the TLS handshake`
-        );
+        fail("PROXY_BAD_REPLY", `the proxy ${proxyName} sent data before the TLS handshake`);
         return;
       }
       let opened: TLSSocket;
@@ -712,16 +672,14 @@ function tunnelHandshake(args: {
 function isAuditedHostOrCounterpart(
   hostname: string,
   port: number,
-  site: { hostname: string; port: string } | undefined
+  site: { hostname: string; port: string } | undefined,
 ): boolean {
   if (site === undefined || String(port) !== site.port) return false;
   const host = hostname.toLowerCase();
   return host === site.hostname || host === wwwVariant(site.hostname);
 }
 
-function siteOrigin(
-  siteUrl: string | undefined
-): { hostname: string; port: string } | undefined {
+function siteOrigin(siteUrl: string | undefined): { hostname: string; port: string } | undefined {
   if (!siteUrl) return undefined;
   try {
     const url = new URL(siteUrl);

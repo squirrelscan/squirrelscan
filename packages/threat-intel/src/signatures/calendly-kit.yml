@@ -33,7 +33,7 @@ strings:
     target: html
   # "Updated"/"Verify" Calendly doorway titles seen across the campaign.
   doorway_title:
-    regex: '(clickfunnels|sales funnel|make money online|kajabi).{0,40}(tips|best|review|guide|funnel)'
+    regex: "(clickfunnels|sales funnel|make money online|kajabi).{0,40}(tips|best|review|guide|funnel)"
     target: title
     nocase: true
 # Calendly branding AND a kit tell — the injected credential overlay, the

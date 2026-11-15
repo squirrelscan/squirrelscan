@@ -52,7 +52,10 @@ describe("agent skills manifest", () => {
   });
 
   test("the bundled skills are complete, named for their directory and within the limits", () => {
-    expect(AGENT_SKILLS_BUNDLE.map((s) => s.name).sort()).toEqual(["audit-website", "squirrelscan"]);
+    expect(AGENT_SKILLS_BUNDLE.map((s) => s.name).sort()).toEqual([
+      "audit-website",
+      "squirrelscan",
+    ]);
     for (const skill of AGENT_SKILLS_BUNDLE) {
       expect(skill.frontmatter.name).toBe(skill.name);
       expect(typeof skill.frontmatter.description).toBe("string");

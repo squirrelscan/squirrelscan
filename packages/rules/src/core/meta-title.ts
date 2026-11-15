@@ -93,7 +93,12 @@ export const metaTitleRule: Rule = {
         items: label("under", opts.min_length),
       });
     } else {
-      checks.push({ name: "meta-title-too-short", status: "pass", message: "Title is long enough", value: title });
+      checks.push({
+        name: "meta-title-too-short",
+        status: "pass",
+        message: "Title is long enough",
+        value: title,
+      });
     }
     if (tooLong) {
       checks.push({
@@ -105,7 +110,12 @@ export const metaTitleRule: Rule = {
         items: label("over", opts.max_length),
       });
     } else {
-      checks.push({ name: "meta-title-too-long", status: "pass", message: "Title is short enough", value: title });
+      checks.push({
+        name: "meta-title-too-long",
+        status: "pass",
+        message: "Title is short enough",
+        value: title,
+      });
     }
 
     return { checks };

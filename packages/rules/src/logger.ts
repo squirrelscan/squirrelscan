@@ -17,7 +17,11 @@ export const logger = {
   warn: (_message: string, _data?: Record<string, unknown>) => {},
   error: (_message: string, ..._args: unknown[]) => {},
   withTrace: <T>(_name: string, fn: () => T, _meta?: () => Record<string, unknown>): T => fn(),
-  withTraceAsync: async <T>(_name: string, fn: () => Promise<T>, _meta?: () => Record<string, unknown>): Promise<T> => fn(),
+  withTraceAsync: async <T>(
+    _name: string,
+    fn: () => Promise<T>,
+    _meta?: () => Record<string, unknown>,
+  ): Promise<T> => fn(),
   traceStart: (_name: string): string => "",
   traceEnd: (_spanId: string, _data?: Record<string, unknown>) => {},
 };

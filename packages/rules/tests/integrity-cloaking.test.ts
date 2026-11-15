@@ -63,13 +63,13 @@ describe("integrity/cloaking", () => {
   });
 
   test("pass when probe ran but found no suspicious paths (empty array)", async () => {
-    const checks = (await run([]));
+    const checks = await run([]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
   });
 
   test("fail on UA cloaking (status flip)", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({
         url: `${SITE}/hidden`,
         defaultStatus: 403,
@@ -77,7 +77,7 @@ describe("integrity/cloaking", () => {
         uaSimilarity: 0,
         uaCloaking: true,
       }),
-    ]));
+    ]);
     const fail = checks.find((c) => c.status === "fail");
     expect(fail).toBeDefined();
     expect(fail!.name).toBe("cloaking");
@@ -86,14 +86,14 @@ describe("integrity/cloaking", () => {
   });
 
   test("fail on UA cloaking (low text similarity)", async () => {
-    const checks = (await run([probe({ url: `${SITE}/x`, uaSimilarity: 0.21, uaCloaking: true })]));
+    const checks = await run([probe({ url: `${SITE}/x`, uaSimilarity: 0.21, uaCloaking: true })]);
     const fail = checks.find((c) => c.status === "fail");
     expect(fail).toBeDefined();
     expect(fail!.value).toContain("21% similar");
   });
 
   test("warn on token-gating (no UA cloaking)", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({
         url: `${SITE}/g`,
         tokenGated: true,
@@ -101,7 +101,7 @@ describe("integrity/cloaking", () => {
         queryStatus: 200,
         querySimilarity: 0.1,
       }),
-    ]));
+    ]);
     expect(checks.find((c) => c.status === "fail")).toBeUndefined();
     const warn = checks.find((c) => c.status === "warn");
     expect(warn).toBeDefined();
@@ -109,26 +109,26 @@ describe("integrity/cloaking", () => {
   });
 
   test("token-gating not double-reported when page also UA-cloaks", async () => {
-    const checks = (await run([probe({ url: `${SITE}/both`, uaCloaking: true, tokenGated: true })]));
+    const checks = await run([probe({ url: `${SITE}/both`, uaCloaking: true, tokenGated: true })]);
     expect(checks.find((c) => c.status === "fail")).toBeDefined();
     expect(checks.find((c) => c.status === "warn")).toBeUndefined();
   });
 
   test("pass when probed paths are all clean", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({ url: `${SITE}/a` }),
       probe({ url: `${SITE}/b`, reason: "recent-lastmod" }),
-    ]));
+    ]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
     expect(checks[0]!.message).toContain("2 suspicious path");
   });
 
   test("reports both fail and warn when distinct pages diverge differently", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({ url: `${SITE}/cloaked`, uaCloaking: true }),
       probe({ url: `${SITE}/gated`, tokenGated: true }),
-    ]));
+    ]);
     expect(checks.find((c) => c.status === "fail")).toBeDefined();
     expect(checks.find((c) => c.status === "warn")).toBeDefined();
   });

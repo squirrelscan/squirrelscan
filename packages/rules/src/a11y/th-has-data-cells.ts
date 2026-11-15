@@ -106,9 +106,7 @@ export const thHasDataCellsRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const tables = doc.querySelectorAll(
-      "table:not([role='presentation']):not([role='none'])"
-    );
+    const tables = doc.querySelectorAll("table:not([role='presentation']):not([role='none'])");
 
     if (tables.length === 0) {
       checks.push({
@@ -168,9 +166,7 @@ export const thHasDataCellsRule: Rule = {
           id: el.textContent?.trim().slice(0, 30) || `row ${r + 1}, col ${c + 1}`,
         })),
         details:
-          orphanedHeaders.length > 10
-            ? { additional: orphanedHeaders.length - 10 }
-            : undefined,
+          orphanedHeaders.length > 10 ? { additional: orphanedHeaders.length - 10 } : undefined,
       });
     } else {
       checks.push({

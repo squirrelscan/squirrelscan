@@ -127,7 +127,14 @@ export interface CollectedPageSignal {
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
    */
-  timedOut?: { budgetMs: number; ruleIds: string[]; /** Observed ms per rule id before it was stopped (pub#960). */ elapsedMs?: Record<string, number> };
+  timedOut?: {
+    budgetMs: number;
+    ruleIds: string[];
+    /** Observed ms per rule id before it was stopped (pub#960). */ elapsedMs?: Record<
+      string,
+      number
+    >;
+  };
 }
 
 /** The collected per-page signals for one crawl, in page-stream (crawl) order. */
@@ -166,7 +173,10 @@ export function detachAnchors(a: PageAnchorSignal | null): PageAnchorSignal | nu
 /** The hreflang signal with every string copied out of the page. */
 export function detachHreflang(h: HreflangPageSignal): HreflangPageSignal {
   return {
-    alternates: h.alternates.map((a) => ({ hreflang: detached(a.hreflang), href: detached(a.href) })),
+    alternates: h.alternates.map((a) => ({
+      hreflang: detached(a.hreflang),
+      href: detached(a.href),
+    })),
     noindex: h.noindex,
     canonical: h.canonical === null ? null : detached(h.canonical),
   };
@@ -253,7 +263,13 @@ export function buildCollectedPageSignal(input: {
       out = runWithinBudget(fn, budgetMs);
     } catch (e) {
       if (!(e instanceof RuleTimeoutError)) throw e;
-      logger.warn("rule timed out", { ruleId, scope: "collect", pageUrl: url, budgetMs, elapsedMs: e.elapsedMs });
+      logger.warn("rule timed out", {
+        ruleId,
+        scope: "collect",
+        pageUrl: url,
+        budgetMs,
+        elapsedMs: e.elapsedMs,
+      });
       if (!timedOutRuleIds.includes(ruleId)) timedOutRuleIds.push(ruleId);
       if (e.elapsedMs !== undefined) timedOutElapsedMs[ruleId] = e.elapsedMs;
       out = fallback;
@@ -278,7 +294,7 @@ export function buildCollectedPageSignal(input: {
   const byteSignal = timed(
     "perf/total-byte-weight",
     { inlineCssLen: 0, inlineJsLen: 0, externalCssCount: 0, externalJsCount: 0, imageCount: 0 },
-    () => extractPageByteSignal(doc)
+    () => extractPageByteSignal(doc),
   );
 
   // The scan's findings live outside the budgeted call: a scan stopped at the budget keeps what it found before the stop
@@ -289,7 +305,9 @@ export function buildCollectedPageSignal(input: {
   const signal: CollectedPageSignal = {
     url,
     secrets: scanned.secrets,
-    ...(scanned.omitted > 0 ? { secretsOmitted: scanned.omitted, secretsOmittedSerious: scanned.omittedSerious } : {}),
+    ...(scanned.omitted > 0
+      ? { secretsOmitted: scanned.omitted, secretsOmittedSerious: scanned.omittedSerious }
+      : {}),
     inlineCssLen: byteSignal.inlineCssLen,
     inlineJsLen: byteSignal.inlineJsLen,
     htmlBytes,
@@ -304,21 +322,27 @@ export function buildCollectedPageSignal(input: {
     fingerprint:
       input.fingerprint !== undefined
         ? input.fingerprint
-        : detachFingerprint(timed("integrity/template-discontinuity", null, () => fingerprintPage(parsed, url))),
+        : detachFingerprint(
+            timed("integrity/template-discontinuity", null, () => fingerprintPage(parsed, url)),
+          ),
     signals: timed("integrity/orphan-page", [], () => [...detectPageSignals(signalCtx)]),
-    scriptSrcs: detachedList(timed("adblock/blocked-links", [] as string[], () => pageScriptSrcs(doc))),
+    scriptSrcs: detachedList(
+      timed("adblock/blocked-links", [] as string[], () => pageScriptSrcs(doc)),
+    ),
     subprocessorMatch: timed("legal/subprocessor-disclosure", null, () =>
-      matchSubprocessorLink(doc, url)
+      matchSubprocessorLink(doc, url),
     ),
     commercialOffer: timed("legal/subprocessor-disclosure", false, () =>
-      hasCommercialOfferLink(doc)
+      hasCommercialOfferLink(doc),
     ),
     anchors: detachAnchors(
-      timed("links/broken-anchors", null, () => buildPageAnchorSignal({ parsed, rendered: input.rendered === true }))
+      timed("links/broken-anchors", null, () =>
+        buildPageAnchorSignal({ parsed, rendered: input.rendered === true }),
+      ),
     ),
     inPageSections: timed("eeat/about-page", null, () => buildInPageSectionSignal(doc)),
     misspellings: timed("content/common-misspellings", { english: false, occurrences: [] }, () =>
-      scanPageForMisspellings(doc)
+      scanPageForMisspellings(doc),
     ),
     // A browser-rendered page has its copy in the script that rendered it, by necessity: no sentences.
     contentSentences:
@@ -326,11 +350,13 @@ export function buildCollectedPageSignal(input: {
         ? []
         : timed("perf/content-in-js-bundle", [] as string[], () => extractContentSentences(doc)),
     ...(input.rendered === true ? { contentRendered: true as const } : {}),
-    edgeMarkers: timed("perf/bad-caching", [] as string[], () => (hasJavaScriptDetections(doc) ? ["cf-jsd"] : [])),
+    edgeMarkers: timed("perf/bad-caching", [] as string[], () =>
+      hasJavaScriptDetections(doc) ? ["cf-jsd"] : [],
+    ),
     // Strings cut from the page are copied so the record does not keep it (#1565).
     hreflang: detachHreflang(buildHreflangSignal(parsed, input.headers, url)),
     contentFingerprint: timed("content/duplicate-content", null as ContentFingerprint | null, () =>
-      fingerprintForPage(doc, url, finalUrl)
+      fingerprintForPage(doc, url, finalUrl),
     ),
   };
   // The one record serves both rules: a timeout is reported against both.
@@ -347,15 +373,28 @@ export function buildCollectedPageSignal(input: {
  * the site had no room for are counted in `secretsOmitted`. The record the rule cache stores is the page's own, untouched:
  * the decision depends on the pages before it, so it belongs to this crawl and not to the page.
  */
-export function applySiteFindingBudget(signal: CollectedPageSignal, budget: SiteFindingBudget): CollectedPageSignal {
+export function applySiteFindingBudget(
+  signal: CollectedPageSignal,
+  budget: SiteFindingBudget,
+): CollectedPageSignal {
   if (signal.secrets.length === 0) return signal;
   const admitted = budget.admit(signal.secrets);
   if (admitted.omitted === 0 && admitted.secrets.length === signal.secrets.length) return signal;
   const omitted = (signal.secretsOmitted ?? 0) + admitted.omitted;
   const { secretsOmitted: _a, secretsOmittedSerious: _b, ...rest } = signal;
   void [_a, _b];
-  const serious = admitted.omittedSerious || (signal.secretsOmitted ? (signal.secretsOmittedSerious ?? true) : false);
-  return { ...rest, secrets: admitted.secrets, ...(omitted > 0 ? { secretsOmitted: omitted, secretsOmittedSerious: serious } : {}) };
+  const serious =
+    admitted.omittedSerious ||
+    (signal.secretsOmitted ? (signal.secretsOmittedSerious ?? true) : false);
+  return {
+    ...rest,
+    secrets: admitted.secrets,
+    ...(omitted > 0 ? { secretsOmitted: omitted, secretsOmittedSerious: serious } : {}),
+  };
 }
 
-export { createSiteFindingBudget, SITE_FINDINGS_CAP, type SiteFindingBudget } from "./security/leaked-secrets";
+export {
+  createSiteFindingBudget,
+  SITE_FINDINGS_CAP,
+  type SiteFindingBudget,
+} from "./security/leaked-secrets";

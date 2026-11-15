@@ -17,18 +17,28 @@ import type { PageRecord } from "@squirrelscan/core-contracts";
 
 import { runStreamingRules, type PreFetchedAssets } from "../../src/adapter";
 
-const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> => Effect.runPromise(eff as Effect.Effect<A, never, never>);
-const CONFIG = { rule_options: {}, rules: { enable: ["security/leaked-secrets"] } } as unknown as Config;
-const ASSETS: PreFetchedAssets = { resourceSizes: { css: [], images: [] }, scripts: [], pdfSizes: [], sitemapUrlStatuses: [] } as unknown as PreFetchedAssets;
+const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> =>
+  Effect.runPromise(eff as Effect.Effect<A, never, never>);
+const CONFIG = {
+  rule_options: {},
+  rules: { enable: ["security/leaked-secrets"] },
+} as unknown as Config;
+const ASSETS: PreFetchedAssets = {
+  resourceSizes: { css: [], images: [] },
+  scripts: [],
+  pdfSizes: [],
+  sitemapUrlStatuses: [],
+} as unknown as PreFetchedAssets;
 
 export const PROBE_PAGES = 16;
 export const PROBE_PAGE_BYTES = 1_500_000;
 const ORIGIN = "https://shop.example";
 
 const j = (...parts: string[]): string => parts.join("");
-const lcg = (seed: number) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+const lcg = (seed: number) => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const rnd = (next: () => number, n: number, alphabet = ALNUM): string => Array.from({ length: n }, () => alphabet[Math.floor(next() * alphabet.length)]).join("");
+const rnd = (next: () => number, n: number, alphabet = ALNUM): string =>
+  Array.from({ length: n }, () => alphabet[Math.floor(next() * alphabet.length)]).join("");
 
 function html(i: number): string {
   const next = lcg(9_000 + i);
@@ -67,7 +77,10 @@ function record(i: number): PageRecord {
 }
 
 if (import.meta.main) {
-  const { storage, crawlId } = await writeCrawlToStorage(generateSiteModel({ seed: 3, pageCount: 1 }), ":memory:");
+  const { storage, crawlId } = await writeCrawlToStorage(
+    generateSiteModel({ seed: 3, pageCount: 1 }),
+    ":memory:",
+  );
   for (let i = 0; i < PROBE_PAGES; i++) await run(storage.upsertPage(crawlId, record(i)));
   const heap: number[] = [];
   const result = await run(
@@ -84,5 +97,10 @@ if (import.meta.main) {
   );
   const checks = result.ruleResultsMap.get("security/leaked-secrets")?.checks ?? [];
   await run(storage.close());
-  console.log(JSON.stringify({ heap, findings: checks.filter((c) => c.status === "fail" || c.status === "warn").length }));
+  console.log(
+    JSON.stringify({
+      heap,
+      findings: checks.filter((c) => c.status === "fail" || c.status === "warn").length,
+    }),
+  );
 }

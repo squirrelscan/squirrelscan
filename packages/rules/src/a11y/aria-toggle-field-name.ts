@@ -41,8 +41,7 @@ export const ariaToggleFieldNameRule: Rule = {
   meta: {
     id: "a11y/aria-toggle-field-name",
     name: "ARIA Toggle Field Name",
-    description:
-      "Checks that toggle fields (checkbox, radio, switch) have accessible names",
+    description: "Checks that toggle fields (checkbox, radio, switch) have accessible names",
     solution:
       "Toggle fields need accessible names to describe what they control. Use <label for='id'>, aria-label, aria-labelledby, or wrap in <label>. Example: <label><input type='checkbox'> Subscribe to newsletter</label> An element hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide counts too. A toggle field carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so an element hidden only by one is still reported.",
     category: "a11y",
@@ -92,9 +91,7 @@ export const ariaToggleFieldNameRule: Rule = {
         const value = radio.getAttribute("value") || "";
         unnamed.add(
           radio,
-          name
-            ? `radio[name="${name}"]${value ? `[value="${value}"]` : ""}`
-            : "radio"
+          name ? `radio[name="${name}"]${value ? `[value="${value}"]` : ""}` : "radio",
         );
       }
     }
@@ -112,7 +109,11 @@ export const ariaToggleFieldNameRule: Rule = {
     }
     if (unnamed.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow("aria-toggle-field-name", "toggle field(s) without accessible names", unnamed.unconfirmed),
+        unconfirmedRow(
+          "aria-toggle-field-name",
+          "toggle field(s) without accessible names",
+          unnamed.unconfirmed,
+        ),
       );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {

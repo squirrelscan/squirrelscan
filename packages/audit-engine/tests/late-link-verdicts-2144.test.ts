@@ -78,7 +78,13 @@ const resolveHost = async (hostname: string): Promise<string[]> =>
 /** The service's verdict for a link: its true status, as the local checker would find it. */
 function verdict(url: string): ExternalCheckResult {
   const gone = url.includes("/gone-");
-  return { href: url, status: gone ? 404 : 200, error: null, redirectTarget: null, fromCache: false };
+  return {
+    href: url,
+    status: gone ? 404 : 200,
+    error: null,
+    redirectTarget: null,
+    fromCache: false,
+  };
 }
 
 /** A gate a test opens when it chooses. */
@@ -312,14 +318,17 @@ describe("late-bound link verdicts (repo#2144)", () => {
       expect(settlement.unverifiable).toBe(10);
 
       // Unverifiable, never broken: counted as out of time, with no row.
-      const stats = (await Effect.runPromise(late.storage.getStats(late.crawlId)))?.externalLinkCheck;
+      const stats = (await Effect.runPromise(late.storage.getStats(late.crawlId)))
+        ?.externalLinkCheck;
       expect(stats).toMatchObject({ found: count, checked: count, outOfTime: 10 });
       const rows = await externalRows(late.storage, late.crawlId);
       expect(rows).toHaveLength(BULK_CHECK_CHUNK_SIZE);
       const unanswered = links.slice(BULK_CHECK_CHUNK_SIZE);
       for (const href of unanswered) expect(rows.some((r) => r.href === href)).toBe(false);
       const dead = checksOf(late.ran, "links/dead-links");
-      expect(dead.map((c) => c.message).join("\n")).toContain(`${BULK_CHECK_CHUNK_SIZE} external link(s)`);
+      expect(dead.map((c) => c.message).join("\n")).toContain(
+        `${BULK_CHECK_CHUNK_SIZE} external link(s)`,
+      );
       const broken = checksOf(late.ran, "links/broken-external-links");
       const brokenIds = broken.flatMap((c) => c.items?.map((i) => i.id) ?? []);
       for (const href of unanswered) expect(brokenIds).not.toContain(href);
@@ -336,9 +345,9 @@ describe("late-bound link verdicts (repo#2144)", () => {
       await handle.checkDone;
       await Bun.sleep(10);
       expect(await externalRows(late.storage, late.crawlId)).toEqual(before.rows);
-      expect((await Effect.runPromise(late.storage.getStats(late.crawlId)))?.externalLinkCheck).toEqual(
-        before.stats,
-      );
+      expect(
+        (await Effect.runPromise(late.storage.getStats(late.crawlId)))?.externalLinkCheck,
+      ).toEqual(before.stats);
       expect(await handle.settle()).toBe(settlement);
       expect(normalised(late.ran)).toEqual(before.findings);
       // (The check had already abandoned the call at the deadline, so the
@@ -384,7 +393,8 @@ describe("late-bound link verdicts (repo#2144)", () => {
       const brokenIds = checksOf(late.ran, "links/broken-external-links").flatMap(
         (c) => c.items?.map((i) => i.id) ?? [],
       );
-      for (const href of links.filter((l) => l.includes("/gone-"))) expect(brokenIds).toContain(href);
+      for (const href of links.filter((l) => l.includes("/gone-")))
+        expect(brokenIds).toContain(href);
       // And the same report the blocking mode builds from the same failure.
       expect(normalised(late.ran)).toEqual(normalised(blocking.ran));
     },

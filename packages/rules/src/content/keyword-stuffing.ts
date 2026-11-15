@@ -237,7 +237,11 @@ function hasMenuSignal(element: Element, body: Element, cache: WeakMap<Element, 
   if (known !== undefined) return known;
   let answer = false;
   let current: Element | null = element;
-  for (let depth = 0; current && current !== body && depth < 4; depth++, current = current.parentElement) {
+  for (
+    let depth = 0;
+    current && current !== body && depth < 4;
+    depth++, current = current.parentElement
+  ) {
     const role = current.getAttribute?.("role")?.toLowerCase();
     if (role === "menu" || role === "menubar" || role === "navigation") {
       answer = true;
@@ -281,7 +285,11 @@ function createLinkListTest(body: Element): (element: Element) => boolean {
     const label = (a.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
     if (!label) continue;
     let current: Element | null = a.parentElement;
-    for (let depth = 0; current && current !== body && depth < LINK_LIST_MAX_DEPTH; depth++, current = current.parentElement) {
+    for (
+      let depth = 0;
+      current && current !== body && depth < LINK_LIST_MAX_DEPTH;
+      depth++, current = current.parentElement
+    ) {
       let entry = stats.get(current);
       if (!entry) {
         entry = { links: 0, chars: 0, labels: new Set(), sample: [] };
@@ -365,7 +373,8 @@ function selectMainContent(
   }
 
   const isInLinkList = createLinkListTest(body);
-  const isExcluded = (element: Element): boolean => isInSiteChrome(element) || isInLinkList(element);
+  const isExcluded = (element: Element): boolean =>
+    isInSiteChrome(element) || isInLinkList(element);
   const words = keywordTokens(getRenderedProseTextWhere(body, isExcluded));
   return { root: body, words, isInExcludedChrome: isExcluded };
 }
@@ -380,10 +389,7 @@ function selectMainContent(
  * spam page could set it to the keyword it stuffs. A name token only counts when
  * the site's own domain carries it too.
  */
-export function brandTerms(
-  pageUrl: string,
-  doc: NonNullable<ParsedPage["document"]>
-): Set<string> {
+export function brandTerms(pageUrl: string, doc: NonNullable<ParsedPage["document"]>): Set<string> {
   const terms = new Set<string>();
   let label = "";
   try {
@@ -461,7 +467,10 @@ const CARD_RAW_DENSITY_LIMIT = 10;
  *
  * Linear in the page: each leaf is read once, with no parent text read at all.
  */
-function repeatedCardText(root: Element, excluded: ((element: Element) => boolean) | null): Map<string, number> {
+function repeatedCardText(
+  root: Element,
+  excluded: ((element: Element) => boolean) | null,
+): Map<string, number> {
   const byText = new Map<string, { count: number; parents: Set<Element>; raws: Set<string> }>();
   let scanned = 0;
   let candidates = 0;
@@ -637,14 +646,17 @@ export const keywordStuffingRule: Rule = {
     const cardDeductions = new Map<string, number>();
     {
       let left = Math.floor(words.length * CARD_MAX_SHARE);
-      const texts = [...repeatedCardText(contentRoot, isInExcludedChrome)].sort((x, y) => y[1] - x[1]);
+      const texts = [...repeatedCardText(contentRoot, isInExcludedChrome)].sort(
+        (x, y) => y[1] - x[1],
+      );
       for (const [text, occurrences] of texts) {
         const tokens = keywordTokens(text);
         if (tokens.length === 0) continue;
         const allowed = Math.min(occurrences, Math.floor(left / tokens.length));
         if (allowed <= 0) continue;
         left -= allowed * tokens.length;
-        for (const word of tokens) cardDeductions.set(word, (cardDeductions.get(word) || 0) + allowed);
+        for (const word of tokens)
+          cardDeductions.set(word, (cardDeductions.get(word) || 0) + allowed);
       }
     }
     // What of that is applied, word by word: never below the floor, never on a word that is
@@ -656,7 +668,10 @@ export const keywordStuffingRule: Rule = {
     for (const [word, deduction] of cardDeductions) {
       const raw = wordCounts.get(word) ?? 0;
       if ((raw / words.length) * 100 >= CARD_RAW_DENSITY_LIMIT) continue;
-      const applied = Math.min(deduction, Math.max(0, raw - (ctaWordDeductions.get(word) ?? 0) - floorCount));
+      const applied = Math.min(
+        deduction,
+        Math.max(0, raw - (ctaWordDeductions.get(word) ?? 0) - floorCount),
+      );
       if (applied <= 0) continue;
       cardApplied.set(word, applied);
       cardAppliedTotal += applied;

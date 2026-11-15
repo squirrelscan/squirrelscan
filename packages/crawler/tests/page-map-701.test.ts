@@ -73,7 +73,6 @@ function page(url: string, fetchedAt: number): PageRecord {
   } as PageRecord;
 }
 
-
 let dir: string;
 let storage: SQLiteStorage;
 beforeEach(async () => {
@@ -94,7 +93,7 @@ async function crawl(): Promise<string> {
       status: "analyzed",
       config: {} as CrawlMetadata["config"],
       stats: STATS,
-    } as Omit<CrawlMetadata, "id">)
+    } as Omit<CrawlMetadata, "id">),
   );
   for (const url of ["https://e.test/", "https://e.test/a", "https://e.test/b"]) {
     await run(storage.upsertPage(id, page(url, 1_000)));
@@ -112,38 +111,71 @@ describe("getFlaggedPages", () => {
       storage.saveRuleResultsBatch(
         id,
         new Map([
-          ["https://e.test/a", [{ ruleId: "core/meta-title", checks: [check({ pageUrl: "https://e.test/a", status: "warn" })] }]],
-          ["https://e.test/b", [{ ruleId: "core/meta-title", checks: [check({ pageUrl: "https://e.test/b", status: "pass" })] }]],
+          [
+            "https://e.test/a",
+            [
+              {
+                ruleId: "core/meta-title",
+                checks: [check({ pageUrl: "https://e.test/a", status: "warn" })],
+              },
+            ],
+          ],
+          [
+            "https://e.test/b",
+            [
+              {
+                ruleId: "core/meta-title",
+                checks: [check({ pageUrl: "https://e.test/b", status: "pass" })],
+              },
+            ],
+          ],
           [
             "",
             [
               {
                 ruleId: "links/orphan-pages",
-                checks: [check({ items: [{ id: "https://e.test/a" }, { id: "https://e.test/b" }] })],
+                checks: [
+                  check({ items: [{ id: "https://e.test/a" }, { id: "https://e.test/b" }] }),
+                ],
               },
               {
                 ruleId: "content/duplicate-title",
                 checks: [
                   check({
                     items: [
-                      { id: "same title", label: "x", sourcePages: ["https://e.test/a", "https://e.test/b"] },
+                      {
+                        id: "same title",
+                        label: "x",
+                        sourcePages: ["https://e.test/a", "https://e.test/b"],
+                      },
                       { id: "not a url and no pages" },
                     ],
                   }),
                 ],
               },
-              { ruleId: "core/h1", checks: [check({ pageUrl: "https://e.test/", status: "fail" })] },
+              {
+                ruleId: "core/h1",
+                checks: [check({ pageUrl: "https://e.test/", status: "fail" })],
+              },
             ],
           ],
-        ])
-      )
+        ]),
+      ),
     );
-    const flagged = await run(storage.getFlaggedPages(id, ["core/meta-title", "links/orphan-pages"]));
+    const flagged = await run(
+      storage.getFlaggedPages(id, ["core/meta-title", "links/orphan-pages"]),
+    );
     expect(flagged.get("core/meta-title")).toEqual(["https://e.test/a"]);
-    expect([...(flagged.get("links/orphan-pages") ?? [])].sort()).toEqual(["https://e.test/a", "https://e.test/b"]);
+    expect([...(flagged.get("links/orphan-pages") ?? [])].sort()).toEqual([
+      "https://e.test/a",
+      "https://e.test/b",
+    ]);
     // A duplicate group names its pages in `sourcePages`; an item id that is not a URL names none.
     const dup = await run(storage.getFlaggedPages(id, ["content/duplicate-title"]));
-    expect([...(dup.get("content/duplicate-title") ?? [])].sort()).toEqual(["https://e.test/a", "https://e.test/b"]);
+    expect([...(dup.get("content/duplicate-title") ?? [])].sort()).toEqual([
+      "https://e.test/a",
+      "https://e.test/b",
+    ]);
     // A rule not asked for is not read.
     expect(flagged.has("core/h1")).toBe(false);
   });

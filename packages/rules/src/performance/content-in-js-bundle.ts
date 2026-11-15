@@ -29,20 +29,23 @@ export const optionsSchema = z.object({
   min_sentences: z
     .number()
     .default(3)
-    .describe("Distinctive sentences of a page that must be found in the chunk for the page's content to count as inside it"),
+    .describe(
+      "Distinctive sentences of a page that must be found in the chunk for the page's content to count as inside it",
+    ),
   escalate_other_pages: z
     .number()
     .default(2)
-    .describe("Other pages whose content is in the same chunk before the finding is reported as sitewide"),
+    .describe(
+      "Other pages whose content is in the same chunk before the finding is reported as sitewide",
+    ),
   max_pages_checked: z
     .number()
     .max(20000)
     .default(2000)
-    .describe("Pages searched for per chunk (5 sentences each), so a very large site stays bounded"),
-  max_chunks: z
-    .number()
-    .default(10)
-    .describe("Largest chunks searched"),
+    .describe(
+      "Pages searched for per chunk (5 sentences each), so a very large site stays bounded",
+    ),
+  max_chunks: z.number().default(10).describe("Largest chunks searched"),
 });
 
 /** Wall-clock budget for the whole search, across chunks. A search that runs out reports what it covered. */
@@ -101,19 +104,25 @@ export const contentInJsBundleRule: Rule = {
     // Every page was browser-rendered: no copy to search for, which is not the same as nothing found (#1329).
     let allRendered = false;
     if (ctx.collectedSignals) {
-      allRendered = ctx.collectedSignals.pages.length > 0 && ctx.collectedSignals.pages.every((rec) => rec.contentRendered === true);
+      allRendered =
+        ctx.collectedSignals.pages.length > 0 &&
+        ctx.collectedSignals.pages.every((rec) => rec.contentRendered === true);
       judged = !(
         ctx.collectedSignals.pages.length > 0 &&
         ctx.collectedSignals.pages.every((rec) => rec.contentSentences === undefined)
       );
-      for (const rec of ctx.collectedSignals.pages) sentencesByPage.set(rec.url, rec.contentSentences ?? []);
+      for (const rec of ctx.collectedSignals.pages)
+        sentencesByPage.set(rec.url, rec.contentSentences ?? []);
     } else {
       const pages = ctx.site?.pages ?? [];
       allRendered = pages.length > 0 && pages.every((page) => page.rendered === true);
       for (const page of pages) {
         const doc = page.parsed?.document;
         // A browser-rendered page has its copy in the script that rendered it, by necessity.
-        sentencesByPage.set(page.url, doc && page.rendered !== true ? extractContentSentences(doc) : []);
+        sentencesByPage.set(
+          page.url,
+          doc && page.rendered !== true ? extractContentSentences(doc) : [],
+        );
       }
     }
     if (allRendered) {
@@ -158,8 +167,14 @@ export const contentInJsBundleRule: Rule = {
     }
 
     const candidates = scripts
-      .filter((s) => s.content !== null && (s.sizeBytes ?? s.content.length) >= opts.min_chunk_bytes)
-      .sort((a, b) => (b.sizeBytes ?? b.content!.length) - (a.sizeBytes ?? a.content!.length) || byText(a.url, b.url));
+      .filter(
+        (s) => s.content !== null && (s.sizeBytes ?? s.content.length) >= opts.min_chunk_bytes,
+      )
+      .sort(
+        (a, b) =>
+          (b.sizeBytes ?? b.content!.length) - (a.sizeBytes ?? a.content!.length) ||
+          byText(a.url, b.url),
+      );
     const searched = candidates.slice(0, opts.max_chunks);
     const skippedLarge: string[] = [];
 
@@ -202,7 +217,8 @@ export const contentInJsBundleRule: Rule = {
         else verificationCapped = true;
       }
       const pagesWithContent = sampled.filter(
-        (url) => needlesByPage.get(url)!.filter((n) => search.found.has(n)).length >= opts.min_sentences,
+        (url) =>
+          needlesByPage.get(url)!.filter((n) => search.found.has(n)).length >= opts.min_sentences,
       );
       const loadingPages = pagesWithContent.filter((url) => loaders.has(url));
       if (loadingPages.length === 0) continue;
@@ -227,7 +243,9 @@ export const contentInJsBundleRule: Rule = {
       meta: {
         size: formatBytes(f.sizeBytes),
         sizeBytes: f.sizeBytes,
-        ...(f.gzipBytes !== undefined ? { gzipSize: formatBytes(f.gzipBytes), gzipBytes: f.gzipBytes } : {}),
+        ...(f.gzipBytes !== undefined
+          ? { gzipSize: formatBytes(f.gzipBytes), gzipBytes: f.gzipBytes }
+          : {}),
         pagesWithContent: f.pagesWithContent.length,
         otherPagesWithContent: Math.max(0, f.pagesWithContent.length - 1),
         pagesChecked: f.eligiblePages,
@@ -238,9 +256,14 @@ export const contentInJsBundleRule: Rule = {
 
     // Largest chunk first, then the one holding most pages, then by URL: never arrival order.
     findings.sort(
-      (a, b) => b.sizeBytes - a.sizeBytes || b.pagesWithContent.length - a.pagesWithContent.length || byText(a.url, b.url),
+      (a, b) =>
+        b.sizeBytes - a.sizeBytes ||
+        b.pagesWithContent.length - a.pagesWithContent.length ||
+        byText(a.url, b.url),
     );
-    const escalated = findings.filter((f) => f.pagesWithContent.length - 1 >= opts.escalate_other_pages);
+    const escalated = findings.filter(
+      (f) => f.pagesWithContent.length - 1 >= opts.escalate_other_pages,
+    );
     const own = findings.filter((f) => !escalated.includes(f));
 
     if (escalated.length > 0) {
@@ -251,7 +274,9 @@ export const contentInJsBundleRule: Rule = {
         status: "warn",
         message: `${escalated.length} JS chunk(s) hold the text of several pages: ${worst.url} carries the content of ${pagesPhrase(worst)} (${formatBytes(worst.sizeBytes)}) in every page's bundle`,
         items: escalated.map(itemOf),
-        details: { suggestion: "Render the bodies on the server and import only frontmatter on the client" },
+        details: {
+          suggestion: "Render the bodies on the server and import only frontmatter on the client",
+        },
       });
     }
     if (own.length > 0) {
@@ -264,7 +289,9 @@ export const contentInJsBundleRule: Rule = {
         // reports the same number whichever side of it an audit lands on.
         message: `${own.length} JS chunk(s) contain the page's own content as script (${own.map((f) => pagesPhrase(f)).join("; ")}; the site-wide warning starts at ${opts.escalate_other_pages + 1} pages)`,
         items: own.map(itemOf),
-        details: { suggestion: "Render static content on the server and keep it out of the client bundle" },
+        details: {
+          suggestion: "Render static content on the server and keep it out of the client bundle",
+        },
       });
     }
     if (skippedLarge.length > 0) {
@@ -286,7 +313,8 @@ export const contentInJsBundleRule: Rule = {
       checks.push({
         name: "content-in-js-bundle-partial",
         status: "info",
-        message: "A chunk repeated the start of the same sentences so often that the search stopped comparing candidates early: its result is a floor",
+        message:
+          "A chunk repeated the start of the same sentences so often that the search stopped comparing candidates early: its result is a floor",
       });
     }
     // Chunks big enough to matter whose body the audit does not have (not fetched, failed,
@@ -302,7 +330,13 @@ export const contentInJsBundleRule: Rule = {
         items: unchecked.slice(0, 20).map((s) => ({ id: s.url })),
       });
     }
-    if (findings.length === 0 && unchecked.length === 0 && skippedLarge.length === 0 && !outOfTime && !verificationCapped) {
+    if (
+      findings.length === 0 &&
+      unchecked.length === 0 &&
+      skippedLarge.length === 0 &&
+      !outOfTime &&
+      !verificationCapped
+    ) {
       checks.push({
         name: "content-in-js-bundle",
         status: "pass",

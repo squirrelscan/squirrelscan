@@ -30,27 +30,27 @@ const unverified = (href: string, wafProvider?: string): ExternalLinkCheckData =
 });
 
 async function unverifiedRow(links: ExternalLinkCheckData[]) {
-  const { checks } = (await brokenExternalLinksRule.run(externalCtx(links)));
+  const { checks } = await brokenExternalLinksRule.run(externalCtx(links));
   return checks.find((c) => c.name === "waf-blocked-external-links")!;
 }
 
 describe("the unverifiable external links row (pub#783)", () => {
   test("says the links could not be verified, never that a firewall blocked them", async () => {
-    const row = (await unverifiedRow([
+    const row = await unverifiedRow([
       unverified("https://walled.example/", "cloudflare"),
       unverified("https://stalls.example/", "unknown"),
-    ]));
+    ]);
     expect(row.status).toBe("info");
     expect(row.message).toBe("2 external link(s) could not be verified - status unverifiable");
     expect(row.message).not.toContain("WAF");
   });
 
   test("names the vendor in the item label only when one was identified", async () => {
-    const row = (await unverifiedRow([
+    const row = await unverifiedRow([
       unverified("https://walled.example/", "cloudflare"),
       unverified("https://stalls.example/", "unknown"),
       unverified("https://pending.example/"),
-    ]));
+    ]);
     expect(row.items?.map((i) => i.label)).toEqual([
       "https://walled.example/ (unverified: cloudflare)",
       "https://stalls.example/ (unverified)",

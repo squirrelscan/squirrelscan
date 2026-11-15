@@ -51,7 +51,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Wrapped Widget",
       aggregateRating: [COMPLETE],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("pass");
@@ -64,7 +64,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Review Count Widget",
       aggregateRating: [{ "@type": "AggregateRating", ratingValue: "4.2", reviewCount: "12" }],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });
@@ -75,7 +75,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Half Widget",
       aggregateRating: [{ "@type": "AggregateRating", ratingCount: "5" }],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
@@ -88,7 +88,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Null Then Rating",
       aggregateRating: [null, COMPLETE],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });
@@ -99,7 +99,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Empty Rating",
       aggregateRating: [],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
 
     expect(check(checks, "aggregate-rating")).toBeUndefined();
     expect(check(checks, "review-schema")?.status).toBe("info");
@@ -111,7 +111,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Plain Widget",
       aggregateRating: COMPLETE,
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("pass");
@@ -124,7 +124,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Plain Half Widget",
       aggregateRating: { "@type": "AggregateRating", ratingCount: "5" },
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
@@ -137,7 +137,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Countless Widget",
       aggregateRating: { "@type": "AggregateRating", ratingValue: "4.0" },
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
@@ -150,7 +150,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       ratingValue: "4.9",
       ratingCount: "200",
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });

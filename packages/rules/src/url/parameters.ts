@@ -61,9 +61,7 @@ export const urlParametersRule: Rule = {
       "ref",
       "source",
     ];
-    const foundTracking = params.filter((p) =>
-      trackingParams.includes(p.toLowerCase())
-    );
+    const foundTracking = params.filter((p) => trackingParams.includes(p.toLowerCase()));
 
     if (foundTracking.length > 0) {
       checks.push({

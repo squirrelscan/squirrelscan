@@ -98,12 +98,7 @@ export const optimizedRule: Rule = {
         srcLower.includes("format=avif")
       ) {
         modernFormat++;
-      } else if (
-        ext === "jpg" ||
-        ext === "jpeg" ||
-        ext === "png" ||
-        ext === "gif"
-      ) {
+      } else if (ext === "jpg" || ext === "jpeg" || ext === "png" || ext === "gif") {
         legacyFormat++;
         if (!isFromImageCdn(src)) {
           legacyImages.push(filename);
@@ -140,9 +135,7 @@ export const optimizedRule: Rule = {
         items: legacyImages.slice(0, 10).map((id) => ({ id })),
         details: {
           note: "Convert JPG/PNG to WebP for 25-35% smaller files",
-          ...(legacyImages.length > 10
-            ? { additional: legacyImages.length - 10 }
-            : {}),
+          ...(legacyImages.length > 10 ? { additional: legacyImages.length - 10 } : {}),
         },
       });
     }

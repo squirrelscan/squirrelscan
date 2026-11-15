@@ -20,7 +20,12 @@ import { extractPageStructure } from "@squirrelscan/report/structure";
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 import { extractNapSignal, getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
 
-import { extractSiteChromeSignal, fingerprintPage, pageReadingLevel, pageTerminologyVariants } from "@squirrelscan/rules";
+import {
+  extractSiteChromeSignal,
+  fingerprintPage,
+  pageReadingLevel,
+  pageTerminologyVariants,
+} from "@squirrelscan/rules";
 
 import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
 import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
@@ -74,7 +79,11 @@ function hashNormalized(raw: string | null): string | null {
 /** Token-exact meta-robots noindex — the meta-ONLY notion (crawl/robots-meta-conflict). */
 function metaRobotsNoindex(robots: string | null): boolean {
   return (
-    robots?.toLowerCase().split(",").map((d) => d.trim()).includes("noindex") ?? false
+    robots
+      ?.toLowerCase()
+      .split(",")
+      .map((d) => d.trim())
+      .includes("noindex") ?? false
   );
 }
 
@@ -102,7 +111,7 @@ function metaRobotsNoindex(robots: string | null): boolean {
 export function extractPageFeatures(
   page: PageRecord,
   parsed: ParsedPage,
-  opts?: { fingerprint?: PageFingerprint | null; crawledUrls?: ReadonlySet<string> }
+  opts?: { fingerprint?: PageFingerprint | null; crawledUrls?: ReadonlySet<string> },
 ): PageFeatureRow {
   const headers = buildHeadersMap(page);
   // meta+header indexability only; the robots.txt reason is site-level and is
@@ -144,13 +153,12 @@ export function extractPageFeatures(
     robotsNoindex: !indexability.isIndexable,
     canonical: parsed.meta.canonical,
     visibleAuthor: parsed.visibleAuthor != null,
-    visibleDate:
-      parsed.visibleDatePublished != null || parsed.visibleDateModified != null,
+    visibleDate: parsed.visibleDatePublished != null || parsed.visibleDateModified != null,
     transferBytes: page.sizeBytes ?? null,
     templateFp: templateFingerprintKey(
       opts?.fingerprint !== undefined
         ? opts.fingerprint
-        : fingerprintPage(parsed, page.normalizedUrl)
+        : fingerprintPage(parsed, page.normalizedUrl),
     ),
     secretHits: null,
     metaNoindex: metaRobotsNoindex(parsed.meta.robots),

@@ -3,11 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  AGENTS_SCORE_MEASURES,
-  agentSignalsLine,
-  getAgentSignals,
-} from "../src/agent-signals";
+import { AGENTS_SCORE_MEASURES, agentSignalsLine, getAgentSignals } from "../src/agent-signals";
 import { renderHtml } from "../src/output/html";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
@@ -78,7 +74,9 @@ describe("getAgentSignals", () => {
   });
 
   test("legacy ai/ rule ids are read", () => {
-    const signals = getAgentSignals(report([rule("ai/llms-txt", "llms-txt-present", "absent")], agents));
+    const signals = getAgentSignals(
+      report([rule("ai/llms-txt", "llms-txt-present", "absent")], agents),
+    );
     expect(signals[0].status).toBe("missing");
   });
 

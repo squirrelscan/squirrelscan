@@ -52,10 +52,7 @@ function shortHash(value: string): string {
 }
 
 export const optionsSchema = z.object({
-  maxMatchesToReport: z
-    .number()
-    .default(10)
-    .describe("Maximum blocked links to report in detail"),
+  maxMatchesToReport: z.number().default(10).describe("Maximum blocked links to report in detail"),
 });
 
 /**
@@ -238,8 +235,7 @@ function buildPerResourceChecks(
 
   entries.sort(
     (a, b) =>
-      b.sourcePages.length - a.sourcePages.length ||
-      a.match.value.localeCompare(b.match.value),
+      b.sourcePages.length - a.sourcePages.length || a.match.value.localeCompare(b.match.value),
   );
 
   return entries.slice(0, limit).map(({ match, sourcePages }) => {
@@ -279,8 +275,7 @@ export const blockedLinksRule: Rule = {
   meta: {
     id: "adblock/blocked-links",
     name: "Blocked Tracking Links",
-    description:
-      "Checks for links and resources that ad blockers (EasyList) would block",
+    description: "Checks for links and resources that ad blockers (EasyList) would block",
     solution:
       "Links to ad/tracking domains will be blocked by users with adblockers like uBlock Origin or AdBlock. " +
       "If these are essential resources, they won't load. If they're analytics or ads, you may get incomplete data or revenue from users with adblockers. " +
@@ -301,7 +296,9 @@ export const blockedLinksRule: Rule = {
     const envelope = readCloudResult<BlocklistCheckResponse>(ctx.cloudResults, "blocklist-check");
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "blocked-links",
         status: "skipped",
@@ -312,9 +309,7 @@ export const blockedLinksRule: Rule = {
     }
 
     // EasyPrivacy url matches are reported by adblock/privacy-blocked.
-    const matches = envelope.data.matches.filter(
-      (m) => m.kind === "url" && m.list === "easylist",
-    );
+    const matches = envelope.data.matches.filter((m) => m.kind === "url" && m.list === "easylist");
 
     if (matches.length === 0) {
       checks.push({

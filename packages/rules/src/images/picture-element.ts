@@ -59,8 +59,7 @@ The <img> provides fallback for:
       if (!imgChild) {
         // Try to identify the picture for debugging
         const sources = querySelectorAllOutsideNoscript(picture, "source");
-        const firstSrcset =
-          sources[0]?.getAttribute("srcset") || "unknown source";
+        const firstSrcset = sources[0]?.getAttribute("srcset") || "unknown source";
         invalidPictures.push(firstSrcset);
       }
     }

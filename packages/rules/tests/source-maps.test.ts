@@ -37,7 +37,12 @@ const SITE_SCRIPTS: ScriptContentData[] = [
   script("/assets/home-only.js", [`${ORIGIN}/`]),
 ];
 
-function checksFor(url: string, scriptPaths: string[], scripts = SITE_SCRIPTS, extra = ""): CheckResult[] {
+function checksFor(
+  url: string,
+  scriptPaths: string[],
+  scripts = SITE_SCRIPTS,
+  extra = "",
+): CheckResult[] {
   const tags = scriptPaths.map((p) => `<script src="${p}"></script>`).join("");
   const html = `<!DOCTYPE html><html><head><title>t</title>${tags}${extra}</head><body>x</body></html>`;
   const ctx = {
@@ -60,7 +65,7 @@ const mapIds = (checks: CheckResult[]) =>
 describe("perf/source-maps: shared bundles (repo#2341)", () => {
   test("every page loading the same bundles emits one identical check", () => {
     const perPage = ["/", "/a", "/b"].map((p) =>
-      exposed(checksFor(`${ORIGIN}${p}`, ["/assets/app.js", "/assets/vendor.js"]))
+      exposed(checksFor(`${ORIGIN}${p}`, ["/assets/app.js", "/assets/vendor.js"])),
     );
     for (const checks of perPage) {
       expect(checks).toHaveLength(1);
@@ -69,7 +74,7 @@ describe("perf/source-maps: shared bundles (repo#2341)", () => {
     const [check] = perPage[0]!;
     expect(check?.status).toBe("warn");
     expect(check?.message).toBe(
-      "2 source map(s) exposed by bundles shared across pages: /assets/app.js.map, /assets/vendor.js.map"
+      "2 source map(s) exposed by bundles shared across pages: /assets/app.js.map, /assets/vendor.js.map",
     );
     expect(check?.details?.sharedPages).toBe(PAGES.length);
     expect(typeof check?.details?.foldKey).toBe("string");
@@ -83,7 +88,7 @@ describe("perf/source-maps: shared bundles (repo#2341)", () => {
 
   test("a section bundle is its own finding, with its own page count", () => {
     const checks = exposed(
-      checksFor(`${ORIGIN}/docs/1`, ["/assets/app.js", "/assets/vendor.js", "/assets/docs.js"])
+      checksFor(`${ORIGIN}/docs/1`, ["/assets/app.js", "/assets/vendor.js", "/assets/docs.js"]),
     );
     expect(checks.map((c) => c.message).sort()).toEqual([
       "1 source map(s) exposed by bundles shared across pages: /assets/docs.js.map",
@@ -107,8 +112,8 @@ describe("perf/source-maps: shared bundles (repo#2341)", () => {
         `${ORIGIN}/a`,
         ["/assets/app.js"],
         SITE_SCRIPTS,
-        `<style>a{}/*# sourceMappingURL=inline.css.map */</style>`
-      )
+        `<style>a{}/*# sourceMappingURL=inline.css.map */</style>`,
+      ),
     );
     expect(checks.map((c) => c.message).sort()).toEqual([
       "1 potential source map(s) detected",
@@ -118,7 +123,12 @@ describe("perf/source-maps: shared bundles (repo#2341)", () => {
 
   test("without script records only the page's own maps are seen, page-level as before", () => {
     const checks = exposed(
-      checksFor(`${ORIGIN}/a`, ["/assets/app.js"], [], `<script>x();//# sourceMappingURL=/inline.js.map</script>`)
+      checksFor(
+        `${ORIGIN}/a`,
+        ["/assets/app.js"],
+        [],
+        `<script>x();//# sourceMappingURL=/inline.js.map</script>`,
+      ),
     );
     expect(checks.map((c) => c.message)).toEqual(["1 potential source map(s) detected"]);
   });
@@ -131,7 +141,7 @@ describe("perf/source-maps: shared bundles (repo#2341)", () => {
       "/assets/home-only.js",
     ]);
     expect(mapIds(checks)).toEqual(
-      ["app", "docs", "home-only", "vendor"].map((n) => `${ORIGIN}/assets/${n}.js.map`)
+      ["app", "docs", "home-only", "vendor"].map((n) => `${ORIGIN}/assets/${n}.js.map`),
     );
     expect(checks.some((c) => c.status === "pass")).toBe(false);
   });
@@ -145,13 +155,21 @@ describe("perf/source-maps: shared bundles (repo#2341)", () => {
   });
 
   test("a shared group lists every map up to the publish item cap, then counts the rest", () => {
-    const many = Array.from({ length: 60 }, (_, i) => script(`/chunks/c${String(i).padStart(2, "0")}.js`, PAGES));
-    const checks = exposed(checksFor(`${ORIGIN}/a`, many.map((s) => new URL(s.url).pathname), many));
+    const many = Array.from({ length: 60 }, (_, i) =>
+      script(`/chunks/c${String(i).padStart(2, "0")}.js`, PAGES),
+    );
+    const checks = exposed(
+      checksFor(
+        `${ORIGIN}/a`,
+        many.map((s) => new URL(s.url).pathname),
+        many,
+      ),
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]?.items).toHaveLength(50);
     expect(checks[0]?.details?.additional).toBe(10);
     expect(checks[0]?.message).toBe(
-      "60 source map(s) exposed by bundles shared across pages: /chunks/c00.js.map, /chunks/c01.js.map, /chunks/c02.js.map, and 57 more"
+      "60 source map(s) exposed by bundles shared across pages: /chunks/c00.js.map, /chunks/c01.js.map, /chunks/c02.js.map, and 57 more",
     );
   });
 });
@@ -175,7 +193,8 @@ describe("perf/source-maps: the grouping is the same from every page (repo#2341)
     const fromA = onPage(a, ["/s/one.js", "/s/three.js"]);
     const fromB = onPage(b, ["/s/one.js", "/s/two.js", "/s/three.js"]);
     const fromC = onPage(c, ["/s/two.js"]);
-    const sharedOf = (checks: CheckResult[]) => checks.find((x) => x.message.includes("shared.map"));
+    const sharedOf = (checks: CheckResult[]) =>
+      checks.find((x) => x.message.includes("shared.map"));
     const otherOf = (checks: CheckResult[]) => checks.find((x) => x.message.includes("other.map"));
     expect(sharedOf(fromA)).toEqual(sharedOf(fromB)!);
     expect(sharedOf(fromC)).toEqual(sharedOf(fromB)!);
@@ -188,8 +207,14 @@ describe("perf/source-maps: the grouping is the same from every page (repo#2341)
 
 describe("perf/source-maps: every group has its own message (repo#2341)", () => {
   test("off-site maps that differ only in their query are named in full", () => {
-    const one = { ...script("/x/one.js", PAGES, false), content: "x();\n//# sourceMappingURL=https://cdn.example.net/app.map?v=one" };
-    const two = { ...script("/x/two.js", DOCS, false), content: "x();\n//# sourceMappingURL=https://cdn.example.net/app.map?v=two" };
+    const one = {
+      ...script("/x/one.js", PAGES, false),
+      content: "x();\n//# sourceMappingURL=https://cdn.example.net/app.map?v=one",
+    };
+    const two = {
+      ...script("/x/two.js", DOCS, false),
+      content: "x();\n//# sourceMappingURL=https://cdn.example.net/app.map?v=two",
+    };
     const checks = exposed(checksFor(`${ORIGIN}/docs/1`, ["/x/one.js", "/x/two.js"], [one, two]));
     expect(checks.map((x) => x.message).sort()).toEqual([
       "1 source map(s) exposed by bundles shared across pages: https://cdn.example.net/app.map?v=one",
@@ -200,7 +225,9 @@ describe("perf/source-maps: every group has its own message (repo#2341)", () => 
   test("a map a script's SourceMap header names is labelled with the header", () => {
     const viaHeader = { ...script("/x/h.js", PAGES, false), sourceMapHeader: "h.js.map" };
     const [check] = exposed(checksFor(`${ORIGIN}/a`, ["/x/h.js"], [viaHeader]));
-    expect(check?.items).toEqual([{ id: `${ORIGIN}/x/h.js.map`, label: "from /x/h.js (HTTP header)" }]);
+    expect(check?.items).toEqual([
+      { id: `${ORIGIN}/x/h.js.map`, label: "from /x/h.js (HTTP header)" },
+    ]);
   });
 
   test("pages on another origin of the site emit the same check", () => {
@@ -211,11 +238,17 @@ describe("perf/source-maps: every group has its own message (repo#2341)", () => 
 
   test("a long name is cut with a hash of the whole URL", () => {
     const long = (tail: string) => `/${"segment/".repeat(20)}${tail}.js.map`;
-    const one = { ...script("/x/one.js", PAGES, false), content: `x();\n//# sourceMappingURL=${long("one")}` };
-    const two = { ...script("/x/two.js", DOCS, false), content: `x();\n//# sourceMappingURL=${long("two")}` };
-    const [m1, m2] = exposed(checksFor(`${ORIGIN}/docs/1`, ["/x/one.js", "/x/two.js"], [one, two])).map(
-      (x) => x.message
-    );
+    const one = {
+      ...script("/x/one.js", PAGES, false),
+      content: `x();\n//# sourceMappingURL=${long("one")}`,
+    };
+    const two = {
+      ...script("/x/two.js", DOCS, false),
+      content: `x();\n//# sourceMappingURL=${long("two")}`,
+    };
+    const [m1, m2] = exposed(
+      checksFor(`${ORIGIN}/docs/1`, ["/x/one.js", "/x/two.js"], [one, two]),
+    ).map((x) => x.message);
     expect(m1).not.toBe(m2);
     expect(m1).toContain("…~");
   });
@@ -253,7 +286,9 @@ describe("fold keeps source-map groups apart (repo#2341)", () => {
   });
 
   test("checks without a foldKey fold exactly as before", () => {
-    expect(foldGroupKey({ name: "x", status: "warn", message: "m" })).toBe("x\u0000warn\u0000\u0000");
+    expect(foldGroupKey({ name: "x", status: "warn", message: "m" })).toBe(
+      "x\u0000warn\u0000\u0000",
+    );
   });
 });
 

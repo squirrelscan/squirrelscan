@@ -55,13 +55,13 @@ export function llmCallWithSystem(system: string, prompt: string): Promise<strin
 export function llmCallWithSystem<T>(
   system: string,
   prompt: string,
-  schema: ZodType<T>
+  schema: ZodType<T>,
 ): Promise<{ success: true; data: T } | { success: false; error: string }>;
 // Implementation
 export async function llmCallWithSystem<T>(
   system: string,
   prompt: string,
-  schema?: ZodType<T>
+  schema?: ZodType<T>,
 ): Promise<string | { success: true; data: T } | { success: false; error: string }> {
   if (!_llmCall) throw new Error("LLM not injected — call setLlmCall() first");
   const raw = await _llmCall(system, prompt);
@@ -76,6 +76,9 @@ export async function llmCallWithSystem<T>(
     }
     return { success: false, error: result.error.message };
   } catch (e) {
-    return { success: false, error: `Failed to parse LLM response as JSON: ${(e as Error).message}` };
+    return {
+      success: false,
+      error: `Failed to parse LLM response as JSON: ${(e as Error).message}`,
+    };
   }
 }

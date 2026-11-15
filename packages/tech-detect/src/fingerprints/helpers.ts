@@ -17,7 +17,12 @@ export function scriptSrc(urlSource: string): Detector[] {
   return [
     { type: "script-url", pattern: new RegExp(`^${urlSource}`, "i") },
     // The `src` of a real `<script>` tag, from the page's one parsed list of tags (not a scan of the HTML per signature).
-    { type: "tag-attr", tags: ["script"], attrs: ["src"], pattern: new RegExp(`^${urlSource}`, "i") },
+    {
+      type: "tag-attr",
+      tags: ["script"],
+      attrs: ["src"],
+      pattern: new RegExp(`^${urlSource}`, "i"),
+    },
   ];
 }
 
@@ -34,11 +39,7 @@ export function inScript(bodySource: string, requires: string): Detector {
  * `source` in a fetched first-party bundle, as code: not inside a comment or a
  * string literal, so a docs snippet or a commented-out call does not match.
  */
-export function inBundle(
-  source: string,
-  hint: string,
-  validate?: ScriptMatchValidator,
-): Detector {
+export function inBundle(source: string, hint: string, validate?: ScriptMatchValidator): Detector {
   return { type: "script-content", pattern: new RegExp(source), inCode: true, hint, validate };
 }
 
@@ -47,7 +48,13 @@ export function inBundle(
  * element a framework renders (see `stringValue` in the detector type); `evidence` must match that string.
  */
 export function inBundleString(source: string, hint: string, evidence: RegExp): Detector {
-  return { type: "script-content", pattern: new RegExp(source), inCode: true, stringValue: evidence, hint };
+  return {
+    type: "script-content",
+    pattern: new RegExp(source),
+    inCode: true,
+    stringValue: evidence,
+    hint,
+  };
 }
 
 /**
@@ -55,7 +62,12 @@ export function inBundleString(source: string, hint: string, evidence: RegExp): 
  * `alsoSource` anywhere (a string included): the library's own strings and a
  * value elsewhere in the file. `alsoHints` are literals the second pattern needs.
  */
-export function inBundleWith(source: string, hint: string, alsoSource: string, alsoHints: string[]): Detector {
+export function inBundleWith(
+  source: string,
+  hint: string,
+  alsoSource: string,
+  alsoHints: string[],
+): Detector {
   return {
     type: "script-content",
     pattern: new RegExp(source),

@@ -13,11 +13,7 @@ import { Effect } from "effect";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { loadAllRules } from "@squirrelscan/rules";
 import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
-import type {
-  PageRecord,
-  RobotsTxtData,
-  SitemapDiscovery,
-} from "@squirrelscan/core-contracts";
+import type { PageRecord, RobotsTxtData, SitemapDiscovery } from "@squirrelscan/core-contracts";
 
 import { createSiteQuery, extractPageFeatures, isAuditablePage } from "../src/index";
 import { buildHeadersMap } from "../src/adapter";
@@ -111,9 +107,24 @@ function mkPage(spec: Spec): { page: PageRecord; parsed: ParsedPage } {
 // Fixture (normalized_url ASC): exercises meta-noindex, header-noindex,
 // robots.txt-disallow, and rich-schema conflicts.
 const FIXTURE: Spec[] = [
-  { normalizedUrl: "https://example.com/a", robots: "noindex,follow", xRobotsTag: null, schemaTypes: [] },
-  { normalizedUrl: "https://example.com/c", robots: "index,follow", xRobotsTag: null, schemaTypes: ["Article", "Product"] },
-  { normalizedUrl: "https://example.com/private/x", robots: "noindex", xRobotsTag: null, schemaTypes: ["Recipe"] },
+  {
+    normalizedUrl: "https://example.com/a",
+    robots: "noindex,follow",
+    xRobotsTag: null,
+    schemaTypes: [],
+  },
+  {
+    normalizedUrl: "https://example.com/c",
+    robots: "index,follow",
+    xRobotsTag: null,
+    schemaTypes: ["Article", "Product"],
+  },
+  {
+    normalizedUrl: "https://example.com/private/x",
+    robots: "noindex",
+    xRobotsTag: null,
+    schemaTypes: ["Recipe"],
+  },
   { normalizedUrl: "https://example.com/z", robots: null, xRobotsTag: "noindex", schemaTypes: [] },
 ];
 
@@ -133,7 +144,7 @@ const SITEMAPS: SitemapDiscovery = {
 async function seedAndRun(
   rule: Rule,
   options: Record<string, unknown> = {},
-  fixture: Spec[] = FIXTURE
+  fixture: Spec[] = FIXTURE,
 ) {
   const store = await freshStore();
   const built = fixture.map(mkPage);
@@ -182,7 +193,7 @@ describe("PR-D dual-path golden — noindex family (extractor → siteQuery)", (
     expect(streamed).toEqual(legacy);
     // /private/x is robots.txt-blocked AND meta-noindex → redundant.
     expect(legacy.find((c) => c.name === "redundant-noindex")?.message).toBe(
-      "1 page(s) blocked in robots.txt also have noindex"
+      "1 page(s) blocked in robots.txt also have noindex",
     );
   });
 
@@ -218,7 +229,12 @@ describe("PR-D dual-path golden — noindex family (extractor → siteQuery)", (
   test("crawl/indexability-conflicts: blocked page without noindex lists pages on both paths", async () => {
     const { legacy, streamed } = await seedAndRun(indexabilityConflicts, {}, [
       { normalizedUrl: "https://example.com/c", robots: null, xRobotsTag: null, schemaTypes: [] },
-      { normalizedUrl: "https://example.com/private/y", robots: null, xRobotsTag: null, schemaTypes: [] },
+      {
+        normalizedUrl: "https://example.com/private/y",
+        robots: null,
+        xRobotsTag: null,
+        schemaTypes: [],
+      },
     ]);
     expect(streamed).toEqual(legacy);
     expect(legacy).toHaveLength(1);

@@ -31,8 +31,7 @@ export const jsFileSizeRule: Rule = {
   meta: {
     id: "perf/js-file-size",
     name: "JavaScript File Size Too Large",
-    description:
-      "Checks for JavaScript files that exceed recommended size limits",
+    description: "Checks for JavaScript files that exceed recommended size limits",
     solution:
       "Large JavaScript files block the main thread and delay interactivity. Code-split bundles into smaller chunks, tree-shake unused exports, lazy-load non-critical scripts, and defer or async load third-party scripts. Use dynamic imports for route-based splitting.",
     category: "perf",
@@ -57,13 +56,11 @@ export const jsFileSizeRule: Rule = {
     }
 
     const errorFiles = scripts.filter(
-      (s) => s.sizeBytes !== null && s.sizeBytes > opts.error_bytes
+      (s) => s.sizeBytes !== null && s.sizeBytes > opts.error_bytes,
     );
     const warnFiles = scripts.filter(
       (s) =>
-        s.sizeBytes !== null &&
-        s.sizeBytes > opts.warn_bytes &&
-        s.sizeBytes <= opts.error_bytes
+        s.sizeBytes !== null && s.sizeBytes > opts.warn_bytes && s.sizeBytes <= opts.error_bytes,
     );
 
     if (errorFiles.length > 0) {

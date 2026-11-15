@@ -47,15 +47,20 @@ export interface FrameworkPayload {
 }
 
 /** Window globals frameworks and state libraries assign their serialised state to. */
-const STATE_GLOBALS: ReadonlyArray<{ kind: FrameworkPayloadKind; label: string; needle: string }> = [
-  { kind: "nuxt", label: "window.__NUXT__", needle: "__NUXT__" },
-  { kind: "remix", label: "window.__remixContext", needle: "__remixContext" },
-  { kind: "remix", label: "window.__staticRouterHydrationData", needle: "__staticRouterHydrationData" },
-  { kind: "sveltekit", label: "__sveltekit data", needle: "__sveltekit_" },
-  { kind: "global-state", label: "window.__INITIAL_STATE__", needle: "__INITIAL_STATE__" },
-  { kind: "global-state", label: "window.__PRELOADED_STATE__", needle: "__PRELOADED_STATE__" },
-  { kind: "global-state", label: "window.__APOLLO_STATE__", needle: "__APOLLO_STATE__" },
-];
+const STATE_GLOBALS: ReadonlyArray<{ kind: FrameworkPayloadKind; label: string; needle: string }> =
+  [
+    { kind: "nuxt", label: "window.__NUXT__", needle: "__NUXT__" },
+    { kind: "remix", label: "window.__remixContext", needle: "__remixContext" },
+    {
+      kind: "remix",
+      label: "window.__staticRouterHydrationData",
+      needle: "__staticRouterHydrationData",
+    },
+    { kind: "sveltekit", label: "__sveltekit data", needle: "__sveltekit_" },
+    { kind: "global-state", label: "window.__INITIAL_STATE__", needle: "__INITIAL_STATE__" },
+    { kind: "global-state", label: "window.__PRELOADED_STATE__", needle: "__PRELOADED_STATE__" },
+    { kind: "global-state", label: "window.__APOLLO_STATE__", needle: "__APOLLO_STATE__" },
+  ];
 
 /** `self.__next_f.push(` chunks the Next.js app router streams its server-component payload in. */
 const NEXT_FLIGHT_NEEDLE = "__next_f";
@@ -66,7 +71,12 @@ interface Tally {
   count: number;
 }
 
-function add(map: Map<FrameworkPayloadKind, Tally>, kind: FrameworkPayloadKind, label: string, bytes: number) {
+function add(
+  map: Map<FrameworkPayloadKind, Tally>,
+  kind: FrameworkPayloadKind,
+  label: string,
+  bytes: number,
+) {
   const tally = map.get(kind);
   if (tally) {
     tally.bytes += bytes;
@@ -103,7 +113,12 @@ export function findFrameworkPayloads(doc: Doc): FrameworkPayload[] {
       add(tallies, "qwik", "qwik/json", text.length);
       continue;
     }
-    if (type !== "" && type !== "text/javascript" && type !== "module" && type !== "application/javascript") {
+    if (
+      type !== "" &&
+      type !== "text/javascript" &&
+      type !== "module" &&
+      type !== "application/javascript"
+    ) {
       // JSON-LD, importmaps, speculation rules and the like are not framework state.
       continue;
     }

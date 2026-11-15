@@ -71,9 +71,7 @@ export function itemSourceView(
   const { rows, unlisted } = itemSourceList(item);
   const scope = itemRegionScope(item, structure, check);
   if (!scope) return { rows, total: rows.length + unlisted, all: rows };
-  const outside = rows
-    .filter((row) => !row.sections?.[scope.region])
-    .slice(0, scope.otherPages);
+  const outside = rows.filter((row) => !row.sections?.[scope.region]).slice(0, scope.otherPages);
   // The region line already counts the other pages; a "+N more" only follows rows it lists.
   const total = outside.length > 0 ? Math.max(scope.otherPages, outside.length) : 0;
   return { scope, rows: outside, total, all: rows };
@@ -100,6 +98,7 @@ export function hasItemSources(check: { items?: CheckItem[] }): boolean {
  * one page; "" otherwise.
  */
 export function affectedPagesSuffix(check: { items?: CheckItem[] }, count: number): string {
-  if (hasItemSources(check) && count > 0) return `, found on ${count} ${count === 1 ? "page" : "pages"}`;
+  if (hasItemSources(check) && count > 0)
+    return `, found on ${count} ${count === 1 ? "page" : "pages"}`;
   return count > 1 ? ` (${count} pages)` : "";
 }

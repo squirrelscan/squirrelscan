@@ -25,13 +25,20 @@ const BUSY = /database is locked|database table is locked|sqlite_busy|sqlite_loc
 const BUSY_DETAIL_MARKER = "(database file: ";
 
 function describeBusy(error: unknown, path: string, startedAt: number): unknown {
-  if (!(error instanceof Error) || !BUSY.test(error.message) || error.message.includes(BUSY_DETAIL_MARKER)) {
+  if (
+    !(error instanceof Error) ||
+    !BUSY.test(error.message) ||
+    error.message.includes(BUSY_DETAIL_MARKER)
+  ) {
     return error;
   }
   const waited = Math.round(performance.now() - startedAt);
-  const described = new Error(`${error.message} ${BUSY_DETAIL_MARKER}${path}, waited ${waited} ms)`, {
-    cause: error,
-  });
+  const described = new Error(
+    `${error.message} ${BUSY_DETAIL_MARKER}${path}, waited ${waited} ms)`,
+    {
+      cause: error,
+    },
+  );
   described.name = error.name;
   for (const key of ["code", "errno", "byteOffset"] as const) {
     const value = (error as unknown as Record<string, unknown>)[key];
@@ -58,7 +65,10 @@ function guardStatement<S extends Statement>(path: string, statement: S): S {
   for (const method of ["run", "get", "all", "values"] as const) {
     const original = (statement as unknown as Record<string, (...a: unknown[]) => unknown>)[method];
     if (typeof original === "function") {
-      (wrapped as unknown as Record<string, unknown>)[method] = guard(path, original.bind(statement));
+      (wrapped as unknown as Record<string, unknown>)[method] = guard(
+        path,
+        original.bind(statement),
+      );
     }
   }
   // iterate() is lazy: a busy error surfaces on a later step, not on the call,
@@ -94,8 +104,7 @@ export function openSqlite(path: string, busyTimeoutMs: number = SQLITE_BUSY_TIM
   }
   for (const method of ["prepare", "query"] as const) {
     const original = target[method]!.bind(db);
-    target[method] = (...args: unknown[]) =>
-      guardStatement(path, original(...args) as Statement);
+    target[method] = (...args: unknown[]) => guardStatement(path, original(...args) as Statement);
   }
   const transaction = target.transaction!.bind(db);
   target.transaction = (fn: unknown) => {

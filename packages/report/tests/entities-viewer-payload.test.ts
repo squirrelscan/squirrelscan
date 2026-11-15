@@ -118,7 +118,11 @@ describe("entityViewerData", () => {
     const nodes = Array.from({ length: ENTITY_MAP_VIEWER_LIMITS.maxNodes + 3 }, (_, i) =>
       node(`n${String(i).padStart(5, "0")}`, i),
     );
-    const full = { ...map(0, 0), nodes, summary: { ...map(0, 0).summary, nodeCount: nodes.length } };
+    const full = {
+      ...map(0, 0),
+      nodes,
+      summary: { ...map(0, 0).summary, nodeCount: nodes.length },
+    };
     const payload = parse(entityViewerData(full));
 
     const keys = new Set(payload.nodes.map((n) => n.key));

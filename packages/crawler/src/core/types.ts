@@ -3,11 +3,7 @@
 import type { DocumentFetcher } from "@squirrelscan/fetchers";
 import type { Stream, Effect } from "effect";
 
-import type {
-  CrawlerEvent,
-  DiscoveryProbe,
-  RedirectChain,
-} from "@squirrelscan/core-contracts";
+import type { CrawlerEvent, DiscoveryProbe, RedirectChain } from "@squirrelscan/core-contracts";
 
 import type { AuditLevel } from "@squirrelscan/core-contracts/audit-levels";
 
@@ -401,7 +397,10 @@ export type CrawlerErrorCode =
 export interface Crawler {
   /** Detect and follow both HTTP and client-side redirects, returning the final URL */
   /** `budget`: no hop starts, and none waits longer than what is left, past its deadline (#1271). */
-  detectRedirects(targetUrl: string, budget?: { readonly deadlineAt: number }): Effect.Effect<string, never, never>;
+  detectRedirects(
+    targetUrl: string,
+    budget?: { readonly deadlineAt: number },
+  ): Effect.Effect<string, never, never>;
 
   /** Start a new crawl from the given base URL (runs synchronously until complete) */
   start(

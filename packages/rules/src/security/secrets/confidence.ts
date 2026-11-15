@@ -156,7 +156,8 @@ function isPlaceholderSecret(part: string): boolean {
 // `{password}`, `%s`, `%(pw)s`. Tested on the password alone and on the whole of
 // it: a hard-coded password next to a templated host (`@${DB_HOST}`), or a real
 // password that merely contains `%s` or `{abc}`, is still a credential.
-const TEMPLATE_PASSWORD_RE = /^(?:\$\{[^}]{1,64}\}|\{\{[^}]{1,64}\}\}|\{[a-z_]{1,32}\}|%[sd]|%\([A-Za-z_]\w{0,32}\)[sd])$/;
+const TEMPLATE_PASSWORD_RE =
+  /^(?:\$\{[^}]{1,64}\}|\{\{[^}]{1,64}\}\}|\{[a-z_]{1,32}\}|%[sd]|%\([A-Za-z_]\w{0,32}\)[sd])$/;
 
 // Hosts that name this machine or a name no resolver hands out: loopback and
 // the reserved `.localhost`, `.test`, `.example` and `.invalid` (RFC 2606 and
@@ -175,10 +176,37 @@ function isUnroutableHosts(authority: string, at: number): boolean {
 // a separator (`example-password`). Short, all letters once those are undone,
 // and containing a word that names itself a placeholder. A random password has
 // no such word in it.
-const LEET: Record<string, string> = { "0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", $: "s" };
+const LEET: Record<string, string> = {
+  "0": "o",
+  "1": "l",
+  "3": "e",
+  "4": "a",
+  "5": "s",
+  "7": "t",
+  "@": "a",
+  $: "s",
+};
 const DOCUMENTATION_STEMS = [
-  "secret", "password", "passwd", "pass", "pwd", "admin", "root", "test", "changeme", "example",
-  "sample", "demo", "dummy", "default", "letmein", "postgres", "mysql", "redis", "mongo", "qwerty",
+  "secret",
+  "password",
+  "passwd",
+  "pass",
+  "pwd",
+  "admin",
+  "root",
+  "test",
+  "changeme",
+  "example",
+  "sample",
+  "demo",
+  "dummy",
+  "default",
+  "letmein",
+  "postgres",
+  "mysql",
+  "redis",
+  "mongo",
+  "qwerty",
 ];
 
 /** Is `text` nothing but whole stems end to end (`examplepassword`, `testpass`)? */
@@ -238,7 +266,12 @@ function refineConnectionString(value: string): Refinement {
     // A password that is itself a template placeholder (`${pass}`, `%s`) is a
     // driver's own connection builder, not a credential (#1227).
     const candidate = colon === -1 ? "" : userinfo.slice(colon + 1);
-    if (colon !== -1 && colon !== userinfo.length - 1 && !isPlaceholderSecret(candidate) && !TEMPLATE_PASSWORD_RE.test(candidate)) {
+    if (
+      colon !== -1 &&
+      colon !== userinfo.length - 1 &&
+      !isPlaceholderSecret(candidate) &&
+      !TEMPLATE_PASSWORD_RE.test(candidate)
+    ) {
       credential = true;
       password = userinfo.slice(colon + 1);
     }
@@ -261,7 +294,12 @@ function refineConnectionString(value: string): Refinement {
   // A `host=` or `hostaddr=` query parameter overrides the authority in libpq
   // and other drivers: `@localhost/db?host=db.acme-prod.net` connects there.
   const hostOverride = /[?&](?:host|hostaddr|server)=/i.test(rest);
-  if (password !== undefined && isDocumentationPassword(password) && !hostOverride && isUnroutableHosts(authority, at)) {
+  if (
+    password !== undefined &&
+    isDocumentationPassword(password) &&
+    !hostOverride &&
+    isUnroutableHosts(authority, at)
+  ) {
     return { drop: true };
   }
   const database = /^[^/?#]*\/([^/?#]*)/.exec(rest)?.[1] ?? "";
@@ -353,7 +391,9 @@ function decodeJwtPart(part: string): Record<string, unknown> | null {
 }
 
 /** Header and payload of a JWT, decoded; null when either is not JSON. */
-export function decodeJwt(token: string): { header: Record<string, unknown>; payload: Record<string, unknown> } | null {
+export function decodeJwt(
+  token: string,
+): { header: Record<string, unknown>; payload: Record<string, unknown> } | null {
   const [head, body] = token.split(".");
   if (!head || !body) return null;
   const header = decodeJwtPart(head);
@@ -371,7 +411,9 @@ export function decodeJwt(token: string): { header: Record<string, unknown>; pay
 export function jwtMatchIsSuspect(value: string): boolean {
   if (value.startsWith("eyJ", value.lastIndexOf(".") + 1)) return true;
   const decoded = decodeJwt(value);
-  return !decoded || typeof decoded.header.alg !== "string" || typeof decoded.payload.alg === "string";
+  return (
+    !decoded || typeof decoded.header.alg !== "string" || typeof decoded.payload.alg === "string"
+  );
 }
 
 const ADMIN_WORD_RE = /\badmin\b|\bsuperuser\b|\bservice_role\b/i;
@@ -413,7 +455,8 @@ const CREDENTIAL_KEY_WORDS = new Set([
 ]);
 // Ends in `\s*(?:["'`]\s*)?$` rather than the equivalent `\s*["'`]?\s*$`, whose
 // two adjacent `\s*` made it cubic in the look-back window (leaked-secrets.ts).
-const PRECEDING_KEY_RE = /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*(?:["'`]\s*)?$/;
+const PRECEDING_KEY_RE =
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*(?:["'`]\s*)?$/;
 
 /** Does the look-behind put the token in an Authorization literal or under a credential key? */
 export function heldAsCredential(before: string): boolean {
@@ -441,7 +484,9 @@ function hasSessionSubject(payload: Record<string, unknown>): boolean {
 function hasAdminScope(payload: Record<string, unknown>): boolean {
   for (const key of ["scope", "scopes", "roles", "permissions", "role"]) {
     const claim = payload[key];
-    const text = Array.isArray(claim) ? claim.filter((c) => typeof c === "string").join(" ") : claim;
+    const text = Array.isArray(claim)
+      ? claim.filter((c) => typeof c === "string").join(" ")
+      : claim;
     if (typeof text === "string" && ADMIN_WORD_RE.test(text)) return true;
   }
   return false;
@@ -461,7 +506,13 @@ function hasAdminScope(payload: Record<string, unknown>): boolean {
  * (`your-256-bit-secret` and its siblings). A token with the sample's claims
  * and any other signature is read like any other token.
  */
-const JWT_IO_SECRETS = ["your-256-bit-secret", "your-384-bit-secret", "your-512-bit-secret", "secret", "your-secret"];
+const JWT_IO_SECRETS = [
+  "your-256-bit-secret",
+  "your-384-bit-secret",
+  "your-512-bit-secret",
+  "secret",
+  "your-secret",
+];
 const HMAC_ALGS: Record<string, string> = { HS256: "sha256", HS384: "sha384", HS512: "sha512" };
 
 // The published payload and nothing else: `{"sub":"1234567890","name":
@@ -485,7 +536,9 @@ function verifiesUnderSampleSecret(token: string, header: Record<string, unknown
   if (hash === undefined || lastDot === -1) return false;
   const signed = token.slice(0, lastDot);
   const signature = trimTrailing(token.slice(lastDot + 1), 61);
-  return JWT_IO_SECRETS.some((secret) => createHmac(hash, secret).update(signed).digest("base64url") === signature);
+  return JWT_IO_SECRETS.some(
+    (secret) => createHmac(hash, secret).update(signed).digest("base64url") === signature,
+  );
 }
 
 // Tokens a platform or a vendor script puts on a page for the browser to read
@@ -501,7 +554,8 @@ function mentionsShopSessions(text: string): boolean {
   for (const candidate of text.match(URL_CANDIDATE_RE) ?? []) {
     try {
       const url = new URL(candidate);
-      if (url.hostname === SHOPIFY_SESSIONS_HOST && url.pathname.startsWith("/sessions")) return true;
+      if (url.hostname === SHOPIFY_SESSIONS_HOST && url.pathname.startsWith("/sessions"))
+        return true;
     } catch {
       // not a URL after all
     }
@@ -535,7 +589,10 @@ function publicBeaconToken(
     typeof payload.merchantOrigin === "string" &&
     onlyClaims(payload, ["merchantId", "merchantOrigin", "expiresAt"])
   ) {
-    return { type: "Shopify Wallet Token", extra: { platform: "Shopify", kind: "per-request wallet token" } };
+    return {
+      type: "Shopify Wallet Token",
+      extra: { platform: "Shopify", kind: "per-request wallet token" },
+    };
   }
   if (
     typeof payload.client_id === "string" &&
@@ -545,7 +602,10 @@ function publicBeaconToken(
     // The sessions URL beside the token is the evidence: the claim names alone
     // are what any custom app's own session token could be made of.
     if (mentionsShopSessions((before?.() ?? "") + " " + (after?.() ?? ""))) {
-      return { type: "Shopify Shop Session Token", extra: { platform: "Shopify", kind: "client session token" } };
+      return {
+        type: "Shopify Shop Session Token",
+        extra: { platform: "Shopify", kind: "client session token" },
+      };
     }
   }
   const iss = typeof payload.iss === "string" ? payload.iss : undefined;
@@ -555,7 +615,10 @@ function publicBeaconToken(
     NETLIFY_CWV_ATTR_RE.test(before()) &&
     onlyClaims(payload, ["site_id", "account_id", "deploy_id"])
   ) {
-    return { type: "Netlify Web Vitals Token", extra: { platform: "Netlify", kind: "web vitals beacon" } };
+    return {
+      type: "Netlify Web Vitals Token",
+      extra: { platform: "Netlify", kind: "web vitals beacon" },
+    };
   }
   return undefined;
 }
@@ -568,7 +631,9 @@ function hygraphIssuerHost(iss: string | undefined): string | undefined {
   if (iss === undefined) return undefined;
   try {
     const host = new URL(iss).hostname.toLowerCase();
-    return host === "hygraph.com" || host.endsWith(".hygraph.com") || host.endsWith(".graphcms.com") ? host : undefined;
+    return host === "hygraph.com" || host.endsWith(".hygraph.com") || host.endsWith(".graphcms.com")
+      ? host
+      : undefined;
   } catch {
     return undefined;
   }
@@ -614,7 +679,9 @@ function jwtPartVerdict(part: string | undefined): JwtPartVerdict {
   } catch (error) {
     return error instanceof SyntaxError ? "not-json" : "inconclusive";
   }
-  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? "object" : "not-object";
+  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+    ? "object"
+    : "not-object";
 }
 
 /**
@@ -624,7 +691,9 @@ function jwtPartVerdict(part: string | undefined): JwtPartVerdict {
  */
 function isNotAJwt(value: string): boolean {
   const [head, body] = value.split(".");
-  return [jwtPartVerdict(head), jwtPartVerdict(body)].some((verdict) => verdict === "not-json" || verdict === "not-object");
+  return [jwtPartVerdict(head), jwtPartVerdict(body)].some(
+    (verdict) => verdict === "not-json" || verdict === "not-object",
+  );
 }
 
 function classifyJwt(
@@ -634,21 +703,30 @@ function classifyJwt(
   after?: () => string,
 ): Refinement {
   const decoded = decodeJwt(value);
-  if (decoded && isJwtIoSampleClaims(decoded.payload) && verifiesUnderSampleSecret(value, decoded.header)) {
+  if (
+    decoded &&
+    isJwtIoSampleClaims(decoded.payload) &&
+    verifiesUnderSampleSecret(value, decoded.header)
+  ) {
     return { drop: true };
   }
   if (decoded) {
     const beacon = publicBeaconToken(decoded.header, decoded.payload, before, after);
     if (beacon) {
       const iss = decoded.payload.iss;
-      const extra: FindingExtra = { ...beacon.extra, ...(typeof iss === "string" ? { issuer: displayIssuer(iss) } : {}) };
+      const extra: FindingExtra = {
+        ...beacon.extra,
+        ...(typeof iss === "string" ? { issuer: displayIssuer(iss) } : {}),
+      };
       return { type: beacon.type, confidence: "medium", publicByDesign: true, extra };
     }
   }
   // Dropped only on proof it is not a token (see `isNotAJwt`): an `eyJ` run with two dots that is a base64 payload or text (#1283).
   // An undecided part (too long to read, nested too deeply, empty) is reported at medium.
   if (!decoded) {
-    return isNotAJwt(value) ? { drop: true } : { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
+    return isNotAJwt(value)
+      ? { drop: true }
+      : { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
   }
   const { payload } = decoded;
   const role = typeof payload.role === "string" ? payload.role : undefined;
@@ -657,11 +735,15 @@ function classifyJwt(
   // A claim past what `Date` can represent (8.64e12 seconds) is not an expiry
   // anyone set; read it as absent rather than let toISOString throw below.
   const exp =
-    typeof payload.exp === "number" && Number.isFinite(payload.exp) && Math.abs(payload.exp) <= 8.64e12
+    typeof payload.exp === "number" &&
+    Number.isFinite(payload.exp) &&
+    Math.abs(payload.exp) <= 8.64e12
       ? payload.exp
       : undefined;
   const iat =
-    typeof payload.iat === "number" && Number.isFinite(payload.iat) && Math.abs(payload.iat) <= 8.64e12
+    typeof payload.iat === "number" &&
+    Number.isFinite(payload.iat) &&
+    Math.abs(payload.iat) <= 8.64e12
       ? payload.iat
       : undefined;
   const expired = exp !== undefined && exp * 1000 < now;
@@ -734,7 +816,12 @@ function classifyJwt(
   };
   if (supabase) {
     if (role === "service_role") {
-      return { type: "Supabase Service Role JWT", confidence: "high", publicByDesign: false, extra };
+      return {
+        type: "Supabase Service Role JWT",
+        confidence: "high",
+        publicByDesign: false,
+        extra,
+      };
     }
     if (signedUrl) return signedUrlNote;
     if (role === "anon") {
@@ -743,11 +830,21 @@ function classifyJwt(
     return { type: "Supabase JWT", confidence: "medium", publicByDesign: false, extra };
   }
   if (hasAdminScope(payload)) {
-    return { type: "JSON Web Token (admin scope)", confidence: "high", publicByDesign: false, extra };
+    return {
+      type: "JSON Web Token (admin scope)",
+      confidence: "high",
+      publicByDesign: false,
+      extra,
+    };
   }
   if (signedUrl) return signedUrlNote;
   if (role === "anon") {
-    return { type: "JSON Web Token (anon role)", confidence: "medium", publicByDesign: true, extra };
+    return {
+      type: "JSON Web Token (anon role)",
+      confidence: "medium",
+      publicByDesign: true,
+      extra,
+    };
   }
 
   // A session token: it expires within 30 days of when it was issued (or of
@@ -759,7 +856,8 @@ function classifyJwt(
   // is a credential someone embedded and stays medium.
   const shortLived =
     exp !== undefined &&
-    ((iat !== undefined && exp - iat <= SESSION_MAX_SECONDS) || exp - now / 1000 <= SESSION_MAX_SECONDS);
+    ((iat !== undefined && exp - iat <= SESSION_MAX_SECONDS) ||
+      exp - now / 1000 <= SESSION_MAX_SECONDS);
   const thirdParty = iss !== undefined && THIRD_PARTY_ISSUER_RE.test(iss);
   // Only a token that stands alone is "the visitor's own session": one being
   // sent in an Authorization header, or held under a key that calls it a
@@ -779,7 +877,11 @@ function classifyJwt(
 }
 
 /** What a JWT-shaped match with no string `alg` in its header may be and still be dropped: a plain generic token. */
-const PLAIN_JWT_TYPES = new Set(["JSON Web Token", "JSON Web Token (expired)", "Session Token (JWT)"]);
+const PLAIN_JWT_TYPES = new Set([
+  "JSON Web Token",
+  "JSON Web Token (expired)",
+  "Session Token (JWT)",
+]);
 
 /**
  * A header with no string `alg` (missing, null, a number, an array, an object) is malformed, which alone proves nothing: the payload is
@@ -796,7 +898,10 @@ function refineJwt(
   // When the match does not decode but the two parts after the first do, the real token is classified.
   const parts = value.split(".");
   const asMatched = decodeJwt(value);
-  const token = !asMatched && parts.length === 3 && decodeJwt(`${parts[1]}.${parts[2]}`) ? `${parts[1]}.${parts[2]}` : value;
+  const token =
+    !asMatched && parts.length === 3 && decodeJwt(`${parts[1]}.${parts[2]}`)
+      ? `${parts[1]}.${parts[2]}`
+      : value;
   const result = classifyJwt(token, now, before, after);
   if (result.drop || result.type === undefined || !PLAIN_JWT_TYPES.has(result.type)) return result;
   const decoded = decodeJwt(token);
@@ -859,7 +964,12 @@ function refineAlgoliaSecuredKey(value: string): Refinement {
   for (const key of keys) extra[key] = restrictions[key]!;
   if (keys.length === 0) {
     // Secured, but with nothing restricted: it can do whatever its parent can.
-    return { structural: true, confidence: "medium", publicByDesign: false, extra: { ...extra, restrictions: "none" } };
+    return {
+      structural: true,
+      confidence: "medium",
+      publicByDesign: false,
+      extra: { ...extra, restrictions: "none" },
+    };
   }
   return { structural: true, confidence: "medium", publicByDesign: true, extra };
 }
@@ -887,8 +997,13 @@ const STRIPE_SECRET_PREFIX_RE = /^(?:sk|rk)_(?:live|test)_/;
 
 function refineStripeKey(value: string): Refinement {
   const prefix = STRIPE_SECRET_PREFIX_RE.exec(value)?.[0];
-  if (prefix !== undefined && STRIPE_DOC_SAMPLE_TAILS.has(value.slice(prefix.length))) return { drop: true };
-  const kind = value.startsWith("sk_") ? "secret" : value.startsWith("rk_") ? "restricted" : "publishable";
+  if (prefix !== undefined && STRIPE_DOC_SAMPLE_TAILS.has(value.slice(prefix.length)))
+    return { drop: true };
+  const kind = value.startsWith("sk_")
+    ? "secret"
+    : value.startsWith("rk_")
+      ? "restricted"
+      : "publishable";
   const mode = value.slice(3, 8) === "live_" ? "live" : "test";
   return { extra: { kind, mode } };
 }
@@ -964,7 +1079,8 @@ export function refineFinding(
       return refineAwsAccessKeyId(value, context.before?.(), context.after?.());
     if (CONNECTION_STRING_TYPES.has(type)) return refineConnectionString(value);
     if (GITHUB_TYPES.has(type)) return refineGithubToken(value);
-    if (type === "JSON Web Token" || type === "Supabase Anon Key") return refineJwt(value, now, context.before, context.after);
+    if (type === "JSON Web Token" || type === "Supabase Anon Key")
+      return refineJwt(value, now, context.before, context.after);
     if (type === "Algolia Secured API Key") return refineAlgoliaSecuredKey(value);
     if (type === "Algolia API Key") return refineAlgoliaHexKey();
     if (STRIPE_TYPES.has(type)) return refineStripeKey(value);

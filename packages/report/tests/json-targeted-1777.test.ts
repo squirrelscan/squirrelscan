@@ -32,7 +32,11 @@ describe("meta.targeted", () => {
         requested: 4,
         audited: 2,
         unaudited: [
-          { url: "https://example.com/old", reason: "redirected", destination: "https://example.com/new" },
+          {
+            url: "https://example.com/old",
+            reason: "redirected",
+            destination: "https://example.com/new",
+          },
           { url: "https://example.com/private", reason: "robots_disallowed" },
         ],
       }),
@@ -41,7 +45,11 @@ describe("meta.targeted", () => {
       requested: 4,
       audited: 2,
       unaudited: [
-        { url: "https://example.com/old", reason: "redirected", destination: "https://example.com/new" },
+        {
+          url: "https://example.com/old",
+          reason: "redirected",
+          destination: "https://example.com/new",
+        },
         { url: "https://example.com/private", reason: "robots_disallowed" },
       ],
     });
@@ -54,8 +62,14 @@ describe("meta.targeted", () => {
         audited: 1,
         unaudited: [
           { url: 7, reason: "x" },
-          { url: "https://example.com/a", reason: "a long free text reason with <script> and symbols!!" },
-          ...Array.from({ length: 150 }, (_, i) => ({ url: `https://example.com/${i}`, reason: "over_max_pages" })),
+          {
+            url: "https://example.com/a",
+            reason: "a long free text reason with <script> and symbols!!",
+          },
+          ...Array.from({ length: 150 }, (_, i) => ({
+            url: `https://example.com/${i}`,
+            reason: "over_max_pages",
+          })),
         ],
       }),
     ) as { targeted: { unaudited: Array<{ url: string; reason: string }> } };

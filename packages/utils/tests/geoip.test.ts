@@ -27,7 +27,9 @@ describe("lookupCountry", () => {
 
 describe("shipped GeoIP database", () => {
   test("matches the size and sha256 recorded in SNAPSHOT.json", async () => {
-    const bytes = new Uint8Array(await Bun.file(new URL("../geoip-db/country.bin.gz", import.meta.url)).arrayBuffer());
+    const bytes = new Uint8Array(
+      await Bun.file(new URL("../geoip-db/country.bin.gz", import.meta.url)).arrayBuffer(),
+    );
     expect(bytes.byteLength).toBe(snapshot.compiledBytes);
     expect(snapshot.compiledBytes).toBe(2296108);
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(snapshot.compiledSha256);

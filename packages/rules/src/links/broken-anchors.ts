@@ -270,7 +270,11 @@ export const brokenAnchorsRule: Rule = {
             sourcePages,
             sources,
             ...regionsField(regions),
-            meta: { skipLink: g.skipLink, ...sectionMeta(sections), linkedFrom: sourcePages.length },
+            meta: {
+              skipLink: g.skipLink,
+              ...sectionMeta(sections),
+              linkedFrom: sourcePages.length,
+            },
           };
         }),
       });

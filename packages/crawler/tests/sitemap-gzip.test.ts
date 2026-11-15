@@ -43,7 +43,9 @@ function serve(routes: (base: string) => Record<string, Route>): string {
     port: 0,
     fetch(req) {
       const route = table[new URL(req.url).pathname];
-      return route ? new Response(route.body, { headers: route.headers }) : new Response("nope", { status: 404 });
+      return route
+        ? new Response(route.body, { headers: route.headers })
+        : new Response("nope", { status: 404 });
     },
   });
   servers.push(server);
@@ -95,7 +97,8 @@ async function discover(origin: string) {
 
 function child(result: Awaited<ReturnType<typeof discover>>, url: string) {
   const found = result.all.find((sitemap) => sitemap.url === url);
-  if (!found) throw new Error(`${url} was not stored; stored: ${result.all.map((s) => s.url).join(", ")}`);
+  if (!found)
+    throw new Error(`${url} was not stored; stored: ${result.all.map((s) => s.url).join(", ")}`);
   return found;
 }
 
@@ -156,7 +159,9 @@ describe("gzip child sitemaps (#662)", () => {
     });
     servers.push(server);
 
-    const result = await Effect.runPromise(fetchSitemap(`http://localhost:${server.port}/sitemap.xml`, "squirrel-test"));
+    const result = await Effect.runPromise(
+      fetchSitemap(`http://localhost:${server.port}/sitemap.xml`, "squirrel-test"),
+    );
 
     expect(acceptEncoding as string | null).toBe("gzip");
     expect(result.success && result.data.errors).toEqual([SITEMAP_TOO_LARGE_ERROR]);
@@ -169,7 +174,12 @@ describe("gzip child sitemaps (#662)", () => {
       ["deflate", deflateSync(xml)],
       ["deflate", deflateRawSync(xml)],
     ] as const) {
-      const decoded = decodeSitemapBody(body, "https://example.com/s.xml", "application/xml", coding);
+      const decoded = decodeSitemapBody(
+        body,
+        "https://example.com/s.xml",
+        "application/xml",
+        coding,
+      );
       expect([coding, decoded.data.errors, decoded.data.urlCount]).toEqual([coding, [], 1]);
     }
   });
@@ -181,7 +191,12 @@ describe("gzip child sitemaps (#662)", () => {
       ["br", br],
       ["deflate", deflateSync(zeros)],
     ] as const) {
-      const decoded = decodeSitemapBody(body, "https://example.com/s.xml", "application/xml", coding);
+      const decoded = decodeSitemapBody(
+        body,
+        "https://example.com/s.xml",
+        "application/xml",
+        coding,
+      );
       expect([coding, decoded.data.errors]).toEqual([coding, [SITEMAP_TOO_LARGE_ERROR]]);
     }
   });
@@ -199,19 +214,26 @@ describe("gzip child sitemaps (#662)", () => {
     const reason = failure(inflateSync);
     // Otherwise the assertion below could not tell the two apart.
     expect(failure(inflateRawSync)).not.toBe(reason);
-    const decoded = decodeSitemapBody(corrupt, "https://example.com/s.xml", "application/xml", "deflate");
+    const decoded = decodeSitemapBody(
+      corrupt,
+      "https://example.com/s.xml",
+      "application/xml",
+      "deflate",
+    );
     expect(decoded.data.errors).toEqual([`Corrupt deflate body: ${reason}`]);
   });
 
   test("a corrupt, stacked or unknown Content-Encoding is reported, not parsed", () => {
     const url = "https://example.com/s.xml";
     const corrupt = Uint8Array.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3]);
-    expect(decodeSitemapBody(corrupt, url, "application/xml", "gzip").data.errors[0]?.startsWith(
-      `${SITEMAP_CORRUPT_GZIP_ERROR}: `,
-    )).toBe(true);
-    expect(decodeSitemapBody(Uint8Array.from([1, 2, 3]), url, "application/xml", "zstd").data.errors).toEqual([
-      `${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: zstd`,
-    ]);
+    expect(
+      decodeSitemapBody(corrupt, url, "application/xml", "gzip").data.errors[0]?.startsWith(
+        `${SITEMAP_CORRUPT_GZIP_ERROR}: `,
+      ),
+    ).toBe(true);
+    expect(
+      decodeSitemapBody(Uint8Array.from([1, 2, 3]), url, "application/xml", "zstd").data.errors,
+    ).toEqual([`${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: zstd`]);
     const twice = gzipSync(gzipSync(urlset("https://example.com/")));
     expect(decodeSitemapBody(twice, url, "application/xml", "gzip, gzip").data.errors).toEqual([
       `${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: gzip, gzip`,
@@ -245,7 +267,9 @@ describe("gzip child sitemaps (#662)", () => {
   test("Bun hands back the raw bytes: a corrupt Content-Encoding body is the walk's to report", async () => {
     // With the runtime decoding, this fetch throws and the sitemap reads as a
     // network failure; with `decompress: false` the bytes reach the walk.
-    const corrupt = Uint8Array.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4, 5, 6, 7, 8]);
+    const corrupt = Uint8Array.from([
+      0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
     const origin = serve(() => ({
       "/sitemap.xml": { body: corrupt, headers: { ...XML, "Content-Encoding": "gzip" } },
     }));
@@ -253,7 +277,9 @@ describe("gzip child sitemaps (#662)", () => {
     const result = await Effect.runPromise(fetchSitemap(`${origin}/sitemap.xml`, "squirrel-test"));
 
     expect(result.success).toBe(true);
-    expect(result.success && result.data.errors[0]?.startsWith(`${SITEMAP_CORRUPT_GZIP_ERROR}: `)).toBe(true);
+    expect(
+      result.success && result.data.errors[0]?.startsWith(`${SITEMAP_CORRUPT_GZIP_ERROR}: `),
+    ).toBe(true);
   });
 
   test("every request, redirect hops included, turns the runtime's decoding off", async () => {
@@ -274,7 +300,9 @@ describe("gzip child sitemaps (#662)", () => {
         : new Response(urlset("https://example.com/"), { headers: XML });
     }) as typeof fetch;
     try {
-      const result = await Effect.runPromise(fetchSitemap("https://example.com/old.xml", "squirrel-test"));
+      const result = await Effect.runPromise(
+        fetchSitemap("https://example.com/old.xml", "squirrel-test"),
+      );
       expect(result.success && result.data.urlCount).toBe(1);
     } finally {
       globalThis.fetch = originalFetch;
@@ -294,14 +322,18 @@ describe("gzip child sitemaps (#662)", () => {
       },
     }));
 
-    const result = await Effect.runPromise(fetchSitemap(`${origin}/sitemap.xml.gz`, "squirrel-test"));
+    const result = await Effect.runPromise(
+      fetchSitemap(`${origin}/sitemap.xml.gz`, "squirrel-test"),
+    );
 
     expect(result.success && result.data.urls.map((url) => url.loc)).toEqual([`${origin}/`]);
   });
 
   test("a corrupt gzip body reports a corrupt-gzip error, not Unknown sitemap format", async () => {
     // The gzip signature and header, then bytes that are not a deflate stream.
-    const corrupt = Uint8Array.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4, 5, 6, 7, 8]);
+    const corrupt = Uint8Array.from([
+      0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
     const origin = indexWithChild("/child.xml.gz", () => ({ body: corrupt, headers: GZIP_FILE }));
 
     const gz = child(await discover(origin), `${origin}/child.xml.gz`);
@@ -313,7 +345,11 @@ describe("gzip child sitemaps (#662)", () => {
 
   test("a truncated gzip body is corrupt too", () => {
     const whole = gzipSync(urlset("https://example.com/"));
-    const decoded = decodeSitemapBody(whole.subarray(0, whole.length - 10), "https://example.com/s.xml.gz", null);
+    const decoded = decodeSitemapBody(
+      whole.subarray(0, whole.length - 10),
+      "https://example.com/s.xml.gz",
+      null,
+    );
 
     expect(decoded.data.errors[0]?.startsWith(`${SITEMAP_CORRUPT_GZIP_ERROR}: `)).toBe(true);
     expect(decoded.notASitemap).toBeUndefined();

@@ -54,7 +54,11 @@ describe("Clerk publishable-key detection (#1478)", () => {
   });
 
   test("the written form of the body does not matter: unpadded and base64url", () => {
-    for (const host of ["clerk.example.com$", "foo-bar-12.clerk.accounts.dev$", "ab.clerk.example.org$"]) {
+    for (const host of [
+      "clerk.example.com$",
+      "foo-bar-12.clerk.accounts.dev$",
+      "ab.clerk.example.org$",
+    ]) {
       expect(detectsClerk(assigned(pk("live", unpadded(host)))), `unpadded ${host}`).toBe(true);
       expect(detectsClerk(assigned(pk("test", b64url(host)))), `base64url ${host}`).toBe(true);
     }

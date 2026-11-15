@@ -105,7 +105,11 @@ export function includesPath(paths: readonly WellKnownPath[], path: string): boo
  * network failure gets, so the marker is the only discriminator.
  */
 export function wasSent(probe: { status: number; error: string | null }): boolean {
-  return !(probe.status === 0 && probe.error !== null && PROBE_NOT_SENT_ERRORS.includes(probe.error));
+  return !(
+    probe.status === 0 &&
+    probe.error !== null &&
+    PROBE_NOT_SENT_ERRORS.includes(probe.error)
+  );
 }
 
 /** Whether a stored probe got an HTTP answer. `status: 0` is no answer at all. */

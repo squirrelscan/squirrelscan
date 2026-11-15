@@ -84,59 +84,43 @@ const check = (checks: Checks, ruleId: string, name: string) =>
   checks.get(ruleId)?.find((c) => c.name === name);
 
 describe("in-page About and Contact sections through the streaming engine (#1236)", () => {
-  test(
-    "the reporter's fixture passes both rules, on the streaming engine and v1",
-    async () => {
-      const { streaming, v1 } = await judge("fixture", FIXTURE);
-      for (const checks of [streaming, v1]) {
-        const about = check(checks, "eeat/about-page", "about-page");
-        expect(about?.status).toBe("pass");
-        expect(about?.message).toBe("About section found on the homepage (#about)");
-        const contact = check(checks, "eeat/contact-page", "contact-page");
-        expect(contact?.status).toBe("pass");
-        expect(contact?.message).toBe("Contact section found on the homepage (#contact)");
-      }
-    },
-    180_000,
-  );
+  test("the reporter's fixture passes both rules, on the streaming engine and v1", async () => {
+    const { streaming, v1 } = await judge("fixture", FIXTURE);
+    for (const checks of [streaming, v1]) {
+      const about = check(checks, "eeat/about-page", "about-page");
+      expect(about?.status).toBe("pass");
+      expect(about?.message).toBe("About section found on the homepage (#about)");
+      const contact = check(checks, "eeat/contact-page", "contact-page");
+      expect(contact?.status).toBe("pass");
+      expect(contact?.message).toBe("Contact section found on the homepage (#contact)");
+    }
+  }, 180_000);
 
-  test(
-    "a thin About section reports info, not warn",
-    async () => {
-      const thin = page(`<section id="about"><h2>Who we are</h2><p>${words(40)}</p></section>`);
-      const { streaming, v1 } = await judge("thin", thin);
-      for (const checks of [streaming, v1]) {
-        expect(check(checks, "eeat/about-page", "about-page")?.status).toBe("info");
-      }
-    },
-    180_000,
-  );
+  test("a thin About section reports info, not warn", async () => {
+    const thin = page(`<section id="about"><h2>Who we are</h2><p>${words(40)}</p></section>`);
+    const { streaming, v1 } = await judge("thin", thin);
+    for (const checks of [streaming, v1]) {
+      expect(check(checks, "eeat/about-page", "about-page")?.status).toBe("info");
+    }
+  }, 180_000);
 
-  test(
-    "an id with no fragment link pointing at it is not a section",
-    async () => {
-      const stray = page(
-        `<section id="about"><h2>Who we are</h2><p>${words(230)}</p></section>`,
-        `<nav><a href="#services">Services</a> <a href="#contact">Contact</a></nav>`,
-      );
-      const { streaming, v1 } = await judge("stray", stray);
-      for (const checks of [streaming, v1]) {
-        expect(check(checks, "eeat/about-page", "about-page")?.status).toBe("warn");
-      }
-    },
-    180_000,
-  );
+  test("an id with no fragment link pointing at it is not a section", async () => {
+    const stray = page(
+      `<section id="about"><h2>Who we are</h2><p>${words(230)}</p></section>`,
+      `<nav><a href="#services">Services</a> <a href="#contact">Contact</a></nav>`,
+    );
+    const { streaming, v1 } = await judge("stray", stray);
+    for (const checks of [streaming, v1]) {
+      expect(check(checks, "eeat/about-page", "about-page")?.status).toBe("warn");
+    }
+  }, 180_000);
 
-  test(
-    "crawl/single-page-site fires on the same fixture on both engines",
-    async () => {
-      const { streaming, v1 } = await judge("single", FIXTURE);
-      for (const checks of [streaming, v1]) {
-        const found = check(checks, "crawl/single-page-site", "single-page-site");
-        expect(found?.status).toBe("info");
-        expect(found?.details).toEqual({ sections: 3 });
-      }
-    },
-    180_000,
-  );
+  test("crawl/single-page-site fires on the same fixture on both engines", async () => {
+    const { streaming, v1 } = await judge("single", FIXTURE);
+    for (const checks of [streaming, v1]) {
+      const found = check(checks, "crawl/single-page-site", "single-page-site");
+      expect(found?.status).toBe("info");
+      expect(found?.details).toEqual({ sections: 3 });
+    }
+  }, 180_000);
 });

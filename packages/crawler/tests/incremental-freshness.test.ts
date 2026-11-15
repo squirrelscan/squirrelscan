@@ -2,12 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  calculateFreshness,
-  parseCacheControl,
-  parseVary,
-  varyMatches,
-} from "../src/incremental";
+import { calculateFreshness, parseCacheControl, parseVary, varyMatches } from "../src/incremental";
 
 const SEC = 1000;
 const now = 1_000_000_000_000; // fixed clock
@@ -15,7 +10,7 @@ const now = 1_000_000_000_000; // fixed clock
 describe("parseCacheControl", () => {
   test("parses max-age, s-maxage, swr, immutable", () => {
     const cc = parseCacheControl(
-      "public, max-age=600, s-maxage=1200, stale-while-revalidate=300, immutable"
+      "public, max-age=600, s-maxage=1200, stale-while-revalidate=300, immutable",
     );
     expect(cc.maxAge).toBe(600);
     expect(cc.sMaxAge).toBe(1200);
@@ -46,7 +41,7 @@ describe("calculateFreshness", () => {
   test("max-age: fresh within lifetime (skip request)", () => {
     const r = calculateFreshness(
       { cacheControl: "max-age=3600", expires: null, age: null, fetchedAt: now - 1800 * SEC },
-      { now }
+      { now },
     );
     expect(r.state).toBe("fresh");
     expect(r.reason).toBe("max-age");
@@ -55,7 +50,7 @@ describe("calculateFreshness", () => {
   test("max-age: stale past lifetime → conditional GET", () => {
     const r = calculateFreshness(
       { cacheControl: "max-age=3600", expires: null, age: null, fetchedAt: now - 7200 * SEC },
-      { now }
+      { now },
     );
     expect(r.state).toBe("stale");
   });
@@ -64,7 +59,7 @@ describe("calculateFreshness", () => {
     // max-age=100, stored 60s ago, but response Age was 80 → total 140 > 100.
     const r = calculateFreshness(
       { cacheControl: "max-age=100", expires: null, age: 80, fetchedAt: now - 60 * SEC },
-      { now }
+      { now },
     );
     expect(r.state).toBe("stale");
   });
@@ -73,14 +68,14 @@ describe("calculateFreshness", () => {
     expect(
       calculateFreshness(
         { cacheControl: "no-store, max-age=3600", expires: null, age: null, fetchedAt: now },
-        { now }
-      ).state
+        { now },
+      ).state,
     ).toBe("stale");
     expect(
       calculateFreshness(
         { cacheControl: "no-cache", expires: null, age: null, fetchedAt: now },
-        { now }
-      ).state
+        { now },
+      ).state,
     ).toBe("stale");
   });
 
@@ -88,7 +83,7 @@ describe("calculateFreshness", () => {
     const expires = new Date(now + 3600 * SEC).toUTCString();
     const r = calculateFreshness(
       { cacheControl: null, expires, age: null, fetchedAt: now },
-      { now }
+      { now },
     );
     expect(r.state).toBe("fresh");
     expect(r.reason).toBe("expires");
@@ -101,13 +96,13 @@ describe("calculateFreshness", () => {
     const expires = new Date(now + 100 * SEC).toUTCString();
     const stale = calculateFreshness(
       { cacheControl: null, expires, age: 120, fetchedAt: now - 60 * SEC },
-      { now }
+      { now },
     );
     expect(stale.state).toBe("stale");
     // Control: same entry with no response Age is still fresh (60 < 160).
     const fresh = calculateFreshness(
       { cacheControl: null, expires, age: 0, fetchedAt: now - 60 * SEC },
-      { now }
+      { now },
     );
     expect(fresh.state).toBe("fresh");
     expect(fresh.reason).toBe("expires");
@@ -117,7 +112,7 @@ describe("calculateFreshness", () => {
     const expires = new Date(now - 10 * SEC).toUTCString();
     const r = calculateFreshness(
       { cacheControl: null, expires, age: null, fetchedAt: now - 20 * SEC },
-      { now }
+      { now },
     );
     expect(r.state).toBe("stale");
   });
@@ -125,7 +120,7 @@ describe("calculateFreshness", () => {
   test("no freshness info → stale", () => {
     const r = calculateFreshness(
       { cacheControl: null, expires: null, age: null, fetchedAt: now },
-      { now }
+      { now },
     );
     expect(r.state).toBe("stale");
     expect(r.reason).toBe("no-cache-header");
@@ -140,7 +135,7 @@ describe("calculateFreshness", () => {
         age: null,
         fetchedAt: now - 2 * 24 * 3600 * SEC,
       },
-      { now, maxStalenessSeconds: 24 * 3600 }
+      { now, maxStalenessSeconds: 24 * 3600 },
     );
     expect(r.state).toBe("stale");
     expect(r.reason).toBe("staleness-cap");
@@ -154,7 +149,7 @@ describe("calculateFreshness", () => {
         age: null,
         fetchedAt: now - 3600 * SEC,
       },
-      { now }
+      { now },
     );
     expect(r.state).toBe("fresh");
     expect(r.reason).toBe("immutable");
@@ -163,8 +158,13 @@ describe("calculateFreshness", () => {
   test("s-maxage takes precedence over max-age", () => {
     // max-age=10 (stale), s-maxage=10000 (fresh) → fresh via s-maxage.
     const r = calculateFreshness(
-      { cacheControl: "max-age=10, s-maxage=10000", expires: null, age: null, fetchedAt: now - 100 * SEC },
-      { now }
+      {
+        cacheControl: "max-age=10, s-maxage=10000",
+        expires: null,
+        age: null,
+        fetchedAt: now - 100 * SEC,
+      },
+      { now },
     );
     expect(r.state).toBe("fresh");
     expect(r.reason).toBe("s-maxage");
@@ -179,7 +179,7 @@ describe("calculateFreshness", () => {
         age: null,
         fetchedAt: now - 120 * SEC,
       },
-      { now }
+      { now },
     );
     expect(r.state).toBe("revalidate");
     expect(r.reason).toBe("stale-while-revalidate");
@@ -193,7 +193,7 @@ describe("calculateFreshness", () => {
         age: null,
         fetchedAt: now - 120 * SEC,
       },
-      { now }
+      { now },
     );
     expect(r.state).toBe("stale");
   });
@@ -207,7 +207,7 @@ describe("calculateFreshness", () => {
         age: null,
         fetchedAt: now - 760 * SEC,
       },
-      { now }
+      { now },
     );
     expect(r.state).toBe("stale");
   });
@@ -215,10 +215,7 @@ describe("calculateFreshness", () => {
 
 describe("Vary keying", () => {
   test("parseVary handles list and wildcard", () => {
-    expect(parseVary("Accept-Encoding, User-Agent")).toEqual([
-      "accept-encoding",
-      "user-agent",
-    ]);
+    expect(parseVary("Accept-Encoding, User-Agent")).toEqual(["accept-encoding", "user-agent"]);
     expect(parseVary("*")).toBe("*");
     expect(parseVary(null)).toEqual([]);
   });
@@ -234,9 +231,7 @@ describe("Vary keying", () => {
   });
 
   test("Vary: * never matches (uncacheable)", () => {
-    expect(varyMatches("*", { "user-agent": "x" }, { "user-agent": "x" })).toBe(
-      false
-    );
+    expect(varyMatches("*", { "user-agent": "x" }, { "user-agent": "x" })).toBe(false);
   });
 
   test("matching varied header → hit", () => {
@@ -244,8 +239,8 @@ describe("Vary keying", () => {
       varyMatches(
         "Accept-Encoding",
         { "accept-encoding": "gzip, br" },
-        { "accept-encoding": "gzip, br" }
-      )
+        { "accept-encoding": "gzip, br" },
+      ),
     ).toBe(true);
   });
 
@@ -254,14 +249,12 @@ describe("Vary keying", () => {
       varyMatches(
         "User-Agent",
         { "user-agent": "SquirrelBot/1.0" },
-        { "user-agent": "SquirrelBot/2.0" }
-      )
+        { "user-agent": "SquirrelBot/2.0" },
+      ),
     ).toBe(false);
   });
 
   test("missing stored header treated as empty (miss when current present)", () => {
-    expect(
-      varyMatches("User-Agent", {}, { "user-agent": "SquirrelBot/2.0" })
-    ).toBe(false);
+    expect(varyMatches("User-Agent", {}, { "user-agent": "SquirrelBot/2.0" })).toBe(false);
   });
 });

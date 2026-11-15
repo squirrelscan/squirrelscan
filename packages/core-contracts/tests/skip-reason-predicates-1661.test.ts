@@ -80,7 +80,9 @@ describe("the predicates over every coded skip reason", () => {
 
   test("the not-checked set is exactly the reasons the table marks", () => {
     expect([...NOT_CHECKED_SKIP_REASONS].sort()).toEqual(
-      TABLE.filter((r) => r[3]).map((r) => r[0]).sort(),
+      TABLE.filter((r) => r[3])
+        .map((r) => r[0])
+        .sort(),
     );
   });
 });

@@ -27,13 +27,11 @@ export const slugKeywordsRule: Rule = {
     // Check for purely numeric or ID-based URLs
     const segments = path.split("/").filter(Boolean);
     const lastSegment = segments.pop() || "";
-    const secondLastSegment =
-      segments.length > 0 ? segments[segments.length - 1] : "";
+    const secondLastSegment = segments.length > 0 ? segments[segments.length - 1] : "";
 
     // Pagination exclusion: /page/N, /pages/N, /p/N
     const isPaginationUrl =
-      PAGINATION_PREFIXES.includes(secondLastSegment.toLowerCase()) &&
-      /^\d+$/.test(lastSegment);
+      PAGINATION_PREFIXES.includes(secondLastSegment.toLowerCase()) && /^\d+$/.test(lastSegment);
 
     if (isPaginationUrl) {
       checks.push({
@@ -46,12 +44,9 @@ export const slugKeywordsRule: Rule = {
 
     // Patterns indicating non-descriptive URLs
     const isNumericId = /^\d+$/.test(lastSegment);
-    const isShortId =
-      /^[a-z0-9]{1,8}$/i.test(lastSegment) && !/[aeiou]{2}/i.test(lastSegment);
+    const isShortId = /^[a-z0-9]{1,8}$/i.test(lastSegment) && !/[aeiou]{2}/i.test(lastSegment);
     const isHashId = /^[a-f0-9]{8,}$/i.test(lastSegment);
-    const isGenericSlug = /^(page|post|item|product|article|node)-?\d+$/i.test(
-      lastSegment
-    );
+    const isGenericSlug = /^(page|post|item|product|article|node)-?\d+$/i.test(lastSegment);
 
     if (isNumericId || isHashId) {
       checks.push({

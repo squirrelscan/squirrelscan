@@ -126,7 +126,10 @@ async function requestStatus(
   }
 }
 
-async function probeOne(url: string, options: LinkTargetProbeOptions): Promise<LinkTargetProbeResult> {
+async function probeOne(
+  url: string,
+  options: LinkTargetProbeOptions,
+): Promise<LinkTargetProbeResult> {
   if (!options.mayRequest(url)) return { url, status: null, error: "not requested" };
   if (options.budget?.shouldSkip(url)) return { url, status: null, error: "skipped" };
   const controller = new AbortController();

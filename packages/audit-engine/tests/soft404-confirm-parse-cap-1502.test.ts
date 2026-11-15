@@ -8,7 +8,11 @@ import { parsePage } from "@squirrelscan/parser";
 import { MAX_DURATION_MAX_PAGE_BYTES } from "@squirrelscan/utils/constants";
 
 import { DEFAULT_MAX_BODY_BYTES } from "../src/lib/capped-body-read";
-import { confirmSoft404Candidates, type ConfirmFetch, type Soft404ConfirmPage } from "../src/soft404-confirm";
+import {
+  confirmSoft404Candidates,
+  type ConfirmFetch,
+  type Soft404ConfirmPage,
+} from "../src/soft404-confirm";
 
 const SHELL = `<!doctype html>
 <html id="__next_error__">
@@ -16,18 +20,25 @@ const SHELL = `<!doctype html>
   <body><main><h1>Page Not Found</h1><p>The page does not exist.</p></main></body>
 </html>`;
 /** The same error shell, padded past any small cap by a comment. */
-const padded = (extra: number): string => SHELL.replace("</body>", `<!--${"x".repeat(extra)}--></body>`);
+const padded = (extra: number): string =>
+  SHELL.replace("</body>", `<!--${"x".repeat(extra)}--></body>`);
 
 const page = (): Soft404ConfirmPage => {
   const url = "https://example.com/gone";
   return { url, statusCode: 200, parsed: parsePage(SHELL, url) };
 };
 
-const bodyFetch = (body: string): ConfirmFetch => async () => ({ status: 200, body });
+const bodyFetch =
+  (body: string): ConfirmFetch =>
+  async () => ({ status: 200, body });
 
 async function verdict(body: string, maxParseBytes?: number) {
   const pages = [page()];
-  await confirmSoft404Candidates(pages, { userAgent: "t", ...(maxParseBytes !== undefined ? { maxParseBytes } : {}) }, bodyFetch(body));
+  await confirmSoft404Candidates(
+    pages,
+    { userAgent: "t", ...(maxParseBytes !== undefined ? { maxParseBytes } : {}) },
+    bodyFetch(body),
+  );
   return pages[0]!.parsed.soft404Confirmation;
 }
 
@@ -54,7 +65,10 @@ describe("the soft-404 confirmation honours the parse cap (#1502)", () => {
   test("the cap does not touch a body under it, a non-2xx, or a disabled pass", async () => {
     expect(await verdict(SHELL, 1_000_000)).toBe("confirmed");
     const pages = [page()];
-    await confirmSoft404Candidates(pages, { userAgent: "t", maxParseBytes: 10 }, async () => ({ status: 500, body: "" }));
+    await confirmSoft404Candidates(pages, { userAgent: "t", maxParseBytes: 10 }, async () => ({
+      status: 500,
+      body: "",
+    }));
     expect(pages[0]!.parsed.soft404Confirmation).toBe("unconfirmed");
   });
 });

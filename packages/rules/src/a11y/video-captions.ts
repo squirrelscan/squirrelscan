@@ -32,9 +32,7 @@ export const videoCaptionsRule: Rule = {
 
     for (const video of checked) {
       const src =
-        video.getAttribute("src") ||
-        video.querySelector("source")?.getAttribute("src") ||
-        "";
+        video.getAttribute("src") || video.querySelector("source")?.getAttribute("src") || "";
 
       if (!hasCaptionTrack(video)) {
         videosWithoutCaptions.push(src.substring(0, 50) || "inline video");
@@ -43,7 +41,7 @@ export const videoCaptionsRule: Rule = {
 
     // Check for embedded videos (iframes)
     const videoEmbeds = doc.querySelectorAll(
-      'iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="wistia"]'
+      'iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="wistia"]',
     );
 
     if (videos.length > 0) {

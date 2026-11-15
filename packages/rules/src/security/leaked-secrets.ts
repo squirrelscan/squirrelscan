@@ -1,16 +1,13 @@
 // security/leaked-secrets - Detect leaked API keys and secrets in HTML/JS
 
 import { detached } from "../shared/detach";
-import type {
-  Rule,
-  RuleContext,
-  RuleResult,
-  CheckItem,
-  CheckResult,
-  ParsedPage,
-} from "../types";
+import type { Rule, RuleContext, RuleResult, CheckItem, CheckResult, ParsedPage } from "../types";
 
-import { REPORT_LIMITS, clampItemString, type ScriptContentData } from "@squirrelscan/core-contracts";
+import {
+  REPORT_LIMITS,
+  clampItemString,
+  type ScriptContentData,
+} from "@squirrelscan/core-contracts";
 import { SECRET_KEY_LOOKBEHIND_SIZE } from "@squirrelscan/utils/constants";
 
 import { shannonEntropy } from "../integrity/signals";
@@ -21,7 +18,12 @@ import {
   withPrefilter,
   type GramIndex,
 } from "../shared/literal-prefilter";
-import { jwtMatchIsSuspect, refineFinding, type Confidence, type FindingExtra } from "./secrets/confidence";
+import {
+  jwtMatchIsSuspect,
+  refineFinding,
+  type Confidence,
+  type FindingExtra,
+} from "./secrets/confidence";
 import { decodeForLocation, scanBase64Blobs, type ReportedLocation } from "./secrets/decode";
 
 import { sharedRegex } from "../shared-regex";
@@ -218,7 +220,8 @@ export const FAST_PATTERNS: FastPattern[] = [
     // (`fw_config_name`), so the tail has to look drawn at random: upper and
     // lower case and a digit, no separator.
     name: "Fireworks AI API Key",
-    pattern: /(?<![A-Za-z0-9_-])fw_(?=[A-Za-z0-9]{0,47}[A-Z])(?=[A-Za-z0-9]{0,47}[a-z])(?=[A-Za-z0-9]{0,47}[0-9])[A-Za-z0-9]{24,48}/g,
+    pattern:
+      /(?<![A-Za-z0-9_-])fw_(?=[A-Za-z0-9]{0,47}[A-Z])(?=[A-Za-z0-9]{0,47}[a-z])(?=[A-Za-z0-9]{0,47}[0-9])[A-Za-z0-9]{24,48}/g,
     keywords: ["fw_"],
     confidence: "medium",
     // A camelCase identifier with a digit (`fw_handleResizeEvent2Callback`) has the same character classes: two or more
@@ -239,7 +242,8 @@ export const FAST_PATTERNS: FastPattern[] = [
     // the same `.`, so it can only fail where the first did, and without the
     // look-behind each of them re-reads the run: `eyJeyJeyJ…` was quadratic.
     name: "JSON Web Token",
-    pattern: /eyJ(?<!eyJ[A-Za-z0-9_-]*?eyJ)[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}={0,2}/g,
+    pattern:
+      /eyJ(?<!eyJ[A-Za-z0-9_-]*?eyJ)[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}={0,2}/g,
     keywords: ["eyj"],
     confidence: "medium",
   },
@@ -370,7 +374,7 @@ export const FAST_PATTERNS: FastPattern[] = [
   {
     name: "AWS Access Key ID",
     pattern: /(A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/g,
-    keywords: ["a3t","akia","agpa","aroa","aipa","anpa","anva","asia"],
+    keywords: ["a3t", "akia", "agpa", "aroa", "aipa", "anpa", "anva", "asia"],
     confidence: "high",
   },
   {
@@ -411,8 +415,7 @@ export const FAST_PATTERNS: FastPattern[] = [
   },
   {
     name: "Azure Storage Key",
-    pattern:
-      /DefaultEndpointsProtocol=https;AccountName=[^;]+;AccountKey=[^;]+;/gi,
+    pattern: /DefaultEndpointsProtocol=https;AccountName=[^;]+;AccountKey=[^;]+;/gi,
     keywords: ["defaultendpointsprotocol="],
     confidence: "high",
   },
@@ -521,8 +524,7 @@ export const FAST_PATTERNS: FastPattern[] = [
   },
   {
     name: "Discord Webhook",
-    pattern:
-      /https:\/\/discord(app)?\.com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+/g,
+    pattern: /https:\/\/discord(app)?\.com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+/g,
     keywords: ["/api/webhooks/"],
     confidence: "high",
   },
@@ -643,7 +645,10 @@ export const FAST_PATTERNS: FastPattern[] = [
     publicByDesign: true,
     accept: (value, content, index) =>
       REVENUECAT_CONTEXT_RE.test(
-        content.slice(Math.max(0, index - REVENUECAT_CONTEXT_REACH), index + value.length + REVENUECAT_CONTEXT_REACH)
+        content.slice(
+          Math.max(0, index - REVENUECAT_CONTEXT_REACH),
+          index + value.length + REVENUECAT_CONTEXT_REACH,
+        ),
       ),
   },
 
@@ -757,7 +762,17 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "medium",
     keyAnchored: true,
     generic: true,
-    keywords: ["api_key", "api-key", "apikey", "master_key", "master-key", "masterkey", "search_key", "search-key", "searchkey"],
+    keywords: [
+      "api_key",
+      "api-key",
+      "apikey",
+      "master_key",
+      "master-key",
+      "masterkey",
+      "search_key",
+      "search-key",
+      "searchkey",
+    ],
   },
   {
     name: "Generic Secret Assignment",
@@ -775,7 +790,14 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "medium",
     keyAnchored: true,
     generic: true,
-    keywords: ["access_token", "access-token", "accesstoken", "auth_token", "auth-token", "authtoken"],
+    keywords: [
+      "access_token",
+      "access-token",
+      "accesstoken",
+      "auth_token",
+      "auth-token",
+      "authtoken",
+    ],
   },
   {
     // Standard base64, not just base64url: a token with `+` or `/` in its first
@@ -842,8 +864,7 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
   {
     name: "Heroku API Key",
     keyword: "heroku",
-    pattern:
-      /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/gi,
+    pattern: /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/gi,
     confidence: "medium",
   },
 
@@ -1031,7 +1052,7 @@ function looksLikeCodeIdentifier(value: string): boolean {
   // Common JS function name prefixes
   if (
     /^(get|set|is|has|on|handle|create|update|delete|fetch|parse|render|convert|init|load|save|find|add|remove|check|validate|process|build|make|format|transform)/i.test(
-      value
+      value,
     )
   )
     return true;
@@ -1043,17 +1064,10 @@ function looksLikeCodeIdentifier(value: string): boolean {
 }
 
 // Check if value appears in a value position (assigned via = or :, not array element)
-function isInValuePosition(
-  window: string,
-  match: string,
-  matchIndex: number
-): boolean {
+function isInValuePosition(window: string, match: string, matchIndex: number): boolean {
   // Look at characters before and after the match
   const before = window.slice(Math.max(0, matchIndex - 20), matchIndex);
-  const after = window.slice(
-    matchIndex + match.length,
-    matchIndex + match.length + 5
-  );
+  const after = window.slice(matchIndex + match.length, matchIndex + match.length + 5);
 
   // Check if in array position: preceded by ," or ,' (comma then quote)
   // This indicates it's an array element, not an assigned value
@@ -1083,9 +1097,7 @@ function isInValuePosition(
 
   // If not clearly assigned, check if it's a standalone quoted string
   // preceded by assignment-related keywords (key, token, secret, etc.)
-  const keywordMatch = /(key|token|secret|password|apikey|api_key|auth)/i.test(
-    before
-  );
+  const keywordMatch = /(key|token|secret|password|apikey|api_key|auth)/i.test(before);
   if (keywordMatch && /['"`]$/.test(before) && /^['"`]/.test(after)) {
     return true;
   }
@@ -1280,8 +1292,7 @@ const AUTH_SCHEME_RE = /\b(?:bearer|basic)(?:\s|\+|%20)+$/i;
 // Attributes that name the value carried by a sibling attribute of the same
 // tag, in either order: `<meta name="algolia-api-key" content="…">` and
 // `<meta content="…" name="algolia-api-key">` say the same thing.
-const TAG_NAMING_ATTR_RE =
-  /\b(?:name|id|itemprop|property)\s*=\s*["']([^"']{1,64})["']/gi;
+const TAG_NAMING_ATTR_RE = /\b(?:name|id|itemprop|property)\s*=\s*["']([^"']{1,64})["']/gi;
 const TAG_DATA_ATTR_RE = sharedRegex(/\b(data-[A-Za-z0-9_-]{1,64})\s*=/g);
 type KeyContext = "digest" | "credential" | "assigned" | "none";
 
@@ -1412,8 +1423,7 @@ function startsInsideDigestKey(text: string, index: number): boolean {
     runStart--;
   }
   const hyphenJoins =
-    QUOTE_CHAR_RE.test(text[runStart - 1] ?? "") ||
-    isAttributeNamePosition(text, runStart);
+    QUOTE_CHAR_RE.test(text[runStart - 1] ?? "") || isAttributeNamePosition(text, runStart);
   const keyChar = hyphenJoins ? KEY_SEGMENT_CHAR_RE : IDENT_CHAR_RE;
 
   let start = index;
@@ -1422,9 +1432,7 @@ function startsInsideDigestKey(text: string, index: number): boolean {
   }
   if (start === index) return false;
   if (start === floor && keyChar.test(text[start - 1] ?? "")) return false;
-  return keyWords(text.slice(start, index)).some((word) =>
-    DIGEST_KEY_WORDS.has(word)
-  );
+  return keyWords(text.slice(start, index)).some((word) => DIGEST_KEY_WORDS.has(word));
 }
 
 /** Every key a tag names, whichever attribute order it wrote them in. */
@@ -1478,7 +1486,7 @@ export function classifyKeyContext(
   before: string,
   keyword: string,
   tag?: string,
-  keyCut = false
+  keyCut = false,
 ): KeyContext {
   let fragment = 0;
   while (keyCut && KEY_CHAR_RE.test(before[fragment] ?? "")) fragment++;
@@ -1608,17 +1616,27 @@ function isTutorialValue(s: LeakedSecret): boolean {
   if (s.type === "Azure Storage Key") return !/AccountKey=[A-Z0-9+/]{86}==;/i.test(s.value);
   if (!s.type.endsWith("Connection String")) return false;
   const authority = /:\/\/([^/?#]*)/.exec(s.value)?.[1] ?? "";
-  const hosts = authority.slice(authority.lastIndexOf("@") + 1).toLowerCase().split(",");
+  const hosts = authority
+    .slice(authority.lastIndexOf("@") + 1)
+    .toLowerCase()
+    .split(",");
   return hosts.every((host) => LOOPBACK_HOST_RE.test(host.replace(/:\d*$/, "")));
 }
 
 /** A server-only secret read from a browser-served script: critical. */
 export function isShippedServerSecret(s: LeakedSecret): boolean {
-  return !s.publicByDesign && SERVER_ONLY_TYPES.has(s.type) && isBrowserServed(s.location) && !isTutorialValue(s);
+  return (
+    !s.publicByDesign &&
+    SERVER_ONLY_TYPES.has(s.type) &&
+    isBrowserServed(s.location) &&
+    !isTutorialValue(s)
+  );
 }
 
 function isLikelyFalsePositive(value: string): boolean {
-  return endsInRepeatedChar(value) || FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(value));
+  return (
+    endsInRepeatedChar(value) || FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(value))
+  );
 }
 
 // ── What a generic assignment's value cannot be (#2218) ─────────────────────
@@ -1692,31 +1710,352 @@ const VENDOR_MODULE_RE = /^[A-Z][a-z]+(?:[A-Z][a-z]+)*_[A-Z][a-z]+(?:[A-Z][a-z]+
 // The words of the module paths a store's own code writes (AMD / RequireJS names: `Magento_Customer/js/change-email-password`). A word
 // outside the list is not read as one: a drawn lower-case run of letters, however word-shaped, is a credential until a person names it.
 const MODULE_VOCABULARY = new Set([
-  "abstract", "account", "accounts", "action", "actions", "add", "address", "addresses", "admin", "advanced", "ajax", "alert", "alerts", "api",
-  "app", "apply", "auth", "authentication", "authorization", "authorize", "back", "backend", "base", "basic", "billing", "block", "blocks",
-  "bootstrap", "button", "cache", "cancel", "captcha", "card", "cards", "carousel", "cart", "cartdata", "catalog", "categories", "category",
-  "change", "checkbox", "checkout", "city", "close", "collapse", "column", "columns", "common", "compare", "component", "components", "config",
-  "confirm", "confirmation", "content", "controller", "controllers", "cookie", "cookies", "core", "countries", "country", "coupon", "create",
-  "credit", "css", "custom", "customer", "customers", "data", "default", "define", "delete", "description", "dialog", "discount", "domready",
-  "dynamic", "edit", "element", "elements", "email", "emails", "error", "errors", "event", "events", "expand", "extended", "external", "factory",
-  "fetch", "field", "fields", "fieldset", "filter", "filters", "footer", "forgot", "form", "forms", "front", "frontend", "gallery", "general",
-  "generic", "get", "global", "grid", "group", "groups", "handler", "handlers", "header", "helper", "helpers", "hide", "html", "http", "i18n",
-  "image", "images", "index", "info", "init", "initialize", "inline", "input", "internal", "item", "items", "jquery", "js", "json", "keeper", "key",
-  "keys", "knockout", "ko", "label", "labels", "lang", "language", "layout", "layouts", "less", "lib", "libs", "list", "listing", "load", "loader",
-  "loading", "local", "locale", "locales", "login", "logout", "mage", "magento", "main", "map", "mapper", "mapping", "maps", "menu", "message",
-  "messages", "method", "methods", "mixin", "mixins", "modal", "model", "models", "module", "modules", "multi", "name", "names", "nav", "navigation",
-  "newsletter", "notice", "notices", "observer", "observers", "open", "option", "options", "order", "orders", "overlay", "page", "pager", "pages",
-  "pagination", "password", "passwords", "path", "paths", "payment", "payments", "phone", "plugin", "plugins", "polyfill", "polyfills", "popup",
-  "post", "postal", "postcode", "price", "prices", "private", "product", "products", "provider", "providers", "public", "put", "quote", "quotes",
-  "radio", "rate", "rates", "recaptcha", "region", "regions", "register", "registration", "remember", "remote", "remove", "renderer", "renderers",
-  "request", "requests", "require", "requirejs", "reset", "response", "review", "reviews", "route", "router", "routes", "row", "rows", "rule",
-  "rules", "sass", "save", "scss", "search", "secret", "secrets", "security", "select", "send", "service", "services", "session", "sessions",
-  "setting", "settings", "shared", "shim", "shims", "shipping", "show", "sidebar", "signin", "signup", "simple", "single", "skin", "slider", "sort",
-  "sorter", "standard", "state", "static", "status", "statuses", "step", "steps", "storage", "store", "stores", "submit", "subscription", "success",
-  "summary", "swatch", "swatches", "tab", "table", "tabs", "tax", "taxes", "template", "templates", "text", "theme", "themes", "title", "titles",
-  "toggle", "token", "tokens", "tooltip", "total", "totals", "translate", "translation", "type", "types", "ui", "underscore", "update", "uri", "url",
-  "urls", "user", "users", "util", "utils", "validation", "validator", "validators", "vendor", "verification", "verify", "view", "views", "warning",
-  "weight", "widget", "widgets", "wishlist", "wizard", "xml", "zip", "zoom",
+  "abstract",
+  "account",
+  "accounts",
+  "action",
+  "actions",
+  "add",
+  "address",
+  "addresses",
+  "admin",
+  "advanced",
+  "ajax",
+  "alert",
+  "alerts",
+  "api",
+  "app",
+  "apply",
+  "auth",
+  "authentication",
+  "authorization",
+  "authorize",
+  "back",
+  "backend",
+  "base",
+  "basic",
+  "billing",
+  "block",
+  "blocks",
+  "bootstrap",
+  "button",
+  "cache",
+  "cancel",
+  "captcha",
+  "card",
+  "cards",
+  "carousel",
+  "cart",
+  "cartdata",
+  "catalog",
+  "categories",
+  "category",
+  "change",
+  "checkbox",
+  "checkout",
+  "city",
+  "close",
+  "collapse",
+  "column",
+  "columns",
+  "common",
+  "compare",
+  "component",
+  "components",
+  "config",
+  "confirm",
+  "confirmation",
+  "content",
+  "controller",
+  "controllers",
+  "cookie",
+  "cookies",
+  "core",
+  "countries",
+  "country",
+  "coupon",
+  "create",
+  "credit",
+  "css",
+  "custom",
+  "customer",
+  "customers",
+  "data",
+  "default",
+  "define",
+  "delete",
+  "description",
+  "dialog",
+  "discount",
+  "domready",
+  "dynamic",
+  "edit",
+  "element",
+  "elements",
+  "email",
+  "emails",
+  "error",
+  "errors",
+  "event",
+  "events",
+  "expand",
+  "extended",
+  "external",
+  "factory",
+  "fetch",
+  "field",
+  "fields",
+  "fieldset",
+  "filter",
+  "filters",
+  "footer",
+  "forgot",
+  "form",
+  "forms",
+  "front",
+  "frontend",
+  "gallery",
+  "general",
+  "generic",
+  "get",
+  "global",
+  "grid",
+  "group",
+  "groups",
+  "handler",
+  "handlers",
+  "header",
+  "helper",
+  "helpers",
+  "hide",
+  "html",
+  "http",
+  "i18n",
+  "image",
+  "images",
+  "index",
+  "info",
+  "init",
+  "initialize",
+  "inline",
+  "input",
+  "internal",
+  "item",
+  "items",
+  "jquery",
+  "js",
+  "json",
+  "keeper",
+  "key",
+  "keys",
+  "knockout",
+  "ko",
+  "label",
+  "labels",
+  "lang",
+  "language",
+  "layout",
+  "layouts",
+  "less",
+  "lib",
+  "libs",
+  "list",
+  "listing",
+  "load",
+  "loader",
+  "loading",
+  "local",
+  "locale",
+  "locales",
+  "login",
+  "logout",
+  "mage",
+  "magento",
+  "main",
+  "map",
+  "mapper",
+  "mapping",
+  "maps",
+  "menu",
+  "message",
+  "messages",
+  "method",
+  "methods",
+  "mixin",
+  "mixins",
+  "modal",
+  "model",
+  "models",
+  "module",
+  "modules",
+  "multi",
+  "name",
+  "names",
+  "nav",
+  "navigation",
+  "newsletter",
+  "notice",
+  "notices",
+  "observer",
+  "observers",
+  "open",
+  "option",
+  "options",
+  "order",
+  "orders",
+  "overlay",
+  "page",
+  "pager",
+  "pages",
+  "pagination",
+  "password",
+  "passwords",
+  "path",
+  "paths",
+  "payment",
+  "payments",
+  "phone",
+  "plugin",
+  "plugins",
+  "polyfill",
+  "polyfills",
+  "popup",
+  "post",
+  "postal",
+  "postcode",
+  "price",
+  "prices",
+  "private",
+  "product",
+  "products",
+  "provider",
+  "providers",
+  "public",
+  "put",
+  "quote",
+  "quotes",
+  "radio",
+  "rate",
+  "rates",
+  "recaptcha",
+  "region",
+  "regions",
+  "register",
+  "registration",
+  "remember",
+  "remote",
+  "remove",
+  "renderer",
+  "renderers",
+  "request",
+  "requests",
+  "require",
+  "requirejs",
+  "reset",
+  "response",
+  "review",
+  "reviews",
+  "route",
+  "router",
+  "routes",
+  "row",
+  "rows",
+  "rule",
+  "rules",
+  "sass",
+  "save",
+  "scss",
+  "search",
+  "secret",
+  "secrets",
+  "security",
+  "select",
+  "send",
+  "service",
+  "services",
+  "session",
+  "sessions",
+  "setting",
+  "settings",
+  "shared",
+  "shim",
+  "shims",
+  "shipping",
+  "show",
+  "sidebar",
+  "signin",
+  "signup",
+  "simple",
+  "single",
+  "skin",
+  "slider",
+  "sort",
+  "sorter",
+  "standard",
+  "state",
+  "static",
+  "status",
+  "statuses",
+  "step",
+  "steps",
+  "storage",
+  "store",
+  "stores",
+  "submit",
+  "subscription",
+  "success",
+  "summary",
+  "swatch",
+  "swatches",
+  "tab",
+  "table",
+  "tabs",
+  "tax",
+  "taxes",
+  "template",
+  "templates",
+  "text",
+  "theme",
+  "themes",
+  "title",
+  "titles",
+  "toggle",
+  "token",
+  "tokens",
+  "tooltip",
+  "total",
+  "totals",
+  "translate",
+  "translation",
+  "type",
+  "types",
+  "ui",
+  "underscore",
+  "update",
+  "uri",
+  "url",
+  "urls",
+  "user",
+  "users",
+  "util",
+  "utils",
+  "validation",
+  "validator",
+  "validators",
+  "vendor",
+  "verification",
+  "verify",
+  "view",
+  "views",
+  "warning",
+  "weight",
+  "widget",
+  "widgets",
+  "wishlist",
+  "wizard",
+  "xml",
+  "zip",
+  "zoom",
 ]);
 const MODULE_MAX_WORDS_PER_SEGMENT = 3;
 const CAMEL_PART_RE = /[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+/g;
@@ -1749,10 +2088,19 @@ export function isModulePath(body: string): boolean {
     }
     if (digits > 2) return false;
     // capitals after the first letter: `changeEmailPassword` and `Vendor_Module` are names, a drawn run of mixed case is not
-    if (capitals - (segment[0]! >= "A" && segment[0]! <= "Z" ? 1 : 0) > 3 && !VENDOR_MODULE_RE.test(segment)) return false;
+    if (
+      capitals - (segment[0]! >= "A" && segment[0]! <= "Z" ? 1 : 0) > 3 &&
+      !VENDOR_MODULE_RE.test(segment)
+    )
+      return false;
   }
   // every segment is a name's words; the `Vendor_Module` head is judged by its own pattern
-  if (!segments.every((segment, i) => (i === 0 && VENDOR_MODULE_RE.test(segment)) || isModuleSegment(segment))) return false;
+  if (
+    !segments.every(
+      (segment, i) => (i === 0 && VENDOR_MODULE_RE.test(segment)) || isModuleSegment(segment),
+    )
+  )
+    return false;
   return VENDOR_MODULE_RE.test(segments[0]!) || segments.includes("js");
 }
 
@@ -1822,7 +2170,6 @@ function isTemplateExpression(body: string): boolean {
   return /[.[(]/.test(inner) || !/[0-9]/.test(inner);
 }
 
-
 // ── What a generic assignment's value can be (#1292) ────────────────────────
 //
 // The gate below is the second half of isNotACredentialValue: shapes that name
@@ -1845,7 +2192,12 @@ function isCssModuleClass(body: string): boolean {
   if (cut <= 0) return false;
   const head = body.slice(0, cut);
   const local = head.lastIndexOf("__");
-  return local > 0 && local + 2 < head.length && CSS_MODULE_HEAD_RE.test(head) && CSS_MODULE_HASH_RE.test(body.slice(cut + 3));
+  return (
+    local > 0 &&
+    local + 2 < head.length &&
+    CSS_MODULE_HEAD_RE.test(head) &&
+    CSS_MODULE_HASH_RE.test(body.slice(cut + 3))
+  );
 }
 
 /**
@@ -1865,15 +2217,42 @@ const VERSIONED_KEY_RE = /^[a-z][a-z0-9]{0,15}(?:[_:.][a-z][a-z0-9]{0,15})*[_:.]
  * `app_secret_v6`. Random lower-case words joined by `_` (a passphrase, a drawn value) have none and are reported.
  */
 const CREDENTIAL_WORDS: ReadonlySet<string> = new Set([
-  "secret", "secrets", "token", "tokens", "key", "keys", "apikey", "pass", "password", "passwd", "pwd", "auth", "authorization",
-  "cred", "creds", "credential", "credentials", "api", "private", "bearer", "session", "sign", "signature", "salt", "jwt", "login", "access", "oauth",
+  "secret",
+  "secrets",
+  "token",
+  "tokens",
+  "key",
+  "keys",
+  "apikey",
+  "pass",
+  "password",
+  "passwd",
+  "pwd",
+  "auth",
+  "authorization",
+  "cred",
+  "creds",
+  "credential",
+  "credentials",
+  "api",
+  "private",
+  "bearer",
+  "session",
+  "sign",
+  "signature",
+  "salt",
+  "jwt",
+  "login",
+  "access",
+  "oauth",
 ]);
 
 /** The patterns whose value is handed over after a scheme word (`Bearer x`, `Basic x`): the value is never a name. */
 const SCHEME_VALUE_PATTERNS: ReadonlySet<string> = new Set(["Bearer Token", "Basic Auth Header"]);
 
 function isJoinedIdentifier(body: string): boolean {
-  if (body.length > 48 || !(IDENTIFIER_JOINED_RE.test(body) || VERSIONED_KEY_RE.test(body))) return false;
+  if (body.length > 48 || !(IDENTIFIER_JOINED_RE.test(body) || VERSIONED_KEY_RE.test(body)))
+    return false;
   // A WHOLE word: `monkey`, `capital`, `bypass` or `author` merely contain one and say nothing.
   if (!body.split(/[_:.]/).some((word) => CREDENTIAL_WORDS.has(word))) return false;
   let digits = 0;
@@ -1894,7 +2273,14 @@ function isUrlWithoutCredential(body: string): boolean {
   if (/^(?:https?:)?\/\/[^/?#]*@/i.test(body)) return false;
   // Any query value of eight characters or more can be the credential.
   const query = body.indexOf("?");
-  if (query !== -1 && body.slice(query + 1).split(/[&=#]/).some((part) => part.length >= 8)) return false;
+  if (
+    query !== -1 &&
+    body
+      .slice(query + 1)
+      .split(/[&=#]/)
+      .some((part) => part.length >= 8)
+  )
+    return false;
   for (const part of body.split(/[/?#&=]/)) {
     if (part.length >= 6 && /[0-9]/.test(part)) return false;
     // A long run of letters is as much a secret as a long run of letters and digits.
@@ -1905,7 +2291,8 @@ function isUrlWithoutCredential(body: string): boolean {
 
 // An env-var reference (`process.env.NAME`, `${NAME}`) and a mask of bullets, `*`, `.`, `_`, `-` or spaces are placeholders, not values:
 // `isImplausibleSecretValue` drops them. A short value that ends in an ellipsis is not dropped: see `isElidedValue`.
-const ENV_REFERENCE_RE = /^(?:(?:process|import\.meta)\.env\.[A-Za-z_]\w*|\$\{[A-Z][A-Z0-9_]{2,}\})$/;
+const ENV_REFERENCE_RE =
+  /^(?:(?:process|import\.meta)\.env\.[A-Za-z_]\w*|\$\{[A-Z][A-Z0-9_]{2,}\})$/;
 const MASK_RE = /^[•●·*.\s_-]*$/u;
 
 /**
@@ -1914,7 +2301,11 @@ const MASK_RE = /^[•●·*.\s_-]*$/u;
  * mask (`••••`, `...`) is still dropped, by `MASK_RE`.
  */
 function isElidedValue(body: string): boolean {
-  const stripped = body.endsWith("...") ? body.slice(0, -3) : body.endsWith("…") ? body.slice(0, -1) : undefined;
+  const stripped = body.endsWith("...")
+    ? body.slice(0, -3)
+    : body.endsWith("…")
+      ? body.slice(0, -1)
+      : undefined;
   return stripped !== undefined && stripped.length <= 12;
 }
 
@@ -1931,7 +2322,13 @@ function looksLikeCodeSpan(body: string): boolean {
   if (/===|!==/.test(body)) return true;
   // The rest also occurs inside a real password (`Zx9&&Kw3mQ7`, `return-of-the-king`),
   // so it counts only with the statement separator that code has between them.
-  if (body.includes(";") && /=>|\)\s*\{|\bfunction\b|\breturn\b|;(?:var|let|const|if|for)\b|;\s+[A-Za-z_$][\w$]*\s*[=(.]/.test(body)) return true;
+  if (
+    body.includes(";") &&
+    /=>|\)\s*\{|\bfunction\b|\breturn\b|;(?:var|let|const|if|for)\b|;\s+[A-Za-z_$][\w$]*\s*[=(.]/.test(
+      body,
+    )
+  )
+    return true;
   let open = 0;
   let close = 0;
   for (let i = 0; i < body.length; i++) {
@@ -2039,14 +2436,19 @@ function emailHosts(text: string): string[] {
   }
   return hosts;
 }
-const RESERVED_HOST_RE = /(?:^|\.)(?:example\.(?:com|org|net)|[a-z0-9-]+\.(?:test|example|invalid|localhost)|(?:test|example|invalid|localhost))$/i;
+const RESERVED_HOST_RE =
+  /(?:^|\.)(?:example\.(?:com|org|net)|[a-z0-9-]+\.(?:test|example|invalid|localhost)|(?:test|example|invalid|localhost))$/i;
 // A key is at most 64 characters: unbounded, a long run of word characters with no colon is scanned again from every character in it.
 const KEY_IN_ROW_RE = sharedRegex(/["']?([A-Za-z_$][\w$-]{0,63})["']?\s*:/g);
 
 export type SeedVerdict = "skip" | "demo-login" | undefined;
 
 /** Rows of the array the match sits in, when that array is a table of same-keyed objects. */
-function tableAround(content: string, at: number, spend: (n: number) => void): { text: string; rows: string[] } | undefined {
+function tableAround(
+  content: string,
+  at: number,
+  spend: (n: number) => void,
+): { text: string; rows: string[] } | undefined {
   spend(TABLE_WALK_BACK + TABLE_WALK_FORWARD);
   let depth = 0;
   let sawObject = false;
@@ -2106,7 +2508,12 @@ function rowKeys(row: string): string {
  * markers). `demo-login`: a table of same-keyed rows with real-domain emails,
  * which can be working logins and stays reported, labelled as such.
  */
-function seedDataVerdict(content: string, at: number, keyName: string, budget: { left: number }): SeedVerdict {
+function seedDataVerdict(
+  content: string,
+  at: number,
+  keyName: string,
+  budget: { left: number },
+): SeedVerdict {
   // One scan has a fixed allowance for these walks; past it nothing is exempted,
   // so a page of ten thousand adversarial rows costs a bounded amount and every
   // password after the allowance reports as usual.
@@ -2247,17 +2654,19 @@ function isCrossOriginScript(src: string, pageUrl: string): boolean {
 function isVendorScriptDataAttribute(
   text: string,
   index: number,
-  pageUrl: string | undefined
+  pageUrl: string | undefined,
 ): boolean {
   if (pageUrl === undefined) return false;
   // The attribute is `data-<anything>`: the match starts at its credential
   // word (`secret` of `data-tb-secret`), so walk back over the attribute's name.
   let nameStart = index;
-  while (nameStart > 0 && index - nameStart < 64 && /[A-Za-z0-9-]/.test(text[nameStart - 1] ?? "")) nameStart--;
+  while (nameStart > 0 && index - nameStart < 64 && /[A-Za-z0-9-]/.test(text[nameStart - 1] ?? ""))
+    nameStart--;
   if (text.slice(nameStart, nameStart + 5).toLowerCase() !== "data-") return false;
   // The WHOLE attribute name has to be free of privileged words, not just its
   // last segment: `data-admin-api-key` ends in `api-key` and is not a widget key.
-  if (keyWords(text.slice(nameStart, index)).some((w) => PRIVILEGED_NAME_WORDS.includes(w))) return false;
+  if (keyWords(text.slice(nameStart, index)).some((w) => PRIVILEGED_NAME_WORDS.includes(w)))
+    return false;
   const tag = tagBoundsAround(text, index);
   if (!tag) return false;
   const open = text.slice(tag.start, tag.end);
@@ -2306,7 +2715,8 @@ const PEM_BREAK_RES = [
 ];
 const PEM_JOIN_RE = /\.(?:concat|join)\(/g;
 // The armor header lines that sit between a header and its body.
-const PEM_ARMOR_LINE_RE = /^[ \t"'`,;+[\]()\\]*(?:Proc-Type|DEK-Info|Version|Comment|Hash|Charset|MessageID):[^\n]{0,120}$/gim;
+const PEM_ARMOR_LINE_RE =
+  /^[ \t"'`,;+[\]()\\]*(?:Proc-Type|DEK-Info|Version|Comment|Hash|Charset|MessageID):[^\n]{0,120}$/gim;
 // Separates body chunks. `+` is NOT in it: it is a base64 character, and a join between string literals is a `+` token of its own
 // (the quotes around it separate), which the loop below skips.
 const PEM_CHUNK_SPLIT_RE = /[%\s"'`,;[\]()\\\u200b-\u200d\u2060\ufeff]+/;
@@ -2340,7 +2750,8 @@ function hasPemBody(value: string, content: string, index: number): boolean {
     chunks++;
     body += lead;
     // Several short lines add up to a key; a few long words do not look like one (a real body mixes cases and digits).
-    if (total >= PEM_BODY_RUN) return chunks === 1 || (/[A-Z]/.test(body) && /[a-z]/.test(body) && /[0-9+/]/.test(body));
+    if (total >= PEM_BODY_RUN)
+      return chunks === 1 || (/[A-Z]/.test(body) && /[a-z]/.test(body) && /[0-9+/]/.test(body));
   }
   return false;
 }
@@ -2364,7 +2775,13 @@ const BEARER_LEAD_RE = /(?:bearer|authorization|token|key)\W{0,3}$/i;
 
 function plausibleTwitterBearer(value: string, content: string, index: number): boolean {
   if (value.length > TWITTER_BEARER_MAX_LENGTH) return false;
-  if (content.slice(Math.max(0, index - 7), index).toLowerCase().endsWith("base64,")) return false;
+  if (
+    content
+      .slice(Math.max(0, index - 7), index)
+      .toLowerCase()
+      .endsWith("base64,")
+  )
+    return false;
   const lead = content.slice(Math.max(0, index - 16), index);
   if (!BEARER_LEAD_RE.test(lead)) {
     const before = content[index - 1];
@@ -2407,7 +2824,8 @@ function isIbanShaped(value: string): boolean {
  */
 /** Two or more `lowercase-word Capital-word` boundaries: a camelCase name, not a random key. */
 const CAMEL_CASE_WORDS_RE = /[a-z]{3,}[A-Z][a-z]{3,}[a-z0-9]*[A-Z][a-z]{3,}/;
-const ASSET_EXTENSION_RE = /^\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|woff2?|ttf|otf|eot|mp[34]|webm)(?![A-Za-z0-9])/i;
+const ASSET_EXTENSION_RE =
+  /^\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|woff2?|ttf|otf|eot|mp[34]|webm)(?![A-Za-z0-9])/i;
 
 const ASSET_NAMED_PATTERNS: ReadonlySet<string> = new Set([
   "Shopify Admin API Token",
@@ -2423,7 +2841,10 @@ const ASSET_NAMED_PATTERNS: ReadonlySet<string> = new Set([
 const FILE_NAME_LEAD_RE = /[/"'(=,]$/;
 
 function endsInAssetExtension(content: string, end: number, start: number): boolean {
-  return FILE_NAME_LEAD_RE.test(content.slice(Math.max(0, start - 1), start)) && ASSET_EXTENSION_RE.test(content.slice(end, end + 8));
+  return (
+    FILE_NAME_LEAD_RE.test(content.slice(Math.max(0, start - 1), start)) &&
+    ASSET_EXTENSION_RE.test(content.slice(end, end + 8))
+  );
 }
 
 /**
@@ -2443,7 +2864,6 @@ function isWidgetKeyAttribute(before: string): boolean {
   return name !== undefined && !PRIVILEGED_ATTR_RE.test(name);
 }
 
-
 // ── Search-only and platform-owned keys (#1287, #1229) ──────────────────────
 
 /**
@@ -2453,19 +2873,37 @@ function isWidgetKeyAttribute(before: string): boolean {
  * `ALGOLIA_SEARCH_API_KEY` reads the same, and nothing offline says which it
  * is. So the name earns a hint on the finding, never a downgrade (#1229).
  */
-const PRIVILEGED_KEY_WORDS = ["admin", "secret", "private", "write", "master", "management", "manage", "backend", "server", "root"];
+const PRIVILEGED_KEY_WORDS = [
+  "admin",
+  "secret",
+  "private",
+  "write",
+  "master",
+  "management",
+  "manage",
+  "backend",
+  "server",
+  "root",
+];
 const SEARCH_PROVIDER_KEY_SHAPE_RE = /^[A-Za-z0-9_-]{32}$/;
 
 function isSearchKeyName(key: string): boolean {
   const words = keyWords(key);
   // `searchAdminApiKey` is the admin key of a search product, not its
   // browser key: the name has to say search and nothing privileged.
-  return (words.includes("search") || words.includes("searchkey")) && !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w));
+  return (
+    (words.includes("search") || words.includes("searchkey")) &&
+    !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w))
+  );
 }
 
 function isAdminSearchProviderKey(key: string, value: string): boolean {
   const words = keyWords(key);
-  return words.includes("master") || words.includes("masterkey") || (SEARCH_PROVIDER_KEY_SHAPE_RE.test(value) && words.includes("admin"));
+  return (
+    words.includes("master") ||
+    words.includes("masterkey") ||
+    (SEARCH_PROVIDER_KEY_SHAPE_RE.test(value) && words.includes("admin"))
+  );
 }
 
 // A name that is only the scope word and `key`: Meilisearch's `masterKey` and
@@ -2475,12 +2913,17 @@ function isAdminSearchProviderKey(key: string, value: string): boolean {
 function isBareSearchScopeKey(key: string): boolean {
   const words = keyWords(key);
   if (words.some((w) => w === "api" || w === "apikey")) return false;
-  return words.some((w) => w === "search" || w === "master" || w === "searchkey" || w === "masterkey");
+  return words.some(
+    (w) => w === "search" || w === "master" || w === "searchkey" || w === "masterkey",
+  );
 }
 
 function hasMeilisearchContext(content: string, index: number, key: string): boolean {
   if (key.toLowerCase().includes("meili")) return true;
-  return content.slice(Math.max(0, index - PROVIDER_CONTEXT_GAP), index).toLowerCase().includes("meili");
+  return content
+    .slice(Math.max(0, index - PROVIDER_CONTEXT_GAP), index)
+    .toLowerCase()
+    .includes("meili");
 }
 
 /**
@@ -2499,7 +2942,7 @@ const APP_STORE_KEY_RE = /^(?:data-)?api[_-]?key$/i;
 
 function platformSourceOf(
   location: ReportedLocation,
-  sourceUrl: string | undefined
+  sourceUrl: string | undefined,
 ): "bundle" | "app-store" | undefined {
   if (sourceUrl === undefined) return undefined;
   try {
@@ -2508,8 +2951,13 @@ function platformSourceOf(
       // A Shopify host, by parsed hostname: nothing else is evidence that the
       // bytes are Shopify's. A custom-domain shop's copy is not recognised and
       // reports like any other script.
-      if (url.hostname === "cdn.shopify.com" && url.pathname.startsWith(SHOPIFY_CDN_BUNDLE_PATH)) return "bundle";
-      if (url.hostname.endsWith(".myshopify.com") && url.pathname.startsWith(SHOPIFY_STORE_BUNDLE_PATH)) return "bundle";
+      if (url.hostname === "cdn.shopify.com" && url.pathname.startsWith(SHOPIFY_CDN_BUNDLE_PATH))
+        return "bundle";
+      if (
+        url.hostname.endsWith(".myshopify.com") &&
+        url.pathname.startsWith(SHOPIFY_STORE_BUNDLE_PATH)
+      )
+        return "bundle";
     }
     if (url.hostname === SHOPIFY_APP_STORE_HOST) return "app-store";
   } catch {
@@ -2528,13 +2976,25 @@ function platformSourceOf(
  */
 const PUBLIC_ENV_PREFIX_RE = /^(?:NEXT_PUBLIC_|NUXT_PUBLIC_|VITE_|PUBLIC_)/;
 const SECRET_VALUE_PREFIX_RE = /^(?:sk_|rk_|sb_secret_)/;
-const PRIVILEGED_NAME_WORDS = ["secret", "private", "server", "admin", "password", "master", "service"];
+const PRIVILEGED_NAME_WORDS = [
+  "secret",
+  "private",
+  "server",
+  "admin",
+  "password",
+  "master",
+  "service",
+];
 
 function isPublicKeyName(key: string): boolean {
   if (PUBLIC_ENV_PREFIX_RE.test(key)) return true;
   const words = keyWords(key);
   if (words.some((w) => PRIVILEGED_NAME_WORDS.includes(w))) return false;
-  return words[0] === "public" || words[0] === "publishable" || (words[0] === "client" && words[words.length - 1] === "key");
+  return (
+    words[0] === "public" ||
+    words[0] === "publishable" ||
+    (words[0] === "client" && words[words.length - 1] === "key")
+  );
 }
 
 // An AWS access key id is the public half of the pair: with no secret key
@@ -2585,11 +3045,7 @@ function maskSecret(value: string): string {
   if (value.length <= 12) {
     return value.slice(0, 4) + "*".repeat(value.length - 4);
   }
-  return (
-    value.slice(0, 6) +
-    "*".repeat(Math.min(value.length - 10, 20)) +
-    value.slice(-4)
-  );
+  return value.slice(0, 6) + "*".repeat(Math.min(value.length - 10, 20)) + value.slice(-4);
 }
 
 /**
@@ -2618,9 +3074,7 @@ const CONTEXT_LOCAL_REACH = LOOKBEHIND_SCAN_LIMIT + SECRET_KEY_LOOKBEHIND_SIZE;
 function isWordCharAt(text: string, index: number): boolean {
   if (index < 0 || index >= text.length) return false;
   const c = text.charCodeAt(index);
-  return (
-    (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95
-  );
+  return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95;
 }
 
 // How far a continued token is read past its match before it is cut.
@@ -2645,7 +3099,8 @@ function continuedTokenEnd(text: string, end: number): number {
   const limit = Math.min(text.length, end + CONTINUED_TOKEN_MAX);
   while (at < limit) {
     if (isWordCharAt(text, at)) at++;
-    else if (text.charCodeAt(at) === 45 && isWordCharAt(text, at + 1)) at++; // -
+    else if (text.charCodeAt(at) === 45 && isWordCharAt(text, at + 1))
+      at++; // -
     else break;
   }
   return at;
@@ -2653,7 +3108,9 @@ function continuedTokenEnd(text: string, end: number): number {
 
 /** The finding type for a secret-prefixed token no provider can be named for. */
 export function unattributedKeyType(prefix?: string): string {
-  return prefix === undefined ? "Secret Key (provider unknown)" : `Secret Key (${prefix} prefix, provider unknown)`;
+  return prefix === undefined
+    ? "Secret Key (provider unknown)"
+    : `Secret Key (${prefix} prefix, provider unknown)`;
 }
 
 // One window's worth of characters. Every pattern in this file matches more
@@ -2885,7 +3342,10 @@ function genericValueOf(match: string): string {
     // regex retries from every `=` and goes quadratic.
     let end = body.length;
     while (end > 0 && body.charCodeAt(end - 1) === 61) end--;
-    const parts = body.slice(0, end).split(/[\s:=]+/).filter(Boolean);
+    const parts = body
+      .slice(0, end)
+      .split(/[\s:=]+/)
+      .filter(Boolean);
     body = parts[parts.length - 1] ?? body;
   }
   return body;
@@ -3035,10 +3495,20 @@ export interface PublicUrlIdentifier {
 
 export const PUBLIC_URL_IDENTIFIERS: readonly PublicUrlIdentifier[] = [
   // Mida A/B testing: the project key in the optimize.js install snippet.
-  { vendor: "Mida", hosts: ["cdn.mida.so", "cdn-eu.mida.so"], paths: ["/js/optimize.js"], params: ["key"] },
+  {
+    vendor: "Mida",
+    hosts: ["cdn.mida.so", "cdn-eu.mida.so"],
+    paths: ["/js/optimize.js"],
+    params: ["key"],
+  },
   // Klaviyo: `company_id` is the public API key (site ID); its API docs
   // call the six-character value public and for client-side use.
-  { vendor: "Klaviyo", hosts: ["static.klaviyo.com"], paths: ["/onsite/js/klaviyo.js"], params: ["company_id"] },
+  {
+    vendor: "Klaviyo",
+    hosts: ["static.klaviyo.com"],
+    paths: ["/onsite/js/klaviyo.js"],
+    params: ["company_id"],
+  },
   // Google reCAPTCHA v3 / Enterprise: `render` carries the site key, the
   // half of the key pair that goes in the page; the secret stays on the server.
   {
@@ -3071,7 +3541,8 @@ export function publicUrlIdentifierSpans(content: string): Array<[start: number,
       from = at + host.length;
       // The host must open a URL: `//host` after a scheme colon, a quote,
       // `=`, `(`, `,` or whitespace; never `https://other.test//host`.
-      if (at < 2 || content.charCodeAt(at - 1) !== 47 || content.charCodeAt(at - 2) !== 47) continue;
+      if (at < 2 || content.charCodeAt(at - 1) !== 47 || content.charCodeAt(at - 2) !== 47)
+        continue;
       const lead = at >= 3 ? content[at - 3]! : "";
       if (lead !== "" && !/[:\s"'(=,]/.test(lead)) continue;
 
@@ -3093,7 +3564,12 @@ export function publicUrlIdentifierSpans(content: string): Array<[start: number,
         let segEnd = rest.indexOf("&", segStart);
         if (segEnd === -1 || segEnd > queryEnd) segEnd = queryEnd;
         const eq = rest.indexOf("=", segStart);
-        if (eq !== -1 && eq < segEnd && entry.params.includes(rest.slice(segStart, eq)) && segEnd > eq + 1) {
+        if (
+          eq !== -1 &&
+          eq < segEnd &&
+          entry.params.includes(rest.slice(segStart, eq)) &&
+          segEnd > eq + 1
+        ) {
           spans.push([from + eq + 1, from + segEnd]);
         }
         segStart = segEnd + 1;
@@ -3200,8 +3676,7 @@ function completeKeyOf(text: string, index: number, match: string): string {
     runStart--;
   }
   const hyphenJoins =
-    QUOTE_CHAR_RE.test(text[runStart - 1] ?? "") ||
-    isAttributeNamePosition(text, runStart);
+    QUOTE_CHAR_RE.test(text[runStart - 1] ?? "") || isAttributeNamePosition(text, runStart);
   const keyChar = hyphenJoins ? KEY_SEGMENT_CHAR_RE : IDENT_CHAR_RE;
 
   let start = index;
@@ -3248,7 +3723,9 @@ function isHexAt(text: string, index: number): boolean {
  * second segment following?
  */
 function isJwtHead(body: string, text: string, end: number): boolean {
-  return /^eyJ[A-Za-z0-9_-]+$/.test(body) && text.charCodeAt(end) === 46 && isWordCharAt(text, end + 1);
+  return (
+    /^eyJ[A-Za-z0-9_-]+$/.test(body) && text.charCodeAt(end) === 46 && isWordCharAt(text, end + 1)
+  );
 }
 
 /**
@@ -3264,7 +3741,21 @@ function isJwtHead(body: string, text: string, end: number): boolean {
 const JWT_HEADER_START_RE = /^\{\s*"(?:alg|typ|kid|cty)"/;
 const TRUNCATED_HEADER_MAX_CHARS = 64;
 const MAX_HEADER_BODY_CHARS = 2_048;
-const JOSE_HEADER_KEYS = new Set(["alg", "typ", "kid", "cty", "enc", "zip", "x5t", "x5t#S256", "x5u", "x5c", "jku", "jwk", "crit"]);
+const JOSE_HEADER_KEYS = new Set([
+  "alg",
+  "typ",
+  "kid",
+  "cty",
+  "enc",
+  "zip",
+  "x5t",
+  "x5t#S256",
+  "x5u",
+  "x5c",
+  "jku",
+  "jwk",
+  "crit",
+]);
 
 /**
  * Whether the text after a Bearer value goes on as part of a token: a `.` followed by a token character, a `%` or `\`
@@ -3493,7 +3984,8 @@ export function createFindingSink(cap: number = PAGE_FINDINGS_CAP): FindingSink 
       if (finding.publicByDesign) {
         const body = hash53(quotedBodyOf(finding.value));
         if (publicBodies.size < bookkeepingCap) publicBodies.add(body);
-        for (const generic of [...(genericsByBody.get(body) ?? [])]) if (generic.alive) kill(generic);
+        for (const generic of [...(genericsByBody.get(body) ?? [])])
+          if (generic.alive) kill(generic);
       } else if (isGeneric(finding) && publicBodies.has(hash53(quotedBodyOf(finding.value)))) {
         return; // the rule drops it: a public client key it re-reads
       }
@@ -3581,7 +4073,11 @@ export interface SiteFindingBudget {
    * The page's findings the site still has room for, in their order, how many were left out (at least that many: a value
    * left out on several pages counts on each), and whether any of them was more serious than public or informational.
    */
-  admit(secrets: readonly LeakedSecret[]): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean };
+  admit(secrets: readonly LeakedSecret[]): {
+    secrets: LeakedSecret[];
+    omitted: number;
+    omittedSerious: boolean;
+  };
   /** Distinct values kept so far. */
   kept(): number;
 }
@@ -3643,7 +4139,7 @@ export function scanContentBounded(
   location: ReportedLocation,
   sourceUrl?: string,
   depth = 0,
-  source: { offsetBase?: number; scriptIndex?: number } = {}
+  source: { offsetBase?: number; scriptIndex?: number } = {},
 ): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean } {
   const sink = createFindingSink();
   scanInto(sink, content, location, sourceUrl, depth, source);
@@ -3656,7 +4152,7 @@ export function scanContent(
   location: ReportedLocation,
   sourceUrl?: string,
   depth = 0,
-  source: { offsetBase?: number; scriptIndex?: number } = {}
+  source: { offsetBase?: number; scriptIndex?: number } = {},
 ): LeakedSecret[] {
   const sink = createListSink();
   scanInto(sink, content, location, sourceUrl, depth, source);
@@ -3682,9 +4178,8 @@ function scanInto(
   location: ReportedLocation,
   sourceUrl: string | undefined,
   depth: number,
-  source: { offsetBase?: number; scriptIndex?: number }
+  source: { offsetBase?: number; scriptIndex?: number },
 ): void {
-
   // Entities in HTML, `\u`/`\x` escapes in script text (#360): every pattern
   // below reads the decoded form, once. See secrets/decode.ts.
   content = decodeForLocation(content, location);
@@ -3701,7 +4196,7 @@ function scanInto(
     length: number,
     before: () => string,
     after: () => string,
-    known?: FindingExtra
+    known?: FindingExtra,
   ): LeakedSecret | null => {
     const refined = refineFinding(name, value, Date.now(), { before, after });
     if (refined?.drop) return null;
@@ -3781,7 +4276,9 @@ function scanInto(
         // The same rule the context pass applies: the keyword has to sit in
         // a NAMING attribute (`id="shopify-features"`), not in a `src`.
         const tagText = open[0];
-        const named = PUBLIC_CONTEXT.filter((p) => tagNamesKeyword(tagText, p.keyword)).map((p) => p.keyword);
+        const named = PUBLIC_CONTEXT.filter((p) => tagNamesKeyword(tagText, p.keyword)).map(
+          (p) => p.keyword,
+        );
         if (named.length === 0) continue;
         const from = open.index + tagText.length;
         scriptBlocks.push({ from, to: scriptBlockEnd(content, from), tag: named.join(" ") });
@@ -3792,14 +4289,17 @@ function scanInto(
 
   const publicContextClaims = (valueAt: number, body: string): boolean => {
     if (PUBLIC_CONTEXT.length === 0) return false;
-    if (keywordFilter && !PUBLIC_CONTEXT.some((p) => mayContain(keywordFilter, p.keyword))) return false;
+    if (keywordFilter && !PUBLIC_CONTEXT.some((p) => mayContain(keywordFilter, p.keyword)))
+      return false;
     const from = Math.max(0, valueAt - CONTEXT_KEYWORD_GAP - PUBLIC_KEYWORD_MAX);
     const window = content.slice(from, valueAt).toLowerCase();
     return PUBLIC_CONTEXT.some(({ keyword, whole }) => {
       if (!whole.test(body)) return false;
       const at = window.lastIndexOf(keyword);
       if (at !== -1 && window.length - (at + keyword.length) <= CONTEXT_KEYWORD_GAP) return true;
-      return publicScriptBlocks().some((b) => b.from <= valueAt && valueAt < b.to && b.tag.includes(keyword));
+      return publicScriptBlocks().some(
+        (b) => b.from <= valueAt && valueAt < b.to && b.tag.includes(keyword),
+      );
     });
   };
 
@@ -3811,7 +4311,10 @@ function scanInto(
     const window = content.slice(from, keyAt).toLowerCase();
     let tagName: string | undefined;
     const tag = tagBoundsAround(content, keyAt);
-    if (tag) tagName = /^<([A-Za-z][\w-]*)/.exec(content.slice(tag.start, Math.min(tag.end, tag.start + 80)))?.[1]?.toLowerCase();
+    if (tag)
+      tagName = /^<([A-Za-z][\w-]*)/
+        .exec(content.slice(tag.start, Math.min(tag.end, tag.start + 80)))?.[1]
+        ?.toLowerCase();
     for (const [brand, type] of PUBLIC_BRANDS) {
       const at = window.lastIndexOf(brand);
       if (at !== -1 && window.length - (at + brand.length) <= CONTEXT_KEYWORD_GAP) return type;
@@ -3828,7 +4331,8 @@ function scanInto(
     // The match can open part-way through its key (`ApiKey` of
     // `clientSideApiKey`); the distance is measured from the key's start.
     let keyAt = matchAt;
-    while (keyAt > 0 && matchAt - keyAt < 64 && IDENT_CHAR_RE.test(content[keyAt - 1] ?? "")) keyAt--;
+    while (keyAt > 0 && matchAt - keyAt < 64 && IDENT_CHAR_RE.test(content[keyAt - 1] ?? ""))
+      keyAt--;
     // The name may also sit inside the key itself (`STATSIG_SERVER_SECRET`).
     const from = Math.max(0, keyAt - PROVIDER_CONTEXT_GAP - PROVIDER_KEYWORD_MAX);
     const window = content.slice(from, matchAt).toLowerCase();
@@ -3875,7 +4379,12 @@ function scanInto(
     // The start of the last segment a failed chain reached: a later match that starts at or before it was already tried.
     let jwtTriedTo = -1;
     while ((match = pattern.exec(content)) !== null) {
-      if (jwtRetry && match.index > jwtTriedTo && found.jwtRetries.left > 0 && jwtMatchIsSuspect(match[0])) {
+      if (
+        jwtRetry &&
+        match.index > jwtTriedTo &&
+        found.jwtRetries.left > 0 &&
+        jwtMatchIsSuspect(match[0])
+      ) {
         let current: RegExpExecArray = match;
         let real: RegExpExecArray | undefined;
         for (;;) {
@@ -3937,10 +4446,13 @@ function scanInto(
       if (!keyAnchored && !generic) {
         const matchEnd = match.index + value.length;
         // A match that ends on its own delimiter (Azure's `;`) is whole.
-        const tokenEnd = isWordCharAt(content, matchEnd - 1) ? continuedTokenEnd(content, matchEnd) : matchEnd;
+        const tokenEnd = isWordCharAt(content, matchEnd - 1)
+          ? continuedTokenEnd(content, matchEnd)
+          : matchEnd;
         if (tokenEnd !== matchEnd) {
           if (refineFinding(name, value)?.drop) continue;
-          unattributed = sharedPrefix !== undefined && value.startsWith(sharedPrefix) ? sharedPrefix : null;
+          unattributed =
+            sharedPrefix !== undefined && value.startsWith(sharedPrefix) ? sharedPrefix : null;
           value = content.slice(match.index, tokenEnd);
           pattern.lastIndex = tokenEnd;
         }
@@ -3951,7 +4463,10 @@ function scanInto(
       // Only for the low-specificity prefixes that hashed asset names collide
       // with: a distinctive provider token (`sk-ant-`, `AIza`, `SG.`, a GitHub
       // token) followed by `.css` is a token followed by text.
-      if (ASSET_NAMED_PATTERNS.has(name) && endsInAssetExtension(content, match.index + value.length, match.index)) {
+      if (
+        ASSET_NAMED_PATTERNS.has(name) &&
+        endsInAssetExtension(content, match.index + value.length, match.index)
+      ) {
         continue;
       }
 
@@ -3977,10 +4492,7 @@ function scanInto(
 
       // A value whose only distinctive mark is a separator has to have a
       // random tail: a decoder table is `<digits>:<digits>`.
-      if (
-        minTailEntropy !== undefined &&
-        shannonEntropy(separatorTailOf(value)) < minTailEntropy
-      ) {
+      if (minTailEntropy !== undefined && shannonEntropy(separatorTailOf(value)) < minTailEntropy) {
         continue;
       }
 
@@ -3994,7 +4506,8 @@ function scanInto(
       if (
         generic &&
         ((platformSource === "bundle" && name === "Generic API Key Assignment") ||
-          (platformSource === "app-store" && APP_STORE_KEY_RE.test(completeKeyOf(content, match.index, value))))
+          (platformSource === "app-store" &&
+            APP_STORE_KEY_RE.test(completeKeyOf(content, match.index, value))))
       ) {
         continue;
       }
@@ -4030,7 +4543,12 @@ function scanInto(
         // A sample is never dropped on that evidence alone: the structure cannot prove the value is not a working login, so
         // the match is kept and labelled (see the demo-login branch below).
         if (name === "Generic Secret Assignment") {
-          seedVerdict = seedDataVerdict(content, match.index, completeKeyOf(content, match.index, value), seedBudget);
+          seedVerdict = seedDataVerdict(
+            content,
+            match.index,
+            completeKeyOf(content, match.index, value),
+            seedBudget,
+          );
         }
         // WordPress's oEmbed nonce: `data-secret` on a wp-embedded-content
         // element, or a ten-character alphanumeric under `data-secret`.
@@ -4039,7 +4557,9 @@ function scanInto(
           content.slice(Math.max(0, match.index - 5), match.index).toLowerCase() === "data-" &&
           (WP_EMBED_NONCE_RE.test(body) ||
             (tagBoundsAround(content, match.index) !== undefined &&
-              /\bwp-embedded-content\b/.test(content.slice(tagBoundsAround(content, match.index)!.start, match.index))))
+              /\bwp-embedded-content\b/.test(
+                content.slice(tagBoundsAround(content, match.index)!.start, match.index),
+              )))
         ) {
           continue;
         }
@@ -4052,27 +4572,29 @@ function scanInto(
         // and the Bearer match stops at its first dot. A JWT no pattern
         // recognises still reports here as an opaque bearer token.
         // A header-only JWT (no dot, no payload) is a truncated example, not a credential.
-        if (name === "Bearer Token" && isHeaderOnlyJwt(body, content, match.index + value.length)) continue;
+        if (name === "Bearer Token" && isHeaderOnlyJwt(body, content, match.index + value.length))
+          continue;
         if (name === "Bearer Token" && isJwtHead(body, content, match.index + value.length)) {
           // The JWT pattern's value is head + "." + payload + "." + signature
           // (#361). Only THAT exact token, at this occurrence, counts as
           // claimed: every HS256 JWT shares the head, and a different one is
           // still an opaque bearer.
           const rest = /^\.([A-Za-z0-9_-]+)(?:\.([A-Za-z0-9_-]+={0,2}))?/.exec(
-            content.slice(match.index + value.length, match.index + value.length + 16384)
+            content.slice(match.index + value.length, match.index + value.length + 16384),
           );
-          if (rest && (seenValues.has(`${body}.${rest[1]}`) || (rest[2] && seenValues.has(`${body}.${rest[1]}.${rest[2]}`)))) continue;
+          if (
+            rest &&
+            (seenValues.has(`${body}.${rest[1]}`) ||
+              (rest[2] && seenValues.has(`${body}.${rest[1]}.${rest[2]}`)))
+          )
+            continue;
         }
         // The tail of a URL is not an assignment.
         if (insideUrlValue(content, match.index)) continue;
       }
 
       // Skip duplicates, overlapping rematches, and false positives
-      if (
-        seenValues.has(value) ||
-        seenValues.overlaps(value) ||
-        isLikelyFalsePositive(body)
-      ) {
+      if (seenValues.has(value) || seenValues.overlaps(value) || isLikelyFalsePositive(body)) {
         continue;
       }
 
@@ -4088,7 +4610,8 @@ function scanInto(
       // A provider that writes the key's kind into its prefix: a server
       // secret is a leak at high, a client SDK key is public. The same
       // secret prefix with no provider named stays reviewable, unattributed.
-      const providerKey = generic && keyOf(value) !== "" ? providerKeyOf(match.index, body) : undefined;
+      const providerKey =
+        generic && keyOf(value) !== "" ? providerKeyOf(match.index, body) : undefined;
       if (providerKey?.named) {
         const { row } = providerKey;
         reportType = row.type;
@@ -4099,11 +4622,17 @@ function scanInto(
         reportType = unattributedKeyType(providerKey.row.prefix);
         known = { prefix: providerKey.row.prefix, provider: "unknown", ...EXPOSURE_ONLY };
       } else if (generic) {
-        const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) ? (publicBrandNear(match.index) ?? sdkInitBrandOf(content, match.index)) : undefined;
+        const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value))
+          ? (publicBrandNear(match.index) ?? sdkInitBrandOf(content, match.index))
+          : undefined;
         if (brand) {
           reportType = brand;
           reportPublic = true;
-        } else if (SHOPIFY_TOKEN_KEY_RE.test(keyOf(value)) && SHOPIFY_TOKEN_RE.test(body) && isShopifyPage()) {
+        } else if (
+          SHOPIFY_TOKEN_KEY_RE.test(keyOf(value)) &&
+          SHOPIFY_TOKEN_RE.test(body) &&
+          isShopifyPage()
+        ) {
           reportType = "Shopify Storefront Access Token";
           reportPublic = true;
         } else if (
@@ -4130,14 +4659,20 @@ function scanInto(
 
       // `sk_live_` is Stripe's prefix and Paystack's and every widget vendor
       // that copied it. The tail's format tells them apart (#1283).
-      if (sharedPrefix !== undefined && unattributed === undefined && value.startsWith(sharedPrefix)) {
+      if (
+        sharedPrefix !== undefined &&
+        unattributed === undefined &&
+        value.startsWith(sharedPrefix)
+      ) {
         const tail = value.slice(sharedPrefix.length);
         const mode = sharedPrefix === "sk_live_" ? "live" : "test";
         if (PAYSTACK_TAIL_RE.test(tail)) {
           reportType = `Paystack ${mode === "live" ? "Live" : "Test"} Secret Key`;
           known = { provider: "Paystack", kind: "secret", mode };
         } else if (HEX_TAIL_RE.test(tail)) {
-          const widget = isWidgetKeyAttribute(content.slice(Math.max(0, match.index - 64), match.index));
+          const widget = isWidgetKeyAttribute(
+            content.slice(Math.max(0, match.index - 64), match.index),
+          );
           reportType = unattributedKeyType(sharedPrefix);
           // Only a `data-*-key` attribute is a widget's client key; the same
           // shape anywhere else is a secret of some vendor, so it stays high.
@@ -4186,7 +4721,9 @@ function scanInto(
       if (generic && seedVerdict === undefined && isElidedValue(body)) {
         reportType = PARTIAL_VALUE_TYPE;
         reportConfidence = "info";
-        known = { hint: "the value ends in an ellipsis: it may be the visible start of a real secret, so check what the full value is and where it is built" };
+        known = {
+          hint: "the value ends in an ellipsis: it may be the visible start of a real secret, so check what the full value is and where it is built",
+        };
       }
 
       // A token that only opens like the provider's: reviewable, at medium,
@@ -4194,7 +4731,11 @@ function scanInto(
       if (unattributed !== undefined) {
         reportType = unattributedKeyType(unattributed ?? undefined);
         reportConfidence = "medium";
-        known = { ...(unattributed !== null ? { prefix: unattributed } : {}), provider: "unknown", resembles: name };
+        known = {
+          ...(unattributed !== null ? { prefix: unattributed } : {}),
+          provider: "unknown",
+          resembles: name,
+        };
       }
 
       seenValues.add(value);
@@ -4206,19 +4747,28 @@ function scanInto(
         match.index + (generic ? value.lastIndexOf(body) : 0),
         body.length,
         () => readKeyLookBack(content, match!.index).before,
-        () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH),
-        known
+        () =>
+          content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH),
+        known,
       );
-      if (finding && finding.type === "AWS Access Key ID" && finding.confidence !== "info" && finding.confidence !== "medium") {
+      if (
+        finding &&
+        finding.type === "AWS Access Key ID" &&
+        finding.confidence !== "info" &&
+        finding.confidence !== "medium"
+      ) {
         const around = content.slice(
           Math.max(0, match.index - AWS_PAIR_REACH),
-          match.index + value.length + AWS_PAIR_REACH
+          match.index + value.length + AWS_PAIR_REACH,
         );
         if (!AWS_SECRET_NEAR_RE.test(around)) {
           // The public half of the pair is low value alone, but stays in the
           // machine-readable output: the secret may be in another file.
           finding.confidence = "medium";
-          finding.extra = { ...finding.extra, pair: `no 40-character secret-shaped value within ${AWS_PAIR_REACH} characters: probably the public half of the pair; the secret may sit elsewhere` }; // pragma: allowlist secret
+          finding.extra = {
+            ...finding.extra,
+            pair: `no 40-character secret-shaped value within ${AWS_PAIR_REACH} characters: probably the public half of the pair; the secret may sit elsewhere`,
+          }; // pragma: allowlist secret
         }
       }
       if (finding) found.add(finding);
@@ -4274,11 +4824,7 @@ function scanInto(
         }
 
         // Skip duplicates, overlapping rematches, and false positives
-        if (
-          seenValues.has(value) ||
-          seenValues.overlaps(value) ||
-          isLikelyFalsePositive(value)
-        ) {
+        if (seenValues.has(value) || seenValues.overlaps(value) || isLikelyFalsePositive(value)) {
           continue;
         }
 
@@ -4320,7 +4866,9 @@ function scanInto(
         // digit in it: `"paste_your_cloudflare_api_token_here_now"` is
         // quoted, under a credential key, and made of words.
         const literal =
-          QUOTE_CHAR_RE.test(content[at - 1] ?? "") && keyContext === "credential" && /[0-9]/.test(value);
+          QUOTE_CHAR_RE.test(content[at - 1] ?? "") &&
+          keyContext === "credential" &&
+          /[0-9]/.test(value);
         if (!structural && !literal && looksLikeCodeIdentifier(value)) {
           continue;
         }
@@ -4334,7 +4882,7 @@ function scanInto(
           at,
           value.length,
           () => back.before,
-          () => content.slice(at + value.length, at + value.length + FORWARD_REACH)
+          () => content.slice(at + value.length, at + value.length + FORWARD_REACH),
         );
         if (finding) found.add(finding);
       }
@@ -4345,7 +4893,12 @@ function scanInto(
   // to the client as one string — scanned as content of their own, two
   // levels deep, reported with a ` (base64)` location suffix.
   // A decoded blob is scanned into a sink of its own, so the cap holds for it too and what it left out is counted here.
-  const scanBlob = (text: string, blobLocation: ReportedLocation, url: string | undefined, blobDepth: number): LeakedSecret[] => {
+  const scanBlob = (
+    text: string,
+    blobLocation: ReportedLocation,
+    url: string | undefined,
+    blobDepth: number,
+  ): LeakedSecret[] => {
     const inner = found.child();
     scanInto(inner, text, blobLocation, url, blobDepth, {});
     found.omit(inner.omitted(), inner.omittedSerious());
@@ -4383,7 +4936,8 @@ function detachSecret(secret: LeakedSecret): LeakedSecret {
   const out: LeakedSecret = { ...secret, value: detached(secret.value) };
   if (secret.extra) {
     const extra: Record<string, unknown> = { ...secret.extra };
-    for (const [key, value] of Object.entries(extra)) if (typeof value === "string") extra[key] = detached(value);
+    for (const [key, value] of Object.entries(extra))
+      if (typeof value === "string") extra[key] = detached(value);
     out.extra = extra as FindingExtra;
   }
   return out;
@@ -4394,7 +4948,10 @@ function detachSecret(secret: LeakedSecret): LeakedSecret {
  * that overruns is stopped at an arbitrary point. The sink is outside the stopped call, so what was found before the stop
  * is still there to keep; only the rest of the page is unscanned (and the page says so, see `timedOut`).
  */
-export function startPageScan(doc: NonNullable<ParsedPage["document"]>, pageUrl: string): {
+export function startPageScan(
+  doc: NonNullable<ParsedPage["document"]>,
+  pageUrl: string,
+): {
   run(): void;
   result(): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean };
 } {
@@ -4402,7 +4959,11 @@ export function startPageScan(doc: NonNullable<ParsedPage["document"]>, pageUrl:
   return {
     run: () => scanPageInto(sink, doc, pageUrl),
     // The records are kept for the whole crawl until the site rule runs: they must not keep the scanned page alive (#1552).
-    result: () => ({ secrets: sink.result().map(detachSecret), omitted: sink.omitted(), omittedSerious: sink.omittedSerious() }),
+    result: () => ({
+      secrets: sink.result().map(detachSecret),
+      omitted: sink.omitted(),
+      omittedSerious: sink.omittedSerious(),
+    }),
   };
 }
 
@@ -4412,14 +4973,18 @@ export function startPageScan(doc: NonNullable<ParsedPage["document"]>, pageUrl:
  */
 export function scanPageBounded(
   doc: NonNullable<ParsedPage["document"]>,
-  pageUrl: string
+  pageUrl: string,
 ): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean } {
   const scan = startPageScan(doc, pageUrl);
   scan.run();
   return scan.result();
 }
 
-function scanPageInto(sink: FindingSink, doc: NonNullable<ParsedPage["document"]>, pageUrl: string): void {
+function scanPageInto(
+  sink: FindingSink,
+  doc: NonNullable<ParsedPage["document"]>,
+  pageUrl: string,
+): void {
   // Inline scripts first: the findings the most serious tier is made of (a server-only key shipped to the browser) are read
   // from a script, so a scan stopped at the time budget (#1556) has read them before the page's whole text. The sink keeps
   // the canonical order: the document's findings (phase 0) come before the scripts' (phase 1) in the result and in the dedupe.
@@ -4449,7 +5014,7 @@ function scanPageInto(sink: FindingSink, doc: NonNullable<ParsedPage["document"]
 /** Every finding of a page, in scan order: no cap, no dedupe. The site rule and the collector read {@link scanPageBounded}. */
 export function scanPageForSecrets(
   doc: NonNullable<ParsedPage["document"]>,
-  pageUrl: string
+  pageUrl: string,
 ): LeakedSecret[] {
   const sink = createListSink();
   scanPageInto(sink, doc, pageUrl);
@@ -4466,11 +5031,14 @@ function unfetchedReason(script: ScriptContentData): string | null {
   // Read and empty: nothing in it to leak.
   if (script.content === "" && script.status !== null && script.status < 400) return null;
   if (script.fetchSkipReason) {
-    return script.fetchSkipReason === "memory-cap" ? "not fetched (memory cap)" : "not fetched (time budget)";
+    return script.fetchSkipReason === "memory-cap"
+      ? "not fetched (memory cap)"
+      : "not fetched (time budget)";
   }
   if (script.wafBlocked) return "blocked by a WAF or bot challenge";
   if (script.rateLimited) return "rate limited";
-  if (script.status === null) return script.error ? `request failed (${script.error})` : "not fetched";
+  if (script.status === null)
+    return script.error ? `request failed (${script.error})` : "not fetched";
   if (script.status >= 500) return `server error (${script.status})`;
   if (script.status >= 400) return `refused (${script.status})`;
   return "no content returned";
@@ -4493,11 +5061,16 @@ function noteOrigin(
   origins: Map<string, ValueOrigins>,
   finding: LeakedSecret,
   source: string,
-  loadedBy: readonly string[] | undefined
+  loadedBy: readonly string[] | undefined,
 ): void {
   let entry = origins.get(finding.value);
   if (!entry) {
-    entry = { pages: new Set(), pagesTruncated: false, occurrences: new Map(), occurrencesTruncated: false };
+    entry = {
+      pages: new Set(),
+      pagesTruncated: false,
+      occurrences: new Map(),
+      occurrencesTruncated: false,
+    };
     origins.set(finding.value, entry);
   }
   const addPage = (page: string): void => {
@@ -4518,7 +5091,7 @@ function noteOrigin(
     key,
     external
       ? { location: finding.location, script: source, loadedBy: loadedBy?.length ?? 0 }
-      : { location: finding.location, page: source }
+      : { location: finding.location, page: source },
   );
 }
 
@@ -4535,8 +5108,7 @@ export const leakedSecretsRule: Rule = {
   meta: {
     id: "security/leaked-secrets",
     name: "Leaked Secrets and API Keys",
-    description:
-      "Checks for exposed API keys, secrets, and credentials in HTML/JS",
+    description: "Checks for exposed API keys, secrets, and credentials in HTML/JS",
     solution:
       "API keys and secrets exposed in client-side code can be harvested by attackers to access your services, " +
       "incur charges, or steal data. Move sensitive credentials to server-side code and use environment variables " +
@@ -4556,7 +5128,19 @@ export const leakedSecretsRule: Rule = {
       { name: "leaked-secrets-info", outcome: "problem" },
       { name: "leaked-secrets-omitted", outcome: "problem" },
       { name: "leaked-secrets-partial", outcome: "problem" },
-      { name: "leaked-secrets", outcome: "clean", clears: ["leaked-secrets-critical", "leaked-secrets-high", "leaked-secrets-medium", "leaked-secrets-public", "leaked-secrets-info", "leaked-secrets-omitted", "leaked-secrets-partial"] },
+      {
+        name: "leaked-secrets",
+        outcome: "clean",
+        clears: [
+          "leaked-secrets-critical",
+          "leaked-secrets-high",
+          "leaked-secrets-medium",
+          "leaked-secrets-public",
+          "leaked-secrets-info",
+          "leaked-secrets-omitted",
+          "leaked-secrets-partial",
+        ],
+      },
       { name: "leaked-secrets-unscanned", outcome: "skipped" },
       { name: "leaked-secrets-unfetched", outcome: "skipped" },
     ],
@@ -4573,7 +5157,11 @@ export const leakedSecretsRule: Rule = {
     // Where each value was seen (#1755): the dedupe below keeps one record per value, so the pages and scripts it sat on are
     // collected here, bounded, and read back by `item`. Pages a script loads count as pages of the finding in that script.
     const origins = new Map<string, ValueOrigins>();
-    const append = (found: readonly LeakedSecret[], page: string, loadedBy?: readonly string[]): void => {
+    const append = (
+      found: readonly LeakedSecret[],
+      page: string,
+      loadedBy?: readonly string[],
+    ): void => {
       for (const finding of found) {
         leakedSecrets.push(finding);
         noteOrigin(origins, finding, page, loadedBy);
@@ -4587,10 +5175,14 @@ export const leakedSecretsRule: Rule = {
     const admitted = (
       found: readonly LeakedSecret[],
       omitted: number,
-      serious: boolean
+      serious: boolean,
     ): { secrets: readonly LeakedSecret[]; omitted: number; serious: boolean } => {
       const result = budget.admit(found);
-      return { secrets: result.secrets, omitted: omitted + result.omitted, serious: serious || result.omittedSerious };
+      return {
+        secrets: result.secrets,
+        omitted: omitted + result.omitted,
+        serious: serious || result.omittedSerious,
+      };
     };
     const noteOmitted = (url: string, omitted: number, serious: boolean): void => {
       if (omitted <= 0) return;
@@ -4652,7 +5244,8 @@ export const leakedSecretsRule: Rule = {
       if (prior?.publicByDesign && !s.publicByDesign) continue;
       // A later page's plain HTML hit must not hide the script hit that makes
       // a server-only secret critical.
-      if (prior && isShippedServerSecret(prior) && !isShippedServerSecret(s) && !s.publicByDesign) continue;
+      if (prior && isShippedServerSecret(prior) && !isShippedServerSecret(s) && !s.publicByDesign)
+        continue;
       byValue.set(s.value, s);
     }
     // A generic assignment's value carries its key (`accessToken":"…"`), so
@@ -4664,24 +5257,25 @@ export const leakedSecretsRule: Rule = {
     const publicBodies = new Set(
       Array.from(byValue.values())
         .filter((s) => s.publicByDesign)
-        .map((s) => quotedBodyOf(s.value))
+        .map((s) => quotedBodyOf(s.value)),
     );
     const uniqueSecrets = Array.from(byValue.values()).filter(
-      (s) => s.publicByDesign || !s.type.startsWith("Generic ") || !publicBodies.has(quotedBodyOf(s.value))
+      (s) =>
+        s.publicByDesign ||
+        !s.type.startsWith("Generic ") ||
+        !publicBodies.has(quotedBodyOf(s.value)),
     );
 
     // Public-by-design client keys are informational only — never leaks
     const publicKeys = uniqueSecrets.filter((s) => s.publicByDesign);
     // Expired tokens and session tokens: shown, never counted (#361)
     const informationalAll = uniqueSecrets.filter(
-      (s) => !s.publicByDesign && s.confidence === "info"
+      (s) => !s.publicByDesign && s.confidence === "info",
     );
     // A value cut short by an ellipsis is not an expired or session token: it has its own check.
     const partialValues = informationalAll.filter((s) => s.type === PARTIAL_VALUE_TYPE);
     const informational = informationalAll.filter((s) => s.type !== PARTIAL_VALUE_TYPE);
-    const realSecrets = uniqueSecrets.filter(
-      (s) => !s.publicByDesign && s.confidence !== "info"
-    );
+    const realSecrets = uniqueSecrets.filter((s) => !s.publicByDesign && s.confidence !== "info");
 
     // Separate by confidence
     // Server-only secrets read from a browser-served script move out of the
@@ -4698,7 +5292,9 @@ export const leakedSecretsRule: Rule = {
       id: `${s.type}: ${maskSecret(s.value)}`,
       label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
       // Each page the value sat on, whether in its HTML or inline script or through a script it loads.
-      ...(origins.get(s.value)?.pages.size ? { sourcePages: [...origins.get(s.value)!.pages] } : {}),
+      ...(origins.get(s.value)?.pages.size
+        ? { sourcePages: [...origins.get(s.value)!.pages] }
+        : {}),
       meta: {
         ...(s.extra ?? {}),
         ...occurrencesMeta(origins.get(s.value)),
@@ -4711,7 +5307,9 @@ export const leakedSecretsRule: Rule = {
 
     // The report keeps `maxItemsPerCheck` items of a check and rolls the rest into `details.additional`: the rule does the
     // same, so a check never carries more than the report would (a 10 MB page of key shapes was a 107 MB result).
-    const listed = (list: LeakedSecret[]): { items: CheckItem[]; extra: { additional?: number } } => {
+    const listed = (
+      list: LeakedSecret[],
+    ): { items: CheckItem[]; extra: { additional?: number } } => {
       const shown = list.length > PAGE_FINDINGS_CAP ? list.slice(0, PAGE_FINDINGS_CAP) : list;
       return {
         items: shown.map(item),
@@ -4782,8 +5380,15 @@ export const leakedSecretsRule: Rule = {
         // Only public-by-design or informational findings left out: nothing to act on, so no warning on a clean site.
         status: omittedSerious ? "warn" : "info",
         message: `At least ${omittedFindings} more secret-shaped finding(s) on ${omittedPages.length} source(s) were not kept (a value left out on several pages counts on each): a page or script keeps at most ${PAGE_FINDINGS_CAP} and a site ${SITE_FINDINGS_CAP} in all, most serious first, so what is listed is not all of it`,
-        details: { omitted: omittedFindings, perPageCap: PAGE_FINDINGS_CAP, siteCap: SITE_FINDINGS_CAP, atLeast: true },
-        items: omittedPages.slice(0, 20).map((p) => ({ id: p.url, label: `${p.omitted} finding(s) not kept` })),
+        details: {
+          omitted: omittedFindings,
+          perPageCap: PAGE_FINDINGS_CAP,
+          siteCap: SITE_FINDINGS_CAP,
+          atLeast: true,
+        },
+        items: omittedPages
+          .slice(0, 20)
+          .map((p) => ({ id: p.url, label: `${p.omitted} finding(s) not kept` })),
       });
     }
 
@@ -4801,7 +5406,7 @@ export const leakedSecretsRule: Rule = {
     // timeout itself as a skipped `-error` check; this keeps the rule from also saying
     // nothing was found.
     const unscanned = (ctx.collectedSignals?.pages ?? []).filter((p) =>
-      p.timedOut?.ruleIds.includes("security/leaked-secrets")
+      p.timedOut?.ruleIds.includes("security/leaked-secrets"),
     );
     if (unscanned.length > 0) {
       checks.push({
@@ -4816,7 +5421,10 @@ export const leakedSecretsRule: Rule = {
       const named = unfetchedScripts.length;
       const parts: string[] = [];
       if (named > 0) parts.push(`${named} script(s) could not be read`);
-      if (capDropped > 0) parts.push(`${capDropped} script(s) were not scanned because the script limit or the asset fetch cap was reached`);
+      if (capDropped > 0)
+        parts.push(
+          `${capDropped} script(s) were not scanned because the script limit or the asset fetch cap was reached`,
+        );
       checks.push({
         name: "leaked-secrets-unfetched",
         status: "info",
@@ -4829,7 +5437,12 @@ export const leakedSecretsRule: Rule = {
       });
     }
 
-    if (realSecrets.length === 0 && unscanned.length === 0 && unfetchedScripts.length === 0 && capDropped === 0) {
+    if (
+      realSecrets.length === 0 &&
+      unscanned.length === 0 &&
+      unfetchedScripts.length === 0 &&
+      capDropped === 0
+    ) {
       checks.push({
         name: "leaked-secrets",
         status: "pass",

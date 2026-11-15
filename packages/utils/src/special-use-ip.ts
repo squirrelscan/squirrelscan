@@ -21,7 +21,8 @@ import { isIP } from "node:net";
 /** The IPv4 blocks that are not public unicast, besides the private ranges `isPrivateOrReservedHost` already holds. */
 export function isSpecialUseIpv4(host: string): boolean {
   const octets = host.split(".").map(Number);
-  if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) return false;
+  if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255))
+    return false;
   const [a, b, c] = octets as [number, number, number, number];
   if (a === 0 || a === 10 || a === 127) return true; // this host, private, loopback
   if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
@@ -57,7 +58,11 @@ function ipv6Bytes(host: string): number[] | null {
   const tail = halves.length === 2 && halves[1] !== "" ? halves[1]!.split(":") : [];
   const missing = 8 - head.length - tail.length;
   if (halves.length === 1 ? missing !== 0 : missing < 0) return null;
-  const groups = [...head, ...(halves.length === 2 ? Array.from({ length: missing }, () => "0") : []), ...tail];
+  const groups = [
+    ...head,
+    ...(halves.length === 2 ? Array.from({ length: missing }, () => "0") : []),
+    ...tail,
+  ];
   if (groups.length !== 8) return null;
   const bytes: number[] = [];
   for (const group of groups) {
@@ -68,12 +73,14 @@ function ipv6Bytes(host: string): number[] | null {
   return bytes;
 }
 
-const v4 = (bytes: number[], at: number): string => `${bytes[at]}.${bytes[at + 1]}.${bytes[at + 2]}.${bytes[at + 3]}`;
+const v4 = (bytes: number[], at: number): string =>
+  `${bytes[at]}.${bytes[at + 1]}.${bytes[at + 2]}.${bytes[at + 3]}`;
 
 /** The globally reachable exceptions inside `2001::/23`: PCP, TURN and DNS-SD anycast (`2001:1::1` to `2001:1::3`), AMT (`2001:3::/32`) and AS112-v6 (`2001:4:112::/48`). */
 function isGloballyReachableIetf(bytes: number[], second: number): boolean {
   const allZero = (from: number, to: number) => bytes.slice(from, to).every((b) => b === 0);
-  if (second === 0x0001 && allZero(4, 14) && bytes[14] === 0 && bytes[15]! >= 1 && bytes[15]! <= 3) return true;
+  if (second === 0x0001 && allZero(4, 14) && bytes[14] === 0 && bytes[15]! >= 1 && bytes[15]! <= 3)
+    return true;
   if (second === 0x0003) return true;
   return second === 0x0004 && bytes[4] === 0x01 && bytes[5] === 0x12;
 }
@@ -88,14 +95,15 @@ function isGloballyReachableIetf(bytes: number[], second: number): boolean {
 export function isSpecialUseIpv6(host: string): boolean {
   const bytes = ipv6Bytes(host);
   if (!bytes) return false;
-  const first = bytes[0]! << 8 | bytes[1]!;
-  const second = bytes[2]! << 8 | bytes[3]!;
+  const first = (bytes[0]! << 8) | bytes[1]!;
+  const second = (bytes[2]! << 8) | bytes[3]!;
   const allZero = (from: number, to: number) => bytes.slice(from, to).every((b) => b === 0);
   if (allZero(0, 10)) {
     if (bytes[10] === 0xff && bytes[11] === 0xff) return isSpecialUseIpv4(v4(bytes, 12)); // ::ffff:a.b.c.d
     if (bytes[10] === 0 && bytes[11] === 0) return true; // ::, ::1 and the compatible ::a.b.c.d
   }
-  if (allZero(0, 8) && bytes[8] === 0xff && bytes[9] === 0xff && bytes[10] === 0 && bytes[11] === 0) return isSpecialUseIpv4(v4(bytes, 12)); // ::ffff:0:a.b.c.d
+  if (allZero(0, 8) && bytes[8] === 0xff && bytes[9] === 0xff && bytes[10] === 0 && bytes[11] === 0)
+    return isSpecialUseIpv4(v4(bytes, 12)); // ::ffff:0:a.b.c.d
   if (first === 0x64 && second === 0xff9b) return true; // NAT64: 64:ff9b::/96, and 64:ff9b:1::/48 treated alike
   if (first === 0x0100 && allZero(2, 8)) return true; // 100::/64, discard-only
   if (first === 0x0100 && allZero(2, 6) && bytes[6] === 0 && bytes[7] === 1) return true; // 100:0:0:1::/64, dummy IPv6 prefix (RFC 9780)
@@ -109,7 +117,13 @@ export function isSpecialUseIpv6(host: string): boolean {
   if ((first & 0xffc0) === 0xfec0) return true; // site-local fec0::/10
   if ((first & 0xff00) === 0xff00) return true; // multicast
   // ISATAP: an interface identifier `0:5efe:a.b.c.d` or `200:5efe:a.b.c.d` on any prefix embeds an IPv4 address.
-  if ((bytes[8] === 0 || bytes[8] === 2) && bytes[9] === 0 && bytes[10] === 0x5e && bytes[11] === 0xfe) return isSpecialUseIpv4(v4(bytes, 12));
+  if (
+    (bytes[8] === 0 || bytes[8] === 2) &&
+    bytes[9] === 0 &&
+    bytes[10] === 0x5e &&
+    bytes[11] === 0xfe
+  )
+    return isSpecialUseIpv4(v4(bytes, 12));
   return false;
 }
 

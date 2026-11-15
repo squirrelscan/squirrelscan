@@ -13,10 +13,14 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-const sha = (bytes: Uint8Array | string) => new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+const sha = (bytes: Uint8Array | string) =>
+  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
 /** A skills checkout with one skill, and its manifest.json describing the files. */
-function checkout(files: Record<string, string | Uint8Array>, manifestOverrides: { version?: string } = {}) {
+function checkout(
+  files: Record<string, string | Uint8Array>,
+  manifestOverrides: { version?: string } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), "agent-skills-bundle-"));
   dirs.push(dir);
   for (const [path, content] of Object.entries(files)) {
@@ -48,17 +52,26 @@ function run(args: string[]) {
   return { code: proc.exitCode, stderr: proc.stderr.toString() };
 }
 
-const SKILL_MD = '---\nname: demo\ndescription: "A demo skill"\nmetadata:\n  version: "1.0"\n---\n\n# Demo\n';
+const SKILL_MD =
+  '---\nname: demo\ndescription: "A demo skill"\nmetadata:\n  version: "1.0"\n---\n\n# Demo\n';
 
 describe("bundle-agent-skills", () => {
   test("writes text and binary files, and --check passes until a file changes", async () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    const { dir, out } = checkout({ "SKILL.md": SKILL_MD, "assets/icon.png": png, "references/a.md": "# A\n" });
+    const { dir, out } = checkout({
+      "SKILL.md": SKILL_MD,
+      "assets/icon.png": png,
+      "references/a.md": "# A\n",
+    });
     expect(run(["--from", dir, "--out", out]).code).toBe(0);
 
     const { AGENT_SKILLS_BUNDLE } = (await import(out)) as typeof import("../src/agent-skills");
     const [skill] = AGENT_SKILLS_BUNDLE;
-    expect(skill?.frontmatter).toEqual({ name: "demo", description: "A demo skill", metadata: { version: "1.0" } });
+    expect(skill?.frontmatter).toEqual({
+      name: "demo",
+      description: "A demo skill",
+      metadata: { version: "1.0" },
+    });
     expect(skill?.files.map((f) => [f.path, f.encoding])).toEqual([
       ["assets/icon.png", "base64"],
       ["references/a.md", "utf8"],
@@ -67,7 +80,11 @@ describe("bundle-agent-skills", () => {
 
     expect(run(["--from", dir, "--out", out, "--check"]).code).toBe(0);
     // A reference edited (with manifest.json regenerated) but not rebundled: stale.
-    const edited = checkout({ "SKILL.md": SKILL_MD, "assets/icon.png": png, "references/a.md": "# A, edited\n" });
+    const edited = checkout({
+      "SKILL.md": SKILL_MD,
+      "assets/icon.png": png,
+      "references/a.md": "# A, edited\n",
+    });
     const stale = run(["--from", edited.dir, "--out", out, "--check"]);
     expect(stale.code).toBe(1);
     expect(stale.stderr).toContain("out of date");
@@ -92,7 +109,11 @@ describe("bundle-agent-skills", () => {
 
   test.each([
     ["no description", "---\nname: demo\n---\n", "has no description"],
-    ["a name that is not the directory", "---\nname: other\ndescription: d\n---\n", "frontmatter name is other"],
+    [
+      "a name that is not the directory",
+      "---\nname: other\ndescription: d\n---\n",
+      "frontmatter name is other",
+    ],
     ["no frontmatter", "# Demo\n", "has no YAML frontmatter"],
   ])("refuses a SKILL.md with %s", (_label, skillMd, message) => {
     const { dir, out } = checkout({ "SKILL.md": skillMd });

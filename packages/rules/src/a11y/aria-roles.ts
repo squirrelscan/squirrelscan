@@ -45,10 +45,7 @@ export const ariaRolesRule: Rule = {
         status: "fail",
         message: `${invalidRoles.length} invalid ARIA role(s) found`,
         items: invalidRoles.slice(0, 10).map((id) => ({ id })),
-        details:
-          invalidRoles.length > 10
-            ? { additional: invalidRoles.length - 10 }
-            : undefined,
+        details: invalidRoles.length > 10 ? { additional: invalidRoles.length - 10 } : undefined,
       });
     } else if (elementsWithRole.length > 0) {
       checks.push({

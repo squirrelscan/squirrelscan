@@ -234,7 +234,7 @@ function accumulatePage(rollup: CanonicalRollup, record: CanonicalPageRecord): v
     "tracking params",
     [...target.searchParams.keys()].some(isTrackingParam)
       ? "tracking params retained"
-      : "tracking params stripped"
+      : "tracking params stripped",
   );
 }
 
@@ -258,7 +258,7 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
   if (sitePageCount < CANONICAL_FORM_MIN_PAGES) {
     return [
       skip(
-        `Only ${sitePageCount} page(s) crawled; ${CANONICAL_FORM_MIN_PAGES} needed to establish a canonical-form norm`
+        `Only ${sitePageCount} page(s) crawled; ${CANONICAL_FORM_MIN_PAGES} needed to establish a canonical-form norm`,
       ),
     ];
   }
@@ -276,7 +276,7 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
   const buckets = [...rollup.samples.values()].sort(
     (a, b) =>
       DIMENSIONS.indexOf(a.dimension) - DIMENSIONS.indexOf(b.dimension) ||
-      byString(a.scope, b.scope)
+      byString(a.scope, b.scope),
   );
 
   for (const sample of buckets) {
@@ -311,9 +311,7 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
       deviantUrls.set(form, urls);
     }
 
-    for (const [deviant, urls] of [...deviantUrls.entries()].sort((a, b) =>
-      byString(a[0], b[0])
-    )) {
+    for (const [deviant, urls] of [...deviantUrls.entries()].sort((a, b) => byString(a[0], b[0]))) {
       drifts.push({
         dimension,
         scope,
@@ -329,7 +327,7 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
   if (judged.length === 0) {
     return [
       skip(
-        `No canonical form is shared by ${Math.round(CANONICAL_FORM_MIN_AGREEMENT * 100)}% of at least ${CANONICAL_FORM_MIN_SAMPLE} comparable pages`
+        `No canonical form is shared by ${Math.round(CANONICAL_FORM_MIN_AGREEMENT * 100)}% of at least ${CANONICAL_FORM_MIN_SAMPLE} comparable pages`,
       ),
     ];
   }
@@ -370,7 +368,7 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
       b.deviantUrls.length - a.deviantUrls.length ||
       DIMENSIONS.indexOf(a.dimension) - DIMENSIONS.indexOf(b.dimension) ||
       byString(a.scope, b.scope) ||
-      byString(a.deviant, b.deviant)
+      byString(a.deviant, b.deviant),
   );
   const items: CheckItem[] = drifts.slice(0, CANONICAL_FORM_MAX_ITEMS).map((d) => ({
     id: `${d.dimension}${d.scope ? `@${d.scope}` : ""}:${d.deviant}`,

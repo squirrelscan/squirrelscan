@@ -357,7 +357,11 @@ export class ComponentOccurrenceCache {
 
   /** The topmost element above `element` (or `element` itself). */
   rootOf(element: Element): Element {
-    return this.resolveUp(this.roots, element, (current, parent, parentValue) => parentValue ?? current);
+    return this.resolveUp(
+      this.roots,
+      element,
+      (current, parent, parentValue) => parentValue ?? current,
+    );
   }
 
   /**

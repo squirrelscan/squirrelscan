@@ -47,17 +47,20 @@ describe("detectSoft404 with the captured errorShell scalar", () => {
   test("an absent scalar is the old DOM-only behaviour", () => {
     expect(detectSoft404(input(SHELL, { errorShell: undefined })).isSoft404).toBe(true);
     expect(detectSoft404(input(SHELL, { document: null, errorShell: undefined })).isSoft404).toBe(
-      false
+      false,
     );
   });
 
   test("the existing fixture gives the identical result with or without the scalar", () => {
-    const html = readFileSync(join(import.meta.dir, "fixtures", "soft-404-next-error.html"), "utf8");
+    const html = readFileSync(
+      join(import.meta.dir, "fixtures", "soft-404-next-error.html"),
+      "utf8",
+    );
     const parsed = parsePage(html, URL);
     const withDom = detectSoft404(input(html));
     expect(detectSoft404(input(html, { errorShell: parsed.errorShell }))).toEqual(withDom);
     expect(detectSoft404(input(html, { document: null, errorShell: parsed.errorShell }))).toEqual(
-      withDom
+      withDom,
     );
   });
 });

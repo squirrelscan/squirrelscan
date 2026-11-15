@@ -61,7 +61,11 @@ const MAP: EntityMap = {
           property: "url",
           values: [
             { value: "https://example.com/ada", pages: ["https://example.com/a"], morePages: 0 },
-            { value: "https://example.com/lovelace", pages: ["https://example.com/b"], morePages: 0 },
+            {
+              value: "https://example.com/lovelace",
+              pages: ["https://example.com/b"],
+              morePages: 0,
+            },
           ],
         },
       ],

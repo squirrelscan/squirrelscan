@@ -45,7 +45,9 @@ describe("probeAgentAccess all tokens (#3788)", () => {
   test("allTokens probes every registry bot once and records X-Robots-Tag per probe", async () => {
     const origin = serve();
     const data = await Effect.runPromise(
-      probeAgentAccess(origin.url, "browser-ua", undefined, undefined, undefined, { allTokens: true }),
+      probeAgentAccess(origin.url, "browser-ua", undefined, undefined, undefined, {
+        allTokens: true,
+      }),
     );
     expect(origin.uas).toHaveLength(1 + AGENT_ACCESS_BOTS.length);
     for (const bot of AGENT_ACCESS_BOTS) {
@@ -60,7 +62,9 @@ describe("probeAgentAccess all tokens (#3788)", () => {
   test("allTokens false behaves as the default", async () => {
     const origin = serve();
     const data = await Effect.runPromise(
-      probeAgentAccess(origin.url, "browser-ua", undefined, undefined, undefined, { allTokens: false }),
+      probeAgentAccess(origin.url, "browser-ua", undefined, undefined, undefined, {
+        allTokens: false,
+      }),
     );
     expect(origin.uas).toHaveLength(3);
   });

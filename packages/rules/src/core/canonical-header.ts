@@ -5,9 +5,7 @@ import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/r
 
 // Parse Link header for canonical URL
 // Format: Link: <https://example.com/page>; rel="canonical"
-export function parseLinkHeaderCanonical(
-  linkHeader: string | undefined
-): string | null {
+export function parseLinkHeaderCanonical(linkHeader: string | undefined): string | null {
   if (!linkHeader) return null;
 
   // Link headers can have multiple values separated by commas
@@ -31,10 +29,7 @@ function normalizeUrl(url: string): string {
     parsed.hash = ""; // Remove fragment
     let normalized = parsed.toString();
     // Remove trailing slash (except for root)
-    if (
-      normalized.endsWith("/") &&
-      normalized.length > parsed.origin.length + 1
-    ) {
+    if (normalized.endsWith("/") && normalized.length > parsed.origin.length + 1) {
       normalized = normalized.slice(0, -1);
     }
     return normalized.toLowerCase();

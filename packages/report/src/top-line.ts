@@ -90,7 +90,9 @@ export interface SectionScoreRow {
  * An older report with no `groups`, or a group code this build does not know,
  * yields fewer rows (possibly none), never a placeholder.
  */
-export function sectionScoreRows(groups: readonly GroupScore[] | null | undefined): SectionScoreRow[] {
+export function sectionScoreRows(
+  groups: readonly GroupScore[] | null | undefined,
+): SectionScoreRow[] {
   const byGroup = new Map((groups ?? []).map((g) => [g.group, g]));
   const rows: SectionScoreRow[] = [];
   for (const code of GROUP_CODES) {

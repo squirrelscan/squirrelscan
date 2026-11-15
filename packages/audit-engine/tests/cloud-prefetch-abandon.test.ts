@@ -225,7 +225,10 @@ describe("abandoned cloud prefetch (#280)", () => {
         getBalance: async () => BALANCE,
         siteMetadata: async () => METADATA,
         keywordGaps: async () => ({ gaps: [], summary: "" }),
-        render: async (req: Parameters<CloudServicesClient["render"]>[0]) => ({ jobId: req.urls[0], status: "queued" }),
+        render: async (req: Parameters<CloudServicesClient["render"]>[0]) => ({
+          jobId: req.urls[0],
+          status: "queued",
+        }),
         renderResult: async (jobId: string) => ({
           jobId,
           status: "done",

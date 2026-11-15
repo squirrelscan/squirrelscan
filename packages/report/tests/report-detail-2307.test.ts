@@ -21,12 +21,21 @@ function rule(
   checks: ReportRuleResult["checks"],
 ): ReportRuleResult {
   return {
-    meta: { id, name, description: `${name} description`, category: "seo", scope: "page", severity, weight: 5 },
+    meta: {
+      id,
+      name,
+      description: `${name} description`,
+      category: "seo",
+      scope: "page",
+      severity,
+      weight: 5,
+    },
     checks,
   };
 }
 
-const NOT_CHECKED = "External link checking was off for this audit, so 3 external link(s) on the audited pages were not checked";
+const NOT_CHECKED =
+  "External link checking was off for this audit, so 3 external link(s) on the audited pages were not checked";
 
 function structure() {
   const builder = createStructureBuilder();
@@ -82,7 +91,14 @@ function fullReport(): AuditReport {
   } as AuditReport;
 }
 
-const ABOVE = ["Not checked", "Page structure", "Rate limited", "Scan:", "Partial scan", "audited 100 of 505"];
+const ABOVE = [
+  "Not checked",
+  "Page structure",
+  "Rate limited",
+  "Scan:",
+  "Partial scan",
+  "audited 100 of 505",
+];
 
 describe("markdown", () => {
   const md = renderMarkdown(fullReport(), { version: "1.2.3" });
@@ -106,12 +122,16 @@ describe("markdown", () => {
 
   test("it holds not-checked notices, then the page structure, then the scan details", () => {
     const detail = md.slice(md.indexOf("## Report detail"));
-    const order = ["### Not checked", "### Page structure", "### Scan details"].map((h) => detail.indexOf(h));
+    const order = ["### Not checked", "### Page structure", "### Scan details"].map((h) =>
+      detail.indexOf(h),
+    );
 
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     // Plain list items, no "Not checked:" lead-in, no bold paragraphs.
-    expect(detail).toContain(`- Broken External Links. ${NOT_CHECKED.replaceAll("(", "\\(").replaceAll(")", "\\)")}`);
+    expect(detail).toContain(
+      `- Broken External Links. ${NOT_CHECKED.replaceAll("(", "\\(").replaceAll(")", "\\)")}`,
+    );
     expect(detail).not.toContain("Not checked:");
     expect(detail).not.toContain("**");
     expect(detail).toContain("- Rate limited: 7 page(s) not verified (example.com)");

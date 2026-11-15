@@ -27,9 +27,11 @@ describe("the rule cache never keys a redirect row (#1762)", () => {
       port: 0,
       fetch(req) {
         const { pathname } = new URL(req.url);
-        const ok = (body: string) => new Response(body, { headers: { "content-type": "text/html" } });
+        const ok = (body: string) =>
+          new Response(body, { headers: { "content-type": "text/html" } });
         if (pathname === "/") return ok(html("Home", `<a href="/old">Old</a>`));
-        if (pathname === "/old") return new Response(null, { status: 301, headers: { location: "/new" } });
+        if (pathname === "/old")
+          return new Response(null, { status: 301, headers: { location: "/new" } });
         if (pathname === "/new") return ok(html("New"));
         return new Response("nf", { status: 404 });
       },
@@ -56,7 +58,9 @@ describe("the rule cache never keys a redirect row (#1762)", () => {
     const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
     const pages = await Effect.runPromise(storage.getPages(crawlId));
     // The crawl really holds a redirect row, or the assertion below proves nothing.
-    expect(pages.find((p) => p.normalizedUrl === `${origin}/old`)?.status).toBeGreaterThanOrEqual(300);
+    expect(pages.find((p) => p.normalizedUrl === `${origin}/old`)?.status).toBeGreaterThanOrEqual(
+      300,
+    );
     // An older crawl's row: the destination's markup filed under the redirecting URL (2xx, auditable shape).
     // It is in the page universe, so only the redirect guard keeps it out of the cache.
     const dest = pages.find((p) => p.normalizedUrl === `${origin}/new`)!;
@@ -93,15 +97,18 @@ describe("the rule cache never keys a redirect row (#1762)", () => {
       carryForward: () => {},
     };
     const runner = createRunner(getGoldenBaselineConfig() as unknown as Config);
-    const siteData = { baseUrl: origin, pages: [], robotsTxt: null, sitemaps: null } as unknown as Parameters<
-      typeof streamPageRules
-    >[3];
+    const siteData = {
+      baseUrl: origin,
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    } as unknown as Parameters<typeof streamPageRules>[3];
     await Effect.runPromise(
-      streamPageRules(storage, crawlId, runner, siteData, { batchSize: 20, collectors: [], ruleCache: cache }) as Effect.Effect<
-        unknown,
-        never,
-        never
-      >,
+      streamPageRules(storage, crawlId, runner, siteData, {
+        batchSize: 20,
+        collectors: [],
+        ruleCache: cache,
+      }) as Effect.Effect<unknown, never, never>,
     );
     expect(keyed).toContain(`${origin}/`);
     expect(keyed).toContain(`${origin}/new`);

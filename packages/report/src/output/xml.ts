@@ -10,7 +10,12 @@ import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
-import { followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
+import {
+  followedStartRedirect,
+  scanScopePageTypes,
+  scanScopeUnfetched,
+  seedRedirect,
+} from "../coverage";
 import { ignoredLine, safeIgnored } from "../ignored";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
@@ -127,7 +132,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     const note = ignoredLine(report);
     if (note) lines.push(`${indent(2)}<note>${escapeXml(note)}</note>`);
     for (const [ruleId, counts] of Object.entries(ignoredSummary.byRule)) {
-      lines.push(`${indent(2)}<rule id="${escapeXml(ruleId)}" items="${counts.items}" pages="${counts.pages}"/>`);
+      lines.push(
+        `${indent(2)}<rule id="${escapeXml(ruleId)}" items="${counts.items}" pages="${counts.pages}"/>`,
+      );
     }
     for (const entry of ignoredSummary.entries) {
       lines.push(
@@ -152,7 +159,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   }
   lines.push(`${indent(1)}</health-score>`);
 
-  lines.push(`${indent(1)}<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`);
+  lines.push(
+    `${indent(1)}<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`,
+  );
 
   // Editor's summary — report-only exec narrative (does not affect the health score).
   const es = editorSummaryView(report.editorSummary, report);
@@ -177,8 +186,11 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}<priorities>`);
     for (const [i, p] of es.priorities.entries()) {
       const rules = p.ruleIds.length > 0 ? ` rules="${escapeXml(p.ruleIds.join(" "))}"` : "";
-      const tech = p.technologies.length > 0 ? ` technologies="${escapeXml(p.technologies.join(" "))}"` : "";
-      lines.push(`${indent(2)}<priority rank="${i + 1}" effort="${escapeXml(p.effort)}"${rules}${tech}>`);
+      const tech =
+        p.technologies.length > 0 ? ` technologies="${escapeXml(p.technologies.join(" "))}"` : "";
+      lines.push(
+        `${indent(2)}<priority rank="${i + 1}" effort="${escapeXml(p.effort)}"${rules}${tech}>`,
+      );
       lines.push(`${indent(3)}<title>${escapeXml(p.title)}</title>`);
       if (p.why) lines.push(`${indent(3)}<why>${escapeXml(p.why)}</why>`);
       lines.push(`${indent(3)}<action>${escapeXml(p.action)}</action>`);
@@ -190,7 +202,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   // Site profile — report-only (Stage-0 context; does not affect the health score).
   const meta = report.siteMetadata;
   if (meta) {
-    const cat = meta.businessCategory ? ` business-category="${escapeXml(meta.businessCategory)}"` : "";
+    const cat = meta.businessCategory
+      ? ` business-category="${escapeXml(meta.businessCategory)}"`
+      : "";
     const aud = meta.audienceScope ? ` audience-scope="${escapeXml(meta.audienceScope)}"` : "";
     const ctry = meta.primaryCountry ? ` primary-country="${escapeXml(meta.primaryCountry)}"` : "";
     lines.push(
@@ -201,7 +215,10 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     }
     const entityName = meta.entityName ?? meta.title;
     if (entityName) {
-      const et = meta.entityType && meta.entityType !== "unknown" ? ` kind="${escapeXml(meta.entityType)}"` : "";
+      const et =
+        meta.entityType && meta.entityType !== "unknown"
+          ? ` kind="${escapeXml(meta.entityType)}"`
+          : "";
       const eu = meta.entityUrl ? ` url="${escapeXml(meta.entityUrl)}"` : "";
       lines.push(`${indent(2)}<identity name="${escapeXml(entityName)}"${et}${eu}/>`);
     }
@@ -209,7 +226,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
       lines.push(`${indent(2)}<contacts>`);
       for (const c of meta.contacts) {
         const label = c.label ? ` label="${escapeXml(c.label)}"` : "";
-        lines.push(`${indent(3)}<contact kind="${escapeXml(c.kind)}" value="${escapeXml(c.value)}"${label}/>`);
+        lines.push(
+          `${indent(3)}<contact kind="${escapeXml(c.kind)}" value="${escapeXml(c.value)}"${label}/>`,
+        );
       }
       lines.push(`${indent(2)}</contacts>`);
     }
@@ -217,7 +236,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
       lines.push(`${indent(2)}<socials>`);
       for (const s of meta.socials) {
         const handle = s.handle ? ` handle="${escapeXml(s.handle)}"` : "";
-        lines.push(`${indent(3)}<social platform="${escapeXml(s.platform)}" url="${escapeXml(s.url)}"${handle}/>`);
+        lines.push(
+          `${indent(3)}<social platform="${escapeXml(s.platform)}" url="${escapeXml(s.url)}"${handle}/>`,
+        );
       }
       lines.push(`${indent(2)}</socials>`);
     }
@@ -240,11 +261,19 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     if (h.addresses.ipv4.length > 0) attrs.push(`ipv4="${escapeXml(h.addresses.ipv4.join(" "))}"`);
     if (h.addresses.ipv6.length > 0) attrs.push(`ipv6="${escapeXml(h.addresses.ipv6.join(" "))}"`);
     if (h.country) {
-      attrs.push(`country="${escapeXml(h.country.code)}"`, `countryLocation="${h.country.location}"`);
+      attrs.push(
+        `country="${escapeXml(h.country.code)}"`,
+        `countryLocation="${h.country.location}"`,
+      );
       if (h.country.edge) attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
     }
     if (h.edge) {
-      attrs.push(`edgeProvider="${escapeXml(h.edge.name)}"`, `edgeSource="${h.edge.source}"`, `edgeHosted="${h.edge.edgeHosted}"`, `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`);
+      attrs.push(
+        `edgeProvider="${escapeXml(h.edge.name)}"`,
+        `edgeSource="${h.edge.source}"`,
+        `edgeHosted="${h.edge.edgeHosted}"`,
+        `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`,
+      );
     }
     if (h.cloudRange) attrs.push(`cloudRange="${escapeXml(h.cloudRange.name)}"`);
     if (h.latency) attrs.push(`connectMs="${h.latency.ms}"`);
@@ -252,11 +281,12 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   }
 
   // Technologies — report-only (does not affect the health score).
-  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
+  if (
+    report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
+  ) {
     const tech = report.technologies;
-    lines.push(
-      techOpenTag("technologies", tech, indent(1)),
-    );
+    lines.push(techOpenTag("technologies", tech, indent(1)));
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";
       const icon = t.icon ? ` icon="${escapeXml(t.icon)}"` : "";
@@ -302,7 +332,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     // Flat and severity-first (#1536): no <category> wrapper — each rule carries
     // its category and group as attributes, so document order IS fix order.
     for (const rule of flattenIssuesBySeverity(categoryIssues)) {
-      lines.push(`${indent(2)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}" category="${escapeXml(rule.categoryName)}" group="${escapeXml(rule.group)}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""}>`);
+      lines.push(
+        `${indent(2)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}" category="${escapeXml(rule.categoryName)}" group="${escapeXml(rule.group)}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""}>`,
+      );
       lines.push(`${indent(3)}<name>${escapeXml(rule.name)}</name>`);
       lines.push(`${indent(3)}<description>${escapeXml(rule.description)}</description>`);
       if (rule.solution) lines.push(`${indent(3)}<solution>${escapeXml(rule.solution)}</solution>`);
@@ -342,13 +374,16 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
             // item's label drops the section phrase the region says.
             const scope = itemRegionScope(item, report.structure, check);
             const label = itemLabel(item, scope);
-            if (label && label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(label)}</label>`);
+            if (label && label !== item.id)
+              lines.push(`${indent(6)}<label>${escapeXml(label)}</label>`);
             if (scope) lines.push(`${indent(6)}${scopeElement(scope)}`);
             if (item.meta) {
               for (const [k, v] of Object.entries(item.meta)) {
                 // An object value (a link's `sections` counts) as JSON, not "[object Object]".
                 if (v !== undefined && v !== null)
-                  lines.push(`${indent(6)}<${k}>${escapeXml(typeof v === "object" ? JSON.stringify(v) : String(v))}</${k}>`);
+                  lines.push(
+                    `${indent(6)}<${k}>${escapeXml(typeof v === "object" ? JSON.stringify(v) : String(v))}</${k}>`,
+                  );
               }
             }
             if (item.sourcePages && item.sourcePages.length > 0) {
@@ -358,7 +393,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
               for (const src of new Set(item.sourcePages)) {
                 const source = sources.get(src);
                 const url = `url="${escapeXml(src)}"`;
-                const sections = Object.entries(source?.sections ?? {}).filter(([, n]) => (n ?? 0) > 0);
+                const sections = Object.entries(source?.sections ?? {}).filter(
+                  ([, n]) => (n ?? 0) > 0,
+                );
                 if (!source) {
                   lines.push(`${indent(7)}<page ${url}/>`);
                   continue;
@@ -370,7 +407,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
                 }
                 lines.push(`${indent(7)}<page ${attrs}>`);
                 for (const [name, n] of sections)
-                  lines.push(`${indent(8)}<section name="${escapeXml(name)}" links="${escapeXml(String(n))}"/>`);
+                  lines.push(
+                    `${indent(8)}<section name="${escapeXml(name)}" links="${escapeXml(String(n))}"/>`,
+                  );
                 lines.push(`${indent(7)}</page>`);
               }
               lines.push(`${indent(6)}</source-pages>`);
@@ -440,20 +479,18 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     const map = report.entityMap;
     const s = map.summary;
     lines.push(
-      `${indent(1)}<entities format="${escapeXml(map.format)}" version="${map.version}" site="${escapeXml(map.site)}" generated-at="${escapeXml(map.generatedAt)}" count="${s.nodeCount}" references="${s.edgeCount}" dangling="${s.danglingCount}" conflicts="${s.conflictCount}" without-id="${s.nodesWithoutIdCount}" page-local="${s.pageLocalCount}" stable-id-share="${stableIdPercent(map)}" pages="${s.pagesTotal}" pages-without-entities="${s.pagesWithoutEntities}">`
+      `${indent(1)}<entities format="${escapeXml(map.format)}" version="${map.version}" site="${escapeXml(map.site)}" generated-at="${escapeXml(map.generatedAt)}" count="${s.nodeCount}" references="${s.edgeCount}" dangling="${s.danglingCount}" conflicts="${s.conflictCount}" without-id="${s.nodesWithoutIdCount}" page-local="${s.pageLocalCount}" stable-id-share="${stableIdPercent(map)}" pages="${s.pagesTotal}" pages-without-entities="${s.pagesWithoutEntities}">`,
     );
     for (const node of map.nodes) {
       const id = node.id ? ` id="${escapeXml(node.id)}"` : "";
       lines.push(
-        `${indent(2)}<entity key="${escapeXml(node.key)}" type="${escapeXml(node.types.join(","))}" name="${escapeXml(node.name ?? "")}"${id} occurrences="${node.occurrences}" pages="${entityPageTotal(node)}" conflicts="${node.conflicts.length}" dangling-refs="${node.danglingRefs}" page-local="${node.pageLocal}">`
+        `${indent(2)}<entity key="${escapeXml(node.key)}" type="${escapeXml(node.types.join(","))}" name="${escapeXml(node.name ?? "")}"${id} occurrences="${node.occurrences}" pages="${entityPageTotal(node)}" conflicts="${node.conflicts.length}" dangling-refs="${node.danglingRefs}" page-local="${node.pageLocal}">`,
       );
       for (const conflict of node.conflicts) {
-        lines.push(
-          `${indent(3)}<conflict property="${escapeXml(conflict.property)}">`
-        );
+        lines.push(`${indent(3)}<conflict property="${escapeXml(conflict.property)}">`);
         for (const value of conflict.values) {
           lines.push(
-            `${indent(4)}<value pages="${value.pages.length + value.morePages}">${escapeXml(value.value)}</value>`
+            `${indent(4)}<value pages="${value.pages.length + value.morePages}">${escapeXml(value.value)}</value>`,
           );
         }
         lines.push(`${indent(3)}</conflict>`);
@@ -462,7 +499,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     }
     for (const edge of map.edges) {
       lines.push(
-        `${indent(2)}<reference source="${escapeXml(edge.source)}" predicate="${escapeXml(edge.predicate)}" target="${escapeXml(edge.target)}" dangling="${edge.dangling}" occurrences="${edge.occurrences}"/>`
+        `${indent(2)}<reference source="${escapeXml(edge.source)}" predicate="${escapeXml(edge.predicate)}" target="${escapeXml(edge.target)}" dangling="${edge.dangling}" occurrences="${edge.occurrences}"/>`,
       );
     }
     lines.push(`${indent(1)}</entities>`);

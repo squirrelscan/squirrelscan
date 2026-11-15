@@ -31,6 +31,8 @@ describe("mapRenderItemToResponse server HTML (#1769)", () => {
     expect(response.body).toBe("<html><body>rendered</body></html>");
     expect(response.fetcherMethod).toBe("cloud-render");
     // An empty string is treated as absent too.
-    expect("serverHtml" in mapRenderItemToResponse(item({ serverHtml: "" }), URL_, TIMING)).toBe(false);
+    expect("serverHtml" in mapRenderItemToResponse(item({ serverHtml: "" }), URL_, TIMING)).toBe(
+      false,
+    );
   });
 });

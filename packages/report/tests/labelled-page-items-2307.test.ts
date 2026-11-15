@@ -98,10 +98,16 @@ describe("a labelled page-URL item prints its label in every format", () => {
 
   test("json", () => {
     const parsed = JSON.parse(renderJson(LABELLED)) as {
-      issues: Array<{ checks: Array<{ items?: Array<{ id: string; label?: string; meta?: unknown }> }> }>;
+      issues: Array<{
+        checks: Array<{ items?: Array<{ id: string; label?: string; meta?: unknown }> }>;
+      }>;
     };
     const item = parsed.issues[0]!.checks[0]!.items![0]!;
-    expect(item).toMatchObject({ id: BLOG, label: LABEL, meta: { sections: { footer: 3, navigation: 1 } } });
+    expect(item).toMatchObject({
+      id: BLOG,
+      label: LABEL,
+      meta: { sections: { footer: 3, navigation: 1 } },
+    });
   });
 });
 

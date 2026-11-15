@@ -60,14 +60,10 @@ function assertFlat(batchMs: number[], minBatches: number) {
 }
 
 describe("streaming page pass — per-batch wall-time flatness", () => {
-  test(
-    "per-batch time stays flat across a 160-page crawl",
-    async () => {
-      const batchMs = await collectBatchTimings(160, 16);
-      assertFlat(batchMs, 9);
-    },
-    30_000,
-  );
+  test("per-batch time stays flat across a 160-page crawl", async () => {
+    const batchMs = await collectBatchTimings(160, 16);
+    assertFlat(batchMs, 9);
+  }, 30_000);
 
   // Real-scale confirmation — slow (thousands of pages). Run manually:
   //   bun test -t "flat across a large crawl" (after removing .skip)

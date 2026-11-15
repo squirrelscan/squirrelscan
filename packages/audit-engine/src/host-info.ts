@@ -1,4 +1,10 @@
-import type { ReportEdgeSource, ReportHost, ReportHostCloudRange, ReportHostEdge, ReportTechnology } from "@squirrelscan/core-contracts";
+import type {
+  ReportEdgeSource,
+  ReportHost,
+  ReportHostCloudRange,
+  ReportHostEdge,
+  ReportTechnology,
+} from "@squirrelscan/core-contracts";
 import { matchEdgeAsn, matchEdgeRanges } from "@squirrelscan/utils/geoip/edge";
 import { countryName, GEOIP_SNAPSHOT, lookupCountry } from "@squirrelscan/utils/geoip";
 
@@ -37,7 +43,8 @@ const TECH_PROVIDER: Readonly<Record<string, string>> = {
 const EDGE_HOSTED_PROVIDERS = new Set(["vercel", "netlify"]);
 const EDGE_HOSTED_TECHNOLOGIES = new Set(["cloudflare-pages"]);
 
-type TechInput = Pick<ReportTechnology, "id"> & Partial<Pick<ReportTechnology, "name" | "category" | "detectedBy">>;
+type TechInput = Pick<ReportTechnology, "id"> &
+  Partial<Pick<ReportTechnology, "name" | "category" | "detectedBy">>;
 
 export interface HostProbe {
   host: string;
@@ -47,7 +54,9 @@ export interface HostProbe {
 }
 
 /** The detected edge provider, if technology detection found one of the supported ones. */
-export function detectedEdge(technologies: ReadonlyArray<TechInput> | undefined): { id: string; name: string } | null {
+export function detectedEdge(
+  technologies: ReadonlyArray<TechInput> | undefined,
+): { id: string; name: string } | null {
   for (const t of technologies ?? []) {
     const name = EDGE_TECHNOLOGY_IDS[t.id];
     if (name) return { id: t.id, name };
@@ -70,7 +79,13 @@ export function detectEdge(
   addresses: ReadonlyArray<string>,
   technologies: ReadonlyArray<TechInput> | undefined,
 ): ReportHostEdge | null {
-  interface Hit { id: string; name: string; source: ReportEdgeSource; address?: string; asn?: number }
+  interface Hit {
+    id: string;
+    name: string;
+    source: ReportEdgeSource;
+    address?: string;
+    asn?: number;
+  }
   const hits: Hit[] = [];
   for (const t of technologies ?? []) {
     const id = TECH_PROVIDER[t.id];
@@ -89,13 +104,22 @@ export function detectEdge(
   hits.sort((x, y) => SOURCE_ORDER[x.source] - SOURCE_ORDER[y.source]);
   const best = hits[0]!;
   const same = hits.filter((h) => h.id === best.id);
-  const matched = [...new Set(same.map((h) => h.source))].sort((x, y) => SOURCE_ORDER[x] - SOURCE_ORDER[y]);
+  const matched = [...new Set(same.map((h) => h.source))].sort(
+    (x, y) => SOURCE_ORDER[x] - SOURCE_ORDER[y],
+  );
   const lead = same.find((h) => h.source === best.source)!;
   const others = new Map<string, { id: string; name: string; source: ReportEdgeSource }>();
-  for (const h of hits) if (h.id !== best.id && !others.has(h.id)) others.set(h.id, { id: h.id, name: h.name, source: h.source });
+  for (const h of hits)
+    if (h.id !== best.id && !others.has(h.id))
+      others.set(h.id, { id: h.id, name: h.name, source: h.source });
   const edgeHosted =
-    EDGE_HOSTED_PROVIDERS.has(best.id) || (technologies ?? []).some((t) => EDGE_HOSTED_TECHNOLOGIES.has(t.id) && best.id === TECH_PROVIDER[t.id]);
-  const hosting = (technologies ?? []).find((t) => t.category === "hosting" && !(t.id in EDGE_TECHNOLOGY_IDS));
+    EDGE_HOSTED_PROVIDERS.has(best.id) ||
+    (technologies ?? []).some(
+      (t) => EDGE_HOSTED_TECHNOLOGIES.has(t.id) && best.id === TECH_PROVIDER[t.id],
+    );
+  const hosting = (technologies ?? []).find(
+    (t) => t.category === "hosting" && !(t.id in EDGE_TECHNOLOGY_IDS),
+  );
   return {
     id: best.id,
     name: best.name,

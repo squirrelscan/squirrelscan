@@ -29,10 +29,19 @@ export const MAX_IGNORE_REASON_LENGTH = 500;
 export const IgnoreEntrySchema = z
   .object({
     rule: z.string().trim().min(1).max(MAX_IGNORE_ITEM_LENGTH),
-    checks: z.array(z.string().min(1).max(MAX_IGNORE_ITEM_LENGTH)).max(MAX_IGNORE_MATCHERS).optional(),
-    items: z.array(z.string().min(1).max(MAX_IGNORE_ITEM_LENGTH)).max(MAX_IGNORE_MATCHERS).optional(),
+    checks: z
+      .array(z.string().min(1).max(MAX_IGNORE_ITEM_LENGTH))
+      .max(MAX_IGNORE_MATCHERS)
+      .optional(),
+    items: z
+      .array(z.string().min(1).max(MAX_IGNORE_ITEM_LENGTH))
+      .max(MAX_IGNORE_MATCHERS)
+      .optional(),
     urls: z.array(z.string().min(1).max(MAX_IGNORE_URL_LENGTH)).max(MAX_IGNORE_MATCHERS).optional(),
-    selectors: z.array(z.string().min(1).max(MAX_IGNORE_SELECTOR_LENGTH)).max(MAX_IGNORE_MATCHERS).optional(),
+    selectors: z
+      .array(z.string().min(1).max(MAX_IGNORE_SELECTOR_LENGTH))
+      .max(MAX_IGNORE_MATCHERS)
+      .optional(),
     reason: z.string().max(MAX_IGNORE_REASON_LENGTH).optional(),
   })
   .superRefine((entry, ctx) => {

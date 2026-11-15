@@ -207,9 +207,12 @@ describe("scope config the user asked for", () => {
           });
         }
         if (url.hostname === "localhost") {
-          return new Response(`<!doctype html><html><head><title>${TARGET_TITLE}</title></head></html>`, {
-            headers: { "content-type": "text/html" },
-          });
+          return new Response(
+            `<!doctype html><html><head><title>${TARGET_TITLE}</title></head></html>`,
+            {
+              headers: { "content-type": "text/html" },
+            },
+          );
         }
         return new Response("not found", { status: 404 });
       },

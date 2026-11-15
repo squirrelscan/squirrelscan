@@ -68,7 +68,7 @@ export const affiliateDisclosureRule: Rule = {
 
     for (const page of pages) {
       const hasAffiliateLink = page.parsed.links.some((l) =>
-        affiliatePatterns.some((p) => p.test(l.url))
+        affiliatePatterns.some((p) => p.test(l.url)),
       );
       if (hasAffiliateLink) pagesWithAffiliateLinks++;
     }

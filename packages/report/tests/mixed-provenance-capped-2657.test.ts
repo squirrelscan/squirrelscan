@@ -69,7 +69,9 @@ describe("mixed-provenance note on a capped report (repo#2657)", () => {
 
   test("stays silent when nothing passed this run", () => {
     expect(
-      ruleMixedProvenanceNote(carriedOnly[RULE]!.checks, { "cookie-consent-missing": { skipped: 9 } }),
+      ruleMixedProvenanceNote(carriedOnly[RULE]!.checks, {
+        "cookie-consent-missing": { skipped: 9 },
+      }),
     ).toBeUndefined();
   });
 

@@ -51,7 +51,9 @@ export const contentGapsRule: Rule = {
     const envelope = readCloudResult<ContentGapsResponse>(ctx.cloudResults, "content-gaps");
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "content-gaps",
         status: "skipped",

@@ -31,7 +31,10 @@ describe("every coded skip reason has an outcome", () => {
 
   for (const [name, reason] of codedReasonConstants()) {
     test(`${name} is in the table`, () => {
-      expect(skipReasonClass(reason), `add "${reason}" to SKIP_REASON_CLASSES in rule-outcome.ts`).toBeDefined();
+      expect(
+        skipReasonClass(reason),
+        `add "${reason}" to SKIP_REASON_CLASSES in rule-outcome.ts`,
+      ).toBeDefined();
     });
   }
 
@@ -44,8 +47,18 @@ describe("every coded skip reason has an outcome", () => {
 });
 
 describe("classifyRuleOutcome", () => {
-  const skipped = (skipReason?: string, details?: Record<string, unknown>) => ({ status: "skipped", skipReason, details });
-  const table: Array<[string, { status: string; skipReason?: string; details?: Record<string, unknown> }, RuleOutcome]> = [
+  const skipped = (skipReason?: string, details?: Record<string, unknown>) => ({
+    status: "skipped",
+    skipReason,
+    details,
+  });
+  const table: Array<
+    [
+      string,
+      { status: string; skipReason?: string; details?: Record<string, unknown> },
+      RuleOutcome,
+    ]
+  > = [
     ["a pass ran", { status: "pass" }, "ran"],
     ["a warn ran", { status: "warn" }, "ran"],
     ["a fail ran", { status: "fail" }, "ran"],
@@ -55,7 +68,11 @@ describe("classifyRuleOutcome", () => {
     ["the page-type gate", skipped("page-type"), "not_applicable"],
     ["a check with nothing to look at", skipped("not-applicable"), "not_applicable"],
     ["a rule that timed out", skipped("rule-timed-out"), "timed_out"],
-    ["a rule that timed out with details but no error", skipped("rule-timed-out", { pages: 3, errored: false }), "timed_out"],
+    [
+      "a rule that timed out with details but no error",
+      skipped("rule-timed-out", { pages: 3, errored: false }),
+      "timed_out",
+    ],
     ["a rule that threw", skipped("rule-timed-out", { errored: true }), "errored"],
     ["an unreadable page", skipped("unread-page"), "coverage_gap"],
     ["a scan cut at a work cap", skipped("scan-truncated"), "coverage_gap"],
@@ -70,7 +87,11 @@ describe("classifyRuleOutcome", () => {
     ["no reason is not applicable", skipped(undefined), "not_applicable"],
     ["a prototype key is not a reason", skipped("__proto__"), "not_applicable"],
     ["constructor is not a reason", skipped("constructor"), "not_applicable"],
-    ["errored only counts on a timed-out skip", skipped("noindex", { errored: true }), "not_applicable"],
+    [
+      "errored only counts on a timed-out skip",
+      skipped("noindex", { errored: true }),
+      "not_applicable",
+    ],
   ];
   for (const [name, check, expected] of table) {
     test(`${name}: ${expected}`, () => {

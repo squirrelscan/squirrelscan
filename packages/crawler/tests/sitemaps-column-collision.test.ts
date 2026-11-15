@@ -40,7 +40,7 @@ afterEach(() => {
 function sitemapColumns(path: string): string[] {
   const db = new Database(path);
   const cols = (db.prepare("PRAGMA table_info(sitemaps)").all() as Array<{ name: string }>).map(
-    (c) => c.name
+    (c) => c.name,
   );
   db.close();
   return cols;

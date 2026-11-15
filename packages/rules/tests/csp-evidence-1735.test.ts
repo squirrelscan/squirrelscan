@@ -25,7 +25,8 @@ const byName = (list: CheckResult[], name: string) => list.find((c) => c.name ==
 describe("security/csp evidence (#1735)", () => {
   test("unsafe-inline names the page, the header and the directive carrying it", () => {
     const list = checks({
-      "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.example.com",
+      "content-security-policy":
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.example.com",
     });
     const check = byName(list, "csp-unsafe-scripts");
     expect(check.pages).toEqual(["https://example.com/"]);
@@ -49,13 +50,21 @@ describe("security/csp evidence (#1735)", () => {
       checks({ "content-security-policy": "default-src 'self' 'unsafe-inline'" }),
       "csp-unsafe-scripts",
     );
-    expect(fallback.details).toMatchObject({ directive: "default-src", value: "'self' 'unsafe-inline'" });
+    expect(fallback.details).toMatchObject({
+      directive: "default-src",
+      value: "'self' 'unsafe-inline'",
+    });
 
     const elem = byName(
-      checks({ "content-security-policy": "script-src 'self'; script-src-elem 'self' 'unsafe-inline'" }),
+      checks({
+        "content-security-policy": "script-src 'self'; script-src-elem 'self' 'unsafe-inline'",
+      }),
       "csp-unsafe-scripts",
     );
-    expect(elem.details).toMatchObject({ directive: "script-src-elem", value: "'self' 'unsafe-inline'" });
+    expect(elem.details).toMatchObject({
+      directive: "script-src-elem",
+      value: "'self' 'unsafe-inline'",
+    });
   });
 
   test("a report-only policy names the report-only header", () => {
@@ -73,7 +82,10 @@ describe("security/csp evidence (#1735)", () => {
   test("a missing header still names the page it looked at", () => {
     const check = byName(checks({}), "csp-missing");
     expect(check.pages).toEqual(["https://example.com/"]);
-    expect(check.details).toMatchObject({ pageUrl: "https://example.com/", header: "content-security-policy" });
+    expect(check.details).toMatchObject({
+      pageUrl: "https://example.com/",
+      header: "content-security-policy",
+    });
   });
 
   test("the directive value kept as evidence is bounded", () => {

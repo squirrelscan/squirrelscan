@@ -46,8 +46,7 @@ export const objectAltRule: Rule = {
         let identifier = "object";
         if (name) identifier = `object[name="${name}"]`;
         else if (type) identifier = `object[type="${type.split("/").pop()}"]`;
-        else if (data)
-          identifier = `object (${data.split("/").pop()?.split("?")[0]})`;
+        else if (data) identifier = `object (${data.split("/").pop()?.split("?")[0]})`;
 
         unnamed.add(obj, identifier);
       }
@@ -65,7 +64,11 @@ export const objectAltRule: Rule = {
     }
     if (unnamed.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow("object-alt", "object element(s) without alternative content", unnamed.unconfirmed),
+        unconfirmedRow(
+          "object-alt",
+          "object element(s) without alternative content",
+          unnamed.unconfirmed,
+        ),
       );
     }
     if (missingAlt.length === 0 && unnamed.unconfirmed.length === 0) {

@@ -46,43 +46,50 @@ function byName(checks: CheckResult[], name: string): CheckResult {
 
 describe("ax/archive-indexing", () => {
   test("skips gracefully with no cloud result", async () => {
-    const checks = (await run(makeCtx()));
+    const checks = await run(makeCtx());
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("skipped");
   });
 
   test("passes a skip envelope through with its reason", async () => {
-    const checks = (await run(makeCtx({ status: "skipped", skipReason: "not-authenticated" })));
+    const checks = await run(makeCtx({ status: "skipped", skipReason: "not-authenticated" }));
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.skipReason).toContain("log");
   });
 
   test("passes when both archives have fresh captures", async () => {
-    const checks = (await run(makeCtx({ status: "ok", data: data({}) })));
+    const checks = await run(makeCtx({ status: "ok", data: data({}) }));
     expect(byName(checks, "common-crawl-indexed").status).toBe("pass");
     expect(byName(checks, "wayback-archived").status).toBe("pass");
   });
 
   test("warns when the domain is not in Common Crawl", async () => {
-    const checks = (await run(
-      makeCtx({ status: "ok", data: data({ commonCrawl: { indexed: false, source: "CC-MAIN-2026-26" } }) }),
-    ));
+    const checks = await run(
+      makeCtx({
+        status: "ok",
+        data: data({ commonCrawl: { indexed: false, source: "CC-MAIN-2026-26" } }),
+      }),
+    );
     expect(byName(checks, "common-crawl-indexed").status).toBe("warn");
     expect(byName(checks, "wayback-archived").status).toBe("pass");
   });
 
   test("warns when there is no Wayback snapshot", async () => {
-    const checks = (await run(makeCtx({ status: "ok", data: data({ wayback: { indexed: false } }) })));
+    const checks = await run(
+      makeCtx({ status: "ok", data: data({ wayback: { indexed: false } }) }),
+    );
     expect(byName(checks, "wayback-archived").status).toBe("warn");
   });
 
   test("warns on a stale (>1y) capture even when indexed", async () => {
-    const checks = (await run(
+    const checks = await run(
       makeCtx({
         status: "ok",
-        data: data({ commonCrawl: { indexed: true, latestCapture: STALE, source: "CC-MAIN-2024-10" } }),
+        data: data({
+          commonCrawl: { indexed: true, latestCapture: STALE, source: "CC-MAIN-2024-10" },
+        }),
       }),
-    ));
+    );
     expect(byName(checks, "common-crawl-indexed").status).toBe("warn");
   });
 });

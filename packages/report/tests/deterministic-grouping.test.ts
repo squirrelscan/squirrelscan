@@ -14,7 +14,7 @@ function rule(
   id: string,
   category: string,
   weight: number,
-  checks: ReportRuleResult["checks"]
+  checks: ReportRuleResult["checks"],
 ): ReportRuleResult {
   return {
     meta: {
@@ -41,11 +41,7 @@ describe("groupIssuesByCategory deterministic ordering (#150)", () => {
     };
     const grouped = groupIssuesByCategory(results);
     const check = grouped[0].rules[0].checks[0];
-    expect(check.pages).toEqual([
-      "https://e.com/a",
-      "https://e.com/m",
-      "https://e.com/z",
-    ]);
+    expect(check.pages).toEqual(["https://e.com/a", "https://e.com/m", "https://e.com/z"]);
   });
 
   test("a check's items are sorted by id", () => {
@@ -101,9 +97,7 @@ describe("groupIssuesByCategory deterministic ordering (#150)", () => {
     ];
 
     const orderA: Record<string, ReportRuleResult> = Object.fromEntries(base);
-    const orderB: Record<string, ReportRuleResult> = Object.fromEntries(
-      [...base].reverse()
-    );
+    const orderB: Record<string, ReportRuleResult> = Object.fromEntries([...base].reverse());
 
     const a = JSON.stringify(groupIssuesByCategory(orderA));
     const b = JSON.stringify(groupIssuesByCategory(orderB));

@@ -76,6 +76,7 @@ describe("nextVisiblePhase", () => {
   }
 
   test("every phase is reachable from every other phase", () => {
-    for (const from of RUN_PHASES) for (const to of RUN_PHASES) expect(nextVisiblePhase(from, to)).toBe(to);
+    for (const from of RUN_PHASES)
+      for (const to of RUN_PHASES) expect(nextVisiblePhase(from, to)).toBe(to);
   });
 });

@@ -60,7 +60,7 @@ describe("endpoint extraction from served JS", () => {
         "- https://example.com/rest/v1/profiles string-literal",
         "- https://example.com/api/login string-literal",
         "- https://example.com/api/feed.json string-literal",
-      ].sort()
+      ].sort(),
     );
   });
 
@@ -80,12 +80,15 @@ describe("endpoint extraction from served JS", () => {
         "https://example.com/api/trpc/post.list",
         "https://api.example.org/v3/things",
         "https://proj.supabase.co/rest/v1/",
-      ].sort()
+      ].sort(),
     );
   });
 
   test("a relative URL without a leading slash is not a candidate (its base depends on the page path)", () => {
-    const refs = extractEndpointRefsFromScript(`fetch("api/users"); axios.get("v1/items")`, "https://example.com/app.js");
+    const refs = extractEndpointRefsFromScript(
+      `fetch("api/users"); axios.get("v1/items")`,
+      "https://example.com/app.js",
+    );
     expect(refs).toEqual([]);
   });
 
@@ -125,7 +128,7 @@ describe("endpoint extraction from HTML", () => {
         "- https://gql.example.net/client.js script-src",
         "GET https://example.com/api/inline fetch",
         "- https://example.com/api/inline string-literal",
-      ].sort()
+      ].sort(),
     );
   });
 });
@@ -136,9 +139,11 @@ describe("endpoint surface fold", () => {
   test("adds convention paths per detected stack, and none for an unknown stack", () => {
     const next = buildEndpointSurface({ baseUrl: BASE, pages: [], techIds: ["nextjs", "react"] });
     expect(next.candidates.map((c) => c.url).sort()).toEqual(
-      CONVENTION_PATHS.nextjs.map((p) => `https://example.com${p}`).sort()
+      CONVENTION_PATHS.nextjs.map((p) => `https://example.com${p}`).sort(),
     );
-    expect(next.candidates.every((c) => c.source === "convention" && c.method === "GET")).toBe(true);
+    expect(next.candidates.every((c) => c.source === "convention" && c.method === "GET")).toBe(
+      true,
+    );
     expect(next.candidates[0].discoveredVia).toBe("convention:nextjs");
 
     const none = buildEndpointSurface({ baseUrl: BASE, pages: [], techIds: ["react"] });
@@ -165,7 +170,7 @@ describe("endpoint surface fold", () => {
       ["POST", "https://example.com/api/users", "static-js", "axios.post"],
     ]);
     expect(Object.keys(surface.candidates[0]).sort()).toEqual(
-      ["discoveredVia", "method", "probeEligible", "sameOrigin", "source", "url"].sort()
+      ["discoveredVia", "method", "probeEligible", "sameOrigin", "source", "url"].sort(),
     );
   });
 
@@ -202,7 +207,9 @@ describe("endpoint surface fold", () => {
     const surface = buildEndpointSurface({ baseUrl: BASE, pages: pages(refs) });
     const eligible = surface.candidates.filter((c) => c.probeEligible).map((c) => c.url);
     expect(eligible).toEqual(["https://example.com/api/mine"]);
-    expect(surface.candidates.filter((c) => !c.sameOrigin).length).toBe(MAX_CROSS_ORIGIN_CANDIDATES);
+    expect(surface.candidates.filter((c) => !c.sameOrigin).length).toBe(
+      MAX_CROSS_ORIGIN_CANDIDATES,
+    );
     expect(surface.truncated).toBe(true);
   });
 
@@ -233,7 +240,7 @@ describe("endpoint surface fold", () => {
     expect(a.total).toBe(520);
     expect(a.truncated).toBe(true);
     expect(a.candidates.filter((c) => !c.sameOrigin).length).toBeLessThanOrEqual(
-      MAX_CROSS_ORIGIN_CANDIDATES
+      MAX_CROSS_ORIGIN_CANDIDATES,
     );
     expect(b.candidates).toEqual(a.candidates);
   });
@@ -266,7 +273,10 @@ describe("script scan budget", () => {
     const scanned = Math.floor(MAX_SCRIPT_SCAN_CHARS / (512 * 1024));
     expect(surface.candidates.length).toBe(scanned);
     expect(surface.candidates.map((c) => c.url)).toEqual(
-      Array.from({ length: scanned }, (_, i) => `https://example.com/api/b${String(i).padStart(3, "0")}`)
+      Array.from(
+        { length: scanned },
+        (_, i) => `https://example.com/api/b${String(i).padStart(3, "0")}`,
+      ),
     );
     expect(surface.scriptsSkipped).toBe(300 - scanned);
     expect(surface.truncated).toBe(true);
@@ -323,7 +333,12 @@ describe("rule context", () => {
     internals.enabledRuleIds = [probe.meta.id];
 
     const surface = buildEndpointSurface({ baseUrl: BASE, pages: [], techIds: ["nuxt"] });
-    await runner.runSiteRules({ baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null }, undefined, undefined, surface);
+    await runner.runSiteRules(
+      { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null },
+      undefined,
+      undefined,
+      surface,
+    );
     expect(seen).toBe(surface);
   });
 });

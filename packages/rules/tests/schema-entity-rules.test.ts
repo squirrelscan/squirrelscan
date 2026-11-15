@@ -126,7 +126,7 @@ describe("every entity rule", () => {
       const check = await oneCheck(rule, undefined);
       expect(check.status).toBe("skipped");
       expect(check.skipReason).toBe("entity-map-unavailable");
-    }
+    },
   );
 
   test.each(ALL.map((rule) => [rule.meta.id, rule] as const))(
@@ -135,7 +135,7 @@ describe("every entity rule", () => {
       const check = await oneCheck(rule, entityMap({ nodes: [] }));
       expect(check.status).toBe("info");
       expect(check.message).toContain("declares no JSON-LD entities");
-    }
+    },
   );
 
   test.each(ALL.map((rule) => [rule.meta.id, rule] as const))(
@@ -143,7 +143,7 @@ describe("every entity rule", () => {
     async (_id, rule) => {
       const check = await oneCheck(rule, CLEAN);
       expect(["pass", "skipped"]).toContain(check.status);
-    }
+    },
   );
 
   test.each(ALL.map((rule) => [rule.meta.id, rule] as const))(
@@ -155,16 +155,16 @@ describe("every entity rule", () => {
       // tests/rule-verdict-scope.test.ts for why.
       expect(rule.meta.verdictScope).toBeUndefined();
       expect(await runRule(rule, CLEAN)).toHaveLength(1);
-    }
+    },
   );
 
   test.each(ALL.map((rule) => [rule.meta.id, rule] as const))(
     "%s links its fix text to the entity-map guide",
     (_id, rule) => {
       expect(rule.meta.solution).toContain(
-        "https://docs.squirrelscan.com/guides/entity-map/fixing"
+        "https://docs.squirrelscan.com/guides/entity-map/fixing",
       );
-    }
+    },
   );
 
   test.each(ALL.map((rule) => [rule.meta.id, rule] as const))(
@@ -183,17 +183,17 @@ describe("every entity rule", () => {
             types: ["Organization"],
             occurrences: 2,
             pages: pages(2),
-          })
+          }),
         ),
         edges: Array.from({ length: 2000 }, (_, i) =>
-          edge({ target: `id:https://example.com/#n${i}`, occurrences: 1 })
+          edge({ target: `id:https://example.com/#n${i}`, occurrences: 1 }),
         ),
         pageUrls: pages(2),
       });
       const check = await oneCheck(rule, many);
       expect(String(check.value ?? "").length).toBeLessThanOrEqual(300);
       expect(check.items?.length ?? 0).toBeLessThanOrEqual(10);
-    }
+    },
   );
 });
 
@@ -246,9 +246,7 @@ describe("schema/entity-identity", () => {
 
   test("an unnamed entity is not reported: there is nothing to reconcile by", async () => {
     const map = entityMap({
-      nodes: [
-        node({ key: "anon:1", id: null, name: null, occurrences: 3, pages: pages(3) }),
-      ],
+      nodes: [node({ key: "anon:1", id: null, name: null, occurrences: 3, pages: pages(3) })],
       pageUrls: pages(3),
     });
     expect((await oneCheck(entityIdentityRule, map)).status).toBe("pass");
@@ -264,7 +262,7 @@ describe("schema/entity-identity", () => {
           name: `Person ${i}`,
           occurrences: 2,
           pages: pages(2),
-        })
+        }),
       ),
       pageUrls: pages(2),
     });
@@ -375,8 +373,16 @@ describe("schema/entity-split-identity", () => {
   test("a different name under a different @id is two entities, not one split", async () => {
     const map = entityMap({
       nodes: [
-        node({ key: "id:https://example.com/#a", id: "https://example.com/#a", name: "Example Ltd" }),
-        node({ key: "id:https://example.com/#b", id: "https://example.com/#b", name: "Example Media" }),
+        node({
+          key: "id:https://example.com/#a",
+          id: "https://example.com/#a",
+          name: "Example Ltd",
+        }),
+        node({
+          key: "id:https://example.com/#b",
+          id: "https://example.com/#b",
+          name: "Example Media",
+        }),
       ],
     });
     expect((await oneCheck(entitySplitIdentityRule, map)).status).toBe("pass");
@@ -416,8 +422,16 @@ describe("schema/entity-conflicts", () => {
             {
               property: "logo",
               values: [
-                { value: "https://example.com/a.png", pages: ["https://example.com/"], morePages: 0 },
-                { value: "https://example.com/b.png", pages: ["https://example.com/p1"], morePages: 0 },
+                {
+                  value: "https://example.com/a.png",
+                  pages: ["https://example.com/"],
+                  morePages: 0,
+                },
+                {
+                  value: "https://example.com/b.png",
+                  pages: ["https://example.com/p1"],
+                  morePages: 0,
+                },
               ],
             },
           ],
@@ -750,8 +764,18 @@ describe("schema/entity-publisher-mismatch", () => {
   test("fires when two publishers are named, and says which is the outlier", async () => {
     const map = entityMap({
       nodes: [
-        node({ key: "id:https://example.com/#org-a", id: "https://example.com/#org-a", name: "A", occurrences: 20 }),
-        node({ key: "id:https://example.com/#org-b", id: "https://example.com/#org-b", name: "B", occurrences: 1 }),
+        node({
+          key: "id:https://example.com/#org-a",
+          id: "https://example.com/#org-a",
+          name: "A",
+          occurrences: 20,
+        }),
+        node({
+          key: "id:https://example.com/#org-b",
+          id: "https://example.com/#org-b",
+          name: "B",
+          occurrences: 1,
+        }),
       ],
       edges: [
         edge({ target: "id:https://example.com/#org-a", occurrences: 20 }),

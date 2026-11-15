@@ -17,12 +17,7 @@ import type { ParsedPage } from "@squirrelscan/core-contracts";
 import { flattenJsonLdNodes } from "./schema-rich-results";
 
 /** Schema @types that mark a page as declaring a business identity. */
-export const NAP_BUSINESS_SCHEMA_TYPES = [
-  "LocalBusiness",
-  "Organization",
-  "Restaurant",
-  "Store",
-];
+export const NAP_BUSINESS_SCHEMA_TYPES = ["LocalBusiness", "Organization", "Restaurant", "Store"];
 
 /** Schema @types the business NAME is read from (subset of the above). */
 export const NAP_NAME_SCHEMA_TYPES = ["LocalBusiness", "Organization"];
@@ -61,37 +56,39 @@ export const NAP_MAX_ADDRESS_CHARS = 200;
  * `TABLE[token]` on a `{}` would resolve "constructor"/"__proto__" through the
  * prototype chain and fold a whole function body into the address key.
  */
-const NAP_ADDRESS_ABBREVIATIONS = new Map<string, string>(Object.entries({
-  st: "street",
-  str: "street",
-  ave: "avenue",
-  av: "avenue",
-  rd: "road",
-  blvd: "boulevard",
-  blv: "boulevard",
-  dr: "drive",
-  ln: "lane",
-  ct: "court",
-  pl: "place",
-  sq: "square",
-  hwy: "highway",
-  pkwy: "parkway",
-  ter: "terrace",
-  cir: "circle",
-  ste: "suite",
-  apt: "apartment",
-  fl: "floor",
-  bldg: "building",
-  rm: "room",
-  n: "north",
-  s: "south",
-  e: "east",
-  w: "west",
-  ne: "northeast",
-  nw: "northwest",
-  se: "southeast",
-  sw: "southwest",
-}));
+const NAP_ADDRESS_ABBREVIATIONS = new Map<string, string>(
+  Object.entries({
+    st: "street",
+    str: "street",
+    ave: "avenue",
+    av: "avenue",
+    rd: "road",
+    blvd: "boulevard",
+    blv: "boulevard",
+    dr: "drive",
+    ln: "lane",
+    ct: "court",
+    pl: "place",
+    sq: "square",
+    hwy: "highway",
+    pkwy: "parkway",
+    ter: "terrace",
+    cir: "circle",
+    ste: "suite",
+    apt: "apartment",
+    fl: "floor",
+    bldg: "building",
+    rm: "room",
+    n: "north",
+    s: "south",
+    e: "east",
+    w: "west",
+    ne: "northeast",
+    nw: "northwest",
+    se: "southeast",
+    sw: "southwest",
+  }),
+);
 
 /** PostalAddress fields joined, in schema.org's own reading order, for display. */
 const NAP_ADDRESS_FIELDS = [

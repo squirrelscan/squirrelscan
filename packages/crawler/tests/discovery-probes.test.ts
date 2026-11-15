@@ -68,7 +68,9 @@ function serve(latencyMs = 0): { url: string; hits: Hit[] } {
       if (latencyMs > 0) await Bun.sleep(latencyMs);
       hit.endedAt = performance.now();
       if (path === "/robots.txt") {
-        return new Response(`User-agent: *\nSitemap: http://localhost:${server.port}/sitemap.xml\n`);
+        return new Response(
+          `User-agent: *\nSitemap: http://localhost:${server.port}/sitemap.xml\n`,
+        );
       }
       if (path === "/sitemap.xml") {
         return new Response(

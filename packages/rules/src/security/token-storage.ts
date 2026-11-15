@@ -171,13 +171,15 @@ export const isJwtShaped = (value: string): boolean => JWT_SHAPE.test(value);
  * A value that holds no credential: a write that clears a key (`setItem("token", "")`,
  * `null`, `undefined`) or stores a flag (`"true"`, `"false"`, `"0"`, `"1"`).
  */
-const EMPTY_VALUE = /^\s*(?:(['"`])(?:|null|undefined|false|true|0|1)\1|null\b|undefined\b|void 0|!?[01]\b|!0|!1)/;
+const EMPTY_VALUE =
+  /^\s*(?:(['"`])(?:|null|undefined|false|true|0|1)\1|null\b|undefined\b|void 0|!?[01]\b|!0|!1)/;
 
 /* -------------------------------------------------------------------------- */
 /* Scanning                                                                   */
 /* -------------------------------------------------------------------------- */
 
-const STORAGE = "(?<![\\w$])(?:window\\s*\\.\\s*|self\\s*\\.\\s*|globalThis\\s*\\.\\s*)?(localStorage|sessionStorage)";
+const STORAGE =
+  "(?<![\\w$])(?:window\\s*\\.\\s*|self\\s*\\.\\s*|globalThis\\s*\\.\\s*)?(localStorage|sessionStorage)";
 
 // `setItem("key", value)` with a string-literal key. The value is read from the
 // text after the comma by VALUE_WINDOW.
@@ -193,10 +195,7 @@ const SET_ITEM_LITERAL = sharedRegex(
 // key expression can misplace the value window. That costs at most a missed or odd
 // JWT-value match, never a wrong key.
 const SET_ITEM_DYNAMIC = sharedRegex(
-  new RegExp(
-    `${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(?!['"\`])`,
-    "g",
-  ),
+  new RegExp(`${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(?!['"\`])`, "g"),
 );
 // `localStorage["key"] = value`
 const BRACKET_ASSIGN = sharedRegex(
@@ -372,7 +371,11 @@ function findingCheck(found: Located[]): CheckResult {
   const items: CheckItem[] = found.slice(0, MAX_ITEMS).map((w) => ({
     id: `${w.script}: ${describe(w)} (${w.reason})`,
     label: `${REASON_LABEL[w.reason]} written in ${
-      w.location === "inline-script" ? "an inline script" : w.thirdParty ? "third-party script" : "script"
+      w.location === "inline-script"
+        ? "an inline script"
+        : w.thirdParty
+          ? "third-party script"
+          : "script"
     } ${w.script}`,
     meta: {
       storage: w.storage,
@@ -389,9 +392,7 @@ function findingCheck(found: Located[]): CheckResult {
     status: "warn",
     message: `${found.length} auth token write(s) to web storage: ${describe(first)} in ${
       first.thirdParty ? "third-party script " : ""
-    }${first.script}${
-      found.length > 1 ? `, and ${found.length - 1} more` : ""
-    }`,
+    }${first.script}${found.length > 1 ? `, and ${found.length - 1} more` : ""}`,
     value: found.length,
     items,
     details: {
@@ -422,7 +423,10 @@ function externalScan(script: { content: string | null }): TokenStorageScan {
  * inventory. A site-wide bundle lists every page in `sourcePages`, so testing
  * `sourcePages.includes(page)` per script on every page is quadratic in pages.
  */
-const scriptsByPageCache = new WeakMap<readonly ScriptContentData[], Map<string, ScriptContentData[]>>();
+const scriptsByPageCache = new WeakMap<
+  readonly ScriptContentData[],
+  Map<string, ScriptContentData[]>
+>();
 
 function scriptsLoadedBy(
   scripts: readonly ScriptContentData[],
@@ -463,7 +467,8 @@ export const tokenStorageRule: Rule = {
   meta: {
     id: "security/token-storage",
     name: "Auth Tokens in Web Storage",
-    description: "Flags JWTs and session or access tokens written to localStorage or sessionStorage",
+    description:
+      "Flags JWTs and session or access tokens written to localStorage or sessionStorage",
     solution:
       "Anything in localStorage or sessionStorage can be read by any script on the page, so one XSS bug or one compromised third-party script steals the session. Keep the credential in an httpOnly, Secure, SameSite cookie that the server sets, and send it automatically with requests. If a token must live in script memory, keep it in a closure for the life of the page rather than persisting it, use short lifetimes and rotate refresh tokens. Pair this with a strict Content-Security-Policy to limit what can run.",
     category: "security",

@@ -13,7 +13,10 @@ import { fixGroupLine, ruleFixCoverage, uncoveredItems } from "../src/component-
 /** Markdown output with its backslash escapes undone, to compare wording with the other formats (3522). */
 const plain = (markdown: string): string => markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
 
-function occurrence(pageUrl: string, overrides: Partial<ComponentOccurrence> = {}): ComponentOccurrence {
+function occurrence(
+  pageUrl: string,
+  overrides: Partial<ComponentOccurrence> = {},
+): ComponentOccurrence {
   return {
     version: 1,
     pageUrl,
@@ -37,15 +40,33 @@ function occurrence(pageUrl: string, overrides: Partial<ComponentOccurrence> = {
 function report(checks: CheckResult[]): AuditReport {
   const rule: ReportRuleResult = {
     meta: {
-      id: "a11y/link-text", name: "Link text", description: "desc", solution: "sol",
-      category: "accessibility", scope: "page", severity: "warning", weight: 1,
+      id: "a11y/link-text",
+      name: "Link text",
+      description: "desc",
+      solution: "sol",
+      category: "accessibility",
+      scope: "page",
+      severity: "warning",
+      weight: 1,
     },
     checks,
   };
   return {
-    baseUrl: "https://example.test", timestamp: "2026-09-19T00:00:00.000Z", totalPages: 4,
-    passed: 0, warnings: checks.length, failed: 0, ruleResults: { "a11y/link-text": rule },
-    healthScore: { overall: 80, categories: [], groups: [], errorCount: 0, warningCount: 1, passedCount: 0 },
+    baseUrl: "https://example.test",
+    timestamp: "2026-09-19T00:00:00.000Z",
+    totalPages: 4,
+    passed: 0,
+    warnings: checks.length,
+    failed: 0,
+    ruleResults: { "a11y/link-text": rule },
+    healthScore: {
+      overall: 80,
+      categories: [],
+      groups: [],
+      errorCount: 0,
+      warningCount: 1,
+      passedCount: 0,
+    },
   } as unknown as AuditReport;
 }
 
@@ -107,7 +128,9 @@ describe("partial coverage: groups first, remainder explicitly labelled", () => 
     expect(out).toContain('<fix-once pages="3"');
     expect(out).toContain("Pages not attributed to a shared component (1): /legal");
     // The covered pages are NOT repeated in that remainder list.
-    const remainder = out.split("Pages not attributed to a shared component (1): ")[1]!.split("\n")[0]!;
+    const remainder = out
+      .split("Pages not attributed to a shared component (1): ")[1]!
+      .split("\n")[0]!;
     expect(remainder).toBe("/legal");
     expect(out).not.toContain("Pages (4)");
   });
@@ -121,7 +144,10 @@ describe("partial coverage: groups first, remainder explicitly labelled", () => 
         ...check(page, [occurrence(page)]),
         items: [{ id: "website", sourcePages: [...PAGES, "https://example.test/legal"] }],
       })),
-      { ...check("https://example.test/legal"), items: [{ id: "website", sourcePages: ["https://example.test/legal"] }] },
+      {
+        ...check("https://example.test/legal"),
+        items: [{ id: "website", sourcePages: ["https://example.test/legal"] }],
+      },
     ]);
     const out = renderLlm(shared);
     expect(out).toContain("Pages not attributed to a shared component (1): /legal");
@@ -191,7 +217,7 @@ describe("a one-page group is not a group", () => {
       ]),
     ]);
     const out = renderLlm(mixed);
-    expect((out.match(/<fix-once /g) ?? [])).toHaveLength(1);
+    expect(out.match(/<fix-once /g) ?? []).toHaveLength(1);
     expect(out).toContain('<fix-once pages="3">');
     // The single-page one is the uncovered remainder, labelled.
     expect(out).toContain("Pages not attributed to a shared component (1): /legal");
@@ -210,9 +236,9 @@ describe("attribution changes what the line claims", () => {
       'Likely one shared block in the site header (nav:1 > a:1): link text "website" is generic, seen on 3 pages: /, /api, /guides',
     );
     // It must NOT read as an instruction to fix one place.
-    expect(fixGroupLine(grouped.componentFixGroups[0]!, 5, (p) => new URL(p).pathname)).not.toContain(
-      "Fix once",
-    );
+    expect(
+      fixGroupLine(grouped.componentFixGroups[0]!, 5, (p) => new URL(p).pathname),
+    ).not.toContain("Fix once");
   });
 
   test("an unknown attribution renders nothing rather than guessing", () => {
@@ -232,7 +258,17 @@ describe("no groups: byte-identical to the pre-feature rendering", () => {
   // The same report with the evidence stripped is what v0.0.96 produced. Any
   // difference here is the feature leaking into reports it has nothing to say
   // about, which is the regression this whole lane exists to prevent.
-  const withEvidence = report(PAGES.map((page) => check(page, [occurrence(page, { groupable: false, confidence: "uncertain", uncertainReason: "region-main" })])));
+  const withEvidence = report(
+    PAGES.map((page) =>
+      check(page, [
+        occurrence(page, {
+          groupable: false,
+          confidence: "uncertain",
+          uncertainReason: "region-main",
+        }),
+      ]),
+    ),
+  );
   const withoutEvidence = report(PAGES.map((page) => check(page)));
 
   test("llm", () => {
@@ -255,18 +291,20 @@ describe("uncoveredItems keeps an item's page count in step with its narrowed pa
 
   test("pages the groups took leave the item's pageCount too", () => {
     // 3 listed pages out of 5 the item is on; one listed page is covered by a group.
-    const out = uncoveredItems(
-      [{ id: "x", sourcePages: pages, pageCount: 5 }],
-      { mode: "partial", groups: [], uncoveredPages: [pages[1]!, pages[2]!] },
-    );
+    const out = uncoveredItems([{ id: "x", sourcePages: pages, pageCount: 5 }], {
+      mode: "partial",
+      groups: [],
+      uncoveredPages: [pages[1]!, pages[2]!],
+    });
     expect(out).toEqual([{ id: "x", sourcePages: [pages[1], pages[2]], pageCount: 4 }]);
   });
 
   test("an item with no pageCount does not gain one", () => {
-    const out = uncoveredItems(
-      [{ id: "x", sourcePages: pages }],
-      { mode: "partial", groups: [], uncoveredPages: [pages[2]!] },
-    );
+    const out = uncoveredItems([{ id: "x", sourcePages: pages }], {
+      mode: "partial",
+      groups: [],
+      uncoveredPages: [pages[2]!],
+    });
     expect(out).toEqual([{ id: "x", sourcePages: [pages[2]] }]);
   });
 });

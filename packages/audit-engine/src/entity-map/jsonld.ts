@@ -5,7 +5,11 @@
 // references rewritten as `{"@id": …}`. Nodes the site never gave an `@id` get
 // a generated, stable one derived from the site URL.
 
-import type { EntityMap, EntityMapJsonLd, EntityMapNode } from "@squirrelscan/core-contracts/entity-map";
+import type {
+  EntityMap,
+  EntityMapJsonLd,
+  EntityMapNode,
+} from "@squirrelscan/core-contracts/entity-map";
 
 /**
  * FNV-1a over the node key. Only needs to be stable and collision-resistant
@@ -136,9 +140,7 @@ export function toJsonLd(map: EntityMap): EntityMapJsonLd {
  * Same function as the export uses, so the two can never disagree about which
  * ids are real.
  */
-export function jsonLdGeneratedIds(
-  map: EntityMap
-): Array<{ key: string; id: string }> {
+export function jsonLdGeneratedIds(map: EntityMap): Array<{ key: string; id: string }> {
   return map.nodes
     .filter((node) => node.id === null)
     .map((node) => ({ key: node.key, id: publishedId(node, map.site) }));

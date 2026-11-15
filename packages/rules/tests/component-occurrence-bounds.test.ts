@@ -72,7 +72,8 @@ describe("the output on ordinary pages is unchanged", () => {
   test("one landmark pass serves every faulty element of a page", () => {
     const document = parse(HTML);
     const cache = new ComponentOccurrenceCache();
-    for (const element of [...document.querySelectorAll("a")] as Element[]) occurrenceOf(element, cache);
+    for (const element of [...document.querySelectorAll("a")] as Element[])
+      occurrenceOf(element, cache);
     expect(cache.landmarkIndexBuilds).toBe(1);
   });
 });
@@ -124,7 +125,11 @@ describe("landmark slots come from one pass over the page", () => {
     const out: string[] = [];
     for (let n = 0; n < count; n += 1) {
       const tags: string[] = [];
-      for (let level = 0, rest = n; level < depth; level += 1, rest = Math.floor(rest / ROLES.length)) {
+      for (
+        let level = 0, rest = n;
+        level < depth;
+        level += 1, rest = Math.floor(rest / ROLES.length)
+      ) {
         tags.push(ROLES[rest % ROLES.length]!);
       }
       out.push(
@@ -254,9 +259,7 @@ describe("a page's evidence work is bounded by a budget, not by how its elements
   });
 
   test("5,000 anchors nested in each other, no landmark", () => {
-    const { value, ms } = build(
-      `${"<a href='/x'>".repeat(DEPTH)}Read more${"</a>".repeat(DEPTH)}`,
-    );
+    const { value, ms } = build(`${"<a href='/x'>".repeat(DEPTH)}Read more${"</a>".repeat(DEPTH)}`);
     expect(ms).toBeLessThan(5000);
     expect(value).toHaveLength(DEPTH);
     expect(value.every((o) => o.uncertainReason === "no-region")).toBe(true);
@@ -267,7 +270,9 @@ describe("a page's evidence work is bounded by a budget, not by how its elements
       { length: 2000 },
       (_, i) => `<li class="card"><div><a href="/p${i}">Read more</a></div></li>`,
     ).join("");
-    const { value } = build(`<main><ul>${cards}</ul></main><footer><a href="/f">Read more</a></footer>`);
+    const { value } = build(
+      `<main><ul>${cards}</ul></main><footer><a href="/f">Read more</a></footer>`,
+    );
     // Region-main cards keep their ladders, and the footer is judged as a component.
     expect(value[0]!.subtreeCandidates?.length ?? 0).toBeGreaterThan(0);
     expect(value[1999]!.subtreeCandidates?.length ?? 0).toBeGreaterThan(0);

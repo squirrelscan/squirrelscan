@@ -25,13 +25,23 @@ function foldPages(pages: readonly string[], variantOf: ReadonlyMap<string, stri
  * A copy of `map` with every page in `variantOf` (variant -> canonical) counted under its canonical page.
  * Returns `map` itself when there is nothing to fold, so a site with no variants is byte-identical.
  */
-export function foldEntityMapVariants(map: EntityMap, variantOf: ReadonlyMap<string, string>): EntityMap {
+export function foldEntityMapVariants(
+  map: EntityMap,
+  variantOf: ReadonlyMap<string, string>,
+): EntityMap {
   if (variantOf.size === 0 || !map.pages.some((p) => variantOf.has(p.url))) return map;
 
-  const byUrl = new Map<string, { declares: Set<string>; references: Set<string>; entityCount: number }>();
+  const byUrl = new Map<
+    string,
+    { declares: Set<string>; references: Set<string>; entityCount: number }
+  >();
   for (const page of map.pages) {
     const url = variantOf.get(page.url) ?? page.url;
-    const into = byUrl.get(url) ?? { declares: new Set<string>(), references: new Set<string>(), entityCount: 0 };
+    const into = byUrl.get(url) ?? {
+      declares: new Set<string>(),
+      references: new Set<string>(),
+      entityCount: 0,
+    };
     for (const key of page.declares) into.declares.add(key);
     for (const key of page.references ?? []) into.references.add(key);
     // The canonical page and its variants carry the same template's entities; the larger count is the page's.

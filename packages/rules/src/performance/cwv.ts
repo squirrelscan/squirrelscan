@@ -148,11 +148,7 @@ function emptyCWVHints(): CWVHints {
 // Compute CWV hints from an already-parsed Document. `html` is used only for the
 // @font-face regex (the one thing the DOM walk can't cheaply give us); it is NOT
 // re-parsed here. Internal — rules call getCWVHints() so the result is memoized.
-function analyzeCWVHints(
-  doc: Document,
-  html: string,
-  pageUrl: string
-): CWVHints {
+function analyzeCWVHints(doc: Document, html: string, pageUrl: string): CWVHints {
   const pageDomain = getHostname(pageUrl);
 
   const hints: CWVHints = emptyCWVHints();
@@ -192,7 +188,7 @@ function analyzeCWVHints(
     // Render-blocking stylesheets
     const stylesheets = querySelectorAllOutsideNoscript(
       headElement,
-      'link[rel="stylesheet"]:not([media="print"])'
+      'link[rel="stylesheet"]:not([media="print"])',
     );
     for (const link of stylesheets) {
       const href = link.getAttribute("href");
@@ -235,8 +231,7 @@ function analyzeCWVHints(
 
       if (scriptDomain !== pageDomain) {
         const isThirdParty = THIRD_PARTY_DOMAINS.some(
-          (domain) =>
-            scriptDomain === domain || scriptDomain.endsWith(`.${domain}`)
+          (domain) => scriptDomain === domain || scriptDomain.endsWith(`.${domain}`),
         );
         if (isThirdParty) {
           hints.thirdPartyScripts.push(src);
@@ -264,10 +259,7 @@ function analyzeCWVHints(
   const externalDomains = new Set<string>();
 
   // Collect all external domains from resources
-  const allResources = querySelectorAllOutsideNoscript(
-    doc,
-    "script[src], link[href], img[src]"
-  );
+  const allResources = querySelectorAllOutsideNoscript(doc, "script[src], link[href], img[src]");
   for (const resource of allResources) {
     const url = resource.getAttribute("src") || resource.getAttribute("href");
     if (!url) continue;
@@ -283,9 +275,7 @@ function analyzeCWVHints(
   }
 
   // Check which CDNs are missing preconnect
-  const preconnectDomains = new Set(
-    hints.preconnectTags.map((url) => getHostname(url) || url)
-  );
+  const preconnectDomains = new Set(hints.preconnectTags.map((url) => getHostname(url) || url));
 
   for (const cdn of COMMON_CDNS) {
     if (externalDomains.has(`https://${cdn}`) && !preconnectDomains.has(cdn)) {
@@ -304,8 +294,7 @@ function analyzeCWVHints(
     // Check if dimensions are set via attributes or inline style
     const hasWidthAttr = width && width !== "auto";
     const hasHeightAttr = height && height !== "auto";
-    const hasStyleDimensions =
-      style.includes("width") && style.includes("height");
+    const hasStyleDimensions = style.includes("width") && style.includes("height");
 
     if (!hasWidthAttr && !hasHeightAttr && !hasStyleDimensions && src) {
       hints.imagesWithoutDimensions.push(src);
@@ -383,11 +372,7 @@ function getNullDocHints(html: string, pageUrl: string): CWVHints {
 // cache note above). `html` is still required alongside a non-null `doc` — the
 // @font-face regex reads it. The returned object is FROZEN (read-only): it is
 // shared across all 6 CWV rules, so callers must not mutate it.
-export function getCWVHints(
-  doc: Document | null,
-  html: string,
-  pageUrl: string
-): CWVHints {
+export function getCWVHints(doc: Document | null, html: string, pageUrl: string): CWVHints {
   if (!doc) {
     // Error pages (4xx/5xx) have no parsed document. An empty/absent body has no
     // CWV signals (and linkedom's doc.head getter throws on a parse of ""); a

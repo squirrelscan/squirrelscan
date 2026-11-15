@@ -19,7 +19,9 @@ const report = (over: Partial<AuditReport> = {}): AuditReport => ({
 
 describe("report JSON", () => {
   test("carries meta.storeIntegrity when bodies were evicted", () => {
-    const parsed = JSON.parse(renderJson(report({ storeIntegrity: { status: "evicted", evicted: 3, stored: 10 } })));
+    const parsed = JSON.parse(
+      renderJson(report({ storeIntegrity: { status: "evicted", evicted: 3, stored: 10 } })),
+    );
     expect(parsed.meta.storeIntegrity).toEqual({ status: "evicted", evicted: 3, stored: 10 });
   });
 
@@ -33,12 +35,23 @@ describe("page map JSON", () => {
 
   test("carries storeIntegrity when bodies were evicted", () => {
     const meta = pageMapMeta(crawl, 5, { status: "evicted", evicted: 2, stored: 5 });
-    expect(JSON.parse(renderPageMapJson([], meta)).storeIntegrity).toEqual({ status: "evicted", evicted: 2, stored: 5 });
+    expect(JSON.parse(renderPageMapJson([], meta)).storeIntegrity).toEqual({
+      status: "evicted",
+      evicted: 2,
+      stored: 5,
+    });
   });
 
   test("has none otherwise, and the other fields are unchanged", () => {
     const parsed = JSON.parse(renderPageMapJson([], pageMapMeta(crawl, 5)));
     expect("storeIntegrity" in parsed).toBe(false);
-    expect(Object.keys(parsed)).toEqual(["site", "crawlId", "startedAt", "total", "filtered", "pages"]);
+    expect(Object.keys(parsed)).toEqual([
+      "site",
+      "crawlId",
+      "startedAt",
+      "total",
+      "filtered",
+      "pages",
+    ]);
   });
 });

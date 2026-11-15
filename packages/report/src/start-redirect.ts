@@ -84,9 +84,7 @@ export function renderRedirectedOutcome(
         `  <original-url>${escapeXml(outcome.originalUrl)}</original-url>`,
         `  <final-url>${escapeXml(outcome.finalUrl)}</final-url>`,
         "  <redirect-chain>",
-        ...chain.map(
-          (hop) => `    <hop status="${hop.status}">${escapeXml(hop.url)}</hop>`,
-        ),
+        ...chain.map((hop) => `    <hop status="${hop.status}">${escapeXml(hop.url)}</hop>`),
         "  </redirect-chain>",
         ...(outcome.rerunCommand
           ? [`  <rerun-command>${escapeXml(outcome.rerunCommand)}</rerun-command>`]

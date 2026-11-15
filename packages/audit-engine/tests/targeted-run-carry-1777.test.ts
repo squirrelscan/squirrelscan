@@ -42,7 +42,11 @@ const targetedSkip: CheckResult = {
   message: "Skipped: this run audited only the URLs it was given, not the whole site",
   skipReason: TARGETED_RUN_SKIP_REASON,
 };
-const clean: CheckResult = { name: "broken-links", status: "pass", message: "No broken internal links detected" };
+const clean: CheckResult = {
+  name: "broken-links",
+  status: "pass",
+  message: "No broken internal links detected",
+};
 
 function stateAfter(rows: CheckResult[]) {
   const collector = createNotEvaluatedCollector(normalizePageUrl);

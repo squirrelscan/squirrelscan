@@ -14,7 +14,11 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { colorContrastRule, stylesheetBackgroundOf, stylesheetBackgroundSelectorsOf } from "../src/a11y/color-contrast";
+import {
+  colorContrastRule,
+  stylesheetBackgroundOf,
+  stylesheetBackgroundSelectorsOf,
+} from "../src/a11y/color-contrast";
 import type { CheckResult, RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
@@ -66,7 +70,7 @@ describe("guesses are not reported", () => {
       page({
         head: `<link rel="stylesheet" href="s.css">`,
         body: `<section class="hero"><p class="text-gray-300">Gray 300 text on a near-black background</p></section>`,
-      })
+      }),
     );
     expect(check.status).toBe("pass");
     expect(check.items).toBeUndefined();
@@ -97,16 +101,52 @@ describe("measured pairs below 4.5:1 are reported", () => {
 
   test.each([
     ["named colors", "color: silver; background-color: white", "p: silver on white (1.82:1)"],
-    ["rgb()", "color: rgb(150, 150, 150); background: rgb(255,255,255)", "p: rgb(150, 150, 150) on rgb(255,255,255) (2.96:1)"],
-    ["opaque rgba()", "color: rgba(150,150,150,1); background: #fff", "p: rgba(150,150,150,1) on #fff (2.96:1)"],
-    ["opaque 8-digit hex", "color: #999999ff; background: #ffffff", "p: #999999ff on #ffffff (2.85:1)"],
+    [
+      "rgb()",
+      "color: rgb(150, 150, 150); background: rgb(255,255,255)",
+      "p: rgb(150, 150, 150) on rgb(255,255,255) (2.96:1)",
+    ],
+    [
+      "opaque rgba()",
+      "color: rgba(150,150,150,1); background: #fff",
+      "p: rgba(150,150,150,1) on #fff (2.96:1)",
+    ],
+    [
+      "opaque 8-digit hex",
+      "color: #999999ff; background: #ffffff",
+      "p: #999999ff on #ffffff (2.85:1)",
+    ],
     ["!important", "color: #999 !important; background: #fff", "p: #999 on #fff (2.85:1)"],
-    ["! important with a space", "color: #999 ! important; background: #fff", "p: #999 on #fff (2.85:1)"],
-    ["the last declaration wins", "color:#111;color:#ccc;background:#000;background:#fff", "p: #ccc on #fff (1.61:1)"],
-    ["!important beats a later declaration", "color:#ccc !important;color:#111;background:#fff", "p: #ccc on #fff (1.61:1)"],
-    ["an unrelated url() elsewhere in the style", "color:#ccc;background:#fff;cursor:url(x.cur),auto", "p: #ccc on #fff (1.61:1)"],
-    ["background-image: none", "color:#ccc;background-color:#fff;background-image:none", "p: #ccc on #fff (1.61:1)"],
-    ["a one-color shorthand after an image", "color:#ccc;background-image:url(x.png);background:#fff", "p: #ccc on #fff (1.61:1)"],
+    [
+      "! important with a space",
+      "color: #999 ! important; background: #fff",
+      "p: #999 on #fff (2.85:1)",
+    ],
+    [
+      "the last declaration wins",
+      "color:#111;color:#ccc;background:#000;background:#fff",
+      "p: #ccc on #fff (1.61:1)",
+    ],
+    [
+      "!important beats a later declaration",
+      "color:#ccc !important;color:#111;background:#fff",
+      "p: #ccc on #fff (1.61:1)",
+    ],
+    [
+      "an unrelated url() elsewhere in the style",
+      "color:#ccc;background:#fff;cursor:url(x.cur),auto",
+      "p: #ccc on #fff (1.61:1)",
+    ],
+    [
+      "background-image: none",
+      "color:#ccc;background-color:#fff;background-image:none",
+      "p: #ccc on #fff (1.61:1)",
+    ],
+    [
+      "a one-color shorthand after an image",
+      "color:#ccc;background-image:url(x.png);background:#fff",
+      "p: #ccc on #fff (1.61:1)",
+    ],
   ])("%s", (_label, style, id) => {
     const check = run(page({ body: `<p style="${style}">Text</p>` }));
     expect(check.items).toEqual([{ id }]);
@@ -146,7 +186,10 @@ describe("pairs that cannot be resolved from the markup are not reported", () =>
     ["background image", "color:#ccc;background:#fff url(hero.jpg)"],
     ["background shorthand beyond one color", "color:#ccc;background:#fff no-repeat"],
     ["image-set() in the shorthand", `color:#ccc;background:#fff image-set('x.png' 1x)`],
-    ["an image shorthand under a later background-color", "color:#ccc;background:url(x.png);background-color:#fff"],
+    [
+      "an image shorthand under a later background-color",
+      "color:#ccc;background:url(x.png);background-color:#fff",
+    ],
     ["a later unresolvable background", "color:#ccc;background:#fff;background:var(--surface)"],
     ["trailing junk after !important", "color:#ccc;background:#fff !important junk"],
     ["over-long hex", "color:#ccc;background-color:#ffffffff0"],
@@ -173,7 +216,7 @@ describe("pairs that cannot be resolved from the markup are not reported", () =>
 describe("output when there is nothing to measure", () => {
   test("a page with no inline text color passes with a note and emits no info", () => {
     const checks = runAll(
-      ctx(`<!DOCTYPE html><html><head><title>t</title></head><body><p>x</p></body></html>`)
+      ctx(`<!DOCTYPE html><html><head><title>t</title></head><body><p>x</p></body></html>`),
     );
     expect(checks.map((c) => [c.name, c.status])).toEqual([["color-contrast", "pass"]]);
     expect(checks[0]!.message).toBe("No obvious contrast issues detected");
@@ -192,34 +235,52 @@ describe("inline color against the computed background (#1752)", () => {
 
   test("an inline background on an ancestor is the background", () => {
     const check = run(
-      page({ body: `<section style="background:#fff"><div><p style="color:#b9b9b9">x</p></div></section>` })
+      page({
+        body: `<section style="background:#fff"><div><p style="color:#b9b9b9">x</p></div></section>`,
+      }),
     );
     expect(check.items).toEqual([{ id: "p: #b9b9b9 on #fff (1.96:1)" }]);
   });
 
   test("a dark ancestor makes light text pass", () => {
     const check = run(
-      page({ body: `<div style="background-color:#000"><p style="color:#b9b9b9">x</p></div>` })
+      page({ body: `<div style="background-color:#000"><p style="color:#b9b9b9">x</p></div>` }),
     );
     expect(check.status).toBe("pass");
     expect(check.details?.measuredPairs).toBe(1);
-    expect(unresolvedOf(page({ body: `<div style="background-color:#000"><p style="color:#b9b9b9">x</p></div>` }))).toBeUndefined();
+    expect(
+      unresolvedOf(
+        page({ body: `<div style="background-color:#000"><p style="color:#b9b9b9">x</p></div>` }),
+      ),
+    ).toBeUndefined();
   });
 
   test("the nearest ancestor background wins", () => {
     const check = run(
       page({
         body: `<div style="background:#000"><div style="background:#fff"><p style="color:#b9b9b9">x</p></div></div>`,
-      })
+      }),
     );
     expect(check.items).toEqual([{ id: "p: #b9b9b9 on #fff (1.96:1)" }]);
   });
 
   test.each([
-    ["a gradient", `<div style="background:linear-gradient(#000,#111)"><p style="color:#b9b9b9">x</p></div>`],
-    ["a background image", `<div style="background-image:url(x.png)"><p style="color:#b9b9b9">x</p></div>`],
-    ["a translucent ancestor", `<div style="background:rgba(0,0,0,.5)"><p style="color:#b9b9b9">x</p></div>`],
-    ["a bgcolor attribute", `<table bgcolor="#000"><tr><td><p style="color:#b9b9b9">x</p></td></tr></table>`],
+    [
+      "a gradient",
+      `<div style="background:linear-gradient(#000,#111)"><p style="color:#b9b9b9">x</p></div>`,
+    ],
+    [
+      "a background image",
+      `<div style="background-image:url(x.png)"><p style="color:#b9b9b9">x</p></div>`,
+    ],
+    [
+      "a translucent ancestor",
+      `<div style="background:rgba(0,0,0,.5)"><p style="color:#b9b9b9">x</p></div>`,
+    ],
+    [
+      "a bgcolor attribute",
+      `<table bgcolor="#000"><tr><td><p style="color:#b9b9b9">x</p></td></tr></table>`,
+    ],
   ])("%s ancestor leaves the pair unresolved, not warned", (_label, body) => {
     const html = page({ body });
     expect(run(html).status).toBe("pass");
@@ -265,22 +326,27 @@ describe("inline color against the computed background (#1752)", () => {
     expect(info.status).toBe("info");
     expect(info.details?.inconclusive).toBe(true);
     expect(info.message).toContain("1 inline-colored text element(s) could not be measured");
-    expect(info.items).toEqual([{ id: expect.stringContaining("p: #b9b9b9 (1.96:1 against white)") }]);
+    expect(info.items).toEqual([
+      { id: expect.stringContaining("p: #b9b9b9 (1.96:1 against white)") },
+    ]);
   });
 
   test("a stylesheet-set background is named in the message", () => {
     const info = unresolvedOf(
-      page({ head: `<link rel="stylesheet" href="/s.css">`, body: `<p style="color:#b9b9b9">x</p>` })
+      page({
+        head: `<link rel="stylesheet" href="/s.css">`,
+        body: `<p style="color:#b9b9b9">x</p>`,
+      }),
     )!;
     expect(info.message).toBe(
-      "1 inline-colored text element(s) could not be measured: the background is set by a stylesheet the audit does not read"
+      "1 inline-colored text element(s) could not be measured: the background is set by a stylesheet the audit does not read",
     );
     expect(info.details?.reasons).toEqual({ stylesheet: 1 });
   });
 
   test("a style block with no background keeps the white default", () => {
     const check = run(
-      page({ head: `<style>.muted{color:#ccc}</style>`, body: `<p style="color:#b9b9b9">x</p>` })
+      page({ head: `<style>.muted{color:#ccc}</style>`, body: `<p style="color:#b9b9b9">x</p>` }),
     );
     expect(check.status).toBe("warn");
   });
@@ -290,7 +356,7 @@ describe("inline color against the computed background (#1752)", () => {
       page({
         head: `<noscript><link rel="stylesheet" href="/s.css"></noscript>`,
         body: `<p style="color:#b9b9b9">x</p>`,
-      })
+      }),
     );
     expect(check.status).toBe("warn");
   });
@@ -300,8 +366,8 @@ describe("inline color against the computed background (#1752)", () => {
       ctx(
         page({
           body: `<p style="color:#b9b9b9">low</p><div style="background:url(x.png)"><p style="color:#eee">y</p></div>`,
-        })
-      )
+        }),
+      ),
     );
     expect(checks.map((c) => [c.name, c.status])).toEqual([
       ["color-contrast", "warn"],
@@ -345,10 +411,18 @@ describe("a linked stylesheet's other background selectors guard the pair (#1756
     ...extra,
   });
   const run = async (body: string, extra: Record<string, unknown>) =>
-    (await colorContrastRule.run({
-      ...ctx(page({ head: '<link rel="stylesheet" href="/styles.css">', body })),
-      site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, stylesheetBackgrounds: [sheet(extra)] },
-    } as unknown as RuleContext)).checks as CheckResult[];
+    (
+      await colorContrastRule.run({
+        ...ctx(page({ head: '<link rel="stylesheet" href="/styles.css">', body })),
+        site: {
+          baseUrl: "https://example.com",
+          pages: [],
+          robotsTxt: null,
+          sitemaps: null,
+          stylesheetBackgrounds: [sheet(extra)],
+        },
+      } as unknown as RuleContext)
+    ).checks as CheckResult[];
   const TEXT = '<p style="color:#b9b9b9">Tagline</p>';
 
   test("text inside an element matching a selector with a background is unresolved, by class, id and tag", async () => {
@@ -357,29 +431,47 @@ describe("a linked stylesheet's other background selectors guard the pair (#1756
       ["#top", `<header id="top"><div>${TEXT}</div></header>`],
       ["footer", `<footer>${TEXT}</footer>`],
     ] as const) {
-      const checks = (await run(wrapped, { selectors: [selector] }));
-      expect(checks.some((c) => c.status === "warn"), selector).toBe(false);
-      expect(checks.some((c) => c.name === "color-contrast-unresolved"), selector).toBe(true);
+      const checks = await run(wrapped, { selectors: [selector] });
+      expect(
+        checks.some((c) => c.status === "warn"),
+        selector,
+      ).toBe(false);
+      expect(
+        checks.some((c) => c.name === "color-contrast-unresolved"),
+        selector,
+      ).toBe(true);
     }
   });
 
   test("text outside every matching element is still measured; a truncated list guards everything", async () => {
     expect((await run(TEXT, { selectors: [".hero"] })).some((c) => c.status === "warn")).toBe(true);
-    expect((await run(TEXT, { selectors: [".hero"], selectorsTruncated: true })).some((c) => c.status === "warn")).toBe(false);
+    expect(
+      (await run(TEXT, { selectors: [".hero"], selectorsTruncated: true })).some(
+        (c) => c.status === "warn",
+      ),
+    ).toBe(false);
   });
 
   test("a selector the DOM cannot evaluate is not provable, so the pair is unresolved", async () => {
-    expect((await run(TEXT, { selectors: ["div:not("] })).some((c) => c.status === "warn")).toBe(false);
+    expect((await run(TEXT, { selectors: ["div:not("] })).some((c) => c.status === "warn")).toBe(
+      false,
+    );
   });
 });
 
 describe("stylesheetBackgroundSelectorsOf lists the other background selectors (#1756)", () => {
   test("html/body are excluded; at-rules and the cap are reported", () => {
-    expect(stylesheetBackgroundSelectorsOf("body{background:#fff}.hero,.card{background:#111}p{color:red}")).toEqual({
+    expect(
+      stylesheetBackgroundSelectorsOf(
+        "body{background:#fff}.hero,.card{background:#111}p{color:red}",
+      ),
+    ).toEqual({
       selectors: [".hero", ".card"],
       truncated: false,
     });
-    expect(stylesheetBackgroundSelectorsOf("@media (max-width:600px){.nav{background:#000}}").selectors).toEqual([".nav"]);
+    expect(
+      stylesheetBackgroundSelectorsOf("@media (max-width:600px){.nav{background:#000}}").selectors,
+    ).toEqual([".nav"]);
     const many = Array.from({ length: 205 }, (_, i) => `.c${i}{background:#000}`).join("");
     const r = stylesheetBackgroundSelectorsOf(many);
     expect(r.selectors).toHaveLength(200);
@@ -388,7 +480,7 @@ describe("stylesheetBackgroundSelectorsOf lists the other background selectors (
 });
 
 describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () => {
-  const timed = <T,>(fn: () => T): [T, number] => {
+  const timed = <T>(fn: () => T): [T, number] => {
     const start = performance.now();
     const out = fn();
     return [out, performance.now() - start];
@@ -407,7 +499,11 @@ describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () =
   });
 
   test("nesting with no background inside is ignored at any depth", () => {
-    const css = "body{background:#fff}" + "@media (min-width:1px){".repeat(40) + ".x{color:red}" + "}".repeat(40);
+    const css =
+      "body{background:#fff}" +
+      "@media (min-width:1px){".repeat(40) +
+      ".x{color:red}" +
+      "}".repeat(40);
     const [bg, ms] = timed(() => stylesheetBackgroundOf(css));
     expect(bg).toEqual({ kind: "color", value: "#fff" });
     expect(ms).toBeLessThan(100);
@@ -436,27 +532,30 @@ describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () =
 
   test("a page nested thousands deep and a stylesheet with many selectors finish, with the pair unresolved", async () => {
     const depth = 3000;
-    const body = "<div>".repeat(depth) + '<p style="color:#b9b9b9">Tagline</p>' + "</div>".repeat(depth);
+    const body =
+      "<div>".repeat(depth) + '<p style="color:#b9b9b9">Tagline</p>' + "</div>".repeat(depth);
     const selectors = Array.from({ length: 200 }, (_, i) => `.n${i}`);
     const start = performance.now();
-    const checks = (await colorContrastRule.run({
-      ...ctx(page({ head: '<link rel="stylesheet" href="/s.css">', body })),
-      site: {
-        baseUrl: "https://example.com",
-        pages: [],
-        robotsTxt: null,
-        sitemaps: null,
-        stylesheetBackgrounds: [
-          {
-            url: "https://example.com/s.css",
-            status: 200,
-            error: null,
-            background: { kind: "color", value: "#fff" },
-            selectors,
-          },
-        ],
-      },
-    } as unknown as RuleContext)).checks as CheckResult[];
+    const checks = (
+      await colorContrastRule.run({
+        ...ctx(page({ head: '<link rel="stylesheet" href="/s.css">', body })),
+        site: {
+          baseUrl: "https://example.com",
+          pages: [],
+          robotsTxt: null,
+          sitemaps: null,
+          stylesheetBackgrounds: [
+            {
+              url: "https://example.com/s.css",
+              status: 200,
+              error: null,
+              background: { kind: "color", value: "#fff" },
+              selectors,
+            },
+          ],
+        },
+      } as unknown as RuleContext)
+    ).checks as CheckResult[];
     expect(performance.now() - start).toBeLessThan(5000);
     // 3000 ancestors x 200 selectors is past the match budget: not provable, so not a warning.
     expect(checks.some((c) => c.status === "warn")).toBe(false);
@@ -467,7 +566,11 @@ describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () =
 describe("stylesheetBackgroundOf keeps only the html/body background (#1756)", () => {
   test.each([
     ["a body color", "body{margin:0;background:#101010}", { kind: "color", value: "#101010" }],
-    ["body over html", "html{background:#fff}body{background-color:#000}", { kind: "color", value: "#000" }],
+    [
+      "body over html",
+      "html{background:#fff}body{background-color:#000}",
+      { kind: "color", value: "#000" },
+    ],
     ["a :root color", ":root{background:navy}", { kind: "color", value: "navy" }],
     ["another selector is not read", ".hero{background:#000}p{color:red}", { kind: "none" }],
     ["a gradient on body", "body{background:linear-gradient(#000,#111)}", { kind: "unresolved" }],
@@ -478,7 +581,11 @@ describe("stylesheetBackgroundOf keeps only the html/body background (#1756)", (
       "body{background:#fff}@media (prefers-color-scheme: dark){body{background:#000}}",
       { kind: "unresolved" },
     ],
-    ["a media rule for another selector", "@media (max-width:600px){.nav{background:#000}}body{background:#fff}", { kind: "color", value: "#fff" }],
+    [
+      "a media rule for another selector",
+      "@media (max-width:600px){.nav{background:#000}}body{background:#fff}",
+      { kind: "color", value: "#fff" },
+    ],
   ])("%s", (_label, css, expected) => {
     expect(stylesheetBackgroundOf(css)).toEqual(expected as never);
   });
@@ -491,18 +598,25 @@ describe("stylesheetBackgroundOf keeps only the html/body background (#1756)", (
     const base = ctx(html);
     const none = (await colorContrastRule.run(base)).checks;
     expect(none.some((c) => c.name === "color-contrast-unresolved")).toBe(true);
-    const read = (await colorContrastRule.run({
-      ...base,
-      site: {
-        baseUrl: "https://example.com",
-        pages: [],
-        robotsTxt: null,
-        sitemaps: null,
-        stylesheetBackgrounds: [
-          { url: "https://example.com/styles.css", status: 200, error: null, background: { kind: "color", value: "#fff" } },
-        ],
-      },
-    } as unknown as RuleContext)).checks as CheckResult[];
+    const read = (
+      await colorContrastRule.run({
+        ...base,
+        site: {
+          baseUrl: "https://example.com",
+          pages: [],
+          robotsTxt: null,
+          sitemaps: null,
+          stylesheetBackgrounds: [
+            {
+              url: "https://example.com/styles.css",
+              status: 200,
+              error: null,
+              background: { kind: "color", value: "#fff" },
+            },
+          ],
+        },
+      } as unknown as RuleContext)
+    ).checks as CheckResult[];
     expect(read.find((c) => c.status === "warn")?.items?.[0]?.id).toContain("#b9b9b9 on #fff");
   });
 });

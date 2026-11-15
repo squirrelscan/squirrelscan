@@ -37,9 +37,9 @@ const WHOLE = { maxScriptChars: 16 * 1024 * 1024, budgetMs: 30_000 };
 describe("bundle bodies reach script-content detection", () => {
   test("Vite SPA shell + a bundle calling createClient on a supabase.co ref", () => {
     const bundle = `var a=1;const sb=createClient("https://${REF}.supabase.co","anon-key-value");export{sb}`;
-    expect(detect([{ url: "https://example.com/assets/index-a1b2c3.js", content: bundle }])).toContain(
-      "supabase",
-    );
+    expect(
+      detect([{ url: "https://example.com/assets/index-a1b2c3.js", content: bundle }]),
+    ).toContain("supabase");
   });
 
   test("the minified `(0,t.createClient)(...)` shape matches too", () => {
@@ -108,7 +108,8 @@ describe("near misses do not match", () => {
     "a commented-out call": `// const sb = createClient("https://${REF}.supabase.co", key)\nvar a=1;`,
     "a block comment": `/* createClient("https://${REF}.supabase.co", key) */var a=1;`,
     "a docs string holding the call": `console.log('Usage: createClient("https://${REF}.supabase.co", key)')`,
-    "a template literal holding the call": "const doc=`createClient(\"https://" + REF + ".supabase.co\", key)`;",
+    "a template literal holding the call":
+      'const doc=`createClient("https://' + REF + '.supabase.co", key)`;',
     "the bare URL in a string": `const link="https://${REF}.supabase.co/docs";`,
     "a placeholder ref": `createClient("https://your${REF.slice(0, 16)}.supabase.co", key)`,
     "a 19-char ref": `createClient("https://${REF.slice(0, 19)}.supabase.co", key)`,
@@ -150,7 +151,9 @@ describe("bounds", () => {
     const url = "https://example.com/a.js";
     expect(detect([{ url, content: call + pad }], SHELL, WHOLE)).toContain("supabase");
     expect(detect([{ url, content: `${pad}\n${call}` }], SHELL, WHOLE)).toContain("supabase");
-    expect(detect([{ url, content: `${pad}\n${call}\n${pad}` }], SHELL, WHOLE)).toContain("supabase");
+    expect(detect([{ url, content: `${pad}\n${call}\n${pad}` }], SHELL, WHOLE)).toContain(
+      "supabase",
+    );
   });
 
   test("by default a script is matched only up to 256 KB: the cloud services keep their cap", () => {
@@ -161,7 +164,9 @@ describe("bounds", () => {
     expect(detect([{ url, content: call + pad }])).toContain("supabase");
     expect(detect([{ url, content: `${pad}\n${call}` }])).not.toContain("supabase");
     // An explicit smaller cap is honoured too.
-    expect(detect([{ url, content: `${"a".repeat(1000)}\n${call}` }], SHELL, { maxScriptChars: 500 })).not.toContain("supabase");
+    expect(
+      detect([{ url, content: `${"a".repeat(1000)}\n${call}` }], SHELL, { maxScriptChars: 500 }),
+    ).not.toContain("supabase");
   });
 
   test("a 1 MB hostile bundle finishes inside the per-page budget", () => {

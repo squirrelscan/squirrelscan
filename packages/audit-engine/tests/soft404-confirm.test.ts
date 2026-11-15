@@ -99,7 +99,11 @@ describe("confirmSoft404Candidates", () => {
 
   test("WAF/bot-challenge served on re-fetch → unconfirmed, NOT intermittent", async () => {
     const pages = [shellPage("/blog/gone")];
-    const summary = await confirmSoft404Candidates(pages, OPTS, fixedFetch(200, WAF_CHALLENGE_HTML));
+    const summary = await confirmSoft404Candidates(
+      pages,
+      OPTS,
+      fixedFetch(200, WAF_CHALLENGE_HTML),
+    );
 
     // A 200 challenge page is not "real content" — must never read as intermittent.
     expect(summary.intermittent).toBe(0);

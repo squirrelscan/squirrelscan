@@ -22,7 +22,14 @@ function ctx(
   return {
     page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
-    site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null, externalLinks, externalLinkCheck },
+    site: {
+      baseUrl: BASE,
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      externalLinks,
+      externalLinkCheck,
+    },
     options: {},
   } as unknown as RuleContext;
 }
@@ -46,28 +53,44 @@ describe("the rule's severity (#1739)", () => {
 });
 
 describe("confirmed broken fails (#1739)", () => {
-  test.each([404, 410])("a link answering %i fails, naming the link, its status and the pages that carry it", async (status) => {
-    const check = named(await run([link({ href: "https://gone.example-live.net/x", status })]), "broken-external-links")!;
-    expect(check.status).toBe("fail");
-    expect(check.message).toBe(`1 broken external link(s): 1 with ${status}`);
-    expect(check.items?.[0]).toMatchObject({
-      id: "https://gone.example-live.net/x",
-      sourcePages: [`${BASE}/`, `${BASE}/about`],
-      meta: { status },
-    });
-    expect(check.items?.[0]?.label).toContain(`(${status})`);
-  });
+  test.each([404, 410])(
+    "a link answering %i fails, naming the link, its status and the pages that carry it",
+    async (status) => {
+      const check = named(
+        await run([link({ href: "https://gone.example-live.net/x", status })]),
+        "broken-external-links",
+      )!;
+      expect(check.status).toBe("fail");
+      expect(check.message).toBe(`1 broken external link(s): 1 with ${status}`);
+      expect(check.items?.[0]).toMatchObject({
+        id: "https://gone.example-live.net/x",
+        sourcePages: [`${BASE}/`, `${BASE}/about`],
+        meta: { status },
+      });
+      expect(check.items?.[0]?.label).toContain(`(${status})`);
+    },
+  );
 
   test("a dead domain and a reserved suffix fail, with the reason in the message and the label", async () => {
     const check = named(
-      (await run([
-        link({ href: "https://gone.nutshop-fault.example-live.net/", status: null, error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR }),
-        link({ href: "https://nut-supplier.invalid/", status: null, error: EXTERNAL_LINK_INVALID_SUFFIX_ERROR }),
-      ])),
+      await run([
+        link({
+          href: "https://gone.nutshop-fault.example-live.net/",
+          status: null,
+          error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR,
+        }),
+        link({
+          href: "https://nut-supplier.invalid/",
+          status: null,
+          error: EXTERNAL_LINK_INVALID_SUFFIX_ERROR,
+        }),
+      ]),
       "broken-external-links",
     )!;
     expect(check.status).toBe("fail");
-    expect(check.message).toBe("2 broken external link(s): 1 domain does not exist, 1 no such domain suffix");
+    expect(check.message).toBe(
+      "2 broken external link(s): 1 domain does not exist, 1 no such domain suffix",
+    );
     expect(check.items?.map((i) => i.label)).toEqual([
       expect.stringContaining("(domain does not exist)"),
       expect.stringContaining("(no such domain suffix)"),
@@ -78,14 +101,20 @@ describe("confirmed broken fails (#1739)", () => {
 
   test("one check holds every confirmed link, mixed reasons counted", async () => {
     const check = named(
-      (await run([
+      await run([
         link({ href: "https://a.example-live.net/", status: 404 }),
         link({ href: "https://b.example-live.net/", status: 410 }),
-        link({ href: "https://c.example-gone.net/", status: null, error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR }),
-      ])),
+        link({
+          href: "https://c.example-gone.net/",
+          status: null,
+          error: EXTERNAL_LINK_HOST_UNRESOLVED_ERROR,
+        }),
+      ]),
       "broken-external-links",
     )!;
-    expect(check.message).toBe("3 broken external link(s): 1 with 404, 1 with 410, 1 domain does not exist");
+    expect(check.message).toBe(
+      "3 broken external link(s): 1 with 404, 1 with 410, 1 domain does not exist",
+    );
   });
 });
 
@@ -94,22 +123,34 @@ describe("possibly broken warns, under its own check (#1739)", () => {
     ["a 503", link({ href: "https://down.example-live.net/", status: 503 })],
     ["a 500", link({ href: "https://err.example-live.net/", status: 500 })],
     ["another 4xx", link({ href: "https://teapot.example-live.net/", status: 418 })],
-    ["a TLS error", link({ href: "https://tls.example-live.net/", status: null, error: "certificate has expired" })],
-    ["a connection reset", link({ href: "https://reset.example-live.net/", status: null, error: "ECONNRESET" })],
+    [
+      "a TLS error",
+      link({
+        href: "https://tls.example-live.net/",
+        status: null,
+        error: "certificate has expired",
+      }),
+    ],
+    [
+      "a connection reset",
+      link({ href: "https://reset.example-live.net/", status: null, error: "ECONNRESET" }),
+    ],
   ])("%s warns and is not a failure", async (_name, l) => {
-    const checks = (await run([l]));
+    const checks = await run([l]);
     expect(named(checks, "possibly-broken-external-links")?.status).toBe("warn");
     expect(named(checks, "broken-external-links")).toBeUndefined();
   });
 
   test("confirmed and possible are separate checks with their own names", async () => {
-    const checks = (await run([
+    const checks = await run([
       link({ href: "https://gone.example-live.net/", status: 404 }),
       link({ href: "https://down.example-live.net/", status: 503 }),
-    ]));
+    ]);
     expect(named(checks, "broken-external-links")?.status).toBe("fail");
     expect(named(checks, "possibly-broken-external-links")?.status).toBe("warn");
-    expect(named(checks, "possibly-broken-external-links")?.message).toBe("1 external link(s) may be broken: 1 with 503");
+    expect(named(checks, "possibly-broken-external-links")?.message).toBe(
+      "1 external link(s) may be broken: 1 with 503",
+    );
   });
 });
 
@@ -122,20 +163,31 @@ describe("a first failure awaiting confirmation is likely broken, under its own 
     unverifiedReason: "awaiting-confirmation",
   });
   test("it warns under awaiting-confirmation-external-links and is not listed as blocked", async () => {
-    const checks = (await run([awaiting, link()]));
+    const checks = await run([awaiting, link()]);
     const check = named(checks, "awaiting-confirmation-external-links")!;
     expect(check.status).toBe("warn");
-    expect(check.message).toBe("1 external link(s) failed a first check and are likely broken, being confirmed");
+    expect(check.message).toBe(
+      "1 external link(s) failed a first check and are likely broken, being confirmed",
+    );
     expect(check.items?.[0]?.label).toContain("failed once, being confirmed");
     expect(check.items?.[0]?.sourcePages).toEqual([`${BASE}/`, `${BASE}/about`]);
     expect(named(checks, "waf-blocked-external-links")).toBeUndefined();
     expect(named(checks, "broken-external-links")?.status).toBe("pass");
   });
   test("a wall beside it stays a blocked, informational link; once confirmed it is a 404 and fails", async () => {
-    const wall = link({ href: "https://wall.example-live.net/", status: 403, wafBlocked: true, wafProvider: "cloudflare" });
-    const checks = (await run([awaiting, wall]));
-    expect(named(checks, "waf-blocked-external-links")?.items?.map((i) => i.id)).toEqual(["https://wall.example-live.net/"]);
-    const confirmed = (await run([{ ...awaiting, status: 404, wafBlocked: false, unverifiedReason: undefined }]));
+    const wall = link({
+      href: "https://wall.example-live.net/",
+      status: 403,
+      wafBlocked: true,
+      wafProvider: "cloudflare",
+    });
+    const checks = await run([awaiting, wall]);
+    expect(named(checks, "waf-blocked-external-links")?.items?.map((i) => i.id)).toEqual([
+      "https://wall.example-live.net/",
+    ]);
+    const confirmed = await run([
+      { ...awaiting, status: 404, wafBlocked: false, unverifiedReason: undefined },
+    ]);
     expect(named(confirmed, "broken-external-links")?.status).toBe("fail");
     expect(named(confirmed, "awaiting-confirmation-external-links")).toBeUndefined();
   });
@@ -143,12 +195,22 @@ describe("a first failure awaiting confirmation is likely broken, under its own 
 
 describe("unverifiable links are reported exactly as before and never fail (#1739)", () => {
   const unverifiable = [
-    link({ href: "https://wall.example-live.net/", status: 403, wafBlocked: true, wafProvider: "cloudflare" }),
-    link({ href: "https://slow.example-live.net/", status: null, wafBlocked: true, unverifiedReason: "unreachable" }),
+    link({
+      href: "https://wall.example-live.net/",
+      status: 403,
+      wafBlocked: true,
+      wafProvider: "cloudflare",
+    }),
+    link({
+      href: "https://slow.example-live.net/",
+      status: null,
+      wafBlocked: true,
+      unverifiedReason: "unreachable",
+    }),
     link({ href: "https://throttled.example-live.net/", status: 429 }),
   ];
   test("they inform; the rule has no failure and no warning", async () => {
-    const checks = (await run([...unverifiable, link()]));
+    const checks = await run([...unverifiable, link()]);
     expect(checks.map((c) => `${c.name}:${c.status}`).sort()).toEqual([
       "broken-external-links:pass",
       "rate-limited-external-links:info",
@@ -156,4 +218,3 @@ describe("unverifiable links are reported exactly as before and never fail (#173
     ]);
   });
 });
-

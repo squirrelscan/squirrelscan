@@ -119,9 +119,7 @@ function hasNoJsClass(el: Element): boolean {
   if (!raw || raw.length < 5 || !/no-js/i.test(raw)) return false;
   // A class is case-sensitive, except in quirks mode (no doctype).
   const blind = !el.ownerDocument?.doctype;
-  return raw
-    .split(/[\t\n\f\r ]+/)
-    .some((token) => (blind ? asciiLower(token) : token) === "no-js");
+  return raw.split(/[\t\n\f\r ]+/).some((token) => (blind ? asciiLower(token) : token) === "no-js");
 }
 
 /** What one inline `style` attribute says about `display` and `visibility`. */
@@ -414,7 +412,8 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     const inForeign = parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
     if (inForeign) {
       if (author.display === undefined && hasAttrCI(el, "display")) author.display = "unknown";
-      if (author.visibility === undefined && hasAttrCI(el, "visibility")) author.visibility = "unknown";
+      if (author.visibility === undefined && hasAttrCI(el, "visibility"))
+        author.visibility = "unknown";
     }
     const ariaHidden =
       options.ariaHidden && asciiLower(getAttrCI(el, "aria-hidden") ?? "") === "true";
@@ -429,7 +428,8 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     const widthUnion = author.hideWidths
       ? unionWidths(parent.widthHidden, author.hideWidths)
       : parent.widthHidden;
-    if (display === "shown" && widthUnion.length > 0 && coversAllWidths(widthUnion)) display = "none";
+    if (display === "shown" && widthUnion.length > 0 && coversAllWidths(widthUnion))
+      display = "none";
     if (
       display === "shown" &&
       uaHides &&
@@ -544,7 +544,13 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
  */
 export type ControlItem =
   | string
-  | { id: string; snippet?: string; label?: string; selector?: string; meta?: Record<string, unknown> };
+  | {
+      id: string;
+      snippet?: string;
+      label?: string;
+      selector?: string;
+      meta?: Record<string, unknown>;
+    };
 
 export interface UnnamedControls<T extends ControlItem> {
   /** Files one unnamed control under the finding it belongs to. */
@@ -571,7 +577,11 @@ export function sortUnnamedControls<T extends ControlItem>(
           seen.reason === "script"
             ? { ...base, label: SCRIPT_STATE_LABEL }
             : seen.reason === "width"
-              ? { ...base, label: widthLabel(seen.shown), meta: { reason: WIDTH_REASON, shown: seen.shown } }
+              ? {
+                  ...base,
+                  label: widthLabel(seen.shown),
+                  meta: { reason: WIDTH_REASON, shown: seen.shown },
+                }
               : item,
         );
       } else failures.push(item);
@@ -597,12 +607,10 @@ export function unconfirmedRow(
     name: `${check}${UNCONFIRMED_CHECK_SUFFIX}`,
     status: "warn",
     message: unconfirmedMessage(what, items),
-    items: items
-      .slice(0, 10)
-      .map((item) => ({
-        ...(typeof item === "string" ? { id: item } : item),
-        label: (typeof item === "string" ? undefined : item.label) ?? UNCONFIRMED_LABEL,
-      })),
+    items: items.slice(0, 10).map((item) => ({
+      ...(typeof item === "string" ? { id: item } : item),
+      label: (typeof item === "string" ? undefined : item.label) ?? UNCONFIRMED_LABEL,
+    })),
     ...(items.length > 10 ? { details: { additional: items.length - 10 } } : {}),
   };
 }

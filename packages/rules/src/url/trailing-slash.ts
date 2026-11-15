@@ -53,9 +53,7 @@ export const trailingSlashRule: Rule = {
       checks.push({
         name: "trailing-slash",
         status: "info",
-        message: hasTrailingSlash
-          ? "URL has trailing slash"
-          : "URL has no trailing slash",
+        message: hasTrailingSlash ? "URL has trailing slash" : "URL has no trailing slash",
         value: "Ensure consistency across site",
       });
     }

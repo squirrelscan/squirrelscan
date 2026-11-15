@@ -224,7 +224,8 @@ export const ariaHiddenFocusRule: Rule = {
       honeypot: { total: 0, first: [], allWidth: true },
       unconfirmed: { total: 0, first: [], allWidth: true },
     };
-    const isWidthOnly = (seen: StaticVisibility) => seen.state === "unknown" && seen.reason === "width";
+    const isWidthOnly = (seen: StaticVisibility) =>
+      seen.state === "unknown" && seen.reason === "width";
     const itemFor = (finding: Finding, label: string, seen: StaticVisibility): CheckItem =>
       finding === "unconfirmed" ? unconfirmedItem(label, seen) : { id: label };
     // Unconfirmed reportables that are not width-only, counted up to each index.
@@ -317,11 +318,7 @@ export const ariaHiddenFocusRule: Rule = {
       });
     }
 
-    if (
-      focusableInHidden.total === 0 &&
-      honeypotInHidden.total === 0 &&
-      unconfirmed.total === 0
-    ) {
+    if (focusableInHidden.total === 0 && honeypotInHidden.total === 0 && unconfirmed.total === 0) {
       if (hiddenElements.length > 0) {
         checks.push({
           name: "aria-hidden-focus",

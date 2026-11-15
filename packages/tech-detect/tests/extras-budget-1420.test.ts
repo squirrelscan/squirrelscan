@@ -5,7 +5,13 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { bundleHints, createBundleSampler, detectTechnologies, SEGMENT_SEPARATOR, sampleBundleExtras } from "../src";
+import {
+  bundleHints,
+  createBundleSampler,
+  detectTechnologies,
+  SEGMENT_SEPARATOR,
+  sampleBundleExtras,
+} from "../src";
 import { ALL_FINGERPRINTS } from "../src/fingerprints";
 import { deriveHints } from "../src/hint-derive";
 
@@ -25,15 +31,24 @@ function crowd(count: number): string {
   const lines: string[] = [];
   for (let i = 0; i < count; i++) {
     lines.push(`var s${i}=mk("https://${REF(i)}.supabase.co","${key}");`);
-    lines.push(`var f${i}={authDomain:"app${i}.firebaseapp.com",storageBucket:"app${i}.appspot.com"};`);
+    lines.push(
+      `var f${i}={authDomain:"app${i}.firebaseapp.com",storageBucket:"app${i}.appspot.com"};`,
+    );
   }
   return lines.join("\n");
 }
 
 function detect(content: string, extras = true): string[] {
-  const body = extras ? `${content.slice(0, HEAD)}${SEGMENT_SEPARATOR}${sampleBundleExtras(content, HEAD, EXTRAS)}` : content;
+  const body = extras
+    ? `${content.slice(0, HEAD)}${SEGMENT_SEPARATOR}${sampleBundleExtras(content, HEAD, EXTRAS)}`
+    : content;
   return detectTechnologies(
-    { url: "https://example.com/", headers: {}, html: "<html></html>", scripts: [{ url: "https://example.com/a.js", content: body }] },
+    {
+      url: "https://example.com/",
+      headers: {},
+      html: "<html></html>",
+      scripts: [{ url: "https://example.com/a.js", content: body }],
+    },
     undefined,
     { maxScriptChars: 16 * 1024 * 1024 },
   ).map((t) => t.id);
@@ -41,15 +56,23 @@ function detect(content: string, extras = true): string[] {
 
 describe("deriveHints", () => {
   test("the longest literal every match must contain, per alternative", () => {
-    expect(deriveHints(/\[Sentry\]|Sentry\.init\(\s*\{/).hints).toEqual(["[Sentry]", "Sentry.init("]);
-    expect(deriveHints(/__REACT_DEVTOOLS_GLOBAL_HOOK__/).hints).toEqual(["__REACT_DEVTOOLS_GLOBAL_HOOK__"]);
+    expect(deriveHints(/\[Sentry\]|Sentry\.init\(\s*\{/).hints).toEqual([
+      "[Sentry]",
+      "Sentry.init(",
+    ]);
+    expect(deriveHints(/__REACT_DEVTOOLS_GLOBAL_HOOK__/).hints).toEqual([
+      "__REACT_DEVTOOLS_GLOBAL_HOOK__",
+    ]);
     expect(deriveHints(/Stripe\(/).hints).toEqual(["Stripe("]);
     expect(deriveHints(/fbq\(['"]init['"]/).hints).toEqual(["fbq("]);
     expect(deriveHints(/(?:foo|bar)baz12/).hints).toEqual(["baz12"]);
   });
 
   test("a case-insensitive pattern gives lower-cased hints and says so", () => {
-    expect(deriveHints(/posthog\.init/i)).toEqual({ hints: ["posthog.init"], caseInsensitive: true });
+    expect(deriveHints(/posthog\.init/i)).toEqual({
+      hints: ["posthog.init"],
+      caseInsensitive: true,
+    });
     expect(deriveHints(/PostHog\.Init/i).hints).toEqual(["posthog.init"]);
     expect(deriveHints(/posthog\.init/).caseInsensitive).toBe(false);
   });
@@ -78,7 +101,10 @@ describe("deriveHints", () => {
     expect(deriveHints(/ym\(\d+,\s*["']init["']/i).hints).toEqual(["ym("]);
     expect(deriveHints(/ml\(\s*["']account["']/i).hints).toEqual(["ml("]);
     expect(deriveHints(/window\[['"]adrum-(?:start-time|app-key)['"]\]/).hints).toEqual(["adrum-"]);
-    expect(deriveHints(/_st\(\s*['"]install['"]|SwiftypeObject/i).hints).toEqual(["_st(", "swiftypeobject"]);
+    expect(deriveHints(/_st\(\s*['"]install['"]|SwiftypeObject/i).hints).toEqual([
+      "_st(",
+      "swiftypeobject",
+    ]);
     // A bare common word is never a hint; with nothing else the alternative stays tail-only.
     expect(deriveHints(/\bconfig\b/).hints).toEqual([]);
     expect(deriveHints(/\binit\s*\(\s*\d/).hints).toEqual([]);
@@ -86,7 +112,15 @@ describe("deriveHints", () => {
 
   test("no literal is a common word: none of the measured common words (config, init, account...) is used", () => {
     for (const hint of bundleHints()) {
-      expect(["config", "init", "account", "install", "window[", "window.", "document."]).not.toContain(hint.toLowerCase());
+      expect([
+        "config",
+        "init",
+        "account",
+        "install",
+        "window[",
+        "window.",
+        "document.",
+      ]).not.toContain(hint.toLowerCase());
     }
   });
 
@@ -129,7 +163,10 @@ describe("the extras budget (#1420)", () => {
 
   test("every unhinted detector's first window is kept before any detector's second", () => {
     const hits = (token: string, n: number): string =>
-      Array.from({ length: n }, (_, i) => `var t${token}${i}=${token}(${i});\n${filler(2_000)}`).join("");
+      Array.from(
+        { length: n },
+        (_, i) => `var t${token}${i}=${token}(${i});\n${filler(2_000)}`,
+      ).join("");
     const content = [
       filler(100_000),
       crowd(300),
@@ -194,18 +231,27 @@ describe("review fixes (#1420)", () => {
     "gtag('config','G-ABC1234567');",
     'Bugsnag.start({apiKey:"x"});',
     'Countly.init({app_key:"x"});',
-    'Paddle.Setup({vendor:1});',
+    "Paddle.Setup({vendor:1});",
     'Calendly.initPopupWidget({url:"x"});',
     '_paq.push(["trackPageView"]);',
     'ttq.load("ABC");',
     'jwplayer("p").setup({});',
-    'Bugsnag.notify(e);',
+    "Bugsnag.notify(e);",
   ];
 
   test("an inCode detector's real config survives any number of string mentions of the vendor", () => {
     for (const mentions of [7, 8, 9, 40]) {
-      const docs = Array.from({ length: mentions }, (_, i) => `var doc${i}='{authDomain:"doc${i}.firebaseapp.com"}';`).join("\n");
-      const content = [filler(100_000), docs, filler(100_000), `var cfg={authDomain:"real-app.firebaseapp.com"};`, filler(100_000)].join("\n");
+      const docs = Array.from(
+        { length: mentions },
+        (_, i) => `var doc${i}='{authDomain:"doc${i}.firebaseapp.com"}';`,
+      ).join("\n");
+      const content = [
+        filler(100_000),
+        docs,
+        filler(100_000),
+        `var cfg={authDomain:"real-app.firebaseapp.com"};`,
+        filler(100_000),
+      ].join("\n");
       expect(sampleBundleExtras(content, HEAD, EXTRAS)).toContain("real-app.firebaseapp.com");
       expect(detect(content)).toContain("firebase");
     }
@@ -214,7 +260,8 @@ describe("review fixes (#1420)", () => {
   test("a docs snippet in a string does not take a window, a real call after it does", () => {
     const key = ["eyJ", "x".repeat(40)].join("");
     // Matches the Supabase pattern as text, but starts inside a string: an inCode detector rejects it.
-    const mention = (i: number): string => `var note${i}='mk("https://${REF(i)}.supabase.co","${key}")';`;
+    const mention = (i: number): string =>
+      `var note${i}='mk("https://${REF(i)}.supabase.co","${key}")';`;
     const content = [
       filler(40_000),
       ...Array.from({ length: 30 }, (_, i) => mention(i) + "\n" + filler(1_500)),
@@ -229,7 +276,8 @@ describe("review fixes (#1420)", () => {
   test("declared hints keep their first windows when derived hints could take the whole budget", () => {
     // A 4 KB budget holds a handful of windows; fifteen vendor calls come before two real Supabase configs.
     const key = ["eyJ", "x".repeat(40)].join("");
-    const supabase = (n: number): string => `var s${n}=mk("https://${REF(n)}.supabase.co","${key}");`;
+    const supabase = (n: number): string =>
+      `var s${n}=mk("https://${REF(n)}.supabase.co","${key}");`;
     const content = [
       filler(30_000),
       ...VENDORS.map((v) => `${v}\n${filler(900)}`),
@@ -267,12 +315,31 @@ describe("review fixes (#1420)", () => {
 // started the tail past the loader, and the stretch between was lost.
 describe("a loader the string tracker loses is still sent (#1433 corpus)", () => {
   /** One long line the tracker reads as a string from the regex's quote to the end of the line, loader inside. */
-  const lostLine = (loader: string): string => `x=a}/'/.test(c);${filler(1_500).replaceAll("\n", "")}${loader}${filler(1_000).replaceAll("\n", "")}\n`;
+  const lostLine = (loader: string): string =>
+    `x=a}/'/.test(c);${filler(1_500).replaceAll("\n", "")}${loader}${filler(1_000).replaceAll("\n", "")}\n`;
   const after = 'Stripe("pk_test_x");\n';
   const cases: Array<{ name: string; loader: string; id: string; before: number; rest: number }> = [
-    { name: "26 KB script, ttq.load( at 21 KB", loader: "ttq.load('ABCDEFGH');ttq.page();", id: "tiktok-pixel", before: 20_000, rest: 3_500 },
-    { name: "121 KB script, fbq( 2 KB from the end", loader: "fbq('init','1234567890');fbq('track','PageView');", id: "facebook-pixel", before: 116_000, rest: 1_500 },
-    { name: "34 KB chunk, posthog.init at 19 KB", loader: "window.posthog||[]);posthog.init('phc_x',{api_host:'https://h.example.com'});", id: "posthog", before: 17_000, rest: 14_000 },
+    {
+      name: "26 KB script, ttq.load( at 21 KB",
+      loader: "ttq.load('ABCDEFGH');ttq.page();",
+      id: "tiktok-pixel",
+      before: 20_000,
+      rest: 3_500,
+    },
+    {
+      name: "121 KB script, fbq( 2 KB from the end",
+      loader: "fbq('init','1234567890');fbq('track','PageView');",
+      id: "facebook-pixel",
+      before: 116_000,
+      rest: 1_500,
+    },
+    {
+      name: "34 KB chunk, posthog.init at 19 KB",
+      loader: "window.posthog||[]);posthog.init('phc_x',{api_host:'https://h.example.com'});",
+      id: "posthog",
+      before: 17_000,
+      rest: 14_000,
+    },
   ];
   for (const c of cases) {
     test(c.name, () => {
@@ -322,7 +389,8 @@ describe("a cut inside a long string or regex never turns its text into code (#1
   /** `lead` + `between` padded to exactly 160 chars + the hint: the window cut falls on the first char of `between`. */
   const aligned = (lead: string, between: string, hint: string): string =>
     `${lead}${(between + "z".repeat(160)).slice(0, 160)}${hint}`;
-  const lone = (q: string): string => `${filler(HEAD + 200).replaceAll("\n", "")}var s=${q}${"a".repeat(1_500)}`;
+  const lone = (q: string): string =>
+    `${filler(HEAD + 200).replaceAll("\n", "")}var s=${q}${"a".repeat(1_500)}`;
 
   for (const q of ["'", "`"]) {
     test(`an escaped ${q} at the cut stays escaped`, () => {
@@ -361,7 +429,10 @@ describe("a cut inside a long string or regex never turns its text into code (#1
 // (Supabase, Firebase, Clerk) with text that is inside the string. The cut moves on until none does.
 describe("the opener never completes an in-code pattern with quoted text (#1433 review)", () => {
   const texts = (c2: string): Record<string, { text: string; id: string }> => ({
-    supabase: { text: `https://${"abcdefghijklmnopqrst"}.supabase.co${c2},${c2}eyJ${"x".repeat(40)}${c2}`, id: "supabase" },
+    supabase: {
+      text: `https://${"abcdefghijklmnopqrst"}.supabase.co${c2},${c2}eyJ${"x".repeat(40)}${c2}`,
+      id: "supabase",
+    },
     firebase: { text: `authDomain${c2}: ${c2}x.firebaseapp.com${c2}`, id: "firebase" },
     clerk: { text: `publishableKey${c2}: ${c2}pk_test_${"x".repeat(30)}${c2}`, id: "clerk" },
   });
@@ -378,7 +449,8 @@ describe("the opener never completes an in-code pattern with quoted text (#1433 
         for (let first = -T.length - 2; first <= 160 - text.length; first++) {
           const region = [...(base + "z".repeat(160))];
           const at = base.length + first - 1;
-          for (let i = 0; i < T.length; i++) if (at + i >= 0 && at + i < region.length) region[at + i] = T[i]!;
+          for (let i = 0; i < T.length; i++)
+            if (at + i >= 0 && at + i < region.length) region[at + i] = T[i]!;
           const content = `${filler(HEAD + 200).replaceAll("\n", "")}var s=${q}${region.join("")}Stripe(${q};\n${filler(40_000)}`;
           if (detect(content, false).includes(id)) continue; // the whole body reads it as code: not a probe
           tested++;
@@ -402,12 +474,16 @@ describe("the tail cut inside a long span (#1433 review)", () => {
     const room = EXTRAS - short;
     return `${lead}${(rest + filler(room)).slice(0, room)}`;
   };
-  const long = (open: string): string => `${filler(HEAD + 200).replaceAll("\n", "")}var s=${open}${"a".repeat(1_500)}`;
+  const long = (open: string): string =>
+    `${filler(HEAD + 200).replaceAll("\n", "")}var s=${open}${"a".repeat(1_500)}`;
 
   for (const q of ["'", "`"]) {
     test(`an escaped ${q} at the tail cut stays escaped`, () => {
       for (const backslashes of [1, 3]) {
-        const content = withTail(`${long(q)}${"\\".repeat(backslashes)}`, `${q}${FAKE}${"z".repeat(600)}${q};\n`);
+        const content = withTail(
+          `${long(q)}${"\\".repeat(backslashes)}`,
+          `${q}${FAKE}${"z".repeat(600)}${q};\n`,
+        );
         const extras = sampleBundleExtras(content, HEAD, EXTRAS);
         expect(extras.length).toBeGreaterThan(20_000);
         expect(extras.length).toBeLessThanOrEqual(EXTRAS);
@@ -447,7 +523,10 @@ describe("the opener check covers the whole text sent, window and tail (#1433 re
   const configs = (c2: string, sp: string): Record<string, { text: string; id: string }> => ({
     firebase: { text: `authDomain${c2}:${sp}${c2}x.firebaseapp.com${c2}`, id: "firebase" },
     clerk: { text: `publishableKey${c2}:${sp}${c2}pk_test_${"x".repeat(30)}${c2}`, id: "clerk" },
-    supabase: { text: `https://abcdefghijklmnopqrst.supabase.co${c2}${sp},${c2}eyJ${"x".repeat(40)}${c2}`, id: "supabase" },
+    supabase: {
+      text: `https://abcdefghijklmnopqrst.supabase.co${c2}${sp},${c2}eyJ${"x".repeat(40)}${c2}`,
+      id: "supabase",
+    },
   });
   const tail = (q: string, c2: string, text: string): string => {
     const room = EXTRAS - 3;
@@ -474,11 +553,12 @@ describe("the opener check covers the whole text sent, window and tail (#1433 re
   }
 });
 
-
 // #1445: the windows-only step of a page leaves the tail its reserve too, and a later step keeps what it chose.
 describe("the two-step sampler (#1445)", () => {
   const unique = (bytes: number, seed: number): string =>
-    Array.from({ length: Math.ceil(bytes / 30) }, (_, n) => `var q${seed}_${n}=(a<<3)+b;\n`).join("").slice(0, bytes);
+    Array.from({ length: Math.ceil(bytes / 30) }, (_, n) => `var q${seed}_${n}=(a<<3)+b;\n`)
+      .join("")
+      .slice(0, bytes);
   const LOADERS = [
     'posthog.init("phc_x",{api_host:"https://eu.i.posthog.com"});',
     'var st=Stripe("pk_test_x");',
@@ -509,7 +589,9 @@ describe("the two-step sampler (#1445)", () => {
 
   test("sampleBundleExtras is the full step of a fresh sampler", () => {
     const content = body();
-    expect(sampleBundleExtras(content, HEAD, EXTRAS)).toBe(createBundleSampler(content, HEAD).sample(EXTRAS, false));
+    expect(sampleBundleExtras(content, HEAD, EXTRAS)).toBe(
+      createBundleSampler(content, HEAD).sample(EXTRAS, false),
+    );
   });
 
   test("a hint just after the head keeps detector context from just before it", () => {
@@ -531,7 +613,8 @@ describe("the two-step sampler (#1445)", () => {
 });
 
 describe("the sampler's scan prefix (#1445)", () => {
-  const code = (chars: number): string => "var q=(a<<3)+b;if(q>9){q-=9}\n".repeat(Math.ceil(chars / 29)).slice(0, chars);
+  const code = (chars: number): string =>
+    "var q=(a<<3)+b;if(q>9){q-=9}\n".repeat(Math.ceil(chars / 29)).slice(0, chars);
   const content = `${code(100_000)}\nposthog.init("phc_a",{});\n${code(300_000)}\nvar st=Stripe("pk_test_x");\n${code(100_000)}`;
 
   test("windows come from the prefix only, and a prefixed scan has no tail", () => {

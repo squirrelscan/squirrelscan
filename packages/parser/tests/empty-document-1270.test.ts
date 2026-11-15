@@ -44,7 +44,9 @@ describe("degenerate documents (#1270)", () => {
   });
 
   test("a normal page is untouched", () => {
-    const { document } = parseHTML("<html><head><title>t</title></head><body><p>x</p></body></html>");
+    const { document } = parseHTML(
+      "<html><head><title>t</title></head><body><p>x</p></body></html>",
+    );
     expect(document.title).toBe("t");
     expect(document.body.querySelectorAll("p").length).toBe(1);
   });

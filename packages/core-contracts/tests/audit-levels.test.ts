@@ -154,7 +154,13 @@ describe("reading a stored snapshot back", () => {
       level: '"/><script>',
       basedOn: "FULL",
       changes: ["pages", "<x>", 7],
-      settings: { pages: Infinity, render: "<img>", probe: "loud", cloudChecks: "yes", externalLinks: false },
+      settings: {
+        pages: Infinity,
+        render: "<img>",
+        probe: "loud",
+        cloudChecks: "yes",
+        externalLinks: false,
+      },
     });
     expect(parsed).toEqual({
       level: "custom",
@@ -168,7 +174,8 @@ describe("reading a stored snapshot back", () => {
 describe("setting words", () => {
   test("every setting has a label", () => {
     expect(Object.keys(AUDIT_SETTING_COPY).sort()).toEqual([...AUDIT_SETTING_KEYS].sort());
-    for (const key of AUDIT_SETTING_KEYS) expect(AUDIT_SETTING_COPY[key].label.length).toBeGreaterThan(0);
+    for (const key of AUDIT_SETTING_KEYS)
+      expect(AUDIT_SETTING_COPY[key].label.length).toBeGreaterThan(0);
   });
 });
 
@@ -298,7 +305,9 @@ describe("AUDIT_LEVEL_COPY quick summary", () => {
     expect(summary).toContain("25 pages");
     expect(summary).toContain("rendered in the cloud");
     expect(summary).toContain("with internal and external link checks");
-    expect(summary).toContain("Costs credits: 50, plus 2 per page and 1 per external link checked, up to 125");
+    expect(summary).toContain(
+      "Costs credits: 50, plus 2 per page and 1 per external link checked, up to 125",
+    );
     expect(summary).not.toMatch(/no credits|local rules only|free/i);
   });
 
@@ -339,7 +348,9 @@ describe("EXTERNAL_LINKS_DEFAULT_ON", () => {
 // #1275: an --offline run records the settings that ran, not the level's cloud defaults.
 describe("offlineAuditSettings", () => {
   test("turns off cloud checks, rendering and external links, and says offline", () => {
-    const resolved = offlineAuditSettings(resolveAuditSettings("surface", { pages: 30, probe: "passive" }));
+    const resolved = offlineAuditSettings(
+      resolveAuditSettings("surface", { pages: 30, probe: "passive" }),
+    );
     expect(resolved.settings).toEqual({
       pages: 30,
       crawlStrategy: "sampled",
@@ -386,6 +397,8 @@ describe("targetedAuditSettings (#1777)", () => {
   test("survives a read back, and an ordinary snapshot has no marker", () => {
     const ran = targetedAuditSettings(resolveAuditSettings("surface"));
     expect(parseResolvedAuditSettings(JSON.parse(JSON.stringify(ran)))?.targeted).toBe(true);
-    expect(parseResolvedAuditSettings(resolveAuditSettings("surface"))).not.toHaveProperty("targeted");
+    expect(parseResolvedAuditSettings(resolveAuditSettings("surface"))).not.toHaveProperty(
+      "targeted",
+    );
   });
 });

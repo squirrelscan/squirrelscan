@@ -1,10 +1,6 @@
 // Schema module exports
 
-export {
-  SchemaCollection,
-  EMPTY_SCHEMA_COLLECTION,
-  schemaCollectionFromJSON,
-} from "./collection";
+export { SchemaCollection, EMPTY_SCHEMA_COLLECTION, schemaCollectionFromJSON } from "./collection";
 export { parseSchemas } from "./parser";
 export { validateSchemas } from "./validator";
 export { extractAuthorFromSchema } from "./author";

@@ -74,7 +74,13 @@ export type Detector =
   // tags instead of a scan of the HTML per signature (#1456). `pattern` tests the value (anchor it to the start of a
   // URL); `tokens` also tests each whitespace or comma separated token (`srcset`). `tags` must be among the tags the
   // page pass collects (`COLLECTED_TAGS` in detect.ts).
-  | { type: "tag-attr"; tags: readonly string[]; attrs: readonly string[]; pattern: RegExp; tokens?: boolean };
+  | {
+      type: "tag-attr";
+      tags: readonly string[];
+      attrs: readonly string[];
+      pattern: RegExp;
+      tokens?: boolean;
+    };
 
 export interface TechFingerprint {
   id: string;

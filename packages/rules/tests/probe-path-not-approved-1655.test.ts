@@ -48,29 +48,37 @@ describe("path not approved (#1655)", () => {
   // #1794 supersedes the first #1655 verdict here: variants the user left out of discovery_probe_paths are theirs
   // to leave out, so an approved path that answered 404 establishes absence, and the left-out variants are listed.
   test("ax/agents-md: /AGENTS.md 404 with the variants not approved is absent, the variants listed as not checked", async () => {
-    const checks = (await agentsMdRule.run(
-      ctx({
-        probes: [
-          probe("/AGENTS.md", { status: 404 }),
-          notApproved("/agents.md"),
-          notApproved("/.well-known/agents.md"),
-          notApproved("/docs/AGENTS.md"),
-        ],
-      }),
-    )).checks;
+    const checks = (
+      await agentsMdRule.run(
+        ctx({
+          probes: [
+            probe("/AGENTS.md", { status: 404 }),
+            notApproved("/agents.md"),
+            notApproved("/.well-known/agents.md"),
+            notApproved("/docs/AGENTS.md"),
+          ],
+        }),
+      )
+    ).checks;
     expect(checks).toHaveLength(1);
     expect(checks[0]?.value).toBe("absent");
-    expect(checks[0]?.details?.notChecked).toEqual(["/agents.md", "/.well-known/agents.md", "/docs/AGENTS.md"]);
+    expect(checks[0]?.details?.notChecked).toEqual([
+      "/agents.md",
+      "/.well-known/agents.md",
+      "/docs/AGENTS.md",
+    ]);
   });
 
   test("ax/agents-md: a block-stopped path is not checked for another reason", async () => {
-    const checks = (await agentsMdRule.run(
-      ctx({
-        probes: ["/AGENTS.md", "/agents.md", "/.well-known/agents.md", "/docs/AGENTS.md"].map((p) =>
-          probe(p, { error: PROBE_STOPPED_ERROR }),
-        ),
-      }),
-    )).checks;
+    const checks = (
+      await agentsMdRule.run(
+        ctx({
+          probes: ["/AGENTS.md", "/agents.md", "/.well-known/agents.md", "/docs/AGENTS.md"].map(
+            (p) => probe(p, { error: PROBE_STOPPED_ERROR }),
+          ),
+        }),
+      )
+    ).checks;
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).not.toContain("path not approved");
   });
@@ -83,13 +91,15 @@ describe("path not approved (#1655)", () => {
   });
 
   test("ax/agents-md: a redirect that was not followed says the request was sent", async () => {
-    const checks = (await agentsMdRule.run(
-      ctx({
-        probes: ["/AGENTS.md", "/agents.md", "/.well-known/agents.md", "/docs/AGENTS.md"].map((p) =>
-          probe(p, { error: PROBE_REDIRECT_NOT_FOLLOWED_ERROR }),
-        ),
-      }),
-    )).checks;
+    const checks = (
+      await agentsMdRule.run(
+        ctx({
+          probes: ["/AGENTS.md", "/agents.md", "/.well-known/agents.md", "/docs/AGENTS.md"].map(
+            (p) => probe(p, { error: PROBE_REDIRECT_NOT_FOLLOWED_ERROR }),
+          ),
+        }),
+      )
+    ).checks;
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("redirect to another path was not followed");
     expect(checks[0]?.message).not.toContain("was not sent");

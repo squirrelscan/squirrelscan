@@ -100,9 +100,7 @@ export function safeWafSuspect(report: Pick<AuditReport, "wafSuspect">): WafSusp
  * a count line, then up to ten pages. Empty when none was seen, and for a failed or
  * blocked run (whose notice says more).
  */
-export function wafSuspectLines(
-  report: Pick<AuditReport, "wafSuspect" | "status">,
-): string[] {
+export function wafSuspectLines(report: Pick<AuditReport, "wafSuspect" | "status">): string[] {
   const suspect = safeWafSuspect(report);
   if (!suspect || isAuditFailed(report.status)) return [];
   const by = suspect.providers.length > 0 ? ` from ${suspect.providers.join(", ")}` : "";
@@ -157,8 +155,7 @@ export function wafBlockedPagesLines(
   report: Pick<AuditReport, "wafBlocked" | "totalPages" | "status">,
 ): string[] {
   const blocked = safeWafBlocked(report);
-  if (!blocked || blocked.seed || isAuditFailed(report.status))
-    return [];
+  if (!blocked || blocked.seed || isAuditFailed(report.status)) return [];
   const lines = [wafBlockedPagesNotice(blocked, Math.max(0, report.totalPages))];
   for (const page of blocked.pages.slice(0, MAX_LISTED)) {
     const by = page.provider ? `${page.provider}, ` : "";

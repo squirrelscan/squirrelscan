@@ -111,7 +111,9 @@ export function body(t: Template, n: number): string {
     { length: n + 1 },
     (_, i) =>
       `<p>Paragraph ${i + 1} of the ${t.id} page number ${n}. ` +
-      "It carries enough prose that word count, reading level and text-to-html ratio move with n. ".repeat(n) +
+      "It carries enough prose that word count, reading level and text-to-html ratio move with n. ".repeat(
+        n,
+      ) +
       "</p>",
   ).join("");
   const images = Array.from({ length: n }, (_, i) =>

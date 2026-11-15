@@ -288,9 +288,7 @@ describe("under the budget it carries exactly the original signal", () => {
     // `other`, which must not take its order from the check.
     const aggregate = (pages: string[]): Rules => ({
       r: {
-        checks: [
-          { name: "c", status: "fail", message: "x", pages, details: { aggregated: true } },
-        ],
+        checks: [{ name: "c", status: "fail", message: "x", pages, details: { aggregated: true } }],
       },
     });
     const forward = buildCompactResolutionSignal(aggregate([P1, P3, P4]), [P1, P2])!;
@@ -341,9 +339,14 @@ describe("the byte budget", () => {
           // The capper, which sends tallies, asks for them: the rest of the crawl
           // rides by hash, at the cost of fewer listed pages.
           const capped = await decodeResolutionSignal(
-            buildPublishResolution(fixtureShapedResults(crawl), reportPages, RESOLUTION_PUBLISH_LIMITS, {
-              pageHashes: true,
-            }).resolutionSignalCompact!,
+            buildPublishResolution(
+              fixtureShapedResults(crawl),
+              reportPages,
+              RESOLUTION_PUBLISH_LIMITS,
+              {
+                pageHashes: true,
+              },
+            ).resolutionSignalCompact!,
           );
           expect(capped.crawledUrls.length).toBeGreaterThan(2_500);
           expect(capped.crawledUrls.length).toBeLessThan(decoded.crawledUrls.length);
@@ -472,7 +475,9 @@ describe("the byte budget", () => {
         : { name: "c", status: "pass", message: "ok", pageUrl: url };
     results.sevenths = { checks: urls.map((url, i) => check(url, i % 7 === 0)) };
     results.tail = { checks: urls.map((url, i) => check(url, i >= 2_990)) };
-    const signal = buildCompactResolutionSignal(results, urls, 24 * 1024, [], { pageHashes: true })!;
+    const signal = buildCompactResolutionSignal(results, urls, 24 * 1024, [], {
+      pageHashes: true,
+    })!;
     expect(bytes(signal)).toBeLessThanOrEqual(24 * 1024);
     const decoded = await decodeResolutionSignal(signal);
     expect(decoded.crawledComplete).toBe(false);
@@ -482,7 +487,9 @@ describe("the byte budget", () => {
     const listedCount = decoded.crawledUrls.length;
     expect(new Set(decoded.crawledUrls)).toEqual(new Set(norm.slice(0, listedCount)));
     // Every page the list leaves out is named by hash, sorted and distinct.
-    expect(decoded.crawledHashes).toEqual([...new Set(norm.slice(listedCount).map(resolutionUrlHash))].sort());
+    expect(decoded.crawledHashes).toEqual(
+      [...new Set(norm.slice(listedCount).map(resolutionUrlHash))].sort(),
+    );
     // A listed page keeps exactly its original failing evidence, and every key
     // names exactly the pages, listed or not, the original says it did not evaluate.
     const legacy = buildResolutionSignal(results, urls)!;
@@ -491,8 +498,12 @@ describe("the byte budget", () => {
     for (const [key, hashes] of Object.entries(legacy.failing)) {
       expect(key in decoded.failing).toBe(true);
       expect(truncated.has(key)).toBe(false);
-      expect(new Set(decoded.failing[key])).toEqual(new Set(hashes.filter((h) => listedHashes.has(h))));
-      expect(new Set(decoded.notEvaluated?.[key] ?? [])).toEqual(new Set(legacy.notEvaluated?.[key] ?? []));
+      expect(new Set(decoded.failing[key])).toEqual(
+        new Set(hashes.filter((h) => listedHashes.has(h))),
+      );
+      expect(new Set(decoded.notEvaluated?.[key] ?? [])).toEqual(
+        new Set(legacy.notEvaluated?.[key] ?? []),
+      );
     }
     expect(decoded.notEvaluated?.["tail|c"]).toHaveLength(10);
     expect(decoded.notEvaluated?.["tail|c"]?.some((hash) => listedHashes.has(hash))).toBe(false);
@@ -512,7 +523,9 @@ describe("the byte budget", () => {
   test("(#2673) a whole list carries no hashes", async () => {
     const urls = newsUrls(300);
     const decoded = await decodeResolutionSignal(
-      buildCompactResolutionSignal(fixtureShapedResults(urls), urls, undefined, [], { pageHashes: true })!,
+      buildCompactResolutionSignal(fixtureShapedResults(urls), urls, undefined, [], {
+        pageHashes: true,
+      })!,
     );
     expect(decoded.crawledComplete).toBeUndefined();
     expect(decoded.crawledHashes).toBeUndefined();
@@ -678,12 +691,18 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     ["a complete list with pages it does not list", { ...ok, pages: 3 }],
     ["`other` beside a partial list", { ...ok, complete: false, pages: 3, other: [P3] }],
     ["a removed status other than 404/410", { ...ok, removed: { "301": [0] }, removedCount: 1 }],
-    ["more removed pages named than counted", { ...ok, removed: { "404": [0, 0] }, removedCount: 1 }],
+    [
+      "more removed pages named than counted",
+      { ...ok, removed: { "404": [0, 0] }, removedCount: 1 },
+    ],
     ["a complete list with removed pages it does not name", { ...ok, removedCount: 1 }],
     ["hashes beside a complete list", { ...ok, hashes: "00000001" }],
     ["hashes that are not 8-hex", { ...ok, complete: false, pages: 4, hashes: "0000001" }],
     ["hashes that are not hex", { ...ok, complete: false, pages: 4, hashes: "0000000g" }],
-    ["more hashes than unlisted pages", { ...ok, complete: false, pages: 3, hashes: "0000000100000002" }],
+    [
+      "more hashes than unlisted pages",
+      { ...ok, complete: false, pages: 3, hashes: "0000000100000002" },
+    ],
     ["hashes that are not a string", { ...ok, complete: false, pages: 4, hashes: ["00000001"] }],
     [
       "unlisted not-evaluated pages without hashes",
@@ -727,21 +746,29 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
       v: 1,
       data: deflateRawSync(Buffer.from(body)).toString("base64"),
     });
-    const objects = raw(`{"v":1,"x":[${"{},".repeat(1_300_000)}{}],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    const objects = raw(
+      `{"v":1,"x":[${"{},".repeat(1_300_000)}{}],"urls":[],"complete":true,"pages":0,"failing":{}}`,
+    );
     expect(objects.data.length).toBeLessThan(32 * 1024);
     await expect(decodeResolutionSignal(objects)).rejects.toThrow(/shape past/);
     // A flat list of more elements than every list together may hold.
-    const zeros = raw(`{"v":1,"x":[${"0,".repeat(600_000)}0],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    const zeros = raw(
+      `{"v":1,"x":[${"0,".repeat(600_000)}0],"urls":[],"complete":true,"pages":0,"failing":{}}`,
+    );
     await expect(decodeResolutionSignal(zeros)).rejects.toThrow(/shape past/);
     // More strings than every URL list and key together may hold: ~10 KB
     // deflated, which JSON.parse would make 416k strings of.
-    const strings = raw(`{"v":1,"x":[${'"a",'.repeat(416_000)}"a"],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    const strings = raw(
+      `{"v":1,"x":[${'"a",'.repeat(416_000)}"a"],"urls":[],"complete":true,"pages":0,"failing":{}}`,
+    );
     await expect(decodeResolutionSignal(strings)).rejects.toThrow(/shape past/);
     // Nesting deeper than root → map → list.
     const deep = raw(`{"v":1,"x":[[[0]]],"urls":[],"complete":true,"pages":0,"failing":{}}`);
     await expect(decodeResolutionSignal(deep)).rejects.toThrow(/shape past/);
     // Brackets inside strings are text, not structure.
-    const quoted = raw(`{"v":1,"urls":["https://x.test/[{\\"}]"],"complete":true,"pages":1,"failing":{}}`);
+    const quoted = raw(
+      `{"v":1,"urls":["https://x.test/[{\\"}]"],"complete":true,"pages":1,"failing":{}}`,
+    );
     expect((await decodeResolutionSignal(quoted)).crawledUrls).toHaveLength(1);
   });
 
@@ -849,7 +876,9 @@ describe("an unconfirmed row counts as its base check evaluated (pub#935)", () =
       pageUrl: P3,
       details: { timedOut: true, budgetMs: 1000, pages: 1 },
     };
-    const rules: Rules = { "a11y/r": { checks: [row("c", P1, "fail"), row("c", P2, "pass"), timedOut] } };
+    const rules: Rules = {
+      "a11y/r": { checks: [row("c", P1, "fail"), row("c", P2, "pass"), timedOut] },
+    };
     const legacy = buildResolutionSignal(rules, [P1, P2, P3])!;
     // P3 is neither failing nor evaluated for `c`, so the merge carries it.
     expect(new Set(legacy.notEvaluated?.[KEY] ?? [])).toEqual(new Set([h(P3)]));

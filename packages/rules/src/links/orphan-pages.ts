@@ -19,7 +19,8 @@ const SKIP_CHECK: CheckResult = {
   observation: {
     mode: "crawl",
     applicability: "unknown",
-    uncertainty: "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
+    uncertainty:
+      "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
   },
 };
 
@@ -76,7 +77,7 @@ function collectOrphans(
   excludePatterns: string[],
   baseUrl: string,
   noindexUrls: ReadonlySet<string>,
-  entryUrls: readonly string[]
+  entryUrls: readonly string[],
 ): string[] {
   const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
   const orphans: string[] = [];
@@ -122,9 +123,7 @@ export const orphanPagesRule: Rule = {
         .int()
         .min(0)
         .default(2)
-        .describe(
-          "Minimum inbound links required (pages below this are flagged)"
-        ),
+        .describe("Minimum inbound links required (pages below this are flagged)"),
       excludePatterns: z
         .array(z.string())
         .default([])
@@ -150,7 +149,8 @@ export const orphanPagesRule: Rule = {
         observation: {
           mode: "crawl",
           applicability: "unknown",
-          uncertainty: "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
+          uncertainty:
+            "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
         },
       });
       return { checks };
@@ -174,7 +174,7 @@ export const orphanPagesRule: Rule = {
           excludePatterns,
           ctx.site?.baseUrl || "",
           noindexUrls,
-          ctx.site?.entryUrls ?? []
+          ctx.site?.entryUrls ?? [],
         );
         checks.push(buildOrphanCheck(orphans, minLinks));
         return { checks };
@@ -221,7 +221,7 @@ export const orphanPagesRule: Rule = {
             // Invalid URL - count and log for debugging
             invalidUrlCount++;
             logger.debug(
-              `[orphan-pages] Invalid internal link URL: "${link.url}" on page ${getPathname(page.url)}`
+              `[orphan-pages] Invalid internal link URL: "${link.url}" on page ${getPathname(page.url)}`,
             );
           }
         }
@@ -231,7 +231,7 @@ export const orphanPagesRule: Rule = {
     // Log invalid URL summary if any found
     if (invalidUrlCount > 0) {
       logger.debug(
-        `[orphan-pages] Found ${invalidUrlCount} invalid internal link URL(s) during link counting`
+        `[orphan-pages] Found ${invalidUrlCount} invalid internal link URL(s) during link counting`,
       );
     }
 
@@ -239,7 +239,7 @@ export const orphanPagesRule: Rule = {
     const noindexUrls = new Set(
       pages
         .filter((page) => excludesNoindexPage(ctx.site, page.parsed, page.headers))
-        .map((page) => page.url)
+        .map((page) => page.url),
     );
     const orphans = collectOrphans(
       pages.map(
@@ -247,13 +247,13 @@ export const orphanPagesRule: Rule = {
           [page.url, incomingLinkCount.get(normalizedCache.get(page.url)!) ?? 0] as [
             string,
             number,
-          ]
+          ],
       ),
       minLinks,
       excludePatterns,
       ctx.site?.baseUrl || "",
       noindexUrls,
-      ctx.site?.entryUrls ?? []
+      ctx.site?.entryUrls ?? [],
     );
 
     // Report results

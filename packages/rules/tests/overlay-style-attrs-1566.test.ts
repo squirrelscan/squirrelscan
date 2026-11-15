@@ -15,7 +15,11 @@ const FRAME = '<iframe id="google-auth" class="cover" srcdoc=""></iframe>';
 function fires(styles: string): boolean {
   const html = `<!doctype html><html><head><title>F</title>${styles}</head><body><main><h1>F</h1>${FRAME}</main></body></html>`;
   const parsed = parsePage(html, url);
-  const ctx = { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
+  const ctx = {
+    page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+    parsed,
+    options: {},
+  } as unknown as RuleContext;
   return detectFakeAuthOverlay(ctx) !== null;
 }
 

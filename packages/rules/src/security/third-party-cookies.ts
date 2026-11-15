@@ -84,21 +84,14 @@ export const thirdPartyCookiesRule: Rule = {
 
     const checks: CheckResult[] = [];
     const pageHostname = getHostname(ctx.page.url).toLowerCase();
-    const thirdPartyDomains = new Map<
-      string,
-      { type: string; tracking: boolean }
-    >();
+    const thirdPartyDomains = new Map<string, { type: string; tracking: boolean }>();
 
     // Check scripts
     const scripts = querySelectorAllOutsideNoscript(doc, "script[src]");
     for (const script of scripts) {
       const src = script.getAttribute("src") || "";
       const hostname = getHostname(src).toLowerCase();
-      if (
-        hostname &&
-        !hostname.includes(pageHostname) &&
-        !pageHostname.includes(hostname)
-      ) {
+      if (hostname && !hostname.includes(pageHostname) && !pageHostname.includes(hostname)) {
         const existing = thirdPartyDomains.get(hostname);
         if (!existing) {
           thirdPartyDomains.set(hostname, {
@@ -114,11 +107,7 @@ export const thirdPartyCookiesRule: Rule = {
     for (const iframe of iframes) {
       const src = iframe.getAttribute("src") || "";
       const hostname = getHostname(src).toLowerCase();
-      if (
-        hostname &&
-        !hostname.includes(pageHostname) &&
-        !pageHostname.includes(hostname)
-      ) {
+      if (hostname && !hostname.includes(pageHostname) && !pageHostname.includes(hostname)) {
         const existing = thirdPartyDomains.get(hostname);
         if (!existing) {
           thirdPartyDomains.set(hostname, {
@@ -139,14 +128,9 @@ export const thirdPartyCookiesRule: Rule = {
       const width = img.getAttribute("width");
       const height = img.getAttribute("height");
       // Check for tracking pixels (1x1 images)
-      const isPixel =
-        (width === "1" || width === "0") && (height === "1" || height === "0");
+      const isPixel = (width === "1" || width === "0") && (height === "1" || height === "0");
 
-      if (
-        hostname &&
-        !hostname.includes(pageHostname) &&
-        !pageHostname.includes(hostname)
-      ) {
+      if (hostname && !hostname.includes(pageHostname) && !pageHostname.includes(hostname)) {
         if (isPixel || isTrackingDomain(hostname)) {
           const existing = thirdPartyDomains.get(hostname);
           if (!existing) {
@@ -188,9 +172,7 @@ export const thirdPartyCookiesRule: Rule = {
         message: `${otherThirdParty.length} other third-party domain(s) found`,
         items: otherThirdParty.slice(0, 5).map((id) => ({ id })),
         details:
-          otherThirdParty.length > 5
-            ? { additional: otherThirdParty.length - 5 }
-            : undefined,
+          otherThirdParty.length > 5 ? { additional: otherThirdParty.length - 5 } : undefined,
       });
     }
 

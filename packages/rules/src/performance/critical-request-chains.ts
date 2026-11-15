@@ -41,13 +41,12 @@ export const criticalRequestChainsRule: Rule = {
     // Find render-blocking CSS (link[rel=stylesheet] without media=print/disabled)
     const blockingCss = querySelectorAllOutsideNoscript(
       head,
-      'link[rel="stylesheet"]:not([media="print"]):not([disabled])'
+      'link[rel="stylesheet"]:not([media="print"]):not([disabled])',
     );
 
     // Find render-blocking JS (classic script without async/defer in head)
     const blockingJs = querySelectorAllOutsideNoscript(head, "script[src]").filter(
-      (script) =>
-        script.getAttribute("src") && scriptLoading(script) === "blocking"
+      (script) => script.getAttribute("src") && scriptLoading(script) === "blocking",
     );
 
     // Count the CSS @imports inline styles would fetch: not one inside a comment
@@ -74,9 +73,7 @@ export const criticalRequestChainsRule: Rule = {
     }
 
     if (importCount > 0) {
-      chainMembers.push(
-        `${importCount} CSS @import(s) found (each adds a network round-trip)`
-      );
+      chainMembers.push(`${importCount} CSS @import(s) found (each adds a network round-trip)`);
     }
 
     if (chainMembers.length > 0) {
@@ -90,9 +87,7 @@ export const criticalRequestChainsRule: Rule = {
           blockingJs: blockingJs.length,
           importCount,
           preloads: preloads.length,
-          ...(chainMembers.length > 10
-            ? { additional: chainMembers.length - 10 }
-            : {}),
+          ...(chainMembers.length > 10 ? { additional: chainMembers.length - 10 } : {}),
         },
         observation: {
           mode: "static",

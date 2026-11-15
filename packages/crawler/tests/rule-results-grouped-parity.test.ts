@@ -20,7 +20,7 @@ function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
 }
 
 async function storeWith(
-  rows: Array<{ page: string; rule: string; check: string }>
+  rows: Array<{ page: string; rule: string; check: string }>,
 ): Promise<SQLiteStorage> {
   const store = new SQLiteStorage(":memory:");
   await run(store.init());
@@ -70,9 +70,7 @@ describe("getRuleResultsGrouped", () => {
     const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
 
     // This is the entire point: one allocation per row, referenced twice.
-    const fromPage = grouped.byPage.get("https://e.test/a")!.find(
-      (c) => c.name === "ttfb"
-    );
+    const fromPage = grouped.byPage.get("https://e.test/a")!.find((c) => c.name === "ttfb");
     const fromRule = grouped.byRuleId
       .get("perf/ttfb")!
       .find((c) => c.pageUrl === "https://e.test/a");
@@ -106,17 +104,17 @@ describe("getRuleResultsGrouped", () => {
     ]);
     // Reaching into the connection deliberately: the point is a DIFFERENT query
     // plan from the one the schema gives today.
-    (
-      store as unknown as { getDb(): { exec(sql: string): void } }
-    ).getDb().exec(
-      "CREATE INDEX IF NOT EXISTS idx_rr_probe ON rule_results (crawl_id, rule_id, page_url)"
-    );
+    (store as unknown as { getDb(): { exec(sql: string): void } })
+      .getDb()
+      .exec(
+        "CREATE INDEX IF NOT EXISTS idx_rr_probe ON rule_results (crawl_id, rule_id, page_url)",
+      );
 
     const byRuleId = await run(store.getRuleResultsByRuleId("crawl-1"));
     const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
 
     expect(grouped.byRuleId.get("seo/title")?.map((c) => c.pageUrl)).toEqual(
-      byRuleId.get("seo/title")!.map((c) => c.pageUrl)
+      byRuleId.get("seo/title")!.map((c) => c.pageUrl),
     );
     expect(grouped.byRuleId).toEqual(byRuleId);
 
@@ -138,7 +136,7 @@ describe("getRuleResultsGrouped", () => {
     await run(
       store.saveRuleResults("crawl-2", "https://e.test/z", "seo/title", [
         { name: "title-present", status: "fail", message: "other crawl" },
-      ])
+      ]),
     );
 
     const grouped = await run(store.getRuleResultsGrouped("crawl-1"));

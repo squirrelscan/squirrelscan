@@ -86,8 +86,7 @@ async function checks(ctx: RuleContext): Promise<Record<string, CheckResult>> {
   return Object.fromEntries(out.map((c) => [c.name, c]));
 }
 
-const run = (raw: Signals, rendered: Signals) =>
-  checks(makeCtx(raw, envelope(html(rendered))));
+const run = (raw: Signals, rendered: Signals) => checks(makeCtx(raw, envelope(html(rendered))));
 
 describe("crawl/rendered-signal-mismatch", () => {
   test("declares the render cloud spec, page scope and error severity", () => {
@@ -103,13 +102,15 @@ describe("crawl/rendered-signal-mismatch", () => {
   });
 
   test("identical signals on both sides pass all four checks", async () => {
-    const c = (await run(SAME, SAME));
+    const c = await run(SAME, SAME);
     expect(Object.values(c).map((x) => x.status)).toEqual(["pass", "pass", "pass", "pass"]);
   });
 
   describe("canonical-mismatch", () => {
     test("a different canonical fails and shows both URLs", async () => {
-      const c = (await run(SAME, { ...SAME, canonical: "https://example.com/other" }))["canonical-mismatch"]!;
+      const c = (await run(SAME, { ...SAME, canonical: "https://example.com/other" }))[
+        "canonical-mismatch"
+      ]!;
       expect(c.status).toBe("fail");
       expect(c.message).toContain("https://example.com/page");
       expect(c.message).toContain("https://example.com/other");
@@ -120,10 +121,12 @@ describe("crawl/rendered-signal-mismatch", () => {
     });
 
     test("a canonical only the render adds, when it points elsewhere, fails; one it removes fails", async () => {
-      const added = (await run(
-        { ...SAME, canonical: undefined },
-        { ...SAME, canonical: "https://example.com/elsewhere" },
-      ))["canonical-mismatch"]!;
+      const added = (
+        await run(
+          { ...SAME, canonical: undefined },
+          { ...SAME, canonical: "https://example.com/elsewhere" },
+        )
+      )["canonical-mismatch"]!;
       expect(added.status).toBe("fail");
       expect(added.message).toContain("adds a canonical");
       const removed = (await run(SAME, { ...SAME, canonical: undefined }))["canonical-mismatch"]!;
@@ -148,15 +151,17 @@ describe("crawl/rendered-signal-mismatch", () => {
     });
 
     test("a script that changes a canonical the raw HTML had still fails, even to the page's own URL", async () => {
-      const c = (await run(
-        { ...SAME, canonical: "https://example.com/other" },
-        { ...SAME, canonical: "https://example.com/page" },
-      ))["canonical-mismatch"]!;
+      const c = (
+        await run(
+          { ...SAME, canonical: "https://example.com/other" },
+          { ...SAME, canonical: "https://example.com/page" },
+        )
+      )["canonical-mismatch"]!;
       expect(c.status).toBe("fail");
     });
 
     test("no canonical on either side passes", async () => {
-      const c = (await run({ ...SAME, canonical: undefined }, { ...SAME, canonical: undefined }));
+      const c = await run({ ...SAME, canonical: undefined }, { ...SAME, canonical: undefined });
       expect(c["canonical-mismatch"]!.status).toBe("pass");
     });
 
@@ -205,8 +210,9 @@ describe("crawl/rendered-signal-mismatch", () => {
         ]!.status,
       ).toBe("pass");
       expect(
-        (await run({ ...SAME, robots: "nofollow" }, { ...SAME, robots: "noarchive" }))["noindex-mismatch"]!
-          .status,
+        (await run({ ...SAME, robots: "nofollow" }, { ...SAME, robots: "noarchive" }))[
+          "noindex-mismatch"
+        ]!.status,
       ).toBe("pass");
     });
 
@@ -220,11 +226,17 @@ describe("crawl/rendered-signal-mismatch", () => {
 
     test("a second robots tag a script appends is a mismatch: the first tag alone would read equal", async () => {
       const raw = { ...SAME, robots: "index, follow" };
-      const rendered = { ...SAME, robots: "index, follow", extraHead: '<meta name="robots" content="noindex">' };
+      const rendered = {
+        ...SAME,
+        robots: "index, follow",
+        extraHead: '<meta name="robots" content="noindex">',
+      };
       const c = (await run(raw, rendered))["noindex-mismatch"]!;
       expect(c.status).toBe("fail");
       expect(c.details).toMatchObject({ raw: false, rendered: true, carriedBy: "rendered" });
-      expect((c.details as { renderedRobots: string }).renderedRobots).toBe("index, follow | noindex");
+      expect((c.details as { renderedRobots: string }).renderedRobots).toBe(
+        "index, follow | noindex",
+      );
     });
 
     test("a second tag in the raw HTML that the script removes is a mismatch too", async () => {
@@ -245,28 +257,37 @@ describe("crawl/rendered-signal-mismatch", () => {
     });
 
     test("the name is matched without regard to case", async () => {
-      const upper = (await run(
-        { ...SAME },
-        { ...SAME, extraHead: '<meta NAME="ROBOTS" content="NoIndex">' },
-      ))["noindex-mismatch"]!;
+      const upper = (
+        await run({ ...SAME }, { ...SAME, extraHead: '<meta NAME="ROBOTS" content="NoIndex">' })
+      )["noindex-mismatch"]!;
       expect(upper.status).toBe("fail");
-      const mixed = (await run(
-        { ...SAME },
-        { ...SAME, extraHead: '<meta name="GoogleBot" content="none">' },
-      ))["noindex-mismatch"]!;
+      const mixed = (
+        await run({ ...SAME }, { ...SAME, extraHead: '<meta name="GoogleBot" content="none">' })
+      )["noindex-mismatch"]!;
       expect(mixed.status).toBe("fail");
     });
 
     test("other meta names are not robots directives", async () => {
-      const c = (await run(
-        { ...SAME },
-        { ...SAME, extraHead: '<meta name="bingbot" content="noindex"><meta name="keywords" content="noindex">' },
-      ))["noindex-mismatch"]!;
+      const c = (
+        await run(
+          { ...SAME },
+          {
+            ...SAME,
+            extraHead:
+              '<meta name="bingbot" content="noindex"><meta name="keywords" content="noindex">',
+          },
+        )
+      )["noindex-mismatch"]!;
       expect(c.status).toBe("pass");
     });
 
     test("the raw document is read again from the raw HTML when the crawl released it", async () => {
-      const ctx = makeCtx({ ...SAME, robots: "index, follow" }, envelope(html({ ...SAME, robots: "index", extraHead: '<meta name="robots" content="noindex">' })));
+      const ctx = makeCtx(
+        { ...SAME, robots: "index, follow" },
+        envelope(
+          html({ ...SAME, robots: "index", extraHead: '<meta name="robots" content="noindex">' }),
+        ),
+      );
       // A large crawl drops each page's document as it goes: the rule falls back to page.html.
       (ctx.parsed as { document: unknown }).document = null;
       const out = ((await renderedSignalMismatchRule.run(ctx)) as { checks: CheckResult[] }).checks;
@@ -275,7 +296,10 @@ describe("crawl/rendered-signal-mismatch", () => {
 
     test("collectRobotsDirectives lists every robots and googlebot tag, and directivesSayNoindex reads them all", () => {
       const doc = parsePage(
-        html({ robots: "index", extraHead: '<meta name="Googlebot" content="noindex"><meta name="x" content="noindex">' }),
+        html({
+          robots: "index",
+          extraHead: '<meta name="Googlebot" content="noindex"><meta name="x" content="noindex">',
+        }),
         URL,
       ).document!;
       expect(collectRobotsDirectives(doc)).toEqual(["index", "noindex"]);
@@ -295,10 +319,9 @@ describe("crawl/rendered-signal-mismatch", () => {
     });
 
     test("whitespace and case differences are not a change", async () => {
-      const c = (await run(
-        { ...SAME, title: "  Our   Pricing " },
-        { ...SAME, title: "our pricing" },
-      ))["title-modified"]!;
+      const c = (
+        await run({ ...SAME, title: "  Our   Pricing " }, { ...SAME, title: "our pricing" })
+      )["title-modified"]!;
       expect(c.status).toBe("pass");
     });
 
@@ -336,13 +359,13 @@ describe("crawl/rendered-signal-mismatch", () => {
     };
 
     test("a browser-rendered crawl skips, with the reason", async () => {
-      const c = (await only(makeCtx(SAME, envelope(html(SAME)), { rendered: true })));
+      const c = await only(makeCtx(SAME, envelope(html(SAME)), { rendered: true }));
       expect(c.status).toBe("skipped");
       expect(c.skipReason).toContain("browser-rendered");
     });
 
     test("no render result (a CLI audit without the cloud) skips with a reason", async () => {
-      const c = (await only(makeCtx(SAME)));
+      const c = await only(makeCtx(SAME));
       expect(c.status).toBe("skipped");
       expect(c.skipReason).toBeTruthy();
     });
@@ -353,15 +376,19 @@ describe("crawl/rendered-signal-mismatch", () => {
         skipReason: "render-disabled",
       } as unknown as CloudResultEnvelope<RenderResultItem>;
       expect((await only(makeCtx(SAME, skippedEnvelope))).status).toBe("skipped");
-      const empty = (await only(makeCtx(SAME, envelope(undefined))));
+      const empty = await only(makeCtx(SAME, envelope(undefined)));
       expect(empty.status).toBe("skipped");
       expect(empty.message).toContain("No rendered HTML");
     });
   });
 
   test("the same input gives the same result every run", async () => {
-    const a = JSON.stringify(await run(SAME, { ...SAME, title: "Other", canonical: "/x", h1: "Y" }));
-    const b = JSON.stringify(await run(SAME, { ...SAME, title: "Other", canonical: "/x", h1: "Y" }));
+    const a = JSON.stringify(
+      await run(SAME, { ...SAME, title: "Other", canonical: "/x", h1: "Y" }),
+    );
+    const b = JSON.stringify(
+      await run(SAME, { ...SAME, title: "Other", canonical: "/x", h1: "Y" }),
+    );
     expect(a).toBe(b);
   });
 

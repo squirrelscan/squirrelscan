@@ -58,19 +58,21 @@ function benchConfig(): Config {
 function sizeOf(value: unknown): number {
   const seen = new WeakSet<object>();
   try {
-    return JSON.stringify(value, (key, v) => {
-      // A linkedom Document would serialize the whole tree; it is also exactly
-      // what this pipeline is supposed to have dropped, so report its presence
-      // rather than its size.
-      if (key === "document") return v == null ? null : "<LIVE DOCUMENT>";
-      if (typeof v === "object" && v !== null) {
-        if (seen.has(v as object)) return "<cycle>";
-        seen.add(v as object);
-        if (v instanceof Map) return Object.fromEntries(v);
-        if (v instanceof Set) return [...v];
-      }
-      return v;
-    })?.length ?? 0;
+    return (
+      JSON.stringify(value, (key, v) => {
+        // A linkedom Document would serialize the whole tree; it is also exactly
+        // what this pipeline is supposed to have dropped, so report its presence
+        // rather than its size.
+        if (key === "document") return v == null ? null : "<LIVE DOCUMENT>";
+        if (typeof v === "object" && v !== null) {
+          if (seen.has(v as object)) return "<cycle>";
+          seen.add(v as object);
+          if (v instanceof Map) return Object.fromEntries(v);
+          if (v instanceof Set) return [...v];
+        }
+        return v;
+      })?.length ?? 0
+    );
   } catch {
     return -1;
   }

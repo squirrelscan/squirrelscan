@@ -74,7 +74,10 @@ export function typeNames(node: Record<string, unknown>): string[] {
 function typeTerm(type: string): string {
   // One alternation, not two passes: stripping in sequence would reduce the
   // nonsense `https://schema.org/schema:Article` to a type it does not name.
-  return type.trim().replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, "").toLowerCase();
+  return type
+    .trim()
+    .replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, "")
+    .toLowerCase();
 }
 
 /** Whether a `@type` (as authored) is a dated piece of content rather than a page shell. */
