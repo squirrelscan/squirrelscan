@@ -11,7 +11,9 @@
 // exception that the rule's own try/catch cannot swallow. The rule function is
 // still called with its own realm's globals; the context only hosts the call.
 //
-// Verified on Bun 1.3.14: `runInContext` with a `timeout` interrupts a catastrophic
+// Verified on Bun 1.3.14 and re-verified on Bun 1.4.4 (repo#2553; same behaviour, a
+// 200 ms budget threw ERR_SCRIPT_EXECUTION_TIMEOUT after about 443 ms on a ReDoS
+// run and after about 200 ms on a spin loop): `runInContext` with a `timeout` interrupts a catastrophic
 // regex run by a main-realm function called from inside the context (a 200 ms
 // budget threw ERR_SCRIPT_EXECUTION_TIMEOUT after about 430 ms; a spin loop after
 // about 110 ms). tests/rule-time-budget.test.ts pins it through RuleRunner on the
@@ -104,7 +106,7 @@ const slot: { fn?: () => unknown } = {};
 const context = vm.createContext(slot);
 const callSlot = new vm.Script("fn()");
 
-// Bun (1.3.14) leaves the watchdog armed after `runInContext` returns, until the
+// Bun (1.3.14, still true on 1.4.4: the disarm test passes) leaves the watchdog armed after `runInContext` returns, until the
 // current macrotask ends. Code that then runs past the deadline in the same task
 // (the rest of the page loop, a chain of microtasks) was terminated: uncatchably,
 // so the process drained its event loop and exited 0 with no report, and one fast
