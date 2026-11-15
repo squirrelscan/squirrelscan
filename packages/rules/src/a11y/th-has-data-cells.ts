@@ -41,6 +41,16 @@ function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
   const grid: (GridCell | null)[][] = [];
   let slots = 0;
 
+  // A row span ends at the last row of its row group (thead, tbody, tfoot, or the
+  // table itself), as a browser cuts it off, so no grid row exists past the
+  // table's real ones (squirrelscan/repo#3383).
+  const groupEnd: number[] = [];
+  for (let r = rows.length - 1; r >= 0; r--) {
+    const sameGroup =
+      r + 1 < rows.length && rows[r]!.row.parentElement === rows[r + 1]!.row.parentElement;
+    groupEnd[r] = sameGroup ? groupEnd[r + 1]! : r;
+  }
+
   for (let r = 0; r < rows.length; r++) {
     if (!grid[r]) grid[r] = [];
     const cells = rows[r]!.cells;
@@ -48,7 +58,8 @@ function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
 
     for (const cell of cells) {
       const colspan = span(cell, "colspan", MAX_COLSPAN);
-      const rowspan = span(cell, "rowspan", MAX_ROWSPAN);
+      // Cut at the group's end first, so the slot count is for the grid built.
+      const rowspan = Math.min(span(cell, "rowspan", MAX_ROWSPAN), groupEnd[r]! - r + 1);
       // The fill loops below run ceil(span) times for a fractional span.
       slots += Math.ceil(colspan) * Math.ceil(rowspan);
       if (slots > MAX_GRID_SLOTS) return grid;

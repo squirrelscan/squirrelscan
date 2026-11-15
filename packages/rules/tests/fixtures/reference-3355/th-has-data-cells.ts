@@ -1,6 +1,8 @@
 // The rule as it was before squirrelscan/repo#3355, kept as the parity oracle
 // for a11y-nested-tables-3355.test.ts: on pages without nested tables the
 // rewrite must report exactly what this did. Not loaded by the rule registry.
+// One change since: a row span stops at the end of its row group, as the rule
+// does since squirrelscan/repo#3383.
 
 // a11y/th-has-data-cells - Table headers have associated data cells
 
@@ -20,6 +22,11 @@ interface GridCell {
 function buildGrid(table: Element): (GridCell | null)[][] {
   const rows = table.querySelectorAll("tr");
   const grid: (GridCell | null)[][] = [];
+  const groupEnd: number[] = [];
+  for (let r = rows.length - 1; r >= 0; r--) {
+    const same = r + 1 < rows.length && rows[r].parentElement === rows[r + 1].parentElement;
+    groupEnd[r] = same ? groupEnd[r + 1] : r;
+  }
 
   for (let r = 0; r < rows.length; r++) {
     if (!grid[r]) grid[r] = [];
@@ -27,7 +34,10 @@ function buildGrid(table: Element): (GridCell | null)[][] {
 
     for (const cell of cells) {
       const colspan = Math.max(1, Number(getAttrCI(cell, "colspan")) || 1);
-      const rowspan = Math.max(1, Number(getAttrCI(cell, "rowspan")) || 1);
+      const rowspan = Math.min(
+        Math.max(1, Number(getAttrCI(cell, "rowspan")) || 1),
+        groupEnd[r] - r + 1,
+      );
       const tag = cell.tagName.toLowerCase();
       const entry: GridCell = { tag, el: cell };
 

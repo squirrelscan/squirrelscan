@@ -352,16 +352,39 @@ describe("spans a browser would not read (#3355)", () => {
       '<table><tr><th colspan="100000">h</th></tr><tr><td colspan="999"></td><td>d</td></tr></table>',
     );
     expect((await run(thHasDataCellsRule, wide)).checks[0]!.status).toBe("pass");
+    // 1,001 rows of a 1,000-column cell: the cap lands on the last row's cell.
     const start = performance.now();
+    const rows = '<tr><td colspan="1000">x</td></tr>'.repeat(1000);
     const huge = (await run(
       thHasDataCellsRule,
-      parse(
-        '<table><tr><th>first</th></tr><tr><td colspan="1000" rowspan="65534">x</td><th>after</th></tr></table>',
-      ),
+      parse(`<table><tr><th>first</th></tr>${rows}<tr><td colspan="1000" rowspan="65534">x</td><th>after</th></tr></table>`),
     )).checks[0]!;
     expect(performance.now() - start).toBeLessThan(1_000);
-    // The cell past the cap is not placed: the table is judged on what came before.
-    expect(huge.items).toEqual([{ id: "first" }]);
+    // The cells past the cap are not placed: the table is judged on what came before.
+    expect(huge.status).toBe("pass");
+  }, { timeout: 10_000 });
+
+  test("a row span stops at the end of its row group, so the grid has no rows past the table's (#3383)", async () => {
+    // The th in thead spans into tbody in a naive grid; browsers cut it at thead's end.
+    const grouped = (await run(
+      thHasDataCellsRule,
+      parse('<table><thead><tr><th rowspan="2">h</th></tr></thead><tbody><tr><th>x</th><td>d</td></tr></tbody></table>'),
+    )).checks[0]!;
+    expect(grouped.status).toBe("warn");
+    expect(grouped.items).toEqual([{ id: "h" }]);
+    // A td spanning past the last row of a table adds no grid row (and no column td for later rows).
+    const plain = (await run(
+      thHasDataCellsRule,
+      parse('<table><tr><th>a</th><td rowspan="65534">d</td></tr></table>'),
+    )).checks[0]!;
+    expect(plain.status).toBe("pass");
+    // A huge rowspan costs no more than the rows there are.
+    const start = performance.now();
+    await run(
+      thHasDataCellsRule,
+      parse('<table><tr><th rowspan="65534" colspan="1000">h</th></tr></table>'),
+    );
+    expect(performance.now() - start).toBeLessThan(1_000);
   }, { timeout: 10_000 });
 
   test("wide rows cost a walk of the row, not one per cell", async () => {
