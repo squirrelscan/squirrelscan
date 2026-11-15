@@ -100,3 +100,18 @@ describe("known limits: loaders written another way are not found", () => {
     }
   });
 });
+
+// #1996: the one Clarity pair still lost against v0.0.140 could not be reproduced (the stored page is gone). A
+// Clarity command call in a first-party bundle was missed by the detectors above.
+describe("API calls in a bundle (#1996)", () => {
+  test("a Clarity command call in a bundled script is found", () => {
+    for (const code of ['window.clarity("identify",uid);', "clarity('set','plan','pro');", 'window.clarity( "consent" );']) {
+      expect(ids(`${filler(10)}${code}${filler(10)}`), code).toContain("clarity");
+    }
+  });
+  test("look-alikes are not Clarity", () => {
+    for (const code of ['myclarity("identify",1);', 'clarity("hello");', 'load({src:"https://example.com/tag/"+id});']) {
+      expect(ids(`${filler(10)}${code}${filler(10)}`), code).not.toContain("clarity");
+    }
+  });
+});
