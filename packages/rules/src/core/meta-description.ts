@@ -3,10 +3,22 @@
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { pageTypeSkip, skippablePageType } from "../shared/page-type";
 
 /** Page types whose short title or description is normal (pub#841). */
 const SHORT_OK_PAGE_TYPES = ["contact", "legal"] as const;
+
+/** Han, kana, Hangul and Thai: scripts where one character carries far more than a Latin letter (pub#1866). */
+const WIDE_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]/gu;
+const ANY_LETTER = /\p{L}/gu;
+
+/** True when most of the description's letters are in a CJK or Thai script. */
+export function isWideScript(text: string): boolean {
+  const letters = text.match(ANY_LETTER)?.length ?? 0;
+  if (letters === 0) return false;
+  return (text.match(WIDE_SCRIPT)?.length ?? 0) * 2 > letters;
+}
 
 export const optionsSchema = z.object({
   min_length: z.number().default(120).describe("Minimum description length"),
@@ -56,9 +68,19 @@ export const metaDescriptionRule: Rule = {
     const expected = `${opts.min_length}-${opts.max_length} characters`;
     const tooShort = len < opts.min_length;
     const tooLong = len > opts.max_length;
-    const skipType = tooShort ? skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES) : null;
+    const wide = tooShort && isWideScript(description);
+    const skipType = tooShort && !wide ? skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES) : null;
 
-    if (tooShort && skipType !== null) {
+    if (wide) {
+      // The Latin character floor does not measure snippet width in these scripts (pub#1866).
+      checks.push({
+        name: "meta-description-too-short",
+        status: "skipped",
+        message: `Skipped: the ${opts.min_length}-character floor is calibrated for Latin text and is not applied to CJK or Thai descriptions (${len} chars)`,
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON, script: "cjk-thai", chars: len },
+      });
+    } else if (tooShort && skipType !== null) {
       // A contact or legal page is not a search target worth a long snippet (pub#841). Too long still applies.
       checks.push(pageTypeSkip("meta-description-too-short", skipType, "The description length floor"));
     } else if (tooShort) {
