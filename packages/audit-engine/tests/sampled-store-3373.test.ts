@@ -1,0 +1,558 @@
+// squirrelscan/repo#3373: a partial re-audit over a SAMPLED cloud store.
+//
+// A capped report published as one POST (the CLI's publish) leaves the store a
+// 10-page sample of each issue class. Every test publishes the same first audit
+// twice, once capped (the sampled store) and once uncapped (the full store a
+// chunked publish would leave), then re-audits part of the site against both.
+// The sampled store is told it is sampled and given the first audit's tallies
+// (`sampledStore`); the full store is not. The sampled store's score must never
+// be higher than the full store's, and must equal it when the re-audit re-checks
+// none of the first audit's pages, or all of them.
+
+import { describe, expect, test } from "bun:test";
+
+import type {
+  CheckResult,
+  FindingState,
+  HealthScore,
+  PageFindingRecord,
+  SitePageRecord,
+} from "@squirrelscan/core-contracts";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
+import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
+import {
+  CHECK_NAME_ROBOTS_DISALLOW,
+  CHECK_NAME_ROBOTS_EXISTS,
+  CHECK_NAME_SITEMAP_EXISTS,
+  ISSUE_PENALTY_ITEM_CAP,
+  RULE_ID_ROBOTS_TXT,
+  RULE_ID_SITEMAP_EXISTS,
+} from "@squirrelscan/utils/constants";
+
+import { findingKey } from "../src/merge-core";
+import {
+  runCloudSmartAudits,
+  type CloudSmartAuditsInput,
+  type CloudSmartAuditsResult,
+  type SmartAuditStore,
+} from "../src/merge-promise";
+import { capReportForPublish } from "../src/publish-cap";
+import type { SampledStoreMarker } from "../src/sampled-store";
+import {
+  calculateHealthScore,
+  calculateHealthScoreFromTallies,
+  foldRuleResultIntoTallies,
+  type RuleTally,
+} from "../src/scoring";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
+
+class MemStore implements SmartAuditStore {
+  findings = new Map<string, PageFindingRecord>();
+  pages = new Map<string, SitePageRecord>();
+
+  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+    const all = [...this.findings.values()];
+    return states ? all.filter((f) => states.includes(f.state)) : all;
+  }
+  async getSitePages(): Promise<SitePageRecord[]> {
+    return [...this.pages.values()];
+  }
+  async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
+    for (const f of findings) {
+      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+    }
+  }
+  async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
+    for (const p of pages) this.pages.set(p.normalizedUrl, { ...p });
+  }
+  async markPageRemoved(
+    siteKey: string,
+    normalizedUrl: string,
+    crawlId: string,
+    lastStatus: number,
+  ): Promise<void> {
+    this.pages.set(normalizedUrl, {
+      siteKey,
+      normalizedUrl,
+      lastStatus,
+      state: "removed",
+      lastSeenCrawlId: crawlId,
+      lastSeenAt: Date.now(),
+    });
+    for (const [k, f] of this.findings) {
+      if (f.normalizedUrl === normalizedUrl && f.state === "open") {
+        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+      }
+    }
+  }
+  async markPagesRemoved(
+    siteKey: string,
+    pages: Array<{ normalizedUrl: string; lastStatus: number }>,
+    crawlId: string,
+  ): Promise<void> {
+    for (const p of pages) await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+  }
+  async compactFindings(): Promise<number> {
+    return 0;
+  }
+}
+
+type Meta = CloudSmartAuditsInput["ruleResults"][string]["meta"];
+type Rules = Record<string, { meta: Meta; checks: CheckResult[] }>;
+
+const SITE = "https://shop.test";
+const url = (i: number): string => `${SITE}/p/${String(i).padStart(3, "0")}`;
+const range = (from: number, to: number): number[] =>
+  Array.from({ length: to - from }, (_, i) => from + i);
+
+const meta = (
+  id: string,
+  category: string,
+  scope: "page" | "site",
+  severity: "error" | "warning" | "info",
+  weight: number,
+): Meta => ({ id, name: id, description: `${id} rule`, category, scope, severity, weight }) as Meta;
+
+interface PageShape {
+  i: number;
+  status?: number;
+  metaMissing?: boolean;
+  /** img-alt fail items (at most 12, as rules truncate their lists). */
+  altItems?: number;
+  emptyAlt?: boolean;
+  ttfb?: "slow" | "skipped";
+  readability?: boolean;
+}
+
+/** A full per-page report: every page rule emits one row per page and check name. */
+function fullReport(shapes: PageShape[]) {
+  const rows = (fn: (s: PageShape) => CheckResult | CheckResult[]): CheckResult[] =>
+    shapes.flatMap((s) => fn(s));
+  const ruleResults: Rules = {
+    "core/meta-description": {
+      meta: meta("core/meta-description", "core", "page", "warning", 10),
+      checks: rows((s) => ({
+        name: "has-meta-description",
+        status: s.metaMissing ? "fail" : "pass",
+        message: s.metaMissing ? "Missing meta description" : "Meta description present",
+        pageUrl: url(s.i),
+      })),
+    },
+    "a11y/img-alt": {
+      meta: meta("a11y/img-alt", "a11y", "page", "error", 8),
+      checks: rows((s) => [
+        s.altItems
+          ? {
+              name: "img-alt",
+              status: "fail" as const,
+              message: `${s.altItems} images missing alt`,
+              pageUrl: url(s.i),
+              items: range(0, s.altItems).map((k) => ({
+                id: `${SITE}/img/${s.i}-${k}.png`,
+                sourcePages: [url(s.i)],
+              })),
+            }
+          : { name: "img-alt", status: "pass" as const, message: "All images have alt", pageUrl: url(s.i) },
+        {
+          name: "img-alt-empty",
+          status: s.emptyAlt ? ("warn" as const) : ("pass" as const),
+          message: s.emptyAlt ? "Empty alt on a linked image" : "No empty alt",
+          pageUrl: url(s.i),
+        },
+      ]),
+    },
+    "perf/ttfb": {
+      meta: meta("perf/ttfb", "perf", "page", "warning", 6),
+      checks: rows((s) => ({
+        name: "ttfb",
+        status: s.ttfb === "slow" ? "warn" : s.ttfb === "skipped" ? "skipped" : "pass",
+        message: s.ttfb === "slow" ? "Slow TTFB" : s.ttfb === "skipped" ? "No timing data" : "TTFB ok",
+        pageUrl: url(s.i),
+      })),
+    },
+    "content/readability": {
+      meta: meta("content/readability", "content", "page", "info", 3),
+      checks: rows((s) => ({
+        name: "readability",
+        status: s.readability ? "warn" : "pass",
+        message: s.readability ? "Hard to read" : "Readable",
+        pageUrl: url(s.i),
+      })),
+    },
+    [RULE_ID_ROBOTS_TXT]: {
+      meta: meta(RULE_ID_ROBOTS_TXT, "crawl", "site", "error", 9),
+      checks: [
+        { name: CHECK_NAME_ROBOTS_EXISTS, status: "pass", message: "robots.txt found" },
+        { name: CHECK_NAME_ROBOTS_DISALLOW, status: "pass", message: "Not blocking all" },
+      ],
+    },
+    [RULE_ID_SITEMAP_EXISTS]: {
+      meta: meta(RULE_ID_SITEMAP_EXISTS, "crawl", "site", "warning", 5),
+      checks: [{ name: CHECK_NAME_SITEMAP_EXISTS, status: "pass", message: "Sitemap found" }],
+    },
+  };
+  return {
+    baseUrl: `${SITE}/`,
+    ruleResults,
+    pages: shapes.map((s) => ({ url: url(s.i), statusCode: s.status ?? 200 })),
+  };
+}
+type Report = ReturnType<typeof fullReport>;
+
+/** The uncapped body: every row, the non-2xx statuses, the unsampled signal. */
+function uncappedBody(report: Report) {
+  return {
+    ruleResults: report.ruleResults,
+    pageStatuses: report.pages
+      .filter((p) => p.statusCode < 200 || p.statusCode >= 300)
+      .map((p) => ({ url: p.url, status: p.statusCode })),
+    resolutionSignal: buildResolutionSignal(
+      report.ruleResults,
+      report.pages.map((p) => p.url),
+    ),
+  };
+}
+
+/** The capped body a CLI publishes as one POST, plus what it reports beside it. */
+async function cappedBody(report: Report) {
+  const capped = capReportForPublish(report);
+  return {
+    body: {
+      ruleResults: capped.ruleResults as unknown as Rules,
+      pageStatuses: capped.pageStatuses ?? [],
+      resolutionSignal: capped.resolutionSignalCompact
+        ? await decodeResolutionSignal(capped.resolutionSignalCompact)
+        : undefined,
+      checkTallies: capped.checkTallies,
+    },
+    rulePageCounts: capped.rulePageCounts,
+  };
+}
+
+/** What the API stores after the rescore: the score and the report's totals. */
+function rescored(r: CloudSmartAuditsResult): {
+  healthScore: HealthScore;
+  totals: { passed: number; warnings: number; failed: number };
+} {
+  if (r.scoringTallies) {
+    return {
+      healthScore: calculateHealthScoreFromTallies(r.scoringTallies, r.unionRuleResults),
+      totals: r.reportTotals!,
+    };
+  }
+  const totals = { passed: 0, warnings: 0, failed: 0 };
+  for (const rule of r.unionRuleResults.values()) {
+    const advisory = rule.meta.severity === "info";
+    for (const c of rule.checks) {
+      if (c.status === "pass") totals.passed++;
+      else if (c.status === "warn" && !advisory) totals.warnings++;
+      else if (c.status === "fail") totals.failed++;
+    }
+  }
+  return { healthScore: calculateHealthScore({ results: r.unionRuleResults }), totals };
+}
+
+/** Category order among ties follows rule order; compare the values, not the order. */
+function comparable(s: ReturnType<typeof rescored>) {
+  const byCategory = <T extends { category: string }>(list: T[]) =>
+    [...list].sort((a, b) => (a.category < b.category ? -1 : a.category > b.category ? 1 : 0));
+  return { ...s, healthScore: { ...s.healthScore, categories: byCategory(s.healthScore.categories) } };
+}
+
+/** The per-rule tallies a result is scored from. */
+function tallies(r: CloudSmartAuditsResult): Map<string, RuleTally> {
+  if (r.scoringTallies) return r.scoringTallies;
+  const out = new Map<string, RuleTally>();
+  for (const [ruleId, rule] of r.unionRuleResults) foldRuleResultIntoTallies(out, ruleId, rule);
+  return out;
+}
+
+const FIRST = 1_779_000_000_000;
+const SECOND = 1_780_000_000_000;
+
+interface Seeded {
+  full: MemStore;
+  sampled: MemStore;
+  marker: SampledStoreMarker;
+  /** The CLI audit's own score, as the capped publish scored it. */
+  cliScore: number;
+  /** Pages of each rule the sampled store holds a row for. */
+  sampledPages: Map<string, Set<string>>;
+}
+
+/** The first audit, published capped to one store and uncapped to another. */
+async function seed(
+  shapes: PageShape[],
+  markerOverrides: Partial<SampledStoreMarker> = {},
+  older: PageShape[] = [],
+): Promise<Seeded> {
+  const report = fullReport(shapes);
+  const full = new MemStore();
+  const sampled = new MemStore();
+  // An earlier complete audit of other pages, in both stores alike.
+  if (older.length > 0) {
+    for (const store of [full, sampled]) {
+      await runCloudSmartAudits({
+        store,
+        siteKey: "site",
+        crawlId: "cloud_0",
+        now: FIRST - 1_000_000,
+        ...uncappedBody(fullReport(older)),
+      });
+    }
+  }
+  await runCloudSmartAudits({ store: full, siteKey: "site", crawlId: "cli_1", now: FIRST, ...uncappedBody(report) });
+  const { body, rulePageCounts } = await cappedBody(report);
+  const first = await runCloudSmartAudits({ store: sampled, siteKey: "site", crawlId: "cli_1", now: FIRST, ...body });
+  const sampledPages = new Map<string, Set<string>>();
+  for (const f of await sampled.getFindings("site", ["open"])) {
+    let set = sampledPages.get(f.ruleId);
+    if (!set) {
+      set = new Set();
+      sampledPages.set(f.ruleId, set);
+    }
+    set.add(f.normalizedUrl);
+  }
+  return {
+    full,
+    sampled,
+    sampledPages,
+    cliScore: rescored(first).healthScore.overall!,
+    marker: {
+      sampled: true,
+      crawlId: "cli_1",
+      checkTallies: body.checkTallies,
+      pagesAudited: shapes.length,
+      ...(rulePageCounts ? { rulePageCounts } : {}),
+      ...markerOverrides,
+    },
+  };
+}
+
+/** Re-audit `shapes` against the seeded stores, uncapped (a small cloud run). */
+async function reaudit(s: Seeded, shapes: PageShape[], opts: { capped?: boolean } = {}) {
+  const report = fullReport(shapes);
+  const body = opts.capped ? (await cappedBody(report)).body : uncappedBody(report);
+  const full = await runCloudSmartAudits({ store: s.full, siteKey: "site", crawlId: "cloud_2", now: SECOND, ...body });
+  const estimated = await runCloudSmartAudits({
+    store: s.sampled,
+    siteKey: "site",
+    crawlId: "cloud_2",
+    now: SECOND,
+    ...body,
+    sampledStore: s.marker,
+  });
+  return { full, estimated };
+}
+
+/** A site with every kind of class, wider than the 10-page sample. */
+function busyShapes(pages: number[]): PageShape[] {
+  return pages.map((i) => ({
+    i,
+    metaMissing: i % 3 === 0,
+    altItems: i % 4 === 0 ? 3 : i % 7 === 0 ? 12 : 0,
+    emptyAlt: i % 5 === 0,
+    ttfb: i % 6 === 0 ? "slow" : i % 11 === 0 ? "skipped" : undefined,
+    readability: i % 2 === 0,
+  }));
+}
+
+/** Deterministic PRNG (mulberry32), so a failing case can be replayed. */
+function prng(seedValue: number): () => number {
+  let a = seedValue >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function randomShapes(rand: () => number, pages: number[]): PageShape[] {
+  return pages.map((i) => ({
+    i,
+    metaMissing: rand() < 0.45,
+    altItems: rand() < 0.3 ? 1 + Math.floor(rand() * 12) : 0,
+    emptyAlt: rand() < 0.35,
+    ttfb: rand() < 0.3 ? "slow" : rand() < 0.1 ? "skipped" : undefined,
+    readability: rand() < 0.5,
+  }));
+}
+
+describe("partial re-audit over a sampled store (repo#3373)", () => {
+  test("the issue: a 1-page cloud re-audit after a 100-page CLI publish scores within 2 points", async () => {
+    // A check fails on every page; the CLI publish leaves 10 of them in the store.
+    const shapes = range(0, 100).map((i) => ({ i, metaMissing: true }));
+    const s = await seed(shapes);
+    expect(s.sampledPages.get("core/meta-description")!.size).toBeLessThanOrEqual(10);
+
+    const rerun = [shapes[0]!];
+    // Without the marker the store's 90 clipped pages read clean.
+    const unmarked = await runCloudSmartAudits({
+      store: structuredCloneStore(s.sampled),
+      siteKey: "site",
+      crawlId: "cloud_2",
+      now: SECOND,
+      ...uncappedBody(fullReport(rerun)),
+    });
+    expect(rescored(unmarked).healthScore.overall!).toBeGreaterThan(s.cliScore + 2);
+
+    const { full, estimated } = await reaudit(s, rerun);
+    const score = rescored(estimated).healthScore.overall!;
+    expect(estimated.sampledStoreScored).toBe(true);
+    expect(Math.abs(score - s.cliScore)).toBeLessThanOrEqual(2);
+    expect(score).toBeLessThanOrEqual(rescored(full).healthScore.overall!);
+  }, 30_000);
+
+  test("no overlap: sampled store plus tallies scores exactly as the full store", async () => {
+    const shapes = range(0, 100).map((i) => ({ i, metaMissing: i % 2 === 0 }));
+    const s = await seed(shapes);
+    // A page the first audit never saw.
+    const { full, estimated } = await reaudit(s, [{ i: 100, metaMissing: true }]);
+    expect(comparable(rescored(estimated))).toEqual(comparable(rescored(full)));
+  }, 30_000);
+
+  test("parity fixture: every kind of class, published complete or sampled, scores the same with no overlap", async () => {
+    const s = await seed(busyShapes(range(0, 60)));
+    // The capped publish really sampled the store.
+    expect(s.sampledPages.get("core/meta-description")!.size).toBeLessThan(20);
+    const { full, estimated } = await reaudit(s, busyShapes([60, 61]));
+    expect(comparable(rescored(estimated))).toEqual(comparable(rescored(full)));
+    expect(rescored(estimated).healthScore.overall!).toBeLessThan(100);
+  }, 30_000);
+
+  test("no overlap, with an older audit's pages beside the sample: their rows count as they are", async () => {
+    // Pages 200-229 come from an earlier complete cloud audit and are no part of
+    // the CLI audit's tallies; their carried warnings stay warnings.
+    const older = busyShapes(range(200, 230)).map((sh) => ({ ...sh, ttfb: "slow" as const }));
+    const s = await seed(busyShapes(range(0, 60)), {}, older);
+    const { full, estimated } = await reaudit(s, busyShapes([60]));
+    expect(comparable(rescored(estimated))).toEqual(comparable(rescored(full)));
+  }, 30_000);
+
+  test("full overlap: re-checking every page scores as a fresh full audit", async () => {
+    const shapes = busyShapes(range(0, 60));
+    const s = await seed(shapes);
+    const { full, estimated } = await reaudit(s, shapes);
+    const fresh = await runCloudSmartAudits({
+      store: new MemStore(),
+      siteKey: "site",
+      crawlId: "cloud_2",
+      now: SECOND,
+      ...uncappedBody(fullReport(shapes)),
+    });
+    expect(comparable(rescored(estimated))).toEqual(comparable(rescored(fresh)));
+    expect(comparable(rescored(full))).toEqual(comparable(rescored(fresh)));
+  }, 30_000);
+
+  test("partial overlap: never above the full store, and within the documented bound", async () => {
+    const rand = prng(3373);
+    let below = 0;
+    for (let round = 0; round < 24; round++) {
+      const pages = 25 + Math.floor(rand() * 50);
+      const shapes = randomShapes(rand, range(0, pages));
+      const s = await seed(shapes);
+      // Re-audit a random part of the site (some rounds capped, as a big run
+      // publishes), with a new page now and then and some pages changed or gone.
+      const rerun: PageShape[] = [];
+      for (const shape of shapes) {
+        if (rand() >= 0.35) continue;
+        const roll = rand();
+        rerun.push(
+          roll < 0.1
+            ? { ...shape, status: 404 }
+            : roll < 0.25
+              ? { ...shape, metaMissing: !shape.metaMissing, ttfb: rand() < 0.5 ? "skipped" : shape.ttfb }
+              : shape,
+        );
+      }
+      if (rand() < 0.3) rerun.push(...randomShapes(rand, [pages]));
+      const { full, estimated } = await reaudit(s, rerun, { capped: rand() < 0.3 });
+
+      const est = rescored(estimated).healthScore;
+      const ref = rescored(full).healthScore;
+      const label = `round ${round}: ${pages} pages, ${rerun.length} re-audited`;
+      expect({ label, ok: est.overall! <= ref.overall! }).toEqual({ label, ok: true });
+      for (const c of est.categories) {
+        const refScore = ref.categories.find((r) => r.category === c.category)?.score ?? 100;
+        expect({ label, category: c.category, ok: c.score <= refScore }).toEqual({
+          label,
+          category: c.category,
+          ok: true,
+        });
+      }
+      if (est.overall! < ref.overall!) below += 1;
+
+      // The bound: per rule, the estimate carries at most the unknown re-checked
+      // pages' worth of extra issues (each check name, up to the item cap) and
+      // that many fewer clean carried pages.
+      const rechecked = new Set(rerun.filter((r) => r.i < pages).map((r) => url(r.i)));
+      const estTallies = tallies(estimated);
+      for (const [ruleId, { tally: refTally, meta: m }] of tallies(full)) {
+        if (m.scope !== "page") continue;
+        const estTally = estTallies.get(ruleId)!.tally;
+        const sampled = s.sampledPages.get(ruleId) ?? new Set<string>();
+        const unknown = [...rechecked].filter((u) => !sampled.has(u)).length;
+        const names = Object.keys(s.marker.checkTallies[ruleId] ?? {}).length;
+        const issues = (t: typeof refTally) => t.failed + t.warnings;
+        expect({ label, ruleId, ok: issues(estTally) - issues(refTally) <= unknown * names * ISSUE_PENALTY_ITEM_CAP }).toEqual({
+          label,
+          ruleId,
+          ok: true,
+        });
+        expect({ label, ruleId, ok: refTally.passed - estTally.passed <= unknown }).toEqual({
+          label,
+          ruleId,
+          ok: true,
+        });
+      }
+    }
+    // The property is not vacuous: the bias does show on some rounds.
+    expect(below).toBeGreaterThan(0);
+  }, 120_000);
+
+  test("flag absent or not sampled: the result is exactly the unmarked one", async () => {
+    const shapes = busyShapes(range(0, 60));
+    const report = fullReport(range(0, 20).map((i) => shapes[i]!));
+    const results: CloudSmartAuditsResult[] = [];
+    for (const sampledStore of [undefined, { ...(await seed(shapes)).marker, sampled: false }]) {
+      const s = await seed(shapes);
+      results.push(
+        await runCloudSmartAudits({
+          store: s.sampled,
+          siteKey: "site",
+          crawlId: "cloud_2",
+          now: SECOND,
+          ...uncappedBody(report),
+          ...(sampledStore ? { sampledStore } : {}),
+        }),
+      );
+    }
+    expect(results[1]).toEqual(results[0]!);
+    expect(results[0]!.scoringTallies).toBeUndefined();
+    expect(results[0]!.sampledStoreScored).toBeUndefined();
+  }, 30_000);
+
+  test("without pagesAudited every estimated warning scores as a failure, never higher", async () => {
+    const shapes = busyShapes(range(0, 60));
+    const withCount = await seed(shapes);
+    const without = await seed(shapes, { pagesAudited: undefined });
+    const rerun = busyShapes([60]);
+    const a = await reaudit(withCount, rerun);
+    const b = await reaudit(without, rerun);
+    expect(rescored(b.estimated).healthScore.overall!).toBeLessThanOrEqual(
+      rescored(a.estimated).healthScore.overall!,
+    );
+    expect(rescored(b.estimated).totals.warnings).toBeLessThan(rescored(a.estimated).totals.warnings);
+  }, 30_000);
+});
+
+function structuredCloneStore(store: MemStore): MemStore {
+  const copy = new MemStore();
+  for (const [k, f] of store.findings) copy.findings.set(k, { ...f });
+  for (const [k, p] of store.pages) copy.pages.set(k, { ...p });
+  return copy;
+}
+
+describeSitePagesContract("sampled-store-3373.test.ts MemStore", () => new MemStore());

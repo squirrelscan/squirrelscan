@@ -24,6 +24,7 @@ import {
   buildSupersededIndex,
   isRuleNotApplicableReason,
   resolutionCheckKey,
+  resolutionRuleKey,
   resolutionUrlHash,
 } from "@squirrelscan/core-contracts/resolution";
 // `/types` (leaf type module) not the barrel — see scoring.ts. (#195)
@@ -57,10 +58,16 @@ import {
   type UntouchedSamplePage,
 } from "./complete-store-fold";
 import { isReplayedCheck, REMOVED_STATUSES } from "./published-checks";
+import {
+  isSampledStoreMarker,
+  SampledStoreEstimator,
+  type SampledStoreMarker,
+} from "./sampled-store";
 import type { SkippedPassCounts } from "./stream-findings";
 import {
   addChecksToTally,
   buildScoringResultsFromMerged,
+  foldRuleResultIntoTallies,
   type CarriedFinding,
   type CarriedUnionSource,
   type PageUrlSet,
@@ -383,6 +390,22 @@ export interface CloudSmartAuditsInput {
    * input, because no audit has seen them.
    */
   unfetchedPages?: number;
+  /**
+   * (repo#3373) The store holds a SAMPLE of an earlier audit: a capped report
+   * published as one POST (the CLI's publish) wrote at most 10 pages per issue
+   * class. With `sampled: true` and that report's `checkTallies`, the carried side
+   * of each tallied page rule is scored from those counts, less the pages this
+   * run re-checked, instead of from the sampled rows, which would read every
+   * clipped page as clean. The estimate may score lower than a store holding
+   * every finding would, never higher (see `sampled-store.ts` for the method and
+   * the bound). The rows the merge keeps, resolves and carries do not change.
+   *
+   * Sampled (single-POST) path only: a complete-store finalize ignores it. Absent,
+   * or without `sampled: true`, the result is exactly what it was without it.
+   * When applied, the result carries {@link CloudSmartAuditsResult.scoringTallies}
+   * and `reportTotals` on every sampled-path run, and `sampledStoreScored`.
+   */
+  sampledStore?: SampledStoreMarker;
 }
 
 export interface CloudSmartAuditsResult {
@@ -492,6 +515,11 @@ export interface CloudSmartAuditsResult {
    * (page-rule passes are counts here, not materialized checks).
    */
   completeStore: boolean;
+  /**
+   * (repo#3373) Set when {@link CloudSmartAuditsInput.sampledStore} scored the
+   * carried side from the sampled audit's tallies. Absent otherwise.
+   */
+  sampledStoreScored?: true;
 }
 
 const NO_VARIANTS: ReadonlyMap<string, string> = new Map();
@@ -953,6 +981,25 @@ export async function runCloudSmartAudits(
   // site with a long history these outnumber the run's pages many times over, and
   // the streaming fold only asks it for its size and for the touched pages.
   const carriedPageUrls = session.carriedPageUrls;
+
+  // (repo#3373) A store an earlier capped single POST sampled: collect what the
+  // carried estimate needs as the priors stream past. Sampled path only.
+  const sampledEstimator =
+    !completeStore && isSampledStoreMarker(input.sampledStore)
+      ? new SampledStoreEstimator({
+          marker: input.sampledStore,
+          priorPages,
+          crawled: (url) => isRecrawled(url, crawledUrls, resolution),
+          removed: (url) => removedUrls.has(url),
+          evaluated: resolution ? makeCheckEvaluated(crawledUrls, resolution) : () => false,
+          // A truncated key cannot say which pages it evaluated, so a re-checked
+          // page may count for it twice: no warning is then kept as one.
+          crawledSetExact:
+            !!resolution &&
+            resolution.truncatedChecks.size === 0 &&
+            (resolution.crawledComplete !== false || !!resolution.crawledHashes),
+        })
+      : undefined;
   // (#2067) Every page this run crawled, which is what the coverage line (and
   // with it the page charge) counts: the payload's evidence plus the pages only
   // the unsampled signal saw, less the removed ones. The session gave all of them
@@ -1139,6 +1186,7 @@ export async function runCloudSmartAudits(
       carriedCount += 1;
       const carried = toCarriedFinding(finding);
       carriedFindings.push(carried);
+      sampledEstimator?.noteCarried(finding, carried);
       if (finding.neverRendered) {
         unrenderedCount += 1;
         return;
@@ -1149,6 +1197,7 @@ export async function runCloudSmartAudits(
       );
     };
     for await (const batch of priorFindingPages(store, siteKey, completeStore?.priorOpenFindings)) {
+      if (sampledEstimator) for (const row of batch) sampledEstimator.observePrior(row);
       session.addPriorFindings(batch);
       if (persistWhileStreaming && pendingWrites.length >= MERGE_PERSIST_BATCH) {
         await flushWrites();
@@ -1277,6 +1326,23 @@ export async function runCloudSmartAudits(
     reportTotals = tallyReportTotals(scoringTallies, completeTallies);
   }
 
+  // (repo#3373) Rescore the carried side of a sampled store from the sampled
+  // audit's tallies. A run that scored off the union map is first folded into the
+  // tallies that map scores to (the streaming-golden invariant), with the totals
+  // the API counts off it, so the estimate has one shape to rewrite.
+  if (sampledEstimator) {
+    if (!scoringTallies || !reportTotals) {
+      ({ scoringTallies, reportTotals } = unionTallies(unionRuleResults));
+    }
+    sampledEstimator.apply({
+      scoringTallies,
+      reportTotals,
+      unionCarried,
+      unionCarriedPages,
+      ruleMetaIndex,
+    });
+  }
+
   // (#1350) Variants among the site's ACTIVE pages: this run's (recorded above) and the ones earlier runs
   // recorded. Nothing is read, computed or changed unless one was reported or is stored, so a site without
   // any is byte-identical. `auditedPages` is NOT folded: it is what this run crawled, and billing reads it.
@@ -1330,6 +1396,83 @@ export async function runCloudSmartAudits(
     replayedChecksDropped,
     replayedUnknownPages,
     completeStore: !!completeStore,
+    ...(sampledEstimator ? { sampledStoreScored: true as const } : {}),
+  };
+}
+
+/**
+ * (repo#3373) The tallies and report totals of a union scored off its checks:
+ * what `calculateHealthScore` and the API's sampled-path count read off it.
+ */
+function unionTallies(union: Map<string, RuleRunResult>): {
+  scoringTallies: Map<string, RuleTally>;
+  reportTotals: NonNullable<CloudSmartAuditsResult["reportTotals"]>;
+} {
+  const scoringTallies = new Map<string, RuleTally>();
+  const reportTotals = { passed: 0, warnings: 0, failed: 0 };
+  for (const [ruleId, r] of union) {
+    foldRuleResultIntoTallies(scoringTallies, ruleId, r);
+    const advisory = r.meta.severity === "info";
+    for (const c of r.checks) {
+      if (c.status === "pass") reportTotals.passed++;
+      else if (c.status === "warn" && !advisory) reportTotals.warnings++;
+      else if (c.status === "fail") reportTotals.failed++;
+    }
+  }
+  return { scoringTallies, reportTotals };
+}
+
+/** (repo#3373) This run crawled `url`, by any evidence it has: payload, signal list or hashes. */
+function isRecrawled(
+  url: string,
+  crawledUrls: ReadonlySet<string>,
+  resolution: MergeResolutionInput | undefined,
+): boolean {
+  if (crawledUrls.has(url) || resolution?.crawledUrls.has(url)) return true;
+  return (
+    resolution?.crawledComplete === false &&
+    (resolution.crawledHashes?.has(resolutionUrlHash(url)) ?? false)
+  );
+}
+
+/**
+ * (repo#3373) Whether this run evaluated a check on a page, read off the signal
+ * as {@link evaluatedThisRun} reads it, plus the rule-wide skip the merge honours
+ * (pub#968). A truncated key lost its page sets, so it evaluated nothing it can
+ * vouch for. Each page is hashed once: the estimate asks for every re-checked
+ * page under every tallied check name.
+ */
+function makeCheckEvaluated(
+  crawledUrls: ReadonlySet<string>,
+  resolution: MergeResolutionInput,
+): (url: string, ruleId: string, checkName: string) => boolean {
+  const crawled = (u: string): boolean => crawledUrls.has(u) || resolution.crawledUrls.has(u);
+  const cache = new Map<string, { own: string; all: string[] }>();
+  const hashesOf = (url: string) => {
+    let hashes = cache.get(url);
+    if (!hashes) {
+      hashes = { own: resolutionUrlHash(url), all: signalHashes(url, crawled) };
+      cache.set(url, hashes);
+    }
+    return hashes;
+  };
+  return (url, ruleId, checkName) => {
+    const ruleKey = resolutionRuleKey(ruleId);
+    const key = resolutionCheckKey(ruleId, checkName);
+    if (resolution.truncatedChecks.has(ruleKey) || resolution.truncatedChecks.has(key)) return false;
+    const hashes = hashesOf(url);
+    const ruleSkipped = resolution.notEvaluatedByCheck.get(ruleKey);
+    if (ruleSkipped && hashes.all.some((h) => ruleSkipped.has(h))) return false;
+    if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
+      if (!resolution.crawledHashes?.has(hashes.own)) return false;
+      return (
+        resolution.failingByCheck.has(key) &&
+        !resolution.notEvaluatedByCheck.get(key)?.has(hashes.own)
+      );
+    }
+    if (!crawled(url) || !resolution.failingByCheck.has(key)) return false;
+    const notEvaluated = resolution.notEvaluatedByCheck.get(key);
+    return !notEvaluated || !hashes.all.some((h) => notEvaluated.has(h));
   };
 }
 
