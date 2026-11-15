@@ -8,6 +8,7 @@ import type { RuleMeta } from "@squirrelscan/rules";
 
 import {
   flattenChecks,
+  parsePageRecord,
   runStreamingRules,
   type RuleTally,
 } from "@squirrelscan/audit-engine";
@@ -270,7 +271,13 @@ describe("a live page no link reaches is reported by the orphan rule, fresh", ()
           record("/shop", ["/", "/about"]),
           record("/legacy-promo", ["/", "/about", "/shop"]),
         ]) {
-          yield* storage.upsertPage(crawlId, page);
+          // A real crawl stores the parse with the page, and the streaming siteQuery reads the
+          // links from it (#1022).
+          const { document: _document, ...parse } = parsePageRecord(page)!;
+          yield* storage.upsertPage(crawlId, {
+            ...page,
+            parsedData: JSON.stringify(parse),
+          });
         }
         const pre = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
         const ran = yield* runStreamingRules(
