@@ -106,10 +106,8 @@ import {
   type FullAuditReport,
   type RuleExecutionResult,
 } from "./report-stream";
-// Streaming rule engine (#1021, PR-E). Imported for its call-time function refs
-// only; `streaming.ts` imports buildSiteContext/buildHeadersMap/isRenderedFetch
-// back from here — a module cycle that resolves because neither side calls the
-// other at module-eval time (handoff: "runtime-resolved cycle is fine").
+// Streaming rule engine (#1021, PR-E). streaming.ts takes its shared helpers
+// from ./site-fetch, so there is no runtime import cycle with this module (#1409).
 import {
   streamPageRules,
   STREAM_PAGE_BATCH,
