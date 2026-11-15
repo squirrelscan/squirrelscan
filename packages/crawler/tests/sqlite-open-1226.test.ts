@@ -19,6 +19,17 @@ describe("openSqlite", () => {
     db.close();
   });
 
+  test("a prepared statement's iterate() streams rows through the guard (repo#1920)", () => {
+    const db = openSqlite(join(dir, "iterate.db"), 1234);
+    db.exec("CREATE TABLE t (x)");
+    db.exec("INSERT INTO t VALUES (1), (2), (3)");
+    // A method reached through the guard's Object.create wrapper cannot see the
+    // native statement's private fields unless it is bound to the statement.
+    const rows = [...(db.prepare("SELECT x FROM t ORDER BY x").iterate() as Iterable<{ x: number }>)];
+    expect(rows.map((r) => r.x)).toEqual([1, 2, 3]);
+    db.close();
+  });
+
   test("a lock held past the timeout is reported with the file and the wait", () => {
     const file = join(dir, "held.db");
     const holder = new Database(file);

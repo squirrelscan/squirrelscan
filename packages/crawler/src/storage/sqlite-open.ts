@@ -61,6 +61,21 @@ function guardStatement<S extends Statement>(path: string, statement: S): S {
       (wrapped as unknown as Record<string, unknown>)[method] = guard(path, original.bind(statement));
     }
   }
+  // iterate() is lazy: a busy error surfaces on a later step, not on the call,
+  // so the guard wraps the whole walk. Bound to the statement because a method
+  // reached through Object.create cannot see the native private fields.
+  const iterate = (statement as unknown as Record<string, (...a: unknown[]) => Iterable<unknown>>)
+    .iterate;
+  if (typeof iterate === "function") {
+    (wrapped as unknown as Record<string, unknown>).iterate = function* (...args: unknown[]) {
+      const startedAt = performance.now();
+      try {
+        yield* iterate.apply(statement, args);
+      } catch (error) {
+        throw describeBusy(error, path, startedAt);
+      }
+    };
+  }
   return wrapped;
 }
 

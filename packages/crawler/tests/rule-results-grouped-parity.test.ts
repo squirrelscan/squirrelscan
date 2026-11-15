@@ -148,3 +148,94 @@ describe("getRuleResultsGrouped", () => {
     }
   });
 });
+
+describe("getRuleResultsGrouped compact build (#1920)", () => {
+  async function richStore(): Promise<SQLiteStorage> {
+    const store = new SQLiteStorage(":memory:");
+    await run(store.init());
+    const save = (page: string, rule: string, checks: CheckResult[]) =>
+      run(store.saveRuleResults("crawl-1", page, rule, checks));
+    for (const page of ["https://e.test/a", "https://e.test/b"]) {
+      await save(page, "seo/title", [
+        { name: "t", status: "pass", message: "ok" },
+        { name: "t2", status: "warn", message: "short", value: 0, expected: "30+" },
+        { name: "t3", status: "fail", message: "empty", value: "", expected: 60 },
+        {
+          name: "t4",
+          status: "info",
+          message: "shared message",
+          items: [{ id: "x" }],
+          details: { a: 1 },
+          pages: ["https://e.test/a"],
+        },
+        { name: "t5", status: "skipped", message: "n/a", skipReason: "not applicable" },
+      ]);
+    }
+    await save("", "crawl/sitemap-exists", [
+      { name: "sitemap", status: "fail", message: "missing", value: 3 },
+    ]);
+    await save("https://e.test/a", "components/x", [
+      {
+        name: "c",
+        status: "warn",
+        message: "evidence",
+        componentOccurrences: [
+          {
+            version: 1,
+            pageUrl: "https://e.test/a",
+            siteOrigin: "https://e.test",
+            provenance: { source: "page-dom", rendered: false },
+            groupable: true,
+            confidence: "observed",
+            region: { role: "footer", nestedIn: "none", structuralSignature: "r" },
+            family: { key: "f", structuralSignature: "f" },
+            variant: { key: "v", structuralSignature: "v", contentHash: "c" },
+            element: { locator: "footer:1>footer>p:1", structuralSignature: "e" },
+            defect: { kind: "stale-copyright", values: { year: 2019 }, valueHashes: { year: "h" } },
+          },
+        ],
+        componentEvidence: { state: "omitted", reason: "page-sample-limit", occurrenceCount: 4 },
+      },
+    ]);
+    return store;
+  }
+
+  test("JSON output is byte-identical to the readers it replaces", async () => {
+    const store = await richStore();
+    const byPage = await run(store.getRuleResultsByPage("crawl-1"));
+    const byRuleId = await run(store.getRuleResultsByRuleId("crawl-1"));
+    const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
+    expect(JSON.stringify([...grouped.byPage])).toBe(JSON.stringify([...byPage]));
+    expect(JSON.stringify([...grouped.byRuleId])).toBe(JSON.stringify([...byRuleId]));
+  });
+
+  test("checks carry no explicitly undefined keys, and keep value 0 and ''", async () => {
+    const store = await richStore();
+    const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
+    let seen = 0;
+    for (const checks of grouped.byPage.values()) {
+      for (const check of checks) {
+        seen++;
+        expect(Object.values(check).every((v) => v !== undefined)).toBe(true);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+    const t = grouped.byPage.get("https://e.test/a")!;
+    // The value column stores text, so 0 reads back as "0" (same as before).
+    expect(t.find((c) => c.name === "t2")!.value).toBe("0");
+    expect(t.find((c) => c.name === "t3")!.value).toBe("");
+    expect("skipReason" in t.find((c) => c.name === "t")!).toBe(false);
+  });
+
+  test("equal JSON columns on different rows are distinct objects", async () => {
+    const store = await richStore();
+    const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
+    const a = grouped.byPage.get("https://e.test/a")!.find((c) => c.name === "t4")!;
+    const b = grouped.byPage.get("https://e.test/b")!.find((c) => c.name === "t4")!;
+    expect(a.items).toEqual(b.items);
+    expect(a.items).not.toBe(b.items);
+    expect(a.details).not.toBe(b.details);
+    expect(a.pages).not.toBe(b.pages);
+    expect(a.message).toBe(b.message);
+  });
+});

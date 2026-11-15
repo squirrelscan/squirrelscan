@@ -9,6 +9,8 @@ declare module "bun:sqlite" {
     get(...params: unknown[]): any;
     all(...params: unknown[]): any[];
     values(...params: unknown[]): unknown[][];
+    /** Streams rows one at a time instead of materializing them all. */
+    iterate(...params: unknown[]): IterableIterator<any>;
   }
 
   export class Database {
