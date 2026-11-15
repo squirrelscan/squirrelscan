@@ -201,6 +201,7 @@ import {
 } from "@/crawler/storage/store-check";
 import { isPermanentStorageError } from "@/crawler/storage/types";
 import { preflightBalanceOf } from "@/lib/balance";
+import { botProtectionNotice } from "@/lib/bot-protection-notice";
 import { probeHost } from "@/lib/host-probe";
 import { resolvePageLimit } from "@/lib/page-limit";
 import {
@@ -1266,14 +1267,6 @@ export async function runAudit(
       );
     }
 
-    // Warn if target site uses WAF/bot protection
-    if (reachability.wafDetected) {
-      const provider = reachability.wafProvider ?? "WAF";
-      logger.warn(
-        `Site uses ${provider} protection - some pages may be inaccessible and results may be incomplete`
-      );
-    }
-
     logger.debug("creating storage", projectName);
 
     const storage = await Effect.runPromise(createStorage({ projectName }));
@@ -1784,6 +1777,14 @@ export async function runAudit(
             : `Refusing off-site redirect: ${crawlMeta.originalUrl} → ${crawlMeta.seedUrl}; auditing ${crawlMeta.baseUrl}`
         );
       }
+
+      // Warn only when the crawl was actually refused (repo#2237); detecting a WAF vendor alone
+      // says nothing about coverage.
+      const protectionNotice = botProtectionNotice(
+        crawlMeta?.stats,
+        reachability.wafDetected ? reachability.wafProvider : undefined
+      );
+      if (protectionNotice) logger.warn(protectionNotice);
 
       // Update status to "crawled"
       await Effect.runPromise(
