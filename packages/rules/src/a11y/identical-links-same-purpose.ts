@@ -15,6 +15,27 @@ function normalizedText(value: string | null | undefined): string {
   return value?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
 }
 
+function labelledByText(element: Element, doc: Document): string {
+  const labelledBy = element.getAttribute("aria-labelledby");
+  if (!labelledBy) return "";
+  return labelledBy
+    .trim()
+    .split(/\s+/)
+    .slice(0, MAX_LABELLED_BY_IDS)
+    .map((id) => normalizedText(doc.getElementById(id)?.textContent))
+    .filter(Boolean)
+    .join(" ");
+}
+
+// Accessible name of a link: aria-labelledby, else aria-label, else text content.
+function accessibleName(link: Element, doc: Document): string {
+  return (
+    labelledByText(link, doc) ||
+    normalizedText(link.getAttribute("aria-label")) ||
+    normalizedText(link.textContent)
+  );
+}
+
 function elementContext(
   element: Element,
   doc: Document,
@@ -23,17 +44,7 @@ function elementContext(
   const cached = cache.get(element);
   if (cached) return cached;
 
-  let label = "";
-  const labelledBy = element.getAttribute("aria-labelledby");
-  if (labelledBy) {
-    label = labelledBy
-      .trim()
-      .split(/\s+/)
-      .slice(0, MAX_LABELLED_BY_IDS)
-      .map((id) => normalizedText(doc.getElementById(id)?.textContent))
-      .filter(Boolean)
-      .join(" ");
-  }
+  let label = labelledByText(element, doc);
 
   if (!label) {
     label = normalizedText(element.getAttribute("aria-label"));
@@ -96,7 +107,7 @@ export const identicalLinksSamePurposeRule: Rule = {
     const contextCache = new Map<Element, ElementContext>();
 
     for (const link of links) {
-      const text = normalizedText(link.textContent);
+      const text = accessibleName(link, doc);
       const href = link.getAttribute("href");
 
       if (!text || !href) continue;
