@@ -75,6 +75,7 @@ export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> 
   ["Off-site redirect to https://other.com/x", "redirect"],
   ["Server error: 502", "http_5xx"],
   ["429 Too Many Requests", "http_4xx"],
+  ["Server returned 429", "http_4xx"],
   ["Request blocked by server", "http_4xx"],
   ["WAF challenge detected", "http_4xx"],
 
@@ -96,6 +97,14 @@ export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> 
   ["R2_ASSETS.put timed out after 5000ms", "unknown"],
   ["internal API got no response from the billing service", "unknown"],
   ["database query failed after 403 retries", "unknown"],
+  // A bare 429 with no status lead-in is a count or an id, not the site's
+  // refusal (#1850). A bare "HTTP NNN" is our own callback wording, so it stays
+  // `unknown` too; only "returned NNN" / "server error: NNN" is the site's.
+  ["retried 429 times", "unknown"],
+  ["upload retried 429 times before giving up", "unknown"],
+  ["batch 429 of 1000 failed", "unknown"],
+  ["HTTP 429", "unknown"],
+  ["Request failed with HTTP 429", "unknown"],
   ["CLI session ended before the audit completed", "unknown"],
   ["No pages were crawled", "unknown"],
 ];
