@@ -230,6 +230,11 @@ describe("SiteQuery dual-path — links/orphan-pages", () => {
           { id: "https://example.com/selfish" },
         ],
         details: { total: 4 },
+        observation: {
+          mode: "crawl",
+          applicability: "applicable",
+          uncertainty: "Inbound links are counted only in the observed crawl graph.",
+        },
         value: "/lonely\n/nofollowed\n/orphan\n/selfish",
       },
     ]);
@@ -401,6 +406,11 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
         message: "1 page(s) are linked only from sitewide chrome",
         items: [{ id: "https://example.com/pricing" }],
         details: { total: 1 },
+        observation: {
+          mode: "crawl",
+          applicability: "applicable",
+          uncertainty: "Contextual inbound links are counted only in the observed crawl graph.",
+        },
         value: "/pricing",
       },
     ]);
@@ -561,6 +571,17 @@ describe("SiteQuery dual-path — edge cases parity", () => {
           status: "skipped",
           message: `Crawl stopped at its ${FIXTURE.length}-page cap, so an inbound link may sit on a page not crawled`,
           skipReason: "Crawl capped before the frontier was exhausted",
+          // Only orphan-pages carries observation limits (#2302).
+          ...(name === "orphan-pages"
+            ? {
+                observation: {
+                  mode: "crawl",
+                  applicability: "unknown",
+                  uncertainty:
+                    "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
+                },
+              }
+            : {}),
         },
       ]);
     }
