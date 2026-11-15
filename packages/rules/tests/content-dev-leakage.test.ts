@@ -12,6 +12,7 @@ import { parseHTML } from "@squirrelscan/parser/dom";
 import {
   classifyHost,
   classifyUrlAttribute,
+  devTierOf,
   devLeakageRule,
   findDevHostsInText,
   isDevSubdomainOf,
@@ -676,5 +677,84 @@ describe("seed classification", () => {
       })),
     );
     expect(check.status).toBe("fail");
+  });
+});
+
+describe("tier labels at any position (repo#1858)", () => {
+  test("a tier label anywhere left of the apex is found", () => {
+    expect(devTierOf("app.dev.example.com", "example.com")).toBe("high");
+    expect(devTierOf("www.staging.example.com", "example.com")).toBe("high");
+    expect(isDevSubdomainOf("app.dev.example.com", "example.com")).toBe(true);
+    expect(isDevSubdomainOf("www.staging.example.com", "example.com")).toBe(true);
+  });
+
+  test.each(["staging", "dev", "test", "qa", "uat", "preprod", "local", "int"])(
+    "%s is high confidence",
+    (label) => {
+      expect(devTierOf(`${label}.example.com`, "example.com")).toBe("high");
+    },
+  );
+
+  test.each(["demo", "sandbox"])("%s is low confidence", (label) => {
+    expect(devTierOf(`${label}.example.com`, "example.com")).toBe("low");
+    expect(devTierOf(`app.${label}.example.com`, "example.com")).toBe("low");
+  });
+
+  test("a high label wins over a low one", () => {
+    expect(devTierOf("demo.qa.example.com", "example.com")).toBe("high");
+  });
+
+  test("false positives stay clean", () => {
+    for (const h of [
+      "notdev.example.com",
+      "webdev.example.com",
+      "development.example.com",
+      "latest.example.com",
+      "dev-api.example.com",
+      "dev.other.com",
+    ]) {
+      expect(devTierOf(h, "example.com")).toBeNull();
+    }
+    expect(devTierOf("www.test.com", "test.com")).toBeNull();
+    expect(devTierOf("dev.to", "dev.to")).toBeNull();
+    expect(devTierOf("qa.example.com", "other.com")).toBeNull();
+  });
+
+  test("resolves against a multi-label public suffix", () => {
+    expect(devTierOf("dev.example.co.uk", "example.co.uk")).toBe("high");
+    expect(devTierOf("www.example.co.uk", "example.co.uk")).toBeNull();
+  });
+
+  test("demo and sandbox links warn, a qa link fails", async () => {
+    const warnOf = async (host: string) =>
+      (await run(`${NAV}<a href="https://${host}/x">x</a>`, { url: "https://example.com/" }))[0]!;
+    expect((await warnOf("demo.example.com")).status).toBe("warn");
+    expect((await warnOf("sandbox.example.com")).status).toBe("warn");
+    expect((await warnOf("app.qa.example.com")).status).toBe("fail");
+  });
+
+  test("seed hosts follow the widened vocabulary", () => {
+    expect(isNonProductionSeedHost("qa.example.com")).toBe(true);
+    expect(isNonProductionSeedHost("app.dev.example.com")).toBe(true);
+    expect(isNonProductionSeedHost("demo.example.com")).toBe(true);
+    expect(isNonProductionSeedHost("www.dev.to")).toBe(false);
+    expect(isNonProductionSeedHost("dev.to")).toBe(false);
+    expect(isNonProductionSeedHost("www.int.com")).toBe(false);
+    expect(isNonProductionSeedHost("int.com")).toBe(false);
+  });
+
+  test("a fully qualified host with a trailing dot does not read the apex as a tier", () => {
+    expect(devTierOf("www.dev.to.", "dev.to")).toBeNull();
+    expect(isNonProductionSeedHost("www.dev.to.")).toBe(false);
+    expect(devTierOf("app.dev.example.com.", "example.com")).toBe("high");
+  });
+
+  test("auditing a qa origin is skipped", async () => {
+    const [check] = await run(`${NAV}<a href="https://dev.example.com/x">x</a>`, {
+      url: "https://qa.example.com/",
+      baseUrl: "https://qa.example.com/",
+    });
+    expect(check!.status).toBe("skipped");
+    expect(check!.skipReason).toBe("non-production-origin");
   });
 });

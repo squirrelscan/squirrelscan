@@ -43,6 +43,7 @@ How it works:
 ### Changed
 
 - Local external-link requests use browser-like headers. Bot blocks, timeouts and Cloudflare or Akamai edge errors are informational and do not affect the score; a TLS failure is confirmed broken. The console and LLM reports explain possible false positives and point to Perch. See [how external links are checked](https://docs.squirrelscan.com/guides/external-link-checking) (squirrelscan/repo#2747).
+- `content/dev-leakage` now finds a tier label at any position left of the audited domain (`app.dev.example.com`, `www.staging.example.com`), not only the leftmost, and the vocabulary adds `qa`, `uat`, `preprod`, `local`, `int`, `demo` and `sandbox` to `staging`, `dev` and `test`. Labels match whole (`notdev.example.com` stays clean). `demo` and `sandbox` only ever warn, since they are often real production surfaces. Auditing a host with any of these labels skips the rule as a non-production origin (squirrelscan/repo#1858).
 
 ### Fixed
 

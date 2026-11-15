@@ -39,8 +39,24 @@ const PREVIEW_HOST_SUFFIXES = [
   "trycloudflare.com",
 ] as const;
 
-/** Leftmost labels that name a non-production tier of the site's own domain. */
-const DEV_SUBDOMAIN_LABELS = new Set(["staging", "dev", "test"]);
+/** Labels that name a non-production tier of the site's own domain. */
+const HIGH_CONFIDENCE_TIER_LABELS = new Set([
+  "staging",
+  "dev",
+  "test",
+  "qa",
+  "uat",
+  "preprod",
+  "local",
+  "int",
+]);
+
+/**
+ * `demo` and `sandbox` are often real production surfaces (a public product
+ * demo, a documented API sandbox customers are told to use), so a link to one
+ * is not proof of a leak. They are reported but never `own`, so they only warn.
+ */
+const LOW_CONFIDENCE_TIER_LABELS = new Set(["demo", "sandbox"]);
 
 /**
  * Work cap on the prose scan. This rule is a yes/no signal about whether a dev
@@ -91,9 +107,10 @@ export interface DevLeakageHit {
   sample: string;
   /**
    * True when the host is unambiguously an artifact of THIS site: a loopback or
-   * private address, a non-production tier of the site's own apex, or a preview
-   * deployment that carries the site's own name. False only for a preview-
-   * platform host that could belong to anyone.
+   * private address, a high-confidence non-production tier of the site's own
+   * apex, or a preview deployment that carries the site's own name. False for a
+   * preview-platform host that could belong to anyone and for low-confidence
+   * tier labels (`demo`, `sandbox`), which are often real production surfaces.
    */
   own: boolean;
 }
@@ -201,21 +218,38 @@ export function isPreviewHost(host: string): boolean {
 }
 
 /**
- * True when `host` is a `staging.`/`dev.`/`test.` tier of `apex`.
+ * Which non-production tier `host` is of `apex`, if any: `"high"` for a label
+ * such as `staging`, `dev` or `qa`, `"low"` for `demo` or `sandbox`, else null.
  *
- * Both halves are load-bearing. The registrable-domain equality is what keeps
- * `dev.someoneelse.com` out; the leftmost-label test is what keeps
- * `notdev.example.com` and `development.example.com` out, since neither is the
- * site's dev tier and a suffix test would call both one.
+ * Any label LEFT of the apex counts (`app.dev.example.com`,
+ * `www.staging.example.com`), matched as a whole label. The registrable-domain
+ * equality is what keeps `dev.someoneelse.com` out; whole-label matching on the
+ * labels left of the apex is what keeps `notdev.example.com` and
+ * `development.example.com` out, and what keeps `www.test.com` (apex
+ * `test.com`) clean, since the apex's own labels are never tier labels here.
  */
-export function isDevSubdomainOf(host: string, apex: string): boolean {
-  if (!apex || host === apex) return false;
+export function devTierOf(host: string, apex: string): "high" | "low" | null {
+  // A fully qualified `www.dev.to.` would otherwise carry an empty last label,
+  // shift the slice below by one and read the apex's own `dev` as a tier.
+  const name = host.replace(/\.$/, "");
+  if (!apex || name === apex) return null;
   // Label test BEFORE the PSL lookup. Every named host in the page's prose
   // reaches this function, and `getDomain` is the expensive half; almost none of
-  // them start with a tier label, so this ordering is what keeps the scan cheap.
-  const leftmost = host.split(".")[0] ?? "";
-  if (!DEV_SUBDOMAIN_LABELS.has(leftmost)) return false;
-  return registrableDomain(host) === apex;
+  // them carry a tier label, so this ordering is what keeps the scan cheap.
+  const labels = name.split(".");
+  if (!labels.some((l) => HIGH_CONFIDENCE_TIER_LABELS.has(l) || LOW_CONFIDENCE_TIER_LABELS.has(l))) {
+    return null;
+  }
+  if (registrableDomain(name) !== apex) return null;
+  const left = labels.slice(0, labels.length - apex.split(".").length);
+  if (left.some((l) => HIGH_CONFIDENCE_TIER_LABELS.has(l))) return "high";
+  if (left.some((l) => LOW_CONFIDENCE_TIER_LABELS.has(l))) return "low";
+  return null;
+}
+
+/** True when any label left of `apex` in `host` is a tier label (see `devTierOf`). */
+export function isDevSubdomainOf(host: string, apex: string): boolean {
+  return devTierOf(host, apex) !== null;
 }
 
 /**
@@ -249,7 +283,10 @@ export function isNonProductionSeedHost(host: string): boolean {
   // its links to other local names are its own.
   if (isLocalOnlyName(host)) return true;
   // A seed that is a tier of its OWN apex: auditing `staging.example.com` is
-  // auditing staging, and every internal link on it is a staging link.
+  // auditing staging, and every internal link on it is a staging link. This
+  // covers the whole vocabulary at any position, demo and sandbox included:
+  // auditing `demo.example.com` makes its internal links its own, so skipping
+  // is right even though a link TO a demo host only warns.
   //
   // Routed through the same PSL helper rather than a bare leftmost-label test,
   // because `dev.to`, `test.com` and `staging.com` ARE registrable domains —
@@ -269,7 +306,8 @@ export function classifyHost(
   if (isPreviewHost(host)) {
     return { kind: "preview-host", own: looksLikeOwnPreview(host, site.apexLabel) };
   }
-  if (isDevSubdomainOf(host, site.apex)) return { kind: "dev-subdomain", own: true };
+  const tier = devTierOf(host, site.apex);
+  if (tier) return { kind: "dev-subdomain", own: tier === "high" };
   // Not `own`: a developer's local site could be this site's or anyone's, so it
   // warns rather than fails, like a stranger's preview.
   if (isLocalOnlyName(host)) return { kind: "local-name", own: false };
