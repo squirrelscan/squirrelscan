@@ -382,6 +382,13 @@ export interface RunContextInput {
    */
   readonly utcYear: number;
   /**
+   * The current UTC month (0-11). `content/stale-dated-copy` judges copy against the
+   * calendar month ("Launching March 2026" is stale from April), so a verdict cached
+   * in one month must not replay in the next. Month and not day, for the same reason
+   * as `utcYear`: a day would make every re-audit after midnight cold.
+   */
+  readonly utcMonth: number;
+  /**
    * The runtime's IANA time zone. `content/date-agreement` resolves a schema date
    * through `Date.parse`, which reads a bare "01/01/2026 00:30:00" in LOCAL time,
    * so the same page yields a different year under `UTC` and under
@@ -417,6 +424,7 @@ export async function computeRunContextHash(
       input.cloudResults ?? null,
       input.ignoreApplicability,
       input.utcYear,
+      input.utcMonth,
       input.timeZone,
     ]);
     // A cache that quietly stops hitting looks exactly like a cache that is
@@ -440,6 +448,7 @@ export async function computeRunContextHash(
         ["cloudResults", input.cloudResults ?? null],
         ["ignoreApplicability", input.ignoreApplicability],
         ["utcYear", input.utcYear],
+        ["utcMonth", input.utcMonth],
         ["timeZone", input.timeZone],
       ];
       for (const [name, value] of parts) {
@@ -707,10 +716,15 @@ export function bindRuleCache(store: RuleCacheStore, runContextHash: string): St
   // evaluation of it warns. Rather than freeze a year the rule cannot be told
   // about, replay simply stops for the rest of the run once the year moves — those
   // pages are audited normally, which is always a correct answer.
-  const boundYear = new Date().getUTCFullYear();
+  // `content/stale-dated-copy` reads the month too, so replay stops when the month moves.
+  const monthKey = () => {
+    const now = new Date();
+    return now.getUTCFullYear() * 12 + now.getUTCMonth();
+  };
+  const boundYear = monthKey();
   return {
     keyFor: (page, soft404Confirmation) =>
-      new Date().getUTCFullYear() === boundYear
+      monthKey() === boundYear
         ? computePageCacheKey(runContextHash, page, soft404Confirmation)
         : Promise.resolve(null),
     async load(keys) {

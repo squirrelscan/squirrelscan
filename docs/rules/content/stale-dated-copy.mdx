@@ -1,0 +1,128 @@
+---
+title: "Stale dated copy: promises about dates that have passed"
+description: "Copy that says coming in 2024, register now for a past event, or a sale that ended last year reads as abandoned. squirrel finds visible copy whose own date has passed."
+---
+
+## What stale dated copy is
+
+Some copy carries its own expiry date: "Coming in 2024", "New for 2025", "Register now" beside last spring's event, a sale that "ends March 3, 2025", a countdown widget aimed at a timestamp that has gone. When the date passes and the words stay, the page promises something that cannot happen. A visitor reads it as a site nobody maintains, and an agent summarising the page repeats the dead promise as current.
+
+[content/freshness](/rules/content/freshness) reads date metadata. This rule reads what the visible copy claims.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check named `stale-dated-copy`. It reads the page body without scripts, styles, navigation and the footer, one sentence at a time, and looks for:
+
+- Future-framed phrases with a past date: `coming`, `launching`, `arriving` or `opening` followed by `in`, `on` or `by` and a year (optionally with a month), and `new for` followed by a year.
+- Event or sale end dates that have passed: `sale ends`, `offer expires`, `valid through`, `register by`, `deadline` and similar, followed within a short span by a full date.
+- A future cue (`upcoming`, `register now`, `join us`, `save the date`, `RSVP`, `early bird`) in a sentence that carries a past full date.
+- A `<time datetime>` in the past inside a short block that also carries one of those cues.
+- Countdown markup, an element with `countdown` in its class or id, or a `data-countdown-to` style attribute, whose target is in the past.
+
+The outcomes:
+
+- Pass when nothing on the page asserts a passed date.
+- Warn when one or two claims have expired. The message names the first one and the check lists up to five.
+- Fail when a countdown targets a past time, or when three or more distinct claims have expired on one page.
+- Skipped when the page is noindex, or reads as archival: an archive-style URL path (`/archive/`, `/past-events/`), an `archive` body class, a title or H1 that frames the page as a recap or year in review, or an archive notice near the top.
+
+Retrospective copy does not fire. A sentence with past-tense or historical framing ("in 2019 we launched ...", "the sale ended on ...", "since 2021") is read as a statement about what happened and is left alone, so a post that names several past years stays clean.
+
+"Now" is judged by calendar month. A date counts as passed once its month has ended, so `Launching in June 2026` is not flagged during June 2026. A phrase with a month and no year is ambiguous and is not read.
+
+## How to fix it
+
+```html
+<!-- Before -->
+<p>Our new dashboard is coming in 2024.</p>
+
+<!-- After -->
+<p>Our new dashboard launched in March 2024.</p>
+```
+
+Rewrite the line in the past tense, update the date, or remove it. For an event page, change "register now" to "watch the recording", or move the page under an archive path or mark it noindex so it reads as history. Remove countdown widgets whose end time has passed, and drive sale end dates from the same source that ends the sale.
+
+| | |
+|---|---|
+| **Rule ID** | `content/stale-dated-copy` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `now` | string, `YYYY-MM-DD` | the current UTC date | Date to judge the copy against |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."content/stale-dated-copy"]
+now = "2026-06-15"
+```
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/stale-dated-copy"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/stale-dated-copy"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `stale-dated-copy` | Problem |  |
+| `stale-dated-copy` | Clean | `stale-dated-copy` |
+| `stale-dated-copy` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [content/freshness](/rules/content/freshness): which date signals the page publishes about itself.
+- [content/stale-copyright](/rules/content/stale-copyright): the footer year, a different date claim.
+- [content/date-agreement](/rules/content/date-agreement): dates on the page that disagree with each other.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

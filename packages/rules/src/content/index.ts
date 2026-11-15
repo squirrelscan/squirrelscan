@@ -25,6 +25,7 @@ import { placeholderTextRule } from "./placeholder-text";
 import { contentQualityRule } from "./quality";
 import { readingLevelRule } from "./reading-level";
 import { staleCopyrightRule } from "./stale-copyright";
+import { staleDatedCopyRule } from "./stale-dated-copy";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
 import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { unrenderedMarkupRule } from "./unrendered-markup";
@@ -49,6 +50,7 @@ export const rules: Rule[] = [
   mimeTypeRule,
   mojibakeRule,
   staleCopyrightRule,
+  staleDatedCopyRule,
   thinVsSiteNormRule,
   titlePatternOutlierRule,
   dateAgreementRule,
@@ -85,6 +87,7 @@ export {
   placeholderTextRule,
   readingLevelRule,
   staleCopyrightRule,
+  staleDatedCopyRule,
   thinVsSiteNormRule,
   titlePatternOutlierRule,
   unrenderedMarkupRule,
