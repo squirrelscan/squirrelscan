@@ -423,6 +423,14 @@
    "agent-blocking|skipped|Agent access not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
+ "ax/agent-tasks": {
+  "digest": "52977288621362",
+  "lines": [
+   "find-contact|info|Task find-contact failed at find-route: No contact route within # clicks of the entry page|\"fail\"|",
+   "find-price|skipped|Task find-price skipped: the site type is unknown (force it on to run it)|\"not-applicable\"|",
+   "reach-form|info|Task reach-form failed at find-form: No page with a form was reached|\"fail\"|"
+  ]
+ },
  "ax/agents-md": {
   "digest": "276273209474479",
   "lines": [

@@ -3,6 +3,7 @@
 import type { Rule } from "../types";
 
 import { agentBlockingRule } from "./agent-blocking";
+import { agentTasksRule } from "./agent-tasks";
 import { agentsMdRule } from "./agents-md";
 import { aiCrawlersRule } from "./ai-crawlers";
 import { apiDiscoveryRule } from "./api-discovery";
@@ -32,10 +33,12 @@ export const rules: Rule[] = [
   archiveIndexingRule,
   rslLicenseRule,
   payPerCrawlRule,
+  agentTasksRule,
 ];
 
 export {
   agentBlockingRule,
+  agentTasksRule,
   agentsMdRule,
   archiveIndexingRule,
   aiCrawlersRule,

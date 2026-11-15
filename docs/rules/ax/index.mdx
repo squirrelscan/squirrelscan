@@ -49,6 +49,7 @@ Actionable asks whether an agent can go beyond reading and transact: call an API
 
 - [API & OAuth Discovery](/rules/ax/api-discovery): `api-catalog`, OpenAPI, OAuth discovery documents
 - [Pay Per Crawl](/rules/ax/pay-per-crawl): HTTP 402 monetized agent access (Cloudflare Pay Per Crawl, x402)
+- [Agent Tasks](/rules/ax/agent-tasks): scripted checks that a contact route, a form and a price are reachable without an LLM
 - [Archive Indexing](/rules/ax/archive-indexing): presence in the Wayback Machine and Common Crawl, the archives AI training corpora are built from (cloud)
 
 <Note>`llms.txt` has no proven SEO value. Google has said it does not use it for search ranking or indexing. Treat it as a convenience for coding agents and docs consumption, not a ranking lever.</Note>
@@ -82,6 +83,7 @@ These carry the highest severity and weight in the category.
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
 | [Accept: text/markdown: serving Markdown to AI agents](/rules/ax/markdown-response) | No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header. squirrel probes all three. | info | Site-wide |
+| [Agent task checks: can a visitor's agent do the basic jobs](/rules/ax/agent-tasks) | Scripted, deterministic checks for finding a contact route, reaching a form and finding a price. No LLM, no submissions, same result on every run. | info | Site-wide |
 | [AGENTS.md: the paths squirrel probes and what counts](/rules/ax/agents-md) | No AGENTS.md at the repository root or any conventional path, or an SPA fallback served in its place. squirrel probes four paths and sniffs the body. | info | Site-wide |
 | [AI content detection: why this rule is retired](/rules/ai/ai-content) | The AI-generated content check no longer runs. squirrel emits a skip on every page and never calls a model. | info | Per-page |
 | [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning | Site-wide |

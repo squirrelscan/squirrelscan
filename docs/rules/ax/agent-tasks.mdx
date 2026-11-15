@@ -1,0 +1,88 @@
+---
+title: "Agent task checks: can a visitor's agent do the basic jobs"
+description: "Scripted, deterministic checks for finding a contact route, reaching a form and finding a price. No LLM, no submissions, same result on every run."
+---
+
+## What agent tasks are
+
+Every other AX rule reads a file, a header or markup. None of them shows whether the basic jobs a visitor's agent would try on your site can be done. This rule runs a few fixed, typed task scripts over the pages the crawl already fetched and reports each one as pass, fail or blocked.
+
+There is no LLM and no goal seeking. A task is a start page, bounded link following by a fixed heuristic, then assertions on the served HTML. The same crawl of an unchanged site gives the same result every time. The rule never submits a form, creates an account or makes a purchase, and it makes no request of its own.
+
+## What squirrel checks
+
+The rule runs once per crawl and emits one check per enabled task. The check name is the task id, the value is `pass`, `fail` or `blocked`, and `details` carries the `step` that failed and the `url`.
+
+- `find-contact`: starting from the entry page, follows internal links of crawled pages up to the click budget (2 by default, `maxClicks`) to a contact page, matched by a built-in contact slug or a `ContactPage` schema type. Candidates at each depth are tried in URL order, so the choice does not depend on navigation order. The contact page must show any phone number as a `tel:` link and must have a `mailto:` link or a form. Steps: `load-entry`, `find-route`, `load-route`, `phone-link`, `email-or-form`.
+- `reach-form`: takes the primary form (the one with the most fields) on the contact page, or on the entry page when it has one. The form must not need a login, every field must have a label (`label[for]`, a wrapping `label`, `aria-label`, `aria-labelledby` or `title`; a placeholder alone does not count), and no captcha widget may come before the first field. Steps: `find-form`, `no-login`, `labelled-fields`, `challenge-before-field`.
+- `find-price`: on a pricing or product page, a price must be present in the served HTML as text or as a JSON-LD `price`, not only after script runs. Steps: `find-page`, `load-page`, `price-in-html`.
+
+A task reports `blocked` when a bot wall answered (status 401, 403, 429 or 503, or a challenge interstitial) before it could finish. That is a skipped check with value `blocked`, not a failure. A `fail` reports at info status and never changes the score: results are advisory in this version.
+
+`add-to-cart` is not part of this version. It belongs with commerce readiness checks.
+
+## Which tasks run
+
+`find-contact` and `reach-form` run on every site. `find-price` runs only when the site type is ecommerce, saas, marketplace, agency or smb_local. When the site type is not known (an offline or local audit has no site profile), `find-price` is skipped with the value `not-applicable`. Force any task on or off per site:
+
+```toml squirrel.toml
+[rule_options."ax/agent-tasks"]
+maxClicks = 3
+
+[rule_options."ax/agent-tasks".tasks]
+find-price = "on"
+reach-form = "off"
+```
+
+Each task takes `auto` (the default), `on` or `off`. A task that is off reports a skipped check with the value `off`.
+
+## How to fix it
+
+- `find-route`: link your contact page from the header or footer, or within two clicks of the home page.
+- `phone-link`: wrap phone numbers in `<a href="tel:+15551234567">`.
+- `email-or-form`: add a `mailto:` link or a contact form.
+- `labelled-fields`: give every field a `<label for>`; a placeholder disappears once someone types.
+- `challenge-before-field`: load the captcha after the first field, or use an invisible challenge.
+- `price-in-html`: server-render prices so they exist before JavaScript runs.
+
+It overlaps [eeat/contact-page](/rules/eeat/contact-page) and [reliability/broken-forms](/rules/reliability/broken-forms) on purpose and does not replace them: those check that the page and form exist and work, this one checks the route and the shape an agent needs.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/agent-tasks` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/agent-tasks"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `find-contact` | Problem |  |
+| `reach-form` | Problem |  |
+| `find-price` | Problem |  |
+| `agent-tasks` | Clean | `find-contact`, `reach-form`, `find-price` |
+| `agent-tasks-skipped` | Not checked |  |
+
+{/* rule-checks:end */}
