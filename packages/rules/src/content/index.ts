@@ -11,6 +11,7 @@ import { devLeakageRule } from "./dev-leakage";
 import { duplicateContentRule } from "./duplicate-content";
 import { duplicateDescriptionRule } from "./duplicate-description";
 import { duplicateTitleRule } from "./duplicate-title";
+import { fontConsistencyRule } from "./font-consistency";
 import { freshnessRule } from "./freshness";
 import { h1TitleAlignmentRule } from "./h1-title-alignment";
 import { headingHierarchyRule } from "./heading-hierarchy";
@@ -64,6 +65,7 @@ export const rules: Rule[] = [
   h1TitleAlignmentRule,
   voiceConsistencyRule,
   terminologyConsistencyRule,
+  fontConsistencyRule,
 ];
 
 export {
@@ -96,4 +98,5 @@ export {
   unrenderedMarkupRule,
   voiceConsistencyRule,
   wordCountRule,
+  fontConsistencyRule,
 };

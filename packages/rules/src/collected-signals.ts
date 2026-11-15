@@ -21,6 +21,7 @@ import type { PageMisspellings } from "./content/common-misspellings";
 import type { ParsedPage } from "./types";
 import type { HreflangPageSignal } from "./i18n/hreflang-signal";
 import { buildHreflangSignal } from "./i18n/hreflang-signal";
+import { extractFontUsage, type FontUsageSignal } from "./content/font-consistency";
 import { fingerprintForPage, type ContentFingerprint } from "./content/duplicate-content";
 
 import { logger, profileRules } from "./logger";
@@ -123,6 +124,11 @@ export interface CollectedPageSignal {
    */
   contentFingerprint?: ContentFingerprint | null;
   /**
+   * content/font-consistency: the font families and @font-face rules the page's inline styles
+   * declare. Absent on a record cached before the field existed, which reads as nothing declared.
+   */
+  fontUsage?: FontUsageSignal;
+  /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
@@ -160,6 +166,16 @@ export function detachAnchors(a: PageAnchorSignal | null): PageAnchorSignal | nu
     skipFragments: detachedList(a.skipFragments),
     selfFragments: detachedList(a.selfFragments),
     ...(a.scriptIds ? { scriptIds: detachedList(a.scriptIds) } : {}),
+  };
+}
+
+/** The font signal with every string copied out of the page. */
+export function detachFontUsage(f: FontUsageSignal): FontUsageSignal {
+  return {
+    families: detachedList(f.families),
+    referenced: detachedList(f.referenced),
+    faces: f.faces.map((x) => ({ family: detached(x.family), weight: detached(x.weight), style: detached(x.style) })),
+    linkedStylesheets: f.linkedStylesheets,
   };
 }
 
@@ -225,6 +241,7 @@ export function buildCollectedPageSignal(input: {
       edgeMarkers: [],
       hreflang: buildHreflangSignal(parsed, input.headers, url),
       contentFingerprint: null,
+      fontUsage: { families: [], referenced: [], faces: [], linkedStylesheets: false },
     };
   }
 
@@ -331,6 +348,9 @@ export function buildCollectedPageSignal(input: {
     hreflang: detachHreflang(buildHreflangSignal(parsed, input.headers, url)),
     contentFingerprint: timed("content/duplicate-content", null as ContentFingerprint | null, () =>
       fingerprintForPage(doc, url, finalUrl)
+    ),
+    fontUsage: detachFontUsage(
+      timed("content/font-consistency", extractFontUsage(null), () => extractFontUsage(doc))
     ),
   };
   // The one record serves both rules: a timeout is reported against both.
