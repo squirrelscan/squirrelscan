@@ -636,3 +636,21 @@ describe("a redirect row (#1762) is judged at its destination (#1760)", () => {
     expect(ids(out)).not.toContain(`${BASE}old`);
   });
 });
+
+describe("links/no-contextual-inbound: fail-safe lookup (repo#1669)", () => {
+  test("a key missing from the contextual map does not warn", async () => {
+    const c = ctx([]);
+    c.siteQuery = {
+      incomingLinkCounts: () =>
+        new Map([
+          [BASE, 0],
+          ["https://example.com/a", 3],
+          ["https://example.com/pricing", 4],
+        ]),
+      // Desynced: /pricing is absent. It must read as contextual, not chrome-only.
+      contextualIncomingLinkCounts: () => new Map([["https://example.com/a", 3]]),
+    } as unknown as RuleContext["siteQuery"];
+    const result = await check(noContextualInboundRule, c);
+    expect(result.status).toBe("pass");
+  });
+});

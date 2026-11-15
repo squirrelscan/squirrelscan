@@ -17,7 +17,7 @@ import { Effect } from "effect";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { loadAllRules } from "@squirrelscan/rules";
 import { normalizeUrl } from "@squirrelscan/utils";
-import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
+import type { CheckResult, ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 import type {
   LinkData,
   LinkSection,
@@ -879,4 +879,52 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
     ]);
     await run(store.close());
   }, 30_000);
+});
+
+// ── repo#1669: the reconciled (`universe`) path production always uses ────────
+
+describe("SiteQuery universe path - links/no-contextual-inbound (repo#1669)", () => {
+  const WAF = "https://example.com/waf-challenge";
+  const universe = CHROME_FIXTURE.map((p) => p.normalizedUrl);
+  const opts = { minInboundLinks: 2, excludePatterns: [] };
+
+  async function seedWithOutOfUniversePage(store: SQLiteStorage): Promise<void> {
+    await seedChromeFixture(store);
+    // A page the audit universe does not contain, carrying a BODY link to /pricing.
+    await run(store.upsertPage(CRAWL, pageRow(WAF, [link("/pricing")])));
+  }
+
+  async function runWith(
+    store: SQLiteStorage,
+    siteQuery: RuleContext["siteQuery"]
+  ): Promise<CheckResult[]> {
+    const ctx = {
+      page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      parsed: {} as ParsedPage,
+      options: opts,
+      site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null },
+      siteQuery,
+    } as RuleContext;
+    return (await Promise.resolve(contextualRule.run(ctx))).checks;
+  }
+
+  test("warns on the chrome-only page, and an out-of-universe body link does not silence it", async () => {
+    const store = await freshStore();
+    await seedWithOutOfUniversePage(store);
+
+    const sq = await run(createSiteQuery(store, CRAWL, { universe }));
+    expect([...sq.contextualIncomingLinkCounts().keys()]).toEqual([...sq.incomingLinkCounts().keys()]);
+    expect(sq.contextualIncomingLinkCounts().get("https://example.com/pricing")).toBe(0);
+
+    const checks = await runWith(store, sq);
+    expect(checks[0]!.status).toBe("warn");
+    expect(checks[0]!.items).toEqual([{ id: "https://example.com/pricing" }]);
+
+    // Control: without the universe the WAF page's link leaks in and the rule goes silent.
+    const leaky = await run(createSiteQuery(store, CRAWL));
+    expect(leaky.contextualIncomingLinkCounts().get("https://example.com/pricing")).toBe(1);
+    expect((await runWith(store, leaky))[0]!.status).toBe("pass");
+
+    await run(store.close());
+  });
 });

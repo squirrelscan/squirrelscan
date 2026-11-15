@@ -399,7 +399,7 @@ export const noContextualInboundRule: Rule = {
       const contextual = ctx.siteQuery.contextualIncomingLinkCounts();
       const entries: Array<[string, InboundCounts]> = [];
       for (const [url, count] of all) {
-        entries.push([url, { all: count, contextual: contextual.get(url) ?? 0 }]);
+        entries.push([url, { all: count, contextual: contextual.get(url) ?? count }]);
       }
       // #2307: where the counted inbound links sit. Optional on the query: one without section
       // data leaves the items bare, exactly as before.
