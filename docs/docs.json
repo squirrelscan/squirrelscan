@@ -298,6 +298,7 @@
                   "rules/content/thin-vs-site-norm",
                   "rules/content/voice-consistency",
                   "rules/content/font-consistency",
+                  "rules/content/cross-page-contradictions",
                   "rules/content/title-pattern-outlier",
                   "rules/content/date-agreement",
                   "rules/content/unrendered-markup",

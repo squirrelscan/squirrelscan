@@ -64,11 +64,13 @@ export const CLOUD_SITE_KEY = "site";
  * always skip `not-prefetched`, on free AND paid runs alike, so the locked-rules
  * upsell must not advertise them. Remove entries as the services get wired.
  *
+ * `page-claims` (content/cross-page-contradictions) waits on the hosted extraction endpoint.
+ *
  * `render` was wired into cloud-prefetch for ax/content-without-js (#673), so it
  * left this set — it now runs on raw-HTML crawls (skipped, not advertised-unwired,
  * on rendered crawls).
  */
-export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>([]);
+export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>(["page-claims"]);
 
 /**
  * Read a single prefetched cloud result from a per-run store. `key` is the page

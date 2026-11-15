@@ -23,7 +23,8 @@ export type CloudServiceId =
   | "domain-stats"
   | "archive-indexing"
   | "third-party-scan"
-  | "render";
+  | "render"
+  | "page-claims";
 
 // Slim per-page payload sent from the CLI for AI analysis.
 // textExcerpt is capped client-side (~6KB).
@@ -255,6 +256,65 @@ export interface ContentGapItem {
 export interface ContentGapsResponse {
   gaps: ContentGapItem[];
   summary: string;
+}
+
+// --- page-claims -------------------------------------------------------------
+// LLM claim extraction for content/cross-page-contradictions (LLM rule pack,
+// opt-in, billed as `llm_rules_page`). The model only EXTRACTS structured claims
+// from a bounded page sample; whether two claims contradict is decided by
+// deterministic code in @squirrelscan/rules (never by the model).
+
+export type PageClaimType =
+  | "price"
+  | "plan"
+  | "phone"
+  | "hours"
+  | "shipping"
+  | "returns"
+  | "guarantee"
+  | "headcount"
+  | "founded";
+
+export const PAGE_CLAIM_TYPES: readonly PageClaimType[] = [
+  "price",
+  "plan",
+  "phone",
+  "hours",
+  "shipping",
+  "returns",
+  "guarantee",
+  "headcount",
+  "founded",
+];
+
+export interface PageClaim {
+  /** Page the claim was read from. */
+  url: string;
+  type: PageClaimType;
+  /** What the claim is about: the plan name, the department, the weekday, the policy. Required. */
+  subject: string;
+  /**
+   * Everything that legitimately changes the value: currency, billing period,
+   * region, customer segment. Empty string when the page states none.
+   */
+  context: string;
+  /** The claimed value, as the page states it. */
+  value: string;
+  /** The sentence or phrase the claim was read from, verbatim from the page. */
+  quote: string;
+  /** Model confidence in the extraction, 0 to 1. */
+  confidence: number;
+}
+
+export interface PageClaimsRequest {
+  auditId?: string;
+  pages: CloudPagePayload[];
+}
+
+export interface PageClaimsResponse {
+  claims: PageClaim[];
+  /** Pages the model actually read (the bounded sample). */
+  pagesSampled: number;
 }
 
 // --- tech-detect ------------------------------------------------------------
