@@ -35,6 +35,13 @@ export interface CrawlerConfig {
   concurrency: number;
   /** Per-host concurrency limit */
   perHostConcurrency: number;
+  /**
+   * Adaptive ramp-up ceiling (repo#1024). When above `perHostConcurrency`, a host
+   * answering cleanly earns extra in-flight slots up to this value; a 429/503
+   * drops it back and recovery returns only to `perHostConcurrency`. Never
+   * applies while a robots.txt Crawl-delay is honoured. Unset: no ramp-up.
+   */
+  maxPerHostConcurrency?: number;
   /** Global delay between requests (ms) */
   delayMs: number;
   /** Per-host delay between requests (ms) */
