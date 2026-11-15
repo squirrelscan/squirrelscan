@@ -2164,3 +2164,73 @@ describe.concurrent("release asset download falls back to the mirror (#2064)", (
     );
   });
 });
+
+// --- release manifest fetch failures are diagnosable (repo#1595) ----------
+// A curl stand-in that answers each endpoint with a chosen exit code and HTTP status, in the shape
+// `-w '\n@@status:%{http_code}'` produces.
+const fetchShim = (primary: string, fallback: string) => `
+curl() {
+  local url="" a
+  for a in "$@"; do url="$a"; done
+  case "$url" in
+    *api.github.com*) ${fallback} ;;
+    *) ${primary} ;;
+  esac
+}
+`;
+
+describe.concurrent("release manifest fetch failure message (repo#1595)", () => {
+  const run = (primary: string, fallback: string) =>
+    runWithCurlShim("USE_JQ=false; get_latest_version stable", {
+      prelude: fetchShim(primary, fallback),
+    });
+
+  test("both endpoints unreachable: names each host and curl exit code, says network, gives the manual URL", async () => {
+    const { code, stderr } = await run("return 7", "return 7");
+    expect(code).toBe(1);
+    expect(stderr).toContain(
+      "Cannot reach the release servers (install.squirrelscan.com: curl exit 7; api.github.com: curl exit 7)",
+    );
+    expect(stderr).toContain("https://github.com/squirrelscan/squirrelscan/releases");
+  });
+
+  test("an HTTP error is reported with its status and called unusable, not a network failure", async () => {
+    const { code, stderr } = await run(
+      "printf '\\n@@status:503'; return 22",
+      "printf '\\n@@status:403'; return 22",
+    );
+    expect(code).toBe(1);
+    expect(stderr).toContain(
+      "The release endpoints returned something unusable (install.squirrelscan.com: HTTP 503 (curl exit 22); api.github.com: HTTP 403 (curl exit 22))",
+    );
+    expect(stderr).not.toContain("Cannot reach");
+  });
+
+  test("a 200 without release data is unusable and still reaches error_line", async () => {
+    const { code, stderr } = await run(
+      "printf '<html></html>\\n@@status:200'",
+      "printf '[]\\n@@status:200'",
+    );
+    expect(code).toBe(1);
+    expect(stderr).toContain("install.squirrelscan.com: HTTP 200 but no usable release data");
+    expect(stderr).toContain("api.github.com: HTTP 200 but no usable release data");
+  });
+
+  test("a custom releases endpoint is reported as custom, never by its name", async () => {
+    const { stderr } = await runWithCurlShim("USE_JQ=false; get_latest_version stable", {
+      prelude: fetchShim("return 6", "return 6"),
+      env: { SQUIRREL_RELEASES_ENDPOINT: "https://mirror.corp.example/releases" },
+    });
+    expect(stderr).toContain("custom: curl exit 6");
+    expect(stderr).not.toContain("corp.example");
+  });
+
+  test("a good primary answer still returns the version", async () => {
+    const { code, stdout } = await run(
+      'printf \'{"version":"1.2.3"}\\n@@status:200\'',
+      "return 7",
+    );
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("v1.2.3");
+  });
+});

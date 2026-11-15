@@ -1396,24 +1396,79 @@ json_get_nested_number() {
 # Primary: install.squirrelscan.com/releases/{channel} — R2-backed release
 # metadata with no rate limits. Fallback: the GitHub API, which anonymous
 # clients share at 60 req/hr per IP — corporate NAT/VPN/CI egress hits 403s.
+# Split a `curl -w $'\n@@status:%{http_code}'` capture into RESP_BODY and RESP_STATUS. A capture
+# without the marker (a curl that ignored -w, a killed request) leaves the status empty.
+split_status_marker() {
+  local raw="$1"
+  RESP_STATUS=""
+  RESP_BODY="$raw"
+  case "$raw" in
+    *$'\n@@status:'*)
+      RESP_STATUS="${raw##*$'\n@@status:'}"
+      RESP_BODY="${raw%$'\n@@status:'*}"
+      ;;
+  esac
+  # Only three digits are ever reported, never whatever a server put after the marker.
+  case "$RESP_STATUS" in [0-9][0-9][0-9]) ;; *) RESP_STATUS="" ;; esac
+}
+
+# describe_fetch_outcome <label> <curl rc> <http status>
+# One short, fixed-vocabulary phrase per endpoint (host label, curl exit code, HTTP status): no URL,
+# path, response body or user text, so it is safe in error_line and inside the report allowlist.
+# A zero rc means the endpoint answered but the answer held no release data.
+describe_fetch_outcome() {
+  local label="$1" rc="$2" status="$3"
+  if [ "$rc" -eq 0 ]; then
+    printf '%s: HTTP %s but no usable release data' "$label" "${status:-200}"
+  elif [ -n "$status" ] && [ "$status" != "000" ]; then
+    printf "%s: HTTP %s (curl exit %s)" "$label" "$status" "$rc"
+  else
+    printf "%s: curl exit %s" "$label" "$rc"
+  fi
+}
+
+# fetch_failure_message <primary outcome> <fallback outcome> <network: yes|no>
+fetch_failure_message() {
+  if [ "$3" = yes ]; then
+    printf 'Cannot reach the release servers (%s; %s)' "$1" "$2"
+  else
+    printf 'The release endpoints returned something unusable (%s; %s)' "$1" "$2"
+  fi
+}
+
+# Remediation text for the user (not carried in the report): the manual download URL and a pin.
+fetch_failure_guidance() {
+  if [ "$1" = yes ]; then
+    echo "  This machine could not connect. Check your network, proxy or firewall settings."
+  else
+    echo "  A release endpoint answered, but not with release data. Retrying later usually helps."
+  fi
+  echo "  Download a release by hand: https://github.com/${REPO}/releases"
+  echo "  Or pin a version once you know it: curl -fsSL https://install.squirrelscan.com | SQUIRREL_VERSION=<version> bash"
+}
+
 get_latest_version() {
   local channel="${1:-stable}"
   local api_url="https://api.github.com/repos/${REPO}/releases"
-  local response version=""
+  local response version="" primary_label primary_outcome fallback_outcome primary_network=no network=no
 
   info "Fetching releases (channel: $channel)..."
 
   note_fetch_host "${RELEASES_ENDPOINT}/${channel}"
+  primary_label=$(reportable_host "$LAST_FETCH_HOST")
+  [ -z "$primary_label" ] && primary_label="release endpoint"
   local fetch_rc=0
   response=$(curl "${CURL_TLS_ARGS[@]}" -fsSL -H "User-Agent: squirrelscan-installer" \
-      --connect-timeout 5 --max-time 15 \
+      --connect-timeout 5 --max-time 15 -w $'\n@@status:%{http_code}' \
       "${RELEASES_ENDPOINT}/${channel}" 2>/dev/null) || fetch_rc=$?
   note_fetch_rc "$fetch_rc"
+  split_status_marker "$response"
+  response="$RESP_BODY"
   if [ "$fetch_rc" -eq 0 ]; then
     if [ "$USE_JQ" = true ]; then
       version=$(echo "$response" | jq -r '.version // empty')
     else
-      version=$(json_get "$response" "version")
+      version=$(json_get "$response" "version" || true)
     fi
     if [ -n "$version" ]; then
       # Manifest versions are bare ("0.0.73"); release tags carry the v prefix.
@@ -1421,24 +1476,36 @@ get_latest_version() {
       return 0
     fi
   fi
-  warn "Release metadata endpoint unavailable, falling back to GitHub API..."
+  primary_outcome=$(describe_fetch_outcome "$primary_label" "$fetch_rc" "$RESP_STATUS")
+  is_curl_network_code "$fetch_rc" && primary_network=yes
+  warn "Release metadata endpoint unavailable ($primary_outcome), falling back to GitHub API..."
 
   # Build curl args - add auth header if GITHUB_TOKEN is set (avoids rate limits)
   local curl_args=("${CURL_TLS_ARGS[@]}" -fsSL -H "User-Agent: squirrelscan-installer" --connect-timeout 10 --max-time 30)
   if [ -n "${GITHUB_TOKEN:-}" ]; then
     curl_args+=(-H "Authorization: token $GITHUB_TOKEN")
   fi
+  curl_args+=(-w $'\n@@status:%{http_code}')
 
   note_fetch_host "$api_url"
   fetch_rc=0
-  response=$(curl "${curl_args[@]}" "$api_url" 2>&1) || fetch_rc=$?
+  # stderr is dropped: it can carry the request URL or proxy details, and the outcome is described above.
+  response=$(curl "${curl_args[@]}" "$api_url" 2>/dev/null) || fetch_rc=$?
   note_fetch_rc "$fetch_rc"
+  split_status_marker "$response"
+  response="$RESP_BODY"
   if [ "$fetch_rc" -ne 0 ]; then
-    error "Failed to fetch releases\n  URL: $api_url\n  Response: $response"
+    fallback_outcome=$(describe_fetch_outcome "api.github.com" "$fetch_rc" "$RESP_STATUS")
+    # Unreachable only when neither endpoint answered at all.
+    is_curl_network_code "$fetch_rc" && [ "$primary_network" = yes ] && network=yes
+    error "$(fetch_failure_message "$primary_outcome" "$fallback_outcome" "$network")" \
+      "$(fetch_failure_guidance "$network")"
   fi
 
   if [ -z "$response" ] || [ "$response" = "[]" ]; then
-    error "No releases found\n  Check: https://github.com/${REPO}/releases"
+    fallback_outcome=$(describe_fetch_outcome "api.github.com" 0 "$RESP_STATUS")
+    error "$(fetch_failure_message "$primary_outcome" "$fallback_outcome" no)" \
+      "$(fetch_failure_guidance no)"
   fi
 
   version=""
