@@ -743,6 +743,9 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       if (rule.mixedProvenanceNote) {
         lines.push(`${indent(2)}${escapeXml(rule.mixedProvenanceNote)}`);
       }
+      if (rule.prevalenceNote) {
+        lines.push(`${indent(2)}${escapeXml(rule.prevalenceNote)}`);
+      }
   
       // Union of check.pages + item-level sourcePages / page-URL ids so
       // site-scope rules (blocked-links, sitemap-*) report real page counts.

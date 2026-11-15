@@ -12,6 +12,7 @@ import type {
   SiteResourceOccurrence,
 } from "./types";
 import { KEY_SEPARATOR } from "./constants";
+import { prevalenceNote, type RulePrevalenceData } from "./rule-prevalence";
 import { checkOccurrences } from "./occurrences";
 import {
   shapeOf,
@@ -151,6 +152,8 @@ export interface GroupedRule {
   // still shows red only from pages carried forward (not re-crawled) — e.g.
   // "Fixed on all 75 pages checked this run; 28 pages pending re-check."
   mixedProvenanceNote?: string;
+  /** #2491: set when the rule fires on most audited sites; it ranks below same-severity rules. */
+  prevalenceNote?: string;
   /** Additive actionable groups derived only from component occurrence evidence. */
   componentFixGroups?: ComponentFixGroup[];
 }
@@ -185,6 +188,11 @@ const RULE_SEVERITY_RANK: Record<"error" | "info" | "warning", number> = {
   info: 1,
   warning: 2,
 };
+
+/** #2491: near-universal rules (see rule-prevalence.ts) sort after distinctive ones of the same severity. */
+function prevalenceRank(rule: { prevalenceNote?: string }): number {
+  return rule.prevalenceNote ? 1 : 0;
+}
 
 /**
  * An item a PER-PAGE check reports was found ON that page, so the page is the
@@ -318,7 +326,9 @@ export function groupIssuesByCategory(
     | Record<string, ReportRuleResult>
     | Record<string, { meta: Record<string, unknown>; checks: Array<Record<string, unknown>> }>
     | Map<string, ReportRuleResult>,
-  checkTallies?: CheckTallies
+  checkTallies?: CheckTallies,
+  /** Overrides the shipped corpus prevalence (#2491); tests only. */
+  prevalence?: RulePrevalenceData
 ): GroupedCategory[] {
   const categoryMap = new Map<string, GroupedRule[]>();
   const entries =
@@ -660,6 +670,7 @@ export function groupIssuesByCategory(
       failCount > 0 ? metaSeverity : metaSeverity === "error" ? "warning" : metaSeverity;
 
     const actionableComponentFixGroups = componentFixGroups(ruleId, result.checks);
+    const ruleNote = prevalenceNote(ruleId, prevalence);
     const rule: GroupedRule = {
       id: ruleId,
       name: meta.name,
@@ -676,6 +687,7 @@ export function groupIssuesByCategory(
       failCount,
       warnCount,
       mixedProvenanceNote,
+      ...(ruleNote ? { prevalenceNote: ruleNote } : {}),
       ...(actionableComponentFixGroups.length > 0
         ? { componentFixGroups: actionableComponentFixGroups }
         : {}),
@@ -703,6 +715,8 @@ export function groupIssuesByCategory(
         // existing subcategory/weight/id tiebreakers within each severity.
         const sevDiff = RULE_SEVERITY_RANK[a.severity] - RULE_SEVERITY_RANK[b.severity];
         if (sevDiff !== 0) return sevDiff;
+        const prevDiff = prevalenceRank(a) - prevalenceRank(b);
+        if (prevDiff !== 0) return prevDiff;
         const subDiff =
           getSubcategoryPriority(b.subcategory ?? "") -
           getSubcategoryPriority(a.subcategory ?? "");
@@ -806,6 +820,8 @@ export function flattenIssuesBySeverity(categories: GroupedCategory[]): FlatIssu
   return flat.sort((a, b) => {
     const sevDiff = RULE_SEVERITY_RANK[a.severity] - RULE_SEVERITY_RANK[b.severity];
     if (sevDiff !== 0) return sevDiff;
+    const prevDiff = prevalenceRank(a) - prevalenceRank(b);
+    if (prevDiff !== 0) return prevDiff;
     const priDiff = getCategoryPriority(b.categoryCode) - getCategoryPriority(a.categoryCode);
     if (priDiff !== 0) return priDiff;
     // Equal-priority categories: keep each one's rules together rather than

@@ -42,6 +42,15 @@ export { collectSkippedChecks, parseSkippedChecks, restoreSkippedChecks } from "
 export type { SkippedCheck } from "./skipped";
 export { checkOccurrences } from "./occurrences";
 
+// Cross-site prevalence (#2491)
+export {
+  NEAR_UNIVERSAL_PREVALENCE,
+  isNearUniversal,
+  prevalenceNote,
+  rulePrevalence,
+  type RulePrevalenceData,
+} from "./rule-prevalence";
+
 // Grouping
 export {
   groupIssuesByCategory,

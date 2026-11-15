@@ -105,9 +105,15 @@ Every format lists issues in the same order, so the top of the list is always
 the work to do first:
 
 1. **Severity** - errors, then recommendations, then warnings.
-2. **Category** - within a severity, issues from the same category stay together,
+2. **Prevalence** - within a severity, findings that show up on more than 70% of the
+   sites in our audit corpus move below the distinctive ones, and carry a line
+   saying so. Nothing is hidden and the score does not change; the figures live in
+   `packages/report/src/rule-prevalence.json` and are refreshed by
+   `apps/cli/scripts/rule-prevalence.ts`. Until a corpus run fills that file, the
+   order is unchanged.
+3. **Category** - within a severity, issues from the same category stay together,
    higher-priority categories first.
-3. **Rule weight** - within a category, heavier rules first.
+4. **Rule weight** - within a category, heavier rules first.
 
 Categories are not top-level sections: a category with both an error and a
 warning appears under both severities.
