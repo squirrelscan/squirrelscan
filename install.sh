@@ -1287,16 +1287,16 @@ ensure_musl_runtime() {
   # Non-root, no apk, or apk failed → clear, actionable instructions.
   warn "squirrel needs libstdc++ to run on Alpine/musl."
   if command -v apk >/dev/null 2>&1; then
-    if [ "$(id -u)" = "0" ]; then
-      echo "  Install it, then re-run the installer:" >&2
+    echo "  Install it, then re-run the installer:" >&2
+    if [ "$(id -u)" = "0" ] || ! command -v sudo >/dev/null 2>&1; then
       echo "      apk add libstdc++" >&2
     else
-      echo "  Install it, then re-run the installer:" >&2
       echo "      sudo apk add libstdc++" >&2
     fi
   else
     echo "  Install libstdc++ (and libgcc) with your package manager, then re-run." >&2
   fi
+  echo "  More: https://docs.squirrelscan.com/quickstart (Alpine / musl Linux note)" >&2
   error "Missing libstdc++ (required by the musl build)"
 }
 

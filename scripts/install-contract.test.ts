@@ -1185,6 +1185,31 @@ describe.concurrent("install.sh report_error payload", () => {
     30_000,
   );
 
+  describe("ensure_musl_runtime failure message", () => {
+    const run = (prelude: string) =>
+      runWithCurlShim("ensure_musl_runtime", {
+        cut: "body",
+        prelude: `ls() { return 1; }\napk() { :; }\n${prelude}`,
+      });
+    const noSudo =
+      'command() { if [ "$1" = "-v" ] && [ "$2" = "sudo" ]; then return 1; fi; builtin command "$@"; }';
+
+    test("non-root with sudo: names sudo apk add and links the quickstart", async () => {
+      const r = await run("id() { echo 1000; }\nsudo() { :; }");
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain("sudo apk add libstdc++");
+      expect(r.stderr).toContain("https://docs.squirrelscan.com/quickstart");
+      expect(r.stderr).toContain("Missing libstdc++");
+    }, 30_000);
+
+    test("non-root without sudo: names plain apk add", async () => {
+      const r = await run(`id() { echo 1000; }\n${noSudo}`);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain("apk add libstdc++");
+      expect(r.stderr).not.toContain("sudo apk add");
+    }, 30_000);
+  });
+
   test("omits version while it is not yet known", async () => {
     const { calls } = await runWithCurlShim('report_error check_deps 1 "x" ""; sleep 1', {
       cut: "preamble",
