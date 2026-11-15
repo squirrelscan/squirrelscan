@@ -93,6 +93,7 @@ Pricing:
   external links         1 per link the cloud verifies for an audit, at most 1 per page
                            (internal links, and links checked from your machine, are free)
   content_gaps          25 per run
+  content_recommendations 25 per run
   keyword_gaps          25 per run
 
 Top up: https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01J0ORGEXAMPLE0000000000A&src=cli
@@ -137,6 +138,7 @@ Opt-in add-ons are the only extra charges:
 |--------|------|-------|
 | Keyword gaps | 25 per audit | [`gaps/keywords`](/rules/gaps/keywords) (opt-in) |
 | Content gaps | 25 per audit | [`gaps/content`](/rules/gaps/content) (opt-in) |
+| Content recommendations | 25 per audit | [`gaps/recommendations`](/rules/gaps/recommendations) (opt-in) |
 
 An [ephemeral run](/cli/audit#ephemeral-runs) (`squirrel audit --ephemeral`) is charged exactly like the same audit without the flag. It only skips adding the site to your dashboard, scheduling it and publishing the report. Your credit history shows it as "Ephemeral CLI run" with the domain.
 

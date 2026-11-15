@@ -9,6 +9,7 @@ import type {
   AuditReport,
   CloudPagePayload,
   CloudServiceId,
+  ContentInventoryPage,
   DomainStats,
   EditorSummary,
   EditorSummaryRequest,
@@ -73,6 +74,7 @@ import {
   createSelectorState,
 } from "@/audit/cloud-payloads-blocklist";
 import {
+  absorbInventory,
   absorbSeeds,
   buildGapsPayloads,
   buildGapsPayloadsFromSeeds,
@@ -492,6 +494,8 @@ export interface CloudPrefetchPayloadSet {
   metadataPages: SiteMetadataPagePayload[];
   blocklist: { urls: string[]; selectors: string[] } | null;
   gapsSeeds: string[];
+  /** Content inventory rows for content-recommendations. */
+  gapsInventory?: ContentInventoryPage[];
   renderedPageUrls: Set<string>;
 }
 
@@ -515,6 +519,7 @@ export function createCloudPrefetchCollector(baseUrl: string): {
   const blocklistUrls = new Set<string>();
   const selectorState = createSelectorState();
   const seedState = createSeedState();
+  const inventory: ContentInventoryPage[] = [];
 
   // Bounded metadata sample — never page-count-scaled. Entries keep their
   // PageRecord (so `page.html` can be re-parsed at build time) but their DOMs go
@@ -538,6 +543,7 @@ export function createCloudPrefetchCollector(baseUrl: string): {
       absorbUrls(blocklistUrls, siteContext);
       absorbSelectors(selectorState, siteContext);
       absorbSeeds(seedState, siteContext);
+      absorbInventory(inventory, siteContext);
 
       for (const entry of siteContext) {
         // The same "usable" test buildMetadataPayload applies.
@@ -580,6 +586,7 @@ export function createCloudPrefetchCollector(baseUrl: string): {
             ? null
             : { urls, selectors },
         gapsSeeds: seedState.seeds,
+        gapsInventory: inventory,
         renderedPageUrls,
       };
     },
@@ -657,7 +664,8 @@ export async function runCloudPrefetchFromPayloads(
     ...buildGapsPayloadsFromSeeds(
       payloads.gapsSeeds,
       opts.baseUrl,
-      opts.config
+      opts.config,
+      payloads.gapsInventory
     ),
     // Archive Indexing (#789) — the payload is just the site URL; the server
     // resolves the domain and runs the Wayback + Common Crawl lookups.

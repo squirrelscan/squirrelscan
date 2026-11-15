@@ -528,7 +528,8 @@
                 "pages": [
                   "rules/gaps/index",
                   "rules/gaps/keywords",
-                  "rules/gaps/content"
+                  "rules/gaps/content",
+                  "rules/gaps/recommendations"
                 ]
               }
             ]

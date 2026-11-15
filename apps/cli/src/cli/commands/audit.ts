@@ -234,6 +234,7 @@ const CLOUD_SERVICE_LABELS: Record<string, string> = {
   "blocklist-check": "Blocklist check",
   "keyword-gaps": "Keyword gap analysis",
   "content-gaps": "Content gap analysis",
+  "content-recommendations": "Content recommendations",
 };
 
 export function deepAuditScope(

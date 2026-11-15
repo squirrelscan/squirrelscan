@@ -863,4 +863,8 @@ export const SERVICE_LIMITS = {
   gapsMaxCompetitors: 5,
   gapsMaxSeeds: 50,
   gapsMaxResults: 100,
+  /** Content inventory rows sent to content-recommendations. */
+  recommendationsMaxPages: 100,
+  /** Suggestions kept from a content-recommendations response. */
+  recommendationsMaxResults: 40,
 } as const;

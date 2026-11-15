@@ -67,12 +67,10 @@ describe("cloud prefetch input parity (container replica == CLI)", () => {
     expect(ae).toEqual(cli);
     expect(ae.length).toBeGreaterThan(0); // there ARE cloud-gated rules
     const ids = ae.map((rule) => rule.id);
-    expect(
-      ids.filter((id) => id === "gaps/keywords" || id === "gaps/content")
-    ).toEqual([]);
+    expect(ids.filter((id) => id.startsWith("gaps/"))).toEqual([]);
   });
 
-  test("selectCloudRules: explicit gaps opt-in selects both paid services", () => {
+  test("selectCloudRules: explicit gaps opt-in selects every paid gaps service", () => {
     const config = getDefaultConfig();
     config.rules.enable = ["gaps/*"];
     const ae = aeSelectCloudRules(config as never);
@@ -81,6 +79,7 @@ describe("cloud prefetch input parity (container replica == CLI)", () => {
     expect(ae.map((rule) => rule.id)).toEqual([
       "gaps/keywords",
       "gaps/content",
+      "gaps/recommendations",
     ]);
   });
 
@@ -147,9 +146,12 @@ describe("cloud prefetch input parity (container replica == CLI)", () => {
           url: "https://acme.com/pricing",
           finalUrl: "https://acme.com/pricing",
           status: 200,
+          depth: 1,
+          lastModified: "Wed, 01 Jan 2020 00:00:00 GMT",
         },
         parsed: {
           document,
+          content: { wordCount: 120 },
           meta: {
             title: "Pricing | Acme",
             description: null,
@@ -185,6 +187,15 @@ describe("cloud prefetch input parity (container replica == CLI)", () => {
       config as never
     );
     expect(ae).toEqual(cli);
+    expect(ae["content-recommendations"]?.pages).toEqual([
+      {
+        url: "https://acme.com/pricing",
+        title: "Pricing | Acme",
+        wordCount: 120,
+        depth: 1,
+        lastModified: "Wed, 01 Jan 2020 00:00:00 GMT",
+      },
+    ]);
   });
 
   test("estimateAuditCap ≥ actual worst-case across the auto-charged set", () => {

@@ -51,6 +51,8 @@ export const CREDIT_COSTS = {
   // Opt-in add-ons — the only audit-scoped features still itemized.
   keyword_gaps: { cost: 25, per: 1, unit: "run" },
   content_gaps: { cost: 25, per: 1, unit: "run" },
+  // Placeholder price pending sign-off (repo#100): same as content_gaps.
+  content_recommendations: { cost: 25, per: 1, unit: "run" },
   // AI issue enrichment — one LLM call per issue, charged on the
   // manual enrich routes (not part of an audit run).
   issue_enrich: { cost: 3, per: 1, unit: "issue" },

@@ -6,7 +6,10 @@ import {
   detachFromPage,
   type CloudSitePayloads,
 } from "@squirrelscan/audit-engine";
-import { SERVICE_LIMITS } from "@squirrelscan/core-contracts";
+import {
+  SERVICE_LIMITS,
+  type ContentInventoryPage,
+} from "@squirrelscan/core-contracts";
 
 import type { SiteContextPage } from "@/audit/adapter";
 import type { Config } from "@/config";
@@ -22,7 +25,7 @@ const TITLE_SEPARATORS = /\s*[|·—–]\s*|\s+-\s+/;
 
 export type GapsPayloads = Pick<
   CloudSitePayloads,
-  "keyword-gaps" | "content-gaps"
+  "keyword-gaps" | "content-gaps" | "content-recommendations"
 >;
 
 interface GapsRuleOptions {
@@ -109,6 +112,27 @@ export function absorbSeeds(
   }
 }
 
+/** Append content-inventory rows for 2xx pages, capped at `recommendationsMaxPages`. */
+export function absorbInventory(
+  inventory: ContentInventoryPage[],
+  siteContext: SiteContextPage[]
+): void {
+  for (const { page, parsed } of siteContext) {
+    if (inventory.length >= SERVICE_LIMITS.recommendationsMaxPages) return;
+    if (!parsed || page.status < 200 || page.status >= 300) continue;
+    const row: ContentInventoryPage = {
+      url: detachFromPage(page.finalUrl || page.url, "cloud-payload"),
+      wordCount: parsed.content.wordCount,
+      depth: page.depth,
+    };
+    const title = parsed.meta.title?.trim();
+    if (title) row.title = detachFromPage(title, "cloud-payload");
+    if (page.lastModified)
+      row.lastModified = detachFromPage(page.lastModified, "cloud-payload");
+    inventory.push(row);
+  }
+}
+
 /**
  * Build the gaps site-unit payloads. Returns an empty object (no dispatch →
  * `not-prefetched`, no charge) when the target has no usable domain or the
@@ -119,7 +143,14 @@ export function buildGapsPayloads(
   baseUrl: string,
   config: Config
 ): GapsPayloads {
-  return buildGapsPayloadsFromSeeds(collectSeeds(siteContext), baseUrl, config);
+  const inventory: ContentInventoryPage[] = [];
+  absorbInventory(inventory, siteContext);
+  return buildGapsPayloadsFromSeeds(
+    collectSeeds(siteContext),
+    baseUrl,
+    config,
+    inventory
+  );
 }
 
 /**
@@ -129,13 +160,15 @@ export function buildGapsPayloads(
 export function buildGapsPayloadsFromSeeds(
   seeds: string[],
   baseUrl: string,
-  config: Config
+  config: Config,
+  inventory: ContentInventoryPage[] = []
 ): GapsPayloads {
   const domain = apexDomain(baseUrl);
   if (!domain || seeds.length === 0) return {};
 
   const keywordOpts = gapsOptions(config, "gaps/keywords");
   const contentOpts = gapsOptions(config, "gaps/content");
+  const recOpts = gapsOptions(config, "gaps/recommendations");
 
   return {
     "keyword-gaps": {
@@ -151,6 +184,13 @@ export function buildGapsPayloadsFromSeeds(
       language: contentOpts.language,
       competitors: contentOpts.competitors,
       coveredTopics: seeds,
+    },
+    "content-recommendations": {
+      domain,
+      country: recOpts.country,
+      language: recOpts.language,
+      coveredTopics: seeds,
+      pages: inventory,
     },
   };
 }
