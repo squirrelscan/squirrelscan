@@ -16,7 +16,7 @@ import type {
   WafBlockedSummary,
   WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
-import { isAuditFailed } from "@squirrelscan/core-contracts";
+import { isAuditFailed, type PartialAudit } from "@squirrelscan/core-contracts";
 import type { RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type {
@@ -67,6 +67,7 @@ import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
 import { ruleRuns, type RuleRun } from "../rule-runs";
 import {
+  partialAuditLine,
   robotsScope,
   canonicalVariantCount,
   followedStartRedirect,
@@ -217,6 +218,8 @@ interface SlimJsonReport {
     baseUrl: string;
     /** The deep page requested when `baseUrl` describes the site-wide scope. */
     requestedUrl?: string;
+    /** Present on a run narrowed by `--rule-include`/`--rule-exclude` (repo#1082): the score covers `includedCategories` only. */
+    partialAudit?: PartialAudit;
     /** What `--resume` came to (#1658); present only when the run was asked to resume. */
     resume?: ResumeOutcome;
     /** Page bodies evicted from the local content store since this audit ran (#1667); absent when none were. */
@@ -685,6 +688,15 @@ function buildSlimReport(
       ...(report.requestedUrl ? { requestedUrl: report.requestedUrl } : {}),
       // #1658: what `--resume` came to. Present only when the run was asked to resume, so a
       // consumer can tell a resumed crawl from a fresh one and read why it started fresh.
+      ...(partialAuditLine(report) && report.partialAudit
+        ? {
+            partialAudit: {
+              include: report.partialAudit.include,
+              exclude: report.partialAudit.exclude,
+              includedCategories: report.partialAudit.includedCategories,
+            },
+          }
+        : {}),
       ...(report.resume ? { resume: report.resume } : {}),
       // #1667: page bodies the local content store has evicted since this audit ran. Absent when none were.
       ...(report.storeIntegrity ? { storeIntegrity: report.storeIntegrity } : {}),

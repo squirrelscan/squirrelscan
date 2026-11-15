@@ -10,7 +10,7 @@ import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
-import { followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { partialAuditLine, followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { ignoredLine, safeIgnored } from "../ignored";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
@@ -68,6 +68,15 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   // `requested-max-pages` only when the request was clamped (#1909), and
   // `stop-reason` only when the crawl time budget ended it. Absent on a report
   // from before #1180.
+  // Rule filter (repo#1082): the run was narrowed, so the score covers these categories only.
+  if (partialAuditLine(report) && report.partialAudit) {
+    const pa = report.partialAudit;
+    const attr = (v: unknown) =>
+      escapeXml((Array.isArray(v) ? v.filter((x) => typeof x === "string") : []).join(","));
+    lines.push(
+      `${indent(2)}<partial-audit include="${attr(pa.include)}" exclude="${attr(pa.exclude)}" included-categories="${attr(pa.includedCategories)}"/>`,
+    );
+  }
   if (report.scanScope) {
     const s = report.scanScope;
     const cap = s.maxPages !== undefined ? ` max-pages="${s.maxPages}"` : "";

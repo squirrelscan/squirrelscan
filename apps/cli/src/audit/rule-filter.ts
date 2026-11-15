@@ -7,7 +7,12 @@
 import { loadAllRules } from "@squirrelscan/rules";
 import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
 
-import { normalizeCategoryCode } from "@/rules/categories";
+import type { PartialAudit } from "@/types";
+
+import {
+  normalizeCategoryCode,
+  RULE_CATEGORY_VALUES,
+} from "@/rules/categories";
 
 export {
   filterResolvesToZeroCategories,
@@ -87,4 +92,31 @@ export function isCategoryExcluded(
   if (resolved.disable.some(touches)) return true;
   if (resolved.enable.length === 0) return true;
   return !resolved.enable.some(touches);
+}
+
+/**
+ * The partial-audit marker for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082), or
+ * undefined for an unfiltered run. `includedCategories` is every category that could still run under
+ * the filter, so the score reads with its basis wherever the report is shown.
+ */
+export function buildPartialAudit(
+  filter: { enable: string[]; disable: string[] },
+  pluginRules: readonly { id: string; category: string }[] = []
+): PartialAudit | undefined {
+  if (filter.enable.length === 0 && filter.disable.length === 0) {
+    return undefined;
+  }
+  // No include list means every rule is enabled (the engine's default `*`).
+  const resolved = {
+    enable: filter.enable.length > 0 ? filter.enable : ["*"],
+    disable: filter.disable,
+  };
+  const includedCategories = RULE_CATEGORY_VALUES.filter(
+    (c) => !isCategoryExcluded(c, resolved, pluginRules)
+  ).map((c) => normalizeCategoryCode(c));
+  return {
+    include: [...filter.enable],
+    exclude: [...filter.disable],
+    includedCategories,
+  };
 }

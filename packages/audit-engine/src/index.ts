@@ -228,7 +228,12 @@ export {
 export type { DetectedTechnology, TechCategory } from "@squirrelscan/tech-detect";
 
 // Publish-prep meta shared by the CLI publish controller and runCloudAudit (#656)
-export { computeLockedRules, deriveHomepageSummary } from "./publish-meta";
+export {
+  computeLockedRules,
+  deriveHomepageSummary,
+  isRuleFilteredOut,
+  withoutFilteredLockedRules,
+} from "./publish-meta";
 // The one capper both publish producers build their body with (#2656). Also
 // available Worker-clean via the `./publish-cap` entry.
 export {

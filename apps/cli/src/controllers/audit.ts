@@ -140,7 +140,7 @@ import {
   createProjectRuleCacheStore,
   ruleCacheEnabled,
 } from "@/audit/rule-cache-store";
-import { resolveRulesConfig } from "@/audit/rule-filter";
+import { buildPartialAudit, resolveRulesConfig } from "@/audit/rule-filter";
 import { RULES_VERSION } from "@/audit/rules-version";
 import {
   runSmartAudits,
@@ -2715,6 +2715,13 @@ export async function runAudit(
             : {}),
         };
         report.scanScope = scanScope;
+        // repo#1082: a run narrowed by --rule-include/--rule-exclude says so in
+        // every format and in the published payload. Absent when unfiltered.
+        const partialAudit = buildPartialAudit({
+          enable: options.ruleInclude ?? [],
+          disable: options.ruleExclude ?? [],
+        });
+        if (partialAudit) report.partialAudit = partialAudit;
         // #1271: say what the time limit cut. Status `partial` only when it cut
         // something and the run was not already failed, blocked or partial.
         if (durationBudget) {

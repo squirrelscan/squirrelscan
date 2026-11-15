@@ -3,6 +3,7 @@
 import type { ReportBranding } from "@squirrelscan/core-contracts";
 import type { SeedRedirectRecord } from "@squirrelscan/core-contracts/seed-redirect";
 
+import { withoutFilteredLockedRules } from "@squirrelscan/audit-engine";
 import {
   CloudClientError,
   type UpgradeOffer,
@@ -3292,17 +3293,6 @@ export const audit = defineCommand({
       // console, text, json: stdout by default (pipeable)
       // html: file by default (needs browser)
       const format = options.outputFormat ?? "console";
-      // Only the console renderer carries the partial-audit notice today
-      // (ConsoleReportOptions.ruleFilter) — machine formats don't have a
-      // partial marker in their payload yet (#1082), so warn on stderr
-      // rather than silently emit a filtered report with no distinguishing
-      // signal. Printed to stderr regardless of format so it never pollutes
-      // a piped stdout report.
-      if (ruleFilterActive && format !== "console") {
-        console.error(
-          `⚠ --rule-include/--rule-exclude active — this ${format} report is partial and does not mark itself as such (see #1082)`
-        );
-      }
       const includePassed = args.includePassed ?? false;
       const includeInfo = args.includeInfo ?? false;
       const includePages = args.includePages ?? false;
@@ -3721,7 +3711,13 @@ export const audit = defineCommand({
           // credits) used to show nothing beyond "Credits used: 0" — surface
           // the count + why. Anonymous runs already get an equivalent signup
           // CTA below, so skip this line there to avoid printing two.
-          const lockedLine = lockedRulesFooterLine(report);
+          const lockedLine = lockedRulesFooterLine({
+            ...report,
+            lockedRules: withoutFilteredLockedRules(
+              report.lockedRules,
+              report.partialAudit
+            ),
+          });
           if (lockedLine) footerLines.push(lockedLine);
           // The advance warning the dashboard now shows as a banner, in the
           // one place a CLI-only user will actually read it. Fires while there

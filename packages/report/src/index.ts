@@ -269,6 +269,7 @@ export {
   carriedTag,
   timeAgo,
   scanScopeLine,
+  partialAuditLine,
   robotsScope,
   robotsHonouredNote,
   targetedRunNote,

@@ -24,7 +24,7 @@ import {
   itemLabel,
   regionScopeLine,
 } from "../region-scope";
-import { isVersionLike } from "../coverage";
+import { isVersionLike, partialAuditLine } from "../coverage";
 import { hasCarriedPages } from "../page-type-scope";
 
 /** "in the site footer, ..." from "In the site footer, ...", to sit inside a sentence. */
@@ -469,6 +469,13 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
 
   // Scan scope disclosure (#1180): where the audit ran + crawl cap, so an agent
   // reading the report knows what the score is based on.
+  // Rule filter (repo#1082): the score covers the included categories only.
+  const partialNote = partialAuditLine(report);
+  if (partialNote && report.partialAudit) {
+    lines.push(
+      `<partial-audit included-categories="${escapeXml((report.partialAudit.includedCategories ?? []).join(","))}">${escapeXml(partialNote)}</partial-audit>`,
+    );
+  }
   if (report.scanScope) {
     const s = report.scanScope;
     const cap = s.maxPages !== undefined ? ` max-pages="${s.maxPages}"` : "";

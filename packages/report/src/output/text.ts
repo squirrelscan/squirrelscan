@@ -70,6 +70,7 @@ import {
   seedRedirectLine,
   startRedirectLine,
 } from "../coverage";
+import { partialAuditLine } from "../coverage";
 import { ignoredLine, ignoredNoteLines } from "../ignored";
 import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
@@ -187,6 +188,8 @@ function scanDetailLines(report: AuditReport): string[] {
   const ignored = ignoredLine(report);
   if (ignored) out.push(stripControlChars(ignored));
   for (const line of ignoredNoteLines(report)) out.push(stripControlChars(line));
+  const partial = partialAuditLine(report);
+  if (partial) out.push(stripControlChars(partial));
   const scope = scanScopeLine(report);
   if (scope) out.push(scope);
   // repo#2661: a capped published report lists samples; say so, and where the rest is.
