@@ -46,6 +46,7 @@ How it works:
 
 ### Fixed
 
+- The GraphQL probes (`security/graphql-introspection` and `security/graphql-get-mutations`) now read robots.txt as the crawl does (squirrelscan/repo#3390). With `respect_robots` on, a path that the crawl's own group (`robots_user_agent`, default `SquirrelScan`) disallows is no longer probed below `aggressive`, and a site with no such group gets its `User-agent: *` rules, as before. Previously the probes read only the `*` group, so a `User-agent: SquirrelScan` group that disallowed `/graphql` was not honoured.
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.
 
 ## v0.0.183 (2026-11-17)

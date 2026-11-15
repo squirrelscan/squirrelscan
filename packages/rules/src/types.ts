@@ -638,6 +638,15 @@ export interface SiteData {
    */
   linkDiscoveryOff?: boolean;
   /**
+   * The robots.txt group token the crawl was matched as (`robots_user_agent`,
+   * default `SquirrelScan`, or the user agent's token when that is ""), set
+   * only when the crawl respected robots.txt (squirrelscan/repo#3390). A rule
+   * that holds its own requests to robots.txt passes it to
+   * `isRobotsTxtDisallowed`, which falls back to the `*` group when the file
+   * has no group for it. Undefined: read the `*` group.
+   */
+  robotsUserAgent?: string;
+  /**
    * True on a targeted run (#1777): the crawl fetched an explicit URL list and nothing else. A site-scope rule
    * that judges the whole site skips with `targeted-run` instead of reporting on pages nobody fetched.
    */

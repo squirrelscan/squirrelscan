@@ -18,7 +18,7 @@ This is a probing rule. It sends requests beyond the crawl, so it runs only when
 - GraphQL endpoints the audit found in your pages and scripts, such as a `fetch("/graphql")` call site: a URL with a `graphql` or `gql` path segment. Finding them sends no request.
 - The conventional paths `/graphql` and `/api/graphql`.
 
-Every endpoint must have the same origin as the audited URL (scheme, host and port). An endpoint on another host, such as a vendor API, is never probed. An endpoint whose path names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is never probed either, and neither is a call site that declares `PUT`, `PATCH` or `DELETE`. Below `aggressive`, a path that `robots.txt` disallows is skipped. At most five endpoints are probed.
+Every endpoint must have the same origin as the audited URL (scheme, host and port). An endpoint on another host, such as a vendor API, is never probed. An endpoint whose path names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is never probed either, and neither is a call site that declares `PUT`, `PATCH` or `DELETE`. Below `aggressive`, a path that `robots.txt` disallows is skipped, read as the crawl's robots group ([`robots_user_agent`](/configuration/crawler#robots_user_agent), default `SquirrelScan`, or `User-agent: *` when the file has no group for it; a crawl with `respect_robots` off reads the `*` group). At most five endpoints are probed.
 
 ### What is sent
 

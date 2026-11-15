@@ -14,7 +14,10 @@
 //    delete, update or reset is never probed, whatever the method.
 //  - Not a call site that declares PUT, PATCH or DELETE.
 //  - Not disallowed by robots.txt, unless the run is aggressive (aggressive
-//    probing requests robots-disallowed paths on purpose, see the docs).
+//    probing requests robots-disallowed paths on purpose, see the docs). Read
+//    as the crawl's robots group (`site.robotsUserAgent`, the
+//    `robots_user_agent` token, default `SquirrelScan`), falling back to `*`
+//    when the file has no group for it (squirrelscan/repo#3390).
 //  - At most MAX_GRAPHQL_ENDPOINTS endpoints per rule, one request each (the
 //    introspection rule may add one POST per endpoint when aggressive).
 //
@@ -201,6 +204,7 @@ export function selectGraphqlCandidates(
 
   const aggressive = ctx.probe?.level === "aggressive";
   const robotsTxt = ctx.site?.robotsTxt ?? null;
+  const robotsAgent = ctx.site?.robotsUserAgent || "*";
   const seen = new Set<string>();
   const out: GraphqlCandidate[] = [];
   let skippedStateChanging = 0;
@@ -231,7 +235,7 @@ export function selectGraphqlCandidates(
       return;
     }
     seen.add(url);
-    if (!aggressive && isRobotsTxtDisallowed(url, robotsTxt, "*")) {
+    if (!aggressive && isRobotsTxtDisallowed(url, robotsTxt, robotsAgent)) {
       skippedRobots++;
       return;
     }

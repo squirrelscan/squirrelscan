@@ -177,6 +177,7 @@ import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
 import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
 import { isInScope } from "@squirrelscan/crawler/frontier";
 import { createRobotsEvaluator } from "@squirrelscan/crawler/robots";
+import { robotsGroupToken } from "@squirrelscan/utils/robots-txt";
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 
 // Site-context + header helpers live in ./site-fetch so ./streaming and
@@ -1624,6 +1625,32 @@ function crawlEntryUrls(
   return [crawl?.seedUrl, crawl?.originalUrl].filter((url): url is string => !!url);
 }
 
+/**
+ * The robots.txt group token the crawl was matched as, for rules that hold their
+ * own requests to robots.txt (squirrelscan/repo#3390). Resolved as the crawl
+ * resolves it: a crawl row records `robotsUserAgent` ("" or absent: matched on
+ * its user agent); only without a row does this run's config say. Undefined when
+ * the crawl did not respect robots.txt, so those rules read the `*` group.
+ */
+export function crawlRobotsUserAgent(
+  crawl:
+    | { config?: { userAgent?: string; robotsUserAgent?: string; respectRobots?: boolean } }
+    | null
+    | undefined,
+  config: Config,
+): string | undefined {
+  const respect = crawl?.config
+    ? crawl.config.respectRobots !== false
+    : (config.crawler?.respect_robots ?? true);
+  if (!respect) return undefined;
+  const agent =
+    (crawl?.config ? crawl.config.robotsUserAgent : config.crawler?.robots_user_agent) ||
+    crawl?.config?.userAgent ||
+    config.crawler?.user_agent ||
+    CHROME_USER_AGENT;
+  return robotsGroupToken(agent) || undefined;
+}
+
 export function runRulesOnStorage(
   storage: CrawlStorage,
   crawlId: string,
@@ -2071,6 +2098,7 @@ export function runRulesOnStorage(
       // links/broken-external-links reports "not checked" instead of passing.
       externalLinks: config.external_links?.enabled === false ? undefined : externalLinksData,
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
+      robotsUserAgent: crawlRobotsUserAgent(crawl, config),
       ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
       externalLinkCheck: crawl?.stats?.externalLinkCheck,
       linkTargetStatuses: assets.linkTargetStatuses,
@@ -3019,6 +3047,7 @@ function buildStreamingSiteData(
       // repo#2729: see runRulesOnStorage — undefined means "not checked".
       externalLinks: config.external_links?.enabled === false ? undefined : externalLinksData,
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
+      robotsUserAgent: crawlRobotsUserAgent(crawl, config),
       ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
       externalLinkCheck: crawl?.stats?.externalLinkCheck,
       linkTargetStatuses: assets.linkTargetStatuses,
