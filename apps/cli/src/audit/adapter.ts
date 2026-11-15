@@ -287,34 +287,6 @@ export function parsePageRecord(
   );
 }
 
-/**
- * Get parsed pages from storage for rule execution
- */
-export function getParsedPages(
-  storage: CrawlStorage,
-  crawlId: string
-): Effect.Effect<Array<{ url: string; parsed: ParsedPage }>, never, never> {
-  return Effect.gen(function* () {
-    const pages = yield* storage
-      .getPages(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed([])));
-
-    const result: Array<{ url: string; parsed: ParsedPage }> = [];
-
-    for (const page of pages) {
-      if (!hasAuditableHtmlBody(page) || !isHtmlContentType(page.contentType))
-        continue;
-
-      const parsed = parsePageRecord(page);
-      if (parsed) {
-        result.push({ url: page.url, parsed });
-      }
-    }
-
-    return result;
-  });
-}
-
 // ============================================
 // CONTEXT CONVERSION
 // ============================================

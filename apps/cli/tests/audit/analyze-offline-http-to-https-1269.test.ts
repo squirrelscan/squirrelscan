@@ -19,7 +19,6 @@ import { Effect } from "effect";
 
 import type { CrawlMetadata, PageRecord } from "@/crawler/storage/types";
 
-import { buildSiteContext } from "@/audit/adapter";
 import { getDefaultConfig } from "@/config";
 import { analyzeStoredCrawl } from "@/controllers/analyze";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
@@ -107,10 +106,7 @@ function analyze() {
       } as never);
       yield* storage.upsertPage(crawlId, page(`${BASE}/`));
       const crawl = (yield* storage.getCrawl(crawlId))! as CrawlMetadata;
-      const siteContext = yield* buildSiteContext(
-        yield* storage.getPages(crawlId)
-      );
-      return yield* analyzeStoredCrawl(storage, crawl, siteContext, {
+      return yield* analyzeStoredCrawl(storage, crawl, {
         ...config,
         rules: { ...config.rules, enable: ["security/http-to-https"] },
       });

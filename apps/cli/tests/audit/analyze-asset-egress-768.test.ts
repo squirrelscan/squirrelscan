@@ -25,7 +25,6 @@ import { Effect } from "effect";
 
 import type { CrawlMetadata, PageRecord } from "@/crawler/storage/types";
 
-import { buildSiteContext } from "@/audit/adapter";
 import { getDefaultConfig } from "@/config";
 import { analyzeStoredCrawl, configForCrawl } from "@/controllers/analyze";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
@@ -153,13 +152,9 @@ function analyze(
       yield* storage.upsertPage(crawlId, pageRecord(`${base}/`, home(scripts)));
       for (const page of extra) yield* storage.upsertPage(crawlId, page);
       const crawl = (yield* storage.getCrawl(crawlId))!;
-      const siteContext = yield* buildSiteContext(
-        yield* storage.getPages(crawlId)
-      );
       const { assets, ruleResults } = yield* analyzeStoredCrawl(
         storage,
         crawl,
-        siteContext,
         {
           ...config,
           rules: { ...config.rules, enable: ["links/broken-links"] },
