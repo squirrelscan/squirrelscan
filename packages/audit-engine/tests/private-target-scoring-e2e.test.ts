@@ -21,7 +21,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Config } from "@squirrelscan/config";
-import { type CheckResult, type PageRecord, PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { isAdvisorySeverity, type CheckResult, type PageRecord, PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { getScoreGrade } from "@squirrelscan/report";
 import { loadAllRules } from "@squirrelscan/rules";
@@ -320,7 +320,8 @@ const isPrivateSkip = (c: CheckResult) =>
 
 /** Checks that move the score: fail, or warn on a rule that is not advisory. */
 function scored(checks: CheckResult[], ruleId: string): CheckResult[] {
-  const advisory = loadAllRules().get(ruleId)?.meta.severity === "info";
+  const severity = loadAllRules().get(ruleId)?.meta.severity;
+  const advisory = severity !== undefined && isAdvisorySeverity(severity);
   return checks.filter((c) => c.status === "fail" || (c.status === "warn" && !advisory));
 }
 

@@ -19,6 +19,7 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import { isAdvisorySeverity } from "@squirrelscan/core-contracts";
 import {
   resolutionUrlHash,
   SCAN_TRUNCATED_SKIP_REASON,
@@ -316,7 +317,7 @@ function rescored(r: CloudSmartAuditsResult): {
   // apps/api applyUnionToReport, sampled path: count the union's own checks.
   const totals = { passed: 0, warnings: 0, failed: 0 };
   for (const rule of r.unionRuleResults.values()) {
-    const advisory = rule.meta.severity === "info";
+    const advisory = isAdvisorySeverity(rule.meta.severity);
     for (const c of rule.checks) {
       if (c.status === "pass") totals.passed++;
       else if (c.status === "warn" && !advisory) totals.warnings++;

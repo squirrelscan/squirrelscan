@@ -28,7 +28,9 @@ describe("loadAllRules", () => {
       expect(rule.meta.description).toBeTruthy();
       expect(rule.meta.category).toBeTruthy();
       expect(rule.meta.scope).toMatch(/^(page|site)$/);
-      expect(rule.meta.severity).toMatch(/^(error|warning|info)$/);
+      expect(rule.meta.severity).toMatch(
+        /^(error|warning|info|recommendation)$/
+      );
       expect(typeof rule.meta.weight).toBe("number");
     }
   });

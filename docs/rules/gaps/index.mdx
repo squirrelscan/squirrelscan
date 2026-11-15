@@ -6,7 +6,7 @@ description: "Cloud rules for keyword and content gaps: the searches competitors
 
 <Note>**Cloud rules, opt-in** - these rules require login (`squirrel auth login`), cost **25 credits each per audit**, and are **disabled by default** so a routine audit never spends them by surprise. See [Cloud rules](/cloud/rules).</Note>
 
-Gap analysis compares your site against live search demand data: what people search for, what competitors rank for, and which of those topics your site doesn't cover. Both rules read a result the cloud service produced before the rules ran, report at info severity with a weight of 1, and flag anything above 500 monthly searches as high volume. They are research output rather than defects, which is why they barely move a score.
+Gap analysis compares your site against live search demand data: what people search for, what competitors rank for, and which of those topics your site doesn't cover. Both rules read a result the cloud service produced before the rules ran, report research output rather than defects, and have a weight of 1. Content gaps use recommendation severity and never reduce the health score. Keyword gaps remain info severity. Both flag anything above 500 monthly searches as high volume.
 
 ## Run only these rules
 
@@ -22,8 +22,8 @@ Both rules are opt-in cloud rules: they need you signed in and cost 25 credits e
 
 These carry the highest severity and weight in the category.
 
-- [Content gaps: topic clusters your site does not cover](/rules/gaps/content): A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters.
 - [Keyword gaps: terms competitors rank for and you do not](/rules/gaps/keywords): A keyword gap is demand your competitors capture and you do not. squirrel compares your ranking footprint against theirs using live search data.
+- [Content gaps: topic clusters your site does not cover](/rules/gaps/content): A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters.
 
 {/* hub:start-here:end */}
 
@@ -33,7 +33,7 @@ These carry the highest severity and weight in the category.
 
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
-| [Content gaps: topic clusters your site does not cover](/rules/gaps/content) | A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters. | info | Site-wide |
+| [Content gaps: topic clusters your site does not cover](/rules/gaps/content) | A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters. | recommendation | Site-wide |
 | [Keyword gaps: terms competitors rank for and you do not](/rules/gaps/keywords) | A keyword gap is demand your competitors capture and you do not. squirrel compares your ranking footprint against theirs using live search data. | info | Site-wide |
 
 {/* hub:rules:end */}

@@ -403,7 +403,7 @@ interface SlimJsonReport {
     /** Top-level group code (#626), e.g. "seo" — which group the issue rolls up into. */
     group: string;
     subcategory?: string;
-    severity: "error" | "warning" | "info";
+    severity: "error" | "warning" | "info" | "recommendation";
     /** Additive, evidence-backed actionable targets; raw occurrences are complete. */
     componentFixGroups?: SlimComponentFixGroup[];
     /**

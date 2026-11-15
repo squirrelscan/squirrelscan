@@ -13,14 +13,36 @@ Adjacency is what makes them worth doing first. A cluster next to something you 
 
 ## What squirrel checks
 
-The rule is site-wide and reads a result the cloud content-gaps service produced before the rules ran. It emits up to two checks:
+The rule is site-wide and reads a result the cloud content-gaps service produced before the rules ran. Its rule severity is `recommendation`: a warn check from this rule appears in the Recommendations section of the report but never lowers the health score. It emits up to two checks:
 
 - `content-gaps` is skipped when no result is available, because the rule was not enabled or the service skipped it. Message: `Content gap analysis skipped`, with a readable skip reason.
 - `content-gaps` passes when the service found none. Message: `No content gaps found`.
-- `content-gaps` reports info with the count. Message: `6 content gap topics found`, or `1 content gap topic found` for one.
-- `content-gaps-high-volume` warns when more than 20 clusters each have at least 500 combined monthly searches. Message: `21 high-volume content gap topics (≥500 combined searches/mo) — significant uncovered demand`.
+- `content-gaps` warns when the service found gaps. Message: `6 content gap topics found`, or `1 content gap topic found` for one.
+- `content-gaps-high-volume` warns when more than 20 clusters each have at least 500 combined monthly searches. Message: `21 high-volume content gap topics (≥500 combined searches/mo): significant uncovered demand`.
 
-Severity for the rule is info and the weight is 1. It is disabled by default and costs 25 credits per audit when enabled.
+Severity for the rule is recommendation and the weight is 1. It is disabled by default and costs 25 credits per audit when enabled.
+
+## Opportunity score
+
+Each cluster gets an opportunity score so the best topics come first:
+
+```text
+score = volume x relevance / difficulty
+```
+
+- `volume` is the combined monthly searches for the cluster. Missing volume counts as 0.
+- `relevance` is how close the topic is to your site, from 0 to 1. Missing relevance counts as 1.
+- `difficulty` is keyword difficulty from 0 to 100. Missing difficulty counts as 50, and values below 1 are treated as 1 so the score never divides by zero.
+
+The score is rounded to two decimal places. A cluster with large volume but very high difficulty can rank below a smaller, easier one. Ties break on volume (higher first), then topic name (alphabetical), so the order is the same on every run.
+
+The `content-gaps` check lists the top 25 clusters as items:
+
+- `id` is the topic.
+- `label` reads `topic (score S, vol V, difficulty D)`, showing only the values that are known.
+- `snippet` is the reason for the gap, followed by up to 5 member keywords.
+
+The same top 25 appear in `details.opportunities` as objects with `topic`, `score`, `volume`, `difficulty`, `relevance` and `keywords`, next to the service's `details.summary`. Unknown values are `null`.
 
 ## How to fix it
 
@@ -33,7 +55,7 @@ Link the new page from the existing content it sits next to. That is what connec
 | **Rule ID** | `gaps/content` |
 | **Category** | [Gap Analysis](/rules/gaps) |
 | **Scope** | Site-wide |
-| **Severity** | info |
+| **Severity** | recommendation |
 | **Weight** | 1/10 |
 | **Default** | Disabled (opt-in) |
 
@@ -85,7 +107,7 @@ Glossary: [Content gap analysis](/glossary#content-gap).
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Gap Analysis section of the report. Each gap cluster is listed with its combined search volume. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://example.com` and open the Gap Analysis section of the report. Each gap cluster is listed with its opportunity score, combined search volume and difficulty under Recommendations. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

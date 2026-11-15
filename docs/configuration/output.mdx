@@ -622,7 +622,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
       "category": "string",
       "group": "string",
       "subcategory": "string",
-      "severity": "error|warning|info",
+      "severity": "error|warning|info|recommendation",
       "checks": [
         {
           "name": "string",
@@ -683,6 +683,8 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 **Issues:** `issues` holds findings only. Every check in it has status `fail` or `warn`. `affectedPages` is a sample, and `affectedPagesCount` is the true total, so compare the two (or read `affectedPagesHasMore`) before treating the list as complete.
 
 Schema `1.22` adds optional `observation` metadata to issue checks. It records the evidence `mode`, whether the check was `applicable`, and any `uncertainty` that qualifies the result.
+
+**Severity values:** an issue's `severity` is `error`, `warning`, `info` or `recommendation`. `info` and `recommendation` are advisory: the human reports (text, markdown, HTML, console) show both under one Recommendations heading, and the machine formats (JSON, XML, LLM) keep the raw value. Warn checks in an advisory rule appear in `issues` but never lower the score. `gaps/content` uses `recommendation`; other advisory rules still use `info`.
 
 **Skipped checks:** `skippedChecks` lists checks a rule could not finish evaluating, so an absence of issues on those pages does not mean they are clean. It appears only when at least one check was skipped. Skipped checks are never part of `issues`, and do not count toward `passed`, `warnings`, `failed` or the score.
 

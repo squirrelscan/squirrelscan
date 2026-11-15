@@ -46,7 +46,7 @@ export interface SquirrelScanResult {
   summary: { passed: number; warnings: number; failed: number };
   issues: Array<{
     ruleId: string;
-    severity: "error" | "warning" | "info";
+    severity: "error" | "warning" | "info" | "recommendation";
     checks: Array<{
       status: string;
       affectedPages?: string[];

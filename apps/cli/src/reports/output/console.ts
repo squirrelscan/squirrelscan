@@ -329,7 +329,7 @@ export function generateConsoleReport(
             ? fmt.red("error")
             : rule.severity === "warning"
               ? fmt.yellow("warning")
-              : fmt.cyan("info");
+              : fmt.cyan(rule.severity === "info" ? "info" : "recommendation");
         log(
           box.line(
             ` ${fmt.dim(rule.id)} ${rule.name} ${fmt.dim(`(${severityLabel})`)}`

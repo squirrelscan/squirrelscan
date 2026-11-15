@@ -42,7 +42,7 @@
 // with the touched pages in cursor order. {@link aggregateUntouchedCarried} is the
 // reference the store's twin is measured against.
 
-import type { CheckResult, CheckTallies, PageFindingRecord } from "@squirrelscan/core-contracts";
+import { isAdvisorySeverity, type CheckResult, type CheckTallies, type PageFindingRecord } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { DEFAULT_FOLD_LIMITS, foldGroupKey, foldOverflowChecks } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
@@ -364,7 +364,7 @@ export function createCompleteStoreTallyFold(
     }
     return entry;
   };
-  const advisory = (meta: RuleRunResult["meta"]): boolean => meta.severity === "info";
+  const advisory = (meta: RuleRunResult["meta"]): boolean => isAdvisorySeverity(meta.severity);
   // (repo#3348) The shell's rules first, in the shell's order, as the sampled
   // path's tallies walk them: the scorer sums in map order.
   if (freshTallies) {

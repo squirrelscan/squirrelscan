@@ -1,6 +1,10 @@
 // gaps/content - content gap topic analysis (cloud-backed, site-scope)
 
-import type { ContentGapsResponse } from "@squirrelscan/core-contracts";
+import {
+  rankContentGaps,
+  type ContentGapsResponse,
+  type RankedContentGap,
+} from "@squirrelscan/core-contracts";
 
 import { z } from "zod";
 
@@ -14,6 +18,16 @@ const HIGH_VOLUME_THRESHOLD = 500;
 const HIGH_VOLUME_WARN_COUNT = 20;
 /** Top gap topics listed as check items. */
 const MAX_ITEMS = 25;
+/** Member keywords shown per topic in an item snippet. */
+const MAX_KEYWORDS = 5;
+
+/** `topic (score S, vol V, difficulty D)`, naming only the values that are known. */
+function opportunityLabel(g: RankedContentGap): string {
+  const parts = [`score ${g.score}`];
+  if (g.volume != null) parts.push(`vol ${g.volume}`);
+  if (g.difficulty != null) parts.push(`difficulty ${g.difficulty}`);
+  return `${g.topic} (${parts.join(", ")})`;
+}
 
 export const optionsSchema = z.object({
   country: z.string().optional().describe("ISO country for search data (default US)"),
@@ -32,11 +46,11 @@ export const contentGapsRule: Rule = {
       "Finds topic clusters with search demand around the site's existing content that lack dedicated coverage",
     solution:
       "Each gap is a topic cluster with combined search volume the site doesn't cover directly. " +
-      "Plan content (guides, comparisons, FAQs) around the highest-volume clusters first — they're " +
+      "Plan content (guides, comparisons, FAQs) around the highest-volume clusters first, since they're " +
       "adjacent to what you already rank for, so new pages benefit from existing topical authority.",
     category: "gaps",
     scope: "site",
-    severity: "info",
+    severity: "recommendation",
     weight: 1,
     optionsSchema,
     // Opt-in only: content_gaps costs 25 credits/audit. A concrete rule/category
@@ -73,17 +87,30 @@ export const contentGapsRule: Rule = {
       return { checks };
     }
 
+    const ranked = rankContentGaps(gaps).slice(0, MAX_ITEMS);
     checks.push({
       name: "content-gaps",
-      status: "info",
+      status: "warn",
       message: `${gaps.length} content gap topic${gaps.length === 1 ? "" : "s"} found`,
       value: gaps.length,
-      items: gaps.slice(0, MAX_ITEMS).map((g) => ({
+      items: ranked.map((g) => ({
         id: g.topic,
-        label: g.volume != null ? `${g.topic} — vol ${g.volume}` : g.topic,
-        snippet: g.reason,
+        label: opportunityLabel(g),
+        snippet: g.keywords?.length
+          ? `${g.reason} (keywords: ${g.keywords.slice(0, MAX_KEYWORDS).join(", ")})`
+          : g.reason,
       })),
-      details: { summary },
+      details: {
+        summary,
+        opportunities: ranked.map((g) => ({
+          topic: g.topic,
+          score: g.score,
+          volume: g.volume ?? null,
+          difficulty: g.difficulty ?? null,
+          relevance: g.relevance ?? null,
+          keywords: g.keywords ?? [],
+        })),
+      },
     });
 
     const highVolume = gaps.filter((g) => (g.volume ?? 0) >= HIGH_VOLUME_THRESHOLD);
@@ -91,7 +118,7 @@ export const contentGapsRule: Rule = {
       checks.push({
         name: "content-gaps-high-volume",
         status: "warn",
-        message: `${highVolume.length} high-volume content gap topics (≥${HIGH_VOLUME_THRESHOLD} combined searches/mo) — significant uncovered demand`,
+        message: `${highVolume.length} high-volume content gap topics (≥${HIGH_VOLUME_THRESHOLD} combined searches/mo): significant uncovered demand`,
         value: highVolume.length,
         expected: `<= ${HIGH_VOLUME_WARN_COUNT}`,
       });

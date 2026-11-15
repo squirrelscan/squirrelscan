@@ -19,6 +19,7 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import { isAdvisorySeverity } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   buildSupersededIndex,
@@ -1767,7 +1768,7 @@ function scoreFromCheckTallies(input: {
   for (const [ruleId, r] of carriedSide) {
     const tally = freshTally(input.checkTallies[ruleId]);
     const synthetic = r.syntheticPassCount ?? 0;
-    addChecksToTally(tally, r.checks, r.meta.severity === "info", synthetic);
+    addChecksToTally(tally, r.checks, isAdvisorySeverity(r.meta.severity), synthetic);
     scoringTallies.set(ruleId, { meta: r.meta, tally });
     reportTotals.passed += tally.passed - synthetic;
     reportTotals.warnings += tally.warnings;

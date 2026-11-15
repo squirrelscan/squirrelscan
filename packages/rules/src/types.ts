@@ -57,7 +57,7 @@ export type { PageType };
 export type RuleScope = "page" | "site";
 
 // Rule severity - default severity of issues found
-export type RuleSeverity = "error" | "warning" | "info";
+export type RuleSeverity = "error" | "warning" | "info" | "recommendation";
 
 /**
  * Whether a page rule's verdict is a property of the page's TEMPLATE or of the

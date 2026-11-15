@@ -16,6 +16,7 @@ import {
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+  isAdvisorySeverity,
   isDiscoveryProbeSkipReason,
   isLockedRuleReason,
   NOT_CHECKED_SKIP_REASONS,
@@ -293,7 +294,7 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
   for (const ruleId of Object.keys(report.ruleResults)) {
     const result = report.ruleResults[ruleId];
     if (!result) continue;
-    const info = result.meta.severity === "info";
+    const info = isAdvisorySeverity(result.meta.severity);
     const check = result.checks.find(
       (c) =>
         c.status === "skipped" &&

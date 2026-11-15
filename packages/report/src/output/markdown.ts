@@ -571,10 +571,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     let lastCategory: string | undefined;
     let lastSub: string | undefined;
     for (const rule of flatIssues) {
-      if (rule.severity !== lastSeverity) {
-        lastSeverity = rule.severity;
+      // info and recommendation share one label, so they share one band.
+      const band = severityLabel(rule.severity);
+      if (band !== lastSeverity) {
+        lastSeverity = band;
         lastCategory = undefined;
-        const bucket = flatIssues.filter((r) => r.severity === rule.severity);
+        const bucket = flatIssues.filter((r) => severityLabel(r.severity) === band);
         lines.push(`### ${severityLabel(rule.severity, { titleCase: true, plural: true })}`);
         lines.push("");
         lines.push(`*${bucket.length} rule(s)*`);

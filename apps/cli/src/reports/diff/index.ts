@@ -253,6 +253,7 @@ function sortIssues(issues: IssueInstance[]): IssueInstance[] {
     error: 3,
     warning: 2,
     info: 1,
+    recommendation: 1,
   };
 
   return [...issues].sort((a, b) => {
@@ -276,6 +277,7 @@ function sortChanges(changes: DiffChange[]): DiffChange[] {
       error: 3,
       warning: 2,
       info: 1,
+      recommendation: 1,
     };
     const sevDiff =
       (sevRank[b.after.severity] ?? 0) - (sevRank[a.after.severity] ?? 0);

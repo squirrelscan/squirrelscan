@@ -56,6 +56,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import {
   classifyRuleOutcome,
+  isAdvisorySeverity,
   isCoverageGapCheck,
   LINK_COVERAGE_DETAIL_KEYS,
   LINK_TARGET_SET_RULES,
@@ -335,7 +336,7 @@ export function buildCheckTallies(
         else byName.set(check.name, [check]);
       }
     }
-    const advisory = rule.meta.severity === "info";
+    const advisory = isAdvisorySeverity(rule.meta.severity);
     let perName: Record<string, CheckTally> | undefined;
     for (const name of [...byName.keys()].sort()) {
       const checks = byName.get(name)!;
