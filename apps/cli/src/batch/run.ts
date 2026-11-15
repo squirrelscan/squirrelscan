@@ -152,8 +152,14 @@ export async function runBatch(
   mkdirSync(join(options.outDir, BATCH_REPORTS_DIR), { recursive: true });
 
   let prior: BatchRecord[] = [];
-  if (existsSync(manifestPath)) {
-    const content = readFileSync(manifestPath, "utf8");
+  // Read without an existsSync probe first: a missing manifest is a fresh batch.
+  let content: string | undefined;
+  try {
+    content = readFileSync(manifestPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (content !== undefined) {
     prior = parseManifest(content).records;
     // A crash mid-write leaves a line without its newline: end it so the next record does not join it.
     if (content.length > 0 && !content.endsWith("\n"))

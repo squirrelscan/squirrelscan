@@ -1,6 +1,6 @@
 // `squirrel audit --urls-file` (repo#2214): reads the list, then runs each URL as a child `squirrel audit`.
 
-import { statSync, readFileSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 
 import { readStdinText } from "../cli/stdin";
@@ -128,11 +128,17 @@ export async function runBatchCommand(args: BatchArgs): Promise<number> {
         })
       ).text;
     } else {
-      if (statSync(source).size > BATCH_URLS_FILE_MAX_BYTES)
-        throw new Error(
-          `${source} is over the ${BATCH_URLS_FILE_MAX_BYTES} byte limit`
-        );
-      text = readFileSync(source, "utf8");
+      // One descriptor for the size check and the read, so the file cannot be swapped between them.
+      const fd = openSync(source, "r");
+      try {
+        if (fstatSync(fd).size > BATCH_URLS_FILE_MAX_BYTES)
+          throw new Error(
+            `${source} is over the ${BATCH_URLS_FILE_MAX_BYTES} byte limit`
+          );
+        text = readFileSync(fd, "utf8");
+      } finally {
+        closeSync(fd);
+      }
     }
     const parsed = parseUrlsFile(text, {
       allowPrivateHosts: args["allow-private-hosts"] === true,

@@ -1467,8 +1467,21 @@ export const audit = defineCommand({
       return;
     }
     if (!args.url) {
-      console.error(
-        `${fmt.red("Error:")} missing URL (or pass --urls-file <file>)`
+      // The same usage block citty's missing-argument path shows, now that the
+      // positional is optional so --urls-file can stand in for it.
+      const [{ renderMissingArgument }, { createTheme }] = await Promise.all([
+        import("@/cli/help"),
+        import("@/cli/theme"),
+      ]);
+      const t = createTheme(process.stderr);
+      const block = await renderMissingArgument(
+        t,
+        audit as never,
+        ["audit"],
+        "Missing required positional argument: URL"
+      );
+      process.stderr.write(
+        `${block}Or pass ${t.command("--urls-file <file>")} to audit a list of URLs.\n\n`
       );
       exitWith({ early: "validation" });
       return;
