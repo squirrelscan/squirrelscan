@@ -3094,6 +3094,7 @@ export function createCrawler(
             customHeadersFor(baseUrl),
             preamble,
             gate,
+            { allTokens: config.agentAccessAllTokens === true },
           );
           yield* storage.setAgentAccess(crawlId, { ...agentAccess, fetchedAt: Date.now() });
         }

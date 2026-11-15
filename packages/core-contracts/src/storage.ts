@@ -1394,7 +1394,143 @@ export interface WellKnownProbeRecord {
   fetchedAt: number;
 }
 
-export type AgentAccessUserAgent = "browser" | "gptbot" | "claude-user";
+/**
+ * AI bots that identify themselves with their own User-Agent header, so a site's
+ * bot rules can be exercised by sending that header (#3788). These are the vendors'
+ * published strings, sent so a site's rules trigger as they would for that bot.
+ * The result is still a UA probe, not the real bot: the request has no vendor
+ * source IP and no signature. Robots.txt-only tokens (Google-Extended,
+ * Applebot-Extended, anthropic-ai, cohere-ai) and archive bots are not here.
+ * `userAction` marks a fetcher a person triggers and waits on.
+ */
+export const AGENT_ACCESS_BOTS = [
+  {
+    id: "gptbot",
+    token: "GPTBot",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot",
+    userAction: false,
+  },
+  {
+    id: "oai-searchbot",
+    token: "OAI-SearchBot",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; OAI-SearchBot/1.0; +https://openai.com/searchbot",
+    userAction: false,
+  },
+  {
+    id: "chatgpt-user",
+    token: "ChatGPT-User",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot",
+    userAction: true,
+  },
+  {
+    id: "claudebot",
+    token: "ClaudeBot",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ClaudeBot/1.0; +claudebot@anthropic.com)",
+    userAction: false,
+  },
+  {
+    id: "claude-user",
+    token: "Claude-User",
+    userAgentString:
+      "Mozilla/5.0 (compatible; Claude-User/1.0; +Claude-User@anthropic.com)",
+    userAction: true,
+  },
+  {
+    id: "claude-searchbot",
+    token: "Claude-SearchBot",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-SearchBot/1.0; +Claude-SearchBot@anthropic.com)",
+    userAction: false,
+  },
+  {
+    id: "perplexitybot",
+    token: "PerplexityBot",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)",
+    userAction: false,
+  },
+  {
+    id: "perplexity-user",
+    token: "Perplexity-User",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Perplexity-User/1.0; +https://perplexity.ai/perplexity-user)",
+    userAction: true,
+  },
+  {
+    id: "ccbot",
+    token: "CCBot",
+    userAgentString:
+      "CCBot/2.0 (https://commoncrawl.org/faq/)",
+    userAction: false,
+  },
+  {
+    id: "bytespider",
+    token: "Bytespider",
+    userAgentString:
+      "Mozilla/5.0 (Linux; Android 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; Bytespider; spider-feedback@bytedance.com)",
+    userAction: false,
+  },
+  {
+    id: "amazonbot",
+    token: "Amazonbot",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot) Chrome/119.0.6045.214 Safari/537.36",
+    userAction: false,
+  },
+  {
+    id: "meta-externalagent",
+    token: "Meta-ExternalAgent",
+    userAgentString:
+      "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)",
+    userAction: false,
+  },
+  {
+    id: "meta-externalfetcher",
+    token: "Meta-ExternalFetcher",
+    userAgentString:
+      "meta-externalfetcher/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)",
+    userAction: true,
+  },
+  {
+    id: "duckassistbot",
+    token: "DuckAssistBot",
+    userAgentString:
+      "DuckAssistBot/1.2; (+http://duckduckgo.com/duckassistbot.html)",
+    userAction: false,
+  },
+  {
+    id: "mistralai-user",
+    token: "MistralAI-User",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; MistralAI-User/1.0; +https://docs.mistral.ai/robots)",
+    userAction: true,
+  },
+  {
+    id: "ai2bot",
+    token: "AI2Bot",
+    userAgentString:
+      "Mozilla/5.0 (compatible) AI2Bot (+https://www.allenai.org/crawler)",
+    userAction: false,
+  },
+  {
+    id: "youbot",
+    token: "YouBot",
+    userAgentString:
+      "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; YouBot (+http://www.you.com))",
+    userAction: false,
+  },
+] as const;
+
+export type AgentAccessBotId = (typeof AGENT_ACCESS_BOTS)[number]["id"];
+
+/** The bots probed when the all-token flag is off (unchanged from before #3788). */
+export const DEFAULT_AGENT_ACCESS_BOT_IDS: readonly AgentAccessBotId[] = ["gptbot", "claude-user"];
+
+export type AgentAccessUserAgent = "browser" | AgentAccessBotId;
 
 // One homepage fetch under a specific UA identity, for access-parity comparison.
 export interface AgentAccessProbe {
@@ -1412,6 +1548,8 @@ export interface AgentAccessProbe {
   paymentRequired: boolean;
   /** Which signal tripped payment detection (crawler-price, http-402, x402-body, …), or null. */
   paymentSignal: string | null;
+  /** The response's X-Robots-Tag header (all values as Headers.get joins them), null when absent. Optional so old records parse. */
+  xRobotsTag?: string | null;
   error: string | null;
 }
 

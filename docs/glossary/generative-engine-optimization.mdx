@@ -33,7 +33,7 @@ No squirrelscan rule measures GEO, and no audit can tell you whether an answer e
 | [llms.txt: what the file is and how squirrel validates it](/rules/ax/llms-txt) | No /llms.txt at the root, an SPA fallback served in its place, or a file with no H1 and no links. squirrel checks the file and its format. | info |
 | [LLM parsability score: what it measures and how to raise it](/rules/ai/llm-parsability) | A page a language model reads badly, scored under 70 out of 100. squirrel scores every crawled page and names the ones below the mark. | info |
 | [Invalid JSON-LD syntax: what breaks it and how to fix](/rules/schema/json-ld-valid) | A structured data block that will not parse, or parses but omits properties schema.org requires. squirrel names the exact type and property. | warning |
-| [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking) | A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as all three. | error |
+| [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking) | A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as a browser, GPTBot and Claude-User, and every AI token on request. | error |
 
 {/* glossary:rules:end */}
 

@@ -102,6 +102,12 @@ export interface CrawlerConfig {
    */
   discoveryProbePaths?: readonly string[];
   /**
+   * Probe the homepage as every AI bot that sends its own User-Agent (AGENT_ACCESS_BOTS), not just
+   * GPTBot and Claude-User (#3788). Opt-in, about 15 extra homepage requests through the per-host
+   * gate. The results are UA probes, not the real bots. Unset or false: request count unchanged.
+   */
+  agentAccessAllTokens?: boolean;
+  /**
    * Concrete page paths (`/agentur`) the E-E-A-T rules are configured with (#1428). Each one the crawl did
    * not reach is requested once after the crawl, when the `configured-pages` probe is selected, so the rule
    * can tell a page that exists but is not linked from a page that is missing. robots.txt and the per-host
