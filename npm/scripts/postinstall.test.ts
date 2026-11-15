@@ -6,10 +6,7 @@ const { httpsGet, resolveVersion, selfInstallWarnings } = require("./postinstall
     url: string,
     get?: typeof import("node:https").get,
   ) => Promise<{ data: Buffer; statusCode: number }>;
-  selfInstallWarnings: (result: {
-    status: number | null;
-    signal: string | null;
-  }) => string[];
+  selfInstallWarnings: (result: { status: number | null; signal: string | null }) => string[];
   resolveVersion: (
     env?: Record<string, string>,
     latest?: (channel: string) => Promise<string>,
@@ -17,9 +14,10 @@ const { httpsGet, resolveVersion, selfInstallWarnings } = require("./postinstall
 };
 const packageVersion = require("../package.json").version as string;
 
-function fakeHttpsGet(
-  responses: Array<{ statusCode: number; location?: string; body?: string }>,
-): { get: typeof import("node:https").get; urls: string[] } {
+function fakeHttpsGet(responses: Array<{ statusCode: number; location?: string; body?: string }>): {
+  get: typeof import("node:https").get;
+  urls: string[];
+} {
   const urls: string[] = [];
   const get = ((url: string, _options: unknown, callback: (response: EventEmitter) => void) => {
     urls.push(url);
@@ -62,10 +60,7 @@ describe("npm postinstall HTTPS downloads", () => {
 
     const result = await httpsGet("https://example.com/start", fake.get);
     expect(result.data.toString()).toBe("binary");
-    expect(fake.urls).toEqual([
-      "https://example.com/start",
-      "https://example.com/release/asset",
-    ]);
+    expect(fake.urls).toEqual(["https://example.com/start", "https://example.com/release/asset"]);
   });
 
   test("rejects a fourth redirect", async () => {
@@ -110,9 +105,8 @@ describe("npm postinstall version resolution", () => {
   });
 
   test("only follows latest when a channel is explicitly requested", async () => {
-    const result = await resolveVersion(
-      { SQUIRREL_CHANNEL: "beta" },
-      async (channel) => (channel === "beta" ? "v2.0.0-beta.1" : "v1.0.0"),
+    const result = await resolveVersion({ SQUIRREL_CHANNEL: "beta" }, async (channel) =>
+      channel === "beta" ? "v2.0.0-beta.1" : "v1.0.0",
     );
     expect(result.version).toBe("v2.0.0-beta.1");
   });

@@ -69,7 +69,9 @@ function httpsGetAt(url, redirects, get) {
           reject(new Error(`Invalid redirect URL: ${res.headers.location}`));
           return;
         }
-        return httpsGetAt(next.href, redirects + 1, get).then(resolve).catch(reject);
+        return httpsGetAt(next.href, redirects + 1, get)
+          .then(resolve)
+          .catch(reject);
       }
 
       if (res.statusCode !== 200) {
@@ -239,7 +241,9 @@ async function main() {
   // Get binary info for platform
   const binaryInfo = manifest.binaries?.[platform];
   if (!binaryInfo) {
-    error(`No binary available for platform: ${platform}\n  See: https://github.com/${REPO}/releases/tag/${version}`);
+    error(
+      `No binary available for platform: ${platform}\n  See: https://github.com/${REPO}/releases/tag/${version}`,
+    );
   }
 
   const { filename, sha256: expectedSha256 } = binaryInfo;
