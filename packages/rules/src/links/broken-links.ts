@@ -389,8 +389,10 @@ interface LinkTargetsNotFetched {
   off?: number;
   /** Past the check's per-audit limit (`internal_links.max_targets`). */
   overLimit?: number;
-  /** Never requested: outside the crawl scope, disallowed by robots.txt, or an action or token link. */
-  skipped?: number;
+  /** Never requested by design, whatever the settings: action and token links (log out, delete, one-time tokens). Stable between audits (repo#3017). */
+  action?: number;
+  /** Never requested: outside the crawl's include and exclude rules, or disallowed by robots.txt. Changes when either loosens (repo#3017). */
+  excluded?: number;
   /** Asked, but the site answers HEAD with errors on pages it serves, so no answer was trusted. */
   untrusted?: number;
   /** Asked, and no status came back. */
@@ -421,12 +423,16 @@ function notFetchedCauses(
   } else {
     const notAsked = Math.max(0, unfetched - unanswered - untrusted);
     const overLimit = Math.min(notAsked, Math.max(0, probe.unfetched - probe.cap));
-    const skipped = Math.min(notAsked - overLimit, probe.outOfScope ?? 0);
+    const left = notAsked - overLimit;
+    const outOfScope = Math.min(left, probe.outOfScope ?? 0);
+    const action = Math.min(outOfScope, probe.actionLinks ?? 0);
+    const excluded = outOfScope - action;
     causes = {
       overLimit,
-      skipped,
+      action,
+      excluded,
       untrusted,
-      noAnswer: unanswered + (notAsked - overLimit - skipped),
+      noAnswer: unanswered + (left - outOfScope),
     };
   }
   for (const key of Object.keys(causes) as (keyof LinkTargetsNotFetched)[]) {
@@ -448,8 +454,10 @@ function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
         return cap === 0
           ? "internal_links.max_targets is 0"
           : `its internal link checks stop at ${targets(cap)}, most-linked first`;
-      case "skipped":
-        return "its internal link checks never request targets outside the crawl scope, disallowed by robots.txt, or that look like actions (log out, unsubscribe) or carry a token";
+      case "action":
+        return "its internal link checks never request targets that look like actions (log out, unsubscribe) or carry a token";
+      case "excluded":
+        return "its internal link checks never request targets outside the crawl scope or disallowed by robots.txt";
       case "untrusted":
         return "the internal link checks could not be trusted, as the site answers status-only (HEAD) requests with errors on pages it serves";
       default:
@@ -464,10 +472,13 @@ function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
         : `${causes.overLimit} past the limit of ${targets(cap)}`,
     );
   }
-  if (causes.skipped) {
+  if (causes.action) {
     parts.push(
-      `${causes.skipped} skipped as outside the crawl scope, disallowed by robots.txt, or ${causes.skipped === 1 ? "an action or token link" : "action or token links"}`,
+      `${causes.action} skipped as ${causes.action === 1 ? "an action or token link" : "action or token links"}`,
     );
+  }
+  if (causes.excluded) {
+    parts.push(`${causes.excluded} skipped as outside the crawl scope or disallowed by robots.txt`);
   }
   if (causes.untrusted) {
     parts.push(

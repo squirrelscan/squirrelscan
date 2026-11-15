@@ -680,7 +680,7 @@ describe("capReportForPublish: the sample and its counts", () => {
       linkTargets: 2_400,
       unfetchedTargets: 7,
       probedTargets: 40,
-      notFetched: { overLimit: 5, skipped: 2 },
+      notFetched: { overLimit: 5, action: 1, excluded: 1 },
     };
     const fail: CheckResult = {
       name: "broken-links",
