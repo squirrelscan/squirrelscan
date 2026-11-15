@@ -832,6 +832,13 @@ export interface RuleContext {
   // those two look identical from here and only one of them is a finding.
   entityMap?: EntityMap;
 
+  // Whether another rule is enabled for this run (site rules only). Set by the
+  // runner from its resolved rule set, so a rule that defers to another (the
+  // E-E-A-T per-page rules leave convention breaks to eeat/byline-consistency,
+  // #1364) stops deferring when that rule is disabled. Undefined (tests, an
+  // embedder) must be read as "the default rule set is enabled".
+  ruleEnabled?: (ruleId: string) => boolean;
+
   // Rule options from config, with defaults applied
   options: Record<string, unknown>;
 }
