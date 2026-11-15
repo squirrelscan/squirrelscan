@@ -578,3 +578,18 @@ describe("crawl/sitemap-lastmod-drift", () => {
     expect(JSON.stringify(streaming)).toBe(JSON.stringify(legacy));
   });
 });
+
+describe("sitemap-lastmod-drift options (repo#1680)", () => {
+  const schema = sitemapLastmodDriftRule.meta.optionsSchema;
+
+  test("rejects a negative or fractional day threshold at config parse", () => {
+    expect(() => schema?.parse({ behind_days: -1 })).toThrow();
+    expect(() => schema?.parse({ ahead_days: -5 })).toThrow();
+    expect(() => schema?.parse({ behind_days: 1.5 })).toThrow();
+  });
+
+  test("accepts zero and keeps the defaults", () => {
+    expect(schema?.parse({ behind_days: 0 })).toEqual({ ahead_days: 30, behind_days: 0 });
+    expect(schema?.parse({})).toEqual({ ahead_days: 30, behind_days: 7 });
+  });
+});
