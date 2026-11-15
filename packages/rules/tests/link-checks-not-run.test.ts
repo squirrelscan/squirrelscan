@@ -361,15 +361,15 @@ describe("links/broken-links when the crawl did not follow links", () => {
       ctx(issuePages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: issueStatuses,
-        internalLinkProbe: { unfetched: 3, probed: 3, cap: 200, outOfScope: 2 },
+        internalLinkProbe: { unfetched: 3, probed: 3, cap: 200, outOfScope: 2, actionLinks: 2 },
       }),
     );
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
     expect(skipped.message).toBe(
-      "2 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks never request targets outside the crawl scope, disallowed by robots.txt, or that look like actions (log out, unsubscribe) or carry a token, so they were not checked for broken links",
+      "2 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks never request targets that look like actions (log out, unsubscribe) or carry a token, so they were not checked for broken links",
     );
     expect(skipped.message).not.toContain("max_targets");
-    expect(skipped.details?.notFetched).toEqual({ skipped: 2 });
+    expect(skipped.details?.notFetched).toEqual({ action: 2 });
     // The two answered 4xx still fail beside it.
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["fail", "skipped"]);
   });
@@ -380,13 +380,13 @@ describe("links/broken-links when the crawl did not follow links", () => {
       ctx(issuePages, {
         linkDiscoveryOff: true,
         linkTargetStatuses: issueStatuses.slice(0, 2),
-        internalLinkProbe: { unfetched: 3, probed: 2, cap: 2, outOfScope: 2 },
+        internalLinkProbe: { unfetched: 3, probed: 2, cap: 2, outOfScope: 2, actionLinks: 2 },
       }),
     );
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
-    expect(skipped.details?.notFetched).toEqual({ overLimit: 1, skipped: 2 });
+    expect(skipped.details?.notFetched).toEqual({ overLimit: 1, action: 2 });
     expect(skipped.message).toBe(
-      "3 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks left them out (1 past the limit of 2 targets; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links), so they were not checked for broken links",
+      "3 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks left them out (1 past the limit of 2 targets; 2 skipped as action or token links), so they were not checked for broken links",
     );
   });
 
@@ -396,13 +396,13 @@ describe("links/broken-links when the crawl did not follow links", () => {
         linkDiscoveryOff: true,
         // /moved was asked and never answered; /private was past the limit of 2.
         linkTargetStatuses: [issueStatuses[0]!, { url: `${BASE}/moved`, status: null, error: "timeout" }],
-        internalLinkProbe: { unfetched: 3, probed: 1, cap: 2, outOfScope: 2 },
+        internalLinkProbe: { unfetched: 3, probed: 1, cap: 2, outOfScope: 2, actionLinks: 2 },
       }),
     );
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
-    expect(skipped.details?.notFetched).toEqual({ overLimit: 1, skipped: 2, noAnswer: 1 });
+    expect(skipped.details?.notFetched).toEqual({ overLimit: 1, action: 2, noAnswer: 1 });
     expect(skipped.message).toContain(
-      "(1 past the limit of 2 targets; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links; 1 with no answer)",
+      "(1 past the limit of 2 targets; 2 skipped as action or token links; 1 with no answer)",
     );
   });
 
@@ -420,15 +420,15 @@ describe("links/broken-links when the crawl did not follow links", () => {
         {
           linkDiscoveryOff: true,
           linkTargetStatuses: [{ url: `${BASE}/missing`, status: null, error: "timeout" }],
-          internalLinkProbe: { unfetched: 1, probed: 0, cap: 200, outOfScope: 1 },
+          internalLinkProbe: { unfetched: 1, probed: 0, cap: 200, outOfScope: 1, actionLinks: 1 },
         },
       ),
     );
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
     expect(skipped.value).toBe(2);
-    expect(skipped.details?.notFetched).toEqual({ skipped: 1, noAnswer: 1 });
+    expect(skipped.details?.notFetched).toEqual({ action: 1, noAnswer: 1 });
     expect(skipped.message).toContain(
-      "(1 skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link; 1 with no answer)",
+      "(1 skipped as an action or token link; 1 with no answer)",
     );
   });
 
@@ -441,27 +441,60 @@ describe("links/broken-links when the crawl did not follow links", () => {
           { url: `${BASE}/moved`, status: null, error: "head unreliable" },
           { url: `${BASE}/private`, status: null, error: "timeout" },
         ],
-        internalLinkProbe: { unfetched: 3, probed: 0, cap: 200, outOfScope: 2, headUnreliable: true },
+        internalLinkProbe: { unfetched: 3, probed: 0, cap: 200, outOfScope: 2, actionLinks: 2, headUnreliable: true },
       }),
     );
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
-    expect(skipped.details?.notFetched).toEqual({ skipped: 2, untrusted: 2, noAnswer: 1 });
+    expect(skipped.details?.notFetched).toEqual({ action: 2, untrusted: 2, noAnswer: 1 });
     expect(skipped.message).toContain(
-      "(2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links; 2 not trusted, because the site answers HEAD requests with errors on pages it serves; 1 with no answer)",
+      "(2 skipped as action or token links; 2 not trusted, because the site answers HEAD requests with errors on pages it serves; 1 with no answer)",
     );
+  });
+
+  test("robots and scope exclusions count apart from action links, and the counts add up (repo#3017)", async () => {
+    // Of the two never-requested targets, one is an action link and one is excluded.
+    const { checks } = await brokenLinksRule.run(
+      ctx(issuePages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: issueStatuses,
+        internalLinkProbe: { unfetched: 3, probed: 3, cap: 200, outOfScope: 2, actionLinks: 1 },
+      }),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.details?.notFetched).toEqual({ action: 1, excluded: 1 });
+    expect(skipped.value).toBe(2);
+    expect(skipped.message).toContain(
+      "(1 skipped as an action or token link; 1 skipped as outside the crawl scope or disallowed by robots.txt)",
+    );
+  });
+
+  test("a robots.txt loosening moves targets out of excluded, so a second run reads a different excluded count (repo#3017)", async () => {
+    const run = async (outOfScope: number, actionLinks: number) => {
+      const { checks } = await brokenLinksRule.run(
+        ctx(issuePages, {
+          linkDiscoveryOff: true,
+          linkTargetStatuses: issueStatuses,
+          internalLinkProbe: { unfetched: 3, probed: 3, cap: 200, outOfScope, actionLinks },
+        }),
+      );
+      return named(checks, "broken-links").find((c) => c.status === "skipped")!.details?.notFetched;
+    };
+    // Action links stay put while the excluded count follows robots.txt and scope.
+    expect(await run(2, 1)).toEqual({ action: 1, excluded: 1 });
+    expect(await run(2, 2)).toEqual({ action: 2 });
   });
 
   test("a limit of 0 with targets skipped too: both counted", async () => {
     const { checks } = await brokenLinksRule.run(
       ctx(issuePages, {
         linkDiscoveryOff: true,
-        internalLinkProbe: { unfetched: 3, probed: 0, cap: 0, outOfScope: 2 },
+        internalLinkProbe: { unfetched: 3, probed: 0, cap: 0, outOfScope: 2, actionLinks: 2 },
       }),
     );
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
-    expect(skipped.details?.notFetched).toEqual({ overLimit: 3, skipped: 2 });
+    expect(skipped.details?.notFetched).toEqual({ overLimit: 3, action: 2 });
     expect(skipped.message).toContain(
-      "left them out (3 because internal_links.max_targets is 0; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links)",
+      "left them out (3 because internal_links.max_targets is 0; 2 skipped as action or token links)",
     );
   });
 
@@ -580,7 +613,7 @@ describe("links/broken-links coverage on every row", () => {
     const { checks } = await brokenLinksRule.run(
       ctx([home, about, { url: `${BASE}/missing`, statusCode: 404 }], {
         linkTargetStatuses: [{ url: `${BASE}/moved`, status: 410, error: null }],
-        internalLinkProbe: { unfetched: 2, probed: 1, cap: 1, outOfScope: 2 },
+        internalLinkProbe: { unfetched: 2, probed: 1, cap: 1, outOfScope: 2, actionLinks: 2 },
       }),
     );
     const results = named(checks, "broken-links");
@@ -592,7 +625,7 @@ describe("links/broken-links coverage on every row", () => {
       probedTargets: 1,
       refusedTargets: 0,
       rateLimitedTargets: 0,
-      notFetched: { overLimit: 1, skipped: 2 },
+      notFetched: { overLimit: 1, action: 2 },
     });
   });
 
@@ -605,7 +638,7 @@ describe("links/broken-links coverage on every row", () => {
           { url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/about`, ...home.internal!.slice(4)] },
           about,
         ],
-        { linkTargetStatuses: [], internalLinkProbe: { unfetched: 0, probed: 0, cap: 200, outOfScope: 2 } },
+        { linkTargetStatuses: [], internalLinkProbe: { unfetched: 0, probed: 0, cap: 200, outOfScope: 2, actionLinks: 2 } },
       ),
     );
     const results = named(checks, "broken-links");
@@ -616,7 +649,7 @@ describe("links/broken-links coverage on every row", () => {
       probedTargets: 0,
       refusedTargets: 0,
       rateLimitedTargets: 0,
-      notFetched: { skipped: 2 },
+      notFetched: { action: 2 },
     });
   });
 
@@ -653,7 +686,7 @@ describe("links/broken-links and pages the crawl fetched outside site.pages", ()
           { url: `${BASE}/walled`, status: 403, wafChallenge: true },
         ],
         linkTargetStatuses: [],
-        internalLinkProbe: { unfetched: 0, probed: 0, cap: 200, outOfScope: 0 },
+        internalLinkProbe: { unfetched: 0, probed: 0, cap: 200, outOfScope: 0, actionLinks: 0 },
       }),
     );
     const rows = named(checks, "broken-links") as Array<{
@@ -691,7 +724,7 @@ describe("links/broken-links and pages the crawl fetched outside site.pages", ()
       ctx([{ url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/walled`, `${BASE}/private`] }], {
         fetchedTargets: [{ url: `${BASE}/walled`, status: 503, wafChallenge: true }],
         linkTargetStatuses: [{ url: `${BASE}/private`, status: 403, error: null }],
-        internalLinkProbe: { unfetched: 1, probed: 1, cap: 200, outOfScope: 0 },
+        internalLinkProbe: { unfetched: 1, probed: 1, cap: 200, outOfScope: 0, actionLinks: 0 },
       }),
     );
     const refused = checks.find((c) => c.name === "refused-links");

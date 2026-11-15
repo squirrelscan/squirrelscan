@@ -428,6 +428,8 @@ export interface PreFetchedAssets {
     probed: number;
     cap: number;
     outOfScope?: number;
+    /** Of `outOfScope`, the action and token links (never requested, whatever the settings; repo#3017). */
+    actionLinks?: number;
     headUnreliable?: boolean;
   };
   /**
@@ -1065,6 +1067,7 @@ export function fetchAssetsFromOccurrences(
       }
     };
     let outOfScope = 0;
+    let actionLinks = 0;
     const unfetchedTargets =
       internalLinksEnabled && baseUrl
         ? Array.from(occurrences.internalLinkTargets.entries())
@@ -1072,6 +1075,7 @@ export function fetchAssetsFromOccurrences(
               if (occurrences.crawledUrls.has(key)) return false;
               if (!target.action && mayProbe(target.url)) return true;
               outOfScope++;
+              if (target.action || looksLikeAnAction(target.url)) actionLinks++;
               return false;
             })
             .sort(([ak, a], [bk, b]) => b.pages - a.pages || (ak < bk ? -1 : ak > bk ? 1 : 0))
@@ -1565,6 +1569,7 @@ export function fetchAssetsFromOccurrences(
               ).length,
               cap: probeCap,
               outOfScope,
+              actionLinks,
               ...(resourceResults.linkTargets.headUnreliable ? { headUnreliable: true } : {}),
             },
           }

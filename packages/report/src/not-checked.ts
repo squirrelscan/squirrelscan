@@ -128,7 +128,11 @@ function linkTargetsHint(details: Record<string, unknown> | undefined): string {
   const present = Object.keys(causes).filter((key) => causes[key]);
   // The check skipped them on purpose, and a crawl stays inside the same scope
   // and robots.txt, so only the action and token links can still be reached.
-  if (present.length === 1 && present[0] === "skipped") {
+  const byDesign = ["skipped", "excluded", "action"];
+  if (present.length > 0 && present.every((key) => byDesign.includes(key))) {
+    if (present.length === 1 && present[0] === "action") {
+      return "These are action or token links, which squirrel never requests, so a Surface or Full audit will not reach them either.";
+    }
     return "A Surface or Full audit, which follows links, can reach the ones inside the crawl scope and allowed by robots.txt.";
   }
   const steps: string[] = [];
