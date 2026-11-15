@@ -692,9 +692,13 @@ export const brokenExternalLinksRule: Rule = {
             sourcePages: l.sourcePages,
             ...(sources ? { sources } : {}),
             ...regionsField(placement.regions(l.href)),
-            meta: l.unverifiedReason
-              ? { status: l.status, wafProvider: l.wafProvider, unverifiedReason: l.unverifiedReason, ...sectionMeta(sections) }
-              : { status: l.status, wafProvider: l.wafProvider, ...sectionMeta(sections) },
+            meta: {
+              // A numeric status only: a link that never answered keeps the meta shape consumers read (pub#783).
+              ...(typeof l.status === "number" ? { status: l.status } : {}),
+              wafProvider: l.wafProvider,
+              ...(l.unverifiedReason ? { unverifiedReason: l.unverifiedReason } : {}),
+              ...sectionMeta(sections),
+            },
           };
         }),
       });
