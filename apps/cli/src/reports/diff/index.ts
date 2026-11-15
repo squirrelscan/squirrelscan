@@ -415,6 +415,28 @@ function makeNotComparedJudge(
       }
     }
 
+    // A check that capped its own item list (`details.additional > 0`) lists only the first N items, so a
+    // baseline item missing from it may be one that is still failing past the cap (#1781).
+    {
+      const names = new Set([
+        issue.checkName,
+        ...(superseded.get(resolutionCheckKey(issue.ruleId, issue.checkName)) ??
+          []),
+      ]);
+      const capped = (reportRule(current, issue.ruleId)?.checks ?? []).some(
+        (c) => {
+          const extra = c.details?.additional;
+          return (
+            names.has(c.name) &&
+            typeof extra === "number" &&
+            Number.isFinite(extra) &&
+            extra > 0
+          );
+        }
+      );
+      if (capped) return { reason: "items-capped" };
+    }
+
     // The pages the issue sits on: its target for a page issue, its source pages for an item.
     const pages =
       issue.target.type === "page"

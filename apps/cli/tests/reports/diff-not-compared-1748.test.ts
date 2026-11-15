@@ -527,3 +527,31 @@ describe("a current side rebuilt from a slim JSON export (#1748 review)", () => 
     expect(d.removed).toHaveLength(1);
   });
 });
+
+describe("report --diff: a check that capped its item list cannot call a missing item fixed (#1781)", () => {
+  const capped = (additional?: number): CheckResult => ({
+    name: "charset",
+    status: "fail",
+    message: "charset on b",
+    pageUrl: B,
+    ...(additional ? { details: { additional } } : {}),
+  });
+
+  test("details.additional > 0 and the item is missing: items-capped, not removed", () => {
+    const d = diffReports(
+      baseline(),
+      report({ [RULE]: rule(RULE, [capped(5)]) })
+    );
+    expect(d.removed).toHaveLength(0);
+    expect(reasonOf(d)).toEqual([["items-capped", undefined]]);
+  });
+
+  test("uncapped control: the missing item is fixed", () => {
+    const d = diffReports(
+      baseline(),
+      report({ [RULE]: rule(RULE, [capped()]) })
+    );
+    expect(d.removed).toHaveLength(1);
+    expect(d.notCompared).toBeUndefined();
+  });
+});
