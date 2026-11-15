@@ -88,6 +88,16 @@ export const SCRIPT_FETCH_LIMITS = {
   MAX_RETRIES: 1,
 } as const;
 
+// Stylesheet body fetch limits (repo#1374). Bodies are read in-process by rules
+// (ctx.site.stylesheets) and never published. Same-site only; the fetch shares the
+// script fetcher's FetchBudget, egress policy and concurrency.
+export const STYLESHEET_FETCH_LIMITS = {
+  /** Most same-site stylesheets read per crawl, the most widely linked first. */
+  MAX_STYLESHEETS_TO_FETCH: 20,
+  /** A stylesheet over this many decoded bytes is not read (no `content`). */
+  MAX_STYLESHEET_SIZE_BYTES: 1024 * 1024, // 1MB
+} as const;
+
 // HTTP to HTTPS probe limits
 export const HTTP_PROBE_LIMITS = {
   DEFAULT_SAMPLE_SIZE: 20,
