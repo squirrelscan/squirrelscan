@@ -65,8 +65,9 @@ describe("checkReachability and the site's own hosts (repo#3430)", () => {
   test("a start URL that redirects to the metadata address is not followed there", async () => {
     const result = await checkReachability(`http://localhost:${server.port}/`);
 
-    expect(result.reachable).toBe(false);
-    expect(result.error).toContain("Not requested");
+    // repo#3336: the start URL answered, so it is reachable and audited; only
+    // the redirect it sent is not followed.
+    expect(result).toMatchObject({ reachable: true, statusCode: 302 });
     expect(requested.some((u) => u.includes("169.254.169.254"))).toBe(false);
   });
 
