@@ -4,7 +4,12 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, FindingState, PageFindingRecord } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  FindingState,
+  PageFindingRecord,
+  SitePageRecord,
+} from "@squirrelscan/core-contracts";
 
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
@@ -24,6 +29,7 @@ import {
   pageUrl,
   type FixtureRules,
 } from "./helpers/grouped-stream-fixture";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const NOW = 1_700_000_000_000;
 const pk = (f: StreamFindingLine) => findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
@@ -264,27 +270,33 @@ describe("grouped stream gate", () => {
 });
 
 // Minimal store: runCloudSmartAudits only needs findings + pages in memory here.
+// Its upsertSitePages is a keyed upsert and runs the shared contract below (#497).
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
+  pages = new Map<string, SitePageRecord>();
   async getFindings(_s: string, states?: FindingState[]) {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
-  async getSitePages() {
-    return [];
+  async getSitePages(): Promise<SitePageRecord[]> {
+    return [...this.pages.values()];
   }
   async upsertFindings(rows: PageFindingRecord[]) {
     for (const f of rows) {
       this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), f);
     }
   }
-  async upsertSitePages() {}
+  async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
+    for (const p of pages) this.pages.set(p.normalizedUrl, { ...p });
+  }
   async markPageRemoved() {}
   async markPagesRemoved() {}
   async compactFindings() {
     return 0;
   }
 }
+
+describeSitePagesContract("grouped-stream-findings-1883.test.ts MemStore", () => new MemStore());
 
 describe("grouped stream score parity", () => {
   test("grouped-materialized rows score identically to per-page rows", async () => {
