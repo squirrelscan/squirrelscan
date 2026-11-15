@@ -102,6 +102,26 @@ describe("the rules path, with no model at all", () => {
     expect(isRootPath("not a URL")).toBe(false);
   });
 
+  test("a query that selects other content is not the root; tracking queries are (repo#3363)", () => {
+    for (const q of ["?p=123", "?s=shoes", "?page_id=7", "?cat=3&utm=1"]) {
+      expect(isRootPath(`https://example.com/${q}`)).toBe(false);
+      expect(isRootPath(`https://example.com/index.html${q}`)).toBe(false);
+    }
+    expect(isRootPath("https://example.com/")).toBe(true);
+    expect(isRootPath("https://example.com/?utm_source=x&fbclid=1")).toBe(true);
+  });
+
+  test("/?p=123 and /?s=shoes are not typed homepage; plain / still is at 1 (repo#3363)", () => {
+    const html =
+      "<html><head><title>t</title></head><body><main><h1>Post</h1><p>body</p></main></body></html>";
+    for (const path of ["/?p=123", "/?s=shoes"]) {
+      expect(classifyPage(html, `https://example.com${path}`).pageType.label).not.toBe("homepage");
+    }
+    const plain = classifyPage(html, "https://example.com/").pageType;
+    expect(plain.label).toBe("homepage");
+    expect(plain.confidence).toBe(1);
+  });
+
   test("only the root /index.html document is a root; the other names and extensions are pinned as not (#902)", () => {
     // The root document name that cleared the precision bar.
     expect(isRootPath("https://example.com/index.html?utm=1")).toBe(true);
@@ -475,7 +495,8 @@ describe("platform guard thresholds ", () => {
 
 // The read is LAZY and cached: the artifact is 8 MB of JSON. Tests mutate their copy, so each gets a clone.
 let cached: Record<string, unknown> | undefined;
-const artifactJson = (): Record<string, unknown> => structuredClone(cached ??= JSON.parse(readFileSync(ARTIFACT, "utf8")));
+const artifactJson = (): Record<string, unknown> =>
+  structuredClone((cached ??= JSON.parse(readFileSync(ARTIFACT, "utf8"))));
 
 describe.if(HAS_ARTIFACT)("with the real artifact", () => {
   // The ceiling is 10 MB, and what matters at runtime is load time.
@@ -591,7 +612,8 @@ describe.if(HAS_ARTIFACT)("batched scoring is the row-at-a-time walk, bit for bi
           matrix[row * width + i] = r < 0.5 ? 0 : r < 0.8 ? Math.floor(next() * 20) : next();
         }
         for (let k = 0; k < 8; k++)
-          matrix[row * width + model.nodeFeatureCount + Math.floor(next() * model.tokenBuckets)] = 1;
+          matrix[row * width + model.nodeFeatureCount + Math.floor(next() * model.tokenBuckets)] =
+            1;
       }
       const expected = new Float32Array(rows * head.numClass);
       const scores = new Float32Array(head.numClass);
@@ -870,7 +892,15 @@ describe("a non-root page is never labelled homepage, with or without a model", 
     <p>We make widgets for people.</p></main></body></html>`;
 
   test("the rules never answer homepage for another path, whatever the structured data says", () => {
-    for (const path of ["/welcome", "/en/", "/blog/index.html", "/a/b", "/a?x=1", "/index.php", "/default.html"]) {
+    for (const path of [
+      "/welcome",
+      "/en/",
+      "/blog/index.html",
+      "/a/b",
+      "/a?x=1",
+      "/index.php",
+      "/default.html",
+    ]) {
       const out = classifyPage(HOME, `https://example.com${path}`);
       expect(out.pageType.label).not.toBe("homepage");
     }
@@ -959,7 +989,14 @@ describe.if(HAS_ARTIFACT)(
       expect(closed.fires).toBe(false);
       expect(out.pageType.confidence).toBeCloseTo(closed.probability, 6);
       expect(out.pageType.confidence).toBeLessThan(0.5);
-      for (const path of ["/welcome", "/home", "/index.php", "/blog/index.html", "/lp/spring", "/a/b/c"]) {
+      for (const path of [
+        "/welcome",
+        "/home",
+        "/index.php",
+        "/blog/index.html",
+        "/lp/spring",
+        "/a/b/c",
+      ]) {
         expect(
           classifyPage(LANDING, `https://example.com${path}`, { model }).pageType.label,
         ).not.toBe("homepage");
@@ -1151,7 +1188,12 @@ describe("the root document is a home page (#902)", () => {
     <p>We make widgets for people.</p></main></body></html>`;
 
   test("/index.html is the root, with a query string or a fragment too", () => {
-    for (const path of ["/index.html", "/index.html?utm_source=x", "/index.html#top", "/index.html?a=1#b"]) {
+    for (const path of [
+      "/index.html",
+      "/index.html?utm_source=x",
+      "/index.html#top",
+      "/index.html?a=1#b",
+    ]) {
       expect(isRootPath(`${ORIGIN}${path}`)).toBe(true);
     }
   });
@@ -1165,7 +1207,13 @@ describe("the root document is a home page (#902)", () => {
   });
 
   test("a nested index document is not the root", () => {
-    for (const path of ["/blog/index.html", "/en/index.html", "/a/b/index.html", "/index.html/", "/x/../blog/index.html"]) {
+    for (const path of [
+      "/blog/index.html",
+      "/en/index.html",
+      "/a/b/index.html",
+      "/index.html/",
+      "/x/../blog/index.html",
+    ]) {
       expect(isRootPath(`${ORIGIN}${path}`)).toBe(false);
     }
     expect(classifyPage(PLAIN, `${ORIGIN}/blog/index.html`).pageType.label).not.toBe("homepage");
@@ -1184,7 +1232,14 @@ describe("the root document is a home page (#902)", () => {
   });
 
   test("the match is exact: another case, a trailing dot or extra text is not the root", () => {
-    for (const path of ["/Index.html", "/INDEX.HTML", "/index.html.", "/index.html5", "/xindex.html", "/index.htm"]) {
+    for (const path of [
+      "/Index.html",
+      "/INDEX.HTML",
+      "/index.html.",
+      "/index.html5",
+      "/xindex.html",
+      "/index.htm",
+    ]) {
       expect(isRootPath(`${ORIGIN}${path}`)).toBe(false);
     }
   });
