@@ -1,9 +1,17 @@
 // Audit Adapter - bridges the new crawler to the audit workflow
 // Converts crawler storage data to the format expected by rules and reports
+//
+// Everything duplicated in @squirrelscan/audit-engine is re-exported from it.
+// Deliberately CLI-only, and why: the logger injection (CLI logger), the
+// legacy Page/SiteLink/SiteImage converters (pageRecordToPage,
+// linkRecordToSiteLink, imageRecordToSiteImage: the engine has no legacy
+// `@/infra/context` shapes), and the crawler event subscription.
 
 import {
   fetchResourceAssets as fetchResourceAssetsCore,
   generateReportFromStorage as generateReportFromStorageCore,
+  hasAuditableHtmlBody,
+  parsePageRecord,
   resolveStreamBatch,
   runRulesOnStorage as runRulesOnStorageCore,
   runStreamingPreRules as runStreamingPreRulesCore,
@@ -18,6 +26,7 @@ import {
   type RuleCacheStats,
   type RuleCacheStore,
   type RuleTally,
+  type SiteContextPage,
   type StreamingRulePhase,
 } from "@squirrelscan/audit-engine";
 import {
@@ -99,92 +108,6 @@ setAdapterLogger(cliAdapterLogger);
 // ============================================
 
 /**
- * Site context page - pairs a PageRecord with its parsed data
- * This allows us to parse each page once and reuse across workflows
- */
-export interface SiteContextPage {
-  page: PageRecord;
-  parsed: ParsedPage | null;
-}
-
-/**
- * Build site context by parsing all pages once
- * This eliminates redundant parsing across external link checking and rule execution
- */
-export function buildSiteContext(
-  pages: PageRecord[],
-  parsedCache?: ParsedPageCache
-): Effect.Effect<SiteContextPage[], never, never> {
-  return Effect.sync(() => {
-    const contextPages: SiteContextPage[] = [];
-
-    for (const page of pages) {
-      // Skip non-HTML pages by content type
-      if (!isHtmlContentType(page.contentType)) {
-        contextPages.push({ page, parsed: null });
-        continue;
-      }
-
-      // An empty body is a document only when the response status permits one.
-      // Error pages still join site.pages through the status-only path, while
-      // 204/205 responses have no representation to parse by definition.
-      if (page.html === "" && !isAuditableEmptyBodyStatus(page.status)) {
-        contextPages.push({ page, parsed: null });
-        continue;
-      }
-
-      let parsed: ParsedPage | null = null;
-
-      // Reuse stored parsed data if available
-      if (page.parsedData) {
-        try {
-          const stored = JSON.parse(page.parsedData);
-
-          // Handle corrupted state: parsedData exists but html is null
-          if (page.html === null) {
-            logger.error(
-              `Cannot recreate document for ${page.url}: HTML is null but parsedData exists (corrupted state)`
-            );
-            contextPages.push({ page, parsed: null });
-            continue;
-          }
-
-          // Reuse the crawl-time DOM when present, else re-parse (#267)
-          const doc =
-            parsedCache?.get(page.normalizedUrl)?.document ??
-            parseDocument(page.html);
-          // Rehydrate SchemaCollection (getters lost during JSON serialization)
-          parsed = {
-            document: doc,
-            ...stored,
-            schemas: schemaCollectionFromJSON(stored.schemas),
-          };
-        } catch (e) {
-          logger.error(`Failed to deserialize parsedData for ${page.url}:`, e);
-          // Fall through to re-parsing
-        }
-      }
-
-      // Fallback: parse from HTML if no stored data (old crawls)
-      if (!parsed) {
-        // Skip pages without HTML and no stored data
-        if (page.html === null) {
-          contextPages.push({ page, parsed: null });
-          continue;
-        }
-
-        logger.trace(`Re-parsing HTML for ${page.url} (no stored data)`);
-        parsed = parsePageRecord(page);
-      }
-
-      contextPages.push({ page, parsed });
-    }
-
-    return contextPages;
-  });
-}
-
-/**
  * DOM working-set controls (#858) — the engine implementations are the source
  * of truth; the fork's SiteContextPage is structurally identical, so re-export
  * for the controller. Release before long DOM-free waits (cloud prefetch),
@@ -200,7 +123,6 @@ export {
 export { resolveStreamBatch, STREAM_BATCH_BYTES };
 export type { StreamPreRulesResult } from "@squirrelscan/audit-engine";
 
-// ============================================
 // PARSED PAGE CONVERSION
 // ============================================
 
@@ -286,6 +208,16 @@ export function parsePageRecord(
     () => ({ url: page.url, htmlLen: page.html!.length })
   );
 }
+=======
+// Page parsing and site-context building live ONLY in the engine (repo#1415):
+// one implementation, so the CLI cannot drift from the cloud again.
+export {
+  buildSiteContext,
+  hasAuditableHtmlBody,
+  isAuditableEmptyBodyStatus,
+  parsePageRecord,
+} from "@squirrelscan/audit-engine";
+export type { SiteContextPage } from "@squirrelscan/audit-engine";
 
 // ============================================
 // CONTEXT CONVERSION
@@ -341,21 +273,6 @@ export function pageRecordToPage(
     depth: record.depth,
     parentUrl: record.parentUrl,
   };
-}
-
-/** Whether an empty successful response is allowed to carry a document body. */
-export function isAuditableEmptyBodyStatus(status: number): boolean {
-  return status >= 200 && status < 300 && status !== 204 && status !== 205;
-}
-
-/** A captured body, including an empty one when its status permits content. */
-export function hasAuditableHtmlBody(
-  page: Pick<PageRecord, "html" | "status">
-): page is Pick<PageRecord, "status"> & { html: string } {
-  return (
-    page.html !== null &&
-    (page.html.length > 0 || isAuditableEmptyBodyStatus(page.status))
-  );
 }
 
 /**
