@@ -76,11 +76,15 @@ else
   RED='' GREEN='' YELLOW='' BLUE='' NC=''
 fi
 
-log() { echo -e "${GREEN}==>${NC} $1" >&2; }
-warn() { echo -e "${YELLOW}Warning:${NC} $1" >&2; }
+# log, warn and info are progress chatter and must never abort the install: under `set -e` a
+# failed write to stderr (closed or broken pipe, as in some wrappers and agent shells) would
+# otherwise end the run at the log call and be reported under whatever step was current (#3554).
+log() { echo -e "${GREEN}==>${NC} $1" >&2 || true; }
+warn() { echo -e "${YELLOW}Warning:${NC} $1" >&2 || true; }
 # error <message> [detail]
 # `message` is shown to the user AND carried in the failure report, where it is
-# clamped to ERROR_LINE_MAX. `detail` is remediation text shown to the user
+# clamped to ERROR_LINE_MAX. It is the ONLY source of a report's `error_line` (via LAST_ERROR_MSG,
+# the ERROR_MSG_FILE fallback, or the signal traps): log, info and warn lines never reach it. `detail` is remediation text shown to the user
 # only: a long guidance block passed as `message` would push the actual error
 # out of the report's `error_line`.
 error() {
@@ -95,7 +99,7 @@ error() {
   [ -n "${ERROR_MSG_FILE:-}" ] && printf '%s' "$1" >"$ERROR_MSG_FILE" 2>/dev/null || true
   exit 1
 }
-info() { echo -e "${BLUE}::${NC} $1" >&2; }
+info() { echo -e "${BLUE}::${NC} $1" >&2 || true; }
 
 # --- Failure reporting ----------------------------------------------------
 # On failure, fire a tiny anonymous report to the installer worker (→ Sentry)
@@ -2076,6 +2080,8 @@ main() {
   local platform version bin_dir
   CURRENT_STEP="detect_platform"
   platform=$(detect_platform)
+  # Advance the step before logging so a failure after detection is not labelled detect_platform.
+  CURRENT_STEP="find_bin_dir"
   log "Detected platform: $platform"
 
   # musl builds need libstdc++ at runtime — ensure it before we exec the binary.
