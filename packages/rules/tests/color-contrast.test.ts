@@ -380,9 +380,9 @@ describe("stylesheetBackgroundSelectorsOf lists the other background selectors (
       truncated: false,
     });
     expect(stylesheetBackgroundSelectorsOf("@media (max-width:600px){.nav{background:#000}}").selectors).toEqual([".nav"]);
-    const many = Array.from({ length: 205 }, (_, i) => `.c${i}{background:#000}`).join("");
+    const many = Array.from({ length: 5005 }, (_, i) => `.c${i}{background:#000}`).join("");
     const r = stylesheetBackgroundSelectorsOf(many);
-    expect(r.selectors).toHaveLength(200);
+    expect(r.selectors).toHaveLength(5000);
     expect(r.truncated).toBe(true);
   });
 });
@@ -422,7 +422,7 @@ describe("a hostile stylesheet cannot make the parser superlinear (#1756)", () =
     expect(ms).toBeLessThan(100);
     const manyBackgrounds = "body{background:#fff}" + ".b{background:#000}".repeat(60_000);
     const [sel, ms2] = timed(() => stylesheetBackgroundSelectorsOf(manyBackgrounds));
-    expect(sel.selectors).toHaveLength(200);
+    expect(sel.selectors).toHaveLength(5000);
     expect(sel.truncated).toBe(true);
     expect(ms2).toBeLessThan(100);
   });
