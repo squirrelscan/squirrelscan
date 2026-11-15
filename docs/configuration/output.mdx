@@ -682,7 +682,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 
 **Issues:** `issues` holds findings only. Every check in it has status `fail` or `warn`. `affectedPages` is a sample, and `affectedPagesCount` is the true total, so compare the two (or read `affectedPagesHasMore`) before treating the list as complete.
 
-Schema `1.21` adds optional `observation` metadata to issue checks. It records the evidence `mode`, whether the check was `applicable`, and any `uncertainty` that qualifies the result.
+Schema `1.22` adds optional `observation` metadata to issue checks. It records the evidence `mode`, whether the check was `applicable`, and any `uncertainty` that qualifies the result.
 
 **Skipped checks:** `skippedChecks` lists checks a rule could not finish evaluating, so an absence of issues on those pages does not mean they are clean. It appears only when at least one check was skipped. Skipped checks are never part of `issues`, and do not count toward `passed`, `warnings`, `failed` or the score.
 
