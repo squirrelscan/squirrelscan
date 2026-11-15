@@ -1,6 +1,6 @@
 # @squirrelscan/page-classifier
 
-Names the parts of a parsed page: the region of each DOM node, the page type, and the purpose of each section. One featurizer feeds up to three gradient-boosted heads held in one artifact. A deterministic markup path answers whenever the model cannot.
+The runtime for Treetop, squirrelscan's DOM classifier. Names the parts of a parsed page: the region of each DOM node, the page type, and the purpose of each section. One featurizer feeds up to three gradient-boosted heads held in one artifact. A deterministic markup path answers whenever the model cannot.
 
 ## Use
 
@@ -73,7 +73,7 @@ Since v2.3.0 the featurizer emits two node token streams in the same hash bucket
 
 The weights are `treetop-pagetype-v1`, MIT licensed like the rest of this repository. They are the file `assets/classifier-v2.json`.
 
-See [MODEL.md](./MODEL.md) for what the heads are, what they read, the precision per class and the known limitations.
+See [MODEL.md](./MODEL.md), the Treetop model card, for what the heads are, what they read, the precision per class and the known limitations.
 
 `assets/classifier-v2.json` is weights and thresholds. It holds no vocabulary: tokens are hashed into buckets before scoring, so the only strings in it are the format name, the featurizer version and class names. `assets/classifier-v2.manifest.json` records its sha256, size and featurizer version. `tests/artifact-contents.test.ts` fails if any other string appears.
 
