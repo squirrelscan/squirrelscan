@@ -16,11 +16,15 @@ import {
 
 import { createEntityMapBuilder } from "../src/entity-map/build";
 import { diffEntityMaps } from "../src/entity-map/diff";
-import {
-  projectEntityMap,
-  slimEntityMapForPublish,
-  slimEntityMapForViewer,
-} from "../src/entity-map";
+import { projectEntityMap, slimEntityMapForViewer } from "../src/entity-map";
+
+// These tests pin the SAMPLING fallback (what survives when nothing summarizes),
+// so they run the publish limits with summarization off. Summarization has its
+// own file: entity-map-summarize.test.ts (#407).
+const { summarize: _summarize, ...SAMPLING_PUBLISH_LIMITS } = ENTITY_MAP_PUBLISH_LIMITS;
+function slimEntityMapForPublish(map: EntityMap): EntityMap {
+  return projectEntityMap(map, SAMPLING_PUBLISH_LIMITS, "publish");
+}
 
 function node(
   key: string,

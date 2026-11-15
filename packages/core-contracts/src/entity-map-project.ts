@@ -39,6 +39,7 @@ import {
   type EntityMapTruncation,
 } from "./entity-map";
 import { ENTITY_PROBLEM_CLASSES, entityProblemNodes } from "./entity-map-findings";
+import { buildGroups, groupNodes, type NodeGroups } from "./entity-map-groups";
 
 function clampString(value: string, limits: EntityMapLimits): string {
   return value.length > limits.maxStringLength
@@ -328,16 +329,38 @@ export function projectEntityMap(
   reason: EntityMapTruncation["reason"],
 ): EntityMap {
   const degrees = degreesByKey(map.edges);
+  const groups: NodeGroups | null = limits.summarize
+    ? groupNodes(map, limits.summarize.minGroupSize)
+    : null;
   const degree = (node: EntityMapNode): number => degrees.get(node.key) ?? 0;
   const byReach: NodeCompare = (a, b) =>
     b.occurrences - a.occurrences || degree(b) - degree(a) || compareKeys(a.key, b.key);
   const byDegree: NodeCompare = (a, b) =>
     degree(b) - degree(a) || b.occurrences - a.occurrences || compareKeys(a.key, b.key);
 
+  // Summarize first (#407): a grouped node outside its group's exemplars leaves
+  // the sampling pools, so the budget goes to distinct shapes. Problem nodes
+  // are read from the full map below and so stay eligible whatever their group.
+  const exemplarKeys = new Set<string>();
+  if (groups && limits.summarize) {
+    for (const members of groups.members.values()) {
+      for (const node of [...members].sort(byReach).slice(0, limits.summarize.exemplars)) {
+        exemplarKeys.add(node.key);
+      }
+    }
+  }
+  const sampled =
+    groups && groups.members.size > 0
+      ? map.nodes.filter((node) => {
+          const signature = groups.signatureOf.get(node.key);
+          return !(signature && groups.members.has(signature)) || exemplarKeys.has(node.key);
+        })
+      : map.nodes;
+
   const shared: EntityMapNode[] = [];
   const oneOff: EntityMapNode[] = [];
   const pageLocal: EntityMapNode[] = [];
-  for (const node of map.nodes) {
+  for (const node of sampled) {
     if (node.pageLocal) pageLocal.push(node);
     else if (node.occurrences > 1) shared.push(node);
     else oneOff.push(node);
@@ -391,8 +414,8 @@ export function projectEntityMap(
     return [...problems, ...subjects, ...rest, ...locals];
   };
 
-  let budget = Math.min(map.nodes.length, limits.maxNodes);
-  let result = project(select(budget), map, limits, reason);
+  let budget = Math.min(sampled.length, limits.maxNodes);
+  let result = project(select(budget), map, limits, reason, groups);
   // The page index has its own budget (`maxPageIndexBytes`) inside `maxBytes`,
   // so the graph is measured out of the rest: otherwise a large crawl would pay
   // for its index by losing nodes (#2117).
@@ -410,7 +433,7 @@ export function projectEntityMap(
   while (budget > 0 && size > graphLimit) {
     const scaled = Math.floor((budget * graphLimit) / size);
     budget = Math.max(0, Math.min(budget - 1, scaled));
-    result = project(select(budget), map, limits, reason);
+    result = project(select(budget), map, limits, reason, groups);
     size = graphSize(result);
   }
   return result;
@@ -437,6 +460,7 @@ function project(
   map: EntityMap,
   limits: EntityMapLimits,
   reason: EntityMapTruncation["reason"],
+  groups: NodeGroups | null = null,
 ): EntityMap {
   // Sample order, before the nodes are sorted for output: it ranks the edges.
   const rank = new Map(selected.map((node, index) => [node.key, index]));
@@ -458,6 +482,7 @@ function project(
       pages: map.pages.length - index.pages.length,
       ...(index.truncated ? { pagesTruncated: true } : {}),
     },
+    ...(groups && groups.members.size > 0 ? { groups: buildGroups(map, groups, selected) } : {}),
   };
 }
 

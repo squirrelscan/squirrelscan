@@ -148,6 +148,8 @@ export const ENTITY_MAP_PUBLISH_LIMITS = {
    * that every page declaring a broken entity was recrawled.
    */
   maxPageIndexBytes: 128_000,
+  /** Summarize structurally identical nodes instead of sampling them (#407). */
+  summarize: { minGroupSize: 8, exemplars: 3 },
 } as const;
 
 /**
@@ -217,6 +219,16 @@ export interface EntityMapLimits {
    * drops `pages` entirely, as the viewer does.
    */
   readonly maxPageIndexBytes?: number;
+  /**
+   * Summarize before sampling (#407): structurally identical nodes (same type
+   * set, outgoing predicate set and page-local flag) in a group of at least
+   * `minGroupSize` collapse to `exemplars` real nodes plus a record in
+   * `EntityMap.groups` carrying the true count. Absent means plain sampling.
+   */
+  readonly summarize?: {
+    readonly minGroupSize: number;
+    readonly exemplars: number;
+  };
 }
 
 /** Page-local share used when a limit set does not name one. */
@@ -492,6 +504,36 @@ export const EntityMapTruncationSchema = Type.Object({
 
 export type EntityMapTruncation = Static<typeof EntityMapTruncationSchema>;
 
+/**
+ * A structural group of entities, present only in a summarized projection (#407).
+ *
+ * NOT an entity: it is never in `nodes`, and a renderer must show it as "N
+ * entities of this shape", never as one entity. Members are the nodes of the full
+ * map sharing `signature` (type set, outgoing predicate set, page-local flag).
+ * `exemplars` are the members that stay in `nodes` as real entities; `omitted`
+ * members are in neither `nodes` nor `edges`. `count` is true for the full map,
+ * `count === exemplars.length + omitted`.
+ */
+export const EntityMapGroupSchema = Type.Object({
+  /** Discriminator: marks this record as a group, never an entity. */
+  kind: Type.Literal("group"),
+  signature: Type.String(),
+  types: Type.Array(Type.String()),
+  /** Outgoing predicates every member declares, sorted. */
+  predicates: Type.Array(Type.String()),
+  pageLocal: Type.Boolean(),
+  /** Members in the full map. */
+  count: Type.Integer({ minimum: 1 }),
+  /** Sum of member occurrences. */
+  occurrences: Type.Integer({ minimum: 0 }),
+  /** Keys of members kept as real nodes. */
+  exemplars: Type.Array(Type.String()),
+  /** Members not present in `nodes`. */
+  omitted: Type.Integer({ minimum: 0 }),
+});
+
+export type EntityMapGroup = Static<typeof EntityMapGroupSchema>;
+
 export const EntityMapSchema = Type.Object({
   format: Type.Literal(ENTITY_MAP_FORMAT),
   version: Type.Literal(ENTITY_MAP_VERSION),
@@ -508,6 +550,13 @@ export const EntityMapSchema = Type.Object({
    * Optional so a v1 document written before the field still validates.
    */
   truncated: Type.Optional(EntityMapTruncationSchema),
+  /**
+   * Structural groups, present only when a projection summarized (#407). Optional
+   * and additive, so no version bump: a reader that ignores it still sees valid
+   * nodes and the true `summary`, and cannot mistake a group for an entity
+   * because groups are not in `nodes`.
+   */
+  groups: Type.Optional(Type.Array(EntityMapGroupSchema)),
 });
 
 export type EntityMap = Static<typeof EntityMapSchema>;
