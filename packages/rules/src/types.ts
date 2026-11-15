@@ -469,6 +469,14 @@ export interface ExternalLinkCheckData {
    * report these as info, never as dead links.
    */
   rateLimited?: boolean;
+  /**
+   * Web-archive copy of a confirmed-broken link (repo#2856). Set only by a
+   * lookup that ran: `undefined` means no lookup happened (not requested, not
+   * on the plan, failed or timed out), `null` means the archive was asked and
+   * held no usable snapshot. `url` is the latest capture of the exact URL that
+   * answered 2xx, taken before the link died.
+   */
+  archive?: { url: string; capturedAt?: string } | null;
 }
 
 // Site-level data for site-scope rules

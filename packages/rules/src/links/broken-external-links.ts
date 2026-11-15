@@ -47,6 +47,25 @@ function isRateLimitedLink(link: { status: number | null; rateLimited?: boolean 
  * resolve (#1740). A definite answer, so it fails. Anything else wrong with a link (5xx, a timeout, a TLS or
  * connection error, another 4xx) may be transient or specific to where it was asked from, and only warns.
  */
+/**
+ * The archived copy to suggest for a link, or null. Only a confirmed-broken link gets one, and only an
+ * https web-archive address is trusted, so a malformed value never reaches a report (repo#2856).
+ */
+function archiveSuggestion(link: {
+  status: number | null;
+  error: string | null;
+  archive?: { url: string; capturedAt?: string } | null;
+}): { url: string; capturedAt?: string } | null {
+  if (!isConfirmedBroken(link) || !link.archive) return null;
+  try {
+    const u = new URL(link.archive.url);
+    if (u.protocol !== "https:" || u.hostname !== "web.archive.org") return null;
+  } catch {
+    return null;
+  }
+  return link.archive;
+}
+
 function isConfirmedBroken(link: { status: number | null; error: string | null }): boolean {
   if (link.error) return isDeadHostError(link.error);
   return link.status === 404 || link.status === 410;
@@ -310,7 +329,7 @@ export const brokenExternalLinksRule: Rule = {
     description:
       "Detects external links that are confirmed broken (a 404 or 410, or a host that does not resolve) and links that may be broken (5xx, timeouts, TLS errors)",
     solution:
-      "Broken external links hurt user experience and credibility. A link to a host that no longer resolves is also a risk: a lapsed domain can be registered by someone else, who then receives your visitors and the link equity you send. Remove or replace broken links with working alternatives, and take a link to a lapsed domain off the page before anyone else claims the name. Consider using archived versions (archive.org) if the original content is gone. For important resources, consider hosting your own copies of critical documentation or linking to more stable sources.",
+      "Broken external links hurt user experience and credibility. A link to a host that no longer resolves is also a risk: a lapsed domain can be registered by someone else, who then receives your visitors and the link equity you send. Remove or replace broken links with working alternatives, and take a link to a lapsed domain off the page before anyone else claims the name. When an item names an archived copy (web.archive.org), replace the link with that archived URL; do not replace a link that has no archived copy. For important resources, consider hosting your own copies of critical documentation or linking to more stable sources.",
     // pub#836/#843: a dead link is a reliability problem, scored under
     // Performance; the id keeps its `links/` prefix so configs keep working.
     category: "reliability",
@@ -465,14 +484,21 @@ export const brokenExternalLinksRule: Rule = {
         const sections = placement.sections(l.href);
         const sources = placement.sources(l.href, l.sourcePages);
         const deadHost = l.error !== null && isDeadHostError(l.error);
+        const archive = archiveSuggestion(l);
+        const lookedUpEmpty = l.archive === null && isConfirmedBroken(l);
         return {
           id: l.href,
           label: withSection(
-            deadHost
+            (deadHost
               ? `${l.href} (${brokenReason(l)})`
               : l.error
                 ? `${l.href} (Error: ${l.error})`
-                : `${l.href} (${l.status})`,
+                : `${l.href} (${l.status})`) +
+              (archive
+                ? `, archived copy: ${archive.url}`
+                : lookedUpEmpty
+                  ? ", no archived copy found"
+                  : ""),
             sections,
           ),
           sourcePages: l.sourcePages,
@@ -482,6 +508,7 @@ export const brokenExternalLinksRule: Rule = {
             status: l.status,
             error: l.error,
             ...(deadHost ? { deadHost: true } : {}),
+            ...(archive ? { archiveUrl: archive.url } : {}),
             ...sectionMeta(sections),
           },
         };
