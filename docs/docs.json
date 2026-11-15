@@ -261,6 +261,7 @@
                   "rules/links/dead-end-pages",
                   "rules/links/anchor-text",
                   "rules/links/anchor-mismatch",
+                  "rules/links/generic-anchor-density",
                   "rules/links/https-downgrade",
                   "rules/links/tel-mailto"
                 ]

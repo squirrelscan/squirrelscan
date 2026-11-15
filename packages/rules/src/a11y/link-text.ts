@@ -19,6 +19,7 @@ import {
   unconfirmedRow,
 } from "../shared/static-hidden";
 import { isConventionalLinkLabel } from "../shared/conventional-link-labels";
+import { CORE_GENERIC_ANCHORS } from "../shared/generic-anchor-phrases";
 import { isGenericInPageLanguage } from "../shared/generic-link-phrases";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { ComponentOccurrenceCache, componentOccurrence } from "../shared/component-occurrence";
@@ -28,18 +29,11 @@ import { ComponentOccurrenceCache, componentOccurrence } from "../shared/compone
 // site-utility labels ("sign in", "sign up", "log in", "register", "terms", "privacy")
 // name their destination and are NOT here: see shared/conventional-link-labels.ts (pub#839).
 export const GENERIC_LINK_TEXT = [
+  // The core list every link rule shares (repo#1387)
+  ...CORE_GENERIC_ANCHORS,
   // Original
-  "click here",
-  "here",
-  "read more",
-  "learn more",
-  "more",
-  "link",
   "click",
-  "this",
-  "go",
   "see more",
-  "continue",
   "details",
   // Action words without context
   "view",

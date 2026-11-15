@@ -45,6 +45,7 @@ const orphanRule = rules.get("links/orphan-pages")!;
 const weakRule = rules.get("links/weak-internal-links")!;
 const contextualRule = rules.get("links/no-contextual-inbound")!;
 const anchorMismatchRule = rules.get("links/anchor-mismatch")!;
+const genericAnchorRule = rules.get("links/generic-anchor-density")!;
 
 // ── fixture builders ──────────────────────────────────────────────────────────
 
@@ -877,6 +878,37 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
     expect(legacy[0]?.items?.map((i) => i.id)).toEqual([
       "https://example.com/ -> https://example.com/?p=123",
     ]);
+    await run(store.close());
+  }, 30_000);
+});
+
+describe("SiteQuery dual-path - links/generic-anchor-density (repo#1387)", () => {
+  test("streaming path is deep-equal to legacy and reports the ratio", async () => {
+    const store = await freshStore();
+    const generic = (text: string): LinkData => ({ url: "/a", text, isInternal: true });
+    const rows = [
+      pageRow(BASE, [generic("click here"), generic("Read more"), generic("Pricing"), chrome("/a")]),
+      pageRow("https://example.com/a", [generic("Read more"), generic("Read more"), nofollow("/b")]),
+      pageRow("https://example.com/b", [generic("Guide"), external("https://x.com/")]),
+    ];
+    for (const r of rows) await run(store.upsertPage(CRAWL, r));
+
+    const { legacy, streamed } = await runBothWays(store, genericAnchorRule, {
+      minAnchors: 5,
+      warnRatio: 0.2,
+      failRatio: 0.4,
+    });
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]!.status).toBe("fail");
+    expect(legacy[0]!.details).toMatchObject({ genericAnchors: 4, totalAnchors: 6 });
+
+    const skipped = await runBothWays(store, genericAnchorRule, {
+      minAnchors: 30,
+      warnRatio: 0.2,
+      failRatio: 0.4,
+    });
+    expect(skipped.streamed).toEqual(skipped.legacy);
+    expect(skipped.legacy[0]!.status).toBe("skipped");
     await run(store.close());
   }, 30_000);
 });

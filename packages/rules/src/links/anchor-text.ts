@@ -2,6 +2,7 @@
 
 import { coerceSchemelessUrl } from "@squirrelscan/utils";
 import { isConventionalLinkLabel } from "../shared/conventional-link-labels";
+import { CORE_GENERIC_ANCHORS } from "../shared/generic-anchor-phrases";
 import { isGenericInPageLanguage } from "../shared/generic-link-phrases";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
@@ -21,18 +22,8 @@ function truncateHtml(html: string): string {
   return `${html.slice(0, MAX_SNIPPET_LEN)}...`;
 }
 
-const GENERIC_ANCHORS = [
-  "click here",
-  "here",
-  "read more",
-  "learn more",
-  "more",
-  "link",
-  "this",
-  "this link",
-  "go",
-  "continue",
-];
+// The shared core list (repo#1387), so the site-wide density rule counts the same phrases.
+const GENERIC_ANCHORS: readonly string[] = CORE_GENERIC_ANCHORS;
 
 function hasAccessibleName(link: Element, doc: Document): boolean {
   const text = link.textContent?.trim() || "";

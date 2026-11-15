@@ -1202,6 +1202,12 @@ export interface SiteQuery {
    */
   inboundSectionCounts?(): Map<string, LinkSectionCounts>;
   /**
+   * Per page, how many of its internal content anchors are generic ("click here", "read more")
+   * and how many it has in all (repo#1387), for `links/generic-anchor-density`. Keyed by each
+   * crawled page's stored URL. Optional: an implementation without it makes the rule skip.
+   */
+  genericAnchorCounts?(): Map<string, { generic: number; total: number }>;
+  /**
    * The contextual (non-chrome) anchor text per (source page, target page) pair, plus each crawled
    * page's title and H1s (#110), for `links/anchor-mismatch`. Optional: an implementation without
    * it makes the rule skip. Built by the same `AnchorGraphBuilder` the legacy path uses, so both
