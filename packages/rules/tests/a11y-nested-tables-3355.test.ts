@@ -241,7 +241,7 @@ describe("a nested table is judged as its own table (#3355)", () => {
 
   test("link-in-text-block: a link in nested list items is counted once", async () => {
     const html =
-      '<ul><li>Intro <ul><li><a href="/x" style="text-decoration:none">deep</a></li></ul></li></ul>';
+      '<ul><li>Intro <ul><li>More <a href="/x" style="text-decoration:none">deep</a></li></ul></li></ul>';
     const [check] = (await run(linkInTextBlockRule, parse(html))).checks;
     expect(check!.items).toEqual([{ id: '"deep"' }]);
   });

@@ -34,6 +34,33 @@ function linksInTextBlocks(doc: Document): Element[] {
   return links;
 }
 
+/** Text of a block outside any link, trimmed. Cached per block. */
+function ownText(block: Element, cache: Map<Element, boolean>): boolean {
+  const hit = cache.get(block);
+  if (hit !== undefined) return hit;
+  let has = false;
+  const walk = (node: Node) => {
+    for (let c = node.firstChild; c && !has; c = c.nextSibling) {
+      if (c.nodeType === 3) {
+        if ((c.textContent ?? "").trim()) has = true;
+      } else if (c.nodeType === 1 && (c as Element).localName !== "a") {
+        walk(c);
+      }
+    }
+  };
+  walk(block);
+  cache.set(block, has);
+  return has;
+}
+
+function accessibleName(link: Element): string {
+  const text = link.textContent?.trim();
+  if (text) return text;
+  const label =
+    link.getAttribute("aria-label")?.trim() || link.getAttribute("title")?.trim();
+  return label || link.getAttribute("href") || "link";
+}
+
 export const linkInTextBlockRule: Rule = {
   meta: {
     id: "a11y/link-in-text-block",
@@ -58,7 +85,13 @@ export const linkInTextBlockRule: Rule = {
     const linksWithoutUnderline: Element[] = [];
 
     // Check links within text-heavy elements
+    const blockText = new Map<Element, boolean>();
     for (const link of linksInTextBlocks(doc)) {
+      // Icon-only links have no text to underline.
+      if (!link.textContent?.trim()) continue;
+      // A block holding only links is a list of links, not running text.
+      const block = link.closest(TEXT_BLOCK_SELECTOR);
+      if (block && !ownText(block, blockText)) continue;
       linksInText++;
 
       // Check inline styles for text-decoration: none
@@ -74,7 +107,10 @@ export const linkInTextBlockRule: Rule = {
         className.includes("no-underline") ||
         className.includes("text-decoration-none");
 
-      if (hasNoUnderlineStyle || hasNoUnderlineClass) linksWithoutUnderline.push(link);
+      // Another visual cue the solution text accepts.
+      const hasCue = /(^|[;\s])(border|background)/i.test(style);
+
+      if ((hasNoUnderlineStyle || hasNoUnderlineClass) && !hasCue) linksWithoutUnderline.push(link);
     }
 
     if (linksWithoutUnderline.length > 0) {
@@ -84,8 +120,8 @@ export const linkInTextBlockRule: Rule = {
         message: `${linksWithoutUnderline.length} link(s) in text may lack underlines`,
         // Text read for the shown ten only: a link's text is its whole subtree's.
         items: linksWithoutUnderline.slice(0, 10).map((link) => {
-          const text = link.textContent?.trim().slice(0, 30);
-          return { id: `"${text}${text && text.length >= 30 ? "..." : ""}"` };
+          const text = accessibleName(link).slice(0, 30);
+          return { id: `"${text}${text.length >= 30 ? "..." : ""}"` };
         }),
         details: {
           note: "Links need visual distinction beyond color",

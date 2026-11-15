@@ -41,6 +41,10 @@ export const referenceLinkInTextBlockRule: Rule = {
       for (const link of links) {
         if (counted.has(link)) continue;
         counted.add(link);
+        // #1874: the same two skips as the rule (no text; nearest block has no text of its own).
+        if (!link.textContent?.trim()) continue;
+        const own = link.closest("p, li, td, th, dd, blockquote, figcaption");
+        if (own && ![...own.querySelectorAll("a")].reduce((t, a) => t.replace(a.textContent ?? "", ""), own.textContent ?? "").trim()) continue;
         linksInText++;
 
         // Check inline styles for text-decoration: none
@@ -56,7 +60,7 @@ export const referenceLinkInTextBlockRule: Rule = {
           className.includes("no-underline") ||
           className.includes("text-decoration-none");
 
-        if (hasNoUnderlineStyle || hasNoUnderlineClass) {
+        if ((hasNoUnderlineStyle || hasNoUnderlineClass) && !/(^|[;\s])(border|background)/i.test(style)) {
           const text = link.textContent?.trim().slice(0, 30);
           linksWithoutUnderline.push(
             `"${text}${text && text.length >= 30 ? "..." : ""}"`
