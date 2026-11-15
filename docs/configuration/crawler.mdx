@@ -792,6 +792,8 @@ The product token robots.txt groups are matched against when [`respect_robots`](
 
 It is separate from [`user_agent`](#user_agent) because a robots.txt group is matched on the part of the user agent before its first `/`, and the default browser user agent starts `Mozilla/5.0`. Set it to another token to be matched as that crawler, or to `""` to match on the user agent's own token.
 
+The GraphQL probes ([`security/graphql-introspection`](/rules/security/graphql-introspection) and [`security/graphql-get-mutations`](/rules/security/graphql-get-mutations)) skip the paths this group disallows too.
+
 ```toml
 [crawler]
 respect_robots = true

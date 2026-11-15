@@ -5,6 +5,8 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
+
 import { createProbeBudget } from "../src/probe-budget";
 import {
   buildGraphqlProbe,
@@ -135,6 +137,56 @@ describe("selectGraphqlCandidates", () => {
       `${BASE}/graphql`,
       `${BASE}/api/graphql`,
     ]);
+  });
+
+  describe("reads robots.txt as the crawl's robots group (repo#3390)", () => {
+    const withAgent = (content: string, robotsUserAgent: string | undefined, level?: "aggressive") => {
+      const ctx = ruleCtx({ robotsTxt: parseRobotsTxt(content, `${BASE}/robots.txt`), level });
+      if (robotsUserAgent !== undefined) ctx.site!.robotsUserAgent = robotsUserAgent;
+      return ctx;
+    };
+    const SQUIRREL_ONLY =
+      "User-agent: SquirrelScan\nDisallow: /graphql\n\nUser-agent: *\nAllow: /\n";
+
+    test("a SquirrelScan group that disallows /graphql is honoured while * allows it", () => {
+      const sel = selectGraphqlCandidates(withAgent(SQUIRREL_ONLY, "SquirrelScan"));
+      expect(sel.candidates.map((c) => c.url)).toEqual([`${BASE}/api/graphql`]);
+      expect(sel.skippedRobots).toBe(1);
+    });
+
+    test("the group token matches without case", () => {
+      expect(urls(withAgent(SQUIRREL_ONLY, "squirrelscan"))).toEqual([`${BASE}/api/graphql`]);
+    });
+
+    test("with no robots token (robots.txt not respected) the * group is read", () => {
+      expect(urls(withAgent(SQUIRREL_ONLY, undefined))).toEqual([
+        `${BASE}/graphql`,
+        `${BASE}/api/graphql`,
+      ]);
+    });
+
+    test("falls back to * when the file has no group for the token", () => {
+      const sel = selectGraphqlCandidates(
+        withAgent("User-agent: *\nDisallow: /graphql\n", "SquirrelScan"),
+      );
+      expect(sel.candidates.map((c) => c.url)).toEqual([`${BASE}/api/graphql`]);
+      expect(sel.skippedRobots).toBe(1);
+    });
+
+    test("the crawl's own group wins over *, as the crawl reads it", () => {
+      const content = "User-agent: SquirrelScan\nAllow: /\n\nUser-agent: *\nDisallow: /graphql\n";
+      expect(urls(withAgent(content, "SquirrelScan"))).toEqual([
+        `${BASE}/graphql`,
+        `${BASE}/api/graphql`,
+      ]);
+    });
+
+    test("an aggressive run still keeps a path the crawl's group disallows", () => {
+      expect(urls(withAgent(SQUIRREL_ONLY, "SquirrelScan", "aggressive"))).toEqual([
+        `${BASE}/graphql`,
+        `${BASE}/api/graphql`,
+      ]);
+    });
   });
 
   test(`at most ${MAX_GRAPHQL_ENDPOINTS} endpoints are selected`, () => {

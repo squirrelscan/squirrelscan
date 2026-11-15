@@ -115,7 +115,9 @@ API, auth endpoint, admin endpoint, open redirect, actuator and exposed-files pr
 The GraphQL endpoints are the ones the audit found in your pages and scripts,
 plus `/graphql` and `/api/graphql`. A path that names a state-changing action,
 such as `logout` or `delete`, is never probed. Below `aggressive`, a path that
-`robots.txt` disallows is skipped. Probe requests carry no cookies and do not
+`robots.txt` disallows is skipped, read as the crawl's robots group
+([`robots_user_agent`](/configuration/crawler#robots_user_agent), or
+`User-agent: *` when the file has no group for it). Probe requests carry no cookies and do not
 follow redirects.
 
 The actuator base paths are `/actuator` plus any path with an `actuator`

@@ -8,6 +8,18 @@ import type { RobotsTxtData, RobotsRule } from "@squirrelscan/core-contracts";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
 /**
+ * The robots.txt group token a crawl configured with `agent` is matched as: the
+ * text before the first `/`, trimmed, as the crawler's robots parser reads it
+ * (`SquirrelScan/1.0` is the `SquirrelScan` group). Pass the result to
+ * {@link isRobotsTxtDisallowed} so a rule reads the same group the crawl did
+ * (squirrelscan/repo#3390). Empty when `agent` names no token.
+ */
+export function robotsGroupToken(agent: string): string {
+  const slash = agent.indexOf("/");
+  return (slash === -1 ? agent : agent.slice(0, slash)).trim();
+}
+
+/**
  * Check if a URL is disallowed by robots.txt rules, the way Google reads them
  * (pub#556), so every rule that asks "is this page blocked" gets one answer:
  *
