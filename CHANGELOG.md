@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `ax/commerce-readiness` (squirrelscan/repo#3881): on sites detected as ecommerce or marketplace, checks each product page's offer for price, currency, availability, shipping details, a return policy and a product identifier, and notes linked product feeds and agent checkout manifests (detected only, never scored). Other site types get one skipped check. Force it on or off with `[rule_options."ax/commerce-readiness"] applies = "on" | "off"`, or the `commerce` argument of the `audit_website` MCP tool.
+
 ### Fixed
 
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.

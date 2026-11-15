@@ -448,6 +448,12 @@
    "archive-indexing|skipped|Archive indexing check skipped||"
   ]
  },
+ "ax/commerce-readiness": {
+  "digest": "254756646807814",
+  "lines": [
+   "offer-completeness|info|No Product markup on this page, so offer completeness was not judged||"
+  ]
+ },
  "ax/content-signals": {
   "digest": "154266100118361",
   "lines": [

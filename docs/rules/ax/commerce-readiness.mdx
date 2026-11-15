@@ -1,0 +1,97 @@
+---
+title: "Commerce readiness: can a shopping agent buy from this shop"
+description: "Checks that product pages declare the offer fields a shopping agent needs: price, currency, availability, shipping, returns and an identifier. Runs only on detected shops."
+---
+
+## What commerce readiness is
+
+A shopping agent compares products and, increasingly, buys them for a person. It cannot do that from a photo and a paragraph. It needs the offer declared in structured data: what the product costs and in which currency, whether it is in stock, what shipping and returns look like, and an identifier (GTIN, MPN or SKU) that lets it match the product across shops.
+
+## What squirrel checks
+
+The rule runs on each crawled page of a site detected as `ecommerce` or `marketplace`. It reads the page's own structured data (JSON-LD, microdata and RDFa, the same markup [schema/product](/rules/schema/product) reads) and emits up to three kinds of check.
+
+- `offer-completeness`: on a page with Product or ProductGroup markup, looks for six fields on the offer: `price`, `priceCurrency`, `availability`, `shippingDetails`, a return policy (`hasMerchantReturnPolicy` on the offer, the product or an organization node, or a `MerchantReturnPolicy` node) and an identifier (`gtin`, `gtin8`, `gtin12`, `gtin13`, `gtin14`, `mpn`, `sku` or `productID`). It passes when all six are declared. It warns with `Offer is missing N of 6 fields a shopping agent needs` and lists each missing field as an item. When the page was not read completely (a truncated response, or microdata the reader does not follow), a missing field is not proven, so the check reports at info status instead. A page with no Product markup reports at info status and is not judged.
+- `commerce-feed`: info only. Reported when the page links to what looks like a product feed (a `merchant`, `product-feed` or `google-shopping` style path, or `products.xml`, `products.json` or `products.csv`).
+- `commerce-manifest`: info only. Reported when the page links to an agent checkout manifest under `/.well-known/` (`ucp`, `acp.json` or `agentic-commerce`). The manifest is detected, not fetched or validated: the standards are still competing.
+
+Feed and manifest checks never warn and never lower the score. Only a proven missing offer field does.
+
+squirrel does not probe for feeds or manifests and does not compare a feed with what the pages say. It reports what the crawled pages link to.
+
+## When it runs
+
+The rule declares that it applies to `ecommerce` and `marketplace` sites. On any other detected site type, squirrel emits one skipped check (`Not applicable: site type is "<type>"`) and does not run it. Site type comes from the cloud site profile, so a signed-out local audit has no site type and runs the rule on every page; pages without Product markup report at info status.
+
+Detection can be wrong. Override it per site with the `applies` option, which takes `auto` (the default), `on` or `off`:
+
+```toml squirrel.toml
+[rule_options."ax/commerce-readiness"]
+applies = "on"
+```
+
+`off` emits one skipped check and does not run the rule. The `audit_website` MCP tool takes the same switch as its `commerce` argument (`auto`, `on` or `off`), which wins over the config for that call.
+
+## How to fix it
+
+Add the missing fields to the Product's `offers`:
+
+```json
+{
+  "@type": "Product",
+  "name": "Widget",
+  "sku": "W-1",
+  "offers": {
+    "@type": "Offer",
+    "price": "19.99",
+    "priceCurrency": "USD",
+    "availability": "https://schema.org/InStock",
+    "shippingDetails": { "@type": "OfferShippingDetails" },
+    "hasMerchantReturnPolicy": { "@type": "MerchantReturnPolicy" }
+  }
+}
+```
+
+Fill the shipping and return policy nodes with their real properties; an empty typed node does not count as declared.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/commerce-readiness` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/commerce-readiness"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+## Related rules
+
+- [schema/product](/rules/schema/product): validates Product markup for rich results.
+- [ax/well-known-agent](/rules/ax/well-known-agent): MCP and A2A manifests under `.well-known`.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Signed-out local audits need no account and cost nothing.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>

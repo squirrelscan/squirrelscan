@@ -7,6 +7,7 @@ import { agentsMdRule } from "./agents-md";
 import { aiCrawlersRule } from "./ai-crawlers";
 import { apiDiscoveryRule } from "./api-discovery";
 import { archiveIndexingRule } from "./archive-indexing";
+import { commerceReadinessRule } from "./commerce-readiness";
 import { contentSignalsRule } from "./content-signals";
 import { contentWithoutJsRule } from "./content-without-js";
 import { llmsTxtRule } from "./llms-txt";
@@ -32,6 +33,7 @@ export const rules: Rule[] = [
   archiveIndexingRule,
   rslLicenseRule,
   payPerCrawlRule,
+  commerceReadinessRule,
 ];
 
 export {
@@ -39,6 +41,7 @@ export {
   agentsMdRule,
   archiveIndexingRule,
   aiCrawlersRule,
+  commerceReadinessRule,
   apiDiscoveryRule,
   contentSignalsRule,
   contentWithoutJsRule,

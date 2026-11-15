@@ -48,17 +48,17 @@ interface Candidate {
   node: StructuredNode;
 }
 
-const PRODUCT_TYPES = ["Product", "ProductGroup"];
+export const PRODUCT_TYPES = ["Product", "ProductGroup"];
 const MAX_VARIANTS = 200;
 
-type Resolve = (value: unknown) => unknown;
+export type Resolve = (value: unknown) => unknown;
 
 /** A direct property, as a list of resolved values. */
-function values(node: StructuredNode, prop: string, resolve: Resolve): unknown[] {
+export function values(node: StructuredNode, prop: string, resolve: Resolve): unknown[] {
   return asList(node[prop]).map(resolve);
 }
 
-function filledAny(list: unknown[]): boolean {
+export function filledAny(list: unknown[]): boolean {
   return list.some((v) => !isDanglingRef(v) && isFilled(v));
 }
 
@@ -75,7 +75,7 @@ function imageFilled(list: unknown[]): boolean {
 }
 
 /** Every Offer reachable from a node, through AggregateOffer nesting and references. */
-function offersOf(node: StructuredNode, resolve: Resolve): StructuredNode[] {
+export function offersOf(node: StructuredNode, resolve: Resolve): StructuredNode[] {
   const out: StructuredNode[] = [];
   const seen = new Set<object>();
   const visit = (value: unknown, depth: number): void => {
@@ -93,7 +93,7 @@ function offersOf(node: StructuredNode, resolve: Resolve): StructuredNode[] {
 }
 
 /** A price is declared by `price`, `lowPrice`, or a `priceSpecification` carrying one. A price of 0 is declared. */
-function priceFilled(offer: StructuredNode, resolve: Resolve): boolean {
+export function priceFilled(offer: StructuredNode, resolve: Resolve): boolean {
   if (filledAny([offer["price"], offer["lowPrice"], offer["highPrice"]].filter((v) => v !== undefined))) return true;
   return values(offer, "priceSpecification", resolve).some(
     (spec) => !!spec && typeof spec === "object" && isFilled((spec as StructuredNode)["price"]),
@@ -101,7 +101,7 @@ function priceFilled(offer: StructuredNode, resolve: Resolve): boolean {
 }
 
 /** The product plus, for a ProductGroup, its variants (resolved, bounded). */
-function productAndVariants(node: StructuredNode, resolve: Resolve): StructuredNode[] {
+export function productAndVariants(node: StructuredNode, resolve: Resolve): StructuredNode[] {
   const out: StructuredNode[] = [node];
   for (const raw of values(node, "hasVariant", resolve)) {
     if (out.length > MAX_VARIANTS) break;
