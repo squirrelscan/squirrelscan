@@ -59,8 +59,9 @@
 // is bounded at the audit's granularity, one check per page, as a fresh audit
 // counts it.
 //
-// Off the single-POST (sampled) path only: a complete-store finalize ignores the
-// marker (see CloudSmartAuditsInput.sampledStore).
+// Both paths: the single-POST (sampled) merge and the chunked complete-store
+// finalize (repo#4626) hand the estimator the same inputs, so a partial re-audit
+// scores the same whichever way it was published.
 
 import type {
   CheckTallies,
@@ -219,7 +220,8 @@ export class SampledStoreEstimator {
     return t && typeof t === "object" ? t : undefined;
   }
 
-  private isSampledRow(row: { normalizedUrl: string; ruleId: string; lastSeenCrawlId: string }): boolean {
+  /** The row is one the sampled audit wrote (and no later audit has touched). */
+  isSampledRow(row: { normalizedUrl: string; ruleId: string; lastSeenCrawlId: string }): boolean {
     return (
       row.lastSeenCrawlId === this.marker.crawlId &&
       this.priorRunPages.has(row.normalizedUrl) &&
