@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- Crash reports for the CLI and the local MCP server (squirrelscan/repo#705). An uncaught exception, an unhandled rejection or an unexpected error from a command now prints a short message with a reference such as `cli_3f9a1c0b7d2e` and exits with code 1; `SQUIRREL_LOG_LEVEL=debug` prints the stack. An MCP tool that fails unexpectedly returns a tool error with the same kind of reference instead of a bare message. With telemetry on, the crash goes to the squirrelscan API as an `error` event with the reference, the error class, the subcommand name, OS and architecture, and the crash's code locations (function, file name and line, no directories, URLs or email addresses). The error message is never sent, the binary carries no third-party error-tracking key, and `--offline` and every telemetry opt-out send nothing. The telemetry notice gains one sentence about crash code locations, so it is shown once more, and stack frames are only sent after it has been seen. See [crash reports](https://docs.squirrelscan.com/cli/self#crash-reports).
+
 ## v0.0.183 (2026-11-17)
 
 Four new probing security rules check what a site hands to anyone who asks: open JSON APIs, sensitive JSON fields, exposed files such as `.env` and `.git`, and auth endpoints that leak the user record. Four more catch mixed locale conventions, inconsistent terminology, copy whose own date has passed and broken byline conventions. Large audits peak at about half the memory, and a probe that never got an answer is now reported as not checked instead of clean. This release adds 8 rules: 336 rules on by default, 28 of them in Security, 29 in Content, 16 in E-E-A-T and 4 in Internationalization.

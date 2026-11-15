@@ -1,13 +1,15 @@
 // Local stdio MCP server (#112): exposes squirrelscan to agents (Claude Code, Cursor).
 
-import { McpServer } from "@modelcontextprotocol/server";
+import { McpServer, ProtocolError } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
+import { newCrashReference, reportCrash } from "@/self/crash-reporter";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 
 import { version } from "../../package.json";
 import { cancelActiveMcpRuns } from "./billed-audit";
 import { type LoginResolver } from "./cloud";
+import { errorResult } from "./result";
 import { registerSkills } from "./skills";
 import { registerAuditTools } from "./tools/audit-tools";
 import { registerEntityTools } from "./tools/entity-tools";
@@ -28,6 +30,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     name: "squirrelscan",
     version,
   });
+  reportToolErrors(server);
 
   registerAuditTools(server);
   registerReportTools(server, options.resolveLogin);
@@ -42,6 +45,57 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   registerSkills(server);
 
   return server;
+}
+
+type ToolHandler = (...args: unknown[]) => unknown;
+
+/**
+ * A tool handler that throws is a bug (handlers return errorResult for
+ * expected failures): the agent gets a clean tool error with a `cli_`
+ * reference, stderr gets one line, and the crash is reported through the API
+ * like a CLI crash (repo#705). Protocol errors are the SDK's own signalling
+ * and pass through untouched. Exported for tests.
+ */
+export function wrapToolHandler(
+  name: string,
+  handler: ToolHandler
+): ToolHandler {
+  return async (...args: unknown[]) => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      if (error instanceof ProtocolError) throw error;
+      const reference = newCrashReference();
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `squirrel mcp: the ${name} tool hit an unexpected error (reference ${reference})`
+      );
+      void reportCrash(error, {
+        reference,
+        source: "mcp_tool",
+        args: ["mcp"],
+      });
+      return errorResult(
+        `The ${name} tool hit an unexpected error: ${message}\nReference: ${reference}`
+      );
+    }
+  };
+}
+
+// Every tool registered on this server goes through wrapToolHandler.
+function reportToolErrors(server: McpServer): void {
+  const register = server.registerTool.bind(server) as (
+    ...args: unknown[]
+  ) => unknown;
+  (server as unknown as { registerTool: unknown }).registerTool = (
+    ...args: unknown[]
+  ) => {
+    const [name, , handler] = args;
+    if (typeof name === "string" && typeof handler === "function") {
+      args[2] = wrapToolHandler(name, handler as ToolHandler);
+    }
+    return register(...args);
+  };
 }
 
 // Process-wide redirect so stray stdout console output (log/info/debug) can't corrupt the JSON-RPC stream.
