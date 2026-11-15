@@ -1,0 +1,100 @@
+---
+title: "Locale mixing: spellings, dates and currency that contradict each other"
+description: "A page that writes color and colour, 25/03/2026 and 03/25/2026, or a bare $ beside CAD amounts cannot be read reliably. squirrel flags the mix on pages that declare English."
+---
+
+## What locale mixing is
+
+A page follows one locale when its spelling, dates and currency all agree. It mixes locales when it contradicts itself: "color" in one paragraph and "colour" in the next, `25/03/2026` in the byline and `03/25/2026` in the footer, or `$20` beside `CAD 25`. A human reader shrugs. An agent or a parser has to pick, and a date like `3/4/2026` has two valid readings once the same page has shown that both orders are in use.
+
+## What squirrel checks
+
+The rule runs on every crawled page, reads the visible prose (code blocks, scripts and templates are left out) and emits at most one problem check per family, or a single `locale-mixing` pass when there is nothing to report.
+
+- `spelling-mix` (warning): both spellings of one word appear. Pairs checked: color/colour, center/centre, behavior/behaviour, favorite/favourite, license/licence, organize/organise, analyze/analyse and optimize/optimise, with their inflections. For license/licence the US side is "license" used as a noun after a determiner (the license, a license), because "license" is the correct UK verb.
+- `spelling-lang` (warning): no word is mixed, but the copy contradicts `html lang`. An `en-US` page needs at least two UK-only words, and an `en-GB`, `en-AU`, `en-NZ`, `en-IE`, `en-IN` or `en-ZA` page needs at least two US-only words. The -ize/-ise pairs are never used here, because Oxford spelling is British with -ize. An `en-GB` page that uses UK spellings alone is clean.
+- `date-mix` (fail): the page has at least one numeric date that can only be day-first (`25/03/2026`) and at least one that can only be month-first (`03/25/2026`). Dates with both parts 12 or under are ambiguous on their own and are not counted. ISO dates (`2026-03-25`) are ignored.
+- `currency-mix` (warning): a bare `$` amount sits on a page that also has USD, CAD, AUD or NZD amounts. Qualified symbols such as `US$20` or `C$25` are not bare.
+
+A page whose `lang` has a primary language other than English gets a `locale-mixing-skipped` result with the reason `other-locale`, so a multilingual site with correct hreflang is never judged against English word lists. A page with no `lang` is still checked, because the mix itself needs no declaration.
+
+Not covered: multiple currency symbols such as £ and €, and any language other than English.
+
+## How to fix it
+
+Pick one locale per page and let the copy follow it. Set `lang` to match (`en-US` or `en-GB`). Write dates so they cannot be misread: `25 March 2026` or `2026-03-25`. Qualify prices once, for example `US$20` and `C$25`, or state the currency in the page heading.
+
+| | |
+|---|---|
+| **Rule ID** | `i18n/locale-mixing` |
+| **Category** | [Internationalization](/rules/i18n) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/locale-mixing"]
+```
+
+### Disable all Internationalization rules
+
+```toml squirrel.toml
+[rules]
+disable = ["i18n/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["i18n/locale-mixing"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `spelling-mix` | Problem |  |
+| `spelling-lang` | Problem |  |
+| `date-mix` | Problem |  |
+| `currency-mix` | Problem |  |
+| `locale-mixing` | Clean | `spelling-mix`, `spelling-lang`, `date-mix`, `currency-mix` |
+| `locale-mixing-skipped` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [i18n/lang-attribute](/rules/i18n/lang-attribute): the declaration this rule keys off.
+- [i18n/hreflang](/rules/i18n/hreflang): the tags that link a page to its other language versions.
+- [content/mojibake](/rules/content/mojibake): the other rule that reads a page's visible text for a defect.
+
+## References
+
+- [ISO 8601 date and time format, W3C](https://www.w3.org/TR/NOTE-datetime)
+- [The lang global attribute, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/lang)
+- [Managing multi-regional and multilingual sites, Google Search Central](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Internationalization section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Internationalization section looks like on a real site.
+  </Card>
+</CardGroup>

@@ -62,7 +62,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | URL Structure | 10 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency, site-wide convention consistency |
 | E-E-A-T | 16 | Experience, expertise, authority and trust signals: author bylines and credentials, byline consistency across pages of a type, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
 | Legal Compliance | 4 | Privacy policy, terms of service, real cookie-consent machinery, subprocessor disclosure |
-| Internationalization | 3 | hreflang correctness and the document language declaration |
+| Internationalization | 4 | hreflang correctness, the document language declaration, and spelling, date and currency conventions that contradict each other on one page |
 | Local SEO | 3 | NAP (name, address, phone) consistency across every crawled page, geo metadata, service-area businesses |
 | Video | 3 | VideoObject markup, captions and accessibility, thumbnails |
 | Analytics | 3 | Google Tag Manager presence, consent-mode wiring, and the same GA4 or GTM ID installed twice |
