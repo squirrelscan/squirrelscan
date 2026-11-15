@@ -1,8 +1,8 @@
 // schema/breadcrumb learns the classifier's "breadcrumbs" link section (#2307).
 //
 // A page that shows a breadcrumb trail (at least one anchor the classifier placed in
-// the breadcrumbs section) and declares no BreadcrumbList is a finding. One is enough:
-// the current page is plain text in a trail, so `Docs / Security` has a single link.
+// the breadcrumbs section) and declares no BreadcrumbList is a finding. Two markup-derived
+// links are needed (repo#3365): one link, or links only the model placed, is not a trail.
 // With no breadcrumb-section link the rule behaves exactly as before.
 
 import { describe, expect, test } from "bun:test";
@@ -28,28 +28,56 @@ function html(schema?: unknown): string {
   return `<html><head><title>Parts</title>${script}</head><body><p>content</p></body></html>`;
 }
 
-function link(url: string, section?: LinkSection) {
-  return { url, text: url, isInternal: true, ...(section ? { section } : {}) };
+function link(url: string, section?: LinkSection, model = false) {
+  return {
+    url,
+    text: url,
+    isInternal: true,
+    ...(section ? { section } : {}),
+    ...(model ? { sectionSource: "model" as const, sectionConfidence: 0.9 } : {}),
+  };
 }
 
-async function run(body: string, sections: (LinkSection | undefined)[], url = "https://example.com/parts/x"): Promise<CheckResult[]> {
+async function run(body: string, sections: (LinkSection | undefined)[], url = "https://example.com/parts/x", modelIdx: number[] = []): Promise<CheckResult[]> {
   const parsed = parsePage(body, url) as ParsedPage;
   const ctx: RuleContext = {
     page: { url, html: body, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: { ...parsed, links: sections.map((s, i) => link(`https://example.com/l${i}`, s)) },
+    parsed: { ...parsed, links: sections.map((s, i) => link(`https://example.com/l${i}`, s, modelIdx.includes(i))) },
     options: {},
   };
   return (await breadcrumbSchemaRule.run(ctx)).checks as CheckResult[];
 }
 
 describe("schema/breadcrumb with the breadcrumbs section", () => {
-  test("one breadcrumb-section link and no BreadcrumbList is a fail", async () => {
-    const checks = (await run(html(), ["breadcrumbs", "navigation", "footer"]));
+  test("two markup breadcrumb-section links and no BreadcrumbList is a fail", async () => {
+    const checks = (await run(html(), ["breadcrumbs", "breadcrumbs", "navigation", "footer"]));
     expect(checks).toHaveLength(1);
     expect(checks[0]!.name).toBe("breadcrumb-schema");
     expect(checks[0]!.status).toBe("fail");
     expect(checks[0]!.message).toBe("A breadcrumb trail on the page has no BreadcrumbList schema");
-    expect(checks[0]!.details).toEqual({ trailLinks: 1 });
+    expect(checks[0]!.details).toEqual({ trailLinks: 2 });
+  });
+
+  test("one markup breadcrumb-section link is below the minimum: info, no fail", async () => {
+    const checks = (await run(html(), ["breadcrumbs", "navigation", "footer"]));
+    expect(checks.map((c) => c.status)).toEqual(["info"]);
+  });
+
+  test("one model-only breadcrumb link does not fail", async () => {
+    const checks = (await run(html(), ["breadcrumbs", "navigation"], undefined, [0]));
+    expect(checks).toHaveLength(1);
+    expect(checks[0]!.status).toBe("info");
+    expect(checks[0]!.message).toBe("No BreadcrumbList schema found");
+  });
+
+  test("several model-only breadcrumb links do not fail either", async () => {
+    const checks = (await run(html(), ["breadcrumbs", "breadcrumbs", "breadcrumbs"], undefined, [0, 1, 2]));
+    expect(checks.map((c) => c.status)).toEqual(["info"]);
+  });
+
+  test("model links do not count toward the markup minimum", async () => {
+    const checks = (await run(html(), ["breadcrumbs", "breadcrumbs"], undefined, [1]));
+    expect(checks.map((c) => c.status)).toEqual(["info"]);
   });
 
   test("two breadcrumb-section links report the count", async () => {
@@ -93,7 +121,7 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
   test("a trail marked up as microdata is described: no finding", async () => {
     const body =
       '<html><head><title>x</title></head><body><ol itemscope itemtype="http://schema.org/BreadcrumbList"><li>Docs</li></ol></body></html>';
-    const checks = (await run(body, ["breadcrumbs"]));
+    const checks = (await run(body, ["breadcrumbs", "breadcrumbs"]));
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("info");
     expect(checks[0]!.message).toBe("No BreadcrumbList schema found");
@@ -109,7 +137,7 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
 
   test("a URL-prefixed @type inside an array is the same type", async () => {
     const prefixed = { ...BREADCRUMB_LD, "@type": ["Thing", "https://schema.org/BreadcrumbList"] };
-    const checks = (await run(html(prefixed), ["breadcrumbs"]));
+    const checks = (await run(html(prefixed), ["breadcrumbs", "breadcrumbs"]));
     expect(checks.map((c) => c.name)).toEqual(["breadcrumb-valid"]);
   });
 
@@ -123,7 +151,7 @@ describe("schema/breadcrumb with the breadcrumbs section", () => {
 
   test("markup too large to read is an info check, not a fail", async () => {
     const filler = '<i itemtype="https://example.com/Thing"></i>'.repeat(MAX_ANNOTATED_ELEMENTS + 1);
-    const checks = (await run(`<html><head><title>x</title></head><body>${filler}</body></html>`, ["breadcrumbs"]));
+    const checks = (await run(`<html><head><title>x</title></head><body>${filler}</body></html>`, ["breadcrumbs", "breadcrumbs"]));
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("info");
     expect(checks[0]!.message).toBe(UNREADABLE_MESSAGE);
