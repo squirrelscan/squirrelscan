@@ -96,3 +96,47 @@ describe("a11y/identical-links-same-purpose context", () => {
     expect(result?.status).toBe("pass");
   });
 });
+
+describe("a11y/identical-links-same-purpose accessible name (#1875)", () => {
+  test("same visible text with distinct aria-label values passes", async () => {
+    const result = await run(`
+      <a href="/events/1.ics" aria-label="Add to calendar: Event one">Add to calendar</a>
+      <a href="/events/2.ics" aria-label="Add to calendar: Event two">Add to calendar</a>
+    `);
+    expect(result?.status).toBe("pass");
+  });
+
+  test("same visible text with distinct aria-labelledby targets passes", async () => {
+    const result = await run(`
+      <span id="n1">Event one</span><span id="n2">Event two</span>
+      <a href="/events/1.ics" aria-labelledby="n1">Add to calendar</a>
+      <a href="/events/2.ics" aria-labelledby="n2">Add to calendar</a>
+    `);
+    expect(result?.status).toBe("pass");
+  });
+
+  test("identical accessible names with different hrefs still warn", async () => {
+    const result = await run(`
+      <a href="/a" aria-label="Read more">One</a>
+      <a href="/b" aria-label="Read more">Two</a>
+    `);
+    expect(result?.status).toBe("warn");
+  });
+
+  test("icon-only links named by aria-label are compared by that name", async () => {
+    const result = await run(`
+      <a href="/a" aria-label="Open cart"><svg></svg></a>
+      <a href="/b" aria-label="Open cart"><svg></svg></a>
+    `);
+    expect(result?.status).toBe("warn");
+    expect(result?.items?.[0]?.id).toBe('"open cart" → 2 different URLs');
+  });
+
+  test("the reported item uses the accessible name", async () => {
+    const result = await run(`
+      <a href="/a" aria-label="Buy now">Shop</a>
+      <a href="/b" aria-label="Buy now">Store</a>
+    `);
+    expect(result?.items?.[0]?.id).toBe('"buy now" → 2 different URLs');
+  });
+});
