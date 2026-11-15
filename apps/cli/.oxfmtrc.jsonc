@@ -15,6 +15,8 @@
   "arrowParens": "always",
   "endOfLine": "lf",
   "experimentalSortPackageJson": true,
+  // Gold fixtures are hand-written inputs whose exact markup the benchmark reads.
+  "ignorePatterns": ["tests/fixtures/main-text-gold/**"],
   "experimentalSortImports": {
     "ignoreCase": true,
     "newlinesBetween": true,

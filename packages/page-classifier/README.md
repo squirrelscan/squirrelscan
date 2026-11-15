@@ -31,6 +31,10 @@ A result:
 
 Options (all optional): `model`, `budgetMs` (per page, default 500), `scoringBatch`, `siteFeatures`, `html`, `platform`, `elementsOut`, `timingsOut`.
 
+## Main text
+
+`extractPageMainText(document, url, { model })` returns the page's main text, markdown and labelled blocks (`{ text, markdown, proseText, blocks[], placer }`). It classifies the document, builds an `elementPlacer` and hands it to `extractMainText` from `@squirrelscan/parser`, which keeps `main_content` and `content_block` regions and drops the site header, navigation, footer, sidebar, dialogs, search, forms and article chrome, plus the `ad`, `cookie_consent`, `chat_widget`, `newsletter_signup`, `social_share` and `promo_banner` sections. Each block carries its region and section label with the node id that answered. Where the classifier abstains (or with no model) the parser's markup rules decide: landmarks, then class and id tokens for cookie banners, ad slots, chat widgets, newsletter boxes and share bars. Code blocks are marked (`code: true`) and left out of `proseText`. The exact sets are exported from the parser as `MAIN_TEXT_KEPT_REGIONS`, `MAIN_TEXT_DROPPED_REGIONS` and `MAIN_TEXT_DROPPED_SECTIONS`. `apps/cli/scripts/bench-main-text.ts` scores it against a gold set.
+
 ## Three heads
 
 - **region**: site_header, footer, navigation, sidebar, main_content, content_block, article_chrome, form, search, dialog. Nodes the strict thresholds leave unknown can come back `site_chrome` when the four furniture classes together are sure.

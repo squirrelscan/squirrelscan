@@ -1,0 +1,16 @@
+Configuring the retry policy
+
+The client retries failed requests with exponential backoff. You can change how many attempts it makes and how long it waits between them when you create the client.
+
+Set the attempts option to limit retries, and the delay option to control the first wait in milliseconds. Each later wait doubles.
+
+const client = createClient({
+  attempts: 4,
+  delay: 250,
+});
+
+Only idempotent requests are retried by default. To retry a POST, mark it explicitly.
+
+await client.post("/orders", body, { retry: true });
+
+Errors that are not temporary, such as a 404, are never retried.

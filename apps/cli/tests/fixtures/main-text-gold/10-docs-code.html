@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Configuring the retry policy | Tidepool SDK</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<div class="docs-shell">
+<header class="topbar"><a href="/">Tidepool SDK</a><nav><a href="/docs">Docs</a><a href="/api">API</a><a href="/changelog">Changelog</a></nav></header>
+<nav class="docs-nav"><ul><li><a href="/docs/start">Getting started</a></li><li><a href="/docs/retries">Retries</a></li><li><a href="/docs/errors">Errors</a></li><li><a href="/docs/auth">Authentication</a></li></ul></nav>
+<main class="docs-content">
+<h1>Configuring the retry policy</h1>
+<p>The client retries failed requests with exponential backoff. You can change how many attempts it makes and how long it waits between them when you create the client.</p>
+<p>Set the attempts option to limit retries, and the delay option to control the first wait in milliseconds. Each later wait doubles.</p>
+<pre><code class="language-js">const client = createClient({
+  attempts: 4,
+  delay: 250,
+});</code></pre>
+<p>Only idempotent requests are retried by default. To retry a POST, mark it explicitly.</p>
+<pre><code class="language-js">await client.post("/orders", body, { retry: true });</code></pre>
+<p>Errors that are not temporary, such as a 404, are never retried.</p>
+<p class="edit-link"><a href="https://git.example/edit">Edit this page</a></p>
+</main>
+<footer><p>Tidepool SDK documentation. Released under a permissive licence.</p></footer>
+</div>
+</body>
+</html>
