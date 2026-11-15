@@ -250,6 +250,10 @@ export const UserSettingsSchema = z.object({
   // facts: this says we have already spoken, that says there is nothing to say.
   publish_nudge_shown: z.boolean().nullable().optional(),
 
+  // repo#1118: ISO time the low-credit nudge last printed. Frequency cap: the
+  // nudge stays quiet for a day after it speaks.
+  credit_nudge_at: z.string().nullable().optional(),
+
   // Per-tool BYOK credentials. Keys are tool ids (google-search, pangram,
   // dataforseo, gsc, google-indexing, bing-webmaster, github, analytics).
   // Values are either:

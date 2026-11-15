@@ -67,6 +67,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   link_pricing_notice_shown: null,
   first_publish_at: null,
   publish_nudge_shown: null,
+  credit_nudge_at: null,
 };
 
 // Check if a key is a writable setting
