@@ -1,0 +1,88 @@
+---
+title: "Typographic hygiene: double spaces, mixed quotes and stray dashes"
+description: "Repeated spaces, mixed straight and curly quotes, a space before punctuation and a double hyphen used as a dash read as unproofread. squirrel counts each in your body copy."
+---
+
+## What typographic hygiene is
+
+Each of these is trivial on its own. Together they are the tell that nobody proofread the page: two spaces between words, a page that uses both `"straight"` and `“curly”` quotes, a stray space before a comma, or `--` typed where a dash was meant. The rule is deliberately low-key. It is an info rule and it cannot move the health score more than any other info-class rule.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the rendered prose in `<body>`. It leaves out `<script>`, `<style>`, `<noscript>`, `<pre>`, `<code>`, `<samp>`, `<kbd>`, code editors and syntax highlighters, so quoted source is never judged. It emits a single check named `typography`:
+
+- Skipped when there is no parsed document or no `<body>`.
+- Pass when nothing matched. Message: `No typographic inconsistencies in body copy`.
+- Warn when something matched. Message: `3 typographic issue(s) in body copy (double-space, mixed-quotes)`.
+- Fail when 20 or more occurrences were found in total.
+
+The four families:
+
+| Kind | What matches |
+|---|---|
+| `double-space` | Two or more spaces, or a space beside a no-break space, between two words on one line |
+| `mixed-quotes` | Straight and curly double quotes both present, or straight and curly single quotes and apostrophes both present. A page that is all straight or all curly is clean |
+| `space-before-punctuation` | A word, a single space, then `, . ; : ! ?` that ends the word. Ellipses, domains such as `example.com` and emoticons are not matched |
+| `double-hyphen-dash` | `--` surrounded by spaces, or glued between two words. `---`, `-->` and a CLI flag such as `--verbose` are not matched |
+
+Some locales put a space before `; : ! ?` on purpose. French is the main one, and the space-before-punctuation check is not run when the page's `lang` is `fr` or one of the languages that follow French typography (`br`, `oc`, `co`, `wa`, `ht`, `ln`, `wo`, `mg`). It is also not run when the page declares no `lang` at all, because a French page and a sloppy English page cannot be told apart. The other three checks always run.
+
+Note that browsers collapse repeated spaces when they render, so a double space is a source hygiene signal rather than something a visitor sees, unless it uses a no-break space.
+
+## How to fix it
+
+Pick one convention and apply it everywhere. Let your editor or CMS smart-quote the copy so quotes and apostrophes come out consistent. Use CSS, not extra spaces, for layout. Replace `--` with an em dash, or with a comma, colon or full stop. If the page is French, set `<html lang="fr">`.
+
+| | |
+|---|---|
+| **Rule ID** | `content/typography` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/typography"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/typography"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/mojibake](/rules/content/mojibake): encoding corruption in the same rendered text.
+- [content/common-misspellings](/rules/content/common-misspellings): spelling mistakes in body copy.
+- [content/placeholder-text](/rules/content/placeholder-text): filler and unrendered template text.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

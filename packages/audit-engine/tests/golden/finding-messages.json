@@ -694,6 +694,12 @@
    "title-pattern-outlier|skipped|No title template reaches #% agreement across the crawled titles||"
   ]
  },
+ "content/typography": {
+  "digest": "78251070419673",
+  "lines": [
+   "typography|pass|No typographic inconsistencies in body copy||"
+  ]
+ },
  "content/unrendered-markup": {
   "digest": "10147103181173",
   "lines": [

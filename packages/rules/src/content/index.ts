@@ -29,6 +29,7 @@ import { staleDatedCopyRule } from "./stale-dated-copy";
 import { terminologyConsistencyRule } from "./terminology-consistency";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
 import { titlePatternOutlierRule } from "./title-pattern-outlier";
+import { typographyRule } from "./typography";
 import { unrenderedMarkupRule } from "./unrendered-markup";
 import { voiceConsistencyRule } from "./voice-consistency";
 import { wordCountRule } from "./word-count";
@@ -64,6 +65,7 @@ export const rules: Rule[] = [
   h1TitleAlignmentRule,
   voiceConsistencyRule,
   terminologyConsistencyRule,
+  typographyRule,
 ];
 
 export {
@@ -93,6 +95,7 @@ export {
   terminologyConsistencyRule,
   thinVsSiteNormRule,
   titlePatternOutlierRule,
+  typographyRule,
   unrenderedMarkupRule,
   voiceConsistencyRule,
   wordCountRule,

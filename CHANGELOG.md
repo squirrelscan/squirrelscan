@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **New rule `content/typography`.** Flags typographic inconsistencies in body copy: repeated spaces between words, straight and curly quotes or apostrophes mixed on one page, a space before `, . ; : ! ?`, and `--` used where a dash was meant. Text inside `<pre>`, `<code>`, `<samp>` and `<kbd>` is never read. The space-before-punctuation check is not run for French and related locales, nor for a page with no `lang`. It is an info rule with weight 1 and a warning at most (a fail only at 20 or more occurrences), so it cannot move the score more than any other info-class rule. (squirrelscan/repo#1358)
+
 ### Fixed
 
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.
