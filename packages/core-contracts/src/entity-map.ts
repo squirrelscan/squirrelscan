@@ -130,7 +130,7 @@ export const ENTITY_MAP_PUBLISH_LIMITS = {
   /** Page URLs kept per conflict value, and per node or edge. */
   maxPages: 5,
   /** Serialized ceiling for the whole map. Well under the 20MB publish gate. */
-  maxBytes: 512_000,
+  maxBytes: 640_000,
   /**
    * Small: the hosted graph hides page-local entities by default, so spending
    * the body on one BreadcrumbList per page buys a reader nothing.
@@ -142,6 +142,12 @@ export const ENTITY_MAP_PUBLISH_LIMITS = {
    * spending the body on it.
    */
   maxProblemShare: 0.2,
+  /**
+   * Byte budget for the compact per-page `declares` index (#2117). Inside
+   * `maxBytes` (512,000 for the graph plus this). Without the index the hosted side cannot prove
+   * that every page declaring a broken entity was recrawled.
+   */
+  maxPageIndexBytes: 128_000,
 } as const;
 
 /**
@@ -205,6 +211,12 @@ export interface EntityMapLimits {
    * {@link ENTITY_MAP_DEFAULT_PROBLEM_SHARE}.
    */
   readonly maxProblemShare?: number;
+  /**
+   * Byte budget for a compact per-page index (`url` plus `declares` keys, no
+   * references) kept in the projection's `pages`. Absent means the projection
+   * drops `pages` entirely, as the viewer does.
+   */
+  readonly maxPageIndexBytes?: number;
 }
 
 /** Page-local share used when a limit set does not name one. */
@@ -383,10 +395,16 @@ export const EntityMapPageSchema = Type.Object({
   url: Type.String(),
   /** Node keys this page declares, sorted. */
   declares: Type.Array(Type.String()),
-  /** Node keys this page references without declaring, sorted. */
-  references: Type.Array(Type.String()),
-  /** Number of JSON-LD entities declared on the page (before collapsing). */
-  entityCount: Type.Integer({ minimum: 0 }),
+  /**
+   * Node keys this page references without declaring, sorted. Absent in the
+   * compact page index a publish projection carries (#2117).
+   */
+  references: Type.Optional(Type.Array(Type.String())),
+  /**
+   * Number of JSON-LD entities declared on the page (before collapsing). Absent
+   * in the compact page index a publish projection carries.
+   */
+  entityCount: Type.Optional(Type.Integer({ minimum: 0 })),
 });
 
 export type EntityMapPage = Static<typeof EntityMapPageSchema>;
@@ -458,8 +476,18 @@ export const EntityMapTruncationSchema = Type.Object({
   nodes: Type.Integer({ minimum: 0 }),
   /** Edges present in the full map but not in `edges`. */
   edges: Type.Integer({ minimum: 0 }),
-  /** Page records dropped from `pages`. Both projections drop all of them. */
+  /**
+   * Page records dropped from `pages`. The viewer drops all of them; the
+   * publish projection keeps a compact index, so this is 0 unless the index
+   * itself had to lose pages.
+   */
   pages: Type.Integer({ minimum: 0 }),
+  /**
+   * True when the compact `pages` index was clipped: some `declares` keys or
+   * page records were dropped to fit its byte budget. A consumer must then
+   * treat per-page coverage as unproven. Absent on a complete index.
+   */
+  pagesTruncated: Type.Optional(Type.Boolean()),
 });
 
 export type EntityMapTruncation = Static<typeof EntityMapTruncationSchema>;

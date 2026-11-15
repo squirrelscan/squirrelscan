@@ -34,6 +34,7 @@ import {
   type EntityMapEdge,
   type EntityMapLimits,
   type EntityMapNode,
+  type EntityMapPage,
   type EntityMapProperties,
   type EntityMapTruncation,
 } from "./entity-map";
@@ -310,10 +311,9 @@ function edgesFor(
  * Edges follow the nodes they connect; a dangling edge is kept regardless of
  * its target, because the missing target IS the finding. Past `maxEdges`, the
  * edges kept are ranked by where their endpoints sit in the sample above (see
- * `edgesFor`), not cut at the map's alphabetical order. `pages` is dropped: it
- * is the largest array in the document, neither consumer reads it, and
- * `summary.pagesTotal` / `pagesWithoutEntities` already carry what a reader
- * needs from it.
+ * `edgesFor`), not cut at the map's alphabetical order. `pages` is reduced to a
+ * compact `url` plus `declares` index when the limits give it a byte budget
+ * (publish), and dropped otherwise (viewer). See `projectPageIndex`.
  *
  * `summary` is NOT recomputed. It describes the site, not this projection, so a
  * clipped map still reports the true node and edge counts. What was dropped is
@@ -393,7 +393,13 @@ export function projectEntityMap(
 
   let budget = Math.min(map.nodes.length, limits.maxNodes);
   let result = project(select(budget), map, limits, reason);
-  let size = JSON.stringify(result).length;
+  // The page index has its own budget (`maxPageIndexBytes`) inside `maxBytes`,
+  // so the graph is measured out of the rest: otherwise a large crawl would pay
+  // for its index by losing nodes (#2117).
+  const graphLimit = limits.maxBytes - (limits.maxPageIndexBytes ?? 0);
+  const graphSize = (r: EntityMap): number =>
+    JSON.stringify(r).length - (r.pages.length === 0 ? 0 : JSON.stringify(r.pages).length - 2);
+  let size = graphSize(result);
 
   // Only now does byte size enter, and only when the clamps were not enough.
   // Scaled to the overshoot rather than halved: halving cost a 5,000-page map
@@ -401,11 +407,11 @@ export function projectEntityMap(
   // budget shrinks every tier and every type bucket with it, so the mix of the
   // sample survives the shrink; only its resolution drops. `budget - 1` bounds
   // the loop when the fixed overhead alone is over the limit.
-  while (budget > 0 && size > limits.maxBytes) {
-    const scaled = Math.floor((budget * limits.maxBytes) / size);
+  while (budget > 0 && size > graphLimit) {
+    const scaled = Math.floor((budget * graphLimit) / size);
     budget = Math.max(0, Math.min(budget - 1, scaled));
     result = project(select(budget), map, limits, reason);
-    size = JSON.stringify(result).length;
+    size = graphSize(result);
   }
   return result;
 }
@@ -438,17 +444,77 @@ function project(
     .map((node) => clampNode(node, limits))
     .sort((a, b) => compareKeys(a.key, b.key));
   const edges = edgesFor(map.edges, rank, limits).map((edge) => clampEdge(edge, limits));
+  const index = projectPageIndex(map, selected, limits);
   return {
     ...map,
     site: clampString(map.site, limits),
     nodes: kept,
     edges,
-    pages: [],
+    pages: index.pages,
     truncated: {
       reason,
       nodes: Math.max(0, map.nodes.length - kept.length),
       edges: Math.max(0, map.edges.length - edges.length),
-      pages: map.pages.length,
+      pages: map.pages.length - index.pages.length,
+      ...(index.truncated ? { pagesTruncated: true } : {}),
     },
   };
+}
+
+/**
+ * The compact per-page index (#2117): `url` and `declares` keys only, for the
+ * keys of nodes that survived, inside `maxPageIndexBytes`.
+ *
+ * Page records are kept even when they declare nothing: the set of recrawled
+ * pages is half of the proof. Over budget, the lowest-occurrence keys go first
+ * (a shared Organization is worth more than a one-off), found by binary search
+ * on how many to drop because size only shrinks as keys are dropped. Only if the
+ * URLs alone are over budget are trailing page records dropped. Either loss sets
+ * `truncated`, so a reader never mistakes a clipped index for a complete one.
+ */
+function projectPageIndex(
+  map: EntityMap,
+  kept: EntityMapNode[],
+  limits: EntityMapLimits,
+): { pages: EntityMapPage[]; truncated: boolean } {
+  const budget = limits.maxPageIndexBytes;
+  if (budget === undefined || map.pages.length === 0) return { pages: [], truncated: false };
+
+  // Fewest occurrences first; the key breaks ties so the cut is deterministic.
+  const keyRank = [...kept]
+    .sort((a, b) => a.occurrences - b.occurrences || compareKeys(b.key, a.key))
+    .map((node) => node.key);
+  const rankOf = new Map(keyRank.map((key, index) => [key, index]));
+  const sizeOf = (page: EntityMapPage): number => JSON.stringify(page).length + 1;
+  const build = (dropped: number): EntityMapPage[] =>
+    map.pages.map((page) => ({
+      url: clampString(page.url, limits),
+      declares: page.declares
+        .filter((key) => (rankOf.get(key) ?? -1) >= dropped)
+        .map((key) => clampString(key, limits)),
+    }));
+  const total = (pages: EntityMapPage[]): number =>
+    pages.reduce((sum, page) => sum + sizeOf(page), 2);
+
+  const complete = build(0);
+  // Keys of nodes that were not kept never made it into the index, which is not
+  // a clip of the index: the node is gone from the document too.
+  if (total(complete) <= budget) return { pages: complete, truncated: false };
+
+  let low = 0;
+  let high = keyRank.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (total(build(mid)) <= budget) high = mid;
+    else low = mid + 1;
+  }
+  let pages = build(low);
+  if (total(pages) > budget) {
+    let used = 2;
+    pages = pages.filter((page) => {
+      used += sizeOf(page);
+      return used <= budget;
+    });
+  }
+  return { pages, truncated: true };
 }
