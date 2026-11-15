@@ -10,13 +10,14 @@ The `audit` command crawls a website and runs SEO rules to generate a report.
 
 ```bash
 squirrel audit <url> [options]
+squirrel audit --urls-file <file> [options]
 ```
 
 ## Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `url` | The URL to audit (required). Without a scheme, `https://` is assumed, or `http://` for a local or private host such as `localhost:3000`, `192.168.1.10` or `myapp.test` (see [local audits](/guides/local-audits-cli#local-and-private-hosts-stay-local)) |
+| `url` | The URL to audit (required unless you pass `--urls-file`). Without a scheme, `https://` is assumed, or `http://` for a local or private host such as `localhost:3000`, `192.168.1.10` or `myapp.test` (see [local audits](/guides/local-audits-cli#local-and-private-hosts-stay-local)) |
 
 ## Options
 
@@ -830,6 +831,45 @@ Retired 1 older audit and freed 95.2 MB inside project.db for the next audit; ke
 
 Change the window, or turn it off, with
 [`[storage] keep_audits`](/configuration/storage).
+
+## Batch audits
+
+Audit a list of sites with one command instead of an outer shell loop. `--urls-file` takes a file with one URL per line (`-` reads stdin). Blank lines and lines starting with `#` are ignored, and a bare `example.com` is read as `https://example.com`.
+
+```bash
+squirrel audit --urls-file urls.txt --out-dir reports --skip-existing --level quick
+cat urls.txt | squirrel audit --urls-file - --out-dir reports
+```
+
+Each URL runs as its own `squirrel audit` process, one at a time, with a pause between them. The output directory holds:
+
+- `reports/<key>.json`: the JSON report of one URL. `<key>` is the first 16 hex characters of the SHA-256 of the URL, so a name never comes from the file's text.
+- `results.jsonl`: one JSON line per event (`running`, then the final status), appended as each URL finishes, with `status`, `score`, `pages`, `exitCode`, `durationMs`, `attempt` and the report path.
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--urls-file` | File of URLs to audit, one per line (`-` for stdin) | none |
+| `--out-dir` | Directory for the reports and `results.jsonl` | `squirrel-batch` |
+| `--skip-existing` | Skip URLs whose last record is done, so an interrupted batch resumes. Without it every URL runs again | `false` |
+| `--retry-failed` | With `--skip-existing`, run URLs that ended in a failure again | `false` |
+| `--batch-delay` | Milliseconds to wait between URLs | `1000` |
+| `--batch-timeout` | Seconds before one URL's audit is killed and recorded as `timeout` (`0` for none) | `600` |
+| `--batch-concurrency` | Audits run at once | `1` |
+| `--allow-private-hosts` | Keep listed URLs on private, loopback or internal hosts, which are refused by default | `false` |
+
+`--level`, `--max-pages`, `--max-depth`, `--max-duration`, `--crawl-timeout`, `--concurrency`, `--per-host`, `--render-mode`, `--offline`, `--http`, `--render`, `--no-publish`, `--follow-redirect` and `--yes` are passed to every audit.
+
+A line that is refused (not `http` or `https`, credentials in the URL, a private host, too long) is printed with its line number and recorded as `rejected`. Credentials in a listed URL are never accepted.
+
+Each finished URL prints one line with its status, score, category scores and page count. At the end the batch prints a summary: counts by status and the average score.
+
+### Batch exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Every URL was audited or skipped as done (`rejected` URLs do not count) |
+| `1` | The batch could not start: a bad option, an unreadable or oversized file, or no usable URL |
+| `6` | At least one URL ended in `failed`, `unreachable`, `timeout`, `crashed`, `blocked` or `redirected` |
 
 ## Exit codes
 

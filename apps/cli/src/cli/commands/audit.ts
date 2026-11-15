@@ -1127,8 +1127,47 @@ export const audit = defineCommand({
   args: {
     url: {
       type: "positional",
-      description: "URL to audit",
-      required: true,
+      description: "URL to audit (not needed with --urls-file)",
+      required: false,
+    },
+    "urls-file": {
+      type: "string",
+      description:
+        "Batch mode: audit every URL listed in this file (one per line, - for stdin), one JSON report each in --out-dir",
+    },
+    "out-dir": {
+      type: "string",
+      description:
+        "Batch mode: directory for reports/<key>.json and results.jsonl (default: squirrel-batch)",
+    },
+    "skip-existing": {
+      type: "boolean",
+      description:
+        "Batch mode: skip URLs already recorded in results.jsonl, to resume an interrupted batch",
+    },
+    "retry-failed": {
+      type: "boolean",
+      description:
+        "Batch mode, with --skip-existing: run URLs that ended in a failure again",
+    },
+    "allow-private-hosts": {
+      type: "boolean",
+      description:
+        "Batch mode: keep listed URLs on private, loopback or internal hosts (refused by default)",
+    },
+    "batch-delay": {
+      type: "string",
+      description:
+        "Batch mode: milliseconds to wait between URLs (default 1000)",
+    },
+    "batch-timeout": {
+      type: "string",
+      description:
+        "Batch mode: seconds before one URL's audit is killed (default 600, 0 for none)",
+    },
+    "batch-concurrency": {
+      type: "string",
+      description: "Batch mode: audits run at once (default 1)",
     },
     "max-pages": {
       type: "string",
@@ -1413,6 +1452,27 @@ export const audit = defineCommand({
     const commandStartedAt = Date.now();
     // Configure logging before any output
     configureLogger({ debug: args.debug, trace: args.trace });
+
+    // Batch mode (repo#2214): one child audit per listed URL.
+    if (args["urls-file"] !== undefined) {
+      if (args.url) {
+        console.error(
+          `${fmt.red("Error:")} give a URL or --urls-file, not both`
+        );
+        exitWith({ early: "validation" });
+        return;
+      }
+      const { runBatchCommand } = await import("@/batch/command");
+      applyExitCode(await runBatchCommand(args as never));
+      return;
+    }
+    if (!args.url) {
+      console.error(
+        `${fmt.red("Error:")} missing URL (or pass --urls-file <file>)`
+      );
+      exitWith({ early: "validation" });
+      return;
+    }
 
     // The one URL check, before anything else: no cloud client, balance read,
     // trace upload or log line sees a URL the audit cannot run on.
