@@ -230,7 +230,7 @@ function linkPlacements(ctx: RuleContext): (anchor: Element, href: string) => Li
     if (!href || href.trim() === "#" || hasNonCrawlableUrlScheme(href)) return undefined;
     let url: string;
     try {
-      url = new URL(coerceSchemelessUrl(href.trim()), ctx.page.url).toString();
+      url = new URL(coerceSchemelessUrl(href.trim()), ctx.page.finalUrl ?? ctx.page.url).toString();
     } catch {
       return undefined;
     }
