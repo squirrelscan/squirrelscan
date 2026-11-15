@@ -1223,6 +1223,9 @@ function IssueRow({
         {rule.mixedProvenanceNote && (
           <p className="text-xs text-primary">{rule.mixedProvenanceNote}</p>
         )}
+        {rule.prevalenceNote && (
+          <p className="text-xs text-muted-foreground">{rule.prevalenceNote}</p>
+        )}
         <SiteResourceFixCards coverage={siteResources} />
         <FixGroupCards coverage={coverage} />
         <div className="grid gap-3">

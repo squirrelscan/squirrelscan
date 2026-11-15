@@ -649,6 +649,10 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
         lines.push(`_${rule.mixedProvenanceNote}_`);
         lines.push("");
       }
+      if (rule.prevalenceNote) {
+        lines.push(`_${rule.prevalenceNote}_`);
+        lines.push("");
+      }
 
       lines.push("| Check | Status | Message |");
       lines.push("|-------|--------|---------|");
