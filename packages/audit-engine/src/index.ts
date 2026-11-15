@@ -26,6 +26,7 @@ export {
   fetchAssetsFromOccurrences,
   V1_REPORT_PAGE_BATCH,
 } from "./adapter";
+export { hasAuditableHtmlBody, isAuditableEmptyBodyStatus } from "./site-fetch";
 export type {
   SiteContextPage,
   RuleExecutionResult,
