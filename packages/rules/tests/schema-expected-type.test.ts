@@ -242,8 +242,15 @@ describe("schema/expected-type", () => {
     expect(check.message).toBe(NOT_CONFIDENT);
   });
 
-  test("a page with no classification at all is not applicable", async () => {
-    const check = (await only(ctxFor("<html><body></body></html>", undefined)));
+  test("classifier off (no classification): a skipped not-checked line, no info finding (repo#3364)", async () => {
+    const check = await only(ctxFor("<html><body></body></html>", undefined));
+    expect(check.status).toBe("skipped");
+    expect(check.skipReason).toBe("classifier-off");
+    expect(check.message).toContain("classifier is off");
+  });
+
+  test("classifier on, below the confidence floor: still the info row (repo#3364)", async () => {
+    const check = await only(ctxFor("<html><body></body></html>", classification("product_detail", 0.5)));
     expect(check.status).toBe("info");
     expect(check.message).toBe(NOT_CONFIDENT);
   });
