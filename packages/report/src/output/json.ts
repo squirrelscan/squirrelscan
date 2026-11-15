@@ -2,6 +2,7 @@
 
 import type {
   AuditOutcome,
+  CacheStats,
   AuditStatusReasonCode,
   LockedRuleReason,
   StoreIntegrityEvicted,
@@ -340,6 +341,13 @@ interface SlimJsonReport {
    * provider's page. Present only when one was seen.
    */
   wafSuspect?: WafSuspectSummary;
+  /**
+   * Cache reuse against the previous crawl (#108, #1981): pages and sub-resources served without a
+   * full transfer, by reason (including the stale-while-revalidate skip that makes no request).
+   * Present only when something was reused; absent on a cold audit. A finding that vanished from
+   * a fully reused audit may be a cache artifact rather than a fix. Informational, never scored.
+   */
+  cacheStats?: CacheStats;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -719,6 +727,7 @@ function buildSlimReport(
     ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
     ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
+    ...(report.cacheStats && report.cacheStats.hits > 0 ? { cacheStats: report.cacheStats } : {}),
     ...(locked
       ? {
           lockedRules: {
