@@ -13,8 +13,8 @@ Declaring `width` and `height` on an `<img>` gives the browser the aspect ratio 
 
 The rule runs on every crawled page and emits one or two checks:
 
-- `cls-images`: an info row, never a warning. Images with no dimensions are reported once, by [images/dimensions](/rules/images/dimensions), which owns missing `width` and `height`. When this rule finds such images it emits `N image(s) without width/height: reported by images/dimensions`, listing each image by absolute URL (the same id images/dimensions uses), and the row does not affect the score. It passes with `All images have dimensions` when none are unsized.
-- `cls-iframes`: emitted only when at least one iframe lacks dimensions, warning with the message `N iframe(s) without dimensions` and listing each `src`.
+- `cls-images`: an info row, never a warning. Images with no dimensions are reported once, by [images/dimensions](/rules/images/dimensions), which owns missing `width` and `height`. When this rule finds such images it emits `N image(s) without width/height in static HTML: reported by images/dimensions`, listing each image by absolute URL (the same id images/dimensions uses), and the row does not affect the score. It passes with `All images have dimensions in static HTML` when none are unsized.
+- `cls-iframes`: emitted only when at least one iframe lacks dimensions, warning with the message `N iframe(s) without dimensions in static HTML` and listing each `src`.
 
 For that info row, an `<img>` counts as dimensioned when it has a non-empty `width` attribute other than `auto`, or a non-empty `height` attribute other than `auto`, or an inline `style` containing both the strings `width` and `height`. One attribute is therefore enough to clear the check even though the browser needs both to compute a ratio, and `width=""` clears nothing. Only images with a `src` are considered. An `<iframe>` is flagged when it has a `src` and either `width` or `height` is missing, so a `srcdoc` iframe is never reported.
 
