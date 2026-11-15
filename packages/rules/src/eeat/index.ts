@@ -8,6 +8,7 @@ import { affiliateDisclosureRule } from "./affiliate-disclosure";
 import { authorBylineRule } from "./author-byline";
 import { authoritySignalsRule } from "./authority-signals";
 import { authorExpertiseRule } from "./author-expertise";
+import { bylineConsistencyRule } from "./byline-consistency";
 import { citationsRule } from "./citations";
 import { contactPageRule } from "./contact-page";
 import { contentDatesRule } from "./content-dates";
@@ -23,6 +24,7 @@ export const rules: Rule[] = [
   // Experience
   authorBylineRule,
   contentDatesRule,
+  bylineConsistencyRule,
   // Expertise
   authorExpertiseRule,
   citationsRule,
@@ -48,6 +50,7 @@ export {
   affiliateDisclosureRule,
   authorBylineRule,
   authorExpertiseRule,
+  bylineConsistencyRule,
   citationsRule,
   contactPageRule,
   contentDatesRule,

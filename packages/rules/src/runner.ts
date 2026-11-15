@@ -978,6 +978,8 @@ export class RuleRunner {
         const siteRules = this.getEnabledRules().filter(
           (r) => r.meta.scope === "site"
         );
+        const enabledIds = new Set(this.enabledRuleIds);
+        const ruleEnabled = (ruleId: string): boolean => enabledIds.has(ruleId);
 
         // Per-run Stage-0 metadata + cloud store + intel (see runPageRules).
         const siteMetadata = this.siteMetadata;
@@ -1035,6 +1037,7 @@ export class RuleRunner {
               probe,
               tlsProbe,
               hosted,
+              ruleEnabled,
               options: getRuleOptions(rule, this.config),
             };
             return Promise.resolve(

@@ -1,0 +1,133 @@
+---
+title: "Byline consistency: pages that break your own byline habit"
+description: "A site that bylines its articles and skips a few looks careless. squirrel finds the pages missing the author or date their page type carries."
+---
+
+## What byline consistency is
+
+Most sites settle on a byline convention without ever writing it down: every article shows who wrote it and when, every recipe shows a date, product pages show neither. Then a template changes, a CMS field goes empty, or a batch of posts is imported from somewhere else, and a handful of pages ship without the byline the rest carry.
+
+That gap says more than a missing byline on a site that never uses them. A reader, or a quality rater, who sees 22 attributed articles and 2 anonymous ones is entitled to ask what is different about those 2. This rule finds them by reading the convention off your own site, not from an outside idea of what a page should carry.
+
+## What squirrel checks
+
+The rule is site-wide. It groups the crawled pages by page type (article, recipe, product and so on) and, for each group, measures two signals:
+
+- **author**: a visible author byline in the page (hCard `.author .fn`, `rel="author"` and similar markup), not structured data alone.
+- **date**: a visible published or modified date (entry-meta `<time>` markup).
+
+When a signal is present on at least 70% of a group's pages, that is the group's convention, and the pages of that type without it are reported. Only presence is ever a convention: a page that has a byline is never reported, so a site that never uses bylines is never flagged here.
+
+The rule stays silent unless it has grounds:
+
+- Skipped when fewer than 10 pages were crawled. Message: `Only 6 page(s) crawled; 10 needed to establish a byline convention`.
+- Skipped when no page type has 8 or more pages. Message: `No page type has 8+ comparable pages to establish a byline convention`.
+- Skipped when no page type shows a visible author or date on 70% of its pages. Message: `No page type shows a visible author or date on 70% of its pages, so there is no byline convention to measure against`.
+
+Pages the classifier could not place (`unknown`) never vote, and neither do pages that did not answer 2xx. On a site that is itself indexable, `noindex` pages are left out of the vote and never reported.
+
+When there is a convention, it emits one check, `byline-consistency`:
+
+- Passes when every page follows its type's convention. Message: `All 24 page(s) follow the site's own byline convention (article author 100%, article date 100%)`.
+- Warns when some pages break it. Message: `2 of 24 page(s) break the site's own byline convention (article author 92%, article date 100%)`. Each broken convention is one item, for example `2 of 24 article page(s) have no visible author byline, which 22 (92%) of article pages carry`, listing up to 10 of the pages. Up to 4 broken conventions are listed, biggest first; `details.norms` has every convention measured and `details.brokenConventions` the count.
+- Fails when the pages that break a convention are 20% or more of the pages judged.
+
+Severity warning, weight 2. The weight is deliberately lower than [eeat/author-byline](/rules/eeat/author-byline) (5) and [eeat/content-dates](/rules/eeat/content-dates) (4), and the rule emits one check with at most 4 items, so even a failure costs the E-E-A-T score no more than either of those rules warning.
+
+### Reported once
+
+A page this rule reports would usually also count against [eeat/author-byline](/rules/eeat/author-byline) or [eeat/content-dates](/rules/eeat/content-dates). It is reported once, here: those two rules leave out a page that breaks its type's convention (and would otherwise count as missing the author or published date), and say how many they left out in `details.deferredToBylineConsistency`. If you disable `eeat/byline-consistency`, they count those pages again.
+
+## How to fix it
+
+Find what the reported pages have in common. It is usually one of:
+
+- a second template or layout for the page type that does not render the byline;
+- an empty author or date field in the CMS for posts created a particular way (imported, migrated, written by a guest);
+- a page that is not really the type it was classified as, such as a press release filed as an article.
+
+Fix it at the source so the byline renders on every page of the type:
+
+```html
+<p class="entry-meta">
+  By <span class="author vcard"><a class="fn" rel="author" href="/authors/jane">Jane Writer</a></span>
+  on <time datetime="2026-03-12" class="entry-date published">12 March 2026</time>
+</p>
+```
+
+Put the same author and date in the page's `Article` structured data, so the visible byline and the schema agree.
+
+| | |
+|---|---|
+| **Rule ID** | `eeat/byline-consistency` |
+| **Category** | [E-E-A-T](/rules/eeat) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/byline-consistency"]
+```
+
+### Disable all E-E-A-T rules
+
+```toml squirrel.toml
+[rules]
+disable = ["eeat/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["eeat/byline-consistency"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `byline-consistency` | Problem |  |
+| `byline-consistency` | Clean | `byline-consistency` |
+| `byline-consistency` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [eeat/author-byline](/rules/eeat/author-byline): what share of content pages attribute an author at all.
+- [eeat/content-dates](/rules/eeat/content-dates): what share of content carries a published and modified date.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): the same idea for titles, pages that break the site's own title template.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): word count judged against the site's own norm for each page type.
+
+E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Author byline](/glossary#author-byline).
+
+{/* glossary:backlinks:end */}
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the E-E-A-T section of the report. Each broken convention is listed with the pages that break it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the E-E-A-T section looks like on a real site.
+  </Card>
+</CardGroup>

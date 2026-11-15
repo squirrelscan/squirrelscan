@@ -477,6 +477,7 @@
                   "rules/eeat/index",
                   "rules/eeat/author-byline",
                   "rules/eeat/content-dates",
+                  "rules/eeat/byline-consistency",
                   "rules/eeat/author-expertise",
                   "rules/eeat/citations",
                   "rules/eeat/authority-signals",

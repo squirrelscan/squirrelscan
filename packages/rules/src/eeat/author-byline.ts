@@ -4,6 +4,8 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { flattenJsonLdNodes, getPathname } from "@squirrelscan/utils";
 
+import { bylineConsistencyDeviants, defersToBylineConsistency } from "./byline-consistency";
+
 export const authorBylineRule: Rule = {
   meta: {
     id: "eeat/author-byline",
@@ -33,6 +35,13 @@ export const authorBylineRule: Rule = {
       });
       return { checks };
     }
+
+    // Precedence (#1364): a page that breaks its page type's own byline convention
+    // is reported by eeat/byline-consistency, so it is not counted missing here too.
+    const deferred = defersToBylineConsistency(ctx)
+      ? bylineConsistencyDeviants(ctx.site).author
+      : new Set<string>();
+    let deferredPages = 0;
 
     let pagesWithAuthor = 0;
     let contentPages = 0;
@@ -67,6 +76,12 @@ export const authorBylineRule: Rule = {
       // author. Org-level / footer noise is already filtered by the parser.
       if (!hasAuthor && page.parsed.visibleAuthor) {
         hasAuthor = true;
+      }
+
+      if (!hasAuthor && deferred.has(page.url)) {
+        contentPages--;
+        deferredPages++;
+        continue;
       }
 
       if (hasAuthor) {
@@ -109,6 +124,11 @@ export const authorBylineRule: Rule = {
             : `Only ${authorPercentage}% of content pages have author attribution`,
         value: "Add author bylines to build E-E-A-T",
       });
+    }
+
+    if (deferredPages > 0) {
+      const check = checks.find((c) => c.name === "author-byline");
+      if (check) check.details = { ...check.details, deferredToBylineConsistency: deferredPages };
     }
 
     return { checks };

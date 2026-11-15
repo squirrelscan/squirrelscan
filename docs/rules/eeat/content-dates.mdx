@@ -22,6 +22,8 @@ Dates are read from any flattened JSON-LD node carrying `datePublished` or `date
 
 Flattening the JSON-LD matters here: a top-level-only read misses every date on a site whose SEO plugin emits an `@graph`.
 
+A content page without a published date that breaks its page type's own date convention is reported by [eeat/byline-consistency](/rules/eeat/byline-consistency) instead, so it is left out of both shares and counted in the `date-published` check's `details.deferredToBylineConsistency`. With that rule disabled, it is counted here again.
+
 The rule only runs when the audit classified the site as a blog, a news site, a healthcare provider or an education site. A classification below medium confidence, or an audit with no site metadata at all, runs the rule anyway.
 
 ## How to fix it
@@ -73,6 +75,7 @@ enable = ["eeat/content-dates"]
 - [content/freshness](/rules/content/freshness): the same signals inventoried per page.
 - [crawl/sitemap-lastmod-drift](/rules/crawl/sitemap-lastmod-drift): the sitemap date compared against them.
 - [eeat/author-byline](/rules/eeat/author-byline): the other half of a complete byline.
+- [eeat/byline-consistency](/rules/eeat/byline-consistency): pages missing the date their page type usually carries.
 
 E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 

@@ -60,7 +60,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Mobile | 8 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, form fields small enough to zoom the page on focus, intrusive interstitials, the web app manifest and its icons |
 | Social Media | 5 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links, site-chrome assets that disagree across pages |
 | URL Structure | 10 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency, site-wide convention consistency |
-| E-E-A-T | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
+| E-E-A-T | 16 | Experience, expertise, authority and trust signals: author bylines and credentials, byline consistency across pages of a type, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
 | Legal Compliance | 4 | Privacy policy, terms of service, real cookie-consent machinery, subprocessor disclosure |
 | Internationalization | 3 | hreflang correctness and the document language declaration |
 | Local SEO | 3 | NAP (name, address, phone) consistency across every crawled page, geo metadata, service-area businesses |

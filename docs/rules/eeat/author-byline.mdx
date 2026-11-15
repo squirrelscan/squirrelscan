@@ -21,6 +21,8 @@ An author is found from the parser's extracted author, from any flattened JSON-L
 - Info from 50. Message: `64% of content pages have author attribution`, with `Consider adding authors to more content` as the value.
 - Warn below 50. Message: `Only 20% of content pages have author attribution`, or `No content pages have author attribution` when none do.
 
+A content page without an author that breaks its page type's own byline convention is reported by [eeat/byline-consistency](/rules/eeat/byline-consistency) instead, so it is left out of this share and counted in `details.deferredToBylineConsistency`. With that rule disabled, it is counted here again.
+
 The rule only runs when the audit classified the site as a blog, a news site, a healthcare provider, an education site or a nonprofit. A classification below medium confidence, or an audit with no site metadata at all, runs the rule anyway.
 
 ## How to fix it
@@ -72,6 +74,7 @@ enable = ["eeat/author-byline"]
 - [eeat/author-expertise](/rules/eeat/author-expertise): author pages and Person schema as expertise indicators.
 - [eeat/authority-signals](/rules/eeat/authority-signals): the cloud assessment of attribution in context.
 - [eeat/ymyl-detection](/rules/eeat/ymyl-detection): the topics where attribution matters most.
+- [eeat/byline-consistency](/rules/eeat/byline-consistency): pages missing the byline their page type usually carries.
 
 E-E-A-T findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 

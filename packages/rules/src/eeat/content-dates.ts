@@ -4,6 +4,8 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { flattenJsonLdNodes } from "@squirrelscan/utils";
 
+import { bylineConsistencyDeviants, defersToBylineConsistency } from "./byline-consistency";
+
 export const contentDatesRule: Rule = {
   meta: {
     id: "eeat/content-dates",
@@ -33,6 +35,13 @@ export const contentDatesRule: Rule = {
       });
       return { checks };
     }
+
+    // Precedence (#1364): a page that breaks its page type's own date convention is
+    // reported by eeat/byline-consistency, so it is not counted undated here too.
+    const deferred = defersToBylineConsistency(ctx)
+      ? bylineConsistencyDeviants(ctx.site).date
+      : new Set<string>();
+    let deferredPages = 0;
 
     let pagesWithDates = 0;
     let pagesWithModified = 0;
@@ -73,6 +82,12 @@ export const contentDatesRule: Rule = {
       }
       if (!hasDateModified && page.parsed.visibleDateModified) {
         hasDateModified = true;
+      }
+
+      if (!hasDatePublished && deferred.has(page.url)) {
+        contentPages--;
+        deferredPages++;
+        continue;
       }
 
       if (hasDatePublished) pagesWithDates++;
@@ -124,6 +139,11 @@ export const contentDatesRule: Rule = {
         message: `${modifiedPercentage}% of content has dateModified`,
         value: "Add dateModified to show freshness",
       });
+    }
+
+    if (deferredPages > 0) {
+      const check = checks.find((c) => c.name === "date-published");
+      if (check) check.details = { ...check.details, deferredToBylineConsistency: deferredPages };
     }
 
     return { checks };

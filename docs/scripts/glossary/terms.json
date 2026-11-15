@@ -3147,6 +3147,7 @@
       "definition": "The visible author name on an article, ideally linked to an author page and matched by an author entity in structured data.",
       "rules": [
         "eeat/author-byline",
+        "eeat/byline-consistency",
         "eeat/author-expertise",
         "content/author-info",
         "schema/entity-authors"

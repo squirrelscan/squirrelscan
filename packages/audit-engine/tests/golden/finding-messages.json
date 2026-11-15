@@ -2972,6 +2972,12 @@
    "authority-signals|skipped|Authority signal analysis skipped||"
   ]
  },
+ "eeat/byline-consistency": {
+  "digest": "122352325041062",
+  "lines": [
+   "byline-consistency|skipped|No page type shows a visible author or date on #% of its pages, so there is no byline convention to measure against||"
+  ]
+ },
  "eeat/citations": {
   "digest": "225757834609879",
   "lines": [
