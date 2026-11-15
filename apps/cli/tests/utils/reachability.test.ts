@@ -14,9 +14,15 @@ describe("checkReachability", () => {
     expect(result.error).toBeDefined();
   });
 
+  // A live DNS lookup: .invalid is reserved (RFC 6761) so it never resolves,
+  // and the deadline caps the probe so a slow CI resolver cannot outlast the
+  // test's own 5 s timeout (the probe's default budget is longer than that).
   test("returns unreachable for non-existent domains", async () => {
     const result = await checkReachability(
-      "https://this-domain-definitely-does-not-exist-12345.com"
+      "https://this-domain-definitely-does-not-exist-12345.invalid",
+      undefined,
+      undefined,
+      Date.now() + 2_000
     );
     expect(result.reachable).toBe(false);
     expect(result.error).toBeDefined();
