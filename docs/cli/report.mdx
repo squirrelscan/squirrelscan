@@ -40,6 +40,7 @@ squirrel report [id] [options]
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
 | `--include-passed` | | Also list the rules that passed, with how many pages each passed on. See [List what passed](#list-what-passed) | `false` |
 | `--include-info` | | Also list info checks (notes that are not findings) in the `llm` format. The `json` format always has them under `infoChecks`. See [Info checks](/configuration/output#json) Not available with `--input`: a JSON file does not carry them back, so the flag prints a note and lists nothing | `false` |
+| `--full-report` | | Build the whole report body for a very large crawl instead of a sampled one. See [Large crawls](#large-crawls) | `false` |
 | `--include-pages` | | JSON only: list every crawled page with its HTTP status and how many rules reported on it. See [Pages list](#pages-list) | `false` |
 
 ## Publishing
@@ -422,3 +423,7 @@ falls out of the window.
 - [analyze](/cli/analyze) - Re-analyze crawl
 - [Dashboard](/dashboard) - Manage published reports
 - [Configuration](/configuration) - Config file options
+
+## Large crawls
+
+A crawl with more than 250,000 stored checks (about 1,200 pages) gets a sampled report body, so the report phase does not hold every check of the crawl in memory at once. The score, the passed, warning and failed totals, and every issue class are the same as the full body. What is left out is stated in the JSON report under `reportBody` (`mode`, `totalChecks`, `keptChecks`, `rulesFolded`, `pageChecksOmitted`, `reason`): per-page check lists are empty, and a rule with more than 500 checks keeps one folded entry per issue class with its page count. A crawl under the limit, and any smart audit, is unchanged. Pass `--full-report` to build the whole body whatever its size, at the cost of memory.

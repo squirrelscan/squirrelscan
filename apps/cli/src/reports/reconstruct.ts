@@ -11,26 +11,37 @@ import type {
 } from "@squirrelscan/core-contracts";
 
 import {
+  calculateHealthScoreFromTallies,
   canonicalVariantMap,
   detachFromPage,
   foldChecksToCanonical,
+  foldRuleResultIntoTallies,
   isRedirectSourcePage,
+  type RuleTally,
 } from "@squirrelscan/audit-engine";
 import { buildCacheStats, isScoreless } from "@squirrelscan/core-contracts";
 import {
   crawlTimeoutReason,
   maxDurationReason,
 } from "@squirrelscan/core-contracts/failure-reason";
-import { JSON_REPORT_PAGES } from "@squirrelscan/core-contracts/limits";
+import {
+  JSON_REPORT_PAGES,
+  REPORT_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
 import { redactUrl } from "@squirrelscan/core-contracts/seed-redirect";
 import { unstoredPageRow } from "@squirrelscan/report";
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
 import { createStructureBuilder } from "@squirrelscan/report/structure";
 import {
+  capChecksForPublish,
   loadAllRules,
   type RuleNamespace,
   type RuleRunResult,
 } from "@squirrelscan/rules";
+import {
+  RULE_ID_ROBOTS_TXT,
+  RULE_ID_SITEMAP_EXISTS,
+} from "@squirrelscan/utils/constants";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { Effect } from "effect";
 
@@ -405,7 +416,26 @@ function computeSitemapCoverage(
 /** Default page batch for the report's summary + pageAudits walk (#1913). */
 export const RECONSTRUCT_PAGE_BATCH = 100;
 
+/**
+ * A crawl with more stored checks than this gets a sampled report body
+ * (repo#2352): exact totals and score, capped per-rule check lists, no per-page
+ * check lists. 250,000 is about 1,200 pages at the ~204 checks per page measured
+ * in #1920, so a crawl that fits comfortably in memory today is unchanged.
+ * `--full-report` lifts it.
+ */
+export const REPORT_BODY_MAX_CHECKS = 250_000;
+
+/** Rule ids whose real checks the critical-failure penalty reads (site rules, O(1) checks). */
+const PENALTY_RULE_IDS = new Set<string>([
+  RULE_ID_ROBOTS_TXT,
+  RULE_ID_SITEMAP_EXISTS,
+]);
+
 export interface ReconstructOptions {
+  /** Build the full report body whatever its size (`--full-report`, repo#2352). */
+  fullBody?: boolean;
+  /** Override {@link REPORT_BODY_MAX_CHECKS} (tests). */
+  fullBodyMaxChecks?: number;
   /**
    * Pages read per `getPages` batch. The audit controller passes the same batch
    * the streamed rules phases used, so one setting describes the whole
@@ -549,8 +579,21 @@ export function reconstructReport(
     // CheckResult per row, so a crawl's checks were materialized twice: 203,687
     // rows at 1,000 pages, 204 per page. `getRuleResultsGrouped` shares one
     // object between the two maps and preserves both orders exactly.
-    const { byPage: ruleResultsByPage, byRuleId: ruleResultsByRuleId } =
-      yield* storage.getRuleResultsGrouped(crawlId);
+    //
+    // A crawl past REPORT_BODY_MAX_CHECKS rows takes the sampled path instead
+    // (repo#2352): the rows are folded one rule at a time further down and the
+    // grouped maps stay empty, so the crawl's checks are never all resident.
+    const totalRuleRows = yield* storage.countRuleResults(crawlId);
+    const sampled =
+      smartMerge === undefined &&
+      options?.fullBody !== true &&
+      totalRuleRows > (options?.fullBodyMaxChecks ?? REPORT_BODY_MAX_CHECKS);
+    const { byPage: ruleResultsByPage, byRuleId: ruleResultsByRuleId } = sampled
+      ? {
+          byPage: new Map<string, CheckResult[]>(),
+          byRuleId: new Map<string, CheckResult[]>(),
+        }
+      : yield* storage.getRuleResultsGrouped(crawlId);
 
     // 6b. Query-string variants of a page (#858): a crawled page that declares another crawled
     // page of the same path as its canonical is counted with it. Report time only; every page
@@ -588,6 +631,107 @@ export function reconstructReport(
       if (list) list.push(variant);
       else variantsOfCanonical.set(canonical, [variant]);
     }
+    // 7. Load rule registry to get metadata
+    // Stored results can include explicitly enabled opt-in rules. Reconstruction
+    // needs their metadata even though a default audit does not select them.
+    const ruleRegistry = loadAllRules({
+      includeOptIn: true,
+      additionalNamespaces: options?.additionalNamespaces,
+    });
+
+    // Rule metadata for a rule id, from the registry, or a fallback for a rule
+    // that is no longer in it. Shared by the full and the sampled path.
+    const ruleResultFor = (
+      ruleId: string,
+      checks: CheckResult[]
+    ): ReportRuleResult => {
+      const rule = ruleRegistry.get(ruleId);
+      // `crawl/asset-fetch-degraded` is the engine's own diagnostic note, never a registry rule;
+      // a `--max-duration` run that cuts the resource checks stores it (#1271).
+      if (!rule && ruleId !== "crawl/asset-fetch-degraded") {
+        console.warn(`Rule not found in registry: ${ruleId}`);
+      }
+      return rule
+        ? {
+            meta: {
+              id: rule.meta.id,
+              name: rule.meta.name,
+              description: rule.meta.description,
+              solution: rule.meta.solution,
+              category: rule.meta.category,
+              subcategory: rule.meta.subcategory,
+              scope: rule.meta.scope,
+              severity: rule.meta.severity,
+              weight: rule.meta.weight,
+            },
+            checks,
+          }
+        : {
+            // Rule not in registry (possibly deleted) - use fallback metadata
+            meta: {
+              id: ruleId,
+              name: ruleId,
+              description: "",
+              category: OTHER_CATEGORY,
+              scope: "page",
+              severity: "warning",
+              weight: 1,
+            },
+            checks,
+          };
+    };
+
+    // The sampled path (repo#2352): one rule's checks at a time. Exact totals and
+    // score come from the folded tallies and a raw status count; what stays
+    // resident is each rule's folded sample, bounded per rule.
+    const sampledRuleResults: Record<string, ReportRuleResult> = {};
+    const sampledTallies = new Map<string, RuleTally>();
+    const sampledPenaltyResults = new Map<string, RuleRunResult>();
+    const sampledIgnoredChecks = new Map<string, CheckResult[]>();
+    const sampledSiteChecks: CheckResult[] = [];
+    const sampledCounts = { passed: 0, warnings: 0, failed: 0 };
+    let sampledKept = 0;
+    let sampledRulesFolded = 0;
+    if (sampled) {
+      yield* storage.forEachRuleResultGroup(crawlId, (ruleId, checks) => {
+        // Query-string variants are folded into their canonical page per rule,
+        // the same fold the full path runs over every rule at once.
+        if (variantOf.size > 0) foldChecksToCanonical(checks, variantOf);
+        for (const check of checks) {
+          if (!check.pageUrl) sampledSiteChecks.push(check);
+          if (check.status === "pass") sampledCounts.passed++;
+          else if (check.status === "warn") sampledCounts.warnings++;
+          else if (check.status === "fail") sampledCounts.failed++;
+        }
+        const full = ruleResultFor(ruleId, checks);
+        foldRuleResultIntoTallies(sampledTallies, ruleId, {
+          meta: full.meta as RuleRunResult["meta"],
+          checks,
+        });
+        if (PENALTY_RULE_IDS.has(ruleId)) {
+          sampledPenaltyResults.set(ruleId, {
+            meta: full.meta as RuleRunResult["meta"],
+            checks,
+          });
+        }
+        const ignoredChecks = checks.filter(
+          (c) => c.details && "ignored" in c.details
+        );
+        if (ignoredChecks.length > 0) {
+          sampledIgnoredChecks.set(ruleId, ignoredChecks);
+        }
+        // Lossless per issue class: fold folds repeats of one (name, status)
+        // into one entry with its page count, and stamps the cut.
+        const kept =
+          checks.length > REPORT_LIMITS.maxChecksPerRule
+            ? capChecksForPublish(checks, REPORT_LIMITS.maxChecksPerRule)
+            : checks;
+        if (kept.length < checks.length) sampledRulesFolded++;
+        sampledKept += kept.length;
+        full.checks = kept;
+        sampledRuleResults[ruleId] = full;
+      });
+    }
     let variantPages = 0;
     // Rules that reported on each page, for `--include-pages` (#1260). A failed read
     // leaves the counts at 0 rather than failing the report.
@@ -612,14 +756,6 @@ export function reconstructReport(
     // keeps where each one went. Capped like the pages list, with the real count.
     const redirectRows: RedirectRow[] = [];
     let redirectsTotal = 0;
-
-    // 7. Load rule registry to get metadata
-    // Stored results can include explicitly enabled opt-in rules. Reconstruction
-    // needs their metadata even though a default audit does not select them.
-    const ruleRegistry = loadAllRules({
-      includeOptIn: true,
-      additionalNamespaces: options?.additionalNamespaces,
-    });
 
     // 8. Build PageAudit[] from page records with parsed data and rule results
     const pages: PageAudit[] = [];
@@ -928,18 +1064,25 @@ export function reconstructReport(
     }
 
     // 9. Calculate totals from rule results
-    const allChecks: CheckResult[] = Array.from(
-      ruleResultsByPage.values()
-    ).flat();
-    const scorableChecks = allChecks.filter(
-      (c) => c.status !== "skipped" && c.status !== "info"
-    );
-    const passed = scorableChecks.filter((c) => c.status === "pass").length;
-    const warnings = scorableChecks.filter((c) => c.status === "warn").length;
-    const failed = scorableChecks.filter((c) => c.status === "fail").length;
+    let passed = sampledCounts.passed;
+    let warnings = sampledCounts.warnings;
+    let failed = sampledCounts.failed;
+    if (!sampled) {
+      const allChecks: CheckResult[] = Array.from(
+        ruleResultsByPage.values()
+      ).flat();
+      const scorableChecks = allChecks.filter(
+        (c) => c.status !== "skipped" && c.status !== "info"
+      );
+      passed = scorableChecks.filter((c) => c.status === "pass").length;
+      warnings = scorableChecks.filter((c) => c.status === "warn").length;
+      failed = scorableChecks.filter((c) => c.status === "fail").length;
+    }
 
     // 11. Get site-level checks (page_url = '' convention)
-    const siteChecks = ruleResultsByPage.get("") ?? [];
+    const siteChecks = sampled
+      ? sampledSiteChecks
+      : (ruleResultsByPage.get("") ?? []);
 
     // 12. Build ruleResults with metadata from registry.
     //
@@ -948,7 +1091,9 @@ export function reconstructReport(
     // subset. Carried-clean passes keep the score honest but are a scoring-only
     // count now (syntheticPassCount, #918) — never in `checks` — so there are no
     // synthetic "pass" rows to drop here.
-    const ruleResults: Record<string, ReportRuleResult> = {};
+    const ruleResults: Record<string, ReportRuleResult> = sampled
+      ? sampledRuleResults
+      : {};
     const ruleResultsMap = new Map<string, ReportRuleResult>();
     // Scoring needs `syntheticPassCount`, which `ReportRuleResult` has no room
     // for; only the smart path populates it.
@@ -970,40 +1115,7 @@ export function reconstructReport(
         }
       }
       const rule = ruleRegistry.get(ruleId);
-      const result: ReportRuleResult = rule
-        ? {
-            meta: {
-              id: rule.meta.id,
-              name: rule.meta.name,
-              description: rule.meta.description,
-              solution: rule.meta.solution,
-              category: rule.meta.category,
-              subcategory: rule.meta.subcategory,
-              scope: rule.meta.scope,
-              severity: rule.meta.severity,
-              weight: rule.meta.weight,
-            },
-            checks,
-          }
-        : {
-            // Rule not in registry (possibly deleted) - use fallback metadata
-            meta: {
-              id: ruleId,
-              name: ruleId,
-              description: "",
-              category: OTHER_CATEGORY,
-              scope: "page",
-              severity: "warning",
-              weight: 1,
-            },
-            checks,
-          };
-
-      // `crawl/asset-fetch-degraded` is the engine's own diagnostic note, never a registry rule;
-      // a `--max-duration` run that cuts the resource checks stores it (#1271).
-      if (!rule && ruleId !== "crawl/asset-fetch-degraded") {
-        console.warn(`Rule not found in registry: ${ruleId}`);
-      }
+      const result = ruleResultFor(ruleId, checks);
 
       ruleResults[ruleId] = result;
       ruleResultsMap.set(ruleId, result);
@@ -1029,9 +1141,11 @@ export function reconstructReport(
     // What the config's `[[ignore]]` entries waived (#1262), from the checks the
     // engine changed and the entries as this audit ran them.
     const ignored = summarizeIgnored(
-      [...ruleResultsMap].map(
-        ([id, result]) => [id, result.checks] as [string, CheckResult[]]
-      ),
+      sampled
+        ? sampledIgnoredChecks
+        : [...ruleResultsMap].map(
+            ([id, result]) => [id, result.checks] as [string, CheckResult[]]
+          ),
       crawl.scanScope?.ignore
     );
 
@@ -1043,7 +1157,9 @@ export function reconstructReport(
     // synthetic-pass count has nowhere to live on a `ReportRuleResult`.
     const healthScore = smartMerge
       ? calculateHealthScore({ results: scoringResults })
-      : calculateHealthScore({ results: ruleResultsMap });
+      : sampled
+        ? calculateHealthScoreFromTallies(sampledTallies, sampledPenaltyResults)
+        : calculateHealthScore({ results: ruleResultsMap });
 
     const resourceSizes = {
       css: resourceSizeRecords
@@ -1239,6 +1355,19 @@ export function reconstructReport(
           }
         : {}),
       ...(cacheStats ? { cacheStats } : {}),
+      // What the sampled body left out, stated rather than silently absent.
+      ...(sampled
+        ? {
+            reportBody: {
+              mode: "sampled" as const,
+              totalChecks: totalRuleRows,
+              keptChecks: sampledKept,
+              rulesFolded: sampledRulesFolded,
+              pageChecksOmitted: true,
+              reason: `${totalRuleRows} stored checks is over the ${options?.fullBodyMaxChecks ?? REPORT_BODY_MAX_CHECKS} a local report holds in full. Score, totals and per-rule issue classes are exact; per-page check lists are left out and a rule with more than ${REPORT_LIMITS.maxChecksPerRule} checks keeps one folded entry per issue class. Run with --full-report for the whole body.`,
+            },
+          }
+        : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }
         : {}),

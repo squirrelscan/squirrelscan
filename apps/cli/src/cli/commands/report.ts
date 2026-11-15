@@ -242,6 +242,11 @@ export const report = defineCommand({
       description:
         "Also list info checks (notes that are not findings) in the llm format. The JSON report always has them",
     },
+    fullReport: {
+      type: "boolean",
+      description:
+        "Build the whole report body for a very large crawl instead of a sampled one (more memory)",
+    },
     includePages: {
       type: "boolean",
       description:
@@ -312,6 +317,7 @@ export const report = defineCommand({
 
     // #1260: the per-page rule count is only worth computing for the JSON pages list.
     const reconstruct = {
+      ...(args.fullReport ? { fullBody: true } : {}),
       includePageRuleCounts: Boolean(
         args.includePages && (args.format ?? "console") === "json"
       ),

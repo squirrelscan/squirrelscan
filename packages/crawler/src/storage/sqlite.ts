@@ -4881,6 +4881,60 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /** How many rule_results rows a crawl has: one indexed COUNT, no row materialized (repo#2352). */
+  countRuleResults(crawlId: string): Effect.Effect<number, StorageError, never> {
+    return Effect.try({
+      try: () =>
+        (
+          this.getDb()
+            .prepare("SELECT COUNT(*) AS n FROM rule_results WHERE crawl_id = ?")
+            .get(crawlId) as { n: number }
+        ).n,
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Visit a crawl's rule results one RULE at a time, in rule id order, handing the
+   * visitor that rule's checks and dropping them before the next rule is read
+   * (repo#2352). The bounded twin of {@link getRuleResultsGrouped}: resident
+   * checks are one rule's, never the crawl's. Site checks (`page_url = ''`) are
+   * included in their rule's group like any other.
+   */
+  forEachRuleResultGroup(
+    crawlId: string,
+    visit: (ruleId: string, checks: CheckResult[]) => void,
+  ): Effect.Effect<void, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const db = this.getDb();
+        const strings = new Map<string, string>();
+        const intern = (s: string): string => {
+          const hit = strings.get(s);
+          if (hit !== undefined) return hit;
+          strings.set(s, s);
+          return s;
+        };
+        let current: string | undefined;
+        let checks: CheckResult[] = [];
+        for (const row of db
+          .prepare("SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY rule_id, id")
+          .iterate(crawlId) as Iterable<Record<string, unknown>>) {
+          const ruleId = row.rule_id as string;
+          if (current !== undefined && ruleId !== current) {
+            visit(current, checks);
+            checks = [];
+            strings.clear();
+          }
+          current = ruleId;
+          checks.push(this.rowToCheckResult(row, intern));
+        }
+        if (current !== undefined) visit(current, checks);
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
   /**
    * The pages each of `ruleIds` failed or warned on, for the page map's flags (#701). A page
    * rule stores its page in `page_url`; a site rule stores the pages it names in `items`

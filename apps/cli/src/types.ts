@@ -603,6 +603,22 @@ export interface AuditReport {
    * audited page carries a link section or a classification.
    */
   structure?: ReportStructure;
+  /**
+   * Set when a very large crawl got a sampled local report body (repo#2352): exact score and
+   * totals, per-rule check lists folded to a cap, no per-page check lists. Absent on a full body.
+   */
+  reportBody?: {
+    mode: "sampled";
+    /** Checks stored for the crawl. */
+    totalChecks: number;
+    /** Checks left in `ruleResults` after folding. */
+    keptChecks: number;
+    /** Rules whose check list was folded to the per-rule cap. */
+    rulesFolded: number;
+    /** `pages[].checks` is empty; findings live in `ruleResults`. */
+    pageChecksOmitted: true;
+    reason: string;
+  };
   /** Query-string variants counted with their canonical page (#858). */
   canonicalVariants?: number;
   /** The folded variants and the page each is counted with (first 100) (#858). */

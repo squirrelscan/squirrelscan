@@ -270,6 +270,8 @@ export interface RunAuditOptions extends AuditOptions {
   rulesPhaseTimeoutMs?: number;
   /** Fill each page's rule count in the report (`--include-pages`, #1260). */
   includePages?: boolean;
+  /** Build the whole local report body however large the crawl (`--full-report`, repo#2352). */
+  fullReport?: boolean;
   /**
    * Wall-clock budget for the whole audit, in seconds (#1271). At the budget the
    * crawl stops launching work, the rules run on what was fetched and the report is
@@ -2610,6 +2612,7 @@ export async function runAudit(
           batchSize: streamBatchSize,
           // #1260: only the JSON pages list reads the per-page rule counts.
           includePageRuleCounts: options.includePages === true,
+          fullBody: options.fullReport === true,
           additionalNamespaces: pluginRuleNamespaces,
         })
       );
