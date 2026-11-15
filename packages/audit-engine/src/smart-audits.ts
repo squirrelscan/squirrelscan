@@ -50,6 +50,10 @@ export type {
   UntouchedCarriedSplit,
 } from "./merge-promise";
 
+// (repo#3373) The marker for a store an earlier capped single POST sampled.
+export { isSampledStoreMarker } from "./sampled-store";
+export type { SampledStoreMarker } from "./sampled-store";
+
 export {
   addChecksToTally,
   buildScoringResultsFromMerged,

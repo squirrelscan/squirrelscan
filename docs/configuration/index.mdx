@@ -245,6 +245,32 @@ pages it audits, the carried findings of the pages it left out stay in the score
 and show their last-seen time, so a stale one is visible rather than silently
 dropped.
 
+#### Partial cloud re-audits after a CLI publish
+
+A report published from the CLI is capped: each issue class keeps a sample of
+10 pages, with its true counts beside it. The cloud store for the site then
+holds only that sample, so a later partial cloud re-audit (a time limit, or a
+page limit such as `max_pages: 1`) would carry the sample and read every other
+page of the class as clean.
+
+When the cloud knows its store holds a sample, it scores the carried pages from
+the published report's counts instead of from the sampled findings:
+
+- Pages the re-audit checks again are scored fresh, and their earlier counts are
+  taken out first. For a page the sample held, its exact finding is taken out.
+- For a re-checked page the sample did not hold, the cloud cannot tell whether
+  it was clean or was clipped from the sample. Its earlier issues, if any, stay
+  counted on the carried side, and a warning whose page cannot be placed counts
+  as a failure.
+
+The score is conservative: it can be lower than a store holding every finding
+would give, never higher. With no page re-checked it is the same score; with
+every page re-checked it is the score of a fresh full audit. In between, the
+difference is at most the re-checked pages the sample did not hold: per rule and
+check, that many extra failing checks and that many fewer clean carried pages.
+The carried findings the report lists are still the sample; a full cloud audit
+replaces the sample with every finding.
+
 ```toml
 smart_audits = true
 ```
