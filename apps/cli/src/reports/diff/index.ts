@@ -357,6 +357,12 @@ function makeNotComparedJudge(
   const norm = (url: string) => normalizeTargetId(url, current.baseUrl);
   // Empty when the report does not list its pages: nothing then says a page was not crawled.
   const crawled = new Set((current.pages ?? []).map((p) => norm(p.url)));
+  // Pages of the baseline audit: an item whose id is one of them describes that page (#1835).
+  const baselinePages = new Set(
+    (baseline.pages ?? []).map((p) =>
+      normalizeTargetId(p.url, baseline.baseUrl)
+    )
+  );
 
   return (issue) => {
     if (!sameOrigin) return { reason: "different-scope" };
@@ -438,10 +444,18 @@ function makeNotComparedJudge(
     }
 
     // The pages the issue sits on: its target for a page issue, its source pages for an item.
+    // An item that is itself a page of the baseline audit (a short title keyed by its URL) sits on that page,
+    // whether or not it lists source pages (#1835).
     const pages =
       issue.target.type === "page"
         ? [issue.target.id]
-        : (issue.sourcePages ?? []).map(norm);
+        : [
+            ...(issue.target.type === "item" &&
+            baselinePages.has(issue.target.id)
+              ? [issue.target.id]
+              : []),
+            ...(issue.sourcePages ?? []).map(norm),
+          ];
     if (pages.length > 0) {
       const rule = reportRule(current, issue.ruleId);
       const skippedHere = new Set<string>();
