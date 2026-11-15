@@ -6,9 +6,12 @@
 
 import type { ApiKeyScope } from "@squirrelscan/core-contracts/api-keys";
 
+// Support scopes are not grantable on a key yet (a private follow-up adds them to API_KEY_SCOPES); named here for intent only.
+export type ToolScope = ApiKeyScope | "support:read" | "support:write";
+
 export interface ToolAuth {
   // Scope the underlying API route enforces (semantic intent + #113 forward-compat).
-  scope: ApiKeyScope;
+  scope: ToolScope;
   // Whether an org API key may call it today. Several cloud routes are
   // session-only (rejectApiKey) until the hosted MCP (#113) lifts that.
   apiKey: boolean;
@@ -21,6 +24,11 @@ export const TOOL_AUTH = {
   list_issues: { scope: "audits:read", apiKey: false },
   get_issue: { scope: "audits:read", apiKey: false },
   comment_on_issue: { scope: "audits:write", apiKey: false },
+  // #1090: the support routes take a login session today; apiKey flips with the scopes.
+  create_support_ticket: { scope: "support:write", apiKey: false },
+  list_support_tickets: { scope: "support:read", apiKey: false },
+  get_support_ticket: { scope: "support:read", apiKey: false },
+  reply_to_support_ticket: { scope: "support:write", apiKey: false },
 } as const satisfies Record<string, ToolAuth>;
 
 // Shared phrasing for the session-only restriction so the tool note and the API 403 fallback can't drift (both flip with #113).

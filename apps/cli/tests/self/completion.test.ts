@@ -15,6 +15,7 @@ import { pages, PAGES_FORMATS } from "@/cli/commands/pages";
 import { report } from "@/cli/commands/report";
 import { self } from "@/cli/commands/self";
 import { skills } from "@/cli/commands/skills";
+import { support } from "@/cli/commands/support";
 import { OUTPUT_FORMATS } from "@/constants";
 import { generateCompletion, type Shell } from "@/self/completion";
 
@@ -500,5 +501,40 @@ describe.each(shells)("%s completion", (shell) => {
         /-n "__fish_seen_subcommand_from uninstall" -l (purge|yes|force)/
       );
     });
+  });
+});
+
+// #1090: `support` is a subcommand group, so its flags are checked against the
+// real command defs rather than the top-level blocks above.
+describe("support completion (#1090)", () => {
+  const supportSubs = support.subCommands as Record<string, { args?: unknown }>;
+
+  test.each(shells)("%s offers support and its four subcommands", (shell) => {
+    const text = script(shell);
+    expect(text).toContain("support");
+    for (const sub of ["new", "list", "view", "reply"]) {
+      expect(Object.keys(supportSubs)).toContain(sub);
+      expect(text).toMatch(new RegExp(`(^|[\\s'"])${sub}[\\s:'"]`, "m"));
+    }
+  });
+
+  test.each(shells)("%s offers every long flag of each subcommand", (shell) => {
+    const text = script(shell);
+    const region =
+      shell === "fish"
+        ? text
+            .split("\n")
+            .filter((l) => l.includes("__fish_seen_subcommand_from support"))
+            .join("\n")
+        : text.slice(text.indexOf("support)"));
+    for (const [name, def] of Object.entries(supportSubs)) {
+      for (const flag of commandFlags(def).flags) {
+        expect(region, `support ${name} --${flag} (${shell})`).toMatch(
+          shell === "fish"
+            ? new RegExp(`-l ${flag}(?![a-z0-9-])`)
+            : new RegExp(`--${flag}(?![a-z0-9-])`)
+        );
+      }
+    }
   });
 });

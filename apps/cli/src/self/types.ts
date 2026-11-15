@@ -197,6 +197,20 @@ export const UserSettingsSchema = z.object({
   telemetry_notice_version: z.number().int().nullable().optional(),
   user_feedback_email: z.string().email().nullable().optional(),
 
+  // #1090: a cached read of the signed-in account's unseen support replies, so
+  // the banner can nudge without a network call. Refreshed in the background at
+  // most hourly; `squirrel support view <ref>` clears the ref it shows.
+  support_unread: z
+    .object({
+      ref: z.string().nullable(),
+      count: z.number().int().min(0),
+      checked_at: z.string(),
+    })
+    .nullable()
+    .optional()
+    // A hand-edited bad value reads as unset; it must not invalidate the file.
+    .catch(null),
+
   // Authentication state
   auth: AuthSchema.optional(),
 

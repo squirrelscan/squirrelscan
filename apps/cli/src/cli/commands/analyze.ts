@@ -14,6 +14,7 @@ import { setLogInterceptor } from "@/utils/logger";
 
 import {
   printHeader,
+  printSupportNudge,
   printUpdateNotification,
   shouldShowAutoUpdateDisabledReminder,
   printAutoUpdateDisabledReminder,
@@ -40,6 +41,7 @@ export const analyze = defineCommand({
     printHeader(settings.ok ? settings.data.channel : "stable");
     if (settings.ok) {
       printUpdateNotification(settings.data);
+      printSupportNudge(settings.data);
       if (shouldShowAutoUpdateDisabledReminder(settings.data)) {
         updateSettings({
           auto_update_disabled_reminder: new Date().toISOString(),

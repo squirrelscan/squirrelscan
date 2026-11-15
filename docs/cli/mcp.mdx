@@ -38,6 +38,12 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 | `get_entity_findings` | None | The \`schema/entity-*\` verdicts for an audit, with fix text. |
 | `list_pages` | None | One row per crawled page of a stored audit, the same rows as [`squirrel pages -f json`](/cli/pages): title, description, h1, schema types and `@id`s, link counts, depth, response time and flags from the audit's rule results. Filters `missing`, `duplicate`, `too_long`, `orphan`, `section` and `page` combine; paged with `limit`, `offset` and `hasMore`. |
 | `send_feedback` | None | Send feedback to the squirrelscan team: a bug, a missing feature, what worked. Needs the network and an email to reply to: pass `email`, or it uses the one [`squirrel feedback`](/cli/feedback) saved, then your signed-in account's. |
+| `create_support_ticket` | Login | Open a [support ticket](/cli/support) with the team: `type` (`billing`, `bug`, `audit_question`, `feature_request`, `other`), `subject`, `body`, and optional `run_id`, `rule_id` and `report_id`. The CLI version and platform are attached for you. For a failure the agent cannot fix after one retry, or when you ask it to contact support. Five tickets per user per hour. |
+| `list_support_tickets` | Login | Your support tickets, with a `waiting_on` field on each (`you`, `support` or `closed`). Optional `status` filter. |
+| `get_support_ticket` | Login | One ticket's thread as markdown, by ref or id, with `status` and `waiting_on`. Reading it marks it read. |
+| `reply_to_support_ticket` | Login | Add a message to a ticket by ref or id. A reply reopens a closed ticket. |
+
+The support tools use your login session: an org API key is not accepted yet. Unlike `send_feedback`, which is a one-shot note, a ticket is a thread the team answers: see [`squirrel support`](/cli/support). They are on this local server only, not on the [hosted server](/developers/mcp).
 
 `list_pages` and the five entity tools read the local project store, so they need no account and spend no credits. They answer questions about audits you have already run: see [the entity map for agents](/guides/entity-map/mcp) for the fix-and-verify loop they are built around.
 
