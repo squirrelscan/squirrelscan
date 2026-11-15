@@ -56,7 +56,7 @@ _squirrel_completions() {
   local global_opts="--config-file -c"
 
   # Top-level commands
-  local commands="setup audit auth crawl ci credits analyze entities pages init config report feedback support keys mcp channel self skills"
+  local commands="setup audit auth crawl ci credits analyze entities pages evidence init config report feedback support keys mcp channel self skills"
 
   # Auth subcommands
   local auth_commands="login logout status whoami"
@@ -272,6 +272,10 @@ _squirrel_completions() {
       COMPREPLY=( $(compgen -W "--list -l --crawl --type --page --problem --format -f --output -o --input -i --diff --help" -- "\${cur}") )
       return 0
       ;;
+    evidence)
+      COMPREPLY=( $(compgen -W "export verify replay --crawl --output -o --shareable --json --help" -- "\${cur}") )
+      return 0
+      ;;
     pages)
       case "\${prev}" in
         --format|-f)
@@ -397,6 +401,7 @@ _squirrel() {
     'credits:Show cloud credit balance and pricing'
     'analyze:Run audit rules on stored crawl'
     'pages:List the pages of a stored audit as a table'
+    'evidence:Export, verify and replay an audit evidence bundle'
     'init:Initialize squirrel.toml'
     'config:Manage configuration'
     'report:Generate report from audit results'
@@ -707,6 +712,14 @@ _squirrel() {
             '*'{-i,--input}'[Read an exported entity map JSON]:file:_files' \\
             '--diff[Compare two audits]'
           ;;
+        evidence)
+          _arguments \\
+            '1:action:(export verify replay)' \\
+            '--crawl[Audit id or prefix to export]:id' \\
+            '(-o --output)'{-o,--output}'[Directory to write the bundle to]:dir:_files -/' \\
+            '--shareable[Redact credentials, cookies and sensitive URL parameters]' \\
+            '--json[replay: print the full result as JSON]'
+          ;;
         pages)
           _arguments \\
             '*--crawl[Crawl ID to read (twice with --diff)]:id' \\
@@ -818,6 +831,12 @@ complete -c squirrel -n "__fish_use_subcommand" -a ci -d "Audit a deployed URL i
 complete -c squirrel -n "__fish_use_subcommand" -a credits -d "Show cloud credit balance and pricing"
 complete -c squirrel -n "__fish_use_subcommand" -a analyze -d "Run audit rules on stored crawl"
 complete -c squirrel -n "__fish_use_subcommand" -a pages -d "List the pages of a stored audit as a table"
+complete -c squirrel -n "__fish_use_subcommand" -a evidence -d "Export, verify and replay an audit evidence bundle"
+complete -c squirrel -n "__fish_seen_subcommand_from evidence" -a "export verify replay"
+complete -c squirrel -n "__fish_seen_subcommand_from evidence" -l crawl -d "Audit id or prefix to export"
+complete -c squirrel -n "__fish_seen_subcommand_from evidence" -s o -l output -d "Directory to write the bundle to"
+complete -c squirrel -n "__fish_seen_subcommand_from evidence" -l shareable -d "Redact credentials, cookies and sensitive URL parameters"
+complete -c squirrel -n "__fish_seen_subcommand_from evidence" -l json -d "replay: print the full result as JSON"
 complete -c squirrel -n "__fish_use_subcommand" -a init -d "Initialize squirrel.toml"
 complete -c squirrel -n "__fish_use_subcommand" -a config -d "Manage configuration"
 complete -c squirrel -n "__fish_use_subcommand" -a report -d "Generate report from audit results"

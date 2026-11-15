@@ -59,6 +59,7 @@ export const main = defineCommand({
     analyze: () => import("./commands/analyze").then((m) => m.analyze),
     entities: () => import("./commands/entities").then((m) => m.entities),
     pages: () => import("./commands/pages").then((m) => m.pages),
+    evidence: () => import("./commands/evidence").then((m) => m.evidence),
     init: () => import("./commands/init").then((m) => m.init),
     config: () => import("./commands/config").then((m) => m.config),
     report: () => import("./commands/report").then((m) => m.report),

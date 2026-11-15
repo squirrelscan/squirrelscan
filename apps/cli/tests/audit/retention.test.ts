@@ -25,6 +25,7 @@ import {
   selectCrawlsToRetire,
 } from "../../src/audit/retention";
 import { getDefaultConfig } from "../../src/config";
+import { exportEvidenceBundle } from "../../src/evidence/bundle";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -238,6 +239,52 @@ describe("retainRecentAudits", () => {
       [ids[2]!, ids[3]!, ids[4]!].sort()
     );
     store.close?.();
+  });
+
+  test("with an evidence archive, only audits with a verified bundle are retired (repo#2301)", async () => {
+    const store = await open();
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) ids.push(await audit(store, i));
+    const archive = mkdtempSync(join(tmpdir(), "evidence-archive-"));
+    try {
+      // ids[0] is archived and verified; ids[1] has none.
+      exportEvidenceBundle(
+        {
+          crawl: {
+            id: ids[0]!,
+            baseUrl: "https://e.test",
+            startedAt: 1,
+            status: "analyzed",
+            config: {},
+            stats: {},
+          },
+          scanner: { name: "squirrel", version: "0", rulesRevision: "r" },
+          pages: [],
+          scripts: [],
+          failures: [],
+          findings: [],
+        },
+        join(archive, ids[0]!),
+        { kind: "raw" }
+      );
+      const held: string[] = [];
+      const outcome = await retainRecentAudits(store, {
+        keep: 3,
+        currentCrawlId: ids[4]!,
+        evidenceArchiveDir: archive,
+        onHeldBack: (heldIds) => held.push(...heldIds),
+      });
+      expect(outcome?.retired).toBe(1);
+      expect(held).toEqual([ids[1]!]);
+      const byId = new Map(
+        (await run(store.listCrawls())).map((c) => [c.id, c])
+      );
+      expect(typeof byId.get(ids[0]!)?.retiredAt).toBe("number");
+      expect(byId.get(ids[1]!)?.retiredAt).toBeUndefined();
+    } finally {
+      rmSync(archive, { recursive: true, force: true });
+      store.close?.();
+    }
   });
 
   test("the retired audits are stamped, and only those", async () => {

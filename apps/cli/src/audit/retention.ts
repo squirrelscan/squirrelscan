@@ -29,6 +29,7 @@ import { Effect } from "effect";
 
 import type { SQLiteStorage } from "@/crawler/storage/sqlite";
 
+import { hasVerifiedBundle } from "@/evidence/bundle";
 import { formatBytes } from "@/self/disk";
 
 /**
@@ -62,6 +63,13 @@ export interface RetentionOptions {
   readonly keep: number;
   /** The audit that just ran. Never retired, whatever the window says. */
   readonly currentCrawlId: string;
+  /**
+   * `[storage] evidence_archive_dir`. When set, an audit is retired only if a bundle for it in that
+   * directory passes verification (repo#2301): cleanup must not destroy the only copy of evidence.
+   */
+  readonly evidenceArchiveDir?: string;
+  /** Told which audits stayed because they have no verified bundle. */
+  readonly onHeldBack?: (crawlIds: string[]) => void;
 }
 
 /**
@@ -155,7 +163,15 @@ export async function retainRecentAudits(
           options.keep
     )
     .map((crawl) => crawl.id);
-  const retiring = [...new Set([...windowed, ...abandoned, ...interrupted])];
+  let retiring = [...new Set([...windowed, ...abandoned, ...interrupted])];
+  if (options.evidenceArchiveDir && retiring.length > 0) {
+    const archive = options.evidenceArchiveDir;
+    const heldBack = retiring.filter((id) => !hasVerifiedBundle(archive, id));
+    if (heldBack.length > 0) {
+      options.onHeldBack?.(heldBack);
+      retiring = retiring.filter((id) => !heldBack.includes(id));
+    }
+  }
   if (retiring.length === 0) return null;
 
   // "The first time an audit retires anything" for THIS project, read off the

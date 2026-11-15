@@ -1,0 +1,988 @@
+// Versioned, replayable audit evidence bundle (repo#2301).
+//
+// An audit keeps JSON findings, but the crawl store behind them is pruned (see
+// `retention.ts`), and a later re-fetch is a different observation. This module
+// turns one stored crawl into a directory that stands on its own:
+//
+//   manifest.json          index of every file with sha256 + size, and the bundle hash. Written LAST,
+//                          so a directory without one is an interrupted export, never a bundle.
+//   audit.json             configuration, scanner and rules revision, stats, completion and limits.
+//   pages.json             per page: URLs, status, headers, fetch mode, redirect provenance, artifacts.
+//   findings.json          per finding: evidence refs (content hash + selector / byte range).
+//   failures.json          URLs that were never stored (failed, skipped), with the reason.
+//   scripts.json           external scripts, with the pages that referenced them.
+//   artifacts/<type>/<sha> the bytes: response-body, rendered-dom and script are separate types.
+//
+// `kind: "raw"` is what the site sent and is RESTRICTED (0700/0600, README warns).
+// `kind: "shareable"` passes headers, URLs and every body through `redact.ts`.
+// Verification and replay need nothing but the directory: no network, no store.
+
+import { createHash } from "node:crypto";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, relative, sep } from "node:path";
+
+import {
+  type RedactionCounts,
+  REDACTION_PATTERN_NAMES,
+  newRedactionCounts,
+  redactHeaders,
+  redactText,
+  redactUrl,
+} from "./redact";
+
+export const EVIDENCE_FORMAT = "squirrelscan-evidence";
+export const EVIDENCE_FORMAT_VERSION = 1;
+
+/** How many pages one site-level finding item names evidence for, before it says it stopped. */
+const MAX_EVIDENCE_PAGES_PER_ITEM = 20;
+
+export type ArtifactType = "response-body" | "rendered-dom" | "script";
+export type BundleKind = "raw" | "shareable";
+
+export function sha256(data: string | Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex");
+}
+
+// ── Source model: plain data, so the builder is testable without a store ─────────────
+
+export interface SourcePage {
+  url: string;
+  normalizedUrl: string;
+  finalUrl: string;
+  depth: number;
+  parentUrl?: string;
+  status: number;
+  contentType: string | null;
+  sizeBytes: number;
+  loadTimeMs: number;
+  fetchedAt: number;
+  headers: Record<string, unknown>;
+  requestHeaders?: Record<string, string> | null;
+  fetcherId?: string;
+  fallbackReason?: string;
+  redirectChain?: {
+    sourceUrl: string;
+    finalUrl: string;
+    hops: Array<{ url: string; statusCode: number; type: string }>;
+    chainLength: number;
+    isLoop: boolean;
+    endsInError: boolean;
+  };
+  /** The stored body, or null when it was never stored or has been evicted. */
+  html: string | null;
+}
+
+export interface SourceScript {
+  url: string;
+  finalUrl: string | null;
+  sizeBytes: number | null;
+  status: "stored" | "skipped";
+  skipReason: string | null;
+  sourcePages: string[];
+  evicted: boolean;
+  body: string | null;
+}
+
+export interface SourceFailure {
+  url: string;
+  status: string;
+  reason?: string;
+  depth: number;
+  parentUrl?: string;
+  source: string;
+  retryCount: number;
+}
+
+export interface SourceFinding {
+  ruleId: string;
+  name: string;
+  status: string;
+  message: string;
+  pageUrl?: string;
+  value?: string | number | null;
+  expected?: string | number | null;
+  skipReason?: string;
+  observation?: unknown;
+  items?: Array<{
+    id: string;
+    label?: string;
+    snippet?: string;
+    selector?: string;
+    sourcePages?: string[];
+  }>;
+}
+
+export interface EvidenceSource {
+  crawl: {
+    id: string;
+    baseUrl: string;
+    seedUrl?: string;
+    originalUrl?: string;
+    startedAt: number;
+    completedAt?: number;
+    status: string;
+    reportStatus?: string | null;
+    retiredAt?: number;
+    config: Record<string, unknown>;
+    stats: Record<string, unknown>;
+    scanScope?: unknown;
+  };
+  scanner: { name: string; version: string; rulesRevision: string };
+  pages: Iterable<SourcePage>;
+  scripts: Iterable<SourceScript>;
+  scriptsSummary?: { fetchLimit: number | null; droppedByLimit: number } | null;
+  failures: Iterable<SourceFailure>;
+  findings: Iterable<SourceFinding>;
+}
+
+// ── Bundle shapes ────────────────────────────────────────────────────────────────
+
+export interface ArtifactRef {
+  type: ArtifactType;
+  state: "stored" | "unavailable";
+  /** Why it is unavailable. Always set when `state` is `unavailable`. */
+  reason?: string;
+  sha256?: string;
+  bytes?: number;
+  path?: string;
+  /** The stored text is the decoded body, re-encoded as UTF-8: these are not wire bytes. */
+  encoding?: "utf-8";
+}
+
+export interface InlineScriptRef {
+  kind: "inline-script" | "inline-data";
+  scriptType: string | null;
+  byteStart: number;
+  byteEnd: number;
+  sha256: string;
+  /** The artifact the byte range is relative to. */
+  parentSha256: string;
+}
+
+export interface EvidenceRef {
+  pageUrl: string;
+  artifactType: ArtifactType | null;
+  contentSha256: string | null;
+  locator: {
+    selector?: string;
+    byteRange?: { start: number; end: number; snippetSha256: string };
+  };
+  /**
+   * located: a selector and/or byte range is recorded. page-only: the page is
+   * archived but the rule gave no location. truncated: the rule's snippet was
+   * clipped, so the range is only a prefix. unavailable: no artifact to point at.
+   */
+  state: "located" | "page-only" | "truncated" | "unavailable";
+  reason?: string;
+}
+
+export interface BundleFinding {
+  ruleId: string;
+  check: string;
+  status: string;
+  message: string;
+  pageUrl: string | null;
+  value?: string | number | null;
+  expected?: string | number | null;
+  skipReason?: string;
+  observation?: unknown;
+  evidence: EvidenceRef[];
+}
+
+export interface ManifestFile {
+  path: string;
+  sha256: string;
+  bytes: number;
+}
+
+export interface Manifest {
+  format: typeof EVIDENCE_FORMAT;
+  formatVersion: number;
+  kind: BundleKind;
+  sensitivity: "restricted" | "shareable";
+  createdAt: string;
+  scanner: { name: string; version: string; rulesRevision: string };
+  crawlId: string;
+  site: string;
+  counts: {
+    pages: number;
+    artifacts: number;
+    findings: number;
+    failures: number;
+    scripts: number;
+    pagesWithoutArtifact: number;
+    evidenceUnavailable: number;
+  };
+  redaction?: { patterns: readonly string[]; counts: RedactionCounts };
+  files: ManifestFile[];
+  /** sha256 of the sorted "<sha256>  <path>" lines of `files`. */
+  bundleSha256: string;
+}
+
+export function bundleHash(files: readonly ManifestFile[]): string {
+  const lines = [...files]
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+    .map((f) => `${f.sha256}  ${f.path}\n`)
+    .join("");
+  return sha256(lines);
+}
+
+// ── Writer ───────────────────────────────────────────────────────────────────────
+
+class BundleWriter {
+  readonly files: ManifestFile[] = [];
+  private readonly seen = new Set<string>();
+
+  constructor(
+    readonly dir: string,
+    private readonly restricted: boolean
+  ) {}
+
+  add(path: string, data: string | Uint8Array): ManifestFile {
+    const bytes = typeof data === "string" ? Buffer.from(data, "utf-8") : data;
+    const entry: ManifestFile = {
+      path,
+      sha256: sha256(bytes),
+      bytes: bytes.length,
+    };
+    if (this.seen.has(path)) return entry; // content addressed: same path, same bytes
+    this.seen.add(path);
+    const full = join(this.dir, ...path.split("/"));
+    mkdirSync(dirname(full), {
+      recursive: true,
+      mode: this.restricted ? 0o700 : 0o755,
+    });
+    writeFileSync(full, bytes, { mode: this.restricted ? 0o600 : 0o644 });
+    this.files.push(entry);
+    return entry;
+  }
+
+  addJson(path: string, value: unknown): ManifestFile {
+    return this.add(path, JSON.stringify(value, null, 2) + "\n");
+  }
+}
+
+function artifactPath(type: ArtifactType, hash: string): string {
+  return `artifacts/${type}/${hash}`;
+}
+
+/** The stored page text is a rendered DOM when a browser or render service produced it. */
+export function pageArtifactType(fetcherId: string | undefined): ArtifactType {
+  if (!fetcherId || fetcherId === "fetch" || fetcherId === "http")
+    return "response-body";
+  return "rendered-dom";
+}
+
+const SCRIPT_TAG = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+
+/** Inline scripts and inline data blocks, with byte ranges into the page artifact. */
+export function findInlineScripts(
+  html: string,
+  parentSha256: string
+): InlineScriptRef[] {
+  const out: InlineScriptRef[] = [];
+  SCRIPT_TAG.lastIndex = 0;
+  for (const match of html.matchAll(SCRIPT_TAG)) {
+    const attrs = match[1] ?? "";
+    const body = match[2] ?? "";
+    if (/\bsrc\s*=/i.test(attrs) || body.length === 0) continue;
+    const typeMatch = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attrs);
+    const scriptType = typeMatch ? typeMatch[1]!.toLowerCase() : null;
+    const isData =
+      scriptType !== null &&
+      !/^(module|text\/javascript|application\/javascript|text\/babel)$/.test(
+        scriptType
+      );
+    const charStart = (match.index ?? 0) + match[0].indexOf(">") + 1;
+    const byteStart = Buffer.byteLength(html.slice(0, charStart), "utf-8");
+    const byteEnd = byteStart + Buffer.byteLength(body, "utf-8");
+    out.push({
+      kind: isData ? "inline-data" : "inline-script",
+      scriptType,
+      byteStart,
+      byteEnd,
+      sha256: sha256(body),
+      parentSha256,
+    });
+  }
+  return out;
+}
+
+function looksTruncated(snippet: string): boolean {
+  return /(…|\.\.\.)$/.test(snippet.trimEnd());
+}
+
+function locate(
+  artifact: Buffer,
+  snippet: string
+): { start: number; end: number; snippetSha256: string } | null {
+  const needle = Buffer.from(snippet, "utf-8");
+  if (needle.length === 0) return null;
+  const start = artifact.indexOf(needle);
+  if (start < 0) return null;
+  return { start, end: start + needle.length, snippetSha256: sha256(needle) };
+}
+
+// ── Build ────────────────────────────────────────────────────────────────────────
+
+export interface ExportOptions {
+  kind: BundleKind;
+  /** Injected for tests; defaults to now. */
+  now?: () => Date;
+}
+
+export interface ExportResult {
+  manifest: Manifest;
+  dir: string;
+}
+
+/** Thrown when the target exists and is not empty: an export never overwrites. */
+export class ExportTargetError extends Error {}
+
+export function exportEvidenceBundle(
+  source: EvidenceSource,
+  dir: string,
+  options: ExportOptions
+): ExportResult {
+  const shareable = options.kind === "shareable";
+  if (existsSync(dir) && readdirSync(dir).length > 0) {
+    throw new ExportTargetError(`${dir} already exists and is not empty`);
+  }
+  mkdirSync(dir, { recursive: true, mode: shareable ? 0o755 : 0o700 });
+  if (!shareable) chmodSync(dir, 0o700);
+
+  const counts = newRedactionCounts();
+  const url = (value: string): string =>
+    shareable ? redactUrl(value, counts) : value;
+  const text = (value: string): string =>
+    shareable ? redactText(value, counts) : value;
+  const writer = new BundleWriter(dir, !shareable);
+
+  // Pages: write artifacts, keep a per-page buffer for locating findings.
+  const pageEntries: unknown[] = [];
+  const pageArtifacts = new Map<string, ArtifactRef>(); // keyed by ORIGINAL page url
+  const pageBuffers = new Map<string, Buffer>();
+  const inlineByPage: Record<string, InlineScriptRef[]> = {};
+  let pagesWithoutArtifact = 0;
+  const findingsByPage = new Map<string, SourceFinding[]>();
+  const siteFindings: SourceFinding[] = [];
+  for (const finding of source.findings) {
+    if (finding.pageUrl) {
+      const list = findingsByPage.get(finding.pageUrl) ?? [];
+      list.push(finding);
+      findingsByPage.set(finding.pageUrl, list);
+    } else siteFindings.push(finding);
+  }
+
+  const bundleFindings: BundleFinding[] = [];
+  let evidenceUnavailable = 0;
+  const finish = (finding: SourceFinding, evidence: EvidenceRef[]): void => {
+    for (const ref of evidence)
+      if (ref.state === "unavailable") evidenceUnavailable++;
+    bundleFindings.push({
+      ruleId: finding.ruleId,
+      check: finding.name,
+      status: finding.status,
+      message: text(finding.message),
+      pageUrl: finding.pageUrl ? url(finding.pageUrl) : null,
+      ...(finding.value !== undefined
+        ? {
+            value:
+              typeof finding.value === "string"
+                ? text(finding.value)
+                : finding.value,
+          }
+        : {}),
+      ...(finding.expected !== undefined
+        ? {
+            expected:
+              typeof finding.expected === "string"
+                ? text(finding.expected)
+                : finding.expected,
+          }
+        : {}),
+      ...(finding.skipReason ? { skipReason: finding.skipReason } : {}),
+      ...(finding.observation !== undefined
+        ? { observation: finding.observation }
+        : {}),
+      evidence,
+    });
+  };
+
+  const refFor = (
+    pageUrl: string,
+    item?: NonNullable<SourceFinding["items"]>[number]
+  ): EvidenceRef => {
+    const artifact = pageArtifacts.get(pageUrl);
+    const shownUrl = url(pageUrl);
+    if (!artifact || artifact.state !== "stored") {
+      return {
+        pageUrl: shownUrl,
+        artifactType: artifact?.type ?? null,
+        contentSha256: null,
+        locator: {},
+        state: "unavailable",
+        reason: artifact?.reason ?? "page was not stored in this crawl",
+      };
+    }
+    const locator: EvidenceRef["locator"] = {};
+    let state: EvidenceRef["state"] = "page-only";
+    let reason: string | undefined;
+    if (item?.selector) {
+      locator.selector = item.selector;
+      state = "located";
+    }
+    if (item?.snippet) {
+      const buffer = pageBuffers.get(pageUrl);
+      const snippet = text(item.snippet);
+      const range = buffer ? locate(buffer, snippet) : null;
+      if (range) {
+        locator.byteRange = range;
+        state = "located";
+      } else if (looksTruncated(snippet)) {
+        const trimmed = snippet.trimEnd().replace(/(…|\.\.\.)$/, "");
+        const prefix = buffer ? locate(buffer, trimmed) : null;
+        if (prefix) locator.byteRange = prefix;
+        state = "truncated";
+        reason = "rule snippet was clipped; byte range covers the prefix only";
+      } else if (state === "page-only") {
+        reason = "snippet not found in the archived artifact";
+      }
+    }
+    if (state === "page-only" && !reason) reason = "rule gave no location";
+    return {
+      pageUrl: shownUrl,
+      artifactType: artifact.type,
+      contentSha256: artifact.sha256 ?? null,
+      locator,
+      state,
+      ...(reason ? { reason } : {}),
+    };
+  };
+
+  const evidenceForFinding = (finding: SourceFinding): EvidenceRef[] => {
+    const refs: EvidenceRef[] = [];
+    const items = finding.items ?? [];
+    if (finding.pageUrl && items.length === 0) return [refFor(finding.pageUrl)];
+    for (const item of items) {
+      const pages = item.sourcePages?.length
+        ? item.sourcePages
+        : finding.pageUrl
+          ? [finding.pageUrl]
+          : [];
+      for (const page of pages.slice(0, MAX_EVIDENCE_PAGES_PER_ITEM))
+        refs.push(refFor(page, item));
+      if (pages.length > MAX_EVIDENCE_PAGES_PER_ITEM) {
+        refs.push({
+          pageUrl: "",
+          artifactType: null,
+          contentSha256: null,
+          locator: {},
+          state: "truncated",
+          reason: `evidence lists the first ${MAX_EVIDENCE_PAGES_PER_ITEM} of ${pages.length} pages`,
+        });
+      }
+    }
+    return refs;
+  };
+
+  let pageCount = 0;
+  for (const page of source.pages) {
+    pageCount++;
+    const type = pageArtifactType(page.fetcherId);
+    const otherType: ArtifactType =
+      type === "response-body" ? "rendered-dom" : "response-body";
+    let artifact: ArtifactRef;
+    if (page.html === null) {
+      pagesWithoutArtifact++;
+      artifact = {
+        type,
+        state: "unavailable",
+        reason:
+          "body was not stored or has been evicted from the content store",
+      };
+    } else {
+      const body = text(page.html);
+      const entry = writer.add(artifactPath(type, sha256(body)), body);
+      artifact = {
+        type,
+        state: "stored",
+        sha256: entry.sha256,
+        bytes: entry.bytes,
+        path: entry.path,
+        encoding: "utf-8",
+      };
+      const buffer = Buffer.from(body, "utf-8");
+      pageBuffers.set(page.url, buffer);
+      pageBuffers.set(page.normalizedUrl, buffer);
+      const inline = findInlineScripts(body, entry.sha256);
+      if (inline.length > 0) inlineByPage[url(page.url)] = inline;
+    }
+    pageArtifacts.set(page.url, artifact);
+    pageArtifacts.set(page.normalizedUrl, artifact);
+    const other: ArtifactRef = {
+      type: otherType,
+      state: "unavailable",
+      reason:
+        type === "response-body"
+          ? "fetched without rendering: no rendered DOM exists"
+          : "fetched through a renderer: the original response bytes were not retained",
+    };
+    pageEntries.push({
+      url: url(page.url),
+      normalizedUrl: url(page.normalizedUrl),
+      finalUrl: url(page.finalUrl),
+      depth: page.depth,
+      ...(page.parentUrl ? { parentUrl: url(page.parentUrl) } : {}),
+      status: page.status,
+      contentType: page.contentType,
+      sizeBytes: page.sizeBytes,
+      loadTimeMs: page.loadTimeMs,
+      capturedAt: new Date(page.fetchedAt).toISOString(),
+      fetch: {
+        mode: type === "response-body" ? "http" : "render",
+        fetcher: page.fetcherId ?? null,
+        fallbackReason: page.fallbackReason ?? null,
+      },
+      requestHeaders: page.requestHeaders
+        ? shareable
+          ? redactHeaders(page.requestHeaders, counts)
+          : page.requestHeaders
+        : null,
+      responseHeaders: shareable
+        ? redactHeaders(page.headers, counts)
+        : page.headers,
+      redirect: page.redirectChain
+        ? {
+            sourceUrl: url(page.redirectChain.sourceUrl),
+            finalUrl: url(page.redirectChain.finalUrl),
+            hops: page.redirectChain.hops.map((h) => ({
+              ...h,
+              url: url(h.url),
+            })),
+            chainLength: page.redirectChain.chainLength,
+            isLoop: page.redirectChain.isLoop,
+            endsInError: page.redirectChain.endsInError,
+          }
+        : null,
+      artifacts: [artifact, other],
+    });
+    // Page-scoped findings are located while this page's buffer is live.
+    for (const key of new Set([page.url, page.normalizedUrl])) {
+      for (const finding of findingsByPage.get(key) ?? []) {
+        finish(finding, evidenceForFinding(finding));
+      }
+      findingsByPage.delete(key);
+    }
+    pageBuffers.delete(page.url);
+    pageBuffers.delete(page.normalizedUrl);
+  }
+  // Findings on pages not in the store, then site-level findings (whose items name pages).
+  for (const list of findingsByPage.values()) {
+    for (const finding of list) finish(finding, evidenceForFinding(finding));
+  }
+  // Site-level evidence is page-only: no buffers are kept, by design (memory).
+  for (const finding of siteFindings)
+    finish(finding, evidenceForFinding(finding));
+
+  // Scripts: external bodies keep their lineage (url, final url, referencing pages).
+  const scriptEntries: unknown[] = [];
+  for (const script of source.scripts) {
+    let artifact: ArtifactRef;
+    if (script.body !== null) {
+      const body = text(script.body);
+      const entry = writer.add(artifactPath("script", sha256(body)), body);
+      artifact = {
+        type: "script",
+        state: "stored",
+        sha256: entry.sha256,
+        bytes: entry.bytes,
+        path: entry.path,
+        encoding: "utf-8",
+      };
+    } else {
+      artifact = {
+        type: "script",
+        state: "unavailable",
+        reason: script.evicted
+          ? "body evicted from the content store"
+          : script.skipReason
+            ? `not fetched: ${script.skipReason}`
+            : "body not stored",
+      };
+    }
+    scriptEntries.push({
+      url: url(script.url),
+      finalUrl: script.finalUrl ? url(script.finalUrl) : null,
+      referencedFrom: script.sourcePages.map((p) => {
+        const parent = pageArtifacts.get(p);
+        return { page: url(p), pageArtifactSha256: parent?.sha256 ?? null };
+      }),
+      artifact,
+    });
+  }
+
+  const failures = [...source.failures].map((f) => ({
+    url: url(f.url),
+    status: f.status,
+    reason: f.reason ?? null,
+    depth: f.depth,
+    ...(f.parentUrl ? { parentUrl: url(f.parentUrl) } : {}),
+    source: f.source,
+    retryCount: f.retryCount,
+  }));
+
+  const config = source.crawl.config;
+  const stats = source.crawl.stats;
+  const pagesCap = typeof config.maxPages === "number" ? config.maxPages : null;
+  writer.addJson("audit.json", {
+    crawl: {
+      id: source.crawl.id,
+      site: url(source.crawl.baseUrl),
+      seedUrl: source.crawl.seedUrl ? url(source.crawl.seedUrl) : null,
+      originalUrl: source.crawl.originalUrl
+        ? url(source.crawl.originalUrl)
+        : null,
+      startedAt: new Date(source.crawl.startedAt).toISOString(),
+      completedAt: source.crawl.completedAt
+        ? new Date(source.crawl.completedAt).toISOString()
+        : null,
+    },
+    scanner: source.scanner,
+    configuration: shareable
+      ? JSON.parse(text(JSON.stringify(config)))
+      : config,
+    // Completion: why the crawl stopped, and every cap that could have cut it short.
+    completion: {
+      crawlStatus: source.crawl.status,
+      reportStatus: source.crawl.reportStatus ?? null,
+      retiredAt: source.crawl.retiredAt
+        ? new Date(source.crawl.retiredAt).toISOString()
+        : null,
+      hitPageLimit: pagesCap !== null && pageCount >= pagesCap,
+      stats,
+      scanScope: source.crawl.scanScope ?? null,
+    },
+    limits: {
+      maxPages: pagesCap,
+      maxDepth: config.maxDepth ?? null,
+      timeoutMs: config.timeoutMs ?? null,
+      scripts: source.scriptsSummary ?? null,
+      bodyEncoding:
+        "stored text re-encoded as UTF-8; byte ranges are relative to those bytes",
+    },
+  });
+  writer.addJson("pages.json", pageEntries);
+  writer.addJson("inline-scripts.json", inlineByPage);
+  writer.addJson("scripts.json", scriptEntries);
+  writer.addJson("failures.json", failures);
+  writer.addJson("findings.json", bundleFindings);
+  if (!shareable) {
+    writer.add(
+      "README.txt",
+      "RESTRICTED: this is a raw squirrelscan evidence bundle.\n" +
+        "It holds the response bodies and headers the site sent, which can include cookies,\n" +
+        "tokens and account data. Do not share it. Run the export with --shareable for a\n" +
+        "redacted copy. Check integrity with: squirrel evidence verify <dir>\n"
+    );
+  }
+
+  const artifactFiles = writer.files.filter((f) =>
+    f.path.startsWith("artifacts/")
+  ).length;
+  const files = [...writer.files].sort((a, b) => (a.path < b.path ? -1 : 1));
+  const manifest: Manifest = {
+    format: EVIDENCE_FORMAT,
+    formatVersion: EVIDENCE_FORMAT_VERSION,
+    kind: options.kind,
+    sensitivity: shareable ? "shareable" : "restricted",
+    createdAt: (options.now?.() ?? new Date()).toISOString(),
+    scanner: source.scanner,
+    crawlId: source.crawl.id,
+    site: url(source.crawl.baseUrl),
+    counts: {
+      pages: pageCount,
+      artifacts: artifactFiles,
+      findings: bundleFindings.length,
+      failures: failures.length,
+      scripts: scriptEntries.length,
+      pagesWithoutArtifact,
+      evidenceUnavailable,
+    },
+    ...(shareable
+      ? { redaction: { patterns: REDACTION_PATTERN_NAMES, counts } }
+      : {}),
+    files,
+    bundleSha256: bundleHash(files),
+  };
+  // Last: its presence is what says the export finished.
+  const manifestPath = join(dir, "manifest.json");
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", {
+    mode: shareable ? 0o644 : 0o600,
+  });
+  return { manifest, dir };
+}
+
+// ── Verify ───────────────────────────────────────────────────────────────────────
+
+export interface VerifyResult {
+  ok: boolean;
+  issues: string[];
+  manifest: Manifest | null;
+}
+
+function walk(root: string, dir: string = root): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walk(root, full));
+    else out.push(relative(root, full).split(sep).join("/"));
+  }
+  return out;
+}
+
+/** Check a bundle directory against its manifest. Offline, read-only. */
+export function verifyEvidenceBundle(dir: string): VerifyResult {
+  const issues: string[] = [];
+  const manifestPath = join(dir, "manifest.json");
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+    return { ok: false, issues: [`${dir} is not a directory`], manifest: null };
+  }
+  if (!existsSync(manifestPath)) {
+    return {
+      ok: false,
+      issues: [
+        "manifest.json is missing: the export was interrupted or this is not a bundle",
+      ],
+      manifest: null,
+    };
+  }
+  let manifest: Manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Manifest;
+  } catch (error) {
+    return {
+      ok: false,
+      issues: [`manifest.json is not valid JSON: ${String(error)}`],
+      manifest: null,
+    };
+  }
+  if (manifest.format !== EVIDENCE_FORMAT) {
+    return {
+      ok: false,
+      issues: [`unknown format "${String(manifest.format)}"`],
+      manifest: null,
+    };
+  }
+  if (
+    typeof manifest.formatVersion !== "number" ||
+    manifest.formatVersion > EVIDENCE_FORMAT_VERSION
+  ) {
+    return {
+      ok: false,
+      issues: [
+        `bundle format version ${String(manifest.formatVersion)} is newer than this squirrel reads (${EVIDENCE_FORMAT_VERSION}); update squirrel`,
+      ],
+      manifest,
+    };
+  }
+  if (!Array.isArray(manifest.files)) {
+    return { ok: false, issues: ["manifest.json has no files list"], manifest };
+  }
+  const listed = new Set<string>();
+  for (const file of manifest.files) {
+    listed.add(file.path);
+    const full = join(dir, ...file.path.split("/"));
+    if (file.path.includes("..") || file.path.startsWith("/")) {
+      issues.push(`${file.path}: unsafe path`);
+      continue;
+    }
+    if (!existsSync(full)) {
+      issues.push(`${file.path}: missing`);
+      continue;
+    }
+    const bytes = readFileSync(full);
+    if (bytes.length !== file.bytes)
+      issues.push(
+        `${file.path}: size ${bytes.length}, manifest says ${file.bytes}`
+      );
+    if (sha256(bytes) !== file.sha256)
+      issues.push(`${file.path}: sha256 mismatch`);
+    if (
+      file.path.startsWith("artifacts/") &&
+      !file.path.endsWith(file.sha256)
+    ) {
+      issues.push(`${file.path}: file name is not its sha256`);
+    }
+  }
+  for (const path of walk(dir)) {
+    if (path !== "manifest.json" && !listed.has(path))
+      issues.push(`${path}: not in the manifest`);
+  }
+  if (bundleHash(manifest.files) !== manifest.bundleSha256)
+    issues.push("bundleSha256 does not match the file list");
+
+  // Every evidence ref must point at a listed artifact, or say why it cannot.
+  const findingsFile = join(dir, "findings.json");
+  if (existsSync(findingsFile)) {
+    try {
+      const findings = JSON.parse(
+        readFileSync(findingsFile, "utf-8")
+      ) as BundleFinding[];
+      for (const finding of findings) {
+        for (const ref of finding.evidence) {
+          if (ref.state === "unavailable") {
+            if (!ref.reason)
+              issues.push(
+                `finding ${finding.ruleId}: unavailable evidence has no reason`
+              );
+          } else if (ref.contentSha256 && ref.artifactType) {
+            if (
+              !listed.has(artifactPath(ref.artifactType, ref.contentSha256))
+            ) {
+              issues.push(
+                `finding ${finding.ruleId}: references artifact ${ref.contentSha256} that is not in the bundle`
+              );
+            }
+          }
+        }
+      }
+    } catch (error) {
+      issues.push(`findings.json is not valid JSON: ${String(error)}`);
+    }
+  }
+  return { ok: issues.length === 0, issues, manifest };
+}
+
+// ── Replay ───────────────────────────────────────────────────────────────────────
+
+export interface ReplayEntry {
+  ruleId: string;
+  check: string;
+  pageUrl: string;
+  outcome: "confirmed" | "mismatch" | "unavailable" | "no-location";
+  detail?: string;
+}
+
+export interface ReplayResult {
+  verified: VerifyResult;
+  total: number;
+  confirmed: number;
+  mismatched: number;
+  unavailable: number;
+  noLocation: number;
+  entries: ReplayEntry[];
+}
+
+/**
+ * Re-check every finding's evidence against the archived artifacts: the byte range must still hash to
+ * the recorded snippet, and the selector must still resolve in the archived DOM. Never touches the
+ * network or the crawl store. Refuses a bundle that fails verification.
+ */
+export function replayEvidenceBundle(
+  dir: string,
+  resolveSelector: (html: string, selector: string) => boolean
+): ReplayResult {
+  const verified = verifyEvidenceBundle(dir);
+  const empty: ReplayResult = {
+    verified,
+    total: 0,
+    confirmed: 0,
+    mismatched: 0,
+    unavailable: 0,
+    noLocation: 0,
+    entries: [],
+  };
+  if (!verified.ok) return empty;
+  const findings = JSON.parse(
+    readFileSync(join(dir, "findings.json"), "utf-8")
+  ) as BundleFinding[];
+  const cache = new Map<string, Buffer>();
+  const read = (type: ArtifactType, hash: string): Buffer => {
+    const key = `${type}/${hash}`;
+    let buf = cache.get(key);
+    if (!buf) {
+      buf = readFileSync(join(dir, ...artifactPath(type, hash).split("/")));
+      if (cache.size > 8) cache.clear();
+      cache.set(key, buf);
+    }
+    return buf;
+  };
+  const result = empty;
+  for (const finding of findings) {
+    for (const ref of finding.evidence) {
+      result.total++;
+      const base = {
+        ruleId: finding.ruleId,
+        check: finding.check,
+        pageUrl: ref.pageUrl,
+      };
+      if (
+        ref.state === "unavailable" ||
+        !ref.contentSha256 ||
+        !ref.artifactType
+      ) {
+        result.unavailable++;
+        result.entries.push({
+          ...base,
+          outcome: "unavailable",
+          detail: ref.reason,
+        });
+        continue;
+      }
+      const { selector, byteRange } = ref.locator;
+      if (!selector && !byteRange) {
+        result.noLocation++;
+        result.entries.push({
+          ...base,
+          outcome: "no-location",
+          detail: ref.reason,
+        });
+        continue;
+      }
+      const buffer = read(ref.artifactType, ref.contentSha256);
+      let mismatch: string | null = null;
+      if (byteRange) {
+        const slice = buffer.subarray(byteRange.start, byteRange.end);
+        if (sha256(slice) !== byteRange.snippetSha256)
+          mismatch = "byte range no longer hashes to the recorded snippet";
+      }
+      if (!mismatch && selector) {
+        let found = false;
+        try {
+          found = resolveSelector(buffer.toString("utf-8"), selector);
+        } catch {
+          found = false;
+        }
+        if (!found) mismatch = `selector does not resolve: ${selector}`;
+      }
+      if (mismatch) {
+        result.mismatched++;
+        result.entries.push({ ...base, outcome: "mismatch", detail: mismatch });
+      } else {
+        result.confirmed++;
+        result.entries.push({ ...base, outcome: "confirmed" });
+      }
+    }
+  }
+  return result;
+}
+
+/** Whether `dir` holds a bundle for `crawlId` that passes verification. Used as the cleanup gate. */
+export function hasVerifiedBundle(
+  archiveRoot: string,
+  crawlId: string
+): boolean {
+  const dir = join(archiveRoot, crawlId);
+  if (!existsSync(join(dir, "manifest.json"))) return false;
+  const result = verifyEvidenceBundle(dir);
+  return result.ok && result.manifest?.crawlId === crawlId;
+}
