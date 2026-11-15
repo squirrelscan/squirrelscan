@@ -65,6 +65,18 @@ Many sites refuse automated requests. A refusal says nothing about whether a per
 - **A page that answers 200 but whose title is just "404" or "Page not found"** (a soft 404) counts as broken.
 - **A link that still cannot be verified is listed as status unverifiable, never as broken.** This covers firewall challenges, bot walls and CDN error pages. A rate limit is listed as rate-limited, never as broken.
 
+### The shared cache
+
+Perch keeps one answer per link, shared by every audit that links to it, whoever ran it. The answer is stored under a normalised form of the URL: the scheme and host lowercased, the fragment and tracking parameters (such as `utm_*` and `fbclid`) dropped, credential parameters never kept, the remaining query parameters sorted. `?id=1` and `?id=2` stay two links. An answer is reused until it expires, and how long that is depends on the verdict and on the caching headers the site sent. So a second audit of the same site soon after the first answers most of its external links from the cache instead of fetching them again.
+
+### Why a link can come back unverified
+
+A link is listed as **unverified** when Perch could not get an answer a person would also get. A bot wall or challenge, a throttle, a site that answers automated requests differently, or a certificate error that only a browser can settle all give unverified, not broken. Unverified links cost nothing, and the next audit tries again.
+
+### The two-failures rule for a 404
+
+A page that answers 404 once may be a glitch or a page mid-deploy. Perch reports a link as broken only after it has failed twice, at least ten minutes apart. After the first failure the link is listed as unverified: awaiting confirmation. A later check supplies the second one, and a later audit counts. A domain that does not exist is the exception and is reported as broken straight away.
+
 ### The first check of a new link
 
 Perch's first answer for a link it has never seen can take a while. A cloud audit hands its external links to Perch early, so most are answered by the time the audit needs them. Any link Perch has not answered in time gets a quicker single check instead, and that check can still report a blocked link as broken. The next audit gets Perch's answer.
