@@ -50,7 +50,11 @@ import {
   type SmartAuditStore,
 } from "../src/merge-promise";
 import { buildCheckTallies, capReportForPublish } from "../src/publish-cap";
-import { calculateHealthScore, calculateHealthScoreFromTallies } from "../src/scoring";
+import {
+  calculateHealthScore,
+  calculateHealthScoreFromTallies,
+  isCarriedContinuation,
+} from "../src/scoring";
 import { buildStreamFindings } from "../src/stream-findings";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
@@ -318,6 +322,8 @@ function rescored(r: CloudSmartAuditsResult): {
   for (const rule of r.unionRuleResults.values()) {
     const advisory = rule.meta.severity === "info";
     for (const c of rule.checks) {
+      // A carried item row repeats its page's check (repo#3360): not another one.
+      if (isCarriedContinuation(c)) continue;
       if (c.status === "pass") totals.passed++;
       else if (c.status === "warn" && !advisory) totals.warnings++;
       else if (c.status === "fail") totals.failed++;
@@ -1037,13 +1043,28 @@ describe("a capped report published chunked scores as published in one POST (rep
     const afterCapped = await publish(viaCapped, "audit_2", rerun, now);
     expect(comparable(rescored(afterChunked))).toEqual(comparable(rescored(afterUncapped)));
     expect(afterChunked.coverage).toEqual(afterUncapped.coverage);
-    // The carried side is the whole class, so nothing scores better than the full
-    // audit did. (It scores a little worse: the replay counts each stored item as
-    // a check of its own, squirrelscan/repo#3360.)
+    // The carried side is the whole class, counted in the full audit's check units
+    // (repo#3360), so the unchanged site scores as it did.
     const fullScore = rescored(first).healthScore.overall!;
-    expect(rescored(afterChunked).healthScore.overall!).toBeLessThanOrEqual(fullScore);
+    expect(Math.abs(rescored(afterChunked).healthScore.overall! - fullScore)).toBeLessThanOrEqual(2);
     // After the sampled store the re-run scores the clipped pages clean.
     expect(rescored(afterCapped).healthScore.overall!).toBeGreaterThan(fullScore);
+  });
+
+  test("(repo#3360) a 3-page re-run of an unchanged 60-page site scores within 2 points of the full audit", async () => {
+    const full = fullReport(busyShapes(range(0, 60)));
+    const store = new MemStore();
+    const first = await publishChunked(store, "audit_1", full, 1_779_000_000_000);
+    const rerun = await cappedBody(fullReport(busyShapes(range(0, 3))));
+    const after = await publish(store, "audit_2", rerun, 1_780_000_000_000);
+    const a = rescored(first).healthScore;
+    const b = rescored(after).healthScore;
+    expect(Math.abs(b.overall! - a.overall!)).toBeLessThanOrEqual(2);
+    for (const c of a.categories) {
+      const other = b.categories.find((o) => o.category === c.category);
+      expect(other).toBeDefined();
+      expect(Math.abs(other!.score - c.score)).toBeLessThanOrEqual(2);
+    }
   });
 
   test("partial re-audit published chunked: the one-POST score, crawled-clean resolves, uncrawled carries", async () => {

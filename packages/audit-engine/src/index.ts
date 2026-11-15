@@ -60,6 +60,8 @@ export {
   calculateHealthScoreFromTallies,
   foldRuleResultIntoTallies,
   addChecksToTally,
+  isCarriedContinuation,
+  markCarriedContinuations,
   addTally,
   emptyTally,
   ruleScoreFromTally,
