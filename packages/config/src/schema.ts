@@ -310,6 +310,13 @@ export const StorageConfigSchema = z.object({
     )
     .default(DEFAULT_KEEP_AUDITS),
   /**
+   * Directory holding verified evidence bundles (`squirrel evidence export -o
+   * <dir>/<audit id>`). When set, retention never retires an audit whose bundle
+   * is missing or fails verification there, so cleanup cannot destroy the only
+   * copy of its evidence (repo#2301). Unset = no gate (the default).
+   */
+  evidence_archive_dir: z.string().min(1).optional(),
+  /**
    * Size cap for the local content store (`~/.squirrel/content-store.db`, the
    * gzipped page bodies every audit reads back), in bytes or as a size string
    * such as `"4GB"` (#2342). Unset = the CLI's default, 1 GB.

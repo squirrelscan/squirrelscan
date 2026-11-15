@@ -805,6 +805,7 @@
               "cli/report",
               "cli/entities",
               "cli/pages",
+              "cli/evidence",
               "cli/init",
               "cli/config",
               "cli/feedback",

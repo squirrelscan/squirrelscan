@@ -1,0 +1,74 @@
+---
+title: "evidence"
+icon: "box-archive"
+description: "Export, verify and replay a versioned evidence bundle for a stored audit"
+---
+
+An audit keeps its findings, but the crawl behind them is pruned over time, and fetching the site again later is a different observation: the page may have changed or gone. The `evidence` command writes one stored audit to a directory that stands on its own, so you can check a finding months later without the site or the crawl store.
+
+The command reads what the audit already stored. It fetches nothing and costs no credits.
+
+## Usage
+
+```bash
+squirrel evidence export -o <dir> [--crawl <id>] [--shareable]
+squirrel evidence verify <dir>
+squirrel evidence replay <dir> [--json]
+```
+
+## export
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--output` | `-o` | Directory to write. It must not exist or must be empty | required |
+| `--crawl` | | Audit ID (or prefix) to export | latest audit |
+| `--shareable` | | Redact credentials, cookies, account data and sensitive URL parameters | `false` |
+
+Export is opt-in and never overwrites. It verifies the bundle it just wrote and exits `1` if that fails. An audit that was already retired has no findings left to archive and is refused.
+
+### Raw and shareable bundles
+
+| Kind | Contents | Permissions |
+|------|----------|-------------|
+| raw (default) | Exactly what the site sent: response bodies, headers, cookies, URLs. Restricted: it can hold credentials and account data | directory `0700`, files `0600`, with a `README.txt` warning |
+| shareable (`--shareable`) | Headers, URLs and every body pass through redaction | normal |
+
+Shareable redaction covers cookie and authorization headers, credential-looking query parameters (`token`, `key`, `password`, `session`, `email` and similar), URL userinfo, JWTs, provider API keys, bearer tokens, email addresses, CSRF meta tags, hidden token inputs and credential assignments in scripts. The patterns are conservative but cannot prove a body holds no secret. The manifest lists the patterns and how often each matched. Share the raw bundle with nobody.
+
+## What a bundle contains
+
+| File | Holds |
+|------|-------|
+| `manifest.json` | Format and version, scanner version, rules revision, every file with its sha256 and size, and a bundle hash. Written last: a directory without it is an interrupted export |
+| `audit.json` | Audit configuration, scanner and rules revision, crawl stats, completion status, whether the page limit was hit, and the crawl limits |
+| `pages.json` | Per page: source and final URL, capture time, status, request and response headers, fetch mode (`http` or `render`), redirect hops, and its artifacts |
+| `findings.json` | Per finding: rule, check, status, message, and evidence references |
+| `failures.json` | URLs that were never stored (failed or skipped) with the reason |
+| `scripts.json` | External scripts with the pages that referenced them |
+| `inline-scripts.json` | Inline scripts and inline data blocks with byte ranges into the page artifact |
+| `artifacts/<type>/<sha256>` | The bytes, content addressed |
+
+Artifact types are kept apart. `response-body` is what an HTTP fetch returned and `rendered-dom` is what a render produced. Each page lists both, and the one that does not exist says why (`fetched without rendering`, or `fetched through a renderer: the original response bytes were not retained`). Stored text is the decoded body re-encoded as UTF-8, and byte ranges are relative to those bytes.
+
+### Evidence references
+
+Every finding carries a list of references. Each has the page, the artifact type and sha256, and a locator: a CSS selector path and/or a byte range with the sha256 of the snippet. The `state` is explicit:
+
+| State | Meaning |
+|-------|---------|
+| `located` | A selector and/or byte range is recorded |
+| `page-only` | The page is archived but the rule gave no location |
+| `truncated` | The rule's snippet was clipped, so the range covers only a prefix, or the list of pages was capped |
+| `unavailable` | No artifact to point at (body evicted or never stored), with a reason |
+
+## verify
+
+Checks the bundle against its manifest with no network and no crawl store: every file's size and sha256, files the manifest does not list, the bundle hash, the format version, and that every evidence reference points at an artifact in the bundle. A bundle whose format version is newer than your `squirrel` asks you to update. Exits `1` on any problem.
+
+## replay
+
+Verifies the bundle, then re-checks every finding's evidence against the archived artifacts: the byte range must still hash to the recorded snippet, and the selector must still resolve in the archived DOM. It reports confirmed, mismatched, unavailable and unlocated references and exits `1` on a mismatch. Replay re-checks evidence, not rule logic: it does not re-run the rules.
+
+## Cleanup
+
+Set `[storage] evidence_archive_dir` to a directory that holds bundles at `<dir>/<audit id>`. Automatic retention then retires an audit only when its bundle there verifies, so cleanup cannot destroy the only copy of the evidence. See [storage](/configuration/storage). `squirrel self disk --prune` is an explicit command and is not gated.

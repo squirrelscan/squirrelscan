@@ -48,6 +48,13 @@ finished audit. A crawl newer than the newest finished audit, or one still
 fetching pages, is never touched, because it may be a live audit or a crawl
 waiting for `squirrel analyze`.
 
+### `evidence_archive_dir`
+
+**Type:** `string`
+**Default:** unset
+
+A directory that holds evidence bundles written by `squirrel evidence export -o <dir>/<audit id>`. When set, automatic retention retires an audit only if a bundle for it in this directory passes verification, so cleanup cannot destroy the only copy of an audit's evidence. Audits without a verified bundle are kept past `keep_audits` and the run logs that it did so. `squirrel self disk --prune` is an explicit command and is not gated. See [evidence](/cli/evidence).
+
 ### Crawl status
 
 A crawl's status only moves along the edges below, so a late write can never undo a finished crawl: Ctrl-C or the crawl-phase time limit calling `stop()` after the crawl completed leaves it `completed` instead of turning it back into `paused`. A write the table does not allow changes nothing (it is ignored, never an error, and never stops a crawl). Ctrl-C ends the crawl as `stopped`, from `running` or from the `paused` that `stop()` writes first while the crawl is live, through the same guarded write, so `squirrel audit --resume` still continues it and a crawl that already finished stays as it was.

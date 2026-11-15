@@ -3155,6 +3155,11 @@ export async function runAudit(
           const retention = await retainRecentAudits(sqliteStorage, {
             keep: mergedConfig.storage.keep_audits,
             currentCrawlId: crawlId,
+            evidenceArchiveDir: mergedConfig.storage.evidence_archive_dir,
+            onHeldBack: (ids) =>
+              logger.info(
+                `kept ${ids.length} audit(s) past keep_audits: no verified evidence bundle in evidence_archive_dir`
+              ),
           });
           if (retention) {
             // Logged as well as reported, because not every caller has

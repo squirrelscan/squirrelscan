@@ -444,6 +444,11 @@ async function retainAfterAnalyze(args: {
     const retention = await retainRecentAudits(sqlite, {
       keep: config.storage.keep_audits,
       currentCrawlId: crawlId,
+      evidenceArchiveDir: config.storage.evidence_archive_dir,
+      onHeldBack: (ids) =>
+        logger.info(
+          `kept ${ids.length} audit(s) past keep_audits: no verified evidence bundle in evidence_archive_dir`
+        ),
     });
     if (retention) {
       logger.info(
