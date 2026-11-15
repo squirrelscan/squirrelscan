@@ -163,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 41;
+export const SCHEMA_VERSION = 42;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -647,6 +647,11 @@ const MIGRATIONS: Record<number, string[]> = {
   // Version 41: a page's Flesch reading level (content/voice-consistency). ADDITIVE and
   // nullable: a row written before this reads as no score, so the rule has no sample for it.
   41: [`ALTER TABLE page_features ADD COLUMN reading_level INTEGER`],
+  // Version 42: a check's observation limits (repo#2302), JSON. Same reason as
+  // 37 and 38: the report is rebuilt from `rule_results`, so without this column
+  // the real `squirrel audit` JSON never carries `observation`. ADDITIVE and
+  // nullable: a row written before this reads back with no observation.
+  42: ["ALTER TABLE rule_results ADD COLUMN observation TEXT DEFAULT NULL"],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -805,6 +810,7 @@ const RULE_RESULTS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> 
   { name: "component_evidence", type: "TEXT" },
   { name: "site_resource_occurrences", type: "TEXT" },
   { name: "site_resource_evidence", type: "TEXT" },
+  { name: "observation", type: "TEXT" },
 ];
 
 const SCHEMA = `
@@ -1098,6 +1104,7 @@ CREATE TABLE IF NOT EXISTS rule_results (
   component_evidence TEXT,
   site_resource_occurrences TEXT,
   site_resource_evidence TEXT,
+  observation TEXT,
   created_at INTEGER NOT NULL,
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -4018,9 +4025,9 @@ export class SQLiteStorage implements CrawlStorage {
             crawl_id, page_url, rule_id, check_name, status, message,
             value, expected, items, details, pages, skip_reason,
             component_occurrences, component_evidence, site_resource_occurrences,
-            site_resource_evidence, created_at
+            site_resource_evidence, observation, created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const timestamp = Date.now();
@@ -4054,6 +4061,7 @@ export class SQLiteStorage implements CrawlStorage {
                 ? JSON.stringify(check.siteResourceOccurrences)
                 : null,
               check.siteResourceEvidence ? JSON.stringify(check.siteResourceEvidence) : null,
+              check.observation ? JSON.stringify(check.observation) : null,
               timestamp
             );
           }
@@ -4474,9 +4482,9 @@ export class SQLiteStorage implements CrawlStorage {
             crawl_id, page_url, rule_id, check_name, status, message,
             value, expected, items, details, pages, skip_reason,
             component_occurrences, component_evidence, site_resource_occurrences,
-            site_resource_evidence, created_at
+            site_resource_evidence, observation, created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const timestamp = Date.now();
@@ -4509,6 +4517,7 @@ export class SQLiteStorage implements CrawlStorage {
                   check.siteResourceEvidence
                     ? JSON.stringify(check.siteResourceEvidence)
                     : null,
+                  check.observation ? JSON.stringify(check.observation) : null,
                   timestamp
                 );
               }
@@ -4984,6 +4993,11 @@ export class SQLiteStorage implements CrawlStorage {
       check.siteResourceEvidence = JSON.parse(
         row.site_resource_evidence as string,
       ) as CheckResult["siteResourceEvidence"];
+    }
+    // repo#2302: absent on rows written before the v42 column, so a legacy
+    // audit's report leaves the field out exactly as it always did.
+    if (row.observation) {
+      check.observation = JSON.parse(row.observation as string) as CheckResult["observation"];
     }
     return check;
   }
