@@ -14,6 +14,7 @@ announcements draw their numbers from these files, never from memory.
 | [2026-10 Nested a11y containers](./2026-10-a11y-nesting.md) | rules (`a11y/aria-text`, `a11y/aria-hidden-focus`) | 5,000 nested `role="text"` elements: 35 s → 23 ms; 1,000 nested `aria-hidden` containers: 56 s → 22 ms |
 | [2026-10 Page classifier](./2026-10-page-classifier.md) | CLI, crawler, parser | bundled model: +2.8 ms p50 / +6.8 ms p95 per page on a 58 KB page (+14.2 / +55.9 ms on 106 KB real pages), binary +8.9 MB, `--version` unchanged |
 | [2026-11 HTMLRewriter vs linkedom (spike)](./2026-11-htmlrewriter-spike.md) | parser | native extraction of the shared fields 4.0-5.0x faster than linkedom parse + extract (1.1-2.6x vs bare parse); 183 of 336 rule files read the DOM; decision: no-go |
+| [2026-11 Component-aware findings evaluation](./2026-11-component-findings-eval.md) | rules (`a11y/link-text`, `content/stale-copyright`), report grouping | 14 labelled synthetic cases, 60 pages, 83 observations: 24 fix groups, 0 incorrect and 0 missed merges, detections and health score unchanged; evidence on grouping 6.9 ms vs 0.3 ms off across the corpus; no historic DOM replayed |
 
 ## Reproducing
 
