@@ -1364,7 +1364,12 @@ export const LINK_TARGET_SET_RULES: Readonly<
   "links/broken-external-links": {
     broken: "broken-external-links",
     sitewide: "broken-external-links-sitewide",
+    // Every check below lists links whose status is not settled: a 5xx or timeout that may be transient
+    // (possibly-broken), a first failure still being confirmed (awaiting-confirmation), walled, throttled,
+    // refused or never requested. Pinned to the rule's emitted names by rules/tests/link-target-set-rules-3022.test.ts.
     unverified: [
+      "possibly-broken-external-links",
+      "awaiting-confirmation-external-links",
       "waf-blocked-external-links",
       "rate-limited-external-links",
       "refused-external-links",
