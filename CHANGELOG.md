@@ -2952,6 +2952,8 @@ Clearer page limits, more armor for audits of slow or messy sites, and a lot of 
 - **Very slow or bot-hostile sites can no longer stall a cloud audit.** Analysis of each asset and network probe now runs under its own time budget, and sites that drip-feed bytes to waste crawler time are detected and cut off. An audit of a hostile site finishes with what it could get instead of hanging until the overall timeout.
 - **More publish hardening for messy sites.** Absurdly long URLs are skipped during the crawl instead of gumming up the works later, every remaining free-text field is trimmed at publish time, and size limits are now enforced byte-accurately so emoji and other multi-byte characters can't split at a boundary. This closes out the class of failures where one extreme page could sink an otherwise good report.
 
+## v0.0.78
+
 A reliability release for cloud audits. Heavy sites that used to kill the audit engine outright now complete, the easiest way for a good audit to die at the finish line is gone, failed audits always refund, and audits show you they are alive while they work.
 
 ### Fixed
