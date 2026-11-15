@@ -45,6 +45,7 @@ const orphanRule = rules.get("links/orphan-pages")!;
 const weakRule = rules.get("links/weak-internal-links")!;
 const contextualRule = rules.get("links/no-contextual-inbound")!;
 const anchorMismatchRule = rules.get("links/anchor-mismatch")!;
+const anchorConflictRule = rules.get("links/anchor-target-conflict")!;
 
 // ── fixture builders ──────────────────────────────────────────────────────────
 
@@ -927,4 +928,54 @@ describe("SiteQuery universe path - links/no-contextual-inbound (repo#1669)", ()
 
     await run(store.close());
   });
+});
+
+describe("SiteQuery dual-path: links/anchor-target-conflict (#1372)", () => {
+  const text = (url: string, anchor: string): LinkData => ({
+    url,
+    text: anchor,
+    isInternal: true,
+    isChrome: false,
+  });
+  function page(url: string, links: LinkData[]): PageRecord {
+    const row = pageRow(url, links);
+    row.parsedData = JSON.stringify({ links, meta: { title: url }, h1: { count: 0, texts: [] } });
+    return row;
+  }
+
+  test("streaming path is byte-identical to legacy on one fixture, and flags the deviant", async () => {
+    const store = await freshStore();
+    const pages = [
+      page(BASE, []),
+      page("https://example.com/pricing", []),
+      page("https://example.com/plans", []),
+    ];
+    for (let i = 0; i < 11; i++) {
+      pages.push(
+        page(`https://example.com/a${i}`, [
+          text(i < 9 ? "/pricing" : "/plans", "Pricing"),
+          text("/pricing", "Read more"),
+          text("/plans", "Read more"),
+        ]),
+      );
+    }
+    for (const p of pages) await run(store.upsertPage(CRAWL, p));
+
+    const { legacy, streamed } = await runBothWays(store, anchorConflictRule, {});
+    expect(JSON.stringify(streamed)).toBe(JSON.stringify(legacy));
+    expect(legacy[0]?.status).toBe("warn");
+    expect(legacy[0]?.items?.map((i) => i.id)).toEqual(["anchor: Pricing"]);
+    await run(store.close());
+  }, 30_000);
+
+  test("a site under the page floor skips on both paths", async () => {
+    const store = await freshStore();
+    for (const p of [page(BASE, [text("/a", "Pricing")]), page("https://example.com/a", [])]) {
+      await run(store.upsertPage(CRAWL, p));
+    }
+    const { legacy, streamed } = await runBothWays(store, anchorConflictRule, {});
+    expect(JSON.stringify(streamed)).toBe(JSON.stringify(legacy));
+    expect(legacy[0]?.status).toBe("skipped");
+    await run(store.close());
+  }, 30_000);
 });

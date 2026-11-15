@@ -187,6 +187,7 @@
   "legal/subprocessor-disclosure",
   "legal/terms-of-service",
   "links/anchor-mismatch",
+  "links/anchor-target-conflict",
   "links/anchor-text",
   "links/broken-anchors",
   "links/broken-external-links",

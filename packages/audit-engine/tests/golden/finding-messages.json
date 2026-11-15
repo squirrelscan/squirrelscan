@@ -3280,6 +3280,12 @@
    "anchor-mismatch|pass|Anchor text shares a word with the page it points at||"
   ]
  },
+ "links/anchor-target-conflict": {
+  "digest": "81315312789366",
+  "lines": [
+   "anchor-target-conflict|pass|Each anchor text points at one page and each page keeps a consistent anchor||"
+  ]
+ },
  "links/anchor-text": {
   "digest": "211457743537868",
   "lines": [

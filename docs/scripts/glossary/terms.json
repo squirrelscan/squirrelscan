@@ -652,6 +652,7 @@
         "links/weak-internal-links",
         "links/no-contextual-inbound",
         "links/anchor-mismatch",
+        "links/anchor-target-conflict",
         "links/dead-end-pages",
         "links/orphan-pages",
         "links/nofollow-internal"
@@ -749,6 +750,7 @@
       "rules": [
         "links/anchor-text",
         "links/anchor-mismatch",
+        "links/anchor-target-conflict",
         "a11y/link-text",
         "a11y/identical-links-same-purpose"
       ],

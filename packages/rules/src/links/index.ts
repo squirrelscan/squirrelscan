@@ -3,6 +3,7 @@
 import type { Rule } from "../types";
 
 import { anchorMismatchRule } from "./anchor-mismatch";
+import { anchorTargetConflictRule } from "./anchor-target-conflict";
 import { anchorTextRule } from "./anchor-text";
 import { brokenAnchorsRule } from "./broken-anchors";
 import { brokenExternalLinksRule } from "./broken-external-links";
@@ -40,11 +41,13 @@ export const rules: Rule[] = [
   deadEndPages,
   anchorTextRule,
   anchorMismatchRule,
+  anchorTargetConflictRule,
   httpsDowngradeRule,
   telMailtoRule,
 ];
 
 export {
+  anchorTargetConflictRule,
   anchorTextRule,
   anchorMismatchRule,
   brokenAnchorsRule,
