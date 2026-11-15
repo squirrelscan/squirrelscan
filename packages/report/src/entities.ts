@@ -236,6 +236,27 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
   lines.push(...tail(Math.min(ranked.length, ENTITY_TABLE_LIMIT), ranked.length, "entities"));
   lines.push("");
 
+  // Summarized copy (#407): groups are not entities, so they get their own
+  // table whose rows say "N entities", never a row named after many.
+  const groups = map.groups ?? [];
+  if (groups.length > 0) {
+    lines.push(
+      `${sub} Entity groups (${groups.length})`,
+      "",
+      "Each row is a group of structurally identical entities, not one entity. The count is the true number in the site.",
+      "",
+      "| Types | Entities in group | Shown as examples | Not listed |",
+      "| --- | ---: | ---: | ---: |",
+    );
+    for (const group of groups.slice(0, ENTITY_TABLE_LIMIT)) {
+      const label = `${group.types.join(", ")}${group.pageLocal ? " (page-local)" : ""}`;
+      lines.push(
+        `| ${entityCell(label)} | ${group.count} | ${group.exemplars.length} | ${group.omitted} |`,
+      );
+    }
+    lines.push(...tail(Math.min(groups.length, ENTITY_TABLE_LIMIT), groups.length, "groups"), "");
+  }
+
   // Counts come from the SUMMARY, not from the rows present: a map clipped for
   // the publish payload still knows what the site declared, and a section that
   // counted only what survived would report "nothing wrong" about a site with
