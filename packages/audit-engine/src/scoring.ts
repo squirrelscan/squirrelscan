@@ -1145,7 +1145,7 @@ export interface RuleTally {
  * Fold one rule's per-page (or site) result into the running per-rule tally map
  * (#1021). Incremental folding is byte-identical to `addChecksToTally` over the
  * fully-concatenated per-rule checks array because the item-aware keys are
- * `${name} ${pageUrl}` and page-rule checks are stamped with their page's
+ * `${name}\0${pageUrl}` and page-rule checks are stamped with their page's
  * URL before folding — so every (name,pageUrl) bucket is confined to a single
  * fold call and the per-key sums/max/distinct-counts add up identically across
  * calls. Mirrors mergeRuleRunResult's "meta from first insert" semantics.
