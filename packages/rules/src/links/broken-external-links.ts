@@ -13,7 +13,14 @@ import {
 import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
-import type { Rule, RuleContext, RuleResult, CheckResult, SiteData } from "../types";
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  ExternalLinkCheckData,
+  SiteData,
+} from "../types";
 
 import {
   chromeReach,
@@ -42,10 +49,19 @@ function isRateLimitedLink(link: { status: number | null; rateLimited?: boolean 
   return link.rateLimited === true || isRateLimitStatus(link.status);
 }
 
+function isPossiblyBlockedLink(link: ExternalLinkCheckData): boolean {
+  if (link.wafBlocked) return true;
+  if ([401, 403, 405, 406, 999].includes(link.status ?? 0)) return true;
+  return (
+    (link.wafProvider === "cloudflare" || link.wafProvider === "akamai") &&
+    (link.status ?? 0) >= 520 &&
+    (link.status ?? 0) <= 530
+  );
+}
+
 /**
- * An external link CONFIRMED broken (#1739): the target answered 404 or 410, or its host was confirmed not to
- * resolve (#1740). A definite answer, so it fails. Anything else wrong with a link (5xx, a timeout, a TLS or
- * connection error, another 4xx) may be transient or specific to where it was asked from, and only warns.
+ * An external link confirmed broken: 404, 410, a dead host or a TLS failure. Other errors may be transient;
+ * common bot refusals and provider edge errors are unverified instead of warnings.
  */
 /**
  * The archived copy to suggest for a link, or null. Only a confirmed-broken link gets one, and only an
@@ -67,8 +83,12 @@ function archiveSuggestion(link: {
 }
 
 function isConfirmedBroken(link: { status: number | null; error: string | null }): boolean {
-  if (link.error) return isDeadHostError(link.error);
+  if (link.error) return isDeadHostError(link.error) || isTlsFailure(link.error);
   return link.status === 404 || link.status === 410;
+}
+
+function isTlsFailure(error: string): boolean {
+  return /(?:tls|ssl|x509|certificate|cert_|handshake)/i.test(error);
 }
 
 /** A host that cannot be reached by any visitor: it does not exist, or sits under a suffix that never resolves. */
@@ -80,6 +100,7 @@ function isDeadHostError(error: string): boolean {
 function brokenReason(link: { status: number | null; error: string | null }): string {
   if (link.error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR) return "no such domain suffix";
   if (link.error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR) return "domain does not exist";
+  if (link.error && isTlsFailure(link.error)) return "TLS failure";
   return String(link.status);
 }
 
@@ -438,7 +459,7 @@ export const brokenExternalLinksRule: Rule = {
       if (link.error) return true;
       // A bot or sign-in wall, whatever its status, or a timeout: not truly
       // broken, just not verifiable from where it was checked (pub#800).
-      if (link.wafBlocked) return false;
+      if (isPossiblyBlockedLink(link) || isRateLimitedLink(link)) return false;
       // #1829: 429/430 (and a Retry-After 503) mean the host throttled US. The
       // link's real status is unknown, so it is reported below as info rather
       // than counted here. Must precede the >= 400 test, which they satisfy.
@@ -453,7 +474,7 @@ export const brokenExternalLinksRule: Rule = {
     const isAwaiting = (link: { wafBlocked?: boolean; unverifiedReason?: string }) =>
       link.wafBlocked === true && link.unverifiedReason === "awaiting-confirmation";
     const awaitingLinks = externalLinks.filter(isAwaiting);
-    const wafBlockedLinks = externalLinks.filter((link) => link.wafBlocked && !isAwaiting(link));
+    const wafBlockedLinks = externalLinks.filter((link) => isPossiblyBlockedLink(link) && !isAwaiting(link));
 
     // Same bucket, different cause: throttled targets (#1829).
     const rateLimitedLinks = externalLinks.filter((link) => isRateLimitedLink(link));
@@ -484,12 +505,13 @@ export const brokenExternalLinksRule: Rule = {
         const sections = placement.sections(l.href);
         const sources = placement.sources(l.href, l.sourcePages);
         const deadHost = l.error !== null && isDeadHostError(l.error);
+        const confirmedError = l.error !== null && (deadHost || isTlsFailure(l.error));
         const archive = archiveSuggestion(l);
         const lookedUpEmpty = l.archive === null && isConfirmedBroken(l);
         return {
           id: l.href,
           label: withSection(
-            (deadHost
+            (confirmedError
               ? `${l.href} (${brokenReason(l)})`
               : l.error
                 ? `${l.href} (Error: ${l.error})`
@@ -671,8 +693,8 @@ export const brokenExternalLinksRule: Rule = {
             ...(sources ? { sources } : {}),
             ...regionsField(placement.regions(l.href)),
             meta: l.unverifiedReason
-              ? { wafProvider: l.wafProvider, unverifiedReason: l.unverifiedReason, ...sectionMeta(sections) }
-              : { wafProvider: l.wafProvider, ...sectionMeta(sections) },
+              ? { status: l.status, wafProvider: l.wafProvider, unverifiedReason: l.unverifiedReason, ...sectionMeta(sections) }
+              : { status: l.status, wafProvider: l.wafProvider, ...sectionMeta(sections) },
           };
         }),
       });

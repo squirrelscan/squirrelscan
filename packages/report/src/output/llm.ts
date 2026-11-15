@@ -87,6 +87,31 @@ import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { safeWafBlocked, safeWafSuspect, wafBlockedSeedCopy } from "../waf-blocked";
 import { scoreAdjustmentNoteFor } from "../score-adjustment";
 
+function unverifiedExternalLinksNote(report: AuditReport): string | null {
+  const checks = report.ruleResults?.["links/broken-external-links"]?.checks ?? [];
+  const rows = checks.filter((check) =>
+    ["waf-blocked-external-links", "rate-limited-external-links"].includes(check.name),
+  );
+  const items = rows.flatMap((row) => row.items ?? []);
+  if (items.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const status = item.meta?.status;
+    const provider = item.meta?.wafProvider;
+    const key = typeof status === "number"
+      ? String(status)
+      : provider === "cloudflare" || provider === "akamai"
+        ? `${provider} block`
+        : "timeout";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const statuses = [...counts]
+    .sort(([a], [b]) => (Number(a) || Number.MAX_SAFE_INTEGER) - (Number(b) || Number.MAX_SAFE_INTEGER))
+    .map(([status, count]) => `${status} x${count}`)
+    .join(", ");
+  return `note: ${items.length} external links are unverified (bot-protection status: ${statuses}); possible false positives; Perch in the cloud verifies them`;
+}
+
 export interface LlmRenderOptions {
   /** Roll up groups that are one repair (default true). */
   componentRollup?: boolean;
@@ -188,6 +213,8 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   lines.push(
     `<site url="${escapeXml(report.baseUrl)}" crawled="${report.totalPages}" date="${escapeXml(report.timestamp)}"/>`,
   );
+  const externalLinksNote = unverifiedExternalLinksNote(report);
+  if (externalLinksNote) lines.push(`<note>${escapeXml(externalLinksNote)}</note>`);
 
   // Refused off-site seed redirect (#1418). Without this an agent reads the
   // scores as being about the URL it was handed, when the seed redirected to a

@@ -145,6 +145,7 @@ import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-e
 
 import {
   checkExternalLinks,
+  EXTERNAL_LINK_USER_AGENT,
   type ExternalCheckerOptions,
   type ExternalCheckResult,
   type LinkCache,
@@ -4356,7 +4357,7 @@ export function externalLinkCheckerOptions(
     ttlSeconds: plan.ttlSeconds,
     concurrency: plan.concurrency,
     timeoutMs: plan.timeoutMs,
-    userAgent: SQUIRRELSCAN_USER_AGENT,
+    userAgent: EXTERNAL_LINK_USER_AGENT,
     bulkChecker: run.bulkChecker,
     egress: plan.egress,
     ...(run.deadlineAt !== undefined ? { deadlineAt: run.deadlineAt } : {}),
