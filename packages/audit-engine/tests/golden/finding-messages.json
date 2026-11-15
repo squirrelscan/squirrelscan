@@ -2828,6 +2828,12 @@
    "conflicting-index-signals|pass|No page sends contradictory indexing signals||"
   ]
  },
+ "crawl/custom-404": {
+  "digest": "4454599400909",
+  "lines": [
+   "custom-#-not-checked|skipped|# handling not checked: probing is passive, and this rule sends one request at active. Run with --probe active to check, on a site you own or may test.|\"not-checked\"|"
+  ]
+ },
  "crawl/html-size": {
   "digest": "153079876188729",
   "lines": [
