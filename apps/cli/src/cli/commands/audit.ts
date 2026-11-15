@@ -218,7 +218,7 @@ import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
 import { hasFlag, hasNegatedFlag } from "../flags";
 import { fmt, pageLimitHint } from "../format";
 import { createProgress } from "../progress";
-import { promptForProjectName } from "../prompt";
+import { promptEligible, promptForProjectName } from "../prompt";
 import {
   hasEverPublished,
   publishNudgeLine,
@@ -2188,10 +2188,7 @@ export const audit = defineCommand({
                 lastFlagValue(
                   args["follow-redirect"] as boolean | boolean[] | undefined
                 ) ?? config.crawler.follow_redirect === true,
-              interactive:
-                !!process.stdin.isTTY &&
-                !!process.stdout.isTTY &&
-                !reportGoesToStdoutEarly,
+              interactive: promptEligible() && !reportGoesToStdoutEarly,
               userAgent: config.crawler.user_agent || undefined,
               // #1853: the redirect probe is inside the --max-duration budget.
               budgetDeadlineAt: createDurationBudget(
@@ -2232,7 +2229,7 @@ export const audit = defineCommand({
             urlParsed.url,
             config.project.name
           );
-          if (nameContext.needsCustomName && process.stdout.isTTY) {
+          if (nameContext.needsCustomName && promptEligible()) {
             projectName = await promptForProjectName(
               nameContext.suggestedName,
               urlParsed.url
@@ -2411,8 +2408,7 @@ export const audit = defineCommand({
         !isConsoleFormat &&
         options.outputFormat !== "html" &&
         !options.outputPath;
-      const canPrompt =
-        process.stdin.isTTY && process.stdout.isTTY && !reportGoesToStdout;
+      const canPrompt = promptEligible() && !reportGoesToStdout;
 
       // Guard: cloud was expected (signed in, cloud on, not --offline) but is
       // unusable this run — expired session or unreachable API. Interactive
@@ -2820,41 +2816,40 @@ export const audit = defineCommand({
         // Built for interactive TTY runs — it still gates the UNCAPPED dead-links
         // spend. The capped prefetch confirm is skipped for consented users in the
         // controller via `cloudConsented`, not by nulling this callback.
-        const confirmCloudSpend =
-          process.stdout.isTTY && !args.yes
-            ? async (
-                estimate: number,
-                // An unmetered org still confirms the spend (it is accounted
-                // and invoiced), it just sees "balance: unlimited".
-                balance: PreflightBalance
-              ): Promise<boolean> => {
-                progress.stop();
-                const { createInterface } = await import("node:readline");
-                const rl = createInterface({
-                  input: process.stdin,
-                  output: process.stdout,
-                });
-                const proceed = await new Promise<boolean>((resolve) => {
-                  // stdin EOF/error before an answer → decline the spend rather
-                  // than hang or silently charge credits.
-                  rl.on("close", () => resolve(false));
-                  rl.on("error", () => resolve(false));
-                  rl.question(
-                    `Cloud analysis will use ~${estimate} credits (balance: ${balance}). Continue? [Y/n] `,
-                    (answer) => {
-                      const a = answer.trim();
-                      resolve(a === "" || /^y(es)?$/i.test(a));
-                    }
-                  );
-                }).finally(() => rl.close());
-                // Only resume the cloud spinner when proceeding — a declined
-                // run jumps straight to the rules phase, which starts its own.
-                if (proceed) {
-                  progress.start("Fetching cloud analysis");
-                }
-                return proceed;
+        const confirmCloudSpend = promptEligible({ yes: !!args.yes })
+          ? async (
+              estimate: number,
+              // An unmetered org still confirms the spend (it is accounted
+              // and invoiced), it just sees "balance: unlimited".
+              balance: PreflightBalance
+            ): Promise<boolean> => {
+              progress.stop();
+              const { createInterface } = await import("node:readline");
+              const rl = createInterface({
+                input: process.stdin,
+                output: process.stdout,
+              });
+              const proceed = await new Promise<boolean>((resolve) => {
+                // stdin EOF/error before an answer → decline the spend rather
+                // than hang or silently charge credits.
+                rl.on("close", () => resolve(false));
+                rl.on("error", () => resolve(false));
+                rl.question(
+                  `Cloud analysis will use ~${estimate} credits (balance: ${balance}). Continue? [Y/n] `,
+                  (answer) => {
+                    const a = answer.trim();
+                    resolve(a === "" || /^y(es)?$/i.test(a));
+                  }
+                );
+              }).finally(() => rl.close());
+              // Only resume the cloud spinner when proceeding — a declined
+              // run jumps straight to the rules phase, which starts its own.
+              if (proceed) {
+                progress.start("Fetching cloud analysis");
               }
-            : undefined;
+              return proceed;
+            }
+          : undefined;
 
         result = await runAudit({
           ...options,
