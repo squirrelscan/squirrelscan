@@ -1,7 +1,7 @@
 // content/reading-level - Content readability score
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { getTextExcludingScripts } from "./text-content";
+import { getProseTextExcludingCode } from "./text-content";
 
 export interface ReadabilityStats {
   fleschScore: number;
@@ -23,12 +23,12 @@ function countSyllables(word: string): number {
 
 /**
  * Flesch scores of a page body, or null when the text is too short to judge (under 5
- * sentences or 100 words). Script, style and noscript text is excluded without mutating
+ * sentences or 100 words). Script, style and noscript text and code blocks (code, pre, samp, kbd: no sentence structure, #1639) are excluded without mutating
  * the shared document. The one computation behind content/reading-level and the stored
  * `page_features.reading_level` that content/voice-consistency reads.
  */
 export function readabilityStats(body: Element): ReadabilityStats | null {
-  const text = getTextExcludingScripts(body);
+  const text = getProseTextExcludingCode(body);
   const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
   const words = text.match(/[a-zA-Z]+/g) || [];
   if (sentences.length < 5 || words.length < 100) return null;
