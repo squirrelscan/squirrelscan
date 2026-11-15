@@ -70,6 +70,8 @@ If a rule renames a check or splits one into several, list the old name in `meta
 
 Page rules get the page's parsed document in `ctx.parsed`, its response in `ctx.page`, and the rule's options in `ctx.options`.
 
+A page rule can also read the language the page is written in, detected from its main content: `ctx.contentLanguage?.page()` returns `{ lang, confidence }` (for example `{ lang: "de", confidence: 0.3 }`) and `ctx.contentLanguage?.blocks()` returns one entry per paragraph, list item, heading or table cell, each with its own `language`. A language is `null` where the detector abstains on short or ambiguous text. This is separate from the declared `<html lang>`. Detection runs only when a rule asks for it.
+
 <Warning>
 Site rules get no DOM. In `squirrel audit` the pages of `ctx.site.pages` carry no document and `ctx.page.html` is an empty string. A site rule reads page facts (URL, status, headers), `ctx.siteQuery` and the signals the engine collected. To look at markup, write a page rule.
 </Warning>

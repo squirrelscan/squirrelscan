@@ -12,6 +12,7 @@
     "@squirrelscan/core-contracts": "workspace:*",
     "@squirrelscan/utils": "workspace:*",
     "effect": "^3.22.5",
+    "franc": "6.2.0",
     "htmlparser2": "^10.1.0",
     "linkedom": "^0.18.12"
   },
