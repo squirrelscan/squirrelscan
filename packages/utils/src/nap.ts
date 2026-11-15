@@ -291,6 +291,49 @@ export function extractNapSignal(parsed: ParsedPage | null | undefined): NapSign
     phoneKeys.set(key, display);
   };
 
+  // Business-identity phones come from JSON-LD nodes that are not someone
+  // else's contact data. Phones inside an Event, a Person or their nested
+  // organizer / performer / contactPoint nodes are collected as `foreign` so a
+  // matching `tel:` link on the page is not mistaken for the business phone.
+  const foreign = new Set<string>();
+  const businessPhones: [string, string][] = [];
+  const raw = parsed.schema?.raw;
+  if (raw && mayCarryNap(raw)) {
+    const nodes = flattenJsonLdNodes(raw);
+    for (const node of nodes) {
+      if (
+        signal.name === null &&
+        NAP_NAME_SCHEMA_TYPES.includes(node["@type"] as string) &&
+        typeof node.name === "string" &&
+        node.name
+      ) {
+        signal.name = node.name;
+      }
+      if (isForeignContactNode(node)) {
+        collectTelephones(node, 0, (phone) => {
+          const key = napPhoneKey(phone);
+          if (key) foreign.add(key);
+        });
+      } else if (typeof node.telephone === "string") {
+        const phone = node.telephone.trim();
+        const key = napPhoneKey(phone);
+        if (key) businessPhones.push([key, phone]);
+      }
+      if (signal.address === null && node.address !== undefined) {
+        const display = readSchemaAddress(node.address);
+        if (display) {
+          signal.address = napAddressKey(display);
+          signal.addressFormat = signal.address ? display : null;
+        }
+      }
+    }
+  }
+  for (const [key] of businessPhones) foreign.delete(key);
+  const businessKeys = new Set(businessPhones.map(([key]) => key));
+  // Tel links are read first so a number written both ways keeps the anchor's
+  // rendering, then business phones are moved to the front below.
+  const linkPhones = new Map<string, string>();
+
   // `parsed.contactLinks`, NOT `parsed.links` — the parser drops non-crawlable
   // schemes from the link graph, so tel:/mailto: only exist on this field.
   for (const link of parsed.contactLinks ?? []) {
@@ -305,38 +348,39 @@ export function extractNapSignal(parsed: ParsedPage | null | undefined): NapSign
     // number itself, never a "Call now" label beside it (pub#741).
     const payload = decodeTelPayload(link.value);
     const key = napPhoneKey(payload);
-    addPhone(key, (key && napPhoneToken(link.text, key)) || payload);
-  }
-
-  const raw = parsed.schema?.raw;
-  if (raw && mayCarryNap(raw)) {
-    const nodes = flattenJsonLdNodes(raw);
-    for (const node of nodes) {
-      if (
-        signal.name === null &&
-        NAP_NAME_SCHEMA_TYPES.includes(node["@type"] as string) &&
-        typeof node.name === "string" &&
-        node.name
-      ) {
-        signal.name = node.name;
-      }
-      if (typeof node.telephone === "string") {
-        const phone = node.telephone.trim();
-        addPhone(napPhoneKey(phone), phone);
-      }
-      if (signal.address === null && node.address !== undefined) {
-        const display = readSchemaAddress(node.address);
-        if (display) {
-          signal.address = napAddressKey(display);
-          signal.addressFormat = signal.address ? display : null;
-        }
-      }
+    if (key && foreign.has(key)) continue;
+    if (key && !linkPhones.has(key)) {
+      linkPhones.set(key, napPhoneToken(link.text, key) || payload);
     }
   }
+  // Business phones lead (the rule treats the first phone as the page's primary),
+  // whatever their document order; the remaining link phones follow.
+  for (const [key, display] of businessPhones) addPhone(key, linkPhones.get(key) ?? display);
+  for (const [key, display] of linkPhones) if (!businessKeys.has(key)) addPhone(key, display);
 
   signal.phones = [...phoneKeys.keys()];
   signal.phoneFormats = [...phoneKeys.values()];
   return signal;
+}
+
+/** JSON-LD types whose phone is a person's or an event's, never the business NAP. */
+function isForeignContactNode(node: Record<string, unknown>): boolean {
+  const type = node["@type"];
+  const types = Array.isArray(type) ? type : [type];
+  return types.some((t) => typeof t === "string" && (t === "Person" || t.endsWith("Event")));
+}
+
+/** Every `telephone` string under `value`, depth-bounded (the JSON is untrusted). */
+function collectTelephones(value: unknown, depth: number, visit: (phone: string) => void): void {
+  if (depth > 6 || !value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const entry of value) collectTelephones(entry, depth + 1, visit);
+    return;
+  }
+  for (const [field, child] of Object.entries(value as Record<string, unknown>)) {
+    if (field === "telephone" && typeof child === "string") visit(child.trim());
+    else collectTelephones(child, depth + 1, visit);
+  }
 }
 
 /** `tel:` payloads may be percent-encoded; fall back to the raw text on bad input. */
