@@ -180,6 +180,51 @@ describe("report --diff: fixed needs the rule to have run over the same scope (#
     ]);
   });
 
+  // pub#1835: an item keyed by a page URL with no source pages, targeted current run against a full baseline.
+  test("a page-keyed item on a page the current audit did not crawl is not compared", () => {
+    const rid = "core/meta-title";
+    const full = report(
+      {
+        [rid]: rule(rid, [
+          {
+            name: "meta-title-too-short",
+            status: "fail",
+            message: "short",
+            items: [
+              { id: A, label: "A" },
+              { id: B, label: "B" },
+            ],
+          },
+        ]),
+      },
+      { id: "full", pages: [A, B] }
+    );
+    const targeted = (clean: boolean) =>
+      report(
+        {
+          [rid]: rule(rid, [
+            clean
+              ? pass("meta-title-too-short")
+              : {
+                  name: "meta-title-too-short",
+                  status: "fail",
+                  message: "short",
+                  items: [{ id: B, label: "B" }],
+                },
+          ]),
+        },
+        { pages: [B] }
+      );
+    const d = diffReports(full, targeted(false));
+    expect(d.removed).toHaveLength(0);
+    expect(d.summary.removed).toBe(0);
+    expect(reasonOf(d)).toEqual([["page-not-crawled", A]]);
+    // The crawled page's item that is gone is still removed.
+    const fixed = diffReports(full, targeted(true));
+    expect(fixed.removed.map((i) => i.target.id)).toEqual([B]);
+    expect(reasonOf(fixed)).toEqual([["page-not-crawled", A]]);
+  });
+
   test("the two audits are of different sites: not compared", () => {
     const d = diffReports(
       baseline(),
