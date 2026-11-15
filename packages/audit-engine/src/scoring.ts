@@ -120,6 +120,12 @@ export interface CarriedUnionSource {
   /** How many pages in `carriedPageUrls` have a carried finding for this rule.
    *  `carriedPageUrls.size` minus this is the clean-carried pass count. */
   dirtyCarriedPageCount(ruleId: string): number;
+  /**
+   * (repo#3360) The carried pages' pass count for a rule, when the source models
+   * more than one check per page (see {@link MergedScoringInput.carriedChecksPerPage}).
+   * Absent: `carriedPageUrls.size` minus the dirty pages, one pass per clean page.
+   */
+  carriedPasses?(ruleId: string): number;
 }
 
 /**
@@ -151,6 +157,14 @@ export interface MergedScoringInput {
   /** (#1876) Bounded pre-indexed carried side. When present it REPLACES
    *  `carriedFindings` entirely — pass `[]` for that. */
   carriedSource?: CarriedUnionSource;
+  /**
+   * (repo#3360) How many checks a page-scope rule evaluates on one page: a rule
+   * with two check names (`img-alt`, `img-alt-empty`) scores two checks per page in
+   * the full audit, so a carried page owes it that many. A carried page then earns
+   * one pass for each of those names it holds no failing or warning row for.
+   * Absent or 1: one pass per clean page, as before.
+   */
+  carriedChecksPerPage?: (ruleId: string) => number;
 }
 
 /**
@@ -223,11 +237,46 @@ export function carriedFindingToCheck(
   };
 }
 
+/**
+ * (repo#3360) Carried rows that repeat a check a page already has a row for.
+ *
+ * `flattenChecks` stores one row per item of a multi-item check (12 images
+ * missing alt = 12 rows), and the replay builds one check per row. The full audit
+ * counted that as ONE failed check on the page with 12 items, so every row after
+ * the first of a (check name, status) on a page is a continuation: it still adds
+ * its item units to the density penalty, but it is not another check in the pass
+ * ratio. Kept in a WeakSet so a replayed check serializes exactly as before.
+ */
+const CARRIED_CONTINUATIONS = new WeakSet<CheckResult>();
+
+/**
+ * Mark the continuation rows among ONE page's carried checks for ONE rule, in
+ * replay order. Every carried replay site calls this once per (page, rule), so
+ * the materialized union, the streaming fold and the untouched aggregate count
+ * the same checks.
+ */
+export function markCarriedContinuations(checks: readonly CheckResult[]): void {
+  if (checks.length < 2) return;
+  const seen = new Set<string>();
+  for (const check of checks) {
+    // NUL delimiter: cannot appear in a check name.
+    const key = `${check.name}\u0000${check.status}`;
+    if (seen.has(key)) CARRIED_CONTINUATIONS.add(check);
+    else seen.add(key);
+  }
+}
+
+/** Whether `check` is a carried continuation row (see {@link markCarriedContinuations}). */
+export function isCarriedContinuation(check: CheckResult): boolean {
+  return CARRIED_CONTINUATIONS.has(check);
+}
+
 export function buildScoringResultsFromMerged(
   input: MergedScoringInput
 ): Map<string, RuleRunResult> {
   const { freshResults, carriedFindings, carriedPageUrls, ruleMetaIndex, carriedSource } =
     input;
+  const checksPerPage = input.carriedChecksPerPage;
 
   // Clone fresh results (don't mutate the caller's map / arrays). Preserve any
   // incoming `syntheticPassCount`: the #1023 complete-store reconstruction folds
@@ -297,9 +346,9 @@ export function buildScoringResultsFromMerged(
       for (const check of carriedSource.checksFor(ruleId)) result.checks.push(check);
     } else if (carriedForRule) {
       for (const [url, findings] of carriedForRule) {
-        for (const f of findings) {
-          result.checks.push(carriedFindingToCheck(f, url));
-        }
+        const replayed = findings.map((f) => carriedFindingToCheck(f, url));
+        markCarriedContinuations(replayed);
+        for (const check of replayed) result.checks.push(check);
       }
     }
     // Clean carried pages — carried pages with NO finding for this rule count
@@ -314,13 +363,24 @@ export function buildScoringResultsFromMerged(
     // many carried pages have a finding for the rule as they streamed, and
     // |carriedPageUrls| minus that is the same set difference.
     let cleanCarriedPasses = 0;
+    const perPage = Math.max(1, Math.floor(checksPerPage?.(ruleId) ?? 1));
     if (carriedSource) {
-      cleanCarriedPasses = carriedPageUrls.size - carriedSource.dirtyCarriedPageCount(ruleId);
+      cleanCarriedPasses =
+        carriedSource.carriedPasses?.(ruleId) ??
+        carriedPageUrls.size - carriedSource.dirtyCarriedPageCount(ruleId);
     } else {
       for (const url of carriedPageUrls) {
         const findings = carriedForRule?.get(url);
-        if (!findings || findings.length === 0) cleanCarriedPasses++;
+        if (!findings || findings.length === 0) {
+          cleanCarriedPasses += perPage;
+        } else if (perPage > 1) {
+          // (repo#3360) Each check name the page holds no row for passed there.
+          cleanCarriedPasses += perPage - new Set(findings.map((f) => f.checkName)).size;
+        } else {
+          // One check per page: a page with a row has no pass left.
+        }
       }
+      if (cleanCarriedPasses < 0) cleanCarriedPasses = 0;
     }
     // ADD to any fresh-clean count the reconstruction stamped (#1023), rather
     // than overwrite — a complete-store re-audit has BOTH fresh crawled-clean
@@ -398,6 +458,7 @@ function calculateRuleScore(checks: CheckResult[], advisory = false, syntheticPa
     // Skipped and info checks don't count toward score
     if (check.status === "skipped" || check.status === "info") continue;
     if (advisory && check.status === "warn") continue;
+    if (isCarriedContinuation(check)) continue;
 
     total++;
     if (check.status === "pass") {
@@ -500,11 +561,12 @@ export function addChecksToTally(
       // NUL delimiter: cannot appear in a check name or URL, so pairs never collide.
       const key = `${check.name}\u0000${check.pageUrl ?? ""}`;
       const units = Math.max(check.items?.length ?? 0, 1);
+      const continuation = isCarriedContinuation(check);
       if (check.status === "warn") {
-        tally.warnings++;
+        if (!continuation) tally.warnings++;
         warnKeys.add(key);
       } else {
-        tally.failed++;
+        if (!continuation) tally.failed++;
         failUnitsByKey.set(key, (failUnitsByKey.get(key) ?? 0) + units);
         const extra = checkAdditional(check);
         if (extra > 0) {

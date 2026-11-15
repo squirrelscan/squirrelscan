@@ -51,12 +51,14 @@ import {
 import {
   createCompleteStoreTallyFold,
   foldCompleteStoreTallies,
+  checksPerPageFromTallies,
   freshTally,
   untouchedCarriedFinding,
   type FindingPageSource,
   type UntouchedCarriedAggregate,
   type UntouchedSamplePage,
 } from "./complete-store-fold";
+import { buildCheckTallies } from "./publish-cap";
 import { isReplayedCheck, REMOVED_STATUSES } from "./published-checks";
 import {
   isSampledStoreMarker,
@@ -1346,11 +1348,20 @@ export async function runCloudSmartAudits(
     noteStaleCarry(f);
     noteCarriedOutside(f);
   }
+  // (repo#3360) A carried page owes a rule every check it runs per page, as the
+  // fold derives it, from the tallies.
+  // A body with no tallies (uncapped) holds every row, so the tallies of its own
+  // checks give the same figure the capped body's tallies do.
+  const perPageTallies: CheckTallies =
+    checkTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
+  const carriedChecksPerPage = (ruleId: string): number =>
+    checksPerPageFromTallies(perPageTallies[ruleId]);
   const unionRuleResults = buildScoringResultsFromMerged({
     freshResults: freshForUnion,
     carriedFindings: unionCarried,
     carriedPageUrls: unionCarriedPages,
     ruleMetaIndex,
+    carriedChecksPerPage,
     ...(carriedSource ? { carriedSource } : {}),
   });
 
@@ -1364,6 +1375,7 @@ export async function runCloudSmartAudits(
       carriedFindings: unionCarried,
       carriedPageUrls: unionCarriedPages,
       ruleMetaIndex,
+      carriedChecksPerPage,
     }));
     // The coverage line counts what the report shows as carried, and only those
     // are tagged: a fresh check on the page of a carry left out is not carried.
@@ -1811,6 +1823,7 @@ function scoreFromCheckTallies(input: {
   carriedFindings: readonly CarriedFinding[];
   carriedPageUrls: PageUrlSet;
   ruleMetaIndex: Map<string, RuleRunResult["meta"]>;
+  carriedChecksPerPage?: (ruleId: string) => number;
 }): {
   scoringTallies: Map<string, RuleTally>;
   reportTotals: NonNullable<CloudSmartAuditsResult["reportTotals"]>;
@@ -1825,6 +1838,7 @@ function scoreFromCheckTallies(input: {
     carriedFindings: [...input.carriedFindings],
     carriedPageUrls: input.carriedPageUrls,
     ruleMetaIndex: input.ruleMetaIndex,
+    ...(input.carriedChecksPerPage ? { carriedChecksPerPage: input.carriedChecksPerPage } : {}),
   });
 
   // Keyed like the union: every published rule (an emptied one keeps its key, and
