@@ -78,6 +78,7 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     reportScalars: null,
     hreflangAlternates: null,
     readingLevel: null,
+    terminologyVariants: null,
     ...over,
   };
 }
@@ -744,6 +745,20 @@ describe("page_features store: reading_level (v41)", () => {
     await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
     expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.readingLevel).toBe(62);
     expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.readingLevel).toBeNull();
+    await run(store.close());
+  });
+});
+
+describe("page_features store: terminology_variants (v43)", () => {
+  test("round-trips the bounded count map, and a row without one reads back as null", async () => {
+    const store = await freshStore();
+    const map = { "signin.log_in": 3, "brand.lower": 1 };
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/a", terminologyVariants: map })));
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/c", terminologyVariants: {} })));
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.terminologyVariants).toEqual(map);
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.terminologyVariants).toBeNull();
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/c")))?.terminologyVariants).toBeNull();
     await run(store.close());
   });
 });

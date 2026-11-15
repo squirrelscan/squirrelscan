@@ -291,6 +291,7 @@
                   "rules/content/quality",
                   "rules/content/stale-copyright",
                   "rules/content/stale-dated-copy",
+                  "rules/content/terminology-consistency",
                   "rules/content/mojibake",
                   "rules/content/thin-vs-site-norm",
                   "rules/content/voice-consistency",

@@ -163,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 42;
+export const SCHEMA_VERSION = 43;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -652,6 +652,9 @@ const MIGRATIONS: Record<number, string[]> = {
   // the real `squirrel audit` JSON never carries `observation`. ADDITIVE and
   // nullable: a row written before this reads back with no observation.
   42: ["ALTER TABLE rule_results ADD COLUMN observation TEXT DEFAULT NULL"],
+  // Version 43: a page's bounded variant-count map (content/terminology-consistency), JSON text.
+  // ADDITIVE and nullable: a row written before this reads as no sample for the rule.
+  43: [`ALTER TABLE page_features ADD COLUMN terminology_variants TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -796,6 +799,7 @@ const RESOURCE_SIZES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }
 const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "hreflang_alternates", type: "TEXT" },
   { name: "reading_level", type: "INTEGER" },
+  { name: "terminology_variants", type: "TEXT" },
 ];
 
 // Same guard for `rule_results`. Migrations 37 and 38 added the component-evidence
@@ -1265,6 +1269,7 @@ CREATE TABLE IF NOT EXISTS page_features (
   report_scalars TEXT,
   hreflang_alternates TEXT,
   reading_level INTEGER,
+  terminology_variants TEXT,
   PRIMARY KEY (crawl_id, normalized_url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -6375,8 +6380,8 @@ export class SQLiteStorage implements CrawlStorage {
       meta_noindex, indexable_reasons, rich_result_types,
       nap_name, nap_phones, nap_phone_formats, nap_address, nap_address_format,
       nap_tel_link, nap_mailto_link,
-      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates, reading_level
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates, reading_level, terminology_variants
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   private pageFeatureParams(
@@ -6421,6 +6426,10 @@ export class SQLiteStorage implements CrawlStorage {
       // features object without the field, and stores as "no alternates".
       row.hreflangAlternates?.length ? JSON.stringify(row.hreflangAlternates) : null,
       row.readingLevel ?? null,
+      // Bounded by the variant table; an empty map stores as null, like no alternates.
+      row.terminologyVariants && Object.keys(row.terminologyVariants).length > 0
+        ? JSON.stringify(row.terminologyVariants)
+        : null,
     ];
   }
 
@@ -6789,6 +6798,9 @@ export class SQLiteStorage implements CrawlStorage {
         ? this.safeJsonParse(row.hreflang_alternates as string, null as HreflangAlternate[] | null)
         : null,
       readingLevel: (row.reading_level as number | null) ?? null,
+      terminologyVariants: row.terminology_variants
+        ? this.safeJsonParse(row.terminology_variants as string, null as Record<string, number> | null)
+        : null,
     };
   }
 }

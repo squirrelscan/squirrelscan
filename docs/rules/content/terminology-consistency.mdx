@@ -1,0 +1,100 @@
+---
+title: "Terminology consistency: one word per concept across the site"
+description: "A site that says Sign in, Log in and Login makes the control hard to match for visitors and agents. squirrel counts the spellings across the site and reports the minority ones against the dominant one."
+---
+
+## What terminology consistency is
+
+An agent told to "log in" has to match that against the labels on your pages. When the header says "Sign in", the pricing page says "Log in" and the footer says "Login", the match gets unreliable, and visitors read the mix as a site nobody edits as a whole.
+
+This rule counts the spellings of a few concepts on every page, adds them up across the site and reports the minority spellings against the dominant one. Nothing is compared with a style guide: the norm is whatever your own site already says most.
+
+## What squirrel checks
+
+The rule is site-wide and needs no account, no model and no credits. It counts these variant sets in the visible text of each page and stores the counts per page during the crawl:
+
+| Concept | Spellings counted |
+|---|---|
+| Sign in | Sign in (and sign-in), Log in (and log-in), Login, Signin |
+| Email | Email, E-mail |
+| Sign up | Sign up (and sign-up), Signup, Register, Create account (also "create an account", "create your account") |
+| FAQ | FAQ, FAQs, Faq (case-sensitive) |
+| Product name | The casing of the page's `og:site_name`, when it is one word: lowercase, Title case, UPPERCASE or camelCase |
+
+It emits a single check named `terminology-consistency`:
+
+- Skipped when there are no pages. Message: `No pages available for analysis`.
+- Skipped below 10 crawled pages. Message: `Only 6 page(s) crawled; 10 needed to establish the site's terminology`.
+- Skipped when no concept has at least 10 uses on 3 pages, or when every concept with enough uses is split with no spelling above 70%.
+- Pass when every concept with enough uses is worded consistently. Message: `4 concept(s) are worded consistently across the site`.
+- Warn when one or two concepts have a minority spelling next to a dominant one. Fail when three or more do.
+
+The dominant spelling needs at least 70% of a concept's uses. Each minority spelling becomes one item, with up to ten pages: `Uses "Log in" where the site mostly says "Sign in" (82% of 140 uses)`.
+
+## What is left out
+
+- Words inside URLs and email addresses.
+- Text inside `code`, `pre`, `samp`, `kbd`, `script`, `style` and `noscript`.
+- Pages that did not return a 2xx status.
+- On an indexed site, pages marked `noindex`, counted in `details.skippedNoindexPages`. When the homepage is itself noindex, as on a staging deployment, nothing is skipped; see [pages kept out of search](/rules#pages-kept-out-of-search).
+- A Title-case product name at the start of a sentence, heading, link or button, where a capital says nothing about the brand, and a product name inside a hostname such as `example.com`.
+
+Two known limits: "login" is also a noun ("the login page"), and "register" and "sign up" have other meanings, so a deliberate use can be counted. The rule only reports when one spelling clearly dominates, so occasional noun use rarely matters; if it does, disable the rule or keep the wording on one side.
+
+## How to fix it
+
+Pick the dominant spelling the finding names and change the minority uses to match, in button labels, links, headings and body copy. For a product name, use the casing of your own brand everywhere.
+
+| | |
+|---|---|
+| **Rule ID** | `content/terminology-consistency` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/terminology-consistency"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/terminology-consistency"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/voice-consistency](/rules/content/voice-consistency): the same site-relative approach applied to reading level.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): the same approach applied to titles.
+- [content/common-misspellings](/rules/content/common-misspellings): spelling errors within a page.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each minority spelling is listed with the spelling the site mostly uses. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>
