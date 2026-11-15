@@ -766,6 +766,7 @@ export function createCrawler(
     // asks it for the current ceiling on every acquire.
     const hostBackoff: HostBackoffRegistry = createHostBackoff({
       perHostConcurrency: config.perHostConcurrency,
+      maxPerHostConcurrency: config.maxPerHostConcurrency,
       maxBackoffMs: config.maxBackoffMs,
     });
 
@@ -1458,7 +1459,11 @@ export function createCrawler(
         const outcome = hostBackoff.noteRateLimited(host, retryAfterMs);
         return { waitMs: outcome.waitMs, exhausted: outcome.exhausted };
       },
-      onSuccess: () => hostBackoff.noteSuccess(host),
+      // A robots.txt Crawl-delay is a politeness contract: never ramp past it.
+      onSuccess: () =>
+        hostBackoff.noteSuccess(host, {
+          rampAllowed: !(config.respectRobots && robots?.crawlDelayMs != null),
+        }),
       remainingMs: () => {
         // Room left inside the per-URL watchdog, minus one request's worth of
         // headroom so the attempt AFTER the wait can still finish. Waiting past
@@ -2573,7 +2578,7 @@ export function createCrawler(
             const entries = yield* storage.popNextUrls(
               crawlId,
               batchSize,
-              Math.max(1, config.perHostConcurrency),
+              Math.max(1, config.perHostConcurrency, hostBackoff.maxConcurrency()),
             );
             const first = entries[0];
             if (!first) {

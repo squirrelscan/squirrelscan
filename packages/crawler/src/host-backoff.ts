@@ -30,6 +30,9 @@ export const DEFAULT_RECOVERY_SUCCESSES = 20;
 /** Per-host delay multiplier applied the moment a host starts throttling. */
 export const THROTTLED_DELAY_MULTIPLIER = 10;
 
+/** Consecutive clean responses that earn one adaptive ramp-up step (repo#1024). */
+export const DEFAULT_RAMP_SUCCESSES = 50;
+
 /** Per-host concurrency while throttled, before any recovery. */
 const THROTTLED_CONCURRENCY = 1;
 
@@ -43,6 +46,15 @@ const THROTTLED_MIN_DELAY_MS = 50;
 export interface HostBackoffOptions {
   /** Configured per-host concurrency; the ceiling recovery climbs back to. */
   perHostConcurrency: number;
+  /**
+   * Adaptive ramp-up ceiling (repo#1024). When greater than `perHostConcurrency`,
+   * a host that keeps answering cleanly earns one extra in-flight slot per
+   * `rampSuccesses` responses, never above this ceiling. Unset (or not above the
+   * configured value): no ramp, the configured value is the ceiling.
+   */
+  maxPerHostConcurrency?: number;
+  /** Consecutive clean responses that earn one ramp-up step. */
+  rampSuccesses?: number;
   /** Cap on one wait and on the cumulative wait for a host. */
   maxBackoffMs?: number;
   /** First wait with no `Retry-After`. */
@@ -87,12 +99,18 @@ export interface HostBackoffRegistry {
    * every worker aimed at this host must now observe.
    */
   noteRateLimited(host: string, retryAfterMs?: number): RateLimitOutcome;
-  /** Record a successful response; may earn one step of recovery. */
-  noteSuccess(host: string): void;
+  /**
+   * Record a successful response; may earn one step of recovery, or (for a host
+   * that is not throttled) one adaptive ramp-up step. Pass `rampAllowed: false`
+   * while a robots.txt Crawl-delay is in force: the ramp then never applies.
+   */
+  noteSuccess(host: string, options?: { rampAllowed?: boolean }): void;
   /** Milliseconds until this host may be requested again (0 when clear). */
   waitMs(host: string): number;
   /** In-flight ceiling for this host (configured value when not throttled). */
   concurrencyFor(host: string): number;
+  /** Highest in-flight value any host can reach (the ramp ceiling). */
+  maxConcurrency(): number;
   /** Politeness delay for this host, given the configured delay. */
   delayFor(host: string, configuredDelayMs: number): number;
   /** True once the host spent its backoff budget without recovering. */
@@ -148,7 +166,18 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
 
   const hosts = new Map<string, HostThrottleState>();
 
+  const rampCeiling = Math.max(
+    configuredConcurrency,
+    Math.floor(finiteOr(options.maxPerHostConcurrency, configuredConcurrency)),
+  );
+  const rampSuccessesNeeded = Math.max(1, finiteOr(options.rampSuccesses, DEFAULT_RAMP_SUCCESSES));
+  // Hosts running above the configured value, and their clean-response streaks.
+  // Kept apart from `hosts` so a ramped host is never reported as throttled.
+  const ramped = new Map<string, { concurrency: number; successes: number }>();
+
   const noteRateLimited = (host: string, retryAfterMs?: number): RateLimitOutcome => {
+    // A refusal ends any ramp: recovery climbs back only to the configured value.
+    ramped.delete(host);
     const state = hosts.get(host) ?? {
       strikes: 0,
       successes: 0,
@@ -208,9 +237,20 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
     };
   };
 
-  const noteSuccess = (host: string): void => {
+  const noteSuccess = (host: string, opts: { rampAllowed?: boolean } = {}): void => {
     const state = hosts.get(host);
-    if (!state) return;
+    if (!state) {
+      if (rampCeiling <= configuredConcurrency || opts.rampAllowed === false) return;
+      const ramp = ramped.get(host) ?? { concurrency: configuredConcurrency, successes: 0 };
+      if (ramp.concurrency >= rampCeiling) return;
+      ramp.successes += 1;
+      if (ramp.successes >= rampSuccessesNeeded) {
+        ramp.successes = 0;
+        ramp.concurrency = Math.min(rampCeiling, ramp.concurrency + 1);
+      }
+      ramped.set(host, ramp);
+      return;
+    }
 
     state.successes += 1;
     if (state.successes < recoverySuccesses) {
@@ -241,7 +281,9 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
       if (!state) return 0;
       return Math.max(0, state.nextAttemptAt - now());
     },
-    concurrencyFor: (host) => hosts.get(host)?.concurrency ?? configuredConcurrency,
+    concurrencyFor: (host) =>
+      hosts.get(host)?.concurrency ?? ramped.get(host)?.concurrency ?? configuredConcurrency,
+    maxConcurrency: () => rampCeiling,
     delayFor: (host, configuredDelayMs) => {
       const state = hosts.get(host);
       // No penalty left to apply: either the host never throttled, or it has
@@ -264,6 +306,7 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
     },
     reset: () => {
       hosts.clear();
+      ramped.clear();
     },
   };
 }
