@@ -16,3 +16,4 @@ export * from "./server-scripts";
 export * from "./schema";
 export * from "./headings";
 export * from "./content";
+export * from "./main-text";

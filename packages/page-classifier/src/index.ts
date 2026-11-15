@@ -25,6 +25,8 @@ export {
   type SectionPlacement,
 } from "./placement";
 
+export { extractPageMainText, type MainTextClassifyOptions } from "./main-text";
+
 export { FEATURIZER_VERSION } from "./featurize";
 
 /**

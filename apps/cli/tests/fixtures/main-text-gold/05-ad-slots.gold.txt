@@ -1,0 +1,9 @@
+Reading a tide table without getting stranded
+
+A tide table lists the time and height of each high and low water for one place. The heights are measured from a fixed reference, so a low of 0.3 metres means the sea is very far out.
+
+Between a high and the next low the water does not fall at an even pace. It moves slowly at first, quickly through the middle hours, then slowly again. This is often called the rule of twelfths.
+
+Always check the table for the nearest port and then allow for the headlands and estuaries on your route, which can delay the tide by an hour or more.
+
+Wind and air pressure also shift the water. A strong onshore wind can hold the tide higher than the table predicts.
