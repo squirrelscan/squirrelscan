@@ -239,6 +239,15 @@ export type CacheHitReason =
 /** Per-reason hit counts. Optional keys keep persisted blobs forward-compatible. */
 export type CacheHitsByReason = Partial<Record<CacheHitReason, number>>;
 
+/** A page whose body could not be decoded: the URL and the encoding the server declared. */
+export interface UndecodableFetch {
+  url: string;
+  contentEncoding: string;
+}
+
+/** Most undecodable pages a crawl records by name; the count is never capped. */
+export const MAX_UNDECODABLE_FETCHES = 20;
+
 export interface CrawlStats {
   pagesTotal: number;
   pagesFetched: number;
@@ -289,6 +298,12 @@ export interface CrawlStats {
    * backward compatibility with older persisted stats blobs.
    */
   pagesUndecodable?: number;
+  /**
+   * The pages counted in `pagesUndecodable`: URL and declared content-encoding,
+   * capped at `MAX_UNDECODABLE_FETCHES` (repo#2557). Optional for backward
+   * compatibility with older persisted stats blobs.
+   */
+  undecodableFetches?: UndecodableFetch[];
   /**
    * Why the crawl's ENTRY url could not be audited, when it could not (#1822).
    * The crawler records the first failure it sees, preferring the seed over a

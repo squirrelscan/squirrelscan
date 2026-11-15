@@ -167,6 +167,18 @@ export function reportFailureReasonCode(report: {
 }
 
 /**
+ * One line per page whose body could not be decoded, e.g.
+ * `https://example.com/a (content-encoding: br)`. Empty when none failed.
+ */
+export function undecodableFetchLines(report: {
+  undecodableFetches?: readonly { url: string; contentEncoding: string }[];
+}): string[] {
+  return (report.undecodableFetches ?? []).map(
+    (f) => `${f.url} (content-encoding: ${f.contentEncoding})`,
+  );
+}
+
+/**
  * One line per root fetch the site refused, e.g.
  * `/robots.txt: HTTP 403 (Cloudflare)`. Empty when nothing was refused. Shared
  * so every renderer names the same refusals the same way; the caller escapes

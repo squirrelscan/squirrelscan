@@ -5,7 +5,7 @@ import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
-import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
+import { refusedFetchLines, undecodableFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_TEXT_WRAP_WIDTH } from "../constants";
@@ -365,6 +365,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     // but say plainly that the coverage is short of what was asked for.
     if (report.status === "partial" && report.statusReason) {
       write(`PARTIAL AUDIT: ${report.statusReason}`);
+      for (const line of undecodableFetchLines(report)) write(`  ${line}`);
       write("");
     }
     write(formatHealthScoreText(report));

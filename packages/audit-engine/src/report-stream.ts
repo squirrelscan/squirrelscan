@@ -943,6 +943,9 @@ export function buildV1Report(
     if (crawl?.stats?.refusedFetches?.length) {
       result.refusedFetches = crawl.stats.refusedFetches;
     }
+    if (crawl?.stats?.undecodableFetches?.length) {
+      result.undecodableFetches = crawl.stats.undecodableFetches;
+    }
     // Pages a WAF or bot manager answered with a challenge or block page
     // (#1253): never scored, and the report says how many and who.
     if (crawl?.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0) {
@@ -1252,6 +1255,9 @@ export function buildV2Report(
     // them instead of leaving the reader to infer it from missing findings.
     if (crawl?.stats?.refusedFetches?.length) {
       result.refusedFetches = crawl.stats.refusedFetches;
+    }
+    if (crawl?.stats?.undecodableFetches?.length) {
+      result.undecodableFetches = crawl.stats.undecodableFetches;
     }
     // Pages a WAF or bot manager answered with a challenge or block page
     // (#1253): never scored, and the report says how many and who.

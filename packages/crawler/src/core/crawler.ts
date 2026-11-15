@@ -21,7 +21,7 @@ import {
 } from "@squirrelscan/core-contracts";
 import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import { classifyWafResponse } from "@squirrelscan/utils/waf";
-import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
+import { MAX_UNDECODABLE_FETCHES, WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, MAX_TARGET_URLS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
@@ -1765,7 +1765,18 @@ export function createCrawler(
             yield* updateStats(crawlId, {
               pagesFailed: 1,
               ...(blockedFetch ? { pagesBlocked: 1 } : {}),
-              ...(undecodableFetch ? { pagesUndecodable: 1 } : {}),
+              ...(undecodableFetch
+                ? {
+                    pagesUndecodable: 1,
+                    undecodableFetches: [
+                      {
+                        url: entry.normalizedUrl,
+                        contentEncoding:
+                          /\(content-encoding: ([^)]*)\)/.exec(error.message)?.[1] ?? "unknown",
+                      },
+                    ],
+                  }
+                : {}),
               // #1822: the fetcher knows WHY (DNS, TLS, socket, timeout, 5xx).
               // Without this the reason is discarded here and a zero-page audit
               // can only say "No pages were crawled".
@@ -2336,6 +2347,14 @@ export function createCrawler(
           pagesBlocked: (current.pagesBlocked ?? 0) + (updates.pagesBlocked ?? 0),
           pagesRateLimited: (current.pagesRateLimited ?? 0) + (updates.pagesRateLimited ?? 0),
           pagesUndecodable: (current.pagesUndecodable ?? 0) + (updates.pagesUndecodable ?? 0),
+          ...(current.undecodableFetches || updates.undecodableFetches
+            ? {
+                undecodableFetches: [
+                  ...(current.undecodableFetches ?? []),
+                  ...(updates.undecodableFetches ?? []),
+                ].slice(0, MAX_UNDECODABLE_FETCHES),
+              }
+            : {}),
           pagesSkipped: current.pagesSkipped + (updates.pagesSkipped ?? 0),
           pagesUnchanged: current.pagesUnchanged + (updates.pagesUnchanged ?? 0),
           pagesCacheFresh: (current.pagesCacheFresh ?? 0) + (updates.pagesCacheFresh ?? 0),

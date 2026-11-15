@@ -340,6 +340,8 @@ interface SlimJsonReport {
    * something was refused.
    */
   refusedFetches?: RefusedFetch[];
+  /** Pages whose body could not be decoded, by URL and declared content-encoding (repo#2557). */
+  undecodableFetches?: { url: string; contentEncoding: string }[];
   /**
    * Pages a WAF or bot manager answered with a challenge or block page (#1253).
    * Never audited or scored. `seed` is set when the audited page itself was
@@ -749,6 +751,9 @@ function buildSlimReport(
       ? { rateLimited: report.rateLimited }
       : {}),
     ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
+    ...(report.undecodableFetches?.length
+      ? { undecodableFetches: report.undecodableFetches }
+      : {}),
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
     ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
     ...(report.cacheStats && report.cacheStats.hits > 0 ? { cacheStats: report.cacheStats } : {}),
