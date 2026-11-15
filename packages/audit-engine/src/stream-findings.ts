@@ -231,3 +231,207 @@ export function buildSkippedPassCounts(
   }
   return out;
 }
+
+// Grouped stream (squirrelscan/repo#1883).
+// buildStreamFindings emits one line per page_findings row. Shared-chrome defects
+// repeat the same (rule, check, locator, fingerprint) on hundreds of pages, so one
+// 401-page site streamed 28,829 lines for 2,606 distinct groups. The grouped form
+// ships ONE line per group with the COMPLETE page list; the server materializes the
+// same per-page rows with expandGroupedStreamFinding. Additive: the per-page
+// producer above is untouched.
+
+/**
+ * Default serialized-line budget for a grouped line. The API's per-line ceiling is
+ * 256 KiB; half of that leaves headroom for the envelope and multi-byte escaping.
+ */
+export const GROUPED_STREAM_MAX_LINE_CHARS = 128 * 1024;
+
+/**
+ * One grouped NDJSON line: every page that carries the same finding.
+ *
+ * - `payloads` is a deduped table of the per-page payloads referenced by this line
+ *   (payloads differ per page: emission index, page-level aggregate, evidence).
+ * - `pages` is `[normalizedUrl, payloadIndex]` sorted by URL; `payloadIndex` points
+ *   into `payloads`. The list is COMPLETE, never sampled: the score's per-page
+ *   denominator derives from it.
+ * - `part`/`parts` (0-based index, total) mark a group whose page list was split
+ *   across lines to stay under the line budget; `parts` is 1 when it arrived whole.
+ */
+export type GroupedStreamFindingLine = Omit<
+  StreamFindingLine,
+  "normalizedUrl" | "payload" | "provenance" | "state"
+> & {
+  provenance: "fresh";
+  state: "open";
+  payloads: (string | null)[];
+  pages: Array<[normalizedUrl: string, payloadIndex: number]>;
+  part: number;
+  parts: number;
+};
+
+interface GroupAcc {
+  head: Omit<GroupedStreamFindingLine, "payloads" | "pages" | "part" | "parts">;
+  /** url -> payload. One entry per page (PK dedupe already applied). */
+  pages: Map<string, string | null>;
+}
+
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Group the report's findings by (ruleId, checkName, locator, fingerprint) without
+ * ever materializing the per-page row array. Filtering is exactly
+ * {@link buildStreamFindings}': unfold, skip site-scope and carried/unrendered,
+ * normalize, flatten per (rule, url), last-wins per PK. The PK includes url and
+ * rule, so dedupe per (rule, url) equals the global dedupe.
+ *
+ * The group key uses the literal status/message/value/expected next to the
+ * fingerprint, so a hash collision can never merge two distinct rows.
+ */
+export function buildGroupedStreamFindings(
+  ruleResults: Record<string, { meta: { severity: string }; checks: CheckResult[] }>,
+  now: number,
+  opts?: { maxLineChars?: number },
+): GroupedStreamFindingLine[] {
+  const budget = opts?.maxLineChars ?? GROUPED_STREAM_MAX_LINE_CHARS;
+  const groups = new Map<string, GroupAcc>();
+
+  for (const [ruleId, r] of Object.entries(ruleResults)) {
+    const severity = r.meta.severity;
+    const byUrl = new Map<string, CheckResult[]>();
+    for (const c of r.checks.flatMap(unfoldAggregateCheck)) {
+      if (!c.pageUrl) continue;
+      if (c.provenance === "carried" || c.provenance === "unrendered") continue;
+      const u = normalizePageUrl(c.pageUrl);
+      const arr = byUrl.get(u);
+      if (arr) arr.push(c);
+      else byUrl.set(u, [c]);
+    }
+    for (const [u, cs] of byUrl) {
+      // Last wins per (checkName, locator): status is not part of the PK.
+      const local = new Map<string, ReturnType<typeof flattenChecks>[number]>();
+      for (const f of flattenChecks(u, ruleId, cs)) {
+        local.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), f);
+      }
+      for (const f of local.values()) {
+        const key = JSON.stringify([
+          f.ruleId,
+          f.checkName,
+          f.locator,
+          f.status,
+          f.message,
+          f.value,
+          f.expected,
+        ]);
+        let g = groups.get(key);
+        if (!g) {
+          g = {
+            head: {
+              ruleId: f.ruleId,
+              checkName: f.checkName,
+              locator: f.locator,
+              fingerprint: findingFingerprint(f.status, f.message, f.value, f.expected),
+              status: f.status,
+              severity,
+              message: f.message,
+              value: f.value,
+              expected: f.expected,
+              firstSeenAt: now,
+              lastSeenAt: now,
+              provenance: "fresh",
+              state: "open",
+            },
+            pages: new Map(),
+          };
+          groups.set(key, g);
+        }
+        g.pages.set(u, clampComponentEvidenceForStream(f.payload));
+      }
+    }
+  }
+
+  const sorted = [...groups.entries()].sort(([ka, a], [kb, b]) => {
+    const h = a.head;
+    const o = b.head;
+    return (
+      cmp(h.ruleId, o.ruleId) ||
+      cmp(h.checkName, o.checkName) ||
+      cmp(h.locator, o.locator) ||
+      cmp(h.fingerprint, o.fingerprint) ||
+      cmp(ka, kb)
+    );
+  });
+
+  const out: GroupedStreamFindingLine[] = [];
+  for (const [, g] of sorted) {
+    const urls = [...g.pages.keys()].sort(cmp);
+    // Fixed overhead of the line without pages/payloads. Slack covers the digits of
+    // part/parts, which are not known until the split is decided.
+    const base =
+      JSON.stringify({ ...g.head, payloads: [], pages: [], part: 0, parts: 0 }).length + 24;
+    const partsOut: string[][] = [];
+    let cur: string[] = [];
+    let curSize = base;
+    let seen = new Set<string | null>();
+    for (const u of urls) {
+      const p = g.pages.get(u) ?? null;
+      // Index digits are bounded by the page count; use the widest for a safe bound.
+      const entry = JSON.stringify([u, urls.length]).length + 1;
+      const payloadCost = seen.has(p) ? 0 : JSON.stringify(p).length + 1;
+      if (cur.length > 0 && curSize + entry + payloadCost > budget) {
+        partsOut.push(cur);
+        cur = [];
+        curSize = base;
+        seen = new Set();
+      }
+      // A single oversized page still gets its own part: never drop a page.
+      curSize += entry + (seen.has(p) ? 0 : JSON.stringify(p).length + 1);
+      seen.add(p);
+      cur.push(u);
+    }
+    if (cur.length > 0) partsOut.push(cur);
+
+    partsOut.forEach((chunk, part) => {
+      const index = new Map<string | null, number>();
+      const payloads: (string | null)[] = [];
+      const pages: Array<[string, number]> = chunk.map((u) => {
+        const p = g.pages.get(u) ?? null;
+        let idx = index.get(p);
+        if (idx === undefined) {
+          idx = payloads.length;
+          payloads.push(p);
+          index.set(p, idx);
+        }
+        return [u, idx];
+      });
+      out.push({ ...g.head, payloads, pages, part, parts: partsOut.length });
+    });
+  }
+  return out;
+}
+
+/**
+ * Inverse of {@link buildGroupedStreamFindings} for one line: the per-page rows
+ * {@link buildStreamFindings} would have produced for the pages it carries.
+ */
+export function expandGroupedStreamFinding(line: GroupedStreamFindingLine): StreamFindingLine[] {
+  const { payloads, pages, part: _part, parts: _parts, ...head } = line;
+  return pages.map(([normalizedUrl, idx]) => ({
+    ...head,
+    normalizedUrl,
+    payload: payloads[idx] ?? null,
+  }));
+}
+
+/**
+ * `rows` is the total page count across lines, i.e. the page_findings row count the
+ * server must reach. The finalize gate compares `count(*)` against `rows`, NOT
+ * `lines`, so a dropped line or part leaves received < expected and fails closed.
+ */
+export function summarizeGroupedStream(lines: GroupedStreamFindingLine[]): {
+  lines: number;
+  rows: number;
+} {
+  let rows = 0;
+  for (const l of lines) rows += l.pages.length;
+  return { lines: lines.length, rows };
+}

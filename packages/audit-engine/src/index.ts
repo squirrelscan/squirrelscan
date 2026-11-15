@@ -137,8 +137,19 @@ export type { ReconstructCompleteInput } from "./reconstruct";
 export { foldCompleteStoreTallies } from "./complete-store-fold";
 export type { CompleteStoreTallyInput, FindingPageSource } from "./complete-store-fold";
 // Chunked-publish producer: flatten a report to complete streamable findings (#1023).
-export { buildStreamFindings, buildSkippedPassCounts } from "./stream-findings";
-export type { StreamFindingLine, SkippedPassCounts } from "./stream-findings";
+export {
+  buildStreamFindings,
+  buildSkippedPassCounts,
+  buildGroupedStreamFindings,
+  expandGroupedStreamFinding,
+  summarizeGroupedStream,
+  GROUPED_STREAM_MAX_LINE_CHARS,
+} from "./stream-findings";
+export type {
+  StreamFindingLine,
+  SkippedPassCounts,
+  GroupedStreamFindingLine,
+} from "./stream-findings";
 
 export * from "./cloud-prefetch";
 export * from "./cloud-prefetch-run";

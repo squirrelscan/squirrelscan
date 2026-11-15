@@ -103,5 +103,16 @@ export type {
   UntouchedSamplePage,
 } from "./complete-store-fold";
 
-export { buildStreamFindings, buildSkippedPassCounts } from "./stream-findings";
-export type { StreamFindingLine, SkippedPassCounts } from "./stream-findings";
+export {
+  buildStreamFindings,
+  buildSkippedPassCounts,
+  buildGroupedStreamFindings,
+  expandGroupedStreamFinding,
+  summarizeGroupedStream,
+  GROUPED_STREAM_MAX_LINE_CHARS,
+} from "./stream-findings";
+export type {
+  StreamFindingLine,
+  SkippedPassCounts,
+  GroupedStreamFindingLine,
+} from "./stream-findings";
