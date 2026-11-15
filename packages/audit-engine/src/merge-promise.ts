@@ -400,10 +400,12 @@ export interface CloudSmartAuditsInput {
    * every finding would, never higher (see `sampled-store.ts` for the method and
    * the bound). The rows the merge keeps, resolves and carries do not change.
    *
-   * Sampled (single-POST) path only: a complete-store finalize ignores it. Absent,
-   * or without `sampled: true`, the result is exactly what it was without it.
+   * (repo#4626) Honoured by the chunked complete-store finalize too, over any of its
+   * store reads: the rows the sampled audit wrote are read from the store once, and
+   * the carried side is rescored as on the single-POST path. Absent, or without
+   * `sampled: true`, the result is exactly what it was without it.
    * When applied, the result carries {@link CloudSmartAuditsResult.scoringTallies}
-   * and `reportTotals` on every sampled-path run, and `sampledStoreScored`.
+   * and `reportTotals`, and `sampledStoreScored`.
    */
   sampledStore?: SampledStoreMarker;
 }
@@ -987,22 +989,44 @@ export async function runCloudSmartAudits(
 
   // (repo#3373) A store an earlier capped single POST sampled: collect what the
   // carried estimate needs as the priors stream past. Sampled path only.
-  const sampledEstimator =
-    !completeStore && isSampledStoreMarker(input.sampledStore)
-      ? new SampledStoreEstimator({
-          marker: input.sampledStore,
-          priorPages,
-          crawled: (url) => isRecrawled(url, crawledUrls, resolution),
-          removed: (url) => removedUrls.has(url),
-          evaluated: resolution ? makeCheckEvaluated(crawledUrls, resolution) : () => false,
-          // A truncated key cannot say which pages it evaluated, so a re-checked
-          // page may count for it twice: no warning is then kept as one.
-          crawledSetExact:
-            !!resolution &&
+  // (repo#4626) Complete mode reads "evaluated" as the merge does there: a crawled
+  // page's absent prior is resolved, except where the unsampled signal says the check
+  // did not evaluate it (`tallySignal`).
+  const estimatorSignal = completeStore ? tallySignal : resolution;
+  const sampledEstimator = isSampledStoreMarker(input.sampledStore)
+    ? new SampledStoreEstimator({
+        marker: input.sampledStore,
+        priorPages,
+        crawled: (url) => isRecrawled(url, crawledUrls, estimatorSignal),
+        removed: (url) => removedUrls.has(url),
+        evaluated: estimatorSignal
+          ? makeCheckEvaluated(crawledUrls, estimatorSignal)
+          : completeStore
+            ? (url) => crawledUrls.has(url)
+            : () => false,
+        // A truncated key cannot say which pages it evaluated, so a re-checked
+        // page may count for it twice: no warning is then kept as one.
+        crawledSetExact: completeStore
+          ? !tallySignal ||
+            (tallySignal.truncatedChecks.size === 0 &&
+              (tallySignal.crawledComplete !== false || !!tallySignal.crawledHashes))
+          : !!resolution &&
             resolution.truncatedChecks.size === 0 &&
             (resolution.crawledComplete !== false || !!resolution.crawledHashes),
-        })
-      : undefined;
+      })
+    : undefined;
+  // (repo#4626) The complete-store finalize never holds the sampled rows as one
+  // list (the untouched pages are an aggregate), so it reads them off the store,
+  // and notes the ones on crawled pages as the merge carries them.
+  const sampledCarried: CarriedFinding[] = [];
+  const noteSampledCarry = (finding: MergedFinding): void => {
+    if (!sampledEstimator || !completeStore) return;
+    if (!sampledEstimator.isSampledRow(finding)) return;
+    if (!isRecrawled(finding.normalizedUrl, crawledUrls, estimatorSignal)) return;
+    const carried = toCarriedFinding(finding);
+    sampledEstimator.noteCarried(finding, carried);
+    sampledCarried.push(carried);
+  };
   // (#2067) Every page this run crawled, which is what the coverage line (and
   // with it the page charge) counts: the payload's evidence plus the pages only
   // the unsampled signal saw, less the removed ones. The session gave all of them
@@ -1117,6 +1141,26 @@ export async function runCloudSmartAudits(
     }
   };
 
+  // (repo#4626) Complete mode: one read of the store for the rows the sampled audit
+  // wrote. The estimate needs every one of them (the merge streams only the touched
+  // pages, and an untouched page is an aggregate), and the store holds at most a
+  // sample of each class, so only those rows are kept. A row on a page this run
+  // neither crawled nor removed is carried by the merge unchanged; the merge notes
+  // the ones on crawled pages as it carries them.
+  if (sampledEstimator && completeStore) {
+    for await (const batch of priorFindingPages(store, siteKey, completeStore.priorOpenFindings)) {
+      for (const row of batch) {
+        if (row.state !== "open" || !sampledEstimator.isSampledRow(row)) continue;
+        sampledEstimator.observePrior(row);
+        if (isRunLocalRuleErrorFinding(row) || removedUrls.has(row.normalizedUrl)) continue;
+        if (isRecrawled(row.normalizedUrl, crawledUrls, estimatorSignal)) continue;
+        const carried = toCarriedFinding({ ...row, neverRendered: false } as MergedFinding);
+        sampledEstimator.noteCarried(row, carried);
+        sampledCarried.push(carried);
+      }
+    }
+  }
+
   if (streamedComplete) {
     const fold = createCompleteStoreTallyFold({
       ruleResults: shellResults ?? input.ruleResults,
@@ -1139,6 +1183,7 @@ export async function runCloudSmartAudits(
       carriedCount += 1;
       noteStaleCarry(finding);
       noteCarriedOutside(finding);
+      noteSampledCarry(finding);
       if (finding.neverRendered) unrenderedCount += 1;
       // No copy: `MergedFinding` already carries every field `CarriedFinding`
       // reads, `lastSeenAt` included — which is what stamps the replayed check
@@ -1189,7 +1234,8 @@ export async function runCloudSmartAudits(
       carriedCount += 1;
       const carried = toCarriedFinding(finding);
       carriedFindings.push(carried);
-      sampledEstimator?.noteCarried(finding, carried);
+      if (completeStore) noteSampledCarry(finding);
+      else sampledEstimator?.noteCarried(finding, carried);
       if (finding.neverRendered) {
         unrenderedCount += 1;
         return;
@@ -1200,7 +1246,9 @@ export async function runCloudSmartAudits(
       );
     };
     for await (const batch of priorFindingPages(store, siteKey, completeStore?.priorOpenFindings)) {
-      if (sampledEstimator) for (const row of batch) sampledEstimator.observePrior(row);
+      if (sampledEstimator && !completeStore) {
+        for (const row of batch) sampledEstimator.observePrior(row);
+      }
       session.addPriorFindings(batch);
       if (persistWhileStreaming && pendingWrites.length >= MERGE_PERSIST_BATCH) {
         await flushWrites();
@@ -1334,14 +1382,19 @@ export async function runCloudSmartAudits(
   // tallies that map scores to (the streaming-golden invariant), with the totals
   // the API counts off it, so the estimate has one shape to rewrite.
   if (sampledEstimator) {
-    if (!scoringTallies || !reportTotals) {
+    if (completeStore) {
+      scoringTallies ??= new Map();
+      reportTotals ??= tallyTotals(scoringTallies);
+    } else if (!scoringTallies || !reportTotals) {
       ({ scoringTallies, reportTotals } = unionTallies(unionRuleResults));
     }
     sampledEstimator.apply({
       scoringTallies,
       reportTotals,
-      unionCarried,
-      unionCarriedPages,
+      // The complete store's tallies were folded from the findings: the carried
+      // side is the sampled rows read above plus the pages it credited clean.
+      unionCarried: completeStore ? sampledCarried : unionCarried,
+      unionCarriedPages: completeStore ? carriedPageUrls : unionCarriedPages,
       ruleMetaIndex,
     });
   }
@@ -1401,6 +1454,19 @@ export async function runCloudSmartAudits(
     completeStore: !!completeStore,
     ...(sampledEstimator ? { sampledStoreScored: true as const } : {}),
   };
+}
+
+/** (repo#4626) The report totals a set of rule tallies scores. */
+function tallyTotals(
+  scoringTallies: Map<string, RuleTally>,
+): NonNullable<CloudSmartAuditsResult["reportTotals"]> {
+  const totals = { passed: 0, warnings: 0, failed: 0 };
+  for (const { tally } of scoringTallies.values()) {
+    totals.passed += tally.passed;
+    totals.warnings += tally.warnings;
+    totals.failed += tally.failed;
+  }
+  return totals;
 }
 
 /**

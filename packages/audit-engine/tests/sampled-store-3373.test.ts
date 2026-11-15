@@ -29,9 +29,15 @@ import {
   RULE_ID_SITEMAP_EXISTS,
 } from "@squirrelscan/utils/constants";
 
+import {
+  aggregateUntouchedCarried,
+  isAggregatableCarriedRow,
+  type UntouchedCarriedPage,
+} from "../src/complete-store-fold";
 import { findingKey } from "../src/merge-core";
 import {
   runCloudSmartAudits,
+  type CompleteStoreScope,
   type CloudSmartAuditsInput,
   type CloudSmartAuditsResult,
   type SmartAuditStore,
@@ -44,6 +50,7 @@ import {
   foldRuleResultIntoTallies,
   type RuleTally,
 } from "../src/scoring";
+import { buildStreamFindings } from "../src/stream-findings";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
@@ -546,6 +553,183 @@ describe("partial re-audit over a sampled store (repo#3373)", () => {
     );
     expect(rescored(b.estimated).totals.warnings).toBeLessThan(rescored(a.estimated).totals.warnings);
   }, 30_000);
+});
+
+// ── repo#4626: the same partial re-audit, published chunked ──────────────────
+
+const DRIVERS = ["cursor", "arrays", "split"] as const;
+type Driver = (typeof DRIVERS)[number];
+
+/** The store's open rows, one page at a time in primary-key order. */
+async function openRowsByPage(store: MemStore): Promise<Array<[string, PageFindingRecord[]]>> {
+  const rows = (await store.getFindings("site", ["open"])).sort((a, b) => {
+    const ka = findingKey(a.normalizedUrl, a.ruleId, a.checkName, a.locator);
+    const kb = findingKey(b.normalizedUrl, b.ruleId, b.checkName, b.locator);
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+  const byPage = new Map<string, PageFindingRecord[]>();
+  for (const f of rows) {
+    const list = byPage.get(f.normalizedUrl);
+    if (list) list.push(f);
+    else byPage.set(f.normalizedUrl, [f]);
+  }
+  return [...byPage];
+}
+
+/**
+ * The container's chunked publish of `shapes`: the full report's findings stream
+ * into `store` first, then the finalize merges the capped shell, reading the store
+ * as `driver` says (`cursor`: one cursor; `arrays`: this run's rows beside the
+ * earlier ones; `split`: touched pages plus an untouched aggregate, the API's default).
+ */
+async function reauditChunked(
+  store: MemStore,
+  shapes: PageShape[],
+  driver: Driver,
+  sampledStore?: SampledStoreMarker,
+) {
+  const report = fullReport(shapes);
+  const { body } = await cappedBody(report);
+  const crawlId = "cloud_2";
+  await store.upsertFindings(
+    buildStreamFindings(report.ruleResults, SECOND).map((line) => ({
+      ...line,
+      siteKey: "site",
+      lastSeenCrawlId: crawlId,
+    })),
+  );
+  const pages = await openRowsByPage(store);
+  const fresh = (rows: PageFindingRecord[]) => rows.filter((f) => f.lastSeenCrawlId === crawlId);
+  const prior = (rows: PageFindingRecord[]) => rows.filter((f) => f.lastSeenCrawlId !== crawlId);
+  const openPage = (normalizedUrl: string, rows: PageFindingRecord[]) => ({
+    normalizedUrl,
+    fresh: fresh(rows),
+    prior: prior(rows),
+  });
+  async function* openPages() {
+    for (const [normalizedUrl, rows] of pages) yield openPage(normalizedUrl, rows);
+  }
+  async function* findingPages() {
+    for (const [, rows] of pages) if (fresh(rows).length > 0) yield fresh(rows);
+  }
+  const untouchedCarried = async (scope: CompleteStoreScope) => {
+    const isTouched = (u: string, rows: PageFindingRecord[]) =>
+      scope.crawledUrls.has(u) || scope.removedUrls.has(u) || fresh(rows).length > 0;
+    const untouched: UntouchedCarriedPage[] = [];
+    for (const [u, rows] of pages) {
+      if (isTouched(u, rows)) continue;
+      expect(rows.every(isAggregatableCarriedRow)).toBe(true);
+      const page = store.pages.get(u);
+      untouched.push({ normalizedUrl: u, rows, rendered: !!page, active: page?.state === "active" });
+    }
+    const { aggregate, sample } = aggregateUntouchedCarried(untouched);
+    const sampleByUrl = new Map(sample.map((p) => [p.normalizedUrl, p]));
+    async function* merged() {
+      for (const [u, rows] of pages) {
+        if (isTouched(u, rows)) yield openPage(u, rows);
+        else if (sampleByUrl.has(u)) yield sampleByUrl.get(u)!;
+      }
+    }
+    return { pages: merged(), aggregate };
+  };
+  const crawledUrls = body.resolutionSignal!.crawledUrls;
+  return runCloudSmartAudits({
+    store,
+    siteKey: "site",
+    crawlId,
+    now: SECOND,
+    ruleResults: body.ruleResults,
+    pageStatuses: body.pageStatuses,
+    resolutionSignal: body.resolutionSignal,
+    checkTallies: body.checkTallies,
+    ...(sampledStore ? { sampledStore } : {}),
+    completeStore:
+      driver === "arrays"
+        ? {
+            findingPages: findingPages(),
+            priorOpenFindings: pages.flatMap(([, rows]) => prior(rows)),
+            crawledUrls,
+          }
+        : driver === "split"
+          ? { untouchedCarried, crawledUrls }
+          : { openPages: openPages(), crawledUrls },
+  });
+}
+
+describe("chunked partial re-audit over a sampled store (repo#4626)", () => {
+  for (const driver of DRIVERS) {
+    test(`${driver}: no overlap scores exactly as the full store`, async () => {
+      const s = await seed(busyShapes(range(0, 60)));
+      expect(s.sampledPages.get("core/meta-description")!.size).toBeLessThan(20);
+      const rerun = busyShapes([60, 61]);
+      const full = await reauditChunked(s.full, rerun, driver);
+      const estimated = await reauditChunked(s.sampled, rerun, driver, s.marker);
+      expect(estimated.completeStore).toBe(true);
+      expect(estimated.sampledStoreScored).toBe(true);
+      expect(comparable(rescored(estimated))).toEqual(comparable(rescored(full)));
+    }, 30_000);
+
+    test(`${driver}: the issue, a 1-page chunked re-audit does not inflate the CLI score`, async () => {
+      const shapes = range(0, 100).map((i) => ({ i, metaMissing: true }));
+      const s = await seed(shapes);
+      const rerun = [shapes[0]!];
+      const unmarked = await reauditChunked(structuredCloneStore(s.sampled), rerun, driver);
+      expect(rescored(unmarked).healthScore.overall!).toBeGreaterThan(s.cliScore + 2);
+      const full = await reauditChunked(s.full, rerun, driver);
+      const estimated = await reauditChunked(s.sampled, rerun, driver, s.marker);
+      const score = rescored(estimated).healthScore.overall!;
+      expect(Math.abs(score - s.cliScore)).toBeLessThanOrEqual(2);
+      expect(score).toBeLessThanOrEqual(rescored(full).healthScore.overall!);
+    }, 30_000);
+
+    test(`${driver}: partial overlap is never above the full store`, async () => {
+      const rand = prng(4626);
+      for (let round = 0; round < 8; round++) {
+        const pages = 25 + Math.floor(rand() * 50);
+        const shapes = randomShapes(rand, range(0, pages));
+        const s = await seed(shapes);
+        const rerun: PageShape[] = [];
+        for (const shape of shapes) {
+          if (rand() >= 0.35) continue;
+          const roll = rand();
+          rerun.push(
+            roll < 0.1
+              ? { ...shape, status: 404 }
+              : roll < 0.25
+                ? { ...shape, metaMissing: !shape.metaMissing, ttfb: rand() < 0.5 ? "skipped" : shape.ttfb }
+                : shape,
+          );
+        }
+        if (rand() < 0.3) rerun.push(...randomShapes(rand, [pages]));
+        const full = await reauditChunked(s.full, rerun, driver);
+        const estimated = await reauditChunked(s.sampled, rerun, driver, s.marker);
+        const est = rescored(estimated).healthScore;
+        const ref = rescored(full).healthScore;
+        const label = `${driver} round ${round}: ${pages} pages, ${rerun.length} re-audited`;
+        expect({ label, ok: est.overall! <= ref.overall! }).toEqual({ label, ok: true });
+        for (const c of est.categories) {
+          const refScore = ref.categories.find((r) => r.category === c.category)?.score ?? 100;
+          expect({ label, category: c.category, ok: c.score <= refScore }).toEqual({
+            label,
+            category: c.category,
+            ok: true,
+          });
+        }
+      }
+    }, 120_000);
+
+    test(`${driver}: without the marker the result is unchanged`, async () => {
+      const shapes = busyShapes(range(0, 60));
+      const rerun = busyShapes(range(0, 20));
+      const a = await reauditChunked((await seed(shapes)).sampled, rerun, driver);
+      const b = await reauditChunked((await seed(shapes)).sampled, rerun, driver, {
+        ...(await seed(shapes)).marker,
+        sampled: false,
+      });
+      expect(b).toEqual(a);
+      expect(a.sampledStoreScored).toBeUndefined();
+    }, 30_000);
+  }
 });
 
 function structuredCloneStore(store: MemStore): MemStore {
