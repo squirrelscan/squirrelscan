@@ -396,6 +396,19 @@ interface SlimJsonReport {
    * `pagesTruncated` says the list was cut.
    */
   pages?: JsonPageRow[];
+  /**
+   * Present when a very large crawl got a sampled local report (repo#2352): `summary` and the
+   * score are exact, per-rule check lists were folded to a cap and no per-page checks are kept.
+   * Absent on a full body.
+   */
+  reportBody?: {
+    mode: "sampled";
+    totalChecks: number;
+    keptChecks: number;
+    rulesFolded: number;
+    pageChecksOmitted: true;
+    reason: string;
+  };
   pagesTotal?: number;
   pagesTruncated?: boolean;
   /** URLs that redirected, listed beside `pages` with `--include-pages` (#1762, schema 1.15). */
@@ -786,6 +799,9 @@ function buildSlimReport(
       categories:
         report.healthScore?.categories.map((c) => ({ name: c.name, score: c.score })) ?? [],
     },
+    ...((report as { reportBody?: SlimJsonReport["reportBody"] }).reportBody
+      ? { reportBody: (report as { reportBody?: SlimJsonReport["reportBody"] }).reportBody }
+      : {}),
     summary: {
       passed: report.passed,
       warnings: report.warnings,

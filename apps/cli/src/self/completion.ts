@@ -265,7 +265,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --max-duration --no-ignore" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --full-report --max-duration --no-ignore" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -349,7 +349,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help --include-pages" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help --include-pages --full-report" -- "\${cur}") )
       return 0
       ;;
     feedback)
@@ -697,6 +697,7 @@ _squirrel() {
             '--summary[Print score, category breakdown, and issue counts only]' \\
             '--include-passed[Also list the rules that passed]' \\
             '--include-info[Also list info checks in the llm format]' \\
+            '--full-report[Build the whole report body for a very large crawl]' \\
             '--include-pages[JSON only: list every crawled page with its status and rule count]'
           ;;
         entities)
@@ -801,6 +802,7 @@ _squirrel() {
             '--summary[Print score, category breakdown, and issue counts only]' \\
             '--include-passed[Also list the rules that passed]' \\
             '--include-info[Also list info checks in the llm format]' \\
+            '--full-report[Build the whole report body for a very large crawl]' \\
             '--include-pages[JSON only: list every crawled page with its status and rule count]'
           ;;
       esac
@@ -1026,6 +1028,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l pentest -d "Short
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l include-passed -d "Also list the rules that passed"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l include-info -d "Also list info checks in the llm format"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l full-report -d "Build the whole report body for a very large crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l include-pages -d "JSON only: list every crawled page with its status and rule count"
 
 # Entities options
@@ -1096,6 +1099,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from report" -l visibility -a "p
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-passed -d "Also list the rules that passed"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-info -d "Also list info checks in the llm format"
+complete -c squirrel -n "__fish_seen_subcommand_from report" -l full-report -d "Build the whole report body for a very large crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-pages -d "JSON only: list every crawled page with its status and rule count"
 `;
 }

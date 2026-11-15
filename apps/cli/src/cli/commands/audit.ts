@@ -1403,6 +1403,11 @@ export const audit = defineCommand({
       description:
         "Also list info checks (notes that are not findings) in the llm format. The JSON report always has them",
     },
+    fullReport: {
+      type: "boolean",
+      description:
+        "Build the whole report body for a very large crawl instead of a sampled one (more memory)",
+    },
     includePages: {
       type: "boolean",
       description:
@@ -2280,6 +2285,7 @@ export const audit = defineCommand({
         ...(args.includePages && args.format === "json"
           ? { includePages: true }
           : {}),
+        ...(args.fullReport ? { fullReport: true } : {}),
         ...(maxDurationSeconds !== undefined ? { maxDurationSeconds } : {}),
         ...(crawlTimeoutSeconds !== undefined
           ? { crawlPhaseTimeoutMs: Math.round(crawlTimeoutSeconds * 1000) }
