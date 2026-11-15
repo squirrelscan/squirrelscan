@@ -40,6 +40,11 @@ const EXPECTED_TOOLS = [
   "list_pages",
   // #370: same channel as the hosted server; no auth, no credits.
   "send_feedback",
+  // #1090: threaded support tickets; need a logged-in session.
+  "create_support_ticket",
+  "list_support_tickets",
+  "get_support_ticket",
+  "reply_to_support_ticket",
 ] as const;
 
 function textOf(result: {
@@ -172,6 +177,13 @@ describe("cloud tools auth-gating (logged out)", () => {
         list_issues: { websiteId: "w1" },
         get_issue: { websiteId: "w1", number: 1 },
         comment_on_issue: { websiteId: "w1", number: 1, body: "hi" },
+        create_support_ticket: {
+          type: "bug",
+          subject: "a subject",
+          body: "a long enough body",
+        },
+        get_support_ticket: { ref: "ABCDE" },
+        reply_to_support_ticket: { ref: "ABCDE", body: "hi" },
       };
       const args = argsByTool[name] ?? {};
 

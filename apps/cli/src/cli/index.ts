@@ -63,6 +63,7 @@ export const main = defineCommand({
     config: () => import("./commands/config").then((m) => m.config),
     report: () => import("./commands/report").then((m) => m.report),
     feedback: () => import("./commands/feedback").then((m) => m.feedback),
+    support: () => import("./commands/support").then((m) => m.support),
     keys: () => import("./commands/keys").then((m) => m.keys),
     mcp: () => import("./commands/mcp").then((m) => m.mcp),
     channel: () => import("./commands/channel").then((m) => m.channel),

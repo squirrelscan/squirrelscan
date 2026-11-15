@@ -45,6 +45,7 @@ export const COMMAND_GROUPS: readonly CommandGroup[] = [
       ["auth", "Sign in, sign out and see who you are"],
       ["credits", "Your cloud credit balance and pricing"],
       ["keys", "Manage your org's API keys"],
+      ["support", "Open and follow support tickets with the team"],
     ],
   },
   {
@@ -94,6 +95,27 @@ export const EXAMPLES: Readonly<Record<string, readonly string[]>> = {
   "skills status": ["squirrel skills status", "squirrel skills status --json"],
   "skills uninstall": ["squirrel skills uninstall --agent claude"],
   "self completion": ["squirrel self completion zsh"],
+  support: [
+    'squirrel support new --type bug --subject "audit crashed" -m "details..."',
+    "squirrel support list",
+    "squirrel support view ABCDE",
+  ],
+  "support new": [
+    "squirrel support new",
+    'squirrel support new --type bug --subject "audit crashed on /pricing" -m "It exits with code 2." --attach-doctor',
+    'echo "details..." | squirrel support new --type other --subject "question" --json',
+  ],
+  "support list": [
+    "squirrel support list",
+    "squirrel support list --status in_progress --json",
+  ],
+  "support view": [
+    "squirrel support view ABCDE",
+    "squirrel support view ABCDE --markdown",
+  ],
+  "support reply": [
+    'squirrel support reply ABCDE -m "here is the extra detail"',
+  ],
   feedback: [
     "squirrel feedback",
     'squirrel feedback -m "the audit missed my sitemap" --category bug_report',

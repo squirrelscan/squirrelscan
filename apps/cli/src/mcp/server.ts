@@ -16,6 +16,7 @@ import { registerIssueTools } from "./tools/issue-tools";
 import { registerPageTools } from "./tools/page-tools";
 import { registerReportTools } from "./tools/report-tools";
 import { registerRuleTools } from "./tools/rule-tools";
+import { registerSupportTools } from "./tools/support-tools";
 
 export interface McpServerOptions {
   // Override the credential check (tests inject a logged-in/out resolver).
@@ -33,6 +34,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   registerReportTools(server, options.resolveLogin);
   registerIssueTools(server, options.resolveLogin);
   registerRuleTools(server);
+  // Threaded support tickets (#1090): need a logged-in session.
+  registerSupportTools(server, options.resolveLogin);
   // Local and free: these read the project store, so no auth and no credits.
   registerEntityTools(server);
   registerPageTools(server);

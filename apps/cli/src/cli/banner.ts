@@ -20,6 +20,7 @@ import {
   UPDATE_NOTIFICATION_MAX_WIDTH,
   AUTO_UPDATE_DISABLED_REMINDER_DAYS,
 } from "@/constants";
+import { startSupportRefresh, supportNudgeLine } from "@/lib/support-nudge";
 import { getUnmanagedUpdateHint, isManagedInstall } from "@/self/paths";
 import { trackTelemetryEvent } from "@/self/telemetry";
 import { isPromptSnoozed } from "@/self/update-state";
@@ -144,6 +145,23 @@ export function printUpdateNotification(settings: UserSettings) {
 
   if (displayed) {
     trackTelemetryEvent("update_notified", settings);
+  }
+}
+
+/**
+ * #1090: one stderr line when support has replied to a ticket. Reads the value
+ * cached in settings, so it costs nothing; a stale cache is refreshed in the
+ * background (at most hourly, only when signed in, errors swallowed), which is
+ * what the NEXT run shows. Never throws.
+ */
+export function printSupportNudge(settings: UserSettings) {
+  try {
+    if (!settings.notifications) return;
+    const line = supportNudgeLine(settings);
+    if (line) console.error(useColor ? pc.yellow(line) : line);
+    startSupportRefresh(settings);
+  } catch {
+    // A nudge must never break the command it rides on.
   }
 }
 

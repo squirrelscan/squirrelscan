@@ -206,6 +206,7 @@ import {
 } from "../audit-level";
 import {
   printHeader,
+  printSupportNudge,
   printUpdateNotification,
   printEndOfRunUpdateReminder,
   shouldShowAutoUpdateDisabledReminder,
@@ -1674,6 +1675,7 @@ export const audit = defineCommand({
         // not per command — every command has to announce an update applied
         // before it, not just this one (#170).
         printUpdateNotification(settings.data);
+        printSupportNudge(settings.data);
         if (shouldShowAutoUpdateDisabledReminder(settings.data)) {
           updateSettings({
             auto_update_disabled_reminder: new Date().toISOString(),

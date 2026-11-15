@@ -290,6 +290,7 @@ const selfDoctor = defineCommand({
   },
   async run() {
     const { runDoctorChecks } = await import("@/self/doctor");
+    const { formatDoctorCheck } = await import("@/self/doctor-report");
     // Loaded here, not at the top of the file: it parses the bundled model (#2307).
     const { checkClassifier } = await import("@/classifier/doctor");
 
@@ -304,16 +305,7 @@ const selfDoctor = defineCommand({
     const report = result.data;
 
     for (const check of report.checks) {
-      const icon =
-        check.status === "pass"
-          ? "[OK]"
-          : check.status === "warn"
-            ? "[WARN]"
-            : "[FAIL]";
-      console.log(`${icon} ${check.name}: ${check.message}`);
-      if (check.fix) {
-        console.log(`    Fix: ${check.fix}`);
-      }
+      for (const line of formatDoctorCheck(check)) console.log(line);
     }
 
     console.log(

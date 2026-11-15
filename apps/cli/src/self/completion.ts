@@ -9,6 +9,7 @@ import { PAGES_FORMATS } from "@/cli/commands/pages";
 import { OUTPUT_FORMATS } from "@/constants";
 import { ok, err, commandError } from "@/controllers/types";
 import { ENTITY_PROBLEMS } from "@/entities/filters";
+import { TICKET_STATUSES, TICKET_TYPES } from "@/lib/support";
 import { RULE_CATEGORY_VALUES } from "@/rules/categories";
 
 const categoryValues = RULE_CATEGORY_VALUES.join(" ");
@@ -20,6 +21,8 @@ const pagesDuplicateValues = PAGE_MAP_DUPLICATE.join(" ");
 const formatValues = OUTPUT_FORMATS.join(" ");
 const feedbackCategoryValues = FEEDBACK_CATEGORIES.join(" ");
 const levelValues = AUDIT_LEVELS.join(" ");
+const ticketTypeValues = TICKET_TYPES.join(" ");
+const ticketStatusValues = TICKET_STATUSES.join(" ");
 
 export type Shell = "bash" | "zsh" | "fish";
 
@@ -53,10 +56,13 @@ _squirrel_completions() {
   local global_opts="--config-file -c"
 
   # Top-level commands
-  local commands="setup audit auth crawl ci credits analyze entities pages init config report feedback keys mcp channel self skills"
+  local commands="setup audit auth crawl ci credits analyze entities pages init config report feedback support keys mcp channel self skills"
 
   # Auth subcommands
   local auth_commands="login logout status whoami"
+
+  # Support subcommands
+  local support_commands="new list view reply"
 
   # Keys subcommands
   local keys_commands="create list revoke"
@@ -177,6 +183,40 @@ _squirrel_completions() {
           return 0
           ;;
       esac
+      ;;
+    support)
+      case "\${prev}" in
+        support)
+          COMPREPLY=( $(compgen -W "\${support_commands}" -- "\${cur}") )
+          return 0
+          ;;
+        --type)
+          COMPREPLY=( $(compgen -W "${ticketTypeValues}" -- "\${cur}") )
+          return 0
+          ;;
+        --status)
+          COMPREPLY=( $(compgen -W "${ticketStatusValues}" -- "\${cur}") )
+          return 0
+          ;;
+        --subject|-s|--message|-m|--run-id|--rule-id|--report-id|--limit)
+          return 0
+          ;;
+      esac
+      case "\${COMP_WORDS[2]}" in
+        new)
+          COMPREPLY=( $(compgen -W "--type --subject -s --message -m --run-id --rule-id --report-id --attach-doctor --json" -- "\${cur}") )
+          ;;
+        list)
+          COMPREPLY=( $(compgen -W "--status --limit --json" -- "\${cur}") )
+          ;;
+        view)
+          COMPREPLY=( $(compgen -W "--markdown --json" -- "\${cur}") )
+          ;;
+        reply)
+          COMPREPLY=( $(compgen -W "--message -m --json" -- "\${cur}") )
+          ;;
+      esac
+      return 0
       ;;
     keys)
       case "\${prev}" in
@@ -361,6 +401,7 @@ _squirrel() {
     'config:Manage configuration'
     'report:Generate report from audit results'
     'feedback:Send feedback to the team'
+    'support:Open and follow support tickets'
     'keys:Manage org API keys'
     'mcp:Run the local MCP server (stdio)'
     'channel:Run the Claude Code channel (stdio)'
@@ -373,6 +414,13 @@ _squirrel() {
     'logout:Sign out and revoke token'
     'status:Show authentication status'
     'whoami:Show the active credential (source, scopes, org)'
+  )
+
+  support_commands=(
+    'new:Open a support ticket'
+    'list:List your support tickets'
+    'view:Show a ticket thread and mark it read'
+    'reply:Add a message to a ticket'
   )
 
   keys_commands=(
@@ -522,6 +570,42 @@ _squirrel() {
           _arguments \\
             '--interval[Seconds between polls of the cloud feed]:seconds' \\
             '--categories[Comma-separated categories to deliver]:categories'
+          ;;
+        support)
+          case $words[2] in
+            new)
+              _arguments \\
+                '--type[Ticket type]:type:(${ticketTypeValues})' \\
+                '(-s --subject)'{-s,--subject}'[Short summary]:subject:' \\
+                '(-m --message)'{-m,--message}'[What happened]:message:' \\
+                '--run-id[Audit run the ticket is about]:run-id:' \\
+                '--rule-id[Rule the ticket is about]:rule-id:' \\
+                '--report-id[Report the ticket is about]:report-id:' \\
+                '--attach-doctor[Attach self doctor output as diagnostics]' \\
+                '--json[Print the result as JSON]'
+              ;;
+            list)
+              _arguments \\
+                '--status[Only tickets in this status]:status:(${ticketStatusValues})' \\
+                '--limit[How many tickets to show]:limit:' \\
+                '--json[Output as JSON]'
+              ;;
+            view)
+              _arguments \\
+                '1:ticket ref:' \\
+                '--markdown[Print the thread as markdown]' \\
+                '--json[Output as JSON]'
+              ;;
+            reply)
+              _arguments \\
+                '1:ticket ref:' \\
+                '(-m --message)'{-m,--message}'[Your message]:message:' \\
+                '--json[Print the result as JSON]'
+              ;;
+            *)
+              _describe 'support command' support_commands
+              ;;
+          esac
           ;;
         keys)
           case $words[2] in
@@ -738,6 +822,7 @@ complete -c squirrel -n "__fish_use_subcommand" -a init -d "Initialize squirrel.
 complete -c squirrel -n "__fish_use_subcommand" -a config -d "Manage configuration"
 complete -c squirrel -n "__fish_use_subcommand" -a report -d "Generate report from audit results"
 complete -c squirrel -n "__fish_use_subcommand" -a feedback -d "Send feedback to the team"
+complete -c squirrel -n "__fish_use_subcommand" -a support -d "Open and follow support tickets"
 complete -c squirrel -n "__fish_use_subcommand" -a keys -d "Manage org API keys"
 complete -c squirrel -n "__fish_use_subcommand" -a mcp -d "Run the local MCP server (stdio)"
 complete -c squirrel -n "__fish_use_subcommand" -a channel -d "Run the Claude Code channel (stdio)"
@@ -757,6 +842,21 @@ complete -c squirrel -n "__fish_seen_subcommand_from auth; and __fish_seen_subco
 complete -c squirrel -n "__fish_seen_subcommand_from auth; and __fish_seen_subcommand_from status whoami" -l json -d "Output as JSON"
 
 # Keys subcommands
+complete -c squirrel -n "__fish_seen_subcommand_from support; and not __fish_seen_subcommand_from new list view reply" -a new -d "Open a support ticket"
+complete -c squirrel -n "__fish_seen_subcommand_from support; and not __fish_seen_subcommand_from new list view reply" -a list -d "List your support tickets"
+complete -c squirrel -n "__fish_seen_subcommand_from support; and not __fish_seen_subcommand_from new list view reply" -a view -d "Show a ticket thread and mark it read"
+complete -c squirrel -n "__fish_seen_subcommand_from support; and not __fish_seen_subcommand_from new list view reply" -a reply -d "Add a message to a ticket"
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from new" -l type -d "Ticket type" -xa "${ticketTypeValues}"
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from new" -s s -l subject -d "Short summary" -x
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from new reply" -s m -l message -d "Message text" -x
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from new" -l run-id -d "Audit run the ticket is about" -x
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from new" -l rule-id -d "Rule the ticket is about" -x
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from new" -l report-id -d "Report the ticket is about" -x
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from new" -l attach-doctor -d "Attach self doctor output as diagnostics"
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from list" -l status -d "Only tickets in this status" -xa "${ticketStatusValues}"
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from list" -l limit -d "How many tickets to show" -x
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from view" -l markdown -d "Print the thread as markdown"
+complete -c squirrel -n "__fish_seen_subcommand_from support; and __fish_seen_subcommand_from new list view reply" -l json -d "Output as JSON"
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and not __fish_seen_subcommand_from create list revoke" -a create -d "Mint an org API key for headless / CI use"
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and not __fish_seen_subcommand_from create list revoke" -a list -d "List org API keys"
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and not __fish_seen_subcommand_from create list revoke" -a revoke -d "Revoke an org API key by prefix or id"

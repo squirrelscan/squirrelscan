@@ -808,6 +808,7 @@
               "cli/init",
               "cli/config",
               "cli/feedback",
+              "cli/support",
               "cli/auth",
               "cli/keys",
               "cli/ci",

@@ -40,6 +40,7 @@ import {
 } from "../audit-level";
 import {
   printHeader,
+  printSupportNudge,
   printUpdateNotification,
   shouldShowAutoUpdateDisabledReminder,
   printAutoUpdateDisabledReminder,
@@ -281,6 +282,7 @@ export const crawl = defineCommand({
       if (settings.ok) {
         // See audit.ts: the auto-updated notice belongs to the run (#170).
         printUpdateNotification(settings.data);
+        printSupportNudge(settings.data);
         if (shouldShowAutoUpdateDisabledReminder(settings.data)) {
           updateSettings({
             auto_update_disabled_reminder: new Date().toISOString(),

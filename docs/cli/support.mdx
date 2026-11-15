@@ -1,0 +1,133 @@
+---
+title: "support"
+icon: "life-buoy"
+description: "Open and follow support tickets with the squirrelscan team, from a terminal or from an agent"
+---
+
+The `support` command opens a support ticket with the squirrelscan team and follows it until it is answered. A ticket is a thread tied to your account: you write, the team replies, and `squirrel support view` shows the whole conversation.
+
+It differs from [`squirrel feedback`](/cli/feedback), which is one-shot: a note goes out and nobody answers in the CLI. Use `support` when you need a reply.
+
+## Login required
+
+Every subcommand needs a logged-in session. Without one it says to run `squirrel auth login` and exits 1.
+
+Org API keys (`sq_...`, including `SQUIRRELSCAN_API_KEY`) are not accepted yet: the support routes answer 403 to a key. Use `squirrel auth login`.
+
+## Usage
+
+```bash
+squirrel support new
+squirrel support new --type bug --subject "Audit crashed on /pricing" -m "It exits with code 2 after the crawl." --run-id run_abc123
+echo "Long description..." | squirrel support new --type other --subject "A question about scores" --json
+squirrel support list
+squirrel support list --status in_progress --json
+squirrel support view ABCDE
+squirrel support reply ABCDE -m "Here is the extra detail"
+```
+
+A ticket has a 5-character ref, such as `ABCDE`. Wherever a command takes `<ref>` it also takes the ticket id, and a ref is matched in any case.
+
+## support new
+
+Opens a ticket and prints its ref. At a terminal, anything you leave off is prompted for: the type from a numbered list, the subject, the message, and whether to attach `squirrel self doctor` output.
+
+| Option | Description |
+| ------ | ----------- |
+| `--type <type>` | `billing`, `bug`, `audit_question`, `feature_request` or `other`. |
+| `-s`, `--subject <text>` | A short summary, 3 to 200 characters. Longer text is cut. |
+| `-m`, `--message <text>` | What happened, 10 to 10,000 characters, or pipe it on stdin. Longer text is cut and the command says so. Given twice, each one is a paragraph. |
+| `--run-id <id>` | The audit run the ticket is about. |
+| `--rule-id <id>` | The rule the ticket is about. |
+| `--report-id <id>` | The report the ticket is about. |
+| `--attach-doctor` | Attach the output of `squirrel self doctor` as diagnostics. |
+| `--json` | Print the result as one JSON object. Never prompts. |
+
+The ids, the CLI version, the platform and any doctor output travel as structured metadata beside the message, not inside it. The doctor output includes file paths from your machine, so it is attached only when you say so: at a terminal the command asks `Attach `squirrel self doctor` output? [y/N]` first, and anywhere else it needs `--attach-doctor`.
+
+You can file 5 tickets per hour.
+
+## support list
+
+Shows your tickets: ref, status, whose move it is, subject and last activity.
+
+| Option | Description |
+| ------ | ----------- |
+| `--status <status>` | Only `new`, `in_progress` or `closed` tickets. |
+| `--limit <n>` | How many to show, 1 to 100. Default 20. |
+| `--json` | Output as JSON. |
+
+The waiting column reads `waiting on you` when the team has replied and you have not seen it or answered, `waiting on support` when you spoke last, and `closed` for a finished ticket.
+
+## support view
+
+Shows a ticket's thread, then marks it read. Once you have viewed the ticket that triggered it, the banner nudge below stops mentioning it.
+
+| Option | Description |
+| ------ | ----------- |
+| `--markdown` | Print the thread as markdown. |
+| `--json` | Output as JSON. |
+
+## support reply
+
+Adds a message to a ticket. Replying to a closed ticket reopens it.
+
+| Option | Description |
+| ------ | ----------- |
+| `-m`, `--message <text>` | Your message, up to 10,000 characters, or pipe it on stdin. Without either, at a terminal, it prompts. |
+| `--json` | Print the result as JSON. Never prompts. |
+
+## Replies in the banner
+
+When the team has replied to a ticket you have not opened yet, `audit`, `crawl` and `analyze` print one line on stderr:
+
+```text
+Support replied on ABCDE: squirrel support view ABCDE
+```
+
+It is read from a value cached in `~/.squirrel/settings.json` (`support_unread`), so it adds no network wait. The cache is refreshed in the background at most once an hour, only while you are signed in with a login session, with a 2 second timeout, and any failure is ignored. `notifications = false` in your settings turns the line off.
+
+## From an agent or a script
+
+With `--json`, stdout carries exactly one JSON object and nothing else, nothing prompts, and every failure exits 1.
+
+```bash
+squirrel support new --type bug --subject "Rule misfires on gzip sitemaps" \
+  -m "core/sitemap-valid reports an error on a valid .xml.gz sitemap." \
+  --rule-id core/sitemap-valid --attach-doctor --json
+```
+
+```json
+{"ok":true,"id":"6f2c9a52-4f0e-4f6b-9a39-7a1d3f0f1c11","ref":"ABCDE","truncated":{"subject":false,"body":false},"doctor_attached":true}
+```
+
+`squirrel support list --json`:
+
+```json
+{"ok":true,"total":1,"tickets":[{"id":"6f2c9a52-4f0e-4f6b-9a39-7a1d3f0f1c11","ref":"ABCDE","type":"bug","subject":"Rule misfires on gzip sitemaps","status":"in_progress","isUserRead":false,"lastMessageAt":"2026-06-01T10:00:00Z","createdAt":"2026-05-31T09:00:00Z","waitingOn":"you"}]}
+```
+
+`squirrel support view ABCDE --json` returns `ok`, `ticket`, `messages` (each with `role`, `authorName`, `body` and `createdAt`; `role` is `user` or a staff role) and `waitingOn`. `squirrel support reply ABCDE --json` returns `{"ok":true,"id":"...","truncated":false}`.
+
+A failure prints one object and exits 1:
+
+```json
+{"ok":false,"code":"rate_limited","error":"Too many tickets filed recently (the limit is 5 an hour). Try again later.","status":429}
+```
+
+| `code` | Meaning |
+| ------ | ------- |
+| `not_logged_in` | No login session. Run `squirrel auth login`. |
+| `invalid_type`, `invalid_status`, `invalid_limit` | A flag value is not one of the allowed ones. |
+| `subject_required`, `subject_too_short` | The subject is missing or under 3 characters. |
+| `message_required`, `message_too_short` | The message is missing or under 10 characters (a reply only needs to be non-empty). |
+| `not_found` | No ticket of yours with that ref or id. |
+| `rate_limited` | More than 5 tickets in an hour. |
+| `forbidden` | The login was rejected, or an org API key was used. |
+| `unreachable` | The API could not be reached. |
+| `request_failed` | The API refused the request (`status` is the HTTP status). |
+| `unexpected` | Anything else. |
+
+## From the MCP server
+
+The local [`squirrel mcp`](/cli/mcp) server has the same four operations as tools: `create_support_ticket`, `list_support_tickets`, `get_support_ticket` and `reply_to_support_ticket`. They use your login session, mark the ticket as filed from `mcp`, and `get_support_ticket` returns the thread as markdown with `waiting_on`. They are not on the hosted server yet.
