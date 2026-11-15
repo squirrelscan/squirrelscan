@@ -220,6 +220,7 @@ import {
   printFooter,
   lockedRulesFooterLine,
 } from "../banner";
+import { claimCreditNudge, creditNudgeLine } from "../credit-nudge";
 import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
 import { hasFlag, hasNegatedFlag } from "../flags";
 import { fmt, pageLimitHint } from "../format";
@@ -2672,6 +2673,34 @@ export const audit = defineCommand({
           log("");
           log(fmt.yellow(preflight.noticeLines[0]!));
           log(fmt.dim(preflight.noticeLines[1]!));
+          // repo#1118: one short, frequency-capped line an agent can relay.
+          if (preflight.limitedBy === "balance") {
+            const nextCost = computePreflightAffordability({
+              balance: startingBalance,
+              maxPages: creditClamp.requestedMaxPages,
+              maxCreditsPerAudit: 0,
+              topUpUrl: "",
+              unlimited: true,
+              cloudExternalLinks: cloudLinkChecks,
+            }).estimate;
+            const nudgeKey = accountLabel ?? "account";
+            if (
+              claimCreditNudge({
+                key: nudgeKey,
+                lastShownAt: effectiveSettings?.credit_nudge_at,
+              })
+            ) {
+              log(
+                creditNudgeLine({
+                  balance: startingBalance,
+                  nextEstimate: nextCost,
+                  url: upgradeOffer?.url ?? upgradeUrl("cli-audit"),
+                  topUp: accountPlan === "paid" && !upgradeOffer,
+                })
+              );
+              updateSettings({ credit_nudge_at: new Date().toISOString() });
+            }
+          }
         }
       }
 

@@ -167,6 +167,8 @@ The audit engine can also keep cloud results it has already paid for when the cl
 
 Every credit warning the CLI prints states what the run would have cost, the credits you have left, the date your monthly credits reset, and an upgrade link: the notice when a low balance shrinks an audit's page limit, the out-of-credits notice when a run cannot be tracked, and the low-balance footer after one. `squirrel credits` shows the same balance, reset date and link.
 
+When the balance cannot cover the audit you asked for, the CLI also prints one line such as `Balance 40 credits, next audit needs ~64` with the top-up or upgrade link, so an agent can relay it to you. It prints at most once a day per account (the time is kept in `credit_nudge_at` in `~/.squirrel/settings.json`).
+
 That link is scoped to the organization that ran out, so it opens checkout for that organization rather than whichever one your browser used last. Credits are not shared between organizations, so the distinction matters: topping up the wrong one leaves the blocked audit blocked. The link works signed out, and carries the organization through the login. The MCP server returns the same facts as fields on its `run_audit` response, so an agent can relay them without a second call.
 
 One exception: `squirrel credits --upgrade` answers before reading your balance, so you can reach the upgrade page without logging in first. It prints the general upgrade URL rather than an organization-scoped one.
