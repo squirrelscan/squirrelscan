@@ -56,6 +56,12 @@ export async function storeEntityMap(options: {
         nodes: map.nodes,
         edges: map.edges,
         occurrences,
+        pages: map.pages.map((page) => ({
+          url: page.url,
+          // Absent in a compact publish index; a full map always carries both.
+          entityCount: page.entityCount ?? page.declares.length,
+          references: page.references ?? [],
+        })),
       })
     );
     logger.debug(
