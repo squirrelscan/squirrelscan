@@ -9,6 +9,19 @@ import {
 } from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+// Elements that render apart from their siblings, so text on either side is two words.
+const BLOCK_TAGS = new Set([
+  "address", "article", "aside", "blockquote", "br", "dd", "details", "div", "dl", "dt",
+  "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6",
+  "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "summary", "table",
+  "td", "th", "tr", "ul",
+]);
+const INLINE_BLOCK_DISPLAY = /display\s*:\s*(?:block|flex|grid|table|list-item|flow-root)/i;
+
+// Items show both strings in full up to this many characters.
+const MAX_ITEM_TEXT = 120;
+const clip = (s: string) => (s.length > MAX_ITEM_TEXT ? `${s.slice(0, MAX_ITEM_TEXT)}...` : s);
+
 function getVisibleText(el: Element): string {
   // Get only visible text content (excluding aria-hidden)
   let text = "";
@@ -25,9 +38,14 @@ function getVisibleText(el: Element): string {
 
       if (ariaHidden === "true" || hidden !== null) return;
 
+      const apart =
+        BLOCK_TAGS.has(element.tagName.toLowerCase()) ||
+        INLINE_BLOCK_DISPLAY.test(element.getAttribute("style") ?? "");
+      if (apart) text += " ";
       for (const child of Array.from(node.childNodes)) {
         walk(child);
       }
+      if (apart) text += " ";
     }
   };
 
@@ -84,11 +102,17 @@ export const labelContentNameMismatchRule: Rule = {
       const normalizedVisible = visibleText.replace(/\s+/g, " ");
       const normalizedAriaLabel = ariaLabel.replace(/\s+/g, " ");
 
-      if (!normalizedAriaLabel.includes(normalizedVisible)) {
+      // Class-based flex/block children cannot be seen statically and may join with no space
+      // ("Baptist" + "Example"), so whitespace differences alone are not a mismatch.
+      const squash = (v: string) => v.replace(/\s+/g, "");
+      if (
+        !normalizedAriaLabel.includes(normalizedVisible) &&
+        !squash(normalizedAriaLabel).includes(squash(normalizedVisible))
+      ) {
         const seen = visibility.visibility(el);
         if (seen.state === "hidden") continue;
         const tagName = el.tagName.toLowerCase();
-        const id = `${tagName}: visible="${normalizedVisible.slice(0, 20)}" vs aria-label="${normalizedAriaLabel.slice(0, 20)}"`;
+        const id = `${tagName}: visible="${clip(normalizedVisible)}" vs aria-label="${clip(normalizedAriaLabel)}"`;
         if (seen.state === "unknown") {
           const item = unconfirmedItem(id, seen) as Exclude<ControlItem, string>;
           unconfirmed.push(ctx.wantsItemSelectors ? { ...item, selector: elementSelector(el) } : item);
