@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 
-const { httpsGet, resolveVersion } = require("./postinstall.js") as {
+const { httpsGet, resolveVersion, selfInstallWarnings } = require("./postinstall.js") as {
   httpsGet: (
     url: string,
     get?: typeof import("node:https").get,
   ) => Promise<{ data: Buffer; statusCode: number }>;
+  selfInstallWarnings: (result: {
+    status: number | null;
+    signal: string | null;
+  }) => string[];
   resolveVersion: (
     env?: Record<string, string>,
     latest?: (channel: string) => Promise<string>,
@@ -111,5 +115,25 @@ describe("npm postinstall version resolution", () => {
       async (channel) => (channel === "beta" ? "v2.0.0-beta.1" : "v1.0.0"),
     );
     expect(result.version).toBe("v2.0.0-beta.1");
+  });
+});
+
+describe("npm postinstall self install outcome", () => {
+  test("a SIGKILL warns about memory instead of advising a plain retry", () => {
+    const text = selfInstallWarnings({ status: null, signal: "SIGKILL" }).join("\n");
+    expect(text).toContain("ran out of memory");
+    expect(text).toContain("swap");
+    expect(text).not.toContain("Run 'squirrel self install' manually");
+  });
+
+  test("a plain non-zero exit keeps the original warning", () => {
+    expect(selfInstallWarnings({ status: 1, signal: null })).toEqual([
+      "Native install setup failed, but npm install succeeded",
+      "Run 'squirrel self install' manually for full functionality",
+    ]);
+  });
+
+  test("success warns about nothing", () => {
+    expect(selfInstallWarnings({ status: 0, signal: null })).toEqual([]);
   });
 });

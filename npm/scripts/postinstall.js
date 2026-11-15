@@ -113,6 +113,37 @@ async function fetchWithRetry(url, attempts = 3) {
 /**
  * Compute SHA256 hash
  */
+/**
+ * Warning lines for a finished `self install` spawn (empty on success).
+ * A signal kill reports status null, so the signal has to be read too: a
+ * SIGKILL is almost always the out-of-memory killer, and "retry by hand"
+ * fails again on the same machine.
+ */
+function selfInstallWarnings(result) {
+  if (result.signal === "SIGKILL") {
+    return [
+      "Native install setup was killed by the system, most likely because the machine ran out of memory",
+      "The binary itself downloaded and passed its checksum, and npm install succeeded",
+      "Add swap or memory (for example 1GB of swap) and run 'squirrel self install' again, or download the binary directly: https://github.com/" +
+        REPO +
+        "/releases",
+    ];
+  }
+  if (result.signal) {
+    return [
+      `Native install setup was stopped by signal ${result.signal}, but npm install succeeded`,
+      "Run 'squirrel self install' manually for full functionality",
+    ];
+  }
+  if (result.status !== 0) {
+    return [
+      "Native install setup failed, but npm install succeeded",
+      "Run 'squirrel self install' manually for full functionality",
+    ];
+  }
+  return [];
+}
+
 function sha256(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
@@ -260,17 +291,14 @@ async function main() {
   });
 
   // Don't fail npm install if self install fails - binary still works via wrapper fallback
-  if (result.status !== 0) {
-    warn("Native install setup failed, but npm install succeeded");
-    warn("Run 'squirrel self install' manually for full functionality");
-  }
+  for (const line of selfInstallWarnings(result)) warn(line);
 
   log("Installation complete!");
   info("Run 'squirrel --help' to get started");
   info("Install agent integrations explicitly with 'squirrel skills install'");
 }
 
-module.exports = { httpsGet, normalizeVersion, resolveVersion };
+module.exports = { httpsGet, normalizeVersion, resolveVersion, selfInstallWarnings };
 
 if (require.main === module) {
   main().catch((err) => {
