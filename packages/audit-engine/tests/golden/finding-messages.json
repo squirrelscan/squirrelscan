@@ -669,6 +669,13 @@
    "footer-copyright-year|skipped|No copyright year in the footer||"
   ]
  },
+ "content/stale-dated-copy": {
+  "digest": "152644581632176",
+  "lines": [
+   "stale-dated-copy|pass|No copy on this page asserts a date that has passed||",
+   "stale-dated-copy|skipped|Page is noindex (robots meta tag); dated copy on it is not read as live||"
+  ]
+ },
  "content/thin-vs-site-norm": {
   "digest": "103890801665555",
   "lines": [
