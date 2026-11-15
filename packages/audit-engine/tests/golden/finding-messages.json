@@ -676,6 +676,12 @@
    "stale-dated-copy|skipped|Page is noindex (robots meta tag); dated copy on it is not read as live||"
   ]
  },
+ "content/terminology-consistency": {
+  "digest": "596089480897",
+  "lines": [
+   "terminology-consistency|skipped|Too little sign-in, email, sign-up, FAQ or product-name wording to establish a site convention||"
+  ]
+ },
  "content/thin-vs-site-norm": {
   "digest": "103890801665555",
   "lines": [

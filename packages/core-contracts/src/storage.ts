@@ -1072,6 +1072,14 @@ export interface PageFeatureRow {
    */
   readingLevel?: number | null;
   /**
+   * Per-page counts of the spellings content/terminology-consistency compares (sign in / log in,
+   * email / e-mail, sign up / register, FAQ / Faq, product-name casing). Keys are fixed short ids
+   * such as "signin.log_in" or "brand.lower", values are capped counts: bounded by the variant
+   * table, never raw text. Null when none occur. Optional: absent on a row stored before it
+   * existed, which reads as null (the rule then has no sample for the page).
+   */
+  terminologyVariants?: Record<string, number> | null;
+  /**
    * Report-only per-page scalars (#2343). Null on a row written before schema
    * v30, which is what makes the report's fallback parse reachable rather than
    * dead code.

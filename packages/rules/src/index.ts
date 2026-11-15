@@ -48,6 +48,8 @@ export {
 // Page-time reading level: audit-engine stores it on page_features and content/voice-consistency's
 // legacy path derives it with the SAME function, so both paths agree by construction.
 export { pageReadingLevel } from "./content/reading-level";
+// Page-time terminology variant counts: same shared-function rule as the reading level above.
+export { pageTerminologyVariants } from "./content/terminology-consistency";
 // Per-page chrome fingerprint. `template-discontinuity` consumes it by fuzzy
 // similarity; audit-engine reduces the SAME object to page_features' equality
 // cluster key (#1949) and hands it to `buildCollectedPageSignal`, so one DOM

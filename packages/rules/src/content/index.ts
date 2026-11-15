@@ -26,6 +26,7 @@ import { contentQualityRule } from "./quality";
 import { readingLevelRule } from "./reading-level";
 import { staleCopyrightRule } from "./stale-copyright";
 import { staleDatedCopyRule } from "./stale-dated-copy";
+import { terminologyConsistencyRule } from "./terminology-consistency";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
 import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { unrenderedMarkupRule } from "./unrendered-markup";
@@ -62,6 +63,7 @@ export const rules: Rule[] = [
   commonMisspellingsRule,
   h1TitleAlignmentRule,
   voiceConsistencyRule,
+  terminologyConsistencyRule,
 ];
 
 export {
@@ -88,6 +90,7 @@ export {
   readingLevelRule,
   staleCopyrightRule,
   staleDatedCopyRule,
+  terminologyConsistencyRule,
   thinVsSiteNormRule,
   titlePatternOutlierRule,
   unrenderedMarkupRule,

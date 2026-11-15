@@ -79,6 +79,8 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
 /**
  * Bumped when the payload shape or the key's ingredients change; old rows then miss.
+ * prc-8: `features.terminologyVariants` (content/terminology-consistency). A prc-7 row would replay
+ * features without it and the page would have no terminology sample.
  * prc-7: `features.readingLevel` (content/voice-consistency). A prc-6 row would replay features
  * without it and the page would have no reading-level sample.
  * prc-6: `stylesheetBackgrounds` joins the run context (a11y/color-contrast, #1756).
@@ -90,7 +92,7 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
  * without it, which the store reads as "no alternates" and exempts nothing, so
  * the bump is about getting the new field filled, not about safety.
  */
-export const RULE_CACHE_FORMAT = "prc-7";
+export const RULE_CACHE_FORMAT = "prc-8";
 
 /**
  * The `SiteData` keys page-scope rules read, and therefore the only ones the run
