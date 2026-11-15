@@ -861,6 +861,9 @@ export async function runCloudSmartAudits(
       failingByCheck: new Map(),
       notEvaluatedByCheck: tallySignal.notEvaluatedByCheck,
       truncatedChecks: new Set(),
+      exactNotEvaluatedChecks: new Set(
+        [...tallySignal.failingByCheck.keys()].filter((k) => !tallySignal.truncatedChecks.has(k)),
+      ),
     });
 
   // (#2658) Where the signal lost its say (a truncated key, a page off a clipped
