@@ -1,3 +1,5 @@
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
+
 /**
  * The bot-protection caveat (repo#2237). Sitting behind a WAF vendor is not evidence of anything;
  * being refused by it is. The caveat is built from the crawl's own refusal counts, so an audit
@@ -7,19 +9,24 @@
 export interface RefusalStats {
   /** Fetches the server refused (403, bot wall). Includes the provider-marked ones. */
   pagesBlocked?: number;
-  /** Challenge or block pages a provider served. */
+  /** Challenge or block pages a provider served. A subset of `pagesBlocked`, so never added to it. */
   wafBlocked?: { total: number };
-  /** Root fetches (robots.txt, sitemaps, ...) refused. */
+  /** Root fetches (robots.txt, sitemaps, ...) refused. Disjoint from `pagesBlocked`. */
   refusedFetches?: readonly unknown[];
 }
 
-/** URLs the site refused, challenged or answered with a block page. */
+/**
+ * URLs the site refused, challenged or answered with a block page. Page refusals and root-fetch
+ * refusals are separate sets, so they add up. A throttled root fetch (429, 430) is rate limiting,
+ * not bot protection, so it does not count.
+ */
 export function refusedUrlCount(stats: RefusalStats | undefined): number {
   if (!stats) return 0;
-  return Math.max(
-    stats.pagesBlocked ?? 0,
-    stats.wafBlocked?.total ?? 0,
-    stats.refusedFetches?.length ?? 0
+  return (
+    (stats.pagesBlocked ?? 0) +
+    (stats.refusedFetches ?? []).filter(
+      (r) => !isRateLimitStatus((r as { status?: number }).status)
+    ).length
   );
 }
 
