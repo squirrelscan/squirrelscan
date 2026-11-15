@@ -226,7 +226,7 @@ function ownedByPageRule(dimension: Dimension, url: string): boolean {
 }
 
 function bucketKey(dimension: Dimension, pageType: string | null): string {
-  return `${dimension} ${pageType ?? "*"}`;
+  return `${dimension}\0${pageType ?? "*"}`;
 }
 
 /**

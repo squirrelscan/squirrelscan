@@ -217,7 +217,7 @@ function accumulatePage(rollup: CanonicalRollup, record: CanonicalPageRecord): v
   const push = (dimension: Dimension, form: string | null): void => {
     if (!form) return;
     const scope = SECTIONED_DIMENSIONS.has(dimension) ? sectionOf(target.pathname) : "";
-    const key = `${dimension} ${scope}`;
+    const key = `${dimension}\0${scope}`;
     let sample = rollup.samples.get(key);
     if (!sample) {
       sample = { dimension, scope, urls: [], forms: [] };
