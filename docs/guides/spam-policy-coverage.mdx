@@ -1,0 +1,54 @@
+---
+title: "Google spam policies: what squirrel covers"
+icon: "shield-check"
+description: "Which of Google's Search spam policies squirrel can detect from a crawl, which rule covers each, and which policies need data a crawl does not have."
+---
+
+Google's [spam policies](https://developers.google.com/search/docs/essentials/spam-policies) list what can get a page demoted or removed from search. squirrel can only judge what a crawl of one site shows: HTML, computed styles, HTTP responses and a few extra probes. This page maps each policy to the rules that cover it and states plainly which policies are out of reach, so an audit is never read as a full spam review.
+
+## Covered by a rule
+
+| Policy | Rule | What it detects |
+|---|---|---|
+| Hidden text and links | [content/hidden-text](/rules/content/hidden-text) | Text and links hidden with `display: none`, zero font size, off-screen offsets or same-on-same colour, with screen-reader and collapsed-UI patterns exempt |
+| Keyword stuffing | [content/keyword-stuffing](/rules/content/keyword-stuffing) | Excessive keyword repetition in page content |
+| Doorway abuse | [integrity/seo-doorway](/rules/integrity/seo-doorway) | Thin, off-topic, keyword-stuffed affiliate pages on an unrelated site |
+| Cloaking | [integrity/cloaking](/rules/integrity/cloaking) | Responses that differ for a Googlebot user-agent or when a query token is added. Needs the opt-in integrity cloaking probe |
+| Malicious behavior | [integrity/obfuscated-script](/rules/integrity/obfuscated-script), [integrity/fake-auth-overlay](/rules/integrity/fake-auth-overlay) | Packed inline scripts and full-screen login iframes |
+| Hacked content | [Hacked site signals](/glossary/hacked-site) | Off-template pages, orphan pages, phishing kits and known malicious URLs |
+| Scam and fraud (impersonation) | [integrity/brand-impersonation](/rules/integrity/brand-impersonation) | Sign-in controls that point at hosts the brand does not own |
+
+## Partly covered
+
+These policies have a related signal, not a rule built for the policy.
+
+| Policy | Related rules | Gap |
+|---|---|---|
+| Sneaky redirects | [crawl/redirect-chain](/rules/crawl/redirect-chain) | Redirect chains are reported. Redirects that depend on user-agent, referrer or JavaScript are not flagged as such |
+| Scaled content abuse | [content/duplicate-content](/rules/content/duplicate-content), [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm), [content/title-pattern-outlier](/rules/content/title-pattern-outlier) | Exact duplicates, thin pages and title templates are found. Templated near-duplicates at scale are not scored as one signal |
+| Thin affiliate pages | [eeat/affiliate-disclosure](/rules/eeat/affiliate-disclosure) | Disclosure is checked. Affiliate link density against original content is not |
+
+## Not covered yet
+
+| Policy | Why |
+|---|---|
+| Misleading functionality | Deceptive buttons and fake downloads need a heuristic with a low false-positive rate. No rule exists |
+| User-generated spam | No rule checks comment or forum spam markers |
+
+## Not covered: needs data a crawl does not have
+
+squirrel does not audit these policies, and no rule or report claims to:
+
+- Link spam: needs a link graph across sites.
+- Scraping: needs comparison against other sites.
+- Machine-generated traffic: lives in server logs and traffic, not HTML.
+- Expired domain abuse: needs domain history.
+- Site reputation abuse: needs authorship and intent context.
+- Legal and personal-information removals: needs external removal databases.
+- Policy circumvention: needs cross-domain pattern analysis.
+
+## Run the check
+
+```bash
+squirrel audit https://example.com --rule-include content/hidden-text,content/keyword-stuffing,integrity/seo-doorway,integrity/cloaking,integrity/obfuscated-script
+```
