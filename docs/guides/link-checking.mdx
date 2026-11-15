@@ -96,6 +96,17 @@ When a check did not run, squirrelscan says so rather than reporting the rule as
 
 In the cloud's issue tracker, an open broken-link issue stays open while an audit could not check links for one of the reasons above.
 
+## Archived copies of dead links
+
+When a link is confirmed broken (a 404, a 410, or a domain that does not resolve) and the Wayback Machine holds a copy, the report shows the archived URL beside the link. Your coding agent can swap it in. This is a suggestion only: squirrelscan never rewrites your pages.
+
+- The suggestion is the latest capture of that exact URL that answered 2xx, taken before the link died. An archived error page, a redirect to one, or a later capture is never suggested.
+- A confirmed-broken link with no usable capture says "no archived copy found". Links that are unverified, blocked, rate limited or not requested get no suggestion.
+- Action and token links (unsubscribe links, magic sign-in links, signed downloads, URLs with a credential in the query) are never looked up, because a lookup gives the URL to a third party.
+- Lookups are cached and shared across audits. A slow, failing or rate-limited archive never delays or fails an audit: the link is reported without a suggestion.
+- Plans: included on Pro and up. On Free, each suggestion costs 1 credit, or is hidden.
+- The Wayback Machine is the only archive used.
+
 ## Coming soon: getting past the last walls
 
 <Note>
