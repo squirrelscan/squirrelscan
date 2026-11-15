@@ -1190,7 +1190,7 @@ The gap between peak RSS and settled heap is large and unexplained here:
 5,447 against 2,264 MiB at 10,000 pages. `RSS - live` is not a residency figure
 — it also holds native allocations, SQLite's caches, resident JIT and allocator
 overhead — and on a machine under memory pressure it is not stable either, so no
-attribution is offered.
+attribution is offered. It is attributed in the next section.
 
 **Wall time on this machine is worth much less than the other columns.** The same
 5,000-page cold workload measured 359, 448 and 575 s across three runs today,
@@ -1198,6 +1198,96 @@ a 60% spread, and CPU time moved with it (363, 460 and 582 s). Those runs
 differed in what else the machine was doing, though that association is not a
 controlled result. Treat any wall-clock difference under roughly 60% on this box
 as unresolved.
+
+### Peak RSS against settled heap at 10,000 pages ([repo#1991](https://github.com/squirrelscan/repo/issues/1991))
+
+The section above left the gap between peak RSS and settled heap unexplained.
+It is now attributed, and most of it is gone.
+
+**Setup.** A different machine from the rows above: Linux x64, 96 vCPUs, no
+swap, the process in an 8 GiB cgroup, Bun 1.4.4, CLI from source. Same estate
+shape (`site.ts`), with a deterministic 869 KB stand-in for the uncommitted
+base page: 30 inline scripts totalling about 825 KB and about 1,800 tags.
+Coverage full, `--http --offline`, cold, a fresh content store and `HOME` per
+run, and **one run on the machine at a time**: four concurrent 10,000-page
+runs all hit the cgroup ceiling and three were OOM-killed, so none of those are
+quoted. Peak RSS is the kernel's `VmHWM`, read by `mem-probe.ts` at exit (Linux
+has no `/usr/bin/time -l`). Byte figures are MiB.
+
+| 10,000 pages | peak RSS | heapUsed at exit, collected | wall |
+|---|---|---|---|
+| main | 6,389 MiB | 980 MiB | 785 s |
+| main, `bun --smol` | 6,417 MiB | 980 MiB | 795 s |
+| one forced collection each side of report reconstruction | **3,455 MiB** | 980 MiB | 783 s |
+
+Peak RSS falls 46%. Settled heap does not move, which is the point: nothing
+live changed, only how much garbage was outstanding at the peak. `--smol`,
+which makes the collector more eager in general, changes nothing, so this is
+not about GC pacing across the run but about one moment in it.
+
+**Where the peak is.** A 1-second RSS sampler on the main run shows the whole
+run at or below 2.7 GiB until the last 25 seconds, then up to 6.2 GiB across
+report reconstruction (about 10 s) and the JSON render and write after it. To attribute it
+by stretch, `SQUIRREL_STREAM_PHASE_MEM=1` now prints `peakRss=`, the kernel's
+high-water mark since the previous boundary, read and then reset through
+`/proc/self/clear_refs`, before each boundary's forced collection. That run
+(which collects at every boundary, so its peaks are the "after" shape):
+
+| stretch ending at | peak RSS in the stretch | heapSize after collection |
+|---|---|---|
+| crawl | 570 MiB | 59 MiB |
+| pre-rules walk | 918 MiB | 68 MiB |
+| rules: page universe | 1,256 MiB | 408 MiB |
+| rules: page rules | 2,057 MiB | 489 MiB |
+| rules: site query | 2,083 MiB | 532 MiB |
+| rules: site rules | 3,301 MiB | 541 MiB |
+| rules phase end | 1,799 MiB | 128 MiB |
+| report reconstruction | 3,167 MiB | 1,032 MiB |
+| JSON render and write, to exit | 3,461 MiB | 980 MiB (`heapUsed`) |
+
+Without the collections, the report phase starts allocating its own gigabyte
+on top of whatever the crawl and rules phases left uncollected, and the JSON
+render stacks on both. With them, each of those phases grows from its live set.
+
+**The dominant retainer, from a heap snapshot.** The report phase's settled
+gigabyte cannot be snapshotted inside the audit on this box: the audit's own
+residency plus the V8 snapshot string exceeded 8 GiB and the run was killed.
+`report-heap.ts` rebuilds the same stored audit's report with
+`reconstructReport` in a fresh process (941 MiB settled, against 1,032 MiB in
+the audit) and writes the snapshot; `heap-summary.ts` reads it.
+
+| at the report boundary, 10,000 pages | count | MiB | share of heap |
+|---|---|---|---|
+| whole heap | 15,564,413 nodes | 895.2 | 100% |
+| check results (`{name, status, message, pageUrl, ...}` objects, with their own strings) | 2,226,056 | 698.1 | 78.0% |
+| ...status `pass` | 1,017,335 | 310.0 | 34.6% |
+| ...status `info` | 822,000 | 250.0 | 27.9% |
+| ...status `skipped` | 244,005 | 89.6 | 10.0% |
+| ...status `warn` | 127,678 | 43.4 | 4.8% |
+| ...status `fail` | 15,038 | 5.1 | 0.6% |
+
+So the dominant retainer at 10,000 pages is the reconstructed report's check
+list, about 223 checks per page, and 93.6% of those objects are passes, infos
+and skips. The findings themselves, `fail` and `warn`, are 48.5 MiB. This is
+squirrelscan/repo#1920 measured rather than inferred, and it is the one
+page-scaled term left: the same snapshot at the end of the rules phase is
+124 MiB in total, with nothing check-shaped in its top entries.
+
+**What sets the new floor.** Two stretches now sit within 5% of each other:
+the site-rules sub-phase (3,301 MiB peak on 541 MiB settled) and the report
+plus JSON render (3,461 MiB on about 1 GiB settled). The second shrinks only if
+the report stops holding every passing check, which is the publish-payload
+decision #1920 is waiting on; the first is transient allocation inside the
+site rules and is not attributed here. Until one of those moves, about 3.4 GiB
+is the floor for this design at 10,000 pages on this estate. That is the CLI;
+the hosted runtime and its 4 GiB class were not measured here.
+
+**Byte identity.** Two forced collections free nothing reachable, so no report
+can change. Checked two ways: the audit-engine golden fixtures (all 24
+`*golden*.test.ts` files, 238 tests, pass), and a 1,000-page A/B on one salt,
+before and after, whose JSON reports differ only in timestamps and
+`perf/ttfb`. `perf/ttfb` differs between two runs of unchanged main too: it
+reports measured response times.
 
 ### Re-auditing an unchanged site: how much is there to save
 
@@ -1828,9 +1918,13 @@ with the paths already in place instead of "retry".
   5,000-page audit finished in 359 s, less than that row attributes to site
   rules alone — so the issue needs re-measuring before it is worked.
 - Report reconstruction materializes every check, including the 83.7% that
-  pass: squirrelscan/repo#1920. Reading them once rather than twice, and
-  building them compact, are done (above); dropping the passing rows means
-  feeding six readers from aggregates instead.
+  pass and never reach the report: squirrelscan/repo#1920. At 10,000 pages a
+  heap snapshot puts those checks at 698 of the report phase's 895 MiB, 93.6%
+  of them passes, infos and skips (section "Peak RSS against settled heap at
+  10,000 pages"). Reading them once rather than twice, and building them
+  compact, are done (above); dropping the passing rows means feeding six
+  readers from aggregates instead, which needs a decision about the publish
+  payload first.
 - The page ceilings moved on the evidence above: #278 took `MAX_PAGES_CAP` and
   `REPORT_LIMITS.maxPages` to 10,000 and Team/Enterprise to a 10,000-page
   audit. What is still open is the hosted side actually being exercised there —

@@ -139,6 +139,33 @@ resident figure stops tracking what the process actually holds. `heapUsed` is
 printed too, but on Bun it lags or misses string memory, and retained page text
 is usually what you are looking for.
 
+The same setting prints a `[phase]` line at the end of each audit phase (crawl,
+rules, report and the rest). On Linux every line also carries `peakRss=`, the
+highest resident size since the previous line, so you can see which stretch of
+the run set the peak even when a forced collection has already cleared it:
+
+```text
+[phase] rules end heapSize=128MB heapUsed=128MB external=40MB rss=1223MB peakRss=1799MB
+[phase] report end heapSize=1032MB heapUsed=1032MB external=271MB rss=2500MB peakRss=3167MB
+```
+
+To see what the heap holds rather than how big it is, set
+`SQUIRREL_HEAP_SNAPSHOT_DIR` to a directory. Each of those boundaries then writes
+a heap snapshot there (`01-crawl.heapsnapshot`, `02-pre_rules.heapsnapshot` and
+so on) that Chrome DevTools can open. `SQUIRREL_HEAP_SNAPSHOT_PHASES=rules,report`
+limits it to the phases you name; sub-phases of the rules pass are named
+`stream-page-rules`, `stream-site-rules` and so on.
+
+```bash
+SQUIRREL_HEAP_SNAPSHOT_DIR=./heap SQUIRREL_HEAP_SNAPSHOT_PHASES=report \
+  squirrel audit https://example.com
+```
+
+Both settings force collections and a snapshot takes seconds and roughly the
+heap's size again in memory, so neither belongs in a run whose speed or peak
+memory you are measuring. A snapshot is diagnostic output only: it holds page
+text and URLs from your site, so treat it like the project database.
+
 ## Rules that run once per template
 
 Most of a large site is a handful of templates repeated: a real storefront of 247

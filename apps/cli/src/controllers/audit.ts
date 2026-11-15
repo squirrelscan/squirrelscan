@@ -4,7 +4,13 @@ import type { DocumentFetcher } from "@squirrelscan/fetchers";
 
 import { heapStats } from "bun:jsc";
 import { Duration, Effect, Fiber, Stream } from "effect";
-import { existsSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
 
 import type { Config } from "@/config";
@@ -597,20 +603,122 @@ export const AUDIT_PHASES = [
  * needs to make the number mean anything is not free, and the line is
  * diagnostic output, not part of any report.
  */
-export function streamPhaseMemoryLogger():
-  | ((phase: string, boundary: "start" | "end") => void)
-  | undefined {
+export function streamPhaseMemoryLogger(
+  tag = "stream"
+): ((phase: string, boundary: "start" | "end") => void) | undefined {
   if (process.env.SQUIRREL_STREAM_PHASE_MEM !== "1") return undefined;
   const mb = (bytes: number) => `${Math.round(bytes / (1024 * 1024))}MB`;
   return (phase, boundary) => {
+    // Read before the collection: the peak is what the work since the last
+    // boundary cost, and the collection is not part of that work.
+    const peak = takePeakRssSinceLastBoundary();
     Bun.gc(true);
     const m = process.memoryUsage();
     // `heapUsed` lags or misses JS string memory on Bun; `heapSize` from
     // bun:jsc tracks it, and retained page strings are what this is for.
     const { heapSize } = heapStats();
     console.error(
-      `[stream] ${phase} ${boundary} heapSize=${mb(heapSize)} heapUsed=${mb(m.heapUsed)} external=${mb(m.external)} rss=${mb(m.rss)}`
+      `[${tag}] ${phase} ${boundary} heapSize=${mb(heapSize)} heapUsed=${mb(m.heapUsed)} external=${mb(m.external)} rss=${mb(m.rss)}${
+        peak === undefined ? "" : ` peakRss=${mb(peak)}`
+      }`
     );
+  };
+}
+
+/**
+ * Linux only (repo#1991): the kernel's resident high-water mark since the
+ * previous call, then reset, so each boundary line says which stretch of the
+ * run set the peak. Settled heap alone cannot: a phase's transient working set
+ * is gone by the time a forced collection samples it, and an interval sampler
+ * misses a burst shorter than its period. Undefined where `/proc` is absent.
+ *
+ * Resetting the mark means a run with this on cannot also report the whole
+ * run's peak from `VmHWM`; take that from a run without it.
+ */
+function takePeakRssSinceLastBoundary(): number | undefined {
+  try {
+    const status = readFileSync("/proc/self/status", "utf8");
+    const hwm = /^VmHWM:\s+(\d+) kB/m.exec(status);
+    // "5" resets the peak RSS to the current RSS (proc(5), clear_refs).
+    writeFileSync("/proc/self/clear_refs", "5");
+    return hwm ? Number(hwm[1]) * 1024 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * One forced full collection on each side of report reconstruction (repo#1991).
+ *
+ * The crawl and rules phases leave gigabytes of garbage behind on a large
+ * audit: parsed pages, rule scratch, batch buffers. None of it is live, but
+ * JSC's collector is paced by allocation, and nothing forces a full
+ * collection before the report phase starts allocating its own ~1 GB at
+ * 10,000 pages, then the JSON render on top of that. The two sets stack, and
+ * that is most of the process's peak. Measured on the 10,000-page benchmark
+ * estate: peak RSS 6,389 MiB without these two collections, 3,455 MiB with
+ * them, against 980 MiB of settled heap either way, and no measurable change in
+ * a thirteen-minute wall time (benchmarks/2026-09-perf-program.md). Collecting
+ * frees nothing that is still reachable, so it cannot change a report.
+ */
+function collectAtReportBoundary(): void {
+  Bun.gc(true);
+}
+
+/**
+ * Combine the streamed rules pass's two opt-in diagnostics into the one
+ * `onPhase` hook the engine takes. Undefined when neither is on, so a normal
+ * run passes no hook at all. Snapshots are taken at sub-phase ENDS only: a
+ * start boundary holds the same live set as the end before it.
+ */
+export function streamPhaseHook(
+  memory: ((phase: string, boundary: "start" | "end") => void) | undefined,
+  snapshot: ((phase: string) => void) | undefined
+): ((phase: string, boundary: "start" | "end") => void) | undefined {
+  if (!memory && !snapshot) return undefined;
+  return (phase, boundary) => {
+    memory?.(phase, boundary);
+    if (boundary === "end") snapshot?.(`stream-${phase}`);
+  };
+}
+
+/**
+ * Opt-in heap snapshots at phase boundaries (repo#1991).
+ *
+ * Settled heap and peak RSS say how much, not what. A snapshot names the
+ * retainers, which is the only evidence that settles where a large audit's
+ * memory goes. Set `SQUIRREL_HEAP_SNAPSHOT_DIR` to a directory and every audit
+ * phase boundary, plus every streamed rules sub-phase end, writes one V8-format
+ * `.heapsnapshot` there (`<seq>-<phase>.heapsnapshot`, loadable in Chrome
+ * DevTools). `SQUIRREL_HEAP_SNAPSHOT_PHASES` (comma-separated phase names)
+ * narrows it to the boundaries asked for.
+ *
+ * A snapshot collects first and costs seconds on a multi-GB heap, so a run
+ * taken with this on must not be the run whose peak RSS or wall time is
+ * reported. Snapshot node sizes already include string and ArrayBuffer backing
+ * storage: adding `process.memoryUsage().external` to them double-counts.
+ */
+export function phaseHeapSnapshotWriter():
+  | ((phase: string) => void)
+  | undefined {
+  const dir = process.env.SQUIRREL_HEAP_SNAPSHOT_DIR;
+  if (!dir) return undefined;
+  const only = process.env.SQUIRREL_HEAP_SNAPSHOT_PHASES?.split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  let seq = 0;
+  return (phase) => {
+    if (only && only.length > 0 && !only.includes(phase)) return;
+    seq += 1;
+    const file = `${dir}/${String(seq).padStart(2, "0")}-${phase}.heapsnapshot`;
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(file, Bun.generateHeapSnapshot("v8"));
+      console.error(`[heap] ${phase} snapshot written to ${file}`);
+    } catch (err) {
+      // Diagnostic output must never fail the audit it is observing.
+      console.error(`[heap] ${phase} snapshot failed: ${String(err)}`);
+    }
   };
 }
 
@@ -635,6 +743,13 @@ export class PhaseTimer<Name extends string> {
   private cursor = performance.now();
   private current: Name | undefined;
 
+  /**
+   * `onMark` runs after a phase is timed, so whatever it costs (a forced
+   * collection, a heap snapshot) is charged to the next phase's cursor
+   * rather than this one. Diagnostic only; undefined on every normal run.
+   */
+  constructor(private readonly onMark?: (name: Name) => void) {}
+
   /** Records which phase is about to run. */
   enter(name: Name): void {
     this.current = name;
@@ -644,8 +759,9 @@ export class PhaseTimer<Name extends string> {
   mark(name: Name): void {
     const now = performance.now();
     this.timings[name] = now - this.cursor;
-    this.cursor = now;
     this.current = undefined;
+    this.onMark?.(name);
+    this.cursor = this.onMark ? performance.now() : now;
   }
 
   /** Resets the cursor without marking a phase — excludes setup time from whatever runs next. */
@@ -1015,7 +1131,16 @@ export async function runAudit(
   // absent from the map and the debug summary line. Declared here (not
   // inside the inner try below) so the outer catch can still log whatever
   // phases completed — or was in flight — before a failure.
-  const phaseTimer = new PhaseTimer<(typeof AUDIT_PHASES)[number]>();
+  const heapSnapshot = phaseHeapSnapshotWriter();
+  const phaseMemory = streamPhaseMemoryLogger("phase");
+  const phaseTimer = new PhaseTimer<(typeof AUDIT_PHASES)[number]>(
+    heapSnapshot || phaseMemory
+      ? (name) => {
+          phaseMemory?.(name, "end");
+          heapSnapshot?.(name);
+        }
+      : undefined
+  );
 
   // Project name: the one provided, or derived from the domain
   const projectName = options.projectName ?? domainToProjectName(url);
@@ -2283,7 +2408,7 @@ export async function runAudit(
         },
         {
           batchSize: streamBatchSize,
-          onPhase: streamPhaseMemoryLogger(),
+          onPhase: streamPhaseHook(streamPhaseMemoryLogger(), heapSnapshot),
           // #1271: no page starts its rules after this.
           ...(durationBudget
             ? {
@@ -2421,6 +2546,7 @@ export async function runAudit(
           .pipe(Effect.catchAll(() => Effect.void))
       );
       phaseTimer.mark("rules");
+      collectAtReportBoundary();
 
       // ============================================
       // STEP 2.7: SMART AUDITS (#110; #684: default ON signed-in, OFF anon/config-off)
@@ -2756,6 +2882,7 @@ export async function runAudit(
       if (cloudResult?.siteMetadata)
         report.siteMetadata = cloudResult.siteMetadata;
       phaseTimer.mark("report");
+      collectAtReportBoundary();
 
       // ============================================
       // STEP 3.1: CLOUD EDITOR'S SUMMARY (credited, report-only)

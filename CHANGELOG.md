@@ -33,6 +33,8 @@ How it works:
 
 ### Changed
 
+- Large audits peak at about half the memory they did. The CLI now forces one garbage collection on each side of building the report, so the report and its JSON output no longer stack on top of garbage left by the crawl and the rules. A 10,000-page benchmark audit peaks at 3.4 GiB of resident memory instead of 6.2 GiB, with the same wall time and the same report (squirrelscan/repo#1991).
+- `SQUIRREL_STREAM_PHASE_MEM=1` now also prints a line at the end of every audit phase, and on Linux each line shows the peak resident size since the previous one. New `SQUIRREL_HEAP_SNAPSHOT_DIR` writes a heap snapshot at those boundaries for diagnosing memory use. See [Debugging](https://docs.squirrelscan.com/cli/debug).
 - When a report cannot be published because it is over the 1MB publish limit, the CLI no longer suggests auditing fewer pages (published reports are capped to fit, so that advice was wrong). It now says the report could not be capped to fit and that the full detail stays in your local project (`squirrel report`).
 - Release binaries are built with `NODE_ENV` pinned to `"production"` (`bun build --production --define process.env.NODE_ENV='"production"'`), so test-only knobs gated on `NODE_ENV === "test"` are compiled out whatever the build environment exports (#1839). Bundled React now uses its production build for the HTML report; report output is unchanged.
 

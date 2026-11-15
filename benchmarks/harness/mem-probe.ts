@@ -54,6 +54,16 @@ if (out) {
     }
     sample("exit");
     samples.push(JSON.stringify({ t: Date.now() - t0, tag: "peakRssInProc", rss: peakRss }));
+    // Linux has no `/usr/bin/time -l`; the kernel's own high-water mark is the
+    // equivalent OS-measured peak, and unlike the timer samples above it cannot
+    // be starved by a long synchronous phase.
+    try {
+      const status = require("node:fs").readFileSync("/proc/self/status", "utf8") as string;
+      const hwm = /^VmHWM:\s+(\d+) kB/m.exec(status);
+      if (hwm) samples.push(JSON.stringify({ t: Date.now() - t0, tag: "vmHwm", rss: Number(hwm[1]) * 1024 }));
+    } catch {
+      /* not Linux */
+    }
     try {
       require("node:fs").writeFileSync(out, samples.join("\n") + "\n");
     } catch {
