@@ -125,10 +125,12 @@ describe("security/json-sensitive-fields: gating (per #1931)", () => {
     expect(aggressive.skippedRobots).toBe(0);
   });
 
-  test("no candidates: a pass that says nothing was requested", async () => {
+  test("no candidates: not checked (never a pass), and nothing was requested (#1920)", async () => {
     const { checks, sent } = await run({}, { surface: surface([]) });
     expect(sent).toHaveLength(0);
-    expect(checks).toEqual([expect.objectContaining({ status: "pass" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({ name: "json-api-responses", status: "skipped", skipReason: "no-endpoints" }),
+    ]);
   });
 });
 

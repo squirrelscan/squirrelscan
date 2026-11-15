@@ -12,6 +12,7 @@
     "./public-egress": "./src/public-egress.ts",
     "./dom": "./src/dom.ts",
     "./waf": "./src/waf.ts",
+    "./waf-markers": "./src/waf-markers.ts",
     "./patterns": "./src/patterns.ts",
     "./robots-txt": "./src/robots-txt.ts",
     "./validation": "./src/validation.ts",

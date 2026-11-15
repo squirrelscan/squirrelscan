@@ -25,6 +25,15 @@
 // is what any visitor's browser could send: the rule reads what the endpoint
 // gives an anonymous caller.
 //
+// Not checked is never clean (#1920). No candidate endpoint, or any endpoint
+// left unverified (an HTTP 429, a bot challenge or a 403 carrying WAF markers,
+// which stops the run at once as in security/exposed-files; a 5xx; a timeout
+// or network error; the budget running out) means the rule reports not
+// checked, never a pass. Findings for the endpoints that did answer are kept
+// alongside that note. A 401, a 403 the app sent itself (JSON or plain, no WAF
+// marker: the endpoint is protected), a real 404, and a 2xx page that is not
+// JSON and not a challenge count as answered.
+//
 // What is flagged. A 2xx JSON answer is parsed and walked (bounded depth and
 // node count):
 //
@@ -46,7 +55,7 @@
 // one user can read another's data: it shows what the endpoint hands to anyone
 // who asks without logging in. The rule's copy says so.
 
-import type { CheckItem } from "@squirrelscan/core-contracts";
+import { type CheckItem, PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
@@ -56,7 +65,7 @@ import type { ProbeBudget } from "../probe-budget";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { isGraphqlPath, isStateChangingPath, isSuccessStatus } from "./graphql-probe";
-import { readCapped } from "./probe-http";
+import { isThrottledOrChallenged, isUnverifiedReply, readCapped } from "./probe-http";
 import { isShippedServerSecret, scanContentBounded } from "./leaked-secrets";
 
 const CHECK_SENSITIVE = "json-sensitive-fields";
@@ -181,6 +190,8 @@ export interface JsonProbeResponse {
   contentType: string;
   body: string;
   truncated: boolean;
+  /** Response headers, read for a rate limit or bot challenge (`cf-mitigated`). */
+  headers?: Headers;
 }
 
 export type JsonProbeOutcome =
@@ -230,6 +241,7 @@ export async function sendJsonProbe(
         contentType: (res.headers.get("content-type") ?? "").toLowerCase(),
         body: text,
         truncated,
+        headers: res.headers,
       },
     };
   } catch (err) {
@@ -784,11 +796,14 @@ export const jsonSensitiveFieldsRule: Rule = {
       skippedRobots: selection.skippedRobots,
       skippedCap: selection.skippedCap,
     };
+    // No candidate is not a clean result: nothing was requested (#1920).
     if (selection.candidates.length === 0) {
       checks.push({
         name: CHECK_CLEAN,
-        status: "pass",
-        message: "No same-origin API endpoint that answers GET was found to request",
+        status: "skipped",
+        skipReason: "no-endpoints",
+        message:
+          "Not checked: no API endpoints found in page code (no same-origin API endpoint that answers GET), so nothing was requested",
         details,
       });
       return { checks };
@@ -797,7 +812,9 @@ export const jsonSensitiveFieldsRule: Rule = {
     let probed = 0;
     let errored = 0;
     let jsonAnswers = 0;
+    let serverErrors = 0;
     let budgetStopped = false;
+    let pushback = false;
     let flagged = 0;
     for (const candidate of selection.candidates) {
       const outcome = await sendJsonProbe(ctx.probe, candidate.url);
@@ -810,7 +827,19 @@ export const jsonSensitiveFieldsRule: Rule = {
         errored++;
         continue;
       }
-      const scan = scanJsonResponse(outcome.response, candidate.url);
+      const { response } = outcome;
+      const reply = { status: response.status, headers: response.headers, text: response.body };
+      // Throttled or challenged: the answer says nothing about the endpoint,
+      // and the site is pushing back, so no further request is sent (#1920).
+      if (isThrottledOrChallenged(reply)) {
+        pushback = true;
+        break;
+      }
+      if (isUnverifiedReply(reply)) {
+        serverErrors++;
+        continue;
+      }
+      const scan = scanJsonResponse(response, candidate.url);
       if (!scan) continue;
       jsonAnswers++;
       const partial = scan.truncated
@@ -872,31 +901,54 @@ export const jsonSensitiveFieldsRule: Rule = {
       });
       return { checks };
     }
-    if (errored === probed) {
-      checks.push({
-        name: CHECK_CLEAN,
-        status: "skipped",
-        skipReason: "probe-errors",
-        message: `Every API request failed with a network error or timeout (${probed} endpoint(s)), so no response was checked`,
-        details: { ...details, probed, errored },
-      });
-      return { checks };
-    }
 
-    if (flagged === 0 && budgetStopped) {
+    // An endpoint that was never answered (budget, throttle, challenge, error,
+    // 5xx) could be leaking, so the run is not a clean result (#1920).
+    const total = selection.candidates.length;
+    const verified = probed - errored - serverErrors - (pushback ? 1 : 0);
+    const unverified = total - verified;
+    const runDetails = {
+      ...details,
+      probed,
+      jsonAnswers,
+      errored,
+      serverErrors,
+      pushback,
+      budgetStopped,
+      verified,
+      unverified,
+    };
+    // Findings for the endpoints that answered stand; the note names the rest.
+    if (unverified > 0) {
+      const why: string[] = [];
+      if (pushback) {
+        why.push(
+          `the site throttled the requests (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`
+        );
+      }
+      if (budgetStopped) why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
+      if (errored > 0) why.push(`${errored} request(s) failed with a network error or timeout`);
+      if (serverErrors > 0) why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
+      const onlyBudget = budgetStopped && !pushback && errored === 0 && serverErrors === 0;
+      const onlyErrors = !pushback && !budgetStopped && serverErrors === 0 && errored === probed;
       checks.push({
         name: CHECK_CLEAN,
         status: "skipped",
-        skipReason: "probe-budget",
-        message: `The probe budget ran out after ${probed} of ${selection.candidates.length} API endpoint(s). None of those requested returned sensitive fields, but the rest were not checked`,
-        details: { ...details, probed, jsonAnswers, errored, budgetStopped },
+        skipReason: onlyBudget ? "probe-budget" : onlyErrors ? "probe-errors" : PROBE_INCOMPLETE_SKIP_REASON,
+        message: `JSON API responses check incomplete: ${why.join("; ")}. ${
+          flagged === 0
+            ? `None of the ${verified} endpoint(s) answered returned sensitive fields, but ${unverified}`
+            : `${unverified}`
+        } of ${total} endpoint(s) were not verified and may be leaking`,
+        value: "not-checked",
+        details: runDetails,
       });
     } else if (flagged === 0) {
       checks.push({
         name: CHECK_CLEAN,
         status: "pass",
         message: `No JSON response carried sensitive fields or bulk personal data (${probed} endpoint(s) requested, ${jsonAnswers} answered with JSON)`,
-        details: { ...details, probed, jsonAnswers, errored, budgetStopped },
+        details: runDetails,
       });
     }
     return { checks };

@@ -240,6 +240,53 @@ describe("security/exposed-files", () => {
     expect(checks).toEqual([expect.objectContaining({ name: "exposed-files-incomplete", skipReason: "probe-incomplete" })]);
   });
 
+  test("a 403 JSON from the app on every path is protected: a pass (#1920)", async () => {
+    const site = serve({}, () =>
+      new Response(JSON.stringify({ error: "forbidden" }), {
+        status: 403,
+        headers: { "content-type": "application/json", server: "cloudflare" },
+      })
+    );
+    const checks = await run(ctx(site.origin));
+    expect(site.seen).toHaveLength(SENSITIVE_FILES.length + 1);
+    expect(checks).toEqual([expect.objectContaining({ name: "exposed-files-none", status: "pass" })]);
+  });
+
+  test("a 403 carrying WAF markers is a challenge: not checked, never a pass (#1920)", async () => {
+    const site = serve({ "/.git/HEAD": EXPOSED["/.git/HEAD"]! }, () =>
+      new Response("Access Denied", { status: 403, headers: { "x-sucuri-id": "18012" } })
+    );
+    const checks = await run(ctx(site.origin));
+    // The baseline is challenged: nothing listed is requested.
+    expect(site.seen).toHaveLength(1);
+    expect(checks).toEqual([
+      expect.objectContaining({
+        name: "exposed-files-incomplete",
+        skipReason: "probe-incomplete",
+        details: expect.objectContaining({ stoppedBy: "pushback", unverified: SENSITIVE_FILES.length }),
+      }),
+    ]);
+  });
+
+  test("partial: a confirmed hit is reported and the 5xx paths are counted as not verified (#1920)", async () => {
+    const site = serve({
+      "/.git/HEAD": EXPOSED["/.git/HEAD"]!,
+      "/.env": () => new Response("upstream failed", { status: 502 }),
+      "/backup.zip": () => new Response("upstream failed", { status: 500 }),
+    });
+    const checks = await run(ctx(site.origin));
+    expect(site.seen).toHaveLength(SENSITIVE_FILES.length + 1);
+    expect(checks.find((c) => c.name === "exposed-files")?.details?.path).toBe("/.git/HEAD");
+    const incomplete = checks.find((c) => c.name === "exposed-files-incomplete")!;
+    expect(incomplete).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+      details: { serverErrors: 2, unverified: 2, stoppedBy: "server-errors" },
+    });
+    expect(incomplete.message).toContain(`2 of ${SENSITIVE_FILES.length} path(s) were not verified`);
+    expect(checks.some((c) => c.name === "exposed-files-none")).toBe(false);
+  });
+
   test("the shared probe budget running out makes the run incomplete", async () => {
     let t = 0;
     const site = serve({}, () => {

@@ -28,6 +28,15 @@
 // fragment dropped, no cookies, no Authorization header, no redirect followed.
 // The body is read up to API_RESPONSE_CAP decoded bytes. Nothing else.
 //
+// Not checked is never clean (#1920). No candidate endpoint, or any endpoint
+// left unverified (an HTTP 429, a bot challenge or a 403 carrying WAF markers,
+// which stops the run at once as in security/exposed-files; a 5xx; a timeout
+// or network error; the budget running out) means the rule reports not
+// checked, never a pass. Findings for the endpoints that did answer are kept
+// alongside that note. A 401, a 403 the app sent itself (JSON or plain, no WAF
+// marker: the endpoint is protected), a real 404, and a 2xx page that is not
+// JSON and not a challenge count as answered.
+//
 // What is flagged. A 2xx JSON answer that carries records: an array of
 // objects, an array of objects under a wrapper key (`data`, `results`,
 // `items`, ...), or one object that carries an id and at least two other
@@ -48,6 +57,7 @@
 // (that needs two identities), and it cannot tell intended public data from a
 // leak except by the field names.
 
+import { PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
@@ -57,7 +67,7 @@ import type { ProbeBudget } from "../probe-budget";
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { isGraphqlPath, isStateChangingPath } from "./graphql-probe";
-import { readCapped } from "./probe-http";
+import { isThrottledOrChallenged, isUnverifiedReply, readCapped } from "./probe-http";
 
 /** Endpoints probed per run. */
 export const MAX_API_ENDPOINTS = 10;
@@ -303,6 +313,8 @@ export interface ApiProbeResponse {
   body: string;
   /** True when the decoded body was longer than the cap; `body` is then a prefix. */
   truncated: boolean;
+  /** Response headers, read for a rate limit or bot challenge (`cf-mitigated`). */
+  headers?: Headers;
 }
 
 export type ApiProbeOutcome =
@@ -358,6 +370,7 @@ export async function sendApiProbe(
         contentType: (res.headers.get("content-type") ?? "").toLowerCase(),
         body: text,
         truncated,
+        headers: res.headers,
       },
     };
   } catch (err) {
@@ -960,11 +973,14 @@ export const unauthenticatedApiRule: Rule = {
       skippedRobots: selection.skippedRobots,
       skippedCap: selection.skippedCap,
     };
+    // No candidate is not a clean result: nothing was probed (#1920).
     if (selection.candidates.length === 0) {
       checks.push({
-        name: CHECK_CLEAN,
-        status: "pass",
-        message: "No same-origin API endpoint that may be read with a GET was found to probe",
+        name: CHECK_UNCHECKED,
+        status: "skipped",
+        skipReason: "no-endpoints",
+        message:
+          "Not checked: no API endpoints found in page code (no same-origin API endpoint that may be read with a GET), so nothing was probed",
         details,
       });
       return { checks };
@@ -972,7 +988,9 @@ export const unauthenticatedApiRule: Rule = {
 
     let probed = 0;
     let errored = 0;
+    let serverErrors = 0;
     let budgetStopped = false;
+    let pushback = false;
     const flagged: Flagged[] = [];
     for (const candidate of selection.candidates) {
       const outcome = await sendApiProbe(ctx.probe, candidate.url);
@@ -985,7 +1003,19 @@ export const unauthenticatedApiRule: Rule = {
         errored++;
         continue;
       }
-      const verdict = readApiResponse(outcome.response);
+      const { response } = outcome;
+      const reply = { status: response.status, headers: response.headers, text: response.body };
+      // Throttled or challenged: the answer says nothing about the endpoint,
+      // and the site is pushing back, so no further probe is sent (#1920).
+      if (isThrottledOrChallenged(reply)) {
+        pushback = true;
+        break;
+      }
+      if (isUnverifiedReply(reply)) {
+        serverErrors++;
+        continue;
+      }
+      const verdict = readApiResponse(response);
       if (verdict.kind === "records") {
         flagged.push({ candidate, verdict, tier: tierOf(verdict.summary) });
       }
@@ -998,16 +1028,6 @@ export const unauthenticatedApiRule: Rule = {
         skipReason: "probe-budget",
         message: "The probe budget ran out before any API endpoint was probed",
         details,
-      });
-      return { checks };
-    }
-    if (errored === probed) {
-      checks.push({
-        name: CHECK_UNCHECKED,
-        status: "skipped",
-        skipReason: "probe-errors",
-        message: `Every API probe failed with a network error or timeout (${probed} endpoint(s)), so no endpoint was checked`,
-        details: { ...details, probed, errored },
       });
       return { checks };
     }
@@ -1025,22 +1045,38 @@ export const unauthenticatedApiRule: Rule = {
       });
     }
 
-    // A run the budget cut short is not a clean result: the endpoints it never
-    // reached could be open.
-    if (budgetStopped) {
+    // An endpoint that was never answered (budget, throttle, challenge, error,
+    // 5xx) could be open, so the run is not a clean result (#1920).
+    const total = selection.candidates.length;
+    const verified = probed - errored - serverErrors - (pushback ? 1 : 0);
+    const unverified = total - verified;
+    const runDetails = { ...details, probed, errored, serverErrors, pushback, budgetStopped, verified, unverified };
+    if (unverified > 0) {
+      const why: string[] = [];
+      if (pushback) {
+        why.push(
+          `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`
+        );
+      }
+      if (budgetStopped) why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
+      if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
+      if (serverErrors > 0) why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
+      const onlyBudget = budgetStopped && !pushback && errored === 0 && serverErrors === 0;
+      const onlyErrors = !pushback && !budgetStopped && serverErrors === 0 && errored === probed;
       checks.push({
         name: CHECK_UNCHECKED,
         status: "skipped",
-        skipReason: "probe-budget",
-        message: `The probe budget ran out after ${probed} of ${selection.candidates.length} API endpoint(s), so the rest were not checked`,
-        details: { ...details, probed, errored, budgetStopped },
+        skipReason: onlyBudget ? "probe-budget" : onlyErrors ? "probe-errors" : PROBE_INCOMPLETE_SKIP_REASON,
+        message: `Unauthenticated API check incomplete: ${why.join("; ")}. ${unverified} of ${total} API endpoint(s) were not checked and may be exposed`,
+        value: "not-checked",
+        details: runDetails,
       });
     } else if (flagged.length === 0) {
       checks.push({
         name: CHECK_CLEAN,
         status: "pass",
         message: `No API endpoint returned records without authentication (${probed} endpoint(s) probed)`,
-        details: { ...details, probed, errored },
+        details: runDetails,
       });
     }
     return { checks };
