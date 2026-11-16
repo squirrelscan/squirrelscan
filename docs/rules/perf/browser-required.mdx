@@ -17,6 +17,8 @@ The rule runs on every crawled page and emits one check:
 
 The list is fixed and does not depend on the page. It covers the six Core Web Vitals and related paint metrics, four main-thread and execution measurements, three runtime behaviours including console errors, two network waterfall measurements, and three permission and API detections that only exist at runtime.
 
+Two of those measurements are now taken in cloud audits: [perf/unused-javascript](/rules/perf/unused-javascript) reports first-party JavaScript that never runs, and [perf/long-tasks](/rules/perf/long-tasks) reports the longest main-thread task and total blocking time. Both come from squirrelscan's cloud runner on a sample of pages and are skipped in a local audit. The list stays fixed, since the other runtime metrics still need a browser tool.
+
 This rule never fails and never warns. It exists so the boundary of a static audit is written down in the report rather than assumed.
 
 ## How to fix it
@@ -69,6 +71,7 @@ For one run without editing the config: `squirrel audit https://example.com --ru
 - [perf/lcp-hints](/rules/perf/lcp-hints): the static hints for the paint metric this rule says it cannot measure.
 - [perf/cls-hints](/rules/perf/cls-hints): the same for layout shift.
 - [perf/inp-hints](/rules/perf/inp-hints): the same for interaction.
+- [perf/unused-javascript](/rules/perf/unused-javascript) and [perf/long-tasks](/rules/perf/long-tasks): the two runtime measurements a cloud audit takes.
 - [ax/content-without-js](/rules/ax/content-without-js): a rule that does use a real browser render.
 
 Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.

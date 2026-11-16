@@ -8,7 +8,7 @@ export const browserRequiredRule: Rule = {
     name: "Browser-Required Audits",
     description: "Lists performance audits that require browser execution",
     solution:
-      "For complete performance analysis, run browser-based tools like Lighthouse, WebPageTest, or Chrome DevTools. These tools measure actual runtime metrics that cannot be determined through static HTML analysis alone.",
+      "For complete performance analysis, run browser-based tools like Lighthouse, WebPageTest, or Chrome DevTools. These tools measure actual runtime metrics that cannot be determined through static HTML analysis alone. A cloud audit samples unused JavaScript and long tasks in its own browser (perf/unused-javascript, perf/long-tasks); the other metrics listed here still need a browser tool.",
     category: "perf",
     scope: "page",
     verdictScope: "template",
@@ -56,7 +56,7 @@ export const browserRequiredRule: Rule = {
       message: `${browserOnlyAudits.length} audits require browser execution`,
       items: browserOnlyAudits.slice(0, 10).map((id) => ({ id })),
       details: {
-        note: "Run Lighthouse for complete metrics",
+        note: "Run Lighthouse for complete metrics. Cloud audits measure unused JavaScript and long tasks on sampled pages.",
         totalAudits: browserOnlyAudits.length,
       },
     });

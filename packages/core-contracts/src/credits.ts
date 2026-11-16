@@ -79,6 +79,8 @@ export const CREDIT_COSTS = {
   archive_indexing: { cost: 0, per: 1, unit: "run" },
   // Third-party script scan (cloud audits). Plumbing only: it records the scan in the ledger at no cost.
   third_party_scan: { cost: 0, per: 1, unit: "run" },
+  // Runtime performance signal (cloud audits, repo#4681). Free: it records the signal in the ledger at no cost.
+  runtime_perf: { cost: 0, per: 1, unit: "run" },
 } satisfies Record<string, CreditPrice>;
 
 export type CreditFeature = keyof typeof CREDIT_COSTS;

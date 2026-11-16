@@ -1,0 +1,99 @@
+---
+title: "Unused JavaScript: first-party bytes that never run"
+description: "First-party scripts that download JavaScript the page never executes. A cloud audit measures coverage in a browser and lists the top scripts by unused bytes."
+---
+
+## What unused JavaScript is
+
+A browser downloads, parses and compiles every script a page references, then runs only the parts the page reaches. The rest is unused JavaScript: bytes that cost transfer and parse time and never do work. Code coverage in a real browser is the only way to know which bytes ran, which is why a static crawl cannot answer this.
+
+## What squirrel checks
+
+The rule runs once per audit and reads the JavaScript coverage that squirrelscan's cloud runner recorded on a sample of pages. Coverage needs a browser, so the check needs a cloud audit; a local CLI audit shows it as skipped, not failed. It emits one check:
+
+- `unused-javascript`: passes when the first-party unused bytes, summed over the distinct scripts the runner saw, are under 100 KB. It warns at 100 KB and fails at 500 KB. The message gives the unused and total first-party bytes and how many of the crawled pages were sampled, and states that the measurement is from squirrelscan's cloud runner, not from your visitors' devices. On a warning or failure the top ten first-party scripts are listed by unused bytes, each with its unused and total size and the sampled pages that loaded it.
+- `unused-javascript`, skipped, when the run has no runtime measurement (a CLI run, a render that failed, or a run where the runner sampled nothing). The reason says that runtime measurement needs a cloud audit.
+
+A script that loads on several sampled pages counts once, at its worst page, so a shared bundle is not multiplied by the page count.
+
+Third-party scripts (a different registrable domain from your site) are left out of the verdict. Their unused bytes appear in the check details as `thirdPartyUnusedBytes` for context, because you cannot shrink a tag vendor's bundle. [perf/inp-hints](/rules/perf/inp-hints) covers third-party load.
+
+## How to fix it
+
+Split large first-party bundles by route so a page loads only the code it reaches, load rarely used features with dynamic `import()`, and remove dependencies the page never calls. Then run a cloud audit again and compare the first-party unused bytes.
+
+The common false positive is code that runs on interaction. Coverage is recorded during page load, so a bundle that mostly serves a checkout flow or a modal reads as unused until someone clicks. Treat the list as candidates for lazy loading, not as dead code.
+
+| | |
+|---|---|
+| **Rule ID** | `perf/unused-javascript` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/unused-javascript"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/unused-javascript"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `unused-javascript` | Problem |  |
+| `unused-javascript` | Clean | `unused-javascript` |
+| `unused-javascript` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [perf/js-file-size](/rules/perf/js-file-size): how large each script is, whether or not it runs.
+- [perf/long-tasks](/rules/perf/long-tasks): the main-thread cost of the JavaScript that does run.
+- [perf/inp-hints](/rules/perf/inp-hints): third-party script load, which this rule leaves out.
+- [perf/browser-required](/rules/perf/browser-required): the measurements a static audit cannot make.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules.
+
+## References
+
+- [Remove unused JavaScript, Chrome for Developers](https://developer.chrome.com/docs/lighthouse/performance/unused-javascript)
+- [Code coverage, Chrome DevTools](https://developer.chrome.com/docs/devtools/coverage)
+
+## Check your site
+
+Run a cloud audit of your site and open the Performance section of the report. A local `squirrel audit` skips this check, because the measurement needs the cloud runner's browser. The measurement is free: it does not change the credits an audit costs.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

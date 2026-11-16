@@ -569,6 +569,8 @@
               "rules/perf/legacy-js",
               "rules/perf/duplicate-js",
               "rules/perf/critical-request-chains",
+              "rules/perf/unused-javascript",
+              "rules/perf/long-tasks",
               "rules/perf/browser-required",
               {
                 "group": "Reliability",

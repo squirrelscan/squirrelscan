@@ -1,0 +1,95 @@
+---
+title: "Long tasks: main-thread blocking time on sampled pages"
+description: "Main-thread tasks over 50 ms and total blocking time. A cloud audit measures them in a browser on sampled pages and reports the longest task and TBT."
+---
+
+## What long tasks are
+
+The browser's main thread runs scripts, style, layout and input handling one task at a time. A task over 50 milliseconds is a long task: input that arrives during it waits. Total blocking time (TBT) adds up how far each long task runs past 50 milliseconds, so one 350 ms task contributes 300 ms.
+
+## What squirrel checks
+
+The rule runs once per audit and reads the long-task measurement that squirrelscan's cloud runner recorded on a sample of pages. It needs a cloud audit; a local CLI audit shows it as skipped, not failed. It emits one check:
+
+- `long-tasks`: reports the longest task and the worst page's TBT across the sampled pages. It passes at 200 ms or under, warns above 200 ms and fails above 600 ms, the edges Lighthouse uses for "needs improvement" and "poor". On a warning or failure the pages over 200 ms are listed, worst first, with their TBT, longest task and long-task count. The message says the numbers are from squirrelscan's cloud runner on a sample of pages.
+- `long-tasks`, skipped, when the run has no runtime measurement or the runner recorded no long-task data on any sampled page.
+
+This is a lab measurement from one machine with one network and CPU profile. It is useful for finding scripts that block the main thread and for comparing one audit with the next. It is not what your visitors' devices experience: field data from real visits is the measure for that.
+
+## How to fix it
+
+Open a performance trace of the worst page, find the scripts behind the longest tasks, and split or defer that work. Move heavy computation to a web worker, yield to the main thread between chunks, and delay third-party tags until after the page is interactive. Then run a cloud audit again and compare TBT.
+
+| | |
+|---|---|
+| **Rule ID** | `perf/long-tasks` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/long-tasks"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["perf/long-tasks"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `long-tasks` | Problem |  |
+| `long-tasks` | Clean | `long-tasks` |
+| `long-tasks` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [perf/unused-javascript](/rules/perf/unused-javascript): code downloaded and parsed that never runs.
+- [perf/inp-hints](/rules/perf/inp-hints): the static hints for interaction latency.
+- [perf/js-file-size](/rules/perf/js-file-size): oversized scripts that tend to produce long tasks.
+- [perf/browser-required](/rules/perf/browser-required): the measurements a static audit cannot make.
+
+Performance findings ship in every audit next to the SEO, security and agent experience rules.
+
+## References
+
+- [Total Blocking Time, web.dev](https://web.dev/articles/tbt)
+- [Long tasks API, MDN](https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming)
+
+## Check your site
+
+Run a cloud audit of your site and open the Performance section of the report. A local `squirrel audit` skips this check, because the measurement needs the cloud runner's browser. The measurement is free: it does not change the credits an audit costs.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Performance section looks like on a real site.
+  </Card>
+</CardGroup>

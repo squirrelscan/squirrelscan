@@ -28,6 +28,7 @@ import { lazyAboveFoldRule } from "./lazy-above-fold";
 import { lcpFetchpriorityRule } from "./lcp-fetchpriority";
 import { lcpHintsRule } from "./lcp-hints";
 import { legacyJsRule } from "./legacy-js";
+import { longTasksRule } from "./long-tasks";
 import { preconnectRule } from "./preconnect";
 import { renderBlockingRule } from "./render-blocking";
 import { sourceMapsRule } from "./source-maps";
@@ -35,6 +36,7 @@ import { totalByteWeightRule } from "./total-byte-weight";
 import { ttfbRule } from "./ttfb";
 import { unminifiedCssRule } from "./unminified-css";
 import { unminifiedJsRule } from "./unminified-js";
+import { unusedJavascriptRule } from "./unused-javascript";
 
 export const rules: Rule[] = [
   lcpHintsRule,
@@ -68,6 +70,8 @@ export const rules: Rule[] = [
   legacyJsRule,
   duplicateJsRule,
   criticalRequestChainsRule,
+  unusedJavascriptRule,
+  longTasksRule,
   browserRequiredRule,
 ];
 
@@ -95,6 +99,7 @@ export {
   lcpFetchpriorityRule,
   lcpHintsRule,
   legacyJsRule,
+  longTasksRule,
   preconnectRule,
   renderBlockingRule,
   sourceMapsRule,
@@ -102,4 +107,5 @@ export {
   ttfbRule,
   unminifiedCssRule,
   unminifiedJsRule,
+  unusedJavascriptRule,
 };
