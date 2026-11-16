@@ -560,9 +560,9 @@
   ]
  },
  "content/font-consistency": {
-  "digest": "149478060133416",
+  "digest": "76787524089036",
   "lines": [
-   "font-consistency|skipped|No font declarations found in inline styles on # page(s); linked stylesheets are not read, so this is not a clean pass||"
+   "font-consistency|skipped|No font declarations found in inline styles; linked stylesheets are not read, so this is not a clean pass||"
   ]
  },
  "content/freshness": {
