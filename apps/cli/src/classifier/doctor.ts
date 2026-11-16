@@ -13,6 +13,14 @@ export function checkClassifier(
   const name = "Page classifier";
   const info = (deps.info ?? classifierInfo)();
 
+  if (!info.hashMatches && info.loadedSha256 !== "") {
+    return {
+      name,
+      status: "fail",
+      message: `Loaded artifact sha256 ${info.loadedSha256.slice(0, 12)} (${formatBytes(info.loadedBytes)}) does not match the manifest ${info.artifactSha256.slice(0, 12)} (${formatBytes(info.artifactBytes)}); the model is not used`,
+      fix: "Reinstall squirrel with 'squirrel self update'",
+    };
+  }
   if (!info.loaded) {
     return {
       name,
@@ -33,7 +41,7 @@ export function checkClassifier(
     name,
     status: "pass",
     message:
-      `artifact v${info.artifactVersion} (sha256 ${info.artifactSha256.slice(0, 12)}, ${formatBytes(info.artifactBytes)}), ` +
+      `artifact v${info.artifactVersion} (loaded sha256 ${info.loadedSha256.slice(0, 12)} matches the manifest, ${formatBytes(info.loadedBytes)}), ` +
       `featurizer ${info.featurizerVersion}, ${info.heads.join("+")} heads, loaded in ${Math.round(info.loadMs)} ms`,
   };
 }

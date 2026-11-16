@@ -61,10 +61,10 @@ A wrong phrase never hides a broken link. It only changes the words that say whe
 
 ## Check that it loads
 
-`squirrel self doctor` reports the bundled artifact, the featurizer version it was built for and how long it took to load:
+`squirrel self doctor` reports the bundled artifact, the sha256 of the bytes it actually loaded, the featurizer version it was built for and how long it took to load:
 
 ```text
-[OK] Page classifier: artifact v1 (sha256 f0de5687de8b, 8.4 MB), featurizer v2.3.0, region+pageType+section heads, loaded in 21 ms
+[OK] Page classifier: artifact v1 (loaded sha256 f0de5687de8b matches the manifest, 8.4 MB), featurizer v2.3.0, region+pageType+section heads, loaded in 21 ms
 ```
 
-A warning means the model could not be used. Audits still run and link sections fall back to page markup.
+The loader hashes the bytes it reads and compares them to the manifest before using them. A mismatch (a corrupted or swapped file) is reported as a failure, and audits run without the model with one warning. Any other warning means the model could not be used. Audits still run and link sections fall back to page markup.
