@@ -8,7 +8,11 @@
 // a result is absent (logged out, out of credits, service down, …). No rule ever
 // opens a socket or knows about credits.
 
-import type { CloudServiceId, CreditFeature } from "@squirrelscan/core-contracts";
+import {
+  CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
+  type CloudServiceId,
+  type CreditFeature,
+} from "@squirrelscan/core-contracts";
 
 /** Why a cloud result is unavailable to a rule. Surfaced as `CheckResult.skipReason`. */
 export type CloudSkipReason =
@@ -20,6 +24,7 @@ export type CloudSkipReason =
   | "not-applicable" // Stage-1 gating (via the Stage-0 site metadata) ruled this service out for this site type
   | "render-failed" // service rendered ok but this page failed (nav timeout / JS error)
   | "render-disabled" // the run was configured not to render (render: false): the render service was never asked
+  | "prefetch-out-of-time" // the prefetch hit its time budget before this result came back (repo#2129): "not checked"
   | "not-prefetched"; // rule enabled but prefetch never ran for it
 
 /**
@@ -111,6 +116,10 @@ export function humanizeCloudSkip(reason: CloudSkipReason): string {
       return "Cloud analysis skipped — render disabled by the run config.";
     case "not-prefetched":
       return "Cloud analysis skipped — no result was prefetched for this page.";
+    case "prefetch-out-of-time":
+      // A coded not-checked reason (rule-outcome.ts), so reports list the rule
+      // as "Not checked" rather than reading the missing result as clean.
+      return CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON;
   }
 }
 

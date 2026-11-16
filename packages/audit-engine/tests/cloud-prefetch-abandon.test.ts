@@ -144,7 +144,7 @@ describe("abandoned cloud prefetch (#280)", () => {
     });
     // Not returned: every other page still has an envelope, so rules skip visibly.
     for (const p of pages.slice(1)) {
-      expect(render?.get(p.url)).toEqual({ status: "skipped", skipReason: "service-unavailable" });
+      expect(render?.get(p.url)).toEqual({ status: "skipped", skipReason: "prefetch-out-of-time" });
     }
 
     // Spend: keyword-gaps (25) + render p0 (returned, 2) + render p1 (charged on
@@ -164,7 +164,7 @@ describe("abandoned cloud prefetch (#280)", () => {
         failedUnits: 5,
         attemptedUnits: 6,
         failedBatches: 5,
-        reason: "service-unavailable",
+        reason: "prefetch-out-of-time",
         detail: PREFETCH_DEADLINE_DETAIL,
       },
     ]);
@@ -207,10 +207,10 @@ describe("abandoned cloud prefetch (#280)", () => {
     expect("balanceAfterApproximate" in res).toBe(false);
     expect(res.siteMetadata).toBeNull();
     for (const p of pages) {
-      expect(res.store.get("render")?.get(p.url)?.skipReason).toBe("service-unavailable");
+      expect(res.store.get("render")?.get(p.url)?.skipReason).toBe("prefetch-out-of-time");
     }
     expect(res.store.get("keyword-gaps")?.get(CLOUD_SITE_KEY)?.skipReason).toBe(
-      "service-unavailable",
+      "prefetch-out-of-time",
     );
     expect(res.failures.map((f) => [f.service, f.failedUnits])).toEqual([
       ["site-metadata", 1],
@@ -280,7 +280,7 @@ describe("abandoned cloud prefetch (#280)", () => {
 
     expect(res?.abandoned).toBe(true);
     expect(res?.siteMetadata).toEqual(METADATA);
-    expect(res?.store.get("ai-parse")?.get(pages[0].url)?.skipReason).toBe("service-unavailable");
+    expect(res?.store.get("ai-parse")?.get(pages[0].url)?.skipReason).toBe("prefetch-out-of-time");
     expect(res?.spend).toEqual([]);
   });
 });

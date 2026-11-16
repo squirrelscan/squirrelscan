@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
   CRAWL_CAPPED_SKIP_REASON,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
@@ -43,6 +44,8 @@ const TABLE: Array<[string, boolean, boolean, boolean]> = [
   [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON, false, false, true],
   [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON, false, false, true],
   [CRAWL_CAPPED_SKIP_REASON, false, false, true],
+  // A cloud service the prefetch had not got back when its budget ran out (repo#2129).
+  [CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON, false, false, true],
   // A targeted run (#1777): a whole-site rule has nothing to judge, so the rule-wide gap is also not checked.
   [TARGETED_RUN_SKIP_REASON, false, true, true],
   // Discovery probes with no verdict (#1794): check-scoped coverage gaps that are listed as not checked.

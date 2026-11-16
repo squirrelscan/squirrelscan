@@ -76,6 +76,9 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "discovery-probe-redirect-not-followed": gap(true),
   // Prose rather than an id: published reports already carry this exact text.
   "Crawl capped before the frontier was exhausted": gap(true),
+  // A cloud service the prefetch had no answer from when its time budget ran out (repo#2129).
+  "Cloud analysis not checked: the cloud prefetch ran out of its time budget before this result came back.":
+    gap(true),
   // Left out on purpose.
   ignored: { outcome: "disabled", scope: "check", notChecked: false },
   "private-target": { outcome: "disabled", scope: "rule", notChecked: false },

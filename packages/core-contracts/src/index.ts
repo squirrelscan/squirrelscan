@@ -492,6 +492,16 @@ export const EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON = "external-links-out-of-tim
 export const CRAWL_CAPPED_SKIP_REASON = "Crawl capped before the frontier was exhausted";
 
 /**
+ * A cloud-backed check whose service had not answered when the cloud prefetch
+ * hit its time budget (repo#2129). The prefetch keeps every result that did
+ * return; the rest read this, so the rule is "not checked", never passed and
+ * never silently missing. Prose rather than an id because cloud rules persist
+ * their skip as the operator-facing sentence (`humanizeCloudSkip`).
+ */
+export const CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON =
+  "Cloud analysis not checked: the cloud prefetch ran out of its time budget before this result came back.";
+
+/**
  * `skipReason` of `security/tls-certificate` when no TLS handshake was made or
  * none completed (#1259): a proxy is set in the environment (a direct socket
  * would go around it), `--offline` held the audit to the audited host, the
