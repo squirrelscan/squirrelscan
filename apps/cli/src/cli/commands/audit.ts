@@ -1524,6 +1524,16 @@ export const audit = defineCommand({
       return;
     }
 
+    if (args.url === undefined || String(args.url) === "") {
+      // The URL is optional only for --urls-file; keep citty's missing-argument screen.
+      const missing = new Error(
+        "Missing required positional argument: URL"
+      ) as Error & { code: string };
+      missing.name = "CLIError";
+      missing.code = "EARG";
+      throw missing;
+    }
+
     // The one URL check, before anything else: no cloud client, balance read,
     // trace upload or log line sees a URL the audit cannot run on.
     const startCheck = parseUserUrl(String(args.url ?? ""));

@@ -95,7 +95,7 @@ describe("errors", () => {
       "Missing required positional argument: URL"
     );
     expect(out).toContain("squirrel audit needs a URL.");
-    expect(out).toContain("Usage    squirrel audit <url> [options]");
+    expect(out).toContain("Usage    squirrel audit [url] [options]");
     expect(out).toContain("Example  squirrel audit https://example.com");
   });
 });
