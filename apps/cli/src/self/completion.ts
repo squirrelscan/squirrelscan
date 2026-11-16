@@ -269,7 +269,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --content-store --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --bypass-cache --rule-include --rule-exclude --wcag-level --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --full-report --max-duration --no-ignore" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --content-store --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --bypass-cache --rule-include --rule-exclude --wcag-level --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --full-report --max-duration --no-ignore --urls-file --out-dir --retry-failed --restart --url-timeout --max-urls --allow-private-hosts" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -674,6 +674,13 @@ _squirrel() {
             '--ephemeral[Use cloud features for this run only: no dashboard site, no schedule, no publish]' \\
             '--no-ephemeral[Override [cloud] ephemeral = true for this run]' \\
             '--no-ignore[Run without applying the [[ignore]] entries in squirrel.toml]' \\
+            '--urls-file[Batch mode: audit every URL in this file (- for stdin)]:file:_files' \\
+            '--out-dir[Batch mode: directory for the reports and results.jsonl]:dir:_files -/' \\
+            '--retry-failed[Batch mode: run the URLs that failed earlier again]' \\
+            '--restart[Batch mode: move the old results.jsonl aside and start over]' \\
+            '--url-timeout[Batch mode: hard time limit per URL, in seconds]:seconds' \\
+            '--max-urls[Batch mode: most URLs in the file]:count' \\
+            '--allow-private-hosts[Batch mode: audit loopback and private hosts]' \\
             '--visibility[Visibility for published reports]:visibility:(public unlisted private)' \\
             '--follow-redirect[Audit where the start URL redirects when that is another site]' \\
             '--no-follow-redirect[Turn [crawler] follow_redirect off for this run]' \\
@@ -984,6 +991,13 @@ complete -c squirrel -n "__fish_seen_subcommand_from config; and __fish_seen_sub
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s m -l max-pages -d "Maximum pages to crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-depth -d "Maximum crawl depth from the seed"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-duration -d "Wall-clock budget for the whole audit, in seconds"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l urls-file -r -d "Batch mode: audit every URL in this file"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l out-dir -r -d "Batch mode: directory for reports and results.jsonl"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l retry-failed -d "Batch mode: run failed URLs again"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l restart -d "Batch mode: start the results file over"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l url-timeout -r -d "Batch mode: time limit per URL, in seconds"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l max-urls -r -d "Batch mode: most URLs in the file"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l allow-private-hosts -d "Batch mode: audit loopback and private hosts"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l crawl-timeout -d "Crawl-phase wall-clock backstop, in seconds"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l concurrency -d "Global crawl worker pool size"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l per-host -d "Max concurrent requests per host"

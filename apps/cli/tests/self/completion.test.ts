@@ -39,6 +39,8 @@ function commandFlags(cmd: { args?: unknown }): {
   const aliases: Array<{ short: string; long: string }> = [];
   for (const [name, def] of Object.entries(args ?? {})) {
     if (def.type === "positional") continue;
+    // Internal: the batch orchestrator's hand-off to a child audit, not a flag for people to type.
+    if (name === "batch-record") continue;
     const long = kebab(name);
     flags.push(long);
     for (const a of [def.alias ?? []].flat()) {
