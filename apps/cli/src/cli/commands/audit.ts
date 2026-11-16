@@ -635,13 +635,6 @@ export function estimateBalanceAfter(opts: {
   return null;
 }
 
-/**
- * The post-audit cloud-spend disclosure line: total + per-service breakdown +
- * remaining balance. The breakdown reflects the ACTUAL server charges (pricing
- * v11: audit base + 2 per audited page; folded services charge nothing), and
- * names the page count so the arithmetic is checkable at a glance. Exported for
- * tests. #279 #2290
- */
 /** One line on how many bodies came from the shared content store (#1914). */
 export function contentStoreLine(
   stats: { stored: number; reused: number } | undefined
@@ -651,6 +644,13 @@ export function contentStoreLine(
   return `Content store: ${stats.reused.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} page bodies were already stored (the store is shared by every project; use --content-store <path> for a cold run)`;
 }
 
+/**
+ * The post-audit cloud-spend disclosure line: total + per-service breakdown +
+ * remaining balance. The breakdown reflects the ACTUAL server charges (pricing
+ * v11: audit base + 2 per audited page; folded services charge nothing), and
+ * names the page count so the arithmetic is checkable at a glance. Exported for
+ * tests. #279 #2290
+ */
 export function formatCloudSpendSummary(spend: {
   lines: Array<{
     service: string;
