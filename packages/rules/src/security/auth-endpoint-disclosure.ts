@@ -47,7 +47,9 @@ import {
   buildAnonymousGet,
   isThrottledOrChallenged,
   isUnverifiedReply,
+  peekAnonymousGet,
   sendAnonymousGet,
+  type AnonymousGetOutcome,
 } from "./probe-http";
 
 export const AUTH_ENDPOINT_DISCLOSURE_RULE_ID = "security/auth-endpoint-disclosure";
@@ -541,8 +543,15 @@ type EndpointVerdict =
   | { kind: "server-error" }
   | { kind: "not-sent" };
 
-async function probeEndpoint(ctx: RuleContext, candidate: AuthCandidate): Promise<EndpointVerdict> {
-  const outcome = await sendAuthProbe(ctx.probe, candidate.url);
+async function probeEndpoint(
+  ctx: RuleContext,
+  candidate: AuthCandidate,
+  cachedOnly = false
+): Promise<EndpointVerdict> {
+  const pending: Promise<AnonymousGetOutcome> | undefined = cachedOnly
+    ? peekAnonymousGet(ctx.probe, candidate.url)
+    : sendAuthProbe(ctx.probe, candidate.url);
+  const outcome = pending ? await pending : ({ sent: false } as const);
   if (!outcome.sent) return { kind: "not-sent" };
   if ("error" in outcome) return { kind: "errored" };
   const { response } = outcome;
@@ -616,18 +625,19 @@ export const authEndpointDisclosureRule: Rule = {
     let pushback = false;
     const leaks: Array<{ candidate: AuthCandidate; fields: DisclosedField[] }> = [];
     for (const candidate of selection.candidates) {
-      const verdict = await probeEndpoint(ctx, candidate);
+      // After pushback nothing new is sent (#1920), but an answer another rule
+      // already got in this audit is still read: unauthenticated-api defers a
+      // leaking endpoint to this rule, so skipping it would lose the finding
+      // (squirrelscan#1886). Likewise past a budget refusal.
+      const verdict = await probeEndpoint(ctx, candidate, pushback);
       if (verdict.kind === "not-sent") {
-        // Keep going: a later endpoint another rule already probed in this
-        // audit is answered from that probe at no cost (squirrelscan#1886).
-        budgetStopped = true;
+        if (!pushback) budgetStopped = true;
         continue;
       }
       probed++;
       if (verdict.kind === "pushback") {
-        // The site is pushing back, so no further probe is sent (#1920).
         pushback = true;
-        break;
+        continue;
       }
       if (verdict.kind === "server-error") serverErrors++;
       if (verdict.kind === "errored") errored++;

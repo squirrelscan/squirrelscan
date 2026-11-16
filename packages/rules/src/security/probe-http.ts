@@ -196,6 +196,20 @@ export function sendAnonymousGet(
   return pending;
 }
 
+/**
+ * The answer another rule already got for `endpointUrl` in this audit, without
+ * sending anything. A rule that stopped probing (throttled, challenged, out of
+ * budget) still reads these, so a finding another rule deferred to it is never
+ * lost (squirrelscan#1886).
+ */
+export function peekAnonymousGet(
+  probe: ProbeBudget | undefined,
+  endpointUrl: string
+): Promise<AnonymousGetOutcome> | undefined {
+  if (!probe) return undefined;
+  return anonymousGets.get(probe)?.get(buildAnonymousGet(endpointUrl).url);
+}
+
 async function fetchAnonymousGet(
   url: string,
   init: RequestInit,
