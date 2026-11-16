@@ -39,6 +39,24 @@ export interface ParsePageOptions {
   classify?: PageClassifierHook;
 }
 
+/**
+ * The placer a classified document answered with, kept per document so a rule can ask which
+ * region an element sits in without the node list ever being stored on the page (repo#3544).
+ * Weak on purpose: it lives and dies with the in-memory DOM and is never serialised, so a page
+ * rebuilt from cached HTML has no entry and rules fall back to the markup landmarks.
+ */
+const PLACERS = new WeakMap<object, LinkPlacer>();
+
+/** Remember the placer for a document (the parser does this; tests may too). */
+export function setDocumentPlacer(document: object, placer: LinkPlacer): void {
+  PLACERS.set(document, placer);
+}
+
+/** The classifier's element placer for this document, or null when it was not classified. */
+export function getDocumentPlacer(document: object | null | undefined): LinkPlacer | null {
+  return document ? (PLACERS.get(document) ?? null) : null;
+}
+
 /** Run a hook without ever letting it fail the parse. */
 export function runClassifier(
   hook: PageClassifierHook | undefined,
@@ -48,7 +66,9 @@ export function runClassifier(
 ): PageClassifierOutput | null {
   if (!hook) return null;
   try {
-    return hook({ document, url, html });
+    const out = hook({ document, url, html });
+    if (out) PLACERS.set(document, out.placeLink);
+    return out;
   } catch {
     return null;
   }
