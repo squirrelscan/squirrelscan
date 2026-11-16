@@ -361,7 +361,13 @@ async function writeCrawlBody(
   await run(
     storage.addSitemapUrls(
       crawlId,
-      model.sitemapPaths.map((path) => ({ sitemapUrl, loc: `${baseUrl}${path}` })),
+      // Deterministic lastmod spread over 28 days of 2026-01 (#1668): without any lastmod the
+      // golden recorded a skip for both lastmod rules, so it never exercised their counting.
+      model.sitemapPaths.map((path, i) => ({
+        sitemapUrl,
+        loc: `${baseUrl}${path}`,
+        lastmod: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      })),
     ),
   );
 

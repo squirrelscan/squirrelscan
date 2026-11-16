@@ -149,7 +149,7 @@ describe("crawl/sitemap-lastmod-churn", () => {
       expect(checks[0]?.status).toBe("skipped");
       expect(checks[0]?.status).not.toBe("warn");
       expect(checks[0]?.message).toContain("news");
-      expect(checks[0]?.details?.newsUrlsWithLastmod).toBe(38);
+      expect(checks[0]?.details?.newsUrlsExcluded).toBe(38);
     });
 
     test("news URLs are excluded from the count, so a well-spread regular sitemap still passes", async () => {
@@ -188,6 +188,91 @@ describe("crawl/sitemap-lastmod-churn", () => {
       // The finding names its source, so "which sitemap stamps at build time" is answered.
       expect(checks[0]?.message).toContain("https://example.com/sitemap.xml");
       expect(checks[0]?.message).not.toContain("news.xml");
+    });
+  });
+
+  describe("boundaries and bucketing (#1668)", () => {
+    const run = async (c: RuleContext) => (await sitemapLastmodChurnRule.run(c)).checks[0]!;
+
+    test("19 URLs with lastmod on one day → skipped", async () => {
+      expect((await run(ctx(urlsWithLastmod(19, ["2024-06-01"])))).status).toBe("skipped");
+    });
+
+    test("20 URLs with lastmod on one day → judged (warn)", async () => {
+      expect((await run(ctx(urlsWithLastmod(20, ["2024-06-01"])))).status).toBe("warn");
+    });
+
+    test("20 URLs on exactly 2 distinct days → warn", async () => {
+      const check = await run(ctx(urlsWithLastmod(20, ["2024-06-01", "2024-06-02"])));
+      expect(check.status).toBe("warn");
+      expect(check.details?.distinctDays).toBe(2);
+    });
+
+    test("20 URLs on exactly 3 distinct days → pass", async () => {
+      const check = await run(ctx(urlsWithLastmod(20, ["2024-06-01", "2024-06-02", "2024-06-03"])));
+      expect(check.status).toBe("pass");
+      expect(check.details?.distinctDays).toBe(3);
+    });
+
+    test("500 URLs with no lastmod → skip says the sitemap omits lastmod, not 'too small'", async () => {
+      const urls = Array.from({ length: 500 }, (_, i) => ({ loc: `https://example.com/p${i}` }));
+      const check = await run(ctx(urls));
+      expect(check.status).toBe("skipped");
+      expect(check.message).toContain("omits lastmod");
+      expect(check.message).toContain("500");
+      expect(check.message).not.toContain("too small");
+      expect(check.skipReason).toBe("Sitemap omits lastmod");
+    });
+
+    test("19 URLs with no lastmod → still the 'too small' message", async () => {
+      const urls = Array.from({ length: 19 }, (_, i) => ({ loc: `https://example.com/p${i}` }));
+      const check = await run(ctx(urls));
+      expect(check.status).toBe("skipped");
+      expect(check.message).toContain("too small");
+    });
+
+    test("offset collapse: three local days that are two UTC days stay three days → pass-count 3", async () => {
+      const lastmods = ["2024-06-01T23:30:00+00:00", "2024-06-02T00:30:00+02:00", "2024-06-03T01:00:00+03:00"];
+      const check = await run(ctx(urlsWithLastmod(30, lastmods)));
+      expect(check.status).toBe("pass");
+      expect(check.details?.distinctDays).toBe(3);
+    });
+
+    test("offset split: one local build day with wide offsets stays one day → warn", async () => {
+      const lastmods = ["2024-06-01T00:30:00+14:00", "2024-06-01T12:00:00+00:00", "2024-06-01T23:30:00-12:00"];
+      const check = await run(ctx(urlsWithLastmod(30, lastmods)));
+      expect(check.status).toBe("warn");
+      expect(check.details?.distinctDays).toBe(1);
+      expect(check.details?.dates).toEqual(["2024-06-01"]);
+    });
+
+    test("one details key for the excluded news count on every branch", async () => {
+      const news = Array.from({ length: 5 }, (_, i) => ({ loc: `https://example.com/n${i}`, lastmod: "2024-06-01" }));
+      const regular = (n: number, lastmods: string[]) => urlsWithLastmod(n, lastmods);
+      const skip = await run(multi([{ url: "https://example.com/n.xml", urls: news, news: true }]));
+      const warn = await run(
+        multi([
+          { url: "https://example.com/n.xml", urls: news, news: true },
+          { url: "https://example.com/s.xml", urls: regular(20, ["2024-06-01"]) },
+        ]),
+      );
+      const pass = await run(
+        multi([
+          { url: "https://example.com/n.xml", urls: news, news: true },
+          { url: "https://example.com/s.xml", urls: regular(20, ["2024-06-01", "2024-06-02", "2024-06-03"]) },
+        ]),
+      );
+      for (const c of [skip, warn, pass]) {
+        expect(c.details?.newsUrlsExcluded).toBe(5);
+        expect(c.details).not.toHaveProperty("newsUrlsWithLastmod");
+      }
+      expect([skip.status, warn.status, pass.status]).toEqual(["skipped", "warn", "pass"]);
+    });
+
+    test("isNewsSitemap undefined (pre-migration-21 row) fails open: treated as a regular sitemap and warns", async () => {
+      const urls = urlsWithLastmod(38, ["2024-06-01", "2024-06-02"]);
+      const check = await run(ctx(urls)); // ctx() leaves isNewsSitemap unset
+      expect(check.status).toBe("warn");
     });
   });
 });

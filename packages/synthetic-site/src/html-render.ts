@@ -74,7 +74,8 @@ function templateChrome(templateId: string): {
     case "blog":
       return {
         headerExtra: "",
-        mainWrapperOpen: '<main class="blog"><article><time datetime="2026-01-01"></time>',
+        mainWrapperOpen:
+          '<main class="blog"><article><time class="updated" datetime="2026-01-01"></time>',
         mainWrapperClose: "</article></main>",
       };
     case "category":
