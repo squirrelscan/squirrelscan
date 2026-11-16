@@ -303,6 +303,12 @@
    "reduced-motion|pass|No motion that needs reduced-motion handling||"
   ]
  },
+ "a11y/rendered-layout": {
+  "digest": "24902126840669",
+  "lines": [
+   "rendered-layout|skipped|Rendered layout checks skipped: they need a cloud audit||"
+  ]
+ },
  "a11y/select-name": {
   "digest": "129516861387362",
   "lines": [

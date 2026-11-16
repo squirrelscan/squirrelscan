@@ -399,6 +399,7 @@
                   "rules/a11y/table-headers",
                   "rules/a11y/video-captions",
                   "rules/a11y/zoom-disabled",
+                  "rules/a11y/rendered-layout",
                   "rules/a11y/paste-inputs",
                   "rules/a11y/aria-valid-attr",
                   "rules/a11y/aria-valid-attr-value",
