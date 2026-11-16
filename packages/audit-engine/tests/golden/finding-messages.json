@@ -3726,6 +3726,12 @@
    "unchecked-resources|info|Partial check: fonts, third-party resources were not measured this audit||"
   ]
  },
+ "reliability/js-errors": {
+  "digest": "96331007454476",
+  "lines": [
+   "js-errors|skipped|JavaScript errors were not checked||"
+  ]
+ },
  "schema/article": {
   "digest": "77463328948093",
   "lines": [
