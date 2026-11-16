@@ -1158,7 +1158,7 @@
       },
       "AuditRunMode": {
         "type": "string",
-        "enum": ["audit", "audit-fix", "fix", "recommend"]
+        "enum": ["audit", "audit-fix", "recommend"]
       },
       "CreateAuditRunRequest": {
         "type": "object",
