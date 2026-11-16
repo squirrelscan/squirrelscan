@@ -13,6 +13,8 @@ A manifest at a fixed path lets an agent discover a service without a person rea
 
 One older path is worth removing rather than adding. `/.well-known/ai-plugin.json` described a ChatGPT plugin, a format that has been retired. A stale one still sitting on a server describes a service that no longer works.
 
+Manifests like these help an agent find a service, and the [GEO checker guide](https://squirrelscan.com/learn/geo-checker) covers them with the other ways a site becomes visible to AI systems.
+
 ## What squirrel checks
 
 The rule runs once per crawl against probed well-known paths. A probe counts as a hit when it returned 200, the body parsed as JSON, and it did not sniff as HTML. It emits one or more checks:

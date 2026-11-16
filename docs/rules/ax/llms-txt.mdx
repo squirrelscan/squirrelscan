@@ -9,6 +9,8 @@ description: "No /llms.txt at the root, an SPA fallback served in its place, or 
 
 It is a proposal, not a standard, and no crawler is obliged to fetch it. It costs one static file and it gives an agent a curated entry point instead of a sitemap of every URL you have. Absence is never a defect here.
 
+For where llms.txt sits among other AI visibility work, see the [GEO checker guide](https://squirrelscan.com/learn/geo-checker).
+
 ## What squirrel checks
 
 The rule runs once per crawl against the root `/llms.txt`, with `/.well-known/llms.txt` and `/docs/llms.txt` as fallbacks probed by the crawler. It emits one or two checks:

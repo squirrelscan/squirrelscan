@@ -9,6 +9,8 @@ HTTP 402 Payment Required has been reserved in the HTTP specification for years 
 
 Charging for crawler access is a business decision, not a defect, and this rule reports it as such. The one case worth calling out is scope. A training crawler pulling thousands of pages and a person's assistant fetching one page they asked about are different clients, and a 402 aimed at the first will hit the second unless the rule is scoped.
 
+Charging crawlers changes how AI systems reach a site, so the [GEO checker guide](https://squirrelscan.com/learn/geo-checker) is worth reading alongside this page.
+
 ## What squirrel checks
 
 The rule runs once per crawl and reads the three homepage probes made during prefetch: one with a browser user-agent, one as `GPTBot` and one as `Claude-User`. It emits one or two checks:

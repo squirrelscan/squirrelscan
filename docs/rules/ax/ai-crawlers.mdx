@@ -14,6 +14,8 @@ description: "robots.txt blocking Claude-User or PerplexityBot alongside the tra
 
 Blocking a training crawler is a policy choice about one vendor. Blocking an archive crawler is wider, because the corpus it feeds is shared: a `CCBot` block keeps future pages out of Common Crawl, which many training sets are built from. robots.txt is a request that cooperative crawlers honour, and it does not remove captures that already exist.
 
+Deciding which AI bots to allow is part of generative engine optimization, and the [GEO checker guide](https://squirrelscan.com/learn/geo-checker) explains the wider picture.
+
 ## What squirrel checks
 
 The rule runs once per crawl against the parsed robots.txt and evaluates 24 known crawler tokens. For each one it resolves the groups that apply, preferring a group naming the token over `User-agent: *`, and treats the bot as blocked when those groups carry `Disallow: /` with no `Allow: /`. Token matching is case-insensitive. It emits one to five checks (a bare wildcard block emits just one, described first):

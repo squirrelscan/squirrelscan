@@ -9,6 +9,8 @@ Content negotiation lets one URL serve more than one representation. A client se
 
 Two simpler routes exist. A `.md` twin of the page, such as `/index.md`, is a second URL with the same content. A `Link: <...>; rel="alternate"; type="text/markdown"` header on the HTML page advertises where that twin lives, which is how a site whose homepage is an application shell can still point an agent at readable content.
 
+Markdown responses are one lever in generative engine optimization, and the [GEO checker](https://squirrelscan.com/learn/geo-checker) puts them alongside the rest.
+
 ## What squirrel checks
 
 The rule runs once per crawl against the homepage and emits one or two checks:

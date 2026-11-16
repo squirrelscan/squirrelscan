@@ -9,6 +9,8 @@ description: "Which pages declare noai, noimageai, nosnippet or max-snippet:0, a
 
 `nosnippet` and `max-snippet:0` are different. They are long-standing robots directives that Google documents, they tell a search engine not to show a text snippet from the page, and answer engines treat them as instructions not to quote the page verbatim. All four can be declared in a `<meta name="robots">` tag or in an `X-Robots-Tag` response header.
 
+Opt-out tags are only one part of managing how AI systems use your content, so see the [GEO checker guide](https://squirrelscan.com/learn/geo-checker) for the wider decisions.
+
 ## What squirrel checks
 
 The rule runs on every crawled page. It reads the `X-Robots-Tag` response header and every `<meta>` element whose `name` is `robots`, `ai`, `googlebot` or `bingbot`, and matches four tokens case-insensitively in each: `noai`, `noimageai`, `nosnippet`, and `max-snippet:0` with optional spaces around the colon. It emits one check:

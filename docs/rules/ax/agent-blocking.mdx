@@ -9,6 +9,8 @@ robots.txt states a policy. It does not enforce one. A site can allow an AI user
 
 The two cases differ in cost. Blocking a training crawler such as `GPTBot` is often the intent behind flipping that switch. Blocking `Claude-User` is not: that user-agent fetches a page because a person asked for it inside an assistant and is waiting for the answer.
 
+To see how edge blocking fits into a wider check of AI visibility, read the [GEO checker guide](https://squirrelscan.com/learn/geo-checker).
+
 ## What squirrel checks
 
 The rule runs once per crawl. By default it uses three homepage fetches made during the prefetch phase, one with a browser user-agent, one as `GPTBot` and one as `Claude-User`, and compares each AI response against the browser baseline. It emits at most one check per AI probe, or a single check covering all of them.
