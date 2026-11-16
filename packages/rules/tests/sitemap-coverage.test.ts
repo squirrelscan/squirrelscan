@@ -147,6 +147,7 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
         robotsTxt: null,
         siteIndexable: opts.siteIndexable,
         sitemaps: {
+          readState: "complete",
           discovered: [
             {
               url: `${BASE}/sitemap.xml`,
