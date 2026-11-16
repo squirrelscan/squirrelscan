@@ -66,6 +66,7 @@ import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../t
 
 import {
   AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+  authRuleLeftUnread,
   findDisclosures,
   parseJsonAnswer,
   selectAuthCandidates,
@@ -960,8 +961,9 @@ export const unauthenticatedApiRule: Rule = {
 
     // An endpoint security/auth-endpoint-disclosure also probes is reported
     // once: by that rule when the answer carries a password, secret or the
-    // user record (the more specific finding), by this rule otherwise
-    // (squirrelscan#1886). Undefined `ruleEnabled` means the default rule set.
+    // user record (the more specific finding), by this rule otherwise, and by
+    // this rule when the auth rule left it unread (squirrelscan#1886).
+    // Undefined `ruleEnabled` means the default rule set.
     const authRuleOn = ctx.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
     const authUrls = new Set(authRuleOn ? selectAuthCandidates(ctx).candidates.map((c) => c.url) : []);
     let deferredToAuth = 0;
@@ -997,7 +999,14 @@ export const unauthenticatedApiRule: Rule = {
       }
       const verdict = readApiResponse(response);
       if (verdict.kind === "records") {
-        if (authUrls.has(candidate.url) && disclosesToAuthRule(response)) {
+        // Checked after this rule's own GET resolved: by then the auth rule has
+        // either read this answer (it was memoized before the request left) or
+        // marked the endpoint unread, whichever order the rules run in.
+        if (
+          authUrls.has(candidate.url) &&
+          !authRuleLeftUnread(ctx.probe, candidate.url) &&
+          disclosesToAuthRule(response)
+        ) {
           deferredToAuth++;
           continue;
         }

@@ -100,28 +100,39 @@ describe("squirrelscan#1886: one request and one finding per endpoint", () => {
     });
   }
 
-  test("a deferred endpoint is still reported when the auth rule hit a 429 first", async () => {
-    // unauthenticated-api probes call sites first (/api/me), then the literal (/api/session,
-    // 429, stops it). auth-endpoint-disclosure keeps discovery order: /api/session first, so
-    // it is throttled before /api/me. It must still read the /api/me answer already fetched.
-    const stub = stubFetch({
-      [ME]: () => json(LEAKY_USER),
-      [`${BASE}/api/session`]: () => new Response("slow down", { status: 429 }),
+  for (const authFirst of [false, true]) {
+    test(`a throttle in the auth rule never loses the finding (${authFirst ? "auth rule first" : "api rule first"})`, async () => {
+      // unauthenticated-api probes call sites first (/api/me), then the literal (/api/session).
+      // auth-endpoint-disclosure keeps discovery order: /api/session first, which answers 429,
+      // so it stops sending before /api/me. api first: the auth rule reads the /api/me answer
+      // already fetched and reports it. auth first: /api/me is left unread, so
+      // unauthenticated-api keeps it. Either way one finding and one request.
+      const stub = stubFetch({
+        [ME]: () => json(LEAKY_USER),
+        [`${BASE}/api/session`]: () => new Response("slow down", { status: 429 }),
+      });
+      restore = stub.restore;
+      const ctx = ruleCtx({
+        surface: surface([
+          candidate("/api/session", { method: undefined, discoveredVia: "string-literal" }),
+          candidate("/api/me", { method: "GET" }),
+        ]),
+      });
+      let api: CheckResult[];
+      let auth: CheckResult[];
+      if (authFirst) {
+        auth = (await authEndpointDisclosureRule.run(ctx)).checks;
+        api = (await unauthenticatedApiRule.run(ctx)).checks;
+      } else {
+        api = (await unauthenticatedApiRule.run(ctx)).checks;
+        auth = (await authEndpointDisclosureRule.run(ctx)).checks;
+      }
+      expect(meRequests(stub.sent)).toHaveLength(1);
+      expect(fails(api).length + fails(auth).length).toBe(1);
+      if (authFirst) expect(fails(api)).toHaveLength(1);
+      else expect(fails(auth)[0]?.details).toMatchObject({ endpoint: ME });
     });
-    restore = stub.restore;
-    const ctx = ruleCtx({
-      surface: surface([
-        candidate("/api/session", { method: undefined, discoveredVia: "string-literal" }),
-        candidate("/api/me", { method: "GET" }),
-      ]),
-    });
-    const api = (await unauthenticatedApiRule.run(ctx)).checks;
-    const auth = (await authEndpointDisclosureRule.run(ctx)).checks;
-    expect(meRequests(stub.sent)).toHaveLength(1);
-    expect(fails(api)).toHaveLength(0);
-    expect(fails(auth)).toHaveLength(1);
-    expect(fails(auth)[0]?.details).toMatchObject({ endpoint: ME });
-  });
+  }
 
   test("with auth-endpoint-disclosure disabled, unauthenticated-api keeps the finding", async () => {
     const { api, sent } = await runBoth(
