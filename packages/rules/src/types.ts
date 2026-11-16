@@ -627,6 +627,11 @@ export interface SiteData {
      * before they were recorded, where absence proves nothing.
      */
     versionHeadersRecorded?: boolean;
+    /**
+     * `false` when the page record carries no response headers, so an empty or
+     * missing `headers` map means "unknown", not "none sent" (repo#4641). Absent reads as recorded.
+     */
+    headersRecorded?: boolean;
   }>;
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;

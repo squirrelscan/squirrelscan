@@ -300,6 +300,14 @@ export function recordsVersionHeaders(page: PageRecord): boolean {
 }
 
 /**
+ * Whether a stored page record carries its response headers (repo#4641). Only an
+ * explicit `recorded: false` says they were not; a record without the marker reads as recorded.
+ */
+export function recordsResponseHeaders(page: PageRecord): boolean {
+  return page.headers?.recorded !== false;
+}
+
+/**
  * The header map technology detection reads: the rule-facing map plus the
  * headers the crawler keeps for detection (pub#871), which a crawl reusing an
  * unchanged page refreshes.

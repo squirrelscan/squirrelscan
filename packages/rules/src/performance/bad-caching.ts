@@ -21,6 +21,8 @@ import {
 import { SUBRESOURCE_CACHING_LIMITS } from "@squirrelscan/utils/constants";
 import { detectCdnFromHeaders, hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
 
+import { HEADERS_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Cloudflare documents removing the ETag from HTML when one of these features
@@ -271,6 +273,15 @@ function judgeSubresources(ctx: RuleContext, maxSample: number): CheckResult | u
   };
 }
 
+// Header names are case-insensitive (RFC 9110 5.1). The engine hands rules lowercase keys, but a
+// map built elsewhere (a cloud fetcher, a stored raw response) may carry `ETag` or `Cache-Control`,
+// and a lookup on the lowercase name would read that as "header absent" (repo#4641).
+function lowerCaseHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers ?? {})) out[name.toLowerCase()] = value;
+  return out;
+}
+
 export const badCachingRule: Rule = {
   meta: {
     id: "perf/bad-caching",
@@ -292,14 +303,29 @@ export const badCachingRule: Rule = {
     const opts = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
 
+    // A page whose record carries no response headers (headersRecorded === false) says nothing about
+    // what the response sent: it is not a page "without an ETag", so it is left out and reported as
+    // not checked, never counted against the site (repo#4641).
+    const successful = (ctx.site?.pages ?? []).filter((p) => p.statusCode >= 200 && p.statusCode < 300);
+    const unrecorded = successful.filter((p) => p.headersRecorded === false);
+
     // Only consider successful HTML responses we actually have headers for.
-    const pages = (ctx.site?.pages ?? []).filter(
-      (p) =>
-        p.statusCode >= 200 &&
-        p.statusCode < 300 &&
-        p.headers &&
-        (p.headers["content-type"] ?? "").includes("text/html")
-    );
+    const pages = successful
+      .filter((p) => p.headersRecorded !== false && p.headers)
+      .map((p) => ({ ...p, headers: lowerCaseHeaders(p.headers) }))
+      .filter((p) => (p.headers["content-type"] ?? "").includes("text/html"));
+
+    if (pages.length === 0 && unrecorded.length > 0) {
+      checks.push({
+        name: "bad-caching",
+        status: "skipped",
+        message: `Response headers were not recorded for ${unrecorded.length} page${unrecorded.length === 1 ? "" : "s"}, so caching was not checked`,
+        skipReason: HEADERS_NOT_RECORDED_SKIP_REASON,
+        pages: unrecorded.slice(0, 5).map((p) => p.url),
+        details: { unrecordedPages: unrecorded.length },
+      });
+      return { checks };
+    }
 
     if (pages.length === 0) {
       checks.push({
@@ -537,6 +563,19 @@ export const badCachingRule: Rule = {
 
     const sub = judgeSubresources(ctx, opts.max_subresources);
     if (sub) checks.push(sub);
+
+    // Some pages had no recorded headers: the shares above cover only the rest. Say so, as a
+    // not-checked line, so a partial record never reads as a clean site (repo#4641).
+    if (unrecorded.length > 0) {
+      checks.push({
+        name: "bad-caching-headers-not-recorded",
+        status: "skipped",
+        message: `Response headers were not recorded for ${unrecorded.length} page${unrecorded.length === 1 ? "" : "s"}, so they are left out of the shares above`,
+        skipReason: HEADERS_NOT_RECORDED_SKIP_REASON,
+        pages: unrecorded.slice(0, 5).map((p) => p.url),
+        details: { unrecordedPages: unrecorded.length },
+      });
+    }
 
     return { checks };
   },

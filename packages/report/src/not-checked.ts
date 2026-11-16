@@ -79,6 +79,8 @@ const HINTS: Record<string, string> = {
   [RULE_TIMED_OUT_SKIP_REASON]:
     "A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.",
   // #1269: `squirrel analyze` makes no live request.
+  "headers-not-recorded":
+    "The stored pages carry no response headers, so a missing header proves nothing. Run the audit again to record them.",
   "analyze-offline":
     "Run `squirrel audit` to probe the live site.",
   // #1932: a probing rule below its level, or one the site throttled or the budget cut short.

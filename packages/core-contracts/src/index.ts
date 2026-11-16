@@ -438,6 +438,9 @@ export const EXTERNAL_LINK_INVALID_SUFFIX_ERROR = "invalid link: no such domain 
  * were never fetched (repo#2729). Their status is unknown, so the rule cannot
  * say they are not broken. An evaluation gap, not a pass.
  */
+/** `skipReason` of a rule that needs response headers the page record does not carry (repo#4641). */
+export const HEADERS_NOT_RECORDED_SKIP_REASON = "headers-not-recorded";
+
 export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
 
 /**
