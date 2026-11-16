@@ -8,10 +8,22 @@ import { Effect } from "effect";
 
 import type { CheckResult } from "@/types";
 
-import { saveAnalyzeRuleResults } from "@/controllers/analyze";
+import { createReplacingRuleResultsWriter } from "@/controllers/analyze";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
 const PAGE = "https://example.com/";
+
+async function saveAnalyzeRuleResults(
+  storage: SQLiteStorage,
+  crawlId: string,
+  r: ReturnType<typeof results>
+) {
+  const writer = createReplacingRuleResultsWriter(storage, crawlId);
+  for (const [url, rules] of r.pageRuleResults) {
+    writer.writePage(url, [...rules]);
+  }
+  await writer.writeSite(r.siteRuleResults);
+}
 
 function results(message: string) {
   const check = (name: string): CheckResult => ({
@@ -108,21 +120,29 @@ describe("analyze replaces the crawl's rule results (#844)", () => {
     }
   });
 
-  test("a replace that fails part way keeps the previous results", async () => {
+  test("a first write that fails part way keeps the previous results", async () => {
     const { storage, crawlId } = await storedCrawl();
     try {
       await saveAnalyzeRuleResults(storage, crawlId, results("first run"));
-      // A BigInt cannot be serialized, so the second check's insert throws after
-      // the delete and the first insert already ran inside the transaction.
+      // A BigInt cannot be serialized, so the insert throws after the delete
+      // already ran inside the first write's transaction (the page batch).
       const broken = results("second run");
-      broken.siteRuleResults.set("links/broken-links", [
-        {
-          name: "broken-links",
-          status: "warn",
-          message: "second run",
-          items: [{ id: 1n }] as never,
-        },
-      ]);
+      broken.pageRuleResults.set(
+        PAGE,
+        new Map([
+          [
+            "core/meta-title",
+            [
+              {
+                name: "core/meta-title",
+                status: "warn" as const,
+                message: "second run",
+                items: [{ id: 1n }] as never,
+              },
+            ],
+          ],
+        ])
+      );
       await expect(
         saveAnalyzeRuleResults(storage, crawlId, broken)
       ).rejects.toBeDefined();
