@@ -44,6 +44,16 @@ export const ASSET_COMPRESSION_LIMITS = {
 } as const;
 
 /**
+ * perf/bad-caching judges the caching headers of at most this many crawled
+ * same-site sub-resources (CSS, scripts, fonts, images), taken in URL order so
+ * the CLI and the cloud audit pick the same sample (repo#4492). Tunable per
+ * rule via `max_subresources`.
+ */
+export const SUBRESOURCE_CACHING_LIMITS = {
+  MAX_SAMPLE: 50,
+} as const;
+
+/**
  * A render-blocking `<script src>` that took longer than this to answer is reported by
  * perf/render-blocking as a slow blocking script (#1751). One second is where a
  * synchronous head script alone puts First Contentful Paint past a "good" score.

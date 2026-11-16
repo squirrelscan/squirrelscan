@@ -1395,6 +1395,7 @@ export function fetchAssetsFromOccurrences(
         finalUrl: fetch.finalUrl,
         sourceMapHeader: fetch.sourceMapHeader,
         contentEncoding: fetch.contentEncoding,
+        ...(fetch.cacheHeaders ? { cacheHeaders: fetch.cacheHeaders } : {}),
     });
 
     const result: PreFetchedAssets = {
@@ -1421,6 +1422,8 @@ export function fetchAssetsFromOccurrences(
           cacheControl: check.cacheControl,
           etag: check.etag,
           lastModified: check.lastModified,
+          expires: check.expires,
+          date: check.date,
           vary: check.vary,
           cacheReason: check.cacheReason,
         })),
@@ -1439,6 +1442,8 @@ export function fetchAssetsFromOccurrences(
           cacheControl: check.cacheControl,
           etag: check.etag,
           lastModified: check.lastModified,
+          expires: check.expires,
+          date: check.date,
           vary: check.vary,
           cacheReason: check.cacheReason,
           naturalWidth: check.naturalWidth,
@@ -1455,6 +1460,12 @@ export function fetchAssetsFromOccurrences(
           rateLimited: check.rateLimited,
           wafBlocked: check.wafBlocked,
           ...(withheld(check.url, check.status, check.redirectTarget) ? { headersWithheld: true } : {}),
+          cacheControl: check.cacheControl,
+          expires: check.expires,
+          date: check.date,
+          etag: check.etag,
+          lastModified: check.lastModified,
+          cacheReason: check.cacheReason,
         })),
       },
       // Absent, not empty, when the rule is off: nothing was measured.

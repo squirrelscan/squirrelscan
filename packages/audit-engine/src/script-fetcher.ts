@@ -22,6 +22,14 @@ import { rateLimitedFlag, wafBlockedFlag } from "./lib/asset-status";
 import { normalizeEncoding } from "./resource-checker";
 import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
+export interface ScriptCacheHeaders {
+  cacheControl: string | null;
+  expires: string | null;
+  date: string | null;
+  etag: string | null;
+  lastModified: string | null;
+}
+
 export interface ScriptFetchResult {
   url: string;
   status: number | null;
@@ -38,6 +46,8 @@ export interface ScriptFetchResult {
    * identity/absent. Absent (`undefined`) when no response was seen. (#9)
    */
   contentEncoding?: string | null;
+  /** Caching headers observed on this fetch (repo#4492). Absent when no response was seen. */
+  cacheHeaders?: ScriptCacheHeaders;
   /** Throttled by the origin (429/430, or 503 with Retry-After) (#703). */
   rateLimited?: boolean;
   /** A WAF or bot challenge answered in place of the script (#703). */
@@ -207,6 +217,14 @@ async function fetchScriptAttempt(
       response.headers.get("content-encoding")
     );
 
+    const cacheHeaders: ScriptCacheHeaders = {
+      cacheControl: response.headers.get("cache-control"),
+      expires: response.headers.get("expires"),
+      date: response.headers.get("date"),
+      etag: response.headers.get("etag"),
+      lastModified: response.headers.get("last-modified"),
+    };
+
     const wasRedirected = redirected;
     const finalUrl = wasRedirected ? resolvedFinalUrl : undefined;
 
@@ -224,6 +242,7 @@ async function fetchScriptAttempt(
         finalUrl,
         sourceMapHeader,
         contentEncoding,
+        cacheHeaders,
         error: SCRIPT_TOO_LARGE_ERROR,
       };
     }
@@ -237,6 +256,7 @@ async function fetchScriptAttempt(
         finalUrl,
         sourceMapHeader,
         contentEncoding,
+        cacheHeaders,
         error: `HTTP ${response.status}`,
         rateLimited: rateLimitedFlag(response.status, response.headers),
         wafBlocked: wafBlockedFlag(response.status, response.headers),
@@ -252,6 +272,7 @@ async function fetchScriptAttempt(
         finalUrl,
         sourceMapHeader,
         contentEncoding,
+        cacheHeaders,
         error: "not javascript",
       };
     }
@@ -278,6 +299,7 @@ async function fetchScriptAttempt(
         finalUrl,
         sourceMapHeader,
         contentEncoding,
+        cacheHeaders,
         error: SCRIPT_TOO_LARGE_ERROR,
       };
     }
@@ -292,6 +314,7 @@ async function fetchScriptAttempt(
       finalUrl,
       sourceMapHeader,
       contentEncoding,
+      cacheHeaders,
     };
   } finally {
     clearTimeout(timeoutId);

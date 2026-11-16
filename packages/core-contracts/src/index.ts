@@ -2796,6 +2796,10 @@ export interface ResourceSizeData {
   transferBytes?: number | null;
   /** Cache-Control header verbatim. (#107) */
   cacheControl?: string | null;
+  /** Expires header verbatim, observed on this fetch (repo#4492). */
+  expires?: string | null;
+  /** Date header verbatim, the reference an Expires is judged against (repo#4492). */
+  date?: string | null;
   /** ETag validator, if present. (#107) */
   etag?: string | null;
   /** Last-Modified validator, if present. (#107) */
@@ -2864,6 +2868,17 @@ export interface ScriptContentData {
    * that as unknown, NOT as uncompressed. (#9)
    */
   contentEncoding?: string | null;
+  /**
+   * Caching headers observed on THIS fetch (repo#4492). Absent when no response
+   * was seen (a content-store hit), which perf/bad-caching reads as unknown.
+   */
+  cacheHeaders?: {
+    cacheControl: string | null;
+    expires: string | null;
+    date: string | null;
+    etag: string | null;
+    lastModified: string | null;
+  };
   /** Throttled by the origin: `status` is unverified, not a broken file (#703). */
   rateLimited?: boolean;
   /** A WAF or bot challenge answered in place of the script (#703). */

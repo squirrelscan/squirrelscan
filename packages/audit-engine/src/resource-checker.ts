@@ -76,6 +76,10 @@ export interface ResourceCheckResult {
   transferBytes: number | null;
   /** Cache-Control header verbatim. (#107) */
   cacheControl: string | null;
+  /** Expires header verbatim, observed on this fetch (repo#4492). Absent when not read. */
+  expires?: string | null;
+  /** Date header verbatim, the reference an Expires is judged against (repo#4492). */
+  date?: string | null;
   /** ETag validator, if present. (#107) */
   etag: string | null;
   /** Last-Modified validator, if present. (#107) */
@@ -512,6 +516,8 @@ async function checkSingleResourceAsync(
     contentType: response.headers.get("content-type"),
     contentEncoding: normalizeEncoding(response.headers.get("content-encoding")),
     cacheControl: response.headers.get("cache-control"),
+    expires: response.headers.get("expires"),
+    date: response.headers.get("date"),
     etag: response.headers.get("etag"),
     lastModified: response.headers.get("last-modified"),
     vary: response.headers.get("vary"),
@@ -594,6 +600,8 @@ async function checkSingleResourceAsync(
             cacheControl: meta.cacheControl,
             etag: meta.etag,
             lastModified: meta.lastModified,
+            expires: meta.expires,
+            date: meta.date,
             vary: meta.vary,
             error: "invalid content-type",
           };
@@ -629,6 +637,8 @@ async function checkSingleResourceAsync(
             cacheControl: meta.cacheControl,
             etag: meta.etag,
             lastModified: meta.lastModified,
+            expires: meta.expires,
+            date: meta.date,
             vary: meta.vary,
             redirectTarget: headFinalUrl !== url ? headFinalUrl : null,
           };
@@ -788,6 +798,8 @@ async function checkSingleResourceAsync(
         cacheControl: meta.cacheControl,
         etag: meta.etag,
         lastModified: meta.lastModified,
+        expires: meta.expires,
+        date: meta.date,
         vary: meta.vary,
         error: "invalid content-type",
       };
@@ -827,6 +839,8 @@ async function checkSingleResourceAsync(
         cacheControl: meta.cacheControl,
         etag: meta.etag,
         lastModified: meta.lastModified,
+        expires: meta.expires,
+        date: meta.date,
         vary: meta.vary,
         redirectTarget: getFinalUrl !== url ? getFinalUrl : null,
         naturalWidth: header?.width ?? null,
@@ -868,6 +882,8 @@ async function checkSingleResourceAsync(
       cacheControl: meta.cacheControl,
       etag: meta.etag,
       lastModified: meta.lastModified,
+      expires: meta.expires,
+      date: meta.date,
       vary: meta.vary,
       redirectTarget: getFinalUrl !== url ? getFinalUrl : null,
     };

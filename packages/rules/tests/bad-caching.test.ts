@@ -723,3 +723,78 @@ describe("perf/bad-caching no-store (#1754)", () => {
     expect(msg).toContain("2 set no caching policy");
   });
 });
+
+describe("perf/bad-caching sub-resources (repo#4492)", () => {
+  const pages = [{ url: "https://example.com/", headers: goodHeaders }];
+  function withAssets(css: { url: string; cacheControl: string | null; extra?: Record<string, unknown> }[]): RuleContext {
+    const ctx = siteCtx(pages);
+    ctx.site!.resourceSizes = {
+      css: css.map((c) => ({
+        url: c.url,
+        status: 200,
+        error: null,
+        contentType: "text/css",
+        sizeBytes: 100,
+        sourcePages: ["https://example.com/"],
+        cacheControl: c.cacheControl,
+        ...c.extra,
+      })),
+      images: [],
+    } as unknown as NonNullable<SiteData["resourceSizes"]>;
+    return ctx;
+  }
+
+  test("a sub-resource with a lifetime passes", async () => {
+    const checks = await run(badCachingRule, withAssets([{ url: "https://example.com/a.css", cacheControl: "public, max-age=31536000, immutable" }]));
+    expect(check(checks, "bad-caching-subresources")?.status).toBe("pass");
+  });
+
+  test("a sub-resource without a lifetime is its own finding", async () => {
+    const checks = await run(badCachingRule, withAssets([
+      { url: "https://example.com/a.css", cacheControl: "public, max-age=31536000" },
+      { url: "https://example.com/b.css", cacheControl: null },
+      { url: "https://example.com/c.css", cacheControl: "max-age=0", extra: { etag: '"x"' } },
+    ]));
+    const sub = check(checks, "bad-caching-subresources");
+    expect(sub?.status).toBe("warn");
+    expect(sub?.items?.map((i) => i.id)).toEqual(["https://example.com/b.css", "https://example.com/c.css"]);
+    // The document-level checks are untouched.
+    expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
+  });
+
+  test("a document-only site has no sub-resource check", async () => {
+    const checks = await run(badCachingRule, siteCtx(pages));
+    expect(check(checks, "bad-caching-subresources")).toBeUndefined();
+  });
+
+  test("cross-site, reused and unobserved records are not judged", async () => {
+    const checks = await run(badCachingRule, withAssets([
+      { url: "https://cdn.other.com/a.css", cacheControl: null },
+      { url: "https://example.com/b.css", cacheControl: null, extra: { cacheReason: "fresh" } },
+      { url: "https://example.com/c.css", cacheControl: undefined as unknown as null },
+    ]));
+    expect(check(checks, "bad-caching-subresources")).toBeUndefined();
+  });
+
+  test("the sample is bounded by max_subresources, in URL order", async () => {
+    const ctx = withAssets([
+      { url: "https://example.com/c.css", cacheControl: null },
+      { url: "https://example.com/a.css", cacheControl: "max-age=60" },
+      { url: "https://example.com/b.css", cacheControl: "max-age=60" },
+    ]);
+    ctx.options = { max_subresources: 2 };
+    const sub = check(await run(badCachingRule, ctx), "bad-caching-subresources");
+    expect(sub?.status).toBe("pass");
+    expect(sub?.details?.sampled).toBe(2);
+  });
+
+  test("script fetches carry their cache headers", async () => {
+    const ctx = siteCtx(pages);
+    ctx.site!.scripts = [{
+      url: "https://example.com/app.js", status: 200, error: null, contentType: "application/javascript",
+      sizeBytes: 1, content: null, sourcePages: ["https://example.com/"],
+      cacheHeaders: { cacheControl: null, expires: null, date: null, etag: null, lastModified: null },
+    }] as unknown as NonNullable<SiteData["scripts"]>;
+    expect(check(await run(badCachingRule, ctx), "bad-caching-subresources")?.status).toBe("warn");
+  });
+});
