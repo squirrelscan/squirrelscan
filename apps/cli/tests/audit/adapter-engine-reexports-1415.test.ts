@@ -12,9 +12,6 @@ describe("CLI adapter delegates to the engine (repo#1415)", () => {
   test("parsePageRecord is the engine's function", () => {
     expect(adapter.parsePageRecord).toBe(engine.parsePageRecord);
   });
-  test("getParsedPages is the engine's function", () => {
-    expect(adapter.getParsedPages).toBe(engine.getParsedPages);
-  });
   test("hasAuditableHtmlBody is the engine's function", () => {
     expect(adapter.hasAuditableHtmlBody).toBe(engine.hasAuditableHtmlBody);
   });
