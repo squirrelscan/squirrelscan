@@ -90,7 +90,7 @@ All tools require authentication. Write tools are marked; everything else only r
 | `list_folders` | The organization's website folders (the groups the dashboard files sites into), each with its `folder_id`, `name` and `website_count`. Folders belong to the account that created them: a key sees the folders of the member who created the key. Pass a `folder_id` to `list_websites` to see one folder's sites. | Read |
 | `create_folder` | Create a website folder with a name of 1 to 60 characters. Names are unique per organization, ignoring case: a duplicate is refused with the existing `folder_id` in the error. Costs nothing. | Write |
 | `move_websites_to_folder` | Move up to 50 websites into a folder, or out of any folder with `unfile: true`. Name the folder with `folder_id` or `folder` (its name, ignoring case). `create_if_missing` creates a named folder that does not exist. Websites that cannot be moved are listed per id in `rejected`, and nothing moves in that case. | Write |
-| `list_issues` | A website's issues: action plans, like tracker tickets numbered per website, each covering one or more findings (see [issues and findings](#issues-and-findings)). Sorted by `priority`, then severity, then reach; filterable by status, severity and category. Each row carries `priority`, `type`, `effort`, `labels`, `state_reason`, `source`, `assigned_to`, `closed_at` and `covered_findings` with its counts. Rows omit the long recommendation unless `include_recommendation` is set; `website_totals` counts the whole website, `total` counts the filtered set. After a smart audit each row also carries `provenance` and `last_seen_at`: see [issue provenance](#issue-provenance). When the latest audit did not cover every known page, the result also carries `coverage`: see [audit coverage](#audit-coverage). | Read |
+| `list_issues` | A website's issues: action plans, like tracker tickets numbered per website, each covering one or more findings (see [issues and findings](#issues-and-findings)). Sorted by `priority`, then severity, then reach by default, or by `sort` (`updated`, `pages_affected`); filterable by status, severity, category, type, priority, label, rule, assignee and title search: see [`list_issues` filters and sorts](#list_issues-filters-and-sorts). Each row carries `priority`, `type`, `effort`, `labels`, `state_reason`, `source`, `assigned_to`, `closed_at` and `covered_findings` with its counts. Rows omit the long recommendation unless `include_recommendation` is set; `website_totals` counts the whole website, `total` counts the filtered set. After a smart audit each row also carries `provenance` and `last_seen_at`: see [issue provenance](#issue-provenance). When the latest audit did not cover every known page, the result also carries `coverage`: see [audit coverage](#audit-coverage). | Read |
 | `get_issue` | One issue with its Markdown plan (`body_md`), the findings it covers (up to 100), per-occurrence detail from the latest report (which pages and items, capped and countable via `occurrence_limit`), and its comment thread. It carries the same fields as `list_issues`, plus `provenance` and `last_seen_at`. | Read |
 | `comment_on_issue` | Post a markdown comment on an issue, visible in the dashboard thread. | Write |
 | `update_issue` | Change an issue the way a person does in the dashboard: `status` (`open`, `in_progress`, `resolved`, `dismissed`, `wontfix`), `assigned_to` and `severity`. Set only the fields to change. A completed close releases the issue's findings and a reopen re-links them, a severity edit on a triage issue locks its priority against the next triage run, and a later audit does not reopen what you closed as not planned. Returns the issue as it reads afterwards. | Write |
@@ -148,7 +148,29 @@ Use `get_report` and `list_findings` to see what an audit proved. Use `list_issu
 | `covered_findings` | The findings the issue covers: `finding_id`, `rule_id`, `check_name`, `locator` and `active`. The first 10 on `list_issues`, up to 100 on `get_issue`. |
 | `covered_finding_count`, `active_covered_finding_count`, `covered_findings_truncated` | The true totals, and whether the list is cut. A finding is `active` only while its issue is open and the latest audit still sees it failing. |
 
-An issue closes when every finding it covers is resolved, and each active finding belongs to at most one open issue. Rows are sorted by priority, then severity, then how many pages are reached.
+#### `list_issues` filters and sorts
+
+All parameters except `website_id` are optional. Filters combine: an issue must match every one you pass.
+
+| Parameter | Values | Meaning |
+|---|---|---|
+| `website_id` | string | Required. From `list_websites`, `run_audit` or `list_audits`. |
+| `status` | `open`, `in_progress`, `resolved`, `dismissed`, `wontfix` | Filter by issue status. Omit for all statuses. |
+| `severity` | `critical`, `high`, `medium`, `low` | Filter by severity. |
+| `category` | rule category code, for example `seo`, `performance`, `security` | Filter by rule category. |
+| `type` | `bug`, `task`, `feature` | Filter by issue type. |
+| `priority` | `critical`, `high`, `medium`, `low` | Filter by priority. An unprioritised issue counts as its severity. |
+| `label` | string, 1 to 100 characters | Filter by one label, exact match. |
+| `rule_id` | string, 1 to 200 characters, for example `core/meta-title` | Only issues that cover a finding from this rule. |
+| `assignee` | a user id, or `unassigned` | Filter by assignee. |
+| `search` | string, 1 to 200 characters | Case-insensitive title search. |
+| `sort` | `priority` (default), `updated`, `pages_affected` | `priority` orders by priority, then severity, then reach. `updated` puts the most recently updated first. `pages_affected` puts the issue reaching the most pages first. |
+| `limit`, `offset` | integer, 1 to 100 (default 50); integer, 0 or more (default 0) | Page size and pagination offset. |
+| `include_recommendation` | boolean (default false) | Include each issue's full recommendation text. |
+
+`total` counts the filtered set, and `website_totals` ignores the status, severity and category filters.
+
+An issue closes when every finding it covers is resolved, and each active finding belongs to at most one open issue. By default rows are sorted by priority, then severity, then how many pages are reached; pass `sort` to change that.
 
 The older one-rule fields `rule_id`, `occurrences` and `affected_pages` are kept. They describe a single rule, so they are empty or partial for an issue that covers several rules: read `covered_findings` instead.
 
