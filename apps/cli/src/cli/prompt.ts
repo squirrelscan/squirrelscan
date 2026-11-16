@@ -3,9 +3,6 @@
 import { createInterface } from "node:readline";
 
 /**
- * Prompt for text input from the user
- */
-/**
  * Whether an interactive prompt may be shown: both stdin and stdout must be
  * terminals (a redirected stdin hits EOF at once and would silently answer
  * the prompt), and `--yes` suppresses it. (repo#1171)
@@ -22,6 +19,9 @@ export function promptEligible(
   return !!stdin && !!stdout && !opts.yes;
 }
 
+/**
+ * Prompt for text input from the user
+ */
 export async function promptForInput(question: string): Promise<string> {
   const rl = createInterface({
     input: process.stdin,
