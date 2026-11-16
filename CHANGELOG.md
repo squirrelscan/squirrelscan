@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.183 (2026-11-17)
+
+Four new probing security rules check what a site hands to anyone who asks: open JSON APIs, sensitive JSON fields, exposed files such as `.env` and `.git`, and auth endpoints that leak the user record. Four more catch mixed locale conventions, inconsistent terminology, copy whose own date has passed and broken byline conventions. Large audits peak at about half the memory, and a probe that never got an answer is now reported as not checked instead of clean.
+
 ### Added
 
 - **New rule `i18n/locale-mixing`: one page that follows two locale conventions.** It flags US and UK spellings of the same word (color/colour, center/centre, license/licence, organize/organise and more), day-first and month-first dates on the same page (an error, since 3/4/2026 cannot be resolved), and a bare `$` next to USD, CAD, AUD or NZD amounts. A page whose `lang` is another language is skipped, so multilingual sites with hreflang are not flagged. (repo#1359)
@@ -50,6 +54,10 @@ How it works:
 ### Security
 
 - **A start URL that redirects to a cloud metadata or link-local address no longer makes the CLI request it.** The reachability check and the start URL redirect check, both run before the crawl, followed the start URL's redirects natively whenever the site's own hostnames were not checked (behind an HTTP proxy from the environment, or with `SQUIRREL_NO_HOST_PINNING` set), and the redirect check also followed a meta refresh or script redirect from the start page. Every hop now goes through the same check as the crawl, so a redirect to `169.254.169.254`, `fe80::/10` or a metadata hostname is never sent. The start URL is then reachable and audited itself, where before a refused redirect stopped the audit with "Cannot reach". Redirects within the site, and `localhost` or LAN start URLs, resolve as before, and a WAF challenge on the page an allowed redirect lands on is still detected (squirrelscan/repo#3336). See [follow_redirects](https://docs.squirrelscan.com/configuration/crawler#follow_redirects).
+
+### Known limits
+
+- A fully cached re-audit (every page unchanged since the last run) does not re-run the API probe rules: `security/unauthenticated-api` and `security/json-sensitive-fields` report not checked with `no-endpoints`. Run with `--refresh` to probe again. Tracked in squirrelscan/squirrelscan#2081.
 
 ## v0.0.182 (2026-11-14)
 
