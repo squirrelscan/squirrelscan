@@ -2,7 +2,7 @@
 // one V8 snapshot per asked-for boundary when on, and never charged to the
 // phase it observes.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
   mkdtempSync,
@@ -36,6 +36,12 @@ afterEach(() => {
   }
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
+});
+
+// Snapshot writing and parsing leave a large heap in the shared test process,
+// which skews the timing tests that run after this file. Collect it away.
+afterAll(() => {
+  Bun.gc(true);
 });
 
 function tempDir(): string {
