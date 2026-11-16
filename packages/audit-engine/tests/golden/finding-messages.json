@@ -491,7 +491,7 @@
   ]
  },
  "ax/token-weight": {
-  "digest": "133332720164953",
+  "digest": "57304799802810",
   "lines": [
    "token-weight-budget|pass|~#,# estimated tokens (#,# bytes), within budget|#|",
    "token-weight-ratio|pass|~#% of this page's HTML is visible text, above the #% floor|#|"
@@ -2835,7 +2835,7 @@
   ]
  },
  "crawl/html-size": {
-  "digest": "153079876188729",
+  "digest": "25127802299572",
   "lines": [
    "html-size|pass|HTML size OK: #KB|#|"
   ]
@@ -2937,15 +2937,15 @@
   ]
  },
  "crawl/sitemap-lastmod-churn": {
-  "digest": "29354897186413",
+  "digest": "78573430110917",
   "lines": [
-   "sitemap-lastmod-churn|skipped|Only # sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn||"
+   "sitemap-lastmod-churn|pass|# sitemap URL(s) with lastmod spread across # distinct days||"
   ]
  },
  "crawl/sitemap-lastmod-drift": {
-  "digest": "260756701498461",
+  "digest": "161072149299071",
   "lines": [
-   "sitemap-lastmod-drift|skipped|No sitemap URL carries both a lastmod and a page-side date signal||"
+   "sitemap-lastmod-drift|pass|# sitemap URL(s) carry a lastmod consistent with the page's own dateModified||"
   ]
  },
  "crawl/sitemap-valid": {
@@ -2992,9 +2992,9 @@
   ]
  },
  "eeat/byline-consistency": {
-  "digest": "122352325041062",
+  "digest": "85618577322145",
   "lines": [
-   "byline-consistency|skipped|No page type shows a visible author or date on #% of its pages, so there is no byline convention to measure against||"
+   "byline-consistency|pass|All # page(s) follow the site's own byline convention (article date #%)|#|"
   ]
  },
  "eeat/citations": {
@@ -3591,7 +3591,7 @@
   ]
  },
  "perf/total-byte-weight": {
-  "digest": "70907475740515",
+  "digest": "70074227485419",
   "lines": [
    "total-byte-weight|pass|Heaviest page: http://synthetic.example.com/product/# #KB (# over #KB, # over #KB). Not scored: site total #KB across # pages, shared files counted once; average page #KB|\"#KB\"|\"< #KB\""
   ]

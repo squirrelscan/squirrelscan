@@ -170,7 +170,7 @@ describe("crawl/sitemap-lastmod-churn with a year or year-month lastmod (#758)",
     (context.site!.sitemaps!.discovered[0] as { isNewsSitemap?: boolean }).isNewsSitemap = true;
     const { checks } = (await sitemapLastmodChurnRule.run(context));
     expect(checks[0]!.skipReason).toBe("Only news-sitemap lastmod values");
-    expect(checks[0]!.details).toMatchObject({ newsUrlsWithLastmod: 30, coarseLastmods: 0 });
+    expect(checks[0]!.details).toMatchObject({ newsUrlsExcluded: 30, coarseLastmods: 0 });
   });
 
   test("a few coarse lastmods beside a news sitemap count as lastmods in the too-small message", async () => {
