@@ -20,6 +20,7 @@ How it works:
 ### Changed
 
 - A run narrowed by `--rule-include` or `--rule-exclude` is marked partial in every format and in its publish payload: `meta.partialAudit` in json (schema 1.25, with the included categories) and the same marker in text, markdown, xml and llm. The marker is saved with the audit, so `squirrel report` and `squirrel report --publish` carry it too, and a Pro rule you excluded is no longer listed as a locked rule. A filtered run is still auto-published only with an explicit `--publish` (squirrelscan/repo#1082).
+- Toggling the page classifier on, off or to a different model no longer re-fetches pages reused from the crawl cache (squirrelscan/repo#3369). A reused page that is stale only because of the classifier is re-read from its stored HTML (with the new classifier, or none), so unchanged pages cost no request. A page with no stored body is still fetched. `packages/crawler/scripts/reclassify-bench.ts` measures it.
 - The published entity map now summarizes structurally identical entities into counted groups (`groups`) instead of sampling them, so a large catalogue states the true size of each shape. Rule verdicts still read the full map (#407).
 
 ### Added

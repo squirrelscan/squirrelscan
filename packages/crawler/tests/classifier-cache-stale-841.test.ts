@@ -1,7 +1,6 @@
 // pub#841 review: a page reused from the cache keeps the classification stored in its parsed data, so
-// a changed classifier (a new model, a rules change, or the classifier switched off) never relabelled
-// an unchanged page. A cached page whose stored classification is from another classifier is fetched
-// and parsed again. Drives a real two-pass incremental crawl.
+// a changed classifier never relabelled an unchanged page. A cached page whose stored classification is
+// from another classifier is re-parsed from its stored html, with no fetch (repo#3369). Drives a real two-pass incremental crawl.
 
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
@@ -10,9 +9,9 @@ import type { PageClassifierHook } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { CrawlStorage } from "../src/storage/types";
+import type { CrawlStorage, PageRecord } from "../src/storage/types";
 
-import { cachedClassificationIsStale, createCrawler } from "../src/core/crawler";
+import { cachedClassificationIsStale, createCrawler, reclassifyCachedPage } from "../src/core/crawler";
 import { createTestStorage } from "../src/storage";
 
 const ORIGIN = "http://h.invalid";
@@ -203,19 +202,19 @@ describe("a cached page is reclassified when the classifier changed", () => {
     expect(r.model).toBe("m1");
   }, 30000);
 
-  test("a new model or rules version: the page is fetched again and carries the new stamp", async () => {
+  test("a new model or rules version: the page is re-classified from stored html (no fetch) and carries the new stamp", async () => {
     const r = await run("m1", "m2");
-    expect(r.fetched).toContain(`${ORIGIN}/`);
+    expect(r.fetched).toEqual([]);
     expect(r.model).toBe("m2");
   }, 30000);
 
-  test("classifier switched off: the cached label is not handed on, the page is fetched again without one", async () => {
+  test("classifier switched off: the cached label is stripped without a fetch", async () => {
     const r = await run("m1", undefined);
-    expect(r.fetched).toContain(`${ORIGIN}/`);
+    expect(r.fetched).toEqual([]);
     expect(r.hasClassification).toBe(false);
   }, 30000);
 
-  test("a page labelled before stamps existed is fetched again when the classifier is off", async () => {
+  test("a page labelled before stamps existed is stripped without a fetch when the classifier is off", async () => {
     // A hook with no version stores a label and no stamp, as v0.0.144 did.
     const unversioned = Object.assign(hookFor("m1"), { version: undefined }) as PageClassifierHook;
     const storage = await Effect.runPromise(createTestStorage());
@@ -236,13 +235,13 @@ describe("a cached page is reclassified when the classifier changed", () => {
     await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
     const stored = (await Effect.runPromise(storage.getPages(crawlId2))).find((p) => p.normalizedUrl === `${ORIGIN}/`)?.parsedData ?? "";
     await Effect.runPromise(storage.close());
-    expect(fetched).toContain(`${ORIGIN}/`);
+    expect(fetched).toEqual([]);
     expect(stored.includes('"classification"')).toBe(false);
   }, 30000);
 
-  test("classifier switched on over a page cached without a label: fetched again and labelled", async () => {
+  test("classifier switched on over a page cached without a label: labelled from stored html, no fetch", async () => {
     const r = await run(undefined, "m1");
-    expect(r.fetched).toContain(`${ORIGIN}/`);
+    expect(r.fetched).toEqual([]);
     expect(r.model).toBe("m1");
   }, 30000);
 });
@@ -285,5 +284,25 @@ describe("cachedClassificationIsStale", () => {
   });
   test("a label stored without a stamp (before it existed) is stale for any classifier", () => {
     expect(cachedClassificationIsStale(unstampedWithLabel, "a")).toBe(true);
+  });
+});
+
+describe("reclassifyCachedPage", () => {
+  const page = {
+    finalUrl: `${ORIGIN}/`,
+    html: html("/a"),
+    parsedData: JSON.stringify({ classifierVersion: "m1", classification: {}, meta: {} }),
+  } as unknown as PageRecord;
+  test("re-parses the stored html under the running classifier", () => {
+    const out = reclassifyCachedPage(page, hookFor("m2"));
+    expect(out?.parsedData).toContain('"classifierVersion":"m2"');
+  });
+  test("classifier off strips the label and the stamp", () => {
+    const out = reclassifyCachedPage(page, undefined);
+    expect(out?.parsedData).not.toContain("classifierVersion");
+    expect(out?.parsedData).not.toContain('"classification"');
+  });
+  test("no stored html: null, so the caller fetches", () => {
+    expect(reclassifyCachedPage({ ...page, html: null }, hookFor("m2"))).toBeNull();
   });
 });
