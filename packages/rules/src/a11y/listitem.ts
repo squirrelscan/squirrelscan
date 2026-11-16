@@ -1,5 +1,6 @@
 // a11y/listitem - List items are in lists
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const listitemRule: Rule = {
@@ -10,6 +11,7 @@ export const listitemRule: Rule = {
     solution:
       "The <li> element must be contained within a <ul>, <ol>, or <menu> element. Orphaned list items lose their semantic meaning. Wrap them in an appropriate list container.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

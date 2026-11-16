@@ -1,5 +1,6 @@
 // a11y/definition-list - Definition lists are properly structured
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
@@ -11,6 +12,7 @@ export const definitionListRule: Rule = {
     solution:
       "Definition lists (<dl>) should only contain <dt> (term) and <dd> (description) elements as direct children. Optionally, they can be wrapped in <div> for styling. Do not put other elements like <p>, <span>, or <li> directly inside <dl>.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

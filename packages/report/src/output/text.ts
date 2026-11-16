@@ -57,6 +57,7 @@ import { hostRows } from "../host";
 import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
+import { wcagLabel } from "@squirrelscan/core-contracts/wcag";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
 import { agentSignalLines } from "../agent-signals";
 import {
@@ -496,6 +497,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       }
       write(`  [${severityLabel(rule.severity)}] ${rule.id} - ${rule.name}`);
       if (rule.description) write(`  Description: ${rule.description}`);
+      for (const c of rule.wcag ?? []) write(`  WCAG: ${wcagLabel(c)} (WCAG ${c.version})`);
       if (rule.solution) {
         const wrapped = wrapText(rule.solution, REPORT_TEXT_WRAP_WIDTH);
         write(`  Solution: ${wrapped[0]}`);

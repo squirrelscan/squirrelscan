@@ -1,5 +1,6 @@
 // a11y/aria-required-children - Required children for ARIA roles
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { isInsideNoscript, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
@@ -61,6 +62,7 @@ export const ariaRequiredChildrenRule: Rule = {
     solution:
       "Some ARIA roles require specific child roles. For example, role='list' must contain role='listitem', role='menu' must contain menu items. Add the required child elements with appropriate roles.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

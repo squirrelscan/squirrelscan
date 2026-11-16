@@ -84,6 +84,18 @@ Disable specific rules:
 disable = ["content/word-count", "images/modern-format"]
 ```
 
+### `wcag_level`
+
+**Type:** `"A" | "AA" | "AAA"`
+**Default:** unset (every accessibility rule runs)
+
+Restricts accessibility findings to a WCAG conformance target. `A` keeps rules with a Level A criterion, `AA` keeps rules with a Level A or AA criterion, `AAA` keeps all of them. A rule that maps to several criteria stays when any one is within the target. Other categories are untouched. The same setting is `squirrel audit --wcag-level AA` for one run. Each accessibility rule page lists its criteria and levels.
+
+```toml
+[rules]
+wcag_level = "AA"
+```
+
 ### `time_budget_ms`
 
 **Type:** `integer` (milliseconds: `0`, or `1000` or more)

@@ -68,7 +68,9 @@ import {
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
 import {
   isRuleEnabled,
+  loadAllRules,
   pluginNamespaces,
+  wcagLevelDisablePatterns,
   type PluginRegistrySnapshot,
   type RuleNamespace,
 } from "@squirrelscan/rules";
@@ -3323,7 +3325,18 @@ export function mergeOptionsToConfig(
       ...config.rules,
       ...resolveRulesConfig(config.rules, {
         enable: options.ruleInclude ?? [],
-        disable: options.ruleExclude ?? [],
+        // --wcag-level / [rules] wcag_level (repo#3093): a11y rules beyond the target level.
+        disable: [
+          ...(options.ruleExclude ?? []),
+          ...((options.wcagLevel ?? config.rules.wcag_level)
+            ? wcagLevelDisablePatterns(
+                loadAllRules()
+                  .values()
+                  .map((r) => r.meta),
+                (options.wcagLevel ?? config.rules.wcag_level)!
+              )
+            : []),
+        ],
       }),
     },
     crawler: {

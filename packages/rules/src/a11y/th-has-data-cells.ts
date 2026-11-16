@@ -1,5 +1,6 @@
 // a11y/th-has-data-cells - Table headers have associated data cells
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI } from "@squirrelscan/utils";
@@ -95,6 +96,7 @@ export const thHasDataCellsRule: Rule = {
     solution:
       "Each <th> element should be associated with at least one <td> data cell in the same row or column. Orphaned header cells without data cells usually indicate the table is being misused for layout purposes. If the table is for layout, add role='presentation'. Otherwise, ensure every header has corresponding data cells.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

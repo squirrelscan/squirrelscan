@@ -1,5 +1,7 @@
 // Generic report command - interface-agnostic
 
+import type { WcagCriterion } from "@squirrelscan/core-contracts/wcag";
+
 import { Effect } from "effect";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -203,6 +205,7 @@ interface SlimJsonReport {
     /** The category's display name ("Reliability"); absent in hand-built slim JSON. */
     category?: string;
     subcategory?: string;
+    wcag?: WcagCriterion[];
     severity: "error" | "warning" | "info";
     checks: Array<{
       name: string;
@@ -393,6 +396,7 @@ export function convertSlimReport(report: SlimJsonReport): AuditReport {
         solution: issue.solution,
         category,
         ...(issue.subcategory ? { subcategory: issue.subcategory } : {}),
+        ...(issue.wcag ? { wcag: issue.wcag } : {}),
         scope: "page",
         severity: issue.severity,
         weight: 1,

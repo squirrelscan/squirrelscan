@@ -1,5 +1,6 @@
 // a11y/aria-valid-attr - Valid ARIA attribute names
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { validAriaAttributes } from "./aria-data";
@@ -12,6 +13,7 @@ export const ariaValidAttrRule: Rule = {
     solution:
       "Use only valid ARIA attribute names as defined in the WAI-ARIA specification. Common typos include 'aria-labeledby' (should be 'aria-labelledby'), 'aria-role' (should be 'role'), and 'aria-description' vs 'aria-describedby'. Consult MDN or the WAI-ARIA spec for the complete list of valid attributes.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

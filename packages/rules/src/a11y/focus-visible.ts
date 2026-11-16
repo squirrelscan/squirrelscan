@@ -1,5 +1,6 @@
 // a11y/focus-visible - Check for focus indicators
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const focusVisibleRule: Rule = {
@@ -10,6 +11,7 @@ export const focusVisibleRule: Rule = {
     solution:
       "Keyboard users need visible focus indicators to know where they are on the page. Never use outline: none without providing an alternative focus style. Modern approach: use :focus-visible to show focus only for keyboard users, not mouse clicks. Ensure focus indicators have at least 3:1 contrast. Test by tabbing through your page - can you always see where focus is?",
     category: "a11y",
+    wcag: [wcag("2.4.7")],
     scope: "page",
     verdictScope: "template",
     severity: "warning",

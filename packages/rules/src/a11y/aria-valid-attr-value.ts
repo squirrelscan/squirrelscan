@@ -1,5 +1,6 @@
 // a11y/aria-valid-attr-value - Valid values for ARIA attributes
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // ARIA attribute value types and valid values
@@ -146,6 +147,7 @@ export const ariaValidAttrValueRule: Rule = {
     solution:
       "Ensure ARIA attribute values match the expected type. Boolean attributes should be 'true' or 'false'. Enumerated attributes like aria-current have specific allowed values. Numeric attributes like aria-level must be numbers. Check the WAI-ARIA specification for valid values.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

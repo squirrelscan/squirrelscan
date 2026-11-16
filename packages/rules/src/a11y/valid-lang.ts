@@ -1,5 +1,6 @@
 // a11y/valid-lang - All lang attributes have valid values
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Common valid language codes (ISO 639-1)
@@ -215,6 +216,7 @@ export const validLangRule: Rule = {
     solution:
       "All lang attributes should use valid BCP 47 language tags. This includes lang attributes on any element, not just <html>. Use lang to mark up content in a different language from the page default.",
     category: "a11y",
+    wcag: [wcag("3.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

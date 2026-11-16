@@ -1,5 +1,6 @@
 // a11y/identical-links-same-purpose - Identical links go to same destination
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const MAX_CONTEXT_ANCESTORS = 64;
@@ -91,6 +92,7 @@ export const identicalLinksSamePurposeRule: Rule = {
     solution:
       "Links with the same visible text in the same programmatic context should go to the same URL. When identical link text leads to different destinations, it confuses screen reader users who navigate by listing links. Make link text unique or more descriptive, or label distinct navigation sections with aria-label or aria-labelledby.",
     category: "a11y",
+    wcag: [wcag("2.4.9")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

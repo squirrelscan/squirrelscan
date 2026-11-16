@@ -1,5 +1,6 @@
 // a11y/html-xml-lang-mismatch - HTML lang and xml:lang match
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const htmlXmlLangMismatchRule: Rule = {
@@ -11,6 +12,7 @@ export const htmlXmlLangMismatchRule: Rule = {
     solution:
       "If both lang and xml:lang are present on the <html> element, they must have the same base language. Mismatches can cause screen readers to announce content in the wrong language. Typically, you only need lang for HTML5 documents.",
     category: "a11y",
+    wcag: [wcag("3.1.1")],
     scope: "page",
     verdictScope: "template",
     severity: "error",

@@ -1,6 +1,7 @@
 // a11y/frame-title - Frames/iframes have titles
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
@@ -13,6 +14,7 @@ export const frameTitleRule: Rule = {
     solution:
       "All iframes must have a title attribute describing their content. This helps screen reader users understand what the iframe contains. Example: <iframe src='video.html' title='Product demo video'>. An element hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide counts too. An iframe carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so an element hidden only by one is still reported.",
     category: "a11y",
+    wcag: [wcag("4.1.2"), wcag("2.4.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

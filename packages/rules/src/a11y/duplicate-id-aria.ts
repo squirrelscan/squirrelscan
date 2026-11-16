@@ -1,5 +1,6 @@
 // a11y/duplicate-id-aria - No duplicate IDs used in ARIA
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const duplicateIdAriaRule: Rule = {
@@ -10,6 +11,7 @@ export const duplicateIdAriaRule: Rule = {
     solution:
       "IDs referenced by ARIA attributes (aria-labelledby, aria-describedby, aria-controls, etc.) must be unique on the page. Duplicate IDs cause assistive technology to potentially reference the wrong element. Rename duplicate IDs to be unique.",
     category: "a11y",
+    wcag: [wcag("4.1.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

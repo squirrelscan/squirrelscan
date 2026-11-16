@@ -65,6 +65,18 @@ enable = ["a11y/zoom-disabled"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## WCAG success criteria
+
+The WCAG success criteria this rule's findings map to. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules with a criterion at Level A or AA.
+
+{/* rule-wcag:start */}
+
+| Criterion | Level | Introduced in |
+| --- | --- | --- |
+| 1.4.4 Resize Text | AA | WCAG 2.0 |
+
+{/* rule-wcag:end */}
+
 ## Related rules
 
 - [mobile/viewport-zoom](/rules/mobile/viewport-zoom): the same directives judged for mobile usability.

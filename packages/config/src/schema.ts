@@ -192,6 +192,11 @@ export const RulesConfigSchema = z.object({
   enable: z.array(z.string()).default(["*"]),
   disable: z.array(z.string()).default([]),
   /**
+   * Restrict accessibility findings to a WCAG conformance target (repo#3093): `A` keeps level A
+   * criteria, `AA` keeps A and AA, `AAA` keeps all. Unset keeps every a11y rule. Other categories are untouched.
+   */
+  wcag_level: z.enum(["A", "AA", "AAA"]).optional(),
+  /**
    * Wall-clock budget (ms) for one rule on one page; a site rule gets this much
    * per page, capped at 60 s. A backstop against a pattern that matches slowly
    * on hostile content. Unset = the engine default (2000); 0 turns it off (#578).

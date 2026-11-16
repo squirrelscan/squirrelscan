@@ -1,5 +1,6 @@
 // a11y/autocomplete-tokens - Identified fields carry the right autofill token
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
 import {
@@ -59,6 +60,7 @@ export const autocompleteTokensRule: Rule = {
     solution:
       "Give every field that collects a person's own data the matching WHATWG autofill token, e.g. autocomplete='given-name', 'email', 'tel', 'address-line1', 'postal-code', 'cc-number'. Browsers and password managers fill those fields in one tap, which is the difference between a completed checkout and an abandoned one, and WCAG 2.1 success criterion 1.3.5 (Identify Input Purpose) requires it. Tokens may be prefixed with section-*, shipping/billing and home/work/mobile, e.g. autocomplete='shipping address-line1'. A token the browser does not recognise is ignored outright, so a typo like 'firstname' is worse than nothing: use 'given-name'. Avoid autocomplete='off' on personal data; it does not stop autofill in modern browsers, it only stops the accurate kind.",
     category: "a11y",
+    wcag: [wcag("1.3.5")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

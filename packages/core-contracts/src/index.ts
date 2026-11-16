@@ -553,6 +553,8 @@ export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set(
   Object.keys(SKIP_REASON_CLASSES).filter((reason) => SKIP_REASON_CLASSES[reason]!.notChecked),
 );
 
+import type { WcagCriterion } from "./wcag";
+
 export type RuleScope = "page" | "site";
 export type RuleSeverity = "error" | "warning" | "info";
 
@@ -564,6 +566,8 @@ export interface RuleMetaLite {
   category: string;
   /** Optional sub-group within a category (e.g. blocking → "ad" | "privacy"). */
   subcategory?: string;
+  /** WCAG success criteria (repo#3093); absent on rules outside a11y and on legacy reports. */
+  wcag?: WcagCriterion[];
   scope: RuleScope;
   severity: RuleSeverity;
   weight: number;

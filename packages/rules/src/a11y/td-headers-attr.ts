@@ -1,5 +1,6 @@
 // a11y/td-headers-attr - Table cells reference valid headers
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { ownTableCells } from "../shared/own-table-cells";
@@ -12,6 +13,7 @@ export const tdHeadersAttrRule: Rule = {
     solution:
       "When using the headers attribute on <td> elements to associate cells with headers, ensure each id in the headers attribute matches an existing <th> element's id in the same table.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

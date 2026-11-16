@@ -1,5 +1,11 @@
 import React from "react";
 import { isAuditFailed } from "@squirrelscan/core-contracts";
+import {
+  countByWcagLevel,
+  lowestWcagLevel,
+  WCAG_LEVELS,
+  wcagLabel,
+} from "@squirrelscan/core-contracts/wcag";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   PiArrowSquareOut,
@@ -1170,6 +1176,7 @@ function IssueRow({
       className="issue ir group"
       id={`rule-${rule.id}`}
       data-group={rule.group}
+      {...(rule.wcag ? { "data-wcag-level": lowestWcagLevel(rule.wcag) } : {})}
       data-sev={rule.severity}
       data-sev-label={severityLabel(rule.severity)}
       style={gcVar(rule.group)}
@@ -1235,6 +1242,11 @@ function IssueRow({
         </div>
         <div className="ir-foot">
           <code className="font-mono">{rule.id}</code>
+          {rule.wcag?.map((c) => (
+            <span className="text-xs text-muted-foreground" key={c.sc}>
+              WCAG {wcagLabel(c)} (WCAG {c.version})
+            </span>
+          ))}
           <a href={getDocsUrl(rule.id)} target="_blank" rel="noreferrer" className="ir-docs">
             Rule docs <Sym id="out" className="size-3" />
           </a>
@@ -1278,6 +1290,15 @@ function Issues({
           </a>
         ))}
       </div>
+      {(() => {
+        const byLevel = countByWcagLevel(issues);
+        const parts = WCAG_LEVELS.filter((l) => byLevel[l]).map((l) => `Level ${l}: ${byLevel[l]}`);
+        return parts.length > 0 ? (
+          <p className="mb-5 text-sm text-muted-foreground" id="wcag-levels">
+            Accessibility rules by WCAG level. {parts.join(", ")}
+          </p>
+        ) : null;
+      })()}
       <script
         type="application/json"
         id="fix-prompts"

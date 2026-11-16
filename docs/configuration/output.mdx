@@ -695,6 +695,8 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 
 Schema `1.24` adds optional `meta.discovered`, the distinct URLs the crawl knew of split by sitemap and links.
 
+Schema `1.23` adds `wcag` (the success criteria, each with `sc`, `level` and `version`) and `wcagLevel` (the easiest level among them) to accessibility issues, and a top-level `wcagByLevel` that groups those rule ids by level.
+
 Schema `1.22` adds optional `observation` metadata to issue checks. It records the evidence `mode`, whether the check was `applicable`, and any `uncertainty` that qualifies the result. `1.23` added the top-level `reportBody`, present only when a very large crawl got a sampled report body (see [large crawls](/cli/audit#large-crawls)).
 
 **Skipped checks:** `skippedChecks` lists checks a rule could not finish evaluating, so an absence of issues on those pages does not mean they are clean. It appears only when at least one check was skipped. Skipped checks are never part of `issues`, and do not count toward `passed`, `warnings`, `failed` or the score.

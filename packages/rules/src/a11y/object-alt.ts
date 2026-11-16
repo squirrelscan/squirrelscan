@@ -1,6 +1,7 @@
 // a11y/object-alt - Object elements have alternative text
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const objectAltRule: Rule = {
@@ -11,6 +12,7 @@ export const objectAltRule: Rule = {
     solution:
       "Object elements need alternative content for when the embedded content can't be displayed or for assistive technology. Add content between <object> tags as fallback, or use aria-label/aria-labelledby. An element hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide counts too. An object element carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so an element hidden only by one is still reported.",
     category: "a11y",
+    wcag: [wcag("1.1.1")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

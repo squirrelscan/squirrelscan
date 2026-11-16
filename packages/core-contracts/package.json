@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./scoring": "./src/scoring.ts",
+    "./wcag": "./src/wcag.ts",
     "./storage": "./src/storage.ts",
     "./plans": "./src/plans.ts",
     "./limits": "./src/limits.ts",

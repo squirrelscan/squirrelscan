@@ -1,5 +1,6 @@
 // a11y/aria-allowed-attr - Check for allowed ARIA attributes on elements
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { globalAriaAttributes, validAriaAttributes } from "./aria-data";
@@ -29,6 +30,7 @@ export const ariaAllowedAttrRule: Rule = {
     solution:
       "Some ARIA attributes are not appropriate for certain roles or elements. For example, role='presentation' should not have aria-label since it removes semantic meaning. Remove conflicting attributes or reconsider the element's role.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",
