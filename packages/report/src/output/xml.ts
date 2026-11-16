@@ -1,6 +1,6 @@
 // XML report output
 
-import type { ReportBranding } from "@squirrelscan/core-contracts";
+import { validateBrandColor, type ReportBranding } from "@squirrelscan/core-contracts";
 import { techOpenTag, techOriginAttr } from "../technologies";
 import type { AuditReport } from "../types";
 import { getScoreGrade } from "../scoring";
@@ -57,7 +57,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   const rootTag = options?.branding?.whiteLabel ? "audit" : "squirrelscan-audit";
 
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-  lines.push(`<${rootTag} version="${escapeXml(version)}">`);
+  const brand = validateBrandColor(options?.branding?.brandColor);
+  const brandAttr = brand.ok ? ` brand-color="${brand.color}"` : "";
+  lines.push(`<${rootTag} version="${escapeXml(version)}"${brandAttr}>`);
 
   lines.push(`${indent(1)}<site>`);
   lines.push(`${indent(2)}<url>${escapeXml(report.baseUrl)}</url>`);

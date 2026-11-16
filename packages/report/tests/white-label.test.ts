@@ -235,3 +235,38 @@ describe("white-label website link and footer text", () => {
     }
   });
 });
+
+describe("brand colour (#3130)", () => {
+  const WL: ReportBranding = { whiteLabel: true, orgName: "Acme Inc" };
+  const opts = { reportId: "r1" };
+
+  test("html: absent or invalid brandColor is identical to no brandColor", () => {
+    const base = renderHtml(baseReport(), { ...opts, branding: WL });
+    for (const brandColor of ["#ffff00", "#fffacd", "nope"]) {
+      expect(renderHtml(baseReport(), { ...opts, branding: { ...WL, brandColor } })).toBe(base);
+    }
+  });
+
+  test("html: a valid brandColor adds only an accent style with the picked text colour", () => {
+    const base = renderHtml(baseReport(), { ...opts, branding: WL });
+    const html = renderHtml(baseReport(), { ...opts, branding: { ...WL, brandColor: "#1D4ED8" } });
+    expect(html).not.toBe(base);
+    expect(html).toContain("border-top:4px solid #1d4ed8");
+    expect(html).toContain("color:#ffffff");
+    expect(html.replace(/<style>header\.sticky[^<]*<\/style>/, "")).toBe(base);
+  });
+
+  test("xml: carries brand-color on the root only when valid", () => {
+    const base = renderXml(baseReport(), { branding: WL });
+    expect(base).not.toContain("brand-color");
+    expect(renderXml(baseReport(), { branding: { ...WL, brandColor: "#ffff00" } })).toBe(base);
+    const xml = renderXml(baseReport(), { branding: { ...WL, brandColor: "#1D4ED8" } });
+    expect(xml).toContain('<audit version="0.0.0" brand-color="#1d4ed8">');
+  });
+
+  test("markdown and text ignore brandColor", () => {
+    const b = { ...WL, brandColor: "#1d4ed8" };
+    expect(renderMarkdown(baseReport(), { branding: b })).toBe(renderMarkdown(baseReport(), { branding: WL }));
+    expect(renderText(baseReport(), { branding: b })).toBe(renderText(baseReport(), { branding: WL }));
+  });
+});

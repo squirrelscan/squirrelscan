@@ -1,5 +1,5 @@
 import React from "react";
-import { isAuditFailed } from "@squirrelscan/core-contracts";
+import { isAuditFailed, validateBrandColor } from "@squirrelscan/core-contracts";
 import {
   countByWcagLevel,
   lowestWcagLevel,
@@ -1683,6 +1683,13 @@ function PageStructure({ structure }: { structure: ReportStructure | undefined }
  * text when there is no logo, linked to the org's website when it set one.
  * Only an https website is linked; anything else renders the brand unlinked.
  */
+/** Accent CSS for a valid brand colour (#3130); null (default theme) otherwise. */
+function brandColorCss(input: string | undefined): string | null {
+  const v = validateBrandColor(input);
+  if (!v.ok) return null;
+  return `header.sticky{border-top:4px solid ${v.color}}header.sticky a[href$=".md"],header.sticky a[href$=".json"]{background:${v.color};border-color:${v.color};color:${v.textColor}}`;
+}
+
 function WhiteLabelBrand({ branding }: { branding: ReportBranding }) {
   const logo =
     branding.orgLogoUrl && sanitizeUrl(branding.orgLogoUrl) !== "#" ? (
@@ -1841,6 +1848,7 @@ function ReportPage({
   const lockedAi =
     signedIn && report.coverageMode === "quick" && !groups.some((g) => g.group === "ai");
   const locked = branding?.whiteLabel ? null : lockedRulesMessage(report);
+  const brandStyle = brandColorCss(branding?.brandColor);
   const level = auditLevelLine(report);
   const robotsNote = robotsHonouredNote(report);
   const cov =
@@ -1931,6 +1939,7 @@ function ReportPage({
         )}
         <style dangerouslySetInnerHTML={{ __html: REPORT_CSS }} />
         <style dangerouslySetInnerHTML={{ __html: GROUP_TAG_CSS }} />
+        {brandStyle && <style dangerouslySetInnerHTML={{ __html: brandStyle }} />}
       </head>
       <body>
         <svg
