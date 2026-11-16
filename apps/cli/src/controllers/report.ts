@@ -155,6 +155,8 @@ interface SlimJsonReport {
     requestedMaxPages?: number;
     /** URLs left queued, never fetched; absent when none were. Untrusted. */
     unfetched?: unknown;
+    /** Distinct URLs the crawl knew of, by sitemap and links (repo#3079). Untrusted. */
+    discovered?: unknown;
     /** Whether robots.txt was honoured and the pages it kept out (#1782). Untrusted. */
     respectRobots?: unknown;
     robotsBlockedPages?: unknown;
@@ -431,6 +433,20 @@ export function convertSlimReport(report: SlimJsonReport): AuditReport {
   // A whole count only: the file is user-supplied, and the cloud's publish
   // schema rejects anything else.
   const unfetched = wholeCount(report.meta.unfetched);
+  const discoveredRaw = report.meta.discovered as
+    | { sitemap?: unknown; links?: unknown }
+    | null
+    | undefined;
+  const discoveredSitemap = wholeCount(discoveredRaw?.sitemap);
+  const discoveredLinks = wholeCount(discoveredRaw?.links);
+  const discovered =
+    discoveredSitemap !== undefined && discoveredLinks !== undefined
+      ? {
+          total: discoveredSitemap + discoveredLinks,
+          sitemap: discoveredSitemap,
+          links: discoveredLinks,
+        }
+      : undefined;
   const respectRobots =
     typeof report.meta.respectRobots === "boolean"
       ? report.meta.respectRobots
@@ -486,6 +502,7 @@ export function convertSlimReport(report: SlimJsonReport): AuditReport {
             pagesCrawled: crawled,
             capped: crawled >= report.meta.maxPages,
             ...(unfetched !== undefined ? { unfetched } : {}),
+            ...(discovered ? { discovered } : {}),
             ...(respectRobots !== undefined
               ? { respectRobots, robotsBlockedPages: robotsBlockedPages ?? 0 }
               : {}),
