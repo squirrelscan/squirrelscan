@@ -42,17 +42,30 @@ import { errorResult, jsonResult } from "../result";
 const F = ENTITY_MCP_FIELD_DESCRIPTIONS;
 
 /**
+ * A list argument that also takes a bare value, like the cloud server's
+ * (repo#4559, public half of #2273). The wire schema is `anyOf [member,
+ * array of member]`; `toList` normalises a scalar to a one-element array.
+ */
+function scalarOrArray<T extends z.ZodType>(member: T) {
+  return z.union([member, z.array(member)]);
+}
+
+function toList<T>(value: T | T[] | undefined): T[] | undefined {
+  if (value === undefined) return undefined;
+  return Array.isArray(value) ? value : [value];
+}
+
+/**
  * The filter fields every entity tool accepts.
  *
- * Arrays rather than comma-separated strings: a client sends JSON, so there is
- * no shell to split for. The CLI's comma handling exists because a terminal
- * has no arrays, and copying it here would be cargo.
+ * Arrays (or a single value) rather than comma-separated strings: a client
+ * sends JSON, so there is no shell to split for. The CLI's comma handling
+ * exists because a terminal has no arrays, and copying it here would be cargo.
  */
 const filterShape = {
-  type: z.array(z.string()).optional().describe(F.common.type),
-  page: z.array(z.string()).optional().describe(F.common.page),
-  problem: z
-    .array(z.enum(ENTITY_MCP_PROBLEMS))
+  type: scalarOrArray(z.string()).optional().describe(F.common.type),
+  page: scalarOrArray(z.string()).optional().describe(F.common.page),
+  problem: scalarOrArray(z.enum(ENTITY_MCP_PROBLEMS))
     .optional()
     .describe(F.common.problem),
   q: z.string().optional().describe(F.common.q),
@@ -68,18 +81,21 @@ const runShape = {
 };
 
 interface RawFilters {
-  type?: string[];
-  page?: string[];
-  problem?: string[];
+  type?: string | string[];
+  page?: string | string[];
+  problem?: string | string[];
   q?: string;
   include_page_local?: boolean;
 }
 
 function toFilters(args: RawFilters): EntityToolFilters {
   const filters: EntityToolFilters = {};
-  if (args.type) filters.type = args.type;
-  if (args.page) filters.page = args.page;
-  if (args.problem) filters.problem = args.problem;
+  const type = toList(args.type);
+  const page = toList(args.page);
+  const problem = toList(args.problem);
+  if (type) filters.type = type;
+  if (page) filters.page = page;
+  if (problem) filters.problem = problem;
   if (args.q !== undefined) filters.q = args.q;
   if (args.include_page_local !== undefined)
     filters.includePageLocal = args.include_page_local;
