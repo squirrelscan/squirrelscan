@@ -10,6 +10,8 @@ Each audit a hook starts is an ordinary cloud audit: it is priced in [credits](/
 
 ## Create a hook
 
+In the dashboard, open the website's settings, then **Always-on**, and use the **Deploy hook** card: **Create deploy hook** shows the URL and the signing key. The same actions are available over the API below.
+
 A website has at most one hook. Managing it needs the signed-in session of an organization **owner or admin**. Organization API keys are refused (`403`), so a leaked API key cannot mint or rotate a hook.
 
 | Method | Path | What it does |
@@ -63,10 +65,21 @@ The body is optional JSON. Every field shapes the audit; none can point it at an
 | `full` | `true` | Shorthand for `"level": "full"` |
 | `rules` | array of strings | Run only these rules: rule ids or category globs such as `"links/*"`. At most 50 entries of up to 100 characters |
 | `max_pages` | integer | Page cap for this run, from 1 to 100,000. Your plan's page limit still applies |
+| `ready` | object | Wait for your deploy to answer before the audit starts (see below) |
 
 Without a level in the body, the hook's own level applies, then the website's. Passing `level` and `full` with different meanings is refused.
 
 Any other field is a `400`. A pipeline must not believe it narrowed the audit by a field nothing reads, so unknown fields are refused rather than ignored. That includes `paths`: running an audit on a list of paths is not supported yet.
+
+`ready` makes the hook poll a URL before it estimates or spends anything, so the audit does not run against the previous deploy:
+
+| `ready` field | Type | Meaning |
+| --- | --- | --- |
+| `url` | string | The URL to poll with `GET`. It must be a public http(s) URL on the website's own host, without credentials. Redirects are not followed |
+| `status` | integer | The status that means ready, from 100 to 599. Defaults to 200 |
+| `timeout_seconds` | integer | How long to keep polling, from 1 to 60. Defaults to 30 |
+
+If the URL never answers the expected status, the audit still starts and the `202` response carries a `readiness` object with `"status": "timeout"`. A `ready.url` on another host is a `400`.
 
 ```json
 { "level": "quick", "rules": ["links/*", "core/*"], "max_pages": 50 }
@@ -92,6 +105,7 @@ Every request is checked before anything is charged. A refused request starts no
 - **30 requests a minute per IP address**, counted before the signature is checked, for every caller of the hook endpoint from that address. Over it the answer is `429` with a `Retry-After` header and the error `"Rate limit exceeded. Slow down and retry shortly."`. CI runners that share an address share this limit. A pipeline that retries should wait for `Retry-After` on this one, and should not retry `daily_cap`: that hook is done for the day.
 - **The hook's credit budget per run** (`maxCredits`), together with the website's own per-audit spend cap and your organization's balance. The audit is sized to fit the smallest of them: it audits fewer pages rather than being refused, and the response says so with `"creditClamp": true`. Raise the budget, or narrow the audit with `level`, `rules` or `max_pages`, to keep the pages you want.
 - When not even a one-page audit fits, nothing starts: `402` with `"error": "cap_exceeded"` (the budget or the website's cap is too low) or `"insufficient_credits"` (the balance). An estimate over the hook's budget is refused as `"over_budget"`.
+- **Always-on budgets.** A deploy hook is an always-on trigger, so its estimate also counts against the website's and the organization's always-on budgets when those are on. An audit that would go over one answers `429` with `"error": "always_on_budget"`, the `budget` that stopped it and a `message`, plus `limit`, `spent` and `resetsAt` and a `Retry-After` header when there is a reset to wait for. Raise the cap in the website's **Always-on** settings, or wait for the reset.
 - **Plan limits and the audit queue**, as for every cloud audit.
 
 A request inside the 5 minute window can be replayed by whoever captured it, but only while the timestamp is fresh. During the debounce a replay returns the burst's run, and after it a replay can start at most one more audit, always inside the daily cap and the credit budget. It cannot change what is audited: the body is signed.
@@ -111,6 +125,7 @@ A request inside the 5 minute window can be replayed by whoever captured it, but
 | `413` | `error: "body_too_large"` | The body is over 4 KB |
 | `429` | `error: "daily_cap"` | The hook has started 12 audits today (UTC). Do not retry before tomorrow |
 | `429` | `error: "Rate limit exceeded. Slow down and retry shortly."`, `Retry-After` header | Over 30 requests a minute from this IP address. Retry after the header's seconds |
+| `429` | `error: "always_on_budget"`, `budget`, `message`, `Retry-After` header when known | The always-on budget of the website or organization is spent. Retry after the header's seconds, or raise the cap |
 | `502` | `error: "dispatch_failed"` | The audit could not be handed to a worker. Retryable |
 | `503` | `error: "disabled"` or `"no_sandbox"` | Cloud audits are unavailable right now. Retryable |
 
