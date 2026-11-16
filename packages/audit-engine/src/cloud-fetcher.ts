@@ -38,6 +38,7 @@
 // cancels the SUBMIT: the server debits on submit, so the submit runs to its
 // own bound and the debit is recorded whether or not anyone still wants the page.
 
+import { MAX_RENDERED_REQUESTS_PER_PAGE } from "@squirrelscan/core-contracts";
 import type {
   RenderChargeLine,
   RenderJobResponse,
@@ -266,6 +267,10 @@ export function mapRenderItemToResponse(
     // The server's own HTML, when the render service sent it (#1769): only then does the crawler merge the
     // scripts hydration removed. Absent, the response is exactly what it was.
     ...(typeof item.serverHtml === "string" && item.serverHtml.length > 0 ? { serverHtml: item.serverHtml } : {}),
+    // XHR and fetch requests the page issued, for endpoint discovery. Absent when the service sent none.
+    ...(Array.isArray(item.requests) && item.requests.length > 0
+      ? { renderedRequests: item.requests.slice(0, MAX_RENDERED_REQUESTS_PER_PAGE) }
+      : {}),
     // Queue-wait vs render-time breakdown, absent on a render-cache hit (#826).
     renderTimeMs: item.renderTimeMs,
     queueWaitMs: item.queueWaitMs,

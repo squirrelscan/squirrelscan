@@ -140,7 +140,7 @@ import {
 } from "../priority";
 import { fetchLlmsTxt } from "../llms";
 import { LLMS_TXT_PATHS } from "@squirrelscan/core-contracts/storage";
-import type { WellKnownProbe } from "@squirrelscan/core-contracts";
+import type { RenderedRequestSink, WellKnownProbe } from "@squirrelscan/core-contracts";
 import { probeMarkdownResponse } from "../markdown";
 import { fetchRobotsEvaluator as fetchRobots } from "../robots";
 import { probeConfiguredPage } from "../well-known";
@@ -531,6 +531,11 @@ export interface CreateCrawlerOptions {
   storage?: CrawlStorage;
   // Opt-in: retains each crawl-time ParsedPage so a same-process audit skips re-parse (#267)
   parsedPageCache?: ParsedPageCache;
+  /**
+   * Opt-in: receives the XHR and fetch requests a rendered page issued, keyed by the page's normalized
+   * URL, so endpoint discovery can use them (repo#4188). In memory only: nothing is stored.
+   */
+  renderedRequestSink?: RenderedRequestSink;
   /**
    * Opt-in: run the page classifier on every parsed page (#2307). It fills `LinkData.section`
    * where the markup is silent and stores the page type on the parsed page. Absent = markup rules
@@ -2333,6 +2338,9 @@ export function createCrawler(
             sourceHash: result.sourceHash,
           };
 
+          if (options.renderedRequestSink && result.renderedRequests?.length) {
+            options.renderedRequestSink.set(entry.normalizedUrl, result.renderedRequests);
+          }
           yield* storage.upsertPage(crawlId, pageRecord);
           pagesCommitted++;
 
