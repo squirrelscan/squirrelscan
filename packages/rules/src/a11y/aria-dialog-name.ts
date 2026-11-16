@@ -1,5 +1,6 @@
 // a11y/aria-dialog-name - Dialog elements have accessible names
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { fieldSnippet } from "../shared/form-fields";
@@ -83,6 +84,7 @@ export const ariaDialogNameRule: Rule = {
     solution:
       "Elements with role='dialog' or role='alertdialog' (and native <dialog>) must have an accessible name. Add aria-label with a descriptive label, or use aria-labelledby pointing to a visible heading inside the dialog. A title attribute also works but is less preferred. Without a name, screen reader users won't know the purpose of the dialog. A dialog hidden by the hidden attribute, aria-hidden or an inline style='display:none' while closed is not reported, but it needs a name before it opens; a closed native <dialog> is still checked, since pages open it with script. A <style> rule squirrel can decide (a plain selector, no media query) counts too. Vendor-prefixed display values (-webkit-box, -webkit-flex, -ms-flexbox) are read as shown, including the old fallback chain that ends in display: flex. An attribute selector with an operator ([id$=x], [href^=x], [data-a*=x], [class~=x], [lang|=en]) reaches only elements that have the attribute and a value that could satisfy it. A control carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. A dialog a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a dialog hidden only by one is still reported.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

@@ -2,6 +2,7 @@
 
 import type { AuditStatus, CheckTallies, LinkSection } from "@squirrelscan/core-contracts";
 import { isAuditFailed } from "@squirrelscan/core-contracts";
+import type { WcagCriterion } from "@squirrelscan/core-contracts/wcag";
 import { addRegions, pageRegions } from "@squirrelscan/core-contracts/item-sources";
 import { LCP_PAGE_EVIDENCE, PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type {
@@ -145,6 +146,8 @@ export interface GroupedRule {
   weight: number;
   /** Optional sub-group within the category (e.g. blocking → "ad" | "privacy"). */
   subcategory?: string;
+  /** WCAG criteria (a11y rules, repo#3093). */
+  wcag?: WcagCriterion[];
   checks: GroupedCheck[];
   failCount: number;
   warnCount: number;
@@ -340,6 +343,7 @@ export function groupIssuesByCategory(
     const meta = result.meta as {
       category: string;
       subcategory?: string;
+      wcag?: WcagCriterion[];
       name: string;
       description: string;
       solution?: string;
@@ -683,6 +687,7 @@ export function groupIssuesByCategory(
       subcategory:
         meta.subcategory ??
         (categoryKey === "blocking" ? deriveBlockingSubcategory(ruleId) : undefined),
+      ...(meta.wcag && meta.wcag.length > 0 ? { wcag: meta.wcag } : {}),
       checks,
       failCount,
       warnCount,

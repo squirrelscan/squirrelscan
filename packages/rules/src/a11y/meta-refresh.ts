@@ -1,5 +1,6 @@
 // a11y/meta-refresh - No meta refresh redirect
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
@@ -92,6 +93,7 @@ export const metaRefreshRule: Rule = {
     solution:
       "Avoid using <meta http-equiv='refresh'> or a Refresh response header for redirects or auto-refresh. They can disorient users, especially those using screen readers, and search engines treat them as a weaker signal than a real redirect. Use a server-side redirect instead: 301 or 308 for a permanent move, 302 or 307 for a temporary one. If content must refresh, provide a user control and warn users beforehand.",
     category: "a11y",
+    wcag: [wcag("2.2.1")],
     scope: "page",
     // The Refresh header is a response header, which the template cluster key
     // does not constrain, so the verdict is per page.

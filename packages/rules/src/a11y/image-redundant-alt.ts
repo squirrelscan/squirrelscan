@@ -1,5 +1,6 @@
 // a11y/image-redundant-alt - Image alt not redundant with surrounding text
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
@@ -73,6 +74,7 @@ export const imageRedundantAltRule: Rule = {
     solution:
       "Image alt text should not start with 'image of', 'photo of', 'picture of', etc. Screen readers already announce that it's an image. Alt text should describe the content or function, not state the obvious. Also avoid duplicating adjacent text in the alt.",
     category: "a11y",
+    wcag: [wcag("1.1.1")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

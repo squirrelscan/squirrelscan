@@ -1,5 +1,6 @@
 // a11y/tabindex - Tabindex values are appropriate
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI, querySelectorAllByAttrCI } from "@squirrelscan/utils";
@@ -13,6 +14,7 @@ export const tabindexRule: Rule = {
     solution:
       "Avoid positive tabindex values (1, 2, 3...) as they override natural tab order and confuse keyboard users. Use tabindex='0' to add elements to tab order, tabindex='-1' to make elements focusable via JavaScript only. Rely on natural document order for tab sequence.",
     category: "a11y",
+    wcag: [wcag("2.4.3")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

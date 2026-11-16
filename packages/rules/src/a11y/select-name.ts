@@ -1,6 +1,7 @@
 // a11y/select-name - Select elements have accessible names
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { labelsFor } from "../shared/attribute-lookup";
 import { elementSelector } from "../element-path";
@@ -43,6 +44,7 @@ export const selectNameRule: Rule = {
     solution:
       "Select elements need accessible labels. Use <label for='selectId'>Label</label>, wrap in <label>, or use aria-label/aria-labelledby. A select hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide counts too. A select carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. A select a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a select hidden only by one is still reported.",
     category: "a11y",
+    wcag: [wcag("1.3.1"), wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

@@ -1,6 +1,7 @@
 // a11y/link-text - Check for descriptive link text
 // Based on WCAG 2.4.4 Link Purpose (In Context) (Level A)
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { LinkSection } from "@squirrelscan/core-contracts";
 import {
   coerceSchemelessUrl,
@@ -249,6 +250,7 @@ export const linkTextRule: Rule = {
     solution:
       "Link text should describe the destination, not generic phrases like 'click here'. Screen reader users often navigate by links, hearing them out of context. Good: 'View our pricing plans'. Bad: 'Click here'. For icon-only links, add aria-label: <a href='/search' aria-label='Search'><svg>...</svg></a>. Empty links are especially problematic - add text or aria-label. A link hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs text before it is shown. A <style> rule squirrel can decide counts too. An empty link carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a link hidden only by one is still reported.",
     category: "a11y",
+    wcag: [wcag("2.4.4")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

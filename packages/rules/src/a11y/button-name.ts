@@ -1,5 +1,6 @@
 // a11y/button-name - Buttons have accessible names
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
@@ -54,6 +55,7 @@ export const buttonNameRule: Rule = {
     solution:
       "Buttons must have accessible names. Options: 1) Add text content inside the button. 2) Use aria-label for icon buttons. 3) Use aria-labelledby to reference visible text. 4) Use title attribute (less preferred). For <input type='button'>, use the value attribute. A button hidden by the hidden attribute, an aria-hidden ancestor, a closed dialog or an inline style='display:none' or 'visibility:hidden' is out of the accessibility tree and is not reported, but it needs a name if it is shown later. A <style> rule squirrel can decide (a plain selector, no media query) counts too. Vendor-prefixed display values (-webkit-box, -webkit-flex, -ms-flexbox) are read as shown, including the old fallback chain that ends in display: flex. An attribute selector with an operator ([id$=x], [href^=x], [data-a*=x], [class~=x], [lang|=en]) reaches only elements that have the attribute and a value that could satisfy it. A control carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. A button a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a button hidden only by one is still reported.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

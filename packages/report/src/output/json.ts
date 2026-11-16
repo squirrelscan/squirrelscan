@@ -52,6 +52,8 @@ import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages } from "../affected-pages";
+import type { WcagCriterion, WcagLevel } from "@squirrelscan/core-contracts/wcag";
+import { lowestWcagLevel } from "@squirrelscan/core-contracts/wcag";
 import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import {
   checkRegionScope,
@@ -437,6 +439,9 @@ interface SlimJsonReport {
     /** Top-level group code (#626), e.g. "seo" — which group the issue rolls up into. */
     group: string;
     subcategory?: string;
+    /** WCAG success criteria of an a11y rule and the easiest level among them (schema 1.23, repo#3093). */
+    wcag?: WcagCriterion[];
+    wcagLevel?: WcagLevel;
     severity: "error" | "warning" | "info";
     /** Additive, evidence-backed actionable targets; raw occurrences are complete. */
     componentFixGroups?: SlimComponentFixGroup[];
@@ -537,6 +542,11 @@ interface SlimJsonReport {
    * scope. Omitted on a report read back with `report --input`, which carries no rule results.
    */
   rules?: RuleRun[];
+  /**
+   * The a11y issues' rule ids grouped by the easiest WCAG level among their criteria (schema 1.23, repo#3093).
+   * Present only when an a11y issue carries criteria.
+   */
+  wcagByLevel?: Partial<Record<WcagLevel, string[]>>;
   /**
    * Rules that passed: at least one passing check and no failing or warning
    * one. `scope` is the rule's own; `pages` counts distinct pages with a pass,
@@ -871,6 +881,14 @@ function buildSlimReport(
             : {}),
         }
       : {}),
+    ...(() => {
+      const byLevel: Partial<Record<WcagLevel, string[]>> = {};
+      for (const rule of flattenIssuesBySeverity(categoryIssues)) {
+        const level = lowestWcagLevel(rule.wcag);
+        if (level) (byLevel[level] ??= []).push(rule.id);
+      }
+      return Object.keys(byLevel).length > 0 ? { wcagByLevel: byLevel } : {};
+    })(),
     issues: flattenIssuesBySeverity(categoryIssues).map((rule) => ({
       ruleId: rule.id,
       name: rule.name,
@@ -879,6 +897,9 @@ function buildSlimReport(
       category: rule.categoryName,
       group: rule.group,
       ...(rule.subcategory ? { subcategory: rule.subcategory } : {}),
+      ...(rule.wcag && rule.wcag.length > 0
+        ? { wcag: rule.wcag, wcagLevel: lowestWcagLevel(rule.wcag) }
+        : {}),
       severity: rule.severity,
       ...(rule.componentFixGroups
         ? {

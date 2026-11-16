@@ -1,5 +1,6 @@
 // a11y/dlitem - dt/dd elements are in definition lists
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const dlitemRule: Rule = {
@@ -10,6 +11,7 @@ export const dlitemRule: Rule = {
     solution:
       "The <dt> and <dd> elements must be contained within a <dl> (definition list). Move orphaned dt/dd elements inside a <dl> container.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

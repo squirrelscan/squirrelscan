@@ -7,6 +7,7 @@ import {
   unconfirmedItem,
   unconfirmedRow,
 } from "../shared/static-hidden";
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Elements that render apart from their siblings, so text on either side is two words.
@@ -65,6 +66,7 @@ export const labelContentNameMismatchRule: Rule = {
     solution:
       "For controls with visible labels, the accessible name should contain the visible text. Voice control users say what they see - if the accessible name doesn't include the visible label, voice commands won't work. Example: A button showing 'Search' should not have aria-label='Find products'.",
     category: "a11y",
+    wcag: [wcag("2.5.3")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

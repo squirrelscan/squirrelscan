@@ -5,6 +5,7 @@ validate:
 	bun scripts/check-links.ts
 	bun scripts/glossary.ts --check
 	bun scripts/rule-checks.ts --check
+	bun scripts/rule-wcag.ts --check
 	bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts
 
 dev:

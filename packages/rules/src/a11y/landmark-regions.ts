@@ -1,5 +1,6 @@
 // a11y/landmark-regions - Check for landmark regions
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const landmarkRegionsRule: Rule = {
@@ -10,6 +11,7 @@ export const landmarkRegionsRule: Rule = {
     solution:
       "Landmark regions help screen reader users navigate page structure. Use semantic HTML5 elements: <main> for primary content, <nav> for navigation, <header> for page header, <footer> for footer, <aside> for sidebars, and <section>/<article> for content sections. Alternatively, use ARIA roles: role='main', role='navigation', etc. Each page should have exactly one <main> element.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "info",

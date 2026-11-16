@@ -7,6 +7,8 @@ import { z } from "zod";
 import type { PageType, Soft404Confirmation, Soft404Signal } from "@squirrelscan/parser";
 import type { AuthorInfo, SchemaCollection } from "@squirrelscan/parser";
 // Import and re-export RuleCategory from categories.ts (single source of truth)
+import type { WcagCriterion } from "@squirrelscan/core-contracts/wcag";
+
 import type { RuleCategory } from "./categories";
 import type { CollectedSiteSignals } from "./collected-signals";
 import type { EndpointSurface } from "./endpoint-surface";
@@ -229,6 +231,8 @@ export interface RuleMeta {
   solution?: string; // optional 1-2 paragraphs of guidance for fixing issues
   category: RuleCategory;
   subcategory?: string; // optional sub-group within a category (e.g. "ad" | "privacy")
+  /** WCAG success criteria the rule's findings map to (repo#3093). Required for every a11y rule (tests/a11y-wcag.test.ts). */
+  wcag?: WcagCriterion[];
   scope: RuleScope;
   severity: RuleSeverity;
   weight: number; // scoring weight (1-10)

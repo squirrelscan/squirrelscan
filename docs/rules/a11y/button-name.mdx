@@ -89,6 +89,18 @@ enable = ["a11y/button-name"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## WCAG success criteria
+
+The WCAG success criteria this rule's findings map to. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules with a criterion at Level A or AA.
+
+{/* rule-wcag:start */}
+
+| Criterion | Level | Introduced in |
+| --- | --- | --- |
+| 4.1.2 Name, Role, Value | A | WCAG 2.0 |
+
+{/* rule-wcag:end */}
+
 ## Related rules
 
 - [a11y/aria-labels](/rules/a11y/aria-labels): the same defect on buttons and on interactive `<svg>` elements.

@@ -1,6 +1,7 @@
 // a11y/skip-link - Skip-to-content link for keyboard navigation
 // Based on WCAG 2.4.1 Bypass Blocks (Level A)
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // How far into the body a heading still counts as "early" — enough for a nav,
@@ -32,6 +33,7 @@ export const skipLinkRule: Rule = {
     solution:
       "Skip links allow keyboard users to bypass repetitive navigation and jump directly to main content. Add a hidden link at the very beginning of your page: <a href='#main-content' class='skip-link'>Skip to main content</a>. Style it to become visible on focus. Ensure the target (#main-content) has tabindex='-1' if it's not naturally focusable. Alternative: use landmark roles like <main> which screen readers can navigate to directly.",
     category: "a11y",
+    wcag: [wcag("2.4.1")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

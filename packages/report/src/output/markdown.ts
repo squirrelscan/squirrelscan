@@ -51,6 +51,7 @@ import { hostRows } from "../host";
 import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary, techIconUrl } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
+import { wcagLabel } from "@squirrelscan/core-contracts/wcag";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
 import { agentSignalLines } from "../agent-signals";
 import {
@@ -616,6 +617,11 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
 
       if (rule.description) {
         lines.push(`> ${rule.description}`);
+        lines.push("");
+      }
+
+      if (rule.wcag && rule.wcag.length > 0) {
+        for (const c of rule.wcag) lines.push(`**WCAG:** ${wcagLabel(c)} (WCAG ${c.version})`);
         lines.push("");
       }
 

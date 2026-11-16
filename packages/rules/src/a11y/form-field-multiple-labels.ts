@@ -1,5 +1,6 @@
 // a11y/form-field-multiple-labels - Inputs don't have multiple labels
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** Labelable elements, as HTML defines them (a label's first one is its control). */
@@ -14,6 +15,7 @@ export const formFieldMultipleLabelsRule: Rule = {
     solution:
       "Form inputs should have only one associated label. Multiple labels can confuse assistive technology. If you need multiple text descriptions, use aria-describedby for supplementary text instead of multiple labels.",
     category: "a11y",
+    wcag: [wcag("3.3.2")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

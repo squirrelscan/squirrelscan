@@ -1,6 +1,7 @@
 // a11y/zoom-disabled - Check if viewport disables zoom
 // Based on WCAG 1.4.4 Resize Text (Level AA)
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Lighthouse uses threshold of 5 for maximum-scale
@@ -15,6 +16,7 @@ export const zoomDisabledRule: Rule = {
     solution:
       "Never disable user zoom - it's critical for users with low vision. Remove user-scalable=no and maximum-scale=1.0 from your viewport meta tag. Good: <meta name='viewport' content='width=device-width, initial-scale=1'>. Bad: <meta name='viewport' content='width=device-width, user-scalable=no, maximum-scale=1.0'>. Users must be able to zoom up to at least 500% (WCAG 1.4.4 requires 200%, but browsers limit to 500%).",
     category: "a11y",
+    wcag: [wcag("1.4.4")],
     scope: "page",
     verdictScope: "template",
     severity: "error",

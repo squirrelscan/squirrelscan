@@ -671,6 +671,7 @@ export function reconstructReport(
               solution: rule.meta.solution,
               category: rule.meta.category,
               subcategory: rule.meta.subcategory,
+              ...(rule.meta.wcag ? { wcag: rule.meta.wcag } : {}),
               scope: rule.meta.scope,
               severity: rule.meta.severity,
               weight: rule.meta.weight,

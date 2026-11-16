@@ -1,5 +1,6 @@
 // a11y/accesskeys - Access keys are unique
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI, querySelectorAllByAttrCI } from "@squirrelscan/utils";
@@ -12,6 +13,7 @@ export const accesskeysRule: Rule = {
     solution:
       "Access keys provide keyboard shortcuts for elements. Duplicate access keys cause only one to work, confusing users. Ensure each accesskey value is unique. Consider whether access keys are necessary at all, as they can conflict with browser/OS shortcuts.",
     category: "a11y",
+    wcag: [wcag("2.1.4")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

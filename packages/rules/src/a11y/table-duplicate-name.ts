@@ -9,6 +9,7 @@ import {
   unconfirmedItem,
   unconfirmedRow,
 } from "../shared/static-hidden";
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** Whether `inert` on the table or an ancestor takes it out of the accessibility tree. */
@@ -51,6 +52,7 @@ export const tableDuplicateNameRule: Rule = {
     solution:
       "When a page has multiple data tables, each should have a unique accessible name to help users distinguish between them. Use <caption>, aria-label, or aria-labelledby with unique text for each table.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

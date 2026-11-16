@@ -62,6 +62,18 @@ enable = ["a11y/html-lang-valid"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## WCAG success criteria
+
+The WCAG success criteria this rule's findings map to. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules with a criterion at Level A or AA.
+
+{/* rule-wcag:start */}
+
+| Criterion | Level | Introduced in |
+| --- | --- | --- |
+| 3.1.1 Language of Page | A | WCAG 2.0 |
+
+{/* rule-wcag:end */}
+
 ## Related rules
 
 - [a11y/valid-lang](/rules/a11y/valid-lang): `lang` on every other element on the page.

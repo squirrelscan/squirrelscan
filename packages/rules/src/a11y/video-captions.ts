@@ -1,6 +1,7 @@
 // a11y/video-captions - Videos have captions/transcripts
 
 import { hasCaptionTrack, partitionDecorativeVideos } from "../shared/decorative-video";
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const videoCaptionsRule: Rule = {
@@ -11,6 +12,7 @@ export const videoCaptionsRule: Rule = {
     solution:
       "All video content needs captions for deaf/hard-of-hearing users (WCAG 1.2.2). Add <track kind='captions' src='captions.vtt' srclang='en'> to video elements. For embedded videos (YouTube, Vimeo), enable captions in the embed settings. Also provide a text transcript for complex content. Auto-generated captions should be reviewed for accuracy.",
     category: "a11y",
+    wcag: [wcag("1.2.2")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

@@ -26,6 +26,7 @@ import {
 } from "@squirrelscan/core-contracts";
 import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
 import { isAuditFailureReasonCode } from "@squirrelscan/core-contracts/failure-reason";
+import { isWcagLevel, type WcagLevel } from "@squirrelscan/core-contracts/wcag";
 import { fullScanHint } from "@squirrelscan/report";
 import {
   loadKnownRules,
@@ -1362,6 +1363,11 @@ export const audit = defineCommand({
       description:
         "Skip these rule categories or rules (repeatable or comma-separated), e.g. images,social. Adds to [rules] disable for this run",
     },
+    "wcag-level": {
+      type: "string",
+      description:
+        "Restrict accessibility findings to a WCAG conformance target: A, AA or AAA (AA keeps level A and AA criteria). Overrides [rules] wcag_level for this run",
+    },
     "discovery-probe-path": {
       type: "string",
       description:
@@ -1583,6 +1589,21 @@ export const audit = defineCommand({
       exitWith({ early: "validation" });
       return;
     }
+    const wcagLevelRaw = args["wcag-level"] as string | string[] | undefined;
+    const wcagLevelArg = Array.isArray(wcagLevelRaw)
+      ? wcagLevelRaw.at(-1)
+      : wcagLevelRaw;
+    if (
+      wcagLevelArg !== undefined &&
+      !isWcagLevel(wcagLevelArg.toUpperCase())
+    ) {
+      console.error(
+        `${fmt.red("Error:")} --wcag-level must be A, AA or AAA (got "${wcagLevelArg}")`
+      );
+      exitWith({ early: "validation" });
+      return;
+    }
+    const wcagLevel = wcagLevelArg?.toUpperCase() as WcagLevel | undefined;
     const ruleFilterActive =
       ruleFilter.enable.length > 0 || ruleFilter.disable.length > 0;
 
@@ -2310,6 +2331,7 @@ export const audit = defineCommand({
         ...(ruleFilter.disable.length > 0
           ? { ruleExclude: ruleFilter.disable }
           : {}),
+        ...(wcagLevel ? { wcagLevel } : {}),
         ...(disableDiscoveryProbes !== undefined
           ? { disableDiscoveryProbes }
           : {}),

@@ -1,5 +1,6 @@
 // a11y/html-lang-valid - HTML lang attribute has valid value
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Common valid language codes (ISO 639-1)
@@ -231,6 +232,7 @@ export const htmlLangValidRule: Rule = {
     solution:
       "The lang attribute on <html> should be a valid BCP 47 language tag. Use two-letter ISO 639-1 codes like 'en' for English, 'es' for Spanish, 'fr' for French. You can add region subtags like 'en-US' or 'en-GB'. This helps screen readers use correct pronunciation.",
     category: "a11y",
+    wcag: [wcag("3.1.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

@@ -1,5 +1,6 @@
 // a11y/table-headers - Data tables have proper headers
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { ownTableCells, type OwnTable } from "../shared/own-table-cells";
@@ -12,6 +13,7 @@ export const tableHeadersRule: Rule = {
     solution:
       "Data tables need proper headers for screen reader users to understand relationships. Use <th> for header cells, not styled <td>. Add scope='col' or scope='row' to clarify header direction. For complex tables, use id and headers attributes to associate data cells with headers. Include a <caption> to describe the table's purpose. Layout tables should have role='presentation'.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",

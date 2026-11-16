@@ -3,6 +3,7 @@
 
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { requiredParentByRole } from "./aria-data";
@@ -201,6 +202,7 @@ export const ariaRequiredParentRule: Rule = {
     solution:
       "Some ARIA roles must be contained within specific parent roles. For example, role='listitem' must be within role='list', role='option' must be within role='listbox'. Restructure your markup to ensure proper parent-child relationships.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

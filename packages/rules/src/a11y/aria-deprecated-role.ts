@@ -1,5 +1,6 @@
 // a11y/aria-deprecated-role - No deprecated ARIA roles
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Deprecated or discouraged roles
@@ -30,6 +31,7 @@ export const ariaDeprecatedRoleRule: Rule = {
     solution:
       "Avoid deprecated or abstract ARIA roles. Use the recommended alternatives. Abstract roles are never meant to be used directly - they're base types that other roles extend. Replace with specific, concrete roles.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

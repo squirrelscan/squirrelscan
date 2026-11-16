@@ -1,5 +1,6 @@
 // a11y/list-structure - Lists contain only allowed elements
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
@@ -11,6 +12,7 @@ export const listStructureRule: Rule = {
     solution:
       "Lists (<ul> and <ol>) should only contain <li> elements as direct children. For custom components, you can also use elements with role='listitem'. Move other content inside <li> elements.",
     category: "a11y",
+    wcag: [wcag("1.3.1")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

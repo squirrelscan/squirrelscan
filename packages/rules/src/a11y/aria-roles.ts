@@ -1,5 +1,6 @@
 // a11y/aria-roles - Valid ARIA role values
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { validAriaRoles } from "./aria-data";
@@ -12,6 +13,7 @@ export const ariaRolesRule: Rule = {
     solution:
       "Use only valid ARIA role values as defined in the WAI-ARIA specification. Common mistakes include using made-up roles or misspelling valid roles. Roles are case-sensitive and must be lowercase. Multiple roles can be specified, separated by spaces, but the first valid role is used.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

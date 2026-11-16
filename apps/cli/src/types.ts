@@ -16,6 +16,7 @@ import type {
   SeedRedirectHop,
   SeedRedirectRecord,
 } from "@squirrelscan/core-contracts/seed-redirect";
+import type { WcagCriterion } from "@squirrelscan/core-contracts/wcag";
 
 export interface AuditResult {
   url: string;
@@ -470,6 +471,7 @@ export interface ReportRuleResult {
     solution?: string;
     category: RuleCategory;
     subcategory?: string;
+    wcag?: WcagCriterion[];
     scope: "page" | "site";
     severity: "error" | "warning" | "info";
     weight: number;
@@ -896,6 +898,8 @@ export interface AuditOptions {
   // to config.rules.disable.
   ruleInclude?: string[];
   ruleExclude?: string[];
+  /** --wcag-level (repo#3093): overrides [rules] wcag_level for this run. */
+  wcagLevel?: "A" | "AA" | "AAA";
   // --disable-discovery-probes (#409): overrides [crawler]
   // disable_discovery_probes for this run, either way (`=false` turns the
   // probes back on). Undefined → config decides.

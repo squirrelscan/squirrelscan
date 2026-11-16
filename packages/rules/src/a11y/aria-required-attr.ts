@@ -1,5 +1,6 @@
 // a11y/aria-required-attr - Required ARIA attributes present
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { requiredAttributesByRole } from "./aria-data";
@@ -13,6 +14,7 @@ export const ariaRequiredAttrRule: Rule = {
     solution:
       "Some ARIA roles require specific attributes to be present. For example, role='checkbox' requires aria-checked, role='slider' requires aria-valuenow. Add the missing required attributes with appropriate values.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "page",
     severity: "error",

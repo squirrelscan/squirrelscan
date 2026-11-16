@@ -1,5 +1,6 @@
 // a11y/aria-hidden-body - Ensure body is not aria-hidden
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const ariaHiddenBodyRule: Rule = {
@@ -10,6 +11,7 @@ export const ariaHiddenBodyRule: Rule = {
     solution:
       "Never set aria-hidden='true' on the <body> element. This makes the entire page invisible to assistive technology. If you need to hide content when a modal is open, add aria-hidden to sibling elements of the modal, not to body.",
     category: "a11y",
+    wcag: [wcag("4.1.2")],
     scope: "page",
     verdictScope: "template",
     severity: "error",
