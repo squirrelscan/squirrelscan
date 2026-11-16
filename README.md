@@ -107,26 +107,26 @@ npm install -g squirrelscan
 
 **npx (run without installing):**
 ```bash
-npx squirrelscan audit example.com
+npx squirrelscan audit nutshop.squirrelscan.com
 ```
 
 ### Quick start
 
 ```bash
 # Audit a website
-squirrel audit example.com
+squirrel audit nutshop.squirrelscan.com
 
 # Generate HTML report
-squirrel audit example.com -f html -o report.html
+squirrel audit nutshop.squirrelscan.com -f html -o report.html
 
 # Pipe to Claude for AI analysis
-squirrel audit example.com --format llm | claude
+squirrel audit nutshop.squirrelscan.com --format llm | claude
 
 # Quick audit for a fast first look (other levels: surface, full)
-squirrel audit example.com --level quick
+squirrel audit nutshop.squirrelscan.com --level quick
 
 # run only agent experience and performance rules
-squirrel audit example.com --rule-include ax,performance
+squirrel audit nutshop.squirrelscan.com --rule-include ax,performance
 
 # login for cloud audits and cloud rendering
 squirrel auth login
@@ -251,7 +251,7 @@ Prerequisites: [Bun 1.4.4](https://bun.sh/) and Git.
 git clone https://github.com/squirrelscan/squirrelscan.git
 cd squirrelscan
 bun install --frozen-lockfile
-bun run dev -- audit https://example.com --max-pages 10
+bun run dev -- audit https://nutshop.squirrelscan.com --max-pages 10
 ```
 
 Run the same checks used in pull requests:
@@ -281,7 +281,7 @@ squirrel self settings set telemetry false
 Or disable all telemetry and install registration for any invocation by defining `NO_TELEMETRY` (any defined value works, including an empty value, `0`, or `false`) or `DO_NOT_TRACK=1` (or `true`). A project can opt out with `"telemetry": false` in `.squirrel/settings.json`:
 
 ```bash
-NO_TELEMETRY=1 squirrel audit https://example.com
+NO_TELEMETRY=1 squirrel audit https://nutshop.squirrelscan.com
 ```
 
 ## Links

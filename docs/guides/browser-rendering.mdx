@@ -16,7 +16,7 @@ Browser rendering solves this: pages are loaded in a real headless browser in th
 
 ```bash
 squirrel auth login          # once
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 ```
 
 Once you're logged in, audits render in the cloud by default, with no prompt: the [audit level](/guides/audit-levels) decides which pages, only the ones that need JavaScript at quick and every page at surface and full. The first such run prints a one-line note about what audits cost. The crawl progress shows the rendering spend so far (the 50-credit base appears in the final total, not this counter):
@@ -32,7 +32,7 @@ Logged-out runs (and `--offline`) always use plain HTTP and cost nothing.
 If a site is server-rendered and you don't need a browser for it (it is not cheaper: every audited page costs the same 2 credits either way, it is just faster):
 
 ```bash
-squirrel audit https://example.com --http
+squirrel audit https://nutshop.squirrelscan.com --http
 ```
 
 `--http` forces plain HTTP for that run. The opposite, `--render`, renders every page even when your config disables it.
@@ -52,7 +52,7 @@ The price is the same for all three: 2 credits per audited page plus the 50-cred
 Run a single audit with a strategy:
 
 ```bash
-squirrel audit https://example.com --render-mode auto
+squirrel audit https://nutshop.squirrelscan.com --render-mode auto
 ```
 
 ## Make the choice permanent for a project

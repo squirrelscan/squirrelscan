@@ -52,8 +52,8 @@ Team and Enterprise organizations must also have channels enabled by an admin (`
 Each event arrives as a `<channel source="squirrelscan" ...>` tag. The body is a one-line summary built from ids and counts, and the attributes carry the ids your agent needs for tool calls:
 
 ```text
-<channel source="squirrelscan" category="audit_complete" website_id="web_123" run_id="run_456" domain="example.com">
-Cloud audit complete for example.com (run run_456): health score 91, 2 errors, 5 warnings.
+<channel source="squirrelscan" category="audit_complete" website_id="web_123" run_id="run_456" domain="nutshop.squirrelscan.com">
+Cloud audit complete for nutshop.squirrelscan.com (run run_456): health score 91, 2 errors, 5 warnings.
 </channel>
 ```
 

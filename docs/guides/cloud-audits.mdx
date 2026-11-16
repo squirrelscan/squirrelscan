@@ -43,7 +43,7 @@ The audit is the same underneath. Pick whichever surface fits how you work.
     Run an audit with the cloud checks included. Logged in, the default `surface` level already runs them (and pages render in a cloud browser); the flag below just makes it explicit:
 
     ```bash
-    squirrel audit https://example.com --level surface
+    squirrel audit https://nutshop.squirrelscan.com --level surface
     ```
 
     The start banner shows the estimated spend against your balance. See [`squirrel audit`](/cli/audit).
@@ -68,10 +68,10 @@ When you are logged in and online, every audit auto-publishes to your dashboard 
 
 ```bash
 # logged in: auto-publishes (unlisted) and prints the URL
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 
 # make it public and listed
-squirrel audit https://example.com --visibility public
+squirrel audit https://nutshop.squirrelscan.com --visibility public
 ```
 
 Opt out of a single run with `--no-publish`, or turn it off for the project with `[cloud] publish = false`. Published reports are available in HTML, JSON, Markdown, plain text, XML, and the LLM format by appending an extension to the report URL. See [Reports and scoring](/reports#publishing-reports) for the details.

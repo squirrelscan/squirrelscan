@@ -38,7 +38,7 @@ Gate your build with [`--fail-on`](/cli/audit); quote each expression, since
 shells treat bare `<`/`>` as redirection:
 
 ```bash
-squirrel audit https://example.com --fail-on 'score<90' --fail-on 'severity>=error'
+squirrel audit https://nutshop.squirrelscan.com --fail-on 'score<90' --fail-on 'severity>=error'
 ```
 
 <Note>Deterministic audits run with **no login**. A `SQUIRRELSCAN_API_KEY` is only
@@ -101,7 +101,7 @@ curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com 
 export PATH="$HOME/.local/bin:$PATH"
 
 # JSON report on stdout stays clean — the gate summary goes to stderr.
-squirrel audit https://example.com \
+squirrel audit https://nutshop.squirrelscan.com \
   --format json --output report.json \
   --fail-on 'score<90,score:perf<80'
 ```

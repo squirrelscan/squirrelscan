@@ -82,19 +82,19 @@ That adds `audit-website` (the fix loop) and `squirrelscan` (operating the CLI).
 Start a REPL session and describe the task. Gemini calls `run_audit`, polls until the report is ready, then works the findings:
 
 ```text
-Audit https://example.com with squirrelscan and list the top 3 fixes.
+Audit https://nutshop.squirrelscan.com with squirrelscan and list the top 3 fixes.
 ```
 
 Because Gemini CLI is a coding agent, not just a chat client, it can go straight from the report into your source:
 
 ```text
-Audit example.com, then fix every images/alt-missing finding in this repo and re-audit to confirm.
+Audit nutshop.squirrelscan.com, then fix every images/alt-missing finding in this repo and re-audit to confirm.
 ```
 
 Keep runs fast on a large site by capping the crawl up front:
 
 ```text
-Audit only /docs/* on example.com, cap it at 20 pages, and fix the broken links.
+Audit only /blog/* on nutshop.squirrelscan.com, cap it at 20 pages, and fix the broken links.
 ```
 
 <Tip>Cloud audits cost credits (50 per audit plus 2 per audited page, and 1 per external link checked), and `run_audit` returns a cost estimate before anything runs. Signed out, local `squirrel audit` runs cost nothing, so use those for quick iteration. A signed-in `squirrel audit` registers a cloud run and spends credits, so use the cloud for browser-rendered checks deliberately.</Tip>
@@ -106,7 +106,7 @@ The OAuth flow needs a local browser and a reachable localhost redirect, so it f
 For a plain pass/fail deploy gate you do not need the agent at all, the CLI exits non-zero when a threshold trips:
 
 ```bash
-squirrel audit https://example.com --fail-on 'score<90'
+squirrel audit https://nutshop.squirrelscan.com --fail-on 'score<90'
 ```
 
 See the [CI guide](/guides/ci) for the full pattern.

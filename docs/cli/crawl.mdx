@@ -64,31 +64,31 @@ starts. See [Crawling](/crawl) for how each level picks pages.
 ### Basic crawl
 
 ```bash
-squirrel crawl https://example.com
+squirrel crawl https://nutshop.squirrelscan.com
 ```
 
 ### Comprehensive crawl
 
 ```bash
-squirrel crawl https://example.com --level full
+squirrel crawl https://nutshop.squirrelscan.com --level full
 ```
 
 ### Crawl more pages
 
 ```bash
-squirrel crawl https://example.com -m 1000
+squirrel crawl https://nutshop.squirrelscan.com -m 1000
 ```
 
 ### Fresh crawl (ignore cache)
 
 ```bash
-squirrel crawl https://example.com --refresh
+squirrel crawl https://nutshop.squirrelscan.com --refresh
 ```
 
 ### Resume interrupted crawl
 
 ```bash
-squirrel crawl https://example.com --resume
+squirrel crawl https://nutshop.squirrelscan.com --resume
 ```
 
 Resume continues the latest crawl of the site only when it is unfinished, its include, exclude and URL settings match and this process can claim it. Otherwise a new crawl starts and the reason is printed on stderr, as in [`squirrel audit --resume`](/cli/audit#resume-an-interrupted-crawl).
@@ -151,7 +151,7 @@ level's page budget applies instead; any other value overrides it. See
 
 ```bash
 # 1. Crawl the site
-squirrel crawl https://example.com
+squirrel crawl https://nutshop.squirrelscan.com
 
 # 2. Analyze the crawl
 squirrel analyze

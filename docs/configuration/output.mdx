@@ -177,13 +177,13 @@ path = "reports/audit.json"  # Optional: save to file
 
 ```bash
 # Output to stdout
-squirrel audit https://example.com --format json
+squirrel audit https://nutshop.squirrelscan.com --format json
 
 # Save to file
-squirrel audit https://example.com --format json --output report.json
+squirrel audit https://nutshop.squirrelscan.com --format json --output report.json
 
 # Pipe to jq for filtering
-squirrel audit https://example.com --format json | jq '.score.overall'
+squirrel audit https://nutshop.squirrelscan.com --format json | jq '.score.overall'
 ```
 
 ---
@@ -230,10 +230,10 @@ reports/audit-{timestamp}.html
 
 ```bash
 # Generate and open in browser
-squirrel audit https://example.com --format html
+squirrel audit https://nutshop.squirrelscan.com --format html
 
 # Save to custom location
-squirrel audit https://example.com --format html --output reports/my-audit.html
+squirrel audit https://nutshop.squirrelscan.com --format html --output reports/my-audit.html
 ```
 
 ---
@@ -290,13 +290,13 @@ For a 51-page audit:
 
 ```bash
 # Direct output during audit
-squirrel audit https://example.com --format llm
+squirrel audit https://nutshop.squirrelscan.com --format llm
 
 # Or export from stored audit
 squirrel report <audit-id> --format llm
 
 # Pipe directly to a coding agent
-squirrel audit https://example.com --format llm | claude "analyze and prioritize fixes"
+squirrel audit https://nutshop.squirrelscan.com --format llm | claude "analyze and prioritize fixes"
 ```
 
 See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/skills/blob/main/skills/audit-website/references/OUTPUT-FORMAT.md) for complete format specification.
@@ -371,13 +371,13 @@ See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/skills/blob/main/skills/a
 
 ```bash
 # Direct output during audit
-squirrel audit https://example.com --format xml --output audit.xml
+squirrel audit https://nutshop.squirrelscan.com --format xml --output audit.xml
 
 # Or export from stored audit
 squirrel report <audit-id> --format xml --output audit.xml
 
 # Validate with xmllint
-squirrel audit https://example.com --format xml | xmllint --format -
+squirrel audit https://nutshop.squirrelscan.com --format xml | xmllint --format -
 ```
 
 ---
@@ -467,7 +467,7 @@ format = "console"
 
 Run:
 ```bash
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 ```
 
 ---
@@ -514,13 +514,13 @@ Use CLI to generate multiple formats:
 
 ```bash
 # Console output
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 
 # JSON for automation
-squirrel audit https://example.com --format json --output reports/data.json
+squirrel audit https://nutshop.squirrelscan.com --format json --output reports/data.json
 
 # HTML for sharing
-squirrel audit https://example.com --format html --output reports/visual.html
+squirrel audit https://nutshop.squirrelscan.com --format html --output reports/visual.html
 ```
 
 ---
@@ -538,7 +538,7 @@ path = "reports/default.json"
 
 **CLI override:**
 ```bash
-squirrel audit https://example.com --format json --output custom.json
+squirrel audit https://nutshop.squirrelscan.com --format json --output custom.json
 # Uses: format=json, path=custom.json
 ```
 
@@ -962,12 +962,12 @@ Compare two audits using JSON:
 
 ```bash
 # Before changes
-squirrel audit https://example.com --format json --output before.json
+squirrel audit https://nutshop.squirrelscan.com --format json --output before.json
 
 # Make changes...
 
 # After changes
-squirrel audit https://example.com --format json --output after.json
+squirrel audit https://nutshop.squirrelscan.com --format json --output after.json
 
 # Compare scores
 echo "Before: $(cat before.json | jq '.score.overall')"
@@ -1004,7 +1004,7 @@ squirrel audit $URL > "logs/$DATE.log"
 **Solution:** Open manually:
 
 ```bash
-squirrel audit https://example.com --format html --output report.html
+squirrel audit https://nutshop.squirrelscan.com --format html --output report.html
 open report.html  # macOS
 xdg-open report.html  # Linux
 ```
@@ -1019,10 +1019,10 @@ xdg-open report.html  # Linux
 
 ```bash
 # Get only the score block
-squirrel audit https://example.com --format json | jq '.score'
+squirrel audit https://nutshop.squirrelscan.com --format json | jq '.score'
 
 # Get only error-severity issues
-squirrel audit https://example.com --format json | jq '.issues[] | select(.severity == "error")'
+squirrel audit https://nutshop.squirrelscan.com --format json | jq '.issues[] | select(.severity == "error")'
 ```
 
 ---

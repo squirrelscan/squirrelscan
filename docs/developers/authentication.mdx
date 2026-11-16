@@ -192,7 +192,7 @@ token straight from the environment, and the REST API accepts the same value
 as a bearer token.
 
 ```bash
-SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx squirrel audit https://example.com
+SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx squirrel audit https://nutshop.squirrelscan.com
 ```
 
 <Note>
@@ -233,7 +233,7 @@ names the mismatch. Rotate the key for the right environment with
 - name: Audit
   env:
     SQUIRRELSCAN_API_KEY: ${{ secrets.SQUIRRELSCAN_API_KEY }}
-  run: squirrel audit https://example.com --fail-on 'score<90' --yes
+  run: squirrel audit https://nutshop.squirrelscan.com --fail-on 'score<90' --yes
 ```
 
 Store the key as a repository or organization secret. A **CI** preset key is

@@ -56,7 +56,7 @@ Actionable asks whether an agent can go beyond reading and transact: call an API
 ## Run only these rules
 
 ```bash
-squirrel audit https://example.com --rule-include ax
+squirrel audit https://nutshop.squirrelscan.com --rule-include ax
 ```
 
 `ax` also selects the four `ai/` rules, which belong to this category. Three of them are cloud rules that run only when you are signed in, and [AI content detection](/rules/ai/ai-content) is retired and never runs. [Content Without JavaScript](/rules/ax/content-without-js) and [Archive Indexing](/rules/ax/archive-indexing) need a cloud audit too.
