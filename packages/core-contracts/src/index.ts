@@ -1571,6 +1571,11 @@ export interface ScanScope {
   /** Pages freshly crawled this run (the report.pages basis, before publish drops pages[]). */
   pagesCrawled: number;
   /**
+   * Of `pagesCrawled`, the pages that answered 4xx or 5xx (repo#2404): kept as pages but never rule-audited, so the
+   * scan line says why the crawled count is larger than the audited one. Absent when none, and on older reports.
+   */
+  errorPages?: number;
+  /**
    * Whether the crawl honoured robots.txt (`[crawler] respect_robots`, #1782). robots.txt is read either
    * way: false means pages it disallows were fetched and audited. Absent on reports from before it.
    */

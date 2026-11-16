@@ -130,11 +130,14 @@ function engineScanScope(
   storage: CrawlStorage,
   crawlId: string,
   input: EngineScanScopeInput | undefined,
+  errorPages = 0,
 ): Effect.Effect<ScanScope | undefined, never, never> {
   if (!input) return Effect.succeed(undefined);
-  if (!input.respectRobots) return Effect.succeed({ ...input, robotsBlockedPages: 0 });
+  // Crawled pages that answered 4xx/5xx (repo#2404): kept as pages, never rule-audited.
+  const errors = errorPages > 0 ? { errorPages } : {};
+  if (!input.respectRobots) return Effect.succeed({ ...input, ...errors, robotsBlockedPages: 0 });
   return robotsBlockedFrontierCount(storage, crawlId).pipe(
-    Effect.map((robotsBlockedPages) => ({ ...input, robotsBlockedPages })),
+    Effect.map((robotsBlockedPages) => ({ ...input, ...errors, robotsBlockedPages })),
   );
 }
 
@@ -738,6 +741,7 @@ export function buildV1Report(
     // read, and 8 bytes a page instead of a megabyte.
     const pageStatuses: Array<{ status: number }> = [];
     let pagesCrawled = 0;
+    let errorPages = 0;
     for (let offset = 0; ; offset += batchSize) {
       // Fail-loud, and a deliberate change from the single resident read this
       // replaced. That read degraded to `[]` on failure, which produced a
@@ -756,6 +760,7 @@ export function buildV1Report(
         // A redirecting URL is a redirect, not a page (#1762): not in pages[], not in the totals.
         if (isRedirectSourcePage(page)) continue;
         pagesCrawled++;
+        if (page.status >= 400) errorPages++;
         pageStatuses.push({ status: page.status });
         // A variant is not a page of its own in the report (#858): it is counted with its canonical.
         if (variantOf.has(page.normalizedUrl)) {
@@ -879,7 +884,7 @@ export function buildV1Report(
     ).length;
 
     const refusedSeedRedirect = offSiteSeedRedirect(crawl?.baseUrl ?? "", crawl?.seedUrl);
-    const scanScope = yield* engineScanScope(storage, crawlId, options?.scanScope);
+    const scanScope = yield* engineScanScope(storage, crawlId, options?.scanScope, errorPages);
 
     const result: FullAuditReport = {
       baseUrl: crawl?.baseUrl ?? "",
@@ -1124,6 +1129,7 @@ export function buildV2Report(
     // (matches streamPageRules / site-query.ts).
     const summaryPassSpan = logger.traceStart("v2:summaryPass");
     let pagesCrawled = 0;
+    let errorPages = 0;
     let contentPages = 0;
     let blockedPages = 0;
     let rateLimitedPages = 0;
@@ -1137,6 +1143,7 @@ export function buildV2Report(
         // A redirecting URL is a redirect, not a page (#1762): not in the totals.
         if (isRedirectSourcePage(page)) continue;
         pagesCrawled++;
+        if (page.status >= 400) errorPages++;
         if (page.status >= 200 && page.status < 300) contentPages++;
         if (page.status === 401 || page.status === 403) blockedPages++;
         // #1829: a stored 429/430 is throttling, not a bot wall — counted apart
@@ -1222,7 +1229,7 @@ export function buildV2Report(
     const robotsData = buildRobotsData(robots);
 
     const refusedSeedRedirect = offSiteSeedRedirect(crawl?.baseUrl ?? "", crawl?.seedUrl);
-    const scanScope = yield* engineScanScope(storage, crawlId, options?.scanScope);
+    const scanScope = yield* engineScanScope(storage, crawlId, options?.scanScope, errorPages);
 
     const result: FullAuditReport = {
       baseUrl: crawl?.baseUrl ?? "",

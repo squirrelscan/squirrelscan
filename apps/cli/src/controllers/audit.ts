@@ -2677,6 +2677,9 @@ export async function runAudit(
                 targetedCoverageFor(sqliteStorage, crawlId)
               )
             : undefined;
+        const errorPages = report.pages.filter(
+          (p) => p.statusCode >= 400
+        ).length;
         const scanScope: NonNullable<AuditReport["scanScope"]> = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
@@ -2684,6 +2687,8 @@ export async function runAudit(
             ? { requestedMaxPages: scopeLimit.requested }
             : {}),
           pagesCrawled: report.pages.length,
+          // Crawled pages that answered 4xx/5xx: never rule-audited (repo#2404).
+          ...(errorPages > 0 ? { errorPages } : {}),
           respectRobots: mergedConfig.crawler.respect_robots,
           robotsBlockedPages,
           // The page cap counted every crawled page, variants included (#858).

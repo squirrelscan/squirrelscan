@@ -876,6 +876,8 @@ Page types: 20 product pages, 6 blog posts, 2 contact pages; 30 not classified.
 - Scan: 100 pages crawled from the CLI v0.0.76 (page limit 100 reached)
 ```
 
+When some crawled pages answered with an error status (4xx or 5xx), the scan line counts them: `Scan: 4 pages crawled (2 returned errors) from the CLI`. Those pages are kept, and they show in broken-link findings, but page rules do not run on them, so the audited page count is lower. The LLM and XML reports carry the same count as an `error-pages` attribute on `<scan-scope>`. A crawl with no error pages prints the line as before.
+
 The JSON and XML reports keep every one of these as data fields where they were: `notChecked`, `structure`, `meta` and the rest. The LLM report ends with a `<report-detail>` element that holds `<not-checked>` and `<page-structure>`. Its scan notes stay where they were, as the `<rate-limited>`, `<seed-redirect>`, `<start-redirect>`, `<ignored>`, `<scan-scope>`, `<coverage>` and `<audit-level>` elements, because an agent needs them before it reads the issues.
 
 #### Page structure
