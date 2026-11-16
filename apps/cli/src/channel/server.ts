@@ -1,4 +1,4 @@
-// `squirrel channel` (#569): a stdio MCP *channel* server for Claude Code.
+// The channel half of `squirrel mcp --channel` (#569, #737): a stdio MCP *channel* server for Claude Code.
 //
 // Built on the low-level v2 `Server`, connected straight to a stdio transport,
 // on purpose: Claude Code refuses to register a channel that negotiates MCP
@@ -6,17 +6,17 @@
 // 2025-era versions through `initialize` and answers no `server/discover`, so an
 // auto-negotiating client falls back to the legacy handshake. `serveStdio`, which
 // `squirrel mcp` uses, would add 2026-07-28; the channel must never go through it
-// (#570). Kept apart from `src/mcp/server.ts` for the same reason.
+// (#570). `squirrel mcp --channel` builds this server and forwards the hosted tools through it.
 
 import {
   SUPPORTED_PROTOCOL_VERSIONS,
   Server,
+  type ServerCapabilities,
 } from "@modelcontextprotocol/server";
-import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 
 import { fetchActiveOrgContext } from "@/controllers/orgs/resolve";
 import { cliApi } from "@/lib/api-client";
-import { resolveCredential, warnIfSessionUnreadable } from "@/self/credentials";
+import { resolveCredential } from "@/self/credentials";
 import { logger } from "@/utils/logger";
 
 import { version } from "../../package.json";
@@ -52,13 +52,28 @@ export const CHANNEL_PROTOCOL_VERSIONS = SUPPORTED_PROTOCOL_VERSIONS.filter(
   (v) => v < "2026-07-28"
 );
 
-export function createChannelServer(): Server {
+export interface ChannelServerExtras {
+  // Forwarded tool, resource and prompt capabilities of `squirrel mcp --channel` (#737).
+  capabilities?: ServerCapabilities;
+  // Hosted server instructions, appended after the channel's own.
+  instructions?: string;
+}
+
+export function createChannelServer(extras: ChannelServerExtras = {}): Server {
   return new Server(
     { name: "squirrelscan", version },
     {
       // Presence of this key is what registers the channel. The permission relay capability is deliberately not declared: nobody but Claude Code may approve tool use in the session.
-      capabilities: { experimental: { "claude/channel": {} } },
-      instructions: buildInstructions(),
+      capabilities: {
+        ...extras.capabilities,
+        experimental: {
+          ...extras.capabilities?.experimental,
+          "claude/channel": {},
+        },
+      },
+      instructions: [buildInstructions(), extras.instructions]
+        .filter((part): part is string => Boolean(part))
+        .join("\n\n"),
       supportedProtocolVersions: CHANNEL_PROTOCOL_VERSIONS,
     }
   );
@@ -196,20 +211,11 @@ async function resolveOrgId(): Promise<string | null> {
   return context?.activeOrgId ?? null;
 }
 
-// Process-wide redirect so stray stdout output cannot corrupt the JSON-RPC stream.
-function redirectConsoleLogToStderr(): void {
-  const toStderr = (...args: unknown[]) => console.error(...args);
-  console.log = toStderr;
-  console.info = toStderr;
-  console.debug = toStderr;
-}
-
-// Start the stdio channel and block until the client disconnects.
-export async function runChannelServer(
+// Resolve the options and start polling the cloud feed once the client has finished the handshake (events sent earlier would be dropped). Returns the signal that ends when the client hangs up.
+export function startChannelLoop(
+  server: Server,
   options: ChannelOptions = {}
-): Promise<void> {
-  redirectConsoleLogToStderr();
-  warnIfSessionUnreadable();
+): AbortSignal {
   const resolved: Required<ChannelOptions> = {
     intervalSeconds: Math.max(
       options.intervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
@@ -217,17 +223,18 @@ export async function runChannelServer(
     ),
     categories: options.categories ?? DEFAULT_CHANNEL_CATEGORIES,
   };
-
-  const server = createChannelServer();
   const abort = new AbortController();
   const stop = () => abort.abort();
-  server.onclose = stop;
+  const previousOnClose = server.onclose;
+  server.onclose = () => {
+    previousOnClose?.();
+    stop();
+  };
   // The stdio transport does not surface stdin EOF, which is how a client hanging up looks.
   process.stdin.on("end", stop);
   process.stdin.on("close", stop);
 
   let started = false;
-  // Events sent before the client finished the handshake would be dropped.
   server.oninitialized = () => {
     if (started) return;
     started = true;
@@ -242,11 +249,15 @@ export async function runChannelServer(
         sleep: abortableSleep,
       },
       abort.signal
-    ).finally(() => process.exit(0));
+    );
   };
+  return abort.signal;
+}
 
-  await server.connect(new StdioServerTransport());
-  await new Promise<void>((resolve) =>
-    abort.signal.addEventListener("abort", () => resolve())
-  );
+// `squirrel channel` is an alias of `squirrel mcp --channel` (#737).
+export async function runChannelServer(
+  options: ChannelOptions = {}
+): Promise<void> {
+  const { runMcpServer } = await import("@/mcp/server");
+  await runMcpServer({ channel: options });
 }

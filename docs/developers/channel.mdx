@@ -6,7 +6,7 @@ icon: "bell"
 
 A scheduled cloud audit finishes at 3am. By the time you open your editor, your agent has no idea. The squirrelscan channel fixes that: it pushes `audit_complete`, `audit_failed` and `issues_detected` events into a running [Claude Code](https://code.claude.com) session, so the agent can read the report and start on the fixes.
 
-It is a Claude Code [channel](https://code.claude.com/docs/en/channels): a local stdio server that Claude Code spawns. It is the `squirrel` binary itself, because channels cannot be hosted and `squirrel` already holds your cloud login. See [`squirrel channel`](/cli/channel) for the command reference.
+It is a Claude Code [channel](https://code.claude.com/docs/en/channels): a local stdio server that Claude Code spawns. It is the `squirrel` binary itself, because channels cannot be hosted and `squirrel` already holds your cloud login. It is also `squirrel mcp --channel`, which forwards the hosted tools too; `squirrel channel` is the alias. See [`squirrel channel`](/cli/channel) for the command reference.
 
 <Warning>
 Channels are a research preview in Claude Code. Until squirrelscan is on Anthropic's channel allowlist, you need the development flag described in [Start Claude Code with the channel](#start-claude-code-with-the-channel).

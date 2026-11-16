@@ -202,6 +202,10 @@ _squirrel_completions() {
       COMPREPLY=( $(compgen -W "--interval --categories" -- "\${cur}") )
       return 0
       ;;
+    mcp)
+      COMPREPLY=( $(compgen -W "--channel --interval --categories" -- "\${cur}") )
+      return 0
+      ;;
     audit)
       case "\${prev}" in
         --level|--coverage|-C)
@@ -362,7 +366,7 @@ _squirrel() {
     'report:Generate report from audit results'
     'feedback:Send feedback to the team'
     'keys:Manage org API keys'
-    'mcp:Run the local MCP server (stdio)'
+    'mcp:Run the MCP server (stdio), the hosted tools through your login'
     'channel:Run the Claude Code channel (stdio)'
     'self:Self-management commands'
     'skills:Manage agent skills'
@@ -522,6 +526,12 @@ _squirrel() {
           _arguments \\
             '--interval[Seconds between polls of the cloud feed]:seconds' \\
             '--categories[Comma-separated categories to deliver]:categories'
+          ;;
+        mcp)
+          _arguments \\
+            '--channel[Also push cloud audit events into a Claude Code session]' \\
+            '--interval[With --channel: seconds between polls of the cloud feed]:seconds' \\
+            '--categories[With --channel: comma-separated categories to deliver]:categories'
           ;;
         keys)
           case $words[2] in
@@ -739,7 +749,7 @@ complete -c squirrel -n "__fish_use_subcommand" -a config -d "Manage configurati
 complete -c squirrel -n "__fish_use_subcommand" -a report -d "Generate report from audit results"
 complete -c squirrel -n "__fish_use_subcommand" -a feedback -d "Send feedback to the team"
 complete -c squirrel -n "__fish_use_subcommand" -a keys -d "Manage org API keys"
-complete -c squirrel -n "__fish_use_subcommand" -a mcp -d "Run the local MCP server (stdio)"
+complete -c squirrel -n "__fish_use_subcommand" -a mcp -d "Run the MCP server (stdio), the hosted tools through your login"
 complete -c squirrel -n "__fish_use_subcommand" -a channel -d "Run the Claude Code channel (stdio)"
 complete -c squirrel -n "__fish_use_subcommand" -a self -d "Self-management commands"
 complete -c squirrel -n "__fish_use_subcommand" -a skills -d "Manage agent skills"
@@ -773,6 +783,9 @@ complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subco
 # Channel options
 complete -c squirrel -n "__fish_seen_subcommand_from channel" -l interval -d "Seconds between polls of the cloud feed"
 complete -c squirrel -n "__fish_seen_subcommand_from channel" -l categories -d "Comma-separated categories to deliver"
+complete -c squirrel -n "__fish_seen_subcommand_from mcp" -l channel -d "Also push cloud audit events into a Claude Code session"
+complete -c squirrel -n "__fish_seen_subcommand_from mcp" -l interval -d "With --channel: seconds between polls of the cloud feed"
+complete -c squirrel -n "__fish_seen_subcommand_from mcp" -l categories -d "With --channel: comma-separated categories to deliver"
 
 # Keys revoke options
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from revoke" -l force -d "Skip confirmation prompt"

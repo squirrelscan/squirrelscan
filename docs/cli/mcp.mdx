@@ -1,148 +1,77 @@
 ---
 title: "mcp"
 icon: "plug"
-description: "Run the local MCP server so agents can drive squirrelscan"
+description: "Run a stdio MCP server that forwards the hosted squirrelscan tools through your login"
 ---
 
-The `mcp` command starts a local [Model Context Protocol](https://modelcontextprotocol.io) server over stdio. Agents like Claude Code and Cursor launch it to call squirrelscan's audit engine and cloud features as tools.
+The `mcp` command starts a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio for agents that launch local servers, such as Claude Code and Cursor. It is a front end for the [hosted MCP server](/developers/mcp): every request goes to `https://mcp.squirrelscan.com/mcp` with the credential the CLI already holds. It has no tools of its own.
 
 <Info>
-Prefer the **hosted MCP server** for most work: point any client at `https://mcp.squirrelscan.com/mcp` with nothing to install and no local process to run. See the [Hosted MCP server](/developers/mcp) guide. The local stdio server below runs audits on your machine: signed out it needs no account and no network, and signed in its `audit_website` is billed like `squirrel audit` (see [Billing a signed-in audit](#billing-a-signed-in-audit)).
+Clients with no shell (Claude Desktop, ChatGPT) connect to the hosted URL directly and do not need this command. Use `squirrel mcp` when the client launches stdio servers, or when you want the [channel](#channel-events).
 </Info>
 
 ## Usage
 
 ```bash
-squirrel mcp
+squirrel mcp [--channel] [--interval <seconds>] [--categories <list>]
 ```
 
-The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarely run it directly. Your agent spawns it from its MCP config. See the [MCP Server guide](/developers/mcp) for connect instructions.
-
-## Tools
-
-| Tool | Auth | Description |
-|------|------|-------------|
-| `audit_website` | None | Deterministic audit of a URL at an [audit level](/guides/audit-levels) (`level`: `quick`, `surface` or `full`, default `surface`; `coverage` is the older name). Logged out, or with `offline: true`, it runs on your machine with no cloud call. Logged in, it is a billed cloud audit like [`squirrel audit`](/cli/audit): 50 credits plus 2 per audited page at every level, plus 1 per external link the cloud verifies (at most 1 per page) where external links are checked, with pages that need JavaScript rendered in the cloud browser and the cloud checks at surface and full. Every level checks internal and external links; at quick the external ones are checked on your machine, free. `externalLinks: false` or `internalLinks: false` skips them. `followRedirect: true` (or `[crawler] follow_redirect = true`) audits where the URL redirects when that is another site; without it the call returns `confirmation_required` with the destination (see [Start URLs that redirect](#start-urls-that-redirect)). `maxDuration` (seconds, at most 604800) puts a wall-clock budget on the audit: at the limit it returns a report with status `partial` and reason code `max_duration` (see [Time limit](/cli/audit#time-limit)). `ephemeral: true` (or `[cloud] ephemeral = true`) uses the cloud for this run only: the site is not added to your dashboard or scheduled, and the audit is charged the same (see [Ephemeral runs](/cli/audit#ephemeral-runs)). See [Billing a signed-in audit](#billing-a-signed-in-audit) and [Link checking defaults](/rules/links#link-checking-defaults). |
-| `quick_check` | None | Fast, local-only audit at the quick level: the URL and its sitemaps, up to 25 pages, no link following, no cloud checks. Internal link targets are status-checked, external links are not. Works offline. |
-| `list_rules` | None | List all built-in audit rules. |
-| `get_rule` | None | Full definition of one rule by id. |
-| `list_audits` | Login | Your org's queued, pending and running audits (`queued` is a run waiting for a container slot, which starts by itself). Prints a one-line `⚠ Page limit: ...` warning for any run whose page count was clamped to the plan's ceiling. |
-| `get_report` | Login | Fetch a published report by audit id. |
-| `list_issues` | Login | A website's issues: action plans that each cover one or more findings (one rule result from a report). Issues are a cloud feature; the CLI shows findings only. See [issues and findings](/developers/mcp#issues-and-findings). |
-| `get_issue` | Login | A single issue by website and number: its plan, the findings it covers, and its comments. |
-| `comment_on_issue` | Login | Comment on an issue. |
-| `list_entities` | None | The entities a site declares, collapsed across every crawled page, with filters and paging. |
-| `get_entity` | None | One entity as the map recorded it: the nine kept properties, declaring pages, conflicts (including legal identifiers), and references in and out. |
-| `get_entity_graph` | None | The graph as json, jsonld, mermaid, dot, graphml or markdown. |
-| `compare_entities` | None | What changed between two audits, including entities that gained an \`@id\`. |
-| `get_entity_findings` | None | The \`schema/entity-*\` verdicts for an audit, with fix text. |
-| `list_pages` | None | One row per crawled page of a stored audit, the same rows as [`squirrel pages -f json`](/cli/pages): title, description, h1, schema types and `@id`s, link counts, depth, response time and flags from the audit's rule results. Filters `missing`, `duplicate`, `too_long`, `orphan`, `section` and `page` combine; paged with `limit`, `offset` and `hasMore`. |
-| `send_feedback` | None | Send feedback to the squirrelscan team: a bug, a missing feature, what worked. Needs the network and an email to reply to: pass `email`, or it uses the one [`squirrel feedback`](/cli/feedback) saved, then your signed-in account's. |
-
-`list_pages` and the five entity tools read the local project store, so they need no account and spend no credits. They answer questions about audits you have already run: see [the entity map for agents](/guides/entity-map/mcp) for the fix-and-verify loop they are built around.
-
-## Billing a signed-in audit
-
-Logged out, `audit_website` and `quick_check` run on your machine, need no account and make no cloud call. Logged in, `audit_website` is billed the way [`squirrel audit`](/cli/audit) is: 50 credits for the audit plus 2 per audited page, at every [audit level](/guides/audit-levels), plus 1 per external link the cloud verifies for it at surface and full, at most 1 per page (quick checks its external links on your machine, free). Its estimate includes the link reserve. Links the cloud cannot answer in time are checked on your machine and are free. `quick_check` always runs locally.
-
-A tool call cannot ask you a question, so the first call returns the estimate instead of starting:
-
-```json
-{
-  "status": "confirmation_required",
-  "estimate": { "credits": 100, "pages": 25, "baseCredits": 50, "creditsPerPage": 2 },
-  "balance": 5000,
-  "sufficient": true,
-  "next": "Show the user the estimate (...), then call audit_website again with confirm: true to start the billed cloud audit. Pass offline: true for a local-only audit."
-}
-```
-
-The agent shows you the estimate and calls again with `confirm: true`. The report then starts with the run and its cost, for example `Billed cloud audit, run <id>: 25 audited pages, about 100 credits (50 base + 2 per audited page).` The page charge settles when the run closes, on the pages the audit actually read.
-
-- An estimate at or under `[cloud] confirm_threshold` (50 by default) starts without `confirm`. Every audit costs at least 52 credits, so by default each one asks first.
-- When your balance or `[cloud] max_credits_per_audit` covers fewer pages than the level asks for, the audit runs on the pages it can pay for and says so.
-- When they cannot cover even one page, or the server refuses to register the audit, the tool returns an error with the cost and the balance. Nothing is registered or charged.
-- An audit that does not complete (the site is down or blocks the crawl) closes as failed: no page charge, and the audit base is refunded. Stopping the server mid-audit closes the run as cancelled.
-- `offline: true` runs the audit on your machine with no cloud call: not billed, and without the cloud checks or cloud rendering. A `localhost` or private-network URL always runs locally and is never billed.
-
-## Start URL rules
-
-`audit_website` accepts only `http://` and `https://` URLs with a host (a bare domain gets `https://`). Anything else, such as `ftp://`, `file://`, `mailto:` or `javascript:`, returns an error before any request is made: `invalid_url: only http:// and https:// URLs can be audited. Nothing was registered or charged.` The URL is not echoed back. Credentials and the fragment in a URL are dropped; the query string is kept.
-
-## Start URLs that redirect
-
-`audit_website` resolves the URL's redirect chain before it plans or charges anything. A redirect within one site (`http` to `https`, apex to `www`) is followed silently. A redirect to another site, such as a link shortener, is not audited until the call says so:
-
-```json
-{
-  "status": "confirmation_required",
-  "reason": "redirect",
-  "originalUrl": "https://bit.ly/abc",
-  "finalUrl": "https://example.com/pricing",
-  "redirectChain": [
-    { "url": "https://bit.ly/abc", "status": 301 },
-    { "url": "https://example.com/pricing", "status": 200 }
-  ],
-  "next": "https://bit.ly/abc redirects to https://example.com/pricing, a different site. Show the user the destination, then call audit_website again with followRedirect: true to audit it. The credit estimate is made for the destination on that call."
-}
-```
-
-The agent shows you the destination and calls again with `followRedirect: true`. `confirm: true` does not do it: that approves credit spend, and the redirect may land on a site that is not yours. The next call plans, estimates and audits the destination, and the report names the URL you gave and the chain. A chain that loops, passes 5 hops or reaches a refused hop comes back as `{ "status": "redirected", ... }` with the reason, and nothing is audited. This is the same behaviour as [`squirrel audit`](/cli/audit#start-urls-that-redirect).
-
-## Supported protocol versions
-
-One `squirrel mcp` process serves both MCP protocol eras, and picks the era from the client's first message:
-
-| Protocol version | How a client connects | Capabilities come from |
-|------------------|-----------------------|------------------------|
-| `2026-07-28` | No `initialize` handshake. The client sends its protocol version and capabilities on each request. | `server/discover` |
-| `2025-11-25` and earlier | The `initialize` handshake. | The `initialize` result |
-
-You don't configure anything. Claude Code and other clients on the 2026-07-28 revision connect without a handshake, and older clients keep working with the same binary and the same tools. The tool names, descriptions and input schemas are identical in both eras.
-
-The HTTP-only parts of the 2026-07-28 revision (the `Mcp-Method` and `Mcp-Name` headers, no session id) don't apply to a stdio server.
-
-[`squirrel channel`](/cli/channel#protocol-version) is the exception: it always uses the `initialize` handshake, because Claude Code registers a channel only over it.
-
-## Skills
-
-`squirrel mcp` also serves the squirrelscan [agent skills](/developers/agents) over MCP, through the Skills extension (`io.modelcontextprotocol/skills`). A client that supports the extension gets the skills that match the server it connected to, with no separate install step.
-
-| Skill | `SKILL.md` |
-|-------|------------|
-| `squirrelscan` | `skill://squirrelscan/SKILL.md` |
-| `audit-website` | `skill://audit-website/SKILL.md` |
-
-- The server declares the extension, and the `resources` capability it needs, in `server/discover` (and in the `initialize` result for 2025-era clients).
-- `skills/list` returns both skills and `skills/get` returns one, each with its `SKILL.md` frontmatter and every file's URI, `sha256` digest and size. A URI that is not one of these skills returns `-32602`.
-- Every file, the references and icons included, reads through `resources/read` at `skill://<skill>/<path>`, as exactly the bytes its digest describes, so a client can verify each file before it loads the skill.
-- The skills are bundled into the CLI from [squirrelscan/skills](https://github.com/squirrelscan/skills) when it is built. Nothing is generated per request, and a skill changes only with a CLI release.
-
-Client support for the extension is still new. Clients without it see the skill files as ordinary resources, and [`squirrel skills`](/cli/skills) and the plugin installs keep working as before.
-
-## Authentication for agent/CI use
-
-Tools marked "Login" above need a credential to reach the squirrelscan API. The local server reuses the same [token resolution](/developers/authentication) as the rest of the CLI: it checks `SQUIRRELSCAN_API_KEY` (or the older `SQUIRREL_API_TOKEN` alias) first, then falls back to a `squirrel auth login` session.
-
-For a headless agent or CI runner that spawns `squirrel mcp` without ever calling `squirrel auth login`, set the env var on the process:
-
-```bash
-SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx squirrel mcp
-```
-
-If neither the env var nor a login session is present, an authed tool call returns a clear error naming both fixes instead of a generic failure. A call that's denied for lacking a scope (e.g. an `audits:read`-only key calling a write tool) names the missing scope in the error text as well.
-
-<Info>
-That error is a structured tool result, part of the normal JSON-RPC response on stdout. All other server output, logs and diagnostics, goes to stderr; stdout carries only the JSON-RPC stream.
-</Info>
-
-## Quick start with Claude Code
+The server runs in the foreground and speaks JSON-RPC on stdin and stdout. Your agent spawns it from its MCP config:
 
 ```bash
 claude mcp add squirrelscan -- squirrel mcp
 ```
 
+Existing `squirrel mcp` configs keep working unchanged: the command and the transport are the same.
+
+## One tool set
+
+`tools/list`, `tools/call`, `resources/*`, `prompts/*` and the `skills/*` methods are forwarded to the hosted server as they are. A tool added to the hosted server shows up here with no CLI release, and a call returns what the hosted server returns for the same credential. See the [hosted tool reference](/developers/mcp) for the tools.
+
+Tools of the old local server that the hosted server names differently keep working for one release: `audit_website` and `quick_check` are forwarded to `run_audit` (with `level: "quick"` for `quick_check`). They always run in the cloud, and `offline: true` returns an error that points to `squirrel audit`.
+
+## Needs a login
+
+The MCP is the cloud surface. It uses the same [credential resolution](/developers/authentication) as the rest of the CLI: `SQUIRRELSCAN_API_KEY` (or the older `SQUIRREL_API_TOKEN`) first, then the session from `squirrel auth login`. The credential is read on every request, so a refreshed login is picked up without restarting the server.
+
+Signed out, the catalog still lists (`tools/list`, resources, prompts and skills work), and every tool call returns one error that names `squirrel auth login` and says that free local audits are available through `squirrel audit`.
+
+## Free and local audits
+
+Free audits, and audits of `localhost`, staging and private networks, run on your machine with [`squirrel audit`](/cli/audit) and its output formats (`--format llm`, `json`, `markdown`). Agents with a shell already drive that through the squirrelscan skill. Publish the audit and the forwarded `get_report` tool reads it back.
+
+## Channel events
+
+`squirrel mcp --channel` also declares the Claude Code `claude/channel` capability and pushes cloud events (`audit_complete`, `audit_failed`, `issues_detected`) into the session while the forwarded tools stay available. [`squirrel channel`](/cli/channel) is an alias of it. See the [channel guide](/developers/channel) for setup and the security model.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--channel` | off | Declare the channel and deliver cloud events. |
+| `--interval` | `30` | With `--channel`: seconds between polls of the cloud feed (5 to 86400). |
+| `--categories` | all three | With `--channel`: comma-separated event categories to deliver. |
+
+## Supported protocol versions
+
+The front end serves whatever protocol version the client asks for, and talks to the hosted server on the current revision, so the two sides do not need to match.
+
+| Protocol version | How a client connects |
+|------------------|-----------------------|
+| `2026-07-28` | No `initialize` handshake. The client sends its version and capabilities on each request. |
+| `2025-11-25` and earlier | The `initialize` handshake. |
+
+With `--channel` the server uses the `initialize` handshake only, because Claude Code registers a channel only over it.
+
+## Environment
+
+| Variable | Description |
+|----------|-------------|
+| `SQUIRRELSCAN_API_KEY` | API key used instead of a login session, for headless agents and CI. |
+| `SQUIRREL_MCP_SERVER` | Override the hosted MCP URL (for a staging server). |
+
+Logs and diagnostics go to stderr. Stdout carries only the JSON-RPC stream.
+
 ## Related
 
-- [MCP Server](/developers/mcp): full connect guide for Claude Code, Cursor, and other clients
-- [Using with Agents](/developers/agents): skills-based integration
+- [Hosted MCP server](/developers/mcp): the tools and how to connect any client
+- [`squirrel channel`](/cli/channel): the channel alias
+- [`squirrel audit`](/cli/audit): free and local audits

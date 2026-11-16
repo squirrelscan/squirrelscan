@@ -136,7 +136,6 @@ describe("registerRun is the one door to /register", () => {
     );
     expect(callers.map((f) => f.slice(src.length + 1)).sort()).toEqual([
       "cli/commands/audit.ts",
-      "mcp/billed-audit.ts",
     ]);
   });
 });

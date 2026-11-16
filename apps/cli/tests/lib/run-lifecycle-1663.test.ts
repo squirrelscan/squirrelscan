@@ -288,7 +288,7 @@ describe("createInterruptHandler: a second signal still lets the terminal status
   });
 });
 
-describe("both surfaces use the one lifecycle (#1663)", () => {
+describe("the CLI audit uses the one lifecycle (#1663)", () => {
   const read = (rel: string) =>
     readFileSync(join(import.meta.dir, "../../src", rel), "utf8");
 
@@ -298,12 +298,5 @@ describe("both surfaces use the one lifecycle (#1663)", () => {
     expect(src).toContain("createInterruptHandler(");
     expect(src).not.toContain("createRunFinalizer(");
     expect(src).not.toMatch(/process\.once\("SIG(INT|TERM|HUP)"/);
-  });
-
-  test("the MCP server builds a RunLifecycle and keeps no terminal-state logic of its own", () => {
-    const src = read("mcp/billed-audit.ts");
-    expect(src).toContain("createRunLifecycle(");
-    expect(src).not.toContain("closed ??=");
-    expect(src).not.toMatch(/finalizeRun\(run\.runId/);
   });
 });
