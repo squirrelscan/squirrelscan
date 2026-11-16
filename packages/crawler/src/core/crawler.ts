@@ -333,6 +333,26 @@ const PREAMBLE_TOTAL_BUDGET_MS = 45_000;
 // REDIRECT_BUDGET_HOPS in detectRedirects, which bounds a chain the same way.
 const PREAMBLE_BUDGET_REQUESTS = 3;
 
+/**
+ * Re-run (or drop) the page classifier over a cached page's STORED html, so a page that is stale
+ * only because the classifier changed needs no fetch (squirrelscan/repo#3369). Returns the page
+ * with fresh `parsedData`, or null when there is no body to read (the caller then fetches).
+ * `classify` undefined strips the labels: the parse runs without a classifier, so classification,
+ * stamp and classifier-placed link sections all go.
+ */
+export function reclassifyCachedPage(
+  page: PageRecord,
+  classify: PageClassifierHook | undefined,
+): PageRecord | null {
+  if (!page.html || !page.parsedData) return null;
+  try {
+    const { document: _doc, ...serializable } = parsePage(page.html, page.finalUrl, { classify });
+    return { ...page, parsedData: JSON.stringify(serializable) };
+  } catch {
+    return null;
+  }
+}
+
 /** The preamble's wall-clock allowance, cut to the discovery deadline when one is set (#1271). */
 export function discoveryBudgetMs(timeoutMs: number, discoveryDeadlineAt?: number, now: number = Date.now()): number {
   const base = preambleBudgetMs(timeoutMs);
@@ -1554,16 +1574,28 @@ export function createCrawler(
               { maxStalenessSeconds: config.maxStalenessSeconds },
             );
 
+            let reusable: PageRecord | null = cacheLookup.entry;
             if (
-              cacheLookup.entry &&
-              cachedClassificationIsStale(cacheLookup.entry.parsedData, options.classify?.version)
+              reusable &&
+              cachedClassificationIsStale(reusable.parsedData, options.classify?.version)
             ) {
-              // Classified by another model (or none): fetch and parse the page again so it is
-              // relabelled, instead of reusing a label this run would not produce (pub#841).
-              logger.debug("cached page re-fetched: classifier changed", entry.normalizedUrl);
-            } else if (cacheLookup.entry) {
-              // Narrowing on the lookup union guarantees freshness is present.
-              cachedPage = cacheLookup.entry;
+              // Stale only because the classifier changed (pub#841): re-read the STORED html with the
+              // running classifier (or none) instead of fetching again. Without a body to read
+              // (evicted bodies already miss in the store), fall back to a full fetch.
+              const reparsed = reclassifyCachedPage(reusable, options.classify);
+              if (reparsed) {
+                logger.debug("cached page re-classified from stored html", entry.normalizedUrl);
+                reusable = reparsed;
+              } else {
+                logger.debug("cached page re-fetched: classifier changed", entry.normalizedUrl);
+                reusable = null;
+              }
+            }
+            if (!reusable) {
+              // Fetched in full below.
+            } else if (cacheLookup.freshness) {
+              // A hit always carries freshness (CacheLookup union).
+              cachedPage = reusable;
               // Browser-like freshness: if the origin says the entry is still
               // fresh (Cache-Control max-age / Expires / immutable), skip the
               // request ENTIRELY — bounded by maxStalenessSeconds so an absurd
