@@ -96,6 +96,7 @@
               "crawl",
               "guides/audit-levels",
               "guides/link-checking",
+              "guides/accessibility-coverage",
               "reports",
               "guides/read-your-report",
               "guides/failed-audits",
