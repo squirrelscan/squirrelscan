@@ -72,7 +72,7 @@ networks that block GitHub, and uninstalling.
 Audit a website with a single command:
 
 ```bash
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 ```
 
 You'll see output like:
@@ -140,35 +140,35 @@ Signed in, the audit publishes a report like this one for squirrelscan.com. [Ope
   <Step title="Limit pages crawled">
     For large sites, limit pages to get faster results:
     ```bash
-    squirrel audit https://example.com -m 10
+    squirrel audit https://nutshop.squirrelscan.com -m 10
     ```
   </Step>
 
   <Step title="Export to JSON">
     Output machine-readable JSON for CI/CD or AI processing:
     ```bash
-    squirrel audit https://example.com -f json -o report.json
+    squirrel audit https://nutshop.squirrelscan.com -f json -o report.json
     ```
   </Step>
 
   <Step title="Generate HTML report">
     Create a visual HTML report:
     ```bash
-    squirrel audit https://example.com -f html -o report.html
+    squirrel audit https://nutshop.squirrelscan.com -f html -o report.html
     ```
   </Step>
 
   <Step title="Fresh crawl">
     Ignore cache and fetch all pages fresh:
     ```bash
-    squirrel audit https://example.com --refresh
+    squirrel audit https://nutshop.squirrelscan.com --refresh
     ```
   </Step>
 
   <Step title="Choose an audit level">
     Pick depth or speed. `quick` is fast: up to 25 pages, without the cloud checks (logged out it runs locally, no account needed; logged in it is billed like any level, up to 100 credits). `surface` audits one page per template with the cloud checks. `full` reads every page up to 500:
     ```bash
-    squirrel audit https://example.com --level quick
+    squirrel audit https://nutshop.squirrelscan.com --level quick
     ```
     The default is `quick` when you're logged out and `surface` when you're logged in. See [Audit levels](/guides/audit-levels) for what each one checks and costs.
   </Step>
@@ -179,7 +179,7 @@ Signed in, the audit publishes a report like this one for squirrelscan.com. [Ope
     <Warning>A filtered audit produces a partial report. Scores reflect only the rules that ran, so don't compare them against a full audit.</Warning>
 
     ```bash
-    squirrel audit https://example.com --rule-include ax,perf
+    squirrel audit https://nutshop.squirrelscan.com --rule-include ax,perf
     ```
   </Step>
 </Steps>

@@ -88,7 +88,7 @@ curl -sS -o /dev/null -D - -A "$UA" https://example.com/
 The second runs the audit with the CLI, which fetches from your network. Signed in, the CLI renders pages in the cloud browser by default, so add `--http` to keep every request on your network:
 
 ```bash
-squirrel audit https://example.com --max-pages 1 --http
+squirrel audit https://nutshop.squirrelscan.com --max-pages 1 --http
 ```
 
 If the local run succeeds and the cloud run fails with `connection` or `http_4xx`, your origin or its CDN is treating requests from squirrelscan's network differently from yours.
@@ -287,7 +287,7 @@ A healthy page shows a first byte well under 30 seconds. `curl` exit code `28` (
 - If the run page also says our rendering service failed, run the audit again first: a second run shows whether the site is really slow. See [both sides failed](#rendering-service).
 - Fix whatever makes the first response slow: server load, slow database queries, cold starts on a serverless host.
 - Some firewalls hold unknown clients open without answering instead of refusing them. Let the crawler past that rule with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended).
-- If the site is fast for you, audit it from your own machine with the CLI, which uses your network: `squirrel audit https://example.com --http`.
+- If the site is fast for you, audit it from your own machine with the CLI, which uses your network: `squirrel audit https://nutshop.squirrelscan.com --http`.
 - If the site is fast for you and the audit still times out, contact support with the reference from the run page.
 
 ### Bot protection or WAF challenge \{#waf-challenge\}
@@ -667,7 +667,7 @@ Look for a `Disallow` rule covering the audited path, under `User-agent: *` or a
 
 **Attribution.** Unknown.
 
-**How to check.** Load the site from outside your network, then run the same audit with the CLI from your machine: `squirrel audit https://example.com --max-pages 1`. A local run that works while the cloud run fails points at how your site treats requests from our network. The `curl` checks in [checking it yourself](#checking-it-yourself) narrow it further.
+**How to check.** Load the site from outside your network, then run the same audit with the CLI from your machine: `squirrel audit https://nutshop.squirrelscan.com --max-pages 1`. A local run that works while the cloud run fails points at how your site treats requests from our network. The `curl` checks in [checking it yourself](#checking-it-yourself) narrow it further.
 
 **What to do.** Run the audit again. If it keeps failing, contact support with the reference from the run page: the run id and the audit id.
 

@@ -30,7 +30,7 @@ Valid values: `error`, `warn`, `info`, `debug`
 Override the setting for a single run:
 
 ```bash
-SQUIRREL_LOG_LEVEL=debug squirrel audit https://example.com
+SQUIRREL_LOG_LEVEL=debug squirrel audit https://nutshop.squirrelscan.com
 ```
 
 The environment variable takes precedence over the settings file.
@@ -40,7 +40,7 @@ The environment variable takes precedence over the settings file.
 The `--debug` flag shows debug messages in the console, independent of file logging:
 
 ```bash
-squirrel audit https://example.com --debug
+squirrel audit https://nutshop.squirrelscan.com --debug
 ```
 
 This is useful for real-time debugging without changing your log level setting.
@@ -85,7 +85,7 @@ squirrel config set log_delete_after_days 30
 For performance analysis, enable tracing:
 
 ```bash
-squirrel audit https://example.com --trace
+squirrel audit https://nutshop.squirrelscan.com --trace
 ```
 
 This writes timing data to `~/.squirrel/logs/trace.log`:
@@ -158,7 +158,7 @@ limits it to the phases you name; sub-phases of the rules pass are named
 
 ```bash
 SQUIRREL_HEAP_SNAPSHOT_DIR=./heap SQUIRREL_HEAP_SNAPSHOT_PHASES=report \
-  squirrel audit https://example.com
+  squirrel audit https://nutshop.squirrelscan.com
 ```
 
 Both settings force collections and a snapshot takes seconds and roughly the
@@ -183,7 +183,7 @@ If you suspect a finding that looks copied from a sibling page, turn it off and
 compare:
 
 ```bash
-SQUIRREL_TEMPLATE_FANOUT=0 squirrel audit https://example.com
+SQUIRREL_TEMPLATE_FANOUT=0 squirrel audit https://nutshop.squirrelscan.com
 ```
 
 `0`, `false`, `off` and `no` all disable it; anything else, including leaving it
@@ -228,7 +228,7 @@ For full context, attach the log file to your GitHub issue.
 
 ```bash
 # Run with debug logging
-SQUIRREL_LOG_LEVEL=debug squirrel audit https://example.com
+SQUIRREL_LOG_LEVEL=debug squirrel audit https://nutshop.squirrelscan.com
 
 # Check what happened
 cat ~/.squirrel/logs/debug.log | grep -i error
@@ -238,7 +238,7 @@ cat ~/.squirrel/logs/debug.log | grep -i error
 
 ```bash
 # Enable tracing
-squirrel audit https://example.com --trace
+squirrel audit https://nutshop.squirrelscan.com --trace
 
 # Find slow requests
 grep "duration=" ~/.squirrel/logs/trace.log | sort -t= -k2 -rn | head
@@ -248,7 +248,7 @@ grep "duration=" ~/.squirrel/logs/trace.log | sort -t= -k2 -rn | head
 
 ```bash
 # One-off debug session
-SQUIRREL_LOG_LEVEL=debug squirrel audit https://example.com --debug
+SQUIRREL_LOG_LEVEL=debug squirrel audit https://nutshop.squirrelscan.com --debug
 ```
 
 ## Related

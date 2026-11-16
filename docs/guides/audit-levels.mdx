@@ -9,9 +9,9 @@ An audit level is a named set of audit settings. Pick a level and it fills in ev
 There are three levels: **quick**, **surface** and **full**. The CLI, the local and hosted MCP servers, the API and the dashboard all use the same three, so a surface audit is the same audit wherever you start it.
 
 ```bash
-squirrel audit https://example.com --level quick
-squirrel audit https://example.com --level surface
-squirrel audit https://example.com --level full
+squirrel audit https://nutshop.squirrelscan.com --level quick
+squirrel audit https://nutshop.squirrelscan.com --level surface
+squirrel audit https://nutshop.squirrelscan.com --level full
 ```
 
 ## The three levels
@@ -108,8 +108,8 @@ Level     custom (surface + render off) · max 100 pages
 ```
 
 ```bash
-squirrel audit https://example.com --level surface --max-pages 200
-squirrel audit https://example.com --level surface --http
+squirrel audit https://nutshop.squirrelscan.com --level surface --max-pages 200
+squirrel audit https://nutshop.squirrelscan.com --level surface --http
 ```
 
 The same in `squirrel.toml`:

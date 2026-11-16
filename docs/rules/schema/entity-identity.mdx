@@ -83,7 +83,7 @@ enable = ["schema/entity-identity"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
-For one run without editing the config: `squirrel audit https://example.com --rule-include schema/entity-identity`.
+For one run without editing the config: `squirrel audit https://nutshop.squirrelscan.com --rule-include schema/entity-identity`.
 
 ## Related rules
 
@@ -108,7 +108,7 @@ Glossary: [Entity](/glossary/entity), [@id (JSON-LD node identifier)](/glossary/
 
 ## Check your site
 
-Run `squirrel audit https://example.com`, then `squirrel entities` to see the graph the finding came from. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://nutshop.squirrelscan.com`, then `squirrel entities` to see the graph the finding came from. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

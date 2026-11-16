@@ -143,7 +143,7 @@ to `passive`, so `-C surface --offline --disable-discovery-probes` runs passive.
 To keep the traffic to the crawl itself, with no probes and no cloud:
 
 ```bash
-squirrel audit https://example.com --offline --passive --disable-discovery-probes
+squirrel audit https://nutshop.squirrelscan.com --offline --passive --disable-discovery-probes
 ```
 
 That still sends the crawl's own requests: the pages and their scripts,
@@ -198,8 +198,8 @@ purpose. Only use them on websites you own or are authorized to test.
 </Warning>
 
 ```bash
-squirrel audit https://example.com --aggressive --probe-budget 1m
-squirrel audit https://example.com --pentest
+squirrel audit https://nutshop.squirrelscan.com --aggressive --probe-budget 1m
+squirrel audit https://nutshop.squirrelscan.com --pentest
 ```
 
 To pick which rule families run, use `--rule-include` and `--rule-exclude`. See
@@ -211,55 +211,55 @@ To pick which rule families run, use `--rule-include` and `--rule-exclude`. See
 ### Basic audit
 
 ```bash
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 ```
 
 ### Quick health check
 
 ```bash
-squirrel audit https://example.com --level quick
+squirrel audit https://nutshop.squirrelscan.com --level quick
 ```
 
 ### Full comprehensive audit
 
 ```bash
-squirrel audit https://example.com --level full
+squirrel audit https://nutshop.squirrelscan.com --level full
 ```
 
 ### Crawl more pages
 
 ```bash
-squirrel audit https://example.com -m 200
+squirrel audit https://nutshop.squirrelscan.com -m 200
 ```
 
 ### Cap the run time
 
 ```bash
-squirrel audit https://example.com --max-duration 240
+squirrel audit https://nutshop.squirrelscan.com --max-duration 240
 ```
 
 ### Export to JSON
 
 ```bash
-squirrel audit https://example.com -f json -o report.json
+squirrel audit https://nutshop.squirrelscan.com -f json -o report.json
 ```
 
 ### Generate HTML report
 
 ```bash
-squirrel audit https://example.com -f html -o report.html
+squirrel audit https://nutshop.squirrelscan.com -f html -o report.html
 ```
 
 ### Fresh crawl (ignore cache)
 
 ```bash
-squirrel audit https://example.com --refresh
+squirrel audit https://nutshop.squirrelscan.com --refresh
 ```
 
 ### Resume an interrupted crawl
 
 ```bash
-squirrel audit https://example.com --resume
+squirrel audit https://nutshop.squirrelscan.com --resume
 ```
 
 Resume continues the latest crawl of the site only when it can: the crawl must still be unfinished (`running`, `paused` or `stopped`), the include, exclude and URL settings must match the crawl's, `--refresh` must not be set, its data must not have been reclaimed, and this process must be able to claim it. When any of these fails, the audit starts a new crawl and says why on stderr, for example `--resume requested but not resuming (crawl-finished): previous crawl 3f2a finished (analyzed), nothing left to resume; starting a new crawl`. The reason is one of `no-prior-crawl`, `refresh-requested`, `reclaimed`, `crawl-finished`, `crawl-failed`, `config-changed`, `lease-held` or `lease-unavailable`. With `--format json` the report carries `meta.resume`: `requested` (always `true` when present), `resumed`, and, when `resumed` is `false`, the `reason` code and the `message` printed on stderr. `meta.resume` is absent when `--resume` was not passed. `squirrel crawl --resume` makes the same decision and prints the same line.
@@ -281,13 +281,13 @@ Publishing and tracking the run in the dashboard need a [role](/cloud/team#roles
 
 ```bash
 # logged in → auto-publishes (unlisted) and prints the URL
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 ```
 
 Override the visibility for a run:
 
 ```bash
-squirrel audit https://example.com --visibility public
+squirrel audit https://nutshop.squirrelscan.com --visibility public
 ```
 
 Once a website has been audited successfully, squirrelscan re-audits it on a weekly [schedule](/cloud/scheduled-audits) by itself. From then on every publish prints one more line saying so, with the link that turns it off:
@@ -310,7 +310,7 @@ Every other state prints nothing, and so does a run that published nothing.
 Skip publishing for a single run (still runs online):
 
 ```bash
-squirrel audit https://example.com --no-publish
+squirrel audit https://nutshop.squirrelscan.com --no-publish
 ```
 
 Turn auto-publish off for the project in `squirrel.toml`:
@@ -337,13 +337,13 @@ When you're **logged in, audits render every page in a cloud browser by default*
 Force plain HTTP for a run (no cloud browser):
 
 ```bash
-squirrel audit https://example.com --http
+squirrel audit https://nutshop.squirrelscan.com --http
 ```
 
 Force rendering for a run even if your config disables it:
 
 ```bash
-squirrel audit https://example.com --render
+squirrel audit https://nutshop.squirrelscan.com --render
 ```
 
 Rendering is the only part that runs in the cloud: with `--render` or any `--render-mode` other than `off`, your machine still fetches the site (the pages, `robots.txt`, sitemaps, scripts and assets, link checks), so the site still sees your IP address. See [what still comes from your machine](/cloud/rendering#what-still-comes-from-your-machine).
@@ -429,15 +429,15 @@ The hops are requested before the credit check and before the run is registered:
 
 ### Deep start URLs
 
-`squirrel audit https://example.com/blog/post` audits the whole site at
-`https://example.com`, not only `/blog/`. Before crawling, the CLI names both
+`squirrel audit https://nutshop.squirrelscan.com/blog/raw-vs-roasted-nuts` audits the whole site at
+`https://nutshop.squirrelscan.com`, not only `/blog/`. Before crawling, the CLI names both
 the requested page and the site-wide origin. The requested page is placed first
 in the crawl frontier, ahead of sitemap pages, so it is included even with a
 small `--max-pages` value. JSON reports keep the distinction as
 `meta.requestedUrl` alongside `meta.baseUrl`. If the requested URL redirects,
 its resolved destination receives that frontier priority. A root URL that
 redirects to a deep page keeps root-start reporting and frontier order: the order follows the URL you typed, not where it redirects. An origin-only start URL
-such as `https://example.com/` has the existing behavior and prints no notice.
+such as `https://nutshop.squirrelscan.com/` has the existing behavior and prints no notice.
 
 ### Fully offline audit
 
@@ -465,7 +465,7 @@ subdomains of all of them. Nothing goes to any other host:
 Results are stored in the local database as usual:
 
 ```bash
-squirrel audit https://example.com --offline
+squirrel audit https://nutshop.squirrelscan.com --offline
 ```
 
 `--offline` cannot be combined with `--publish` or `--render` (both require
@@ -479,7 +479,7 @@ cloud access and login).
 A signed-in `squirrel audit` does more than use the cloud. It adds the site to your dashboard (or reuses it), turns on [recurring audits](/cloud/scheduled-audits#when-a-schedule-turns-itself-on) after the site's first successful audit, and publishes the report. `--ephemeral` keeps the cloud features and drops all of that:
 
 ```bash
-squirrel audit https://example.com --ephemeral
+squirrel audit https://nutshop.squirrelscan.com --ephemeral
 ```
 
 An ephemeral run:
@@ -506,10 +506,10 @@ with code `2` when **any** threshold trips (vs `1` for operational errors and
 ```bash
 # Fail if the overall score drops below 90, or any error-severity issue is found.
 # Quote each expression — shells treat bare < and > as redirection.
-squirrel audit https://example.com --fail-on 'score<90' --fail-on 'severity>=error'
+squirrel audit https://nutshop.squirrelscan.com --fail-on 'score<90' --fail-on 'severity>=error'
 
 # Comma-separated form, plus a per-category threshold
-squirrel audit https://example.com --fail-on 'score<90,score:perf<80,warnings>0'
+squirrel audit https://nutshop.squirrelscan.com --fail-on 'score<90,score:perf<80,warnings>0'
 ```
 
 Supported metrics:
@@ -568,13 +568,13 @@ category (`ax` → `ax/*`); exact rules also work (`core/meta-title`):
 
 ```bash
 # Only run agent-experience and performance rules
-squirrel audit https://example.com --rule-include ax,perf
+squirrel audit https://nutshop.squirrelscan.com --rule-include ax,perf
 
 # Run everything except images and social
-squirrel audit https://example.com --rule-exclude images,social
+squirrel audit https://nutshop.squirrelscan.com --rule-exclude images,social
 
 # Repeatable or comma-separated, same as --fail-on
-squirrel audit https://example.com --rule-include ax --rule-include perf
+squirrel audit https://nutshop.squirrelscan.com --rule-include ax --rule-include perf
 ```
 
 `--rule-include` replaces the categories that run for this audit;
@@ -597,7 +597,7 @@ trip.
 Use `--target-url` to audit exactly the pages you name, for a quick re-check of the pages a change touched. Repeat the flag for each URL. A URL is absolute, or a path on the site you are auditing:
 
 ```bash
-squirrel audit https://example.com --target-url /pricing --target-url https://example.com/blog/launch
+squirrel audit https://nutshop.squirrelscan.com --target-url /shop --target-url https://nutshop.squirrelscan.com/blog/raw-vs-roasted-nuts
 ```
 
 A targeted audit fetches `robots.txt` (and honours it) and then those URLs, and no other page: no sitemap, no discovery probes, no link following, and no request for the start URL itself unless you list it. Links on the listed pages are not status-checked: internal and external link checks are off for a targeted audit, because the link rules judge the whole site and skip, so no request goes to a link target. The report's audit level records this (`targeted: true`, external link checks off), and `--external-links` on a targeted audit prints a note that it is ignored. Pass the site's final host as the start URL, because its redirect is not resolved, and the first listed URL stands in for it in the reachability check. Each listed URL goes through the same scope, robots and length checks as any page, and `--max-pages` caps the list. A list is cut at 1,000 URLs: the rest are counted in `overLimit` and not audited.
@@ -630,7 +630,7 @@ Use `--summary` for a quick score check without the per-issue detail — useful
 in CI logs or a fast re-check:
 
 ```bash
-squirrel audit https://example.com --summary
+squirrel audit https://nutshop.squirrelscan.com --summary
 ```
 
 This prints the header, health score, category breakdown, editor's summary
@@ -643,7 +643,7 @@ non-console `--format` and the command errors up front.
 Use `--include-passed` to list the rules that passed after the issues, with how many pages each passed on:
 
 ```bash
-squirrel audit https://example.com --include-passed
+squirrel audit https://nutshop.squirrelscan.com --include-passed
 ```
 
 It works with every `--format`. To list them for an audit you already ran, use [`squirrel report --include-passed`](/cli/report#list-what-passed).
@@ -653,7 +653,7 @@ It works with every `--format`. To list them for an audit you already ran, use [
 `--include-pages` adds the crawled pages to the JSON report, for a pipeline that tracks which pages a run actually covered:
 
 ```bash
-squirrel audit https://example.com -f json --include-pages
+squirrel audit https://nutshop.squirrelscan.com -f json --include-pages
 ```
 
 It is off by default, so the report and its size are unchanged unless you ask. Each entry is `{ "url", "finalUrl", "status", "outcome", "ruleCount" }` (plus `reason` on a URL with no stored page, see below): the URL the crawl requested, where it was served from (`url` again when it did not redirect, which is the case for every listed page: a URL that redirected is recorded as a redirect, not a page, and is listed in `redirects` instead, see below), the HTTP status it answered with, how it answered (`outcome`: `ok` for any status under 400, redirects included; `rate-limited` for 429; `http-error` for any other 4xx or 5xx; `error` without a usable status). `rate-limited` is rare in this list: a request the host rate-limited usually stores no response and is counted in `rateLimited` instead, so a row carries it only when a 429 response was stored. `ruleCount` is how many distinct rules reported on the page (a skipped check does not count, and neither do site-wide rules). `url` and `finalUrl` are written as the crawl stored them: a URL that carries credentials appears with them, so treat the file as you would the crawl. The list is cut at 2,000 pages; `pagesTotal` is the real count and `pagesTruncated` is `true` when entries were dropped. A URL the crawl requested but stored no page for (a connection error, a server error that survived retries, a rate-limited request, an excluded or out-of-scope URL, one robots.txt blocks) is listed after the crawled pages with `status` `0`, `ruleCount` `0`, an `outcome` of `error` (the request failed) or `skipped` (the crawl chose not to request it) and a `reason`: `rate-limited`, `excluded`, `not-included`, `other-site`, `robots-disallowed`, `url-too-long`, or a short code from a fixed list that never carries a URL, query string, token or response text: `http-<status>` for an HTTP error status (`http-500` for a server error that survived retries), `blocked` (a WAF or bot refusal), `timeout`, `dns`, `tls`, `connection-refused`, `connection-reset`, `too-many-redirects`, `off-site-redirect`, `unreadable-body`, or `request-failed` for a failure no other code names; a skipped URL whose recorded reason is none of the listed ones is `skipped`. Failed requests are listed before skipped URLs, so the 2,000-entry cut never drops an error to keep a skipped URL, and a listed `url` is cut at 2,048 characters. Those rows count toward `pagesTotal` and the 2,000-entry cut; rate-limited pages are also counted in `rateLimited`. To get the list for an audit you already ran, use [`squirrel report --include-pages`](/cli/report#pages-list). In any other format the flag does nothing and the command says so on stderr. See the [JSON output schema](/configuration/output#json-output-schema).
@@ -663,7 +663,7 @@ A URL that redirected to another page is not a page (see [redirecting URLs are n
 ### Verbose output
 
 ```bash
-squirrel audit https://example.com -v
+squirrel audit https://nutshop.squirrelscan.com -v
 ```
 
 ## Output formats
@@ -702,7 +702,7 @@ ISSUES
 Machine-readable JSON for CI/CD pipelines and AI processing:
 
 ```bash
-squirrel audit https://example.com -f json -o report.json
+squirrel audit https://nutshop.squirrelscan.com -f json -o report.json
 ```
 
 ```json
@@ -723,7 +723,7 @@ squirrel audit https://example.com -f json -o report.json
 Visual report you can open in a browser:
 
 ```bash
-squirrel audit https://example.com -f html -o report.html
+squirrel audit https://nutshop.squirrelscan.com -f html -o report.html
 open report.html
 ```
 
@@ -917,7 +917,7 @@ See [Configuration](/configuration) for all options.
 Pipe JSON output to your LLM:
 
 ```bash
-squirrel audit https://example.com -f json | claude "analyze this SEO report"
+squirrel audit https://nutshop.squirrelscan.com -f json | claude "analyze this SEO report"
 ```
 
 Or use with Claude Code's MCP integration for interactive auditing.

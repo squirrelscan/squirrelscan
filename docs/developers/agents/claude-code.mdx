@@ -90,13 +90,13 @@ Trigger the skill with a slash command:
 Claude detects your project's website, runs the audit, and summarizes issues by severity. Or be explicit:
 
 ```text
-/audit-website https://example.com focusing on accessibility and performance
+/audit-website https://nutshop.squirrelscan.com focusing on accessibility and performance
 ```
 
 Or just ask in natural language:
 
 ```text
-Use the audit-website skill to audit example.com and fix all high-severity issues.
+Use the audit-website skill to audit nutshop.squirrelscan.com and fix all high-severity issues.
 ```
 
 ### Plan mode for big fixes
@@ -104,7 +104,7 @@ Use the audit-website skill to audit example.com and fix all high-severity issue
 For larger efforts, let Claude plan before it edits:
 
 ```text
-Enter plan mode. Use the audit-website skill to audit example.com,
+Enter plan mode. Use the audit-website skill to audit nutshop.squirrelscan.com,
 then create a plan to fix all high and medium severity issues.
 ```
 
@@ -113,7 +113,7 @@ Claude runs the audit, groups fixes, orders them by dependency, and waits for yo
 ### Parallel fixes with subagents
 
 ```text
-Audit example.com, then spawn subagents to fix in parallel:
+Audit nutshop.squirrelscan.com, then spawn subagents to fix in parallel:
 accessibility, SEO meta tags, and performance.
 ```
 

@@ -46,7 +46,7 @@ Full install detail, including Alpine and musl notes, is in the [Quickstart](/qu
 Point `squirrel audit` at any URL:
 
 ```bash
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 ```
 
 You get a crawl and a scored report in the terminal:
@@ -74,10 +74,10 @@ Logged out, audits default to the `quick` [audit level](/guides/audit-levels): a
 
 ```bash
 # Crawl up to 200 pages
-squirrel audit https://example.com -m 200
+squirrel audit https://nutshop.squirrelscan.com -m 200
 
 # Smart sampling across URL patterns
-squirrel audit https://example.com --level surface
+squirrel audit https://nutshop.squirrelscan.com --level surface
 ```
 
 The three levels are `quick`, `surface`, and `full`. Logged out, every level runs on your machine; the cloud checks need an account. See [Audit levels](/guides/audit-levels) for what each one crawls and checks.
@@ -171,17 +171,17 @@ The console output is for humans. For everything else, pick a format with `-f` a
 
 ```bash
 # Machine-readable JSON to a file
-squirrel audit https://example.com -f json -o report.json
+squirrel audit https://nutshop.squirrelscan.com -f json -o report.json
 
 # A visual HTML report
-squirrel audit https://example.com -f html -o report.html
+squirrel audit https://nutshop.squirrelscan.com -f html -o report.html
 ```
 
 Every audit is stored in a local database, so you can re-read it later without re-crawling. The [`squirrel report`](/cli/report) command queries that history:
 
 ```bash
 squirrel report --list                    # recent audits
-squirrel report example.com               # latest for a domain
+squirrel report nutshop.squirrelscan.com               # latest for a domain
 squirrel report --severity error          # errors only
 squirrel report --category core,links     # filter by category
 ```
@@ -195,7 +195,7 @@ You do not need the cloud to put audits in front of an agent. Three local option
 **Pipe the report straight in.** The `llm` format is built for this:
 
 ```bash
-squirrel audit https://example.com --format llm | claude "prioritize these fixes"
+squirrel audit https://nutshop.squirrelscan.com --format llm | claude "prioritize these fixes"
 ```
 
 **Run the local MCP server.** `squirrel mcp` starts a stdio MCP server that runs the audit engine on your machine, so an agent can call audits as tools while working offline:

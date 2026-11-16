@@ -72,7 +72,7 @@ curl -X POST https://api.squirrelscan.com/v1/agent-runs \
   -H "Authorization: Bearer $SQUIRREL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://example.com",
+    "url": "https://nutshop.squirrelscan.com",
     "config": {
       "maxPages": 1,
       "enabledRulePatterns": ["ax/*", "core/robots-meta"],
@@ -143,7 +143,7 @@ A filtered run skips the editor's summary by default, so the one-page request ab
 
 ```json
 {
-  "url": "https://example.com",
+  "url": "https://nutshop.squirrelscan.com",
   "config": {
     "maxPages": 1,
     "enabledRulePatterns": ["ax/*", "core/robots-meta"],

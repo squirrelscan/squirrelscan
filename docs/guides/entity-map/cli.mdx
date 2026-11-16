@@ -23,7 +23,7 @@ Every format carries the map, and each one carries as much of it as that format 
 | `xml` | Every node and conflict as elements, with the summary on the wrapper. Node properties, page URLs and the page index are not included. |
 
 ```bash
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 squirrel report -f html -o report.html    # the graph
 squirrel report -f json | jq .entities    # the document
 ```
@@ -39,7 +39,7 @@ Queries a stored map without re-auditing.
 ```bash
 squirrel entities                                  # summary of the latest audit
 squirrel entities --list                           # stored audits and their entity counts
-squirrel entities "https://example.com/#org"       # one entity, by @id
+squirrel entities "https://nutshop.squirrelscan.com/#organization" # one entity, by @id
 squirrel entities "Acme"                           # or by name
 squirrel entities --problem no-id                  # what needs fixing
 squirrel entities -f jsonld -o graph.json          # export

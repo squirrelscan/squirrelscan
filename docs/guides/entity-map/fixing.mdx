@@ -189,10 +189,10 @@ Without a resolvable site URL tangly emits no JSON-LD at all, which is better th
 Re-run the audit and look at the Entities section, or query the map directly:
 
 ```bash
-squirrel audit https://example.com
+squirrel audit https://nutshop.squirrelscan.com
 squirrel entities --problem no-id
 squirrel entities --problem split-identity
-squirrel entities "https://example.com/#organization"
+squirrel entities "https://nutshop.squirrelscan.com/#organization"
 ```
 
 To see whether a change actually landed, compare the two audits:

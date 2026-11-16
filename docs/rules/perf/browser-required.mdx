@@ -24,7 +24,7 @@ This rule never fails and never warns. It exists so the boundary of a static aud
 There is nothing to fix. Run a browser-based measurement alongside the audit when you need the numbers this rule lists:
 
 ```bash
-squirrel audit https://example.com --render
+squirrel audit https://nutshop.squirrelscan.com --render
 ```
 
 A rendered audit executes the page, which is what [ax/content-without-js](/rules/ax/content-without-js) and the other render-backed rules need. Field data from real visitors, rather than a single lab run, is what tells you whether a Core Web Vital is failing for the people who use the site.
@@ -62,7 +62,7 @@ enable = ["perf/browser-required"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
-For one run without editing the config: `squirrel audit https://example.com --rule-include perf/browser-required`.
+For one run without editing the config: `squirrel audit https://nutshop.squirrelscan.com --rule-include perf/browser-required`.
 
 ## Related rules
 
@@ -86,7 +86,7 @@ Glossary: [Client-side rendering](/glossary/client-side-rendering), [Core Web Vi
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Performance section of the report. The list appears once per page as an informational note. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://nutshop.squirrelscan.com` and open the Performance section of the report. The list appears once per page as an informational note. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

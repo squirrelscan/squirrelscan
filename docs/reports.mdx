@@ -375,7 +375,7 @@ Top to bottom:
 Every finding has a **Copy fix prompt** button, and so does every ranked issue. The Issues list also has a **Copy fix plan** button that covers all of them in order. Paste the prompt into your coding agent: it names the rules to fix and links their docs, quotes the audit's evidence (messages and example pages), and ends with the command to verify the fix:
 
 ```bash
-squirrel audit 'https://example.com/' --rule-include core/meta-title
+squirrel audit 'https://nutshop.squirrelscan.com/' --rule-include core/meta-title
 ```
 
 Text that comes from the audited site, or from automated analysis of it, sits inside a fenced block the prompt labels as untrusted data, one line per item, so a page cannot slip instructions into your agent's task. The buttons need JavaScript and clipboard access; without them, the prompt opens on the page for you to select.
@@ -688,7 +688,7 @@ squirrel report --diff a7b3c2d1 --format json
 Compare the latest report for a domain against a baseline audit:
 
 ```bash
-squirrel report --regression-since example.com --format llm
+squirrel report --regression-since nutshop.squirrelscan.com --format llm
 ```
 
 A baseline finding stored under a check name a rule has since replaced (a rule lists these in `supersededChecks`, for example `core/meta-title`'s old `meta-title` now `meta-title-too-short` and `meta-title-too-long`) is judged by the new checks on the same target: gone when they all passed, shown as a change when one still fails, and listed under `notChecked` in the JSON diff when one was not checked, so it is never counted as fixed.
@@ -703,7 +703,7 @@ Diff mode supports `console`, `text`, `json`, `llm`, and `markdown`. `html` and 
 
 ```bash
 #!/bin/bash
-SCORE=$(squirrel audit https://example.com -f json | jq '.healthScore.overall')
+SCORE=$(squirrel audit https://nutshop.squirrelscan.com -f json | jq '.healthScore.overall')
 if [ "$SCORE" -lt 80 ]; then
   echo "Health score too low: $SCORE/100 (minimum: 80)"
   exit 1
@@ -714,7 +714,7 @@ fi
 
 ```bash
 #!/bin/bash
-ERRORS=$(squirrel audit https://example.com -f json | jq '.healthScore.errorCount')
+ERRORS=$(squirrel audit https://nutshop.squirrelscan.com -f json | jq '.healthScore.errorCount')
 if [ "$ERRORS" -gt 0 ]; then
   echo "Audit failed with $ERRORS errors"
   exit 1
@@ -786,7 +786,7 @@ squirrel report a7b3c2d1
 
 By domain:
 ```bash
-squirrel report example.com
+squirrel report nutshop.squirrelscan.com
 ```
 
 ### Delete old audits
@@ -814,13 +814,13 @@ When you're **logged in and online, every `squirrel audit` auto-publishes to you
 
 ```bash
 # logged in → auto-publishes (unlisted) and prints the URL
-squirrel audit example.com
+squirrel audit nutshop.squirrelscan.com
 ```
 
 Skip publishing for a single run:
 
 ```bash
-squirrel audit example.com --no-publish
+squirrel audit nutshop.squirrelscan.com --no-publish
 ```
 
 Turn auto-publish off for the project (`squirrel.toml`):
