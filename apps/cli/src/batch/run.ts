@@ -4,6 +4,7 @@
 // (signals, the content store handle, the exit code), so a pool of children gives crash isolation, a real exit code per URL
 // and a kill switch for a wedged crawl. The orchestrator is the only writer of `results.jsonl`. A re-run resumes from it.
 
+import { createHash, randomBytes } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -241,56 +242,132 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-/** Take `<out-dir>/.batch.lock`; a lock whose process is gone on this host is stale and taken over. Returns a release function. */
-function acquireLock(outDir: string): (() => void) | string {
+interface LockHolder {
+  pid?: unknown;
+  host?: unknown;
+  nonce?: unknown;
+}
+
+interface LockRead {
+  raw: string;
+  holder: LockHolder;
+}
+
+/** Read a lock file through one descriptor, so every byte comes from the file we opened, never a re-resolved path. */
+function readLock(path: string): LockRead | undefined {
+  let fd: number;
+  try {
+    fd = openSync(path, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const st = fstatSync(fd);
+    if (!st.isFile() || st.size > 64 * 1024) return undefined;
+    const raw = readFileSync(fd, "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === "object"
+      ? { raw, holder: parsed as LockHolder }
+      : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function isOurs(read: LockRead | undefined, nonce: string): boolean {
+  return read?.holder.pid === process.pid && read.holder.nonce === nonce;
+}
+
+/** Create `path` with O_EXCL and write `body`; throws on any failure (EEXIST included). */
+function writeExclusive(path: string, body: string): void {
+  const fd = openSync(path, "wx", 0o600);
+  try {
+    writeSync(fd, body);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function unlinkQuiet(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    // never created or already gone
+  }
+}
+
+/**
+ * Take `<out-dir>/.batch.lock`; a lock whose process is gone on this host is stale and taken over. Returns a release function.
+ *
+ * No decision rests on a path that can change between check and use. A fresh lock is created with O_EXCL. A stale one is
+ * taken over by whoever first creates (O_EXCL) a claim file named after the stale lock's content; under that claim the lock
+ * is re-read and must still be the same stale bytes, then an O_EXCL temp file is renamed over it atomically, and the lock only
+ * counts as ours once a read of it shows our pid and nonce. A racer that judged the same lock stale either loses the claim or,
+ * after the claim is gone, re-reads and finds our live lock. Release deletes the file only while it still holds our nonce.
+ */
+export function acquireLock(
+  outDir: string,
+  alive: (pid: number) => boolean = pidAlive
+): (() => void) | string {
   const path = join(outDir, ".batch.lock");
+  const nonce = randomBytes(16).toString("hex");
   const body = JSON.stringify({
     pid: process.pid,
     host: hostname(),
+    nonce,
     startedAt: new Date().toISOString(),
   });
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const release = () => {
+    if (isOurs(readLock(path), nonce)) unlinkQuiet(path);
+  };
+  const running = (read: LockRead | undefined) =>
+    `another batch is running on ${outDir} (pid ${String(read?.holder.pid)} on ${String(read?.holder.host)}); lock file ${path}`;
+
+  let held: LockRead | undefined;
+  for (let attempt = 0; attempt < 2 && !held; attempt++) {
     try {
-      const fd = openSync(path, "wx", 0o600);
-      writeSync(fd, body);
-      closeSync(fd);
-      return () => {
-        try {
-          unlinkSync(path);
-        } catch {
-          // already gone
-        }
-      };
+      writeExclusive(path, body);
+      return release;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST")
         return `cannot create ${path}: ${(e as Error).message}`;
-      let held: { pid?: unknown; host?: unknown } = {};
-      try {
-        // Read through one descriptor so the content is the file we opened, not a re-resolved path.
-        const lockFd = openSync(path, "r");
-        try {
-          held = JSON.parse(readFileSync(lockFd, "utf8"));
-        } finally {
-          closeSync(lockFd);
-        }
-      } catch {
-        // unreadable: treated as stale below only when we cannot tell, so refuse
-        return `another batch holds ${path} (unreadable lock); delete it if no batch is running`;
-      }
-      const stale =
-        held.host === hostname() &&
-        typeof held.pid === "number" &&
-        !pidAlive(held.pid);
-      if (!stale)
-        return `another batch is running on ${outDir} (pid ${String(held.pid)} on ${String(held.host)}); lock file ${path}`;
-      try {
-        unlinkSync(path);
-      } catch {
-        // raced: retry
-      }
     }
+    // Unreadable can also mean the holder released between our create and read: try the create once more.
+    held = readLock(path);
   }
-  return `cannot take ${path}`;
+  if (!held)
+    return `another batch holds ${path} (unreadable lock); delete it if no batch is running`;
+  const stale =
+    held.holder.host === hostname() &&
+    typeof held.holder.pid === "number" &&
+    !alive(held.holder.pid);
+  if (!stale) return running(held);
+
+  const claim = `${path}.takeover-${createHash("sha256").update(held.raw).digest("hex").slice(0, 16)}`;
+  try {
+    writeExclusive(claim, body);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "EEXIST")
+      return `another batch is taking over the stale lock ${path}; delete ${claim} if no batch is running`;
+    return `cannot take ${path}: ${(e as Error).message}`;
+  }
+  const temp = `${path}.${process.pid}.${randomBytes(8).toString("hex")}`;
+  try {
+    // Only claim holders replace a lock, and a dead holder never removes its own, so these bytes stay put until our rename.
+    const now = readLock(path);
+    if (now?.raw !== held.raw) return running(now);
+    writeExclusive(temp, body);
+    renameSync(temp, path);
+  } catch (e) {
+    unlinkQuiet(temp);
+    return `cannot take ${path}: ${(e as Error).message}`;
+  } finally {
+    unlinkQuiet(claim);
+  }
+  const mine = readLock(path);
+  return isOurs(mine, nonce) ? release : running(mine);
 }
 
 function readFileCapped(
