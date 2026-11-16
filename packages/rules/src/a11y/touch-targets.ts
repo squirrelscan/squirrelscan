@@ -8,7 +8,7 @@ export const touchTargetsRule: Rule = {
     name: "Touch Targets",
     description: "Checks for minimum touch target sizing hints",
     solution:
-      "Touch targets (buttons, links) should be at least 44x44 pixels for accessibility (WCAG 2.5.5) and usability. Increase size with padding rather than just increasing font size. Ensure at least 8px spacing between adjacent targets. For inline links in text, provide sufficient line-height. This helps users with motor impairments and improves mobile usability for everyone.",
+      "Touch targets (buttons, links) should be large enough to hit. WCAG 2.2 success criterion 2.5.8 Target Size (Minimum, Level AA) requires 24x24 CSS pixels, or enough spacing around a smaller target; 2.5.5 Target Size (Enhanced, Level AAA) asks for 44x44, which is the cutoff this rule flags at. Increase size with padding rather than just increasing font size. For inline links in text, provide sufficient line-height. This helps users with motor impairments and improves mobile usability for everyone.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",

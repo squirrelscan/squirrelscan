@@ -13,7 +13,7 @@ export const zoomDisabledRule: Rule = {
     name: "Zoom Disabled",
     description: "Checks if viewport meta tag disables user zoom",
     solution:
-      "Never disable user zoom - it's critical for users with low vision. Remove user-scalable=no and maximum-scale=1.0 from your viewport meta tag. Good: <meta name='viewport' content='width=device-width, initial-scale=1'>. Bad: <meta name='viewport' content='width=device-width, user-scalable=no, maximum-scale=1.0'>. Users must be able to zoom up to at least 500% (WCAG 1.4.4 requires 200%, but browsers limit to 500%).",
+      "Never disable user zoom - it's critical for users with low vision. Remove user-scalable=no and maximum-scale=1.0 from your viewport meta tag. Good: <meta name='viewport' content='width=device-width, initial-scale=1'>. Bad: <meta name='viewport' content='width=device-width, user-scalable=no, maximum-scale=1.0'>. WCAG 1.4.4 Resize Text (Level AA) requires text to scale to 200%; this rule also flags a maximum-scale below 5, the Lighthouse threshold.",
     category: "a11y",
     scope: "page",
     verdictScope: "template",
