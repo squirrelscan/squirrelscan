@@ -100,6 +100,29 @@ describe("squirrelscan#1886: one request and one finding per endpoint", () => {
     });
   }
 
+  test("a deferred endpoint is still reported when the auth rule hit a 429 first", async () => {
+    // unauthenticated-api probes call sites first (/api/me), then the literal (/api/session,
+    // 429, stops it). auth-endpoint-disclosure keeps discovery order: /api/session first, so
+    // it is throttled before /api/me. It must still read the /api/me answer already fetched.
+    const stub = stubFetch({
+      [ME]: () => json(LEAKY_USER),
+      [`${BASE}/api/session`]: () => new Response("slow down", { status: 429 }),
+    });
+    restore = stub.restore;
+    const ctx = ruleCtx({
+      surface: surface([
+        candidate("/api/session", { method: undefined, discoveredVia: "string-literal" }),
+        candidate("/api/me", { method: "GET" }),
+      ]),
+    });
+    const api = (await unauthenticatedApiRule.run(ctx)).checks;
+    const auth = (await authEndpointDisclosureRule.run(ctx)).checks;
+    expect(meRequests(stub.sent)).toHaveLength(1);
+    expect(fails(api)).toHaveLength(0);
+    expect(fails(auth)).toHaveLength(1);
+    expect(fails(auth)[0]?.details).toMatchObject({ endpoint: ME });
+  });
+
   test("with auth-endpoint-disclosure disabled, unauthenticated-api keeps the finding", async () => {
     const { api, sent } = await runBoth(
       { [ME]: () => json([LEAKY_USER, LEAKY_USER]), ...otherConvention },
