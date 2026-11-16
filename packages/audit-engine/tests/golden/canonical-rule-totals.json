@@ -280,6 +280,7 @@
   "perf/unminified-js": 500,
   "reliability/broken-forms": 1,
   "reliability/broken-resources": 1,
+  "reliability/js-errors": 1,
   "schema/article": 500,
   "schema/breadcrumb": 500,
   "schema/coverage-outlier": 1,

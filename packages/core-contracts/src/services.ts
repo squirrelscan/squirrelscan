@@ -636,6 +636,38 @@ export const MAX_RENDERED_REQUESTS_PER_PAGE = 100;
 /** Rendered requests by the page's normalized URL, filled during a crawl and read by the audit. */
 export type RenderedRequestSink = Map<string, RenderedRequest[]>;
 
+/** One uncaught exception or `console.error` the browser raised while rendering a page (#704). */
+export interface RenderRuntimeError {
+  message: string;
+  /** Script the error came from, when the browser reported one. */
+  sourceUrl?: string;
+  line?: number;
+  column?: number;
+}
+
+/** One request that failed while the page ran: `fetch`/XHR, an injected script, a lazy chunk (#704). */
+export interface RenderFailedRequest {
+  url: string;
+  /** Browser resource type (`fetch`, `xhr`, `script`, `stylesheet`, `font`, `image`, ...). */
+  resourceType?: string;
+  /** HTTP status, or null/absent when the request failed at the network level. */
+  status?: number | null;
+  /** Network error text (`net::ERR_...`) when there was no status. */
+  error?: string | null;
+  /** The renderer itself blocked or aborted the request: never reported as a site fault. */
+  blockedByRenderer?: boolean;
+}
+
+/**
+ * What the browser saw while the page ran, kept listening after `load` (#704, renderer side #425).
+ * Absent from renderers that do not record it; the rule then reports "not measured", never "clean".
+ */
+export interface RenderRuntimeDiagnostics {
+  pageErrors?: RenderRuntimeError[];
+  consoleErrors?: RenderRuntimeError[];
+  failedRequests?: RenderFailedRequest[];
+}
+
 export interface RenderResultItem {
   url: string;
   status: number | null;
@@ -656,6 +688,8 @@ export interface RenderResultItem {
    * it, and then nothing changes: endpoint discovery stays static.
    */
   requests?: RenderedRequest[];
+  /** Runtime errors and failed requests recorded during the render (#704). Absent when not recorded. */
+  runtime?: RenderRuntimeDiagnostics;
   /** Browser render cost only, mirrored from crawler-worker. Absent on a render-cache hit (#826). */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started. Absent on a render-cache hit (#826). */

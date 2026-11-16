@@ -594,6 +594,7 @@
                   "rules/reliability/index",
                   "rules/reliability/broken-resources",
                   "rules/reliability/broken-forms",
+                  "rules/reliability/js-errors",
                   "rules/links/broken-links",
                   "rules/links/broken-external-links",
                   "rules/links/broken-anchors"

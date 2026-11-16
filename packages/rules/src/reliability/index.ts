@@ -4,7 +4,8 @@ import type { Rule } from "../types";
 
 import { brokenFormsRule } from "./broken-forms";
 import { brokenResourcesRule } from "./broken-resources";
+import { jsErrorsRule } from "./js-errors";
 
-export const rules: Rule[] = [brokenResourcesRule, brokenFormsRule];
+export const rules: Rule[] = [brokenResourcesRule, brokenFormsRule, jsErrorsRule];
 
-export { brokenFormsRule, brokenResourcesRule };
+export { brokenFormsRule, brokenResourcesRule, jsErrorsRule };
