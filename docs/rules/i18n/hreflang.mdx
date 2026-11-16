@@ -19,7 +19,7 @@ The rule runs on every crawled page over every `link[rel="alternate"][hreflang]`
 - `hreflang-codes` warns when a tag's value is not `x-default` or a valid code. Message: `1 invalid hreflang code(s): en-uk`. Each invalid value is listed with the reason and, where one exists, the fix. What counts as valid is below.
 - `hreflang` passes, listing the language codes found. Message: `4 hreflang tag(s) found`.
 
-The final pass check is always emitted alongside any warnings, so a page can report both a missing `x-default` and a count of its tags. The self-reference comparison is on the fully resolved URL, so a self-tag that differs by a trailing slash or a query string does not count. The code check validates format only. It does not check return links: whether the other versions link back to this page is not checked. Severity info, weight 3.
+The final pass check is always emitted alongside any warnings, so a page can report both a missing `x-default` and a count of its tags. The self-reference comparison is on the fully resolved URL, so a self-tag that differs by a trailing slash or a query string does not count. The code check validates format only. It does not check return links on a single page. Whether the other versions link back is checked site-wide by [i18n/hreflang-targets](/rules/i18n/hreflang-targets). Severity info, weight 3.
 
 ## What counts as a valid code
 
