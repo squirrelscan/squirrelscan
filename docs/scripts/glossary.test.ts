@@ -542,7 +542,7 @@ describe("glossary --write", () => {
       "| [robots.txt checks](/rules/crawl/robots-txt) | What crawl/robots-txt flags. | error |",
     );
     expect(page).toContain(
-      "squirrel audit https://example.com --rule-include crawl/robots-txt",
+      "squirrel audit https://nutshop.squirrelscan.com --rule-include crawl/robots-txt",
     );
     expect(page).toContain(
       "- [XML sitemap](/glossary#xml-sitemap): What XML sitemap is.",

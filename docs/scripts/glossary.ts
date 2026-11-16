@@ -682,7 +682,7 @@ export function renderBlock(
       return term
         ? [
             "```bash",
-            `squirrel audit https://example.com --rule-include ${term.rules.join(",")}`,
+            `squirrel audit https://nutshop.squirrelscan.com --rule-include ${term.rules.join(",")}`,
             "```",
           ].join("\n")
         : "";
