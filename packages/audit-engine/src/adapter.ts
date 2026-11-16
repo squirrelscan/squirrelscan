@@ -21,6 +21,7 @@ import {
   LINK_VERDICT_RULE_IDS,
   pluginNamespaces,
   stylesheetBackgroundOf,
+  stylesheetMotionOf,
   stylesheetBackgroundSelectorsOf,
   type PluginRegistrySnapshot,
   type RunnerScope,
@@ -55,6 +56,7 @@ import type {
   RuleRunResult,
   SiteData,
   StylesheetBackgroundData,
+  StylesheetMotionData,
   WebAppManifestData,
 } from "@squirrelscan/rules";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
@@ -316,6 +318,7 @@ const PRELOAD_CHUNK_FETCH_LIMIT = 20;
 
 /** The one rule that reads the page background a linked stylesheet sets (#1756). */
 const COLOR_CONTRAST_RULE_ID = "a11y/color-contrast";
+const REDUCED_MOTION_RULE_ID = "a11y/reduced-motion";
 /** Same-site stylesheets read for the page background (#1756): the most widely linked first. */
 const STYLESHEET_BACKGROUND_FETCH_LIMIT = 20;
 /** A stylesheet over this many decoded bytes is not read (#1756). */
@@ -382,6 +385,8 @@ export interface PreFetchedAssets {
    * when the rule is off or the phase did not run: the rule then reads every linked stylesheet as unread.
    */
   stylesheetBackgrounds?: StylesheetBackgroundData[];
+  /** Motion summary per linked stylesheet (#711), for `a11y/reduced-motion`. */
+  stylesheetMotion?: StylesheetMotionData[];
   /**
    * Same-site chunks a page preloads (`modulepreload`, `preload as=script`) that
    * no `<script src>` names. Held apart from `scripts` so the file-size,
@@ -1096,7 +1101,7 @@ export function fetchAssetsFromOccurrences(
           BROKEN_RESOURCES_RULE_ID
         ],
       );
-    const probeStylesheetBackgrounds = isRuleEnabled(
+    const probeColorContrastSheets = isRuleEnabled(
       COLOR_CONTRAST_RULE_ID,
       config.rules?.enable ?? [],
       config.rules?.disable ?? [],
@@ -1104,6 +1109,16 @@ export function fetchAssetsFromOccurrences(
         COLOR_CONTRAST_RULE_ID
       ],
     );
+    const probeStylesheetMotion = isRuleEnabled(
+      REDUCED_MOTION_RULE_ID,
+      config.rules?.enable ?? [],
+      config.rules?.disable ?? [],
+      (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
+        REDUCED_MOTION_RULE_ID
+      ],
+    );
+    // One fetch feeds both rules (#711): same egress and budget.
+    const probeStylesheetBackgrounds = probeColorContrastSheets || probeStylesheetMotion;
     const stylesheetTargets = Array.from(resourceOccurrences.css.entries())
       .sort((a, b) => b[1].size - a[1].size)
       .map(([url]) => url)
@@ -1507,7 +1522,23 @@ export function fetchAssetsFromOccurrences(
       ...(resourceOccurrences.scripts.size > ruleScripts.length
         ? { scriptsNotRead: resourceOccurrences.scripts.size - ruleScripts.length }
         : {}),
-      ...(probeStylesheetBackgrounds
+      ...(probeStylesheetMotion
+        ? {
+            stylesheetMotion: resourceResults.stylesheets.map((fetch): StylesheetMotionData => {
+              const readable = fetch.content !== null && !/html/i.test(fetch.contentType ?? "");
+              return {
+                url: fetch.url,
+                status: fetch.status,
+                error: fetch.error,
+                read: readable,
+                ...(readable
+                  ? stylesheetMotionOf(fetch.content as string)
+                  : { mentionsReducedMotion: false, hasInfiniteAnimation: false, hasSmoothScroll: false }),
+              };
+            }),
+          }
+        : {}),
+      ...(probeColorContrastSheets
         ? {
             stylesheetBackgrounds: resourceResults.stylesheets.map((fetch) => {
               const readable = fetch.content !== null && !/html/i.test(fetch.contentType ?? "");
@@ -2010,6 +2041,7 @@ export function runRulesOnStorage(
       assetCapDropped,
       scriptsNotReadUrls,
       stylesheetBackgrounds,
+      stylesheetMotion,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2123,6 +2155,7 @@ export function runRulesOnStorage(
       assetCapDropped,
       scriptsNotReadUrls,
       stylesheetBackgrounds,
+      stylesheetMotion,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2946,6 +2979,7 @@ function buildStreamingSiteData(
       assetCapDropped,
       scriptsNotReadUrls,
       stylesheetBackgrounds,
+      stylesheetMotion,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -3072,6 +3106,7 @@ function buildStreamingSiteData(
       assetCapDropped,
       scriptsNotReadUrls,
       stylesheetBackgrounds,
+      stylesheetMotion,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,

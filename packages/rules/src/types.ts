@@ -564,6 +564,22 @@ export interface StylesheetBackgroundData {
   selectorsTruncated?: boolean;
 }
 
+/** What a linked stylesheet says about motion (a11y/reduced-motion, #711). Only a summary is kept, never the body. */
+export interface StylesheetMotionData {
+  /** The absolute URL the pages reference. */
+  url: string;
+  status: number | null;
+  error: string | null;
+  /** False when the body was not read (failed, refused, skipped, oversized or non-CSS): the flags below are then meaningless. */
+  read: boolean;
+  /** `prefers-reduced-motion` appears anywhere in the stylesheet. */
+  mentionsReducedMotion: boolean;
+  /** An `infinite` animation outside any `prefers-reduced-motion` block. */
+  hasInfiniteAnimation: boolean;
+  /** `scroll-behavior: smooth` outside any `prefers-reduced-motion` block. */
+  hasSmoothScroll: boolean;
+}
+
 export interface SiteData {
   baseUrl: string;
   /**
@@ -724,6 +740,8 @@ export interface SiteData {
    * was not read. Absent when the asset phase did not run or the rule is off.
    */
   stylesheetBackgrounds?: StylesheetBackgroundData[];
+  /** A motion summary per same-site linked stylesheet, read by `a11y/reduced-motion` (#711). Absent when the asset phase did not run or the rule is off. */
+  stylesheetMotion?: StylesheetMotionData[];
   /**
    * Referenced URLs the asset fetch caps (`maxScripts`, `maxResources`) left
    * unfetched, per kind (#703). Absent or zero means nothing was dropped.

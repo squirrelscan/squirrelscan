@@ -1,0 +1,102 @@
+---
+title: "prefers-reduced-motion: motion that ignores the reduce motion setting"
+description: "Parallax, looping animation and autoplay can make people with vestibular disorders ill. squirrel flags motion on pages with no prefers-reduced-motion handling."
+---
+
+## What reduced motion is
+
+Every major operating system has a reduce motion setting, and browsers expose it to pages as the media query `@media (prefers-reduced-motion: reduce)`. Parallax heroes, scroll-triggered fade-ins, auto-advancing carousels and looping animation can make people with vestibular disorders dizzy or nauseous. A page that animates without ever reading that query ignores the setting completely.
+
+Two WCAG criteria apply. 2.3.3 Animation from Interactions (Level AAA) asks that motion triggered by interaction can be disabled. 2.2.2 Pause, Stop, Hide (Level A) asks that moving content that starts automatically and lasts more than five seconds can be paused. Technique C39 uses `prefers-reduced-motion` to meet 2.3.3. A static check cannot prove 2.2.2, because a pause button may exist, so this rule reports missing reduced-motion handling, not a WCAG failure.
+
+## What squirrel checks
+
+The rule reads the page markup, inline `<style>` blocks, inline scripts, same-site scripts the audit fetched, and a summary of each same-site stylesheet the audit fetched. It runs in the CLI and in HTTP-only audits.
+
+A page has a motion signal when it has any of:
+
+- a looping CSS animation (`infinite` iteration) or `scroll-behavior: smooth`, in an inline `<style>` or a read stylesheet
+- a `<video autoplay>` that loops or has no `controls`
+- `<marquee>`
+- a motion library: AOS (`data-aos`), GSAP ScrollTrigger, Lottie players, animate.css or WOW.js, parallax (`data-parallax`, Rellax, Jarallax), Locomotive Scroll or Lenis
+- a carousel set to auto-advance (`data-autoplay`, or Swiper, Slick, Splide or Flickity `autoplay` options)
+
+Handling counts when `prefers-reduced-motion` appears in the page markup, in a read stylesheet, or in a read script (`matchMedia("(prefers-reduced-motion: reduce)")`).
+
+- A **warning** means the page has a motion signal and none of the CSS and scripts the audit read handles reduced motion, and everything the page references was read.
+- An **info** result means the same, but a referenced stylesheet (including a third-party one) or a same-site script was not read, so the handling may live there. The message says the check was partial.
+- Each motion source is one finding across the site, listing the pages it appears on, because motion usually comes from a shared template.
+
+Not reported: hover and focus `transition` rules, a single non-looping entrance animation, animated GIFs (see [animated-content](/rules/perf/animated-content)), and motion that only runs inside `@media (prefers-reduced-motion: no-preference)`.
+
+Stylesheet reading is bounded: a file over 1 MB is not read and counts as partial, and parsing stops at a fixed number of rules per file.
+
+## How to fix it
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
+```
+
+In script, check the query before starting scroll animation or autoplay:
+
+```js
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (!reduce) AOS.init();
+```
+
+Some libraries expose an option for this (AOS has `disable: "mobile"` or a function), so check the library docs before writing your own.
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/reduced-motion` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/reduced-motion"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `reduced-motion-aos` | Problem |  |
+| `reduced-motion-gsap-scrolltrigger` | Problem |  |
+| `reduced-motion-lottie` | Problem |  |
+| `reduced-motion-animate-wow` | Problem |  |
+| `reduced-motion-parallax` | Problem |  |
+| `reduced-motion-smooth-scroll-lib` | Problem |  |
+| `reduced-motion-carousel-autoplay` | Problem |  |
+| `reduced-motion-marquee` | Problem |  |
+| `reduced-motion-autoplay-video` | Problem |  |
+| `reduced-motion-css-infinite-animation` | Problem |  |
+| `reduced-motion-css-smooth-scroll` | Problem |  |
+| `reduced-motion` | Clean | `reduced-motion-aos`, `reduced-motion-gsap-scrolltrigger`, `reduced-motion-lottie`, `reduced-motion-animate-wow`, `reduced-motion-parallax`, `reduced-motion-smooth-scroll-lib`, `reduced-motion-carousel-autoplay`, `reduced-motion-marquee`, `reduced-motion-autoplay-video`, `reduced-motion-css-infinite-animation`, `reduced-motion-css-smooth-scroll` |
+
+{/* rule-checks:end */}
