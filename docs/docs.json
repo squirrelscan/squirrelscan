@@ -600,7 +600,8 @@
                   "rules/integrity/seo-doorway",
                   "rules/integrity/cloaking",
                   "rules/integrity/kit-signature",
-                  "rules/integrity/known-malicious-url"
+                  "rules/integrity/known-malicious-url",
+                  "rules/integrity/link-scheme"
                 ]
               },
               {

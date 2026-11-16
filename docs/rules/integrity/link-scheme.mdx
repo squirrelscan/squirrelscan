@@ -1,0 +1,107 @@
+---
+title: "Link scheme: selling or arranging links, and paid links without rel=sponsored"
+description: "Keywords cannot tell a link broker from an SEO blog. squirrel pre-filters pages locally and a cloud model judges whether the site sells links or only writes about them."
+---
+
+<Note>**Cloud rule** - requires login (`squirrel auth login`). Skipped when not logged in or when no result is available. See [Cloud rules](/cloud/rules).</Note>
+
+## What a link scheme is
+
+Google's spam policies treat buying and selling links that pass ranking credit, and excessive link exchanges, as link spam. Some sites advertise it openly: a page offering paid guest posts, a community where owners arrange backlink placements, a "link insertion" price list. Outbound commercial links without `rel="sponsored"` or `rel="nofollow"` add to the risk.
+
+The hard part is false positives. SEO agencies and tools write about backlinks, link exchanges and guest posts all the time, and that is fine. A word match alone would flag every one of them.
+
+## What squirrel checks
+
+The rule is two stages and emits a single check named `link-scheme` per page.
+
+1. **Local pre-filter.** Only pages whose text mentions link exchanges, link insertion, buying or selling links or guest posts, paid or sponsored posts, niche edits, or "write for us" are candidates. Their external links are collected with their `rel`. A page with none of that wording passes without any cloud call. Message: `No link exchange or paid link wording on this page`.
+2. **Cloud judgement.** A cloud model reads each candidate and returns one verdict: sells or arranges links, sponsored content, writes about backlinks, or none. It also names the outbound links it judged paid, sponsored or exchanged. squirrel checks the `rel` of those links on the page itself, so the model never decides what a link says.
+
+Outcomes for a candidate page:
+
+- Warn when the verdict is that the page sells or arranges links. Message: `This page sells or arranges links`. Any links the model called paid that carry neither `sponsored` nor `nofollow` are listed as items.
+- Warn when any link the model judged paid has neither `rel="sponsored"` nor `rel="nofollow"`. Message: `2 paid or sponsored outbound link(s) lack rel="sponsored" or rel="nofollow"`.
+- Pass otherwise, including a post that explains backlinks and a sponsored post whose paid links are marked.
+- Skipped when no cloud result is available. The skip reason says why.
+
+The rule is skipped on soft 404 pages. Severity warning, weight 4.
+
+## How to fix it
+
+If the site really sells or exchanges links, remove the offer, or keep it and mark every paid, sponsored or exchanged outbound link `rel="sponsored"` (or `rel="nofollow"`). `rel="ugc"` is for user-submitted links and does not replace either.
+
+If the page only discusses link building, the verdict should be that it writes about backlinks and the page passes. Report a wrong verdict as an issue with the URL.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/link-scheme` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/link-scheme"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["integrity/link-scheme"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `link-scheme` | Problem |  |
+| `link-scheme` | Clean | `link-scheme` |
+| `link-scheme` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [integrity/seo-doorway](/rules/integrity/seo-doorway): the compromise-side cousin, injected affiliate posts.
+- [links/dead-links](/rules/links/dead-links): the other rule that reads your outbound links.
+- [eeat/affiliate-disclosure](/rules/eeat/affiliate-disclosure): what a legitimate affiliate page has to say.
+
+Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules.
+
+## References
+
+- [Link spam, Google spam policies](https://developers.google.com/search/docs/essentials/spam-policies#link-spam)
+- [Qualify your outbound links to Google](https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links)
+
+## Check your site
+
+Run `squirrel audit https://example.com` while signed in and open the Site Integrity section of the report.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

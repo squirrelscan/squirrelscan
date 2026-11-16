@@ -63,7 +63,11 @@ export const CLOUD_SITE_KEY = "site";
  * left this set — it now runs on raw-HTML crawls (skipped, not advertised-unwired,
  * on rendered crawls).
  */
-export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>([]);
+export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>([
+  // integrity/link-scheme (repo#3003): the rule and its contract ship first; the
+  // `/v1/services/link-scheme` endpoint and prefetch wiring follow in the private repo.
+  "link-scheme",
+]);
 
 /**
  * Read a single prefetched cloud result from a per-run store. `key` is the page

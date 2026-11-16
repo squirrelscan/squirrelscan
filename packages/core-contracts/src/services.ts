@@ -13,6 +13,7 @@ export type CloudServiceId =
   | "ai-parse"
   | "ai-content"
   | "authority-signals"
+  | "link-scheme"
   | "site-metadata"
   | "blocklist-check"
   | "content-gaps"
@@ -82,6 +83,56 @@ export interface AuthorityResult {
 
 export interface AuthorityResponse {
   results: AuthorityResult[];
+}
+
+// --- link-scheme ----------------------------------------------------------
+
+/** One outbound link on a candidate page, with the `rel` tokens it carries. */
+export interface LinkSchemeLink {
+  href: string;
+  text?: string;
+  rel: string[];
+}
+
+/**
+ * A page whose text mentions link exchanges, paid guest posts, link insertion or
+ * write-for-us offers (a local keyword prefilter). Only these pages are sent.
+ */
+export interface LinkSchemePagePayload {
+  url: string;
+  title?: string;
+  textExcerpt: string;
+  /** Outbound (external) links on the page, with their `rel`. */
+  links: LinkSchemeLink[];
+}
+
+export interface LinkSchemeRequest {
+  auditId?: string;
+  pages: LinkSchemePagePayload[];
+}
+
+/**
+ * The model's reading of a candidate page.
+ * - `sells-or-arranges`: the site sells or brokers link placements (a risk).
+ * - `sponsored-content`: the page is paid or sponsored content (fine when its
+ *   paid links carry rel=sponsored or nofollow).
+ * - `writes-about`: the page only discusses backlinks or link building (fine).
+ * - `none`: no link-scheme signal.
+ */
+export type LinkSchemeVerdict = "sells-or-arranges" | "sponsored-content" | "writes-about" | "none";
+
+export interface LinkSchemeResult {
+  url: string;
+  verdict: LinkSchemeVerdict;
+  /** Outbound hrefs the model judged paid, sponsored or exchanged. */
+  paidLinks: string[];
+  /** Short quotes or notes behind the verdict. */
+  evidence: string[];
+  confidence: number;
+}
+
+export interface LinkSchemeResponse {
+  results: LinkSchemeResult[];
 }
 
 // --- dead-links -------------------------------------------------------------
