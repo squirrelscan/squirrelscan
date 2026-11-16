@@ -673,28 +673,37 @@ squirrel audit https://nutshop.squirrelscan.com -v
 Human-readable output with colored issue severity:
 
 ```text
-squirrelscan v0.1.0
-========================================
-Auditing  https://example.com
-Level     surface · max 100 pages
-Config    defaults
-Account   you@example.com · 500 credits
-Cloud     checks on · 50 credits + 2 per audited page (--offline runs local-only for free)
+Account   not signed in — run squirrel auth login to unlock cloud features
 Dashboard https://app.squirrelscan.com
+Auditing  https://nutshop.squirrelscan.com/
+Level     quick · max 25 pages
+Probing   passive · no probe rules
+Config    defaults
 
-Crawled 12 pages
+...
+
+✓ Audited 25 pages in 8.7s
+
+──────────────────────────────────────────────────
+SQUIRRELSCAN REPORT
+https://nutshop.squirrelscan.com • 25 pages • 94/100 (A)
+──────────────────────────────────────────────────
+
+...
 
 ISSUES
 
-[high] Missing meta description
-  → /about
-  → /contact
+┌ Security (1 warning)
+│
+│  security/csp Content Security Policy (warning)
+│    ⚠ csp-unsafe-scripts: CSP allows 'unsafe-inline'
+│      → /
+│
+└────────────────────────────────────────────────
 
-[medium] Image missing alt text
-  → /images/hero.png on /
+...
 
-[low] Non-HTTPS link
-  → http://oldsite.com on /links
+──────────────────────────────────────────────────
 ```
 
 ### json

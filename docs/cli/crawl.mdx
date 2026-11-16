@@ -112,12 +112,16 @@ The crawl command:
 ## Output
 
 ```text
-Crawling: https://example.com
+Crawling: https://nutshop.squirrelscan.com/
 Level: quick · max 25 pages
+New crawl: https://nutshop.squirrelscan.com
+Found 70 URLs in sitemap
 
-✓ Crawled 18 pages in 6.3s
+✓ Crawled 25 pages in 3.3s
+⚠ Reached max pages (25). Raise with --max-pages <N> or [crawler] max_pages (cap 10000); use --level full for a full audit.
 
-Crawl ID: a7b3c2d1
+Crawl ID: 985ac861
+Run 'squirrel analyze' to run audit rules.
 ```
 
 After crawling, use `squirrel analyze` to run audit rules on the stored data.

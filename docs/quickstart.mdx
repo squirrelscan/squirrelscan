@@ -78,51 +78,106 @@ squirrel audit https://nutshop.squirrelscan.com
 You'll see output like:
 
 ```text
- ▄█▀ ▄▀█ █ █ █ █▀▄ █▀▄ █▀▀ █   ▄█▀ ▄▀▀ ▄▀█ █▄ █
- ▀▄  █ █ █ █ █ ██▀ ██▀ █▀  █   ▀▄  █   █▀█ █ ▀█
- █▄▀ ▀▀█ ▀▄▀ █ █ █ █ █ █▄▄ █▄▄ █▄▀ ▀▄▄ █ █ █  █
+  ██
+  ██       ██▄
+  ██      ███▀     squirrelscan  v0.0.183
+   ██ ██████████   The website QA tool for your coding agent
+    ████████  ▄█
+      ██████  ▀▀
+      ██  ██
 
-  v0.0.84  •  https://squirrelscan.com
+  https://squirrelscan.com
 ────────────────────────────────────────────
-Auditing  https://example.com
-Level     surface · max 100 pages
-Config    defaults
-Account   you@example.com · 500 credits
+Account   not signed in — run squirrel auth login to unlock cloud features
 Dashboard https://app.squirrelscan.com
+Auditing  https://nutshop.squirrelscan.com/
+Level     quick · max 25 pages
+Probing   passive · no probe rules
+Config    defaults
 
-✓ Audited 12 pages in 2.1s
+🐿️ Tip    Give your coding agent audit superpowers: `squirrel mcp` is a full MCP server → docs.squirrelscan.com/developers/mcp
+
+✓ Audited 25 pages in 8.7s
+⚠ Reached max pages (25). Raise with --max-pages <N> or [crawler] max_pages (cap 10000); use --level full for a full audit.
+
+Audit stored in database. Use 'squirrel report' to view latest audit.
+Use 'squirrel report --list' to see all stored audits.
 
 ──────────────────────────────────────────────────
 SQUIRRELSCAN REPORT
-https://example.com • 12 pages • 72/100 (C)
+https://nutshop.squirrelscan.com • 25 pages • 94/100 (A)
 ──────────────────────────────────────────────────
 
+Health Score: 94/100 (A)
+Weighted audit score. Errors are failed checks; heuristic warnings are signals to review, not proof of a vulnerability. Info recommendations do not affect the score.
+
+Group Breakdown:
+──────────────────────────────────────────────────
+SEO                    ███████████████████░   96%   ✓2865  ⚠26  ✗0
+Performance            ████████████████░░░░   80%   ✓ 484  ⚠26  ✗0
+Security               ████████████████████   99%   ✓ 314  ⚠ 1  ✗0
+Agents                 ███████████████████░   96%   ✓  67  ⚠ 9  ✗0
+  The Agents score covers the scored agent experience rules; it does not include llms.txt, Markdown response or AGENTS.md, which are shown separately as site-level signals.
+  Site-level signals (not scored): llms.txt present, Markdown response missing, AGENTS.md missing
+
 Category Breakdown:
---------------------------------------------------
-Core SEO             ███████░░░ 75%
-Content              ████████░░ 82%
-Links                █████████░ 91%
+──────────────────────────────────────────────────
+Performance            ████████████████░░░░   80%   ✓ 481  ⚠26  ✗0
+Content                ███████████████░░░░░   76%   ✓ 341  ⚠25  ✗0
+Agent Experience       ███████████████████░   96%   ✓  67  ⚠ 9  ✗0
+E-E-A-T                ██████████████████░░   90%   ✓   7  ⚠ 1  ✗0
+Security               ████████████████████   98%   ✓ 186  ⚠ 1  ✗0
+Accessibility          ████████████████████  100%   ✓1018  ⚠ 0  ✗0
+Analytics              ████████████████████  100%   ✓  25  ⚠ 0  ✗0
+Core SEO               ████████████████████  100%   ✓ 327  ⚠ 0  ✗0
+Crawlability           ████████████████████  100%   ✓ 120  ⚠ 0  ✗0
+Internationalization   ████████████████████  100%   ✓  50  ⚠ 0  ✗0
+Images                 ████████████████████  100%   ✓ 227  ⚠ 0  ✗0
+Site Integrity         ████████████████████  100%   ✓ 102  ⚠ 0  ✗0
+Legal Compliance       ████████████████████  100%   ✓  26  ⚠ 0  ✗0
+Links                  ████████████████████  100%   ✓ 189  ⚠ 0  ✗0
+Reliability            ████████████████████  100%   ✓   3  ⚠ 0  ✗0
+Local SEO              ████████████████████  100%   ✓   2  ⚠ 0  ✗0
+Mobile                 ████████████████████  100%   ✓  91  ⚠ 0  ✗0
+Structured Data        ████████████████████  100%   ✓ 151  ⚠ 0  ✗0
+Social Media           ████████████████████  100%   ✓ 127  ⚠ 0  ✗0
+URL Structure          ████████████████████  100%   ✓ 190  ⚠ 0  ✗0
+
+Total: 3730 passed, 62 warnings, 0 errors
+
 ...
 
 ISSUES
 
-Core SEO (1 error, 3 warnings)
-  core/meta-description Meta Description (error)
-    ✗ meta-description: Missing meta description
-      → /about
-      → /contact
+┌ Security (1 warning)
+│
+│  security/csp Content Security Policy (warning)
+│    ⚠ csp-unsafe-scripts: CSP allows 'unsafe-inline'
+│      → /
+│
+└────────────────────────────────────────────────
 
-  core/og-tags Open Graph Tags (warning)
-    ⚠ og-image: Missing og:image
-      → /
+┌ Content (25 warnings)
+│
+│  content/word-count Word Count (warning)
+│    ⚠ word-count: Thin content: 171 to 245 words (min 300) (9 pages)
+│      → /categories/baking
+│      → /categories/gift-boxes
+│      → /categories/nut-butters
+│      → /categories/raw-nuts
+│      → /categories/roasted-nuts
+│      ... +4 more
+│      → Thin content: 171 words (min 300)
+│      → Thin content: 210 words (min 300)
+│      → Thin content: 191 words (min 300)
+│      → Thin content: 200 words (min 300)
+│      → Thin content: 213 words (min 300)
+│      ... +4 more
+│
+└────────────────────────────────────────────────
 
-Content (2 warnings)
-  content/word-count Word Count (warning)
-    ⚠ word-count: Thin content: 150 words (min 300)
-      → /landing
+...
 
-──────────────────────────────────────────────────
-87 passed • 12 warnings • 3 failed
 ──────────────────────────────────────────────────
 ```
 
