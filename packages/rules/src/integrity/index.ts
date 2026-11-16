@@ -19,6 +19,7 @@ import { brandImpersonationRule } from "./brand-impersonation";
 import { cloakingRule } from "./cloaking";
 import { fakeAuthOverlayRule } from "./fake-auth-overlay";
 import { kitSignatureRule } from "./kit-signature";
+import { linkSchemeRule } from "./link-scheme";
 import { knownMaliciousUrlRule } from "./known-malicious-url";
 import { obfuscatedScriptRule } from "./obfuscated-script";
 import { orphanPageRule } from "./orphan-page";
@@ -38,6 +39,8 @@ export const rules: Rule[] = [
   // Phase 3 cloaking rule (#118) — reads `ctx.site.cloakingProbes`, no-op when
   // the opt-in differential probe is off.
   cloakingRule,
+  // Cloud LLM judgement of link selling/exchange (repo#3003); skips without a cloud result.
+  linkSchemeRule,
 ];
 
 export {
@@ -46,6 +49,7 @@ export {
   fakeAuthOverlayRule,
   kitSignatureRule,
   knownMaliciousUrlRule,
+  linkSchemeRule,
   obfuscatedScriptRule,
   orphanPageRule,
   seoDoorwayRule,
@@ -54,4 +58,5 @@ export {
 
 // Shared signal detectors + correlation helpers (exported for tests / reuse).
 export * from "./signals";
+export { collectLinkSchemeCandidate, LINK_SCHEME_PATTERNS } from "./link-scheme";
 export * from "./fingerprint";
