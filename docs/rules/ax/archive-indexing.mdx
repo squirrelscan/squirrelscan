@@ -3,6 +3,10 @@ title: "Common Crawl and Wayback: is your site in the archives"
 description: "A site missing from the Common Crawl index or the Wayback Machine, or archived only with a capture over a year old. squirrel checks both."
 ---
 
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `archive-indexing` cloud service (per site; included in the audit base charge). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
+
 ## What archive indexing is
 
 Two archives sit upstream of most AI training data. Common Crawl runs its own crawler, `CCBot`, and publishes a monthly corpus that the major labs build training sets from. The Internet Archive's Wayback Machine captures pages through `ia_archiver` and also ingests Common Crawl's crawls.

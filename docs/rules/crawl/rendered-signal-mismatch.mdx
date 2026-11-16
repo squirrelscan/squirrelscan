@@ -3,6 +3,10 @@ title: "Rendered signal mismatch: JavaScript changes the canonical, noindex, tit
 description: "A script that rewrites the canonical, adds or removes a robots noindex, or replaces the title or first H1 makes crawlers that read raw HTML see a different page from a browser."
 ---
 
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `render` cloud service (per page; 2 credits per page). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
+
 ## What it is
 
 Crawlers and agents that do not run JavaScript read the raw HTML the server sends. A browser shows the page after scripts have run. When a script rewrites the canonical URL, adds or removes a robots `noindex`, or replaces the title or first `<h1>`, the two readers get different pages.

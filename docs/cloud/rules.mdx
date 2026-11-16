@@ -32,6 +32,28 @@ The two gap-analysis rules are **disabled by default** because of their cost. En
 enable = ["*", "gaps/*"]
 ```
 
+## Every cloud rule
+
+Generated from each rule's `meta.cloud`, so it cannot drift from the code. A signed-out or `--offline` audit skips every rule below. Costs are what the credit table charges for the rule's service; see [Credits and pricing](/cloud/credits).
+
+{/* cloud-rules:start */}
+
+| Rule | Service | Unit | Cost |
+| --- | --- | --- | --- |
+| [`adblock/blocked-links`](/rules/adblock/blocked-links) | `blocklist-check` | site | included in the audit base charge |
+| [`adblock/element-hiding`](/rules/adblock/element-hiding) | `blocklist-check` | site | included in the audit base charge |
+| [`adblock/privacy-blocked`](/rules/adblock/privacy-blocked) | `blocklist-check` | site | included in the audit base charge |
+| [`ai/llm-parsability`](/rules/ai/llm-parsability) | `ai-parse` | page | included in the audit base charge |
+| [`ai/page-type-match`](/rules/ai/page-type-match) | `ai-parse` | page | included in the audit base charge |
+| [`ai/site-metadata`](/rules/ai/site-metadata) | `site-metadata` | site | included in the audit base charge |
+| [`ax/archive-indexing`](/rules/ax/archive-indexing) | `archive-indexing` | site | included in the audit base charge |
+| [`ax/content-without-js`](/rules/ax/content-without-js) | `render` | page | 2 credits per page |
+| [`crawl/rendered-signal-mismatch`](/rules/crawl/rendered-signal-mismatch) | `render` | page | 2 credits per page |
+| [`eeat/authority-signals`](/rules/eeat/authority-signals) | `authority-signals` | page | included in the audit base charge |
+| [`links/dead-links`](/rules/links/dead-links) | `dead-links` | external link | 1 credit per url |
+
+{/* cloud-rules:end */}
+
 ## How they run
 
 Cloud rules match rule filters like any other rule. The default `enable = ["*"]` includes the regular cloud rules but deliberately leaves out the two paid gap rules; select `gaps/*` or either gap rule explicitly to opt in. During an audit, a dedicated cloud phase batches all the required service calls, then rules read the results. You'll see the estimate in the start banner and the actual spend in the audit summary:
@@ -41,6 +63,10 @@ Cloud rules match rule filters like any other rule. The default `enable = ["*"]`
 ```
 
 Pages served from the render cache show as their own `render-cached` line at the same 2-credit rate, e.g. `(audit-base 50, render 70, render-cached 30)`.
+
+## What offline audits skip
+
+A signed-out, `--offline` or `[cloud] enabled = false` audit runs every other rule and skips each cloud rule listed above. Skipped is not passed: the rule shows under Not checked with a reason, and its findings are neither raised nor cleared.
 
 ## Skip behavior
 
@@ -55,6 +81,8 @@ A cloud rule never fails your audit. When it can't run, it reports `skipped` wit
 | `not-applicable` | The site profile rules the service out for this site type |
 | `prefetch-out-of-time` | The cloud analysis step reached its time budget before this result came back. The rule is listed under Not checked, never as a pass. Run the audit again, or audit fewer pages, to check it |
 | `render-disabled` | The run was configured not to render (`render: false`, or a website whose render setting is off), so the render service was never asked. Shown as `render disabled by the run config` |
+
+To get a skipped rule to run, fix its reason: log in with `squirrel auth login`, top up or raise `max_credits_per_audit`, rerun after a `service-unavailable` or `prefetch-out-of-time`, or turn rendering on. `not-applicable` is final for that site type.
 
 `render-disabled` is not a locked-rule upsell: the rule is not locked, the run chose not to render. Turn rendering on for the run or the website and it runs.
 
