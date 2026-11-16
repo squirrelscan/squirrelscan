@@ -1,0 +1,47 @@
+---
+title: "Website details"
+description: "Edit a website's title and summary, copy its ID, or delete it from Website, Settings, Details"
+icon: "pencil"
+---
+
+The **Details** tab holds the name and summary a website shows in your lists, plus the website ID and the delete control.
+
+Open it at **Dashboard → your website → Settings → Details**.
+
+## Title and description
+
+The **Details** card has two fields:
+
+| Field | What it is |
+| --- | --- |
+| **Title** | The name shown for the site in the dashboard. |
+| **Description** | A short summary of the site, up to three lines in the editor. |
+
+Click **Save changes** to store both. Leave a field empty and save to clear your edit, so the site falls back to the text it was given before.
+
+When a field shows a name that was generated or that you edited, a line under it, such as **Site title: Example Co**, shows what the site itself says. The line is hidden when the two are the same.
+
+An unsaved edit is kept in your browser, and the dashboard warns you before you leave the tab with changes you have not saved. If the website changed elsewhere while you were editing, a notice on the card tells you.
+
+Saving the title and description does not change anything on your site and does not affect audit results.
+
+## Website ID
+
+The read-only **Website ID** field shows the identifier for this website. Click the copy button beside it to copy the ID, for example to pass it to the [API](/api) or an agent.
+
+## Delete a website
+
+The **Danger zone** card removes the website from your organization. Click **Delete website**, type `DELETE` in the dialog and confirm.
+
+Deleting is a soft delete: past audits, reports and issues are preserved, and published report links keep working. Re-adding the same domain later creates a fresh website with a new ID. See [Deleting a website](/dashboard#deleting-a-website).
+
+## See also
+
+<CardGroup cols={2}>
+  <Card title="Crawl settings" icon="route" href="/dashboard/crawl-settings">
+    What the cloud crawls for this website.
+  </Card>
+  <Card title="GitHub integration" icon="github" href="/dashboard/website-integrations">
+    Link a repository to this website.
+  </Card>
+</CardGroup>
