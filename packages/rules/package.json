@@ -21,10 +21,11 @@
     "zod": "^4.6.6"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit && tsgo --noEmit -p tsconfig.test.json",
+    "typecheck": "tsgo --noEmit && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.workers.json",
     "bench:secrets": "bun run scripts/bench-leaked-secrets.ts"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260609.1",
     "@types/bun": "^1.4.0",
     "@types/node": "^24.13.1"
   },

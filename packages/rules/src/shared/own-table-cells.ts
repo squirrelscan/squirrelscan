@@ -12,6 +12,8 @@
 // The elements are the ones the document-wide selectors return, so what counts
 // as a table, row or cell (and that template content counts as none) is exactly
 // what the rules queried before; the walk decides which table and row own them.
+import type { ChildrenParent } from "./attribute-lookup";
+
 
 export interface OwnRow {
   row: Element;
@@ -37,7 +39,7 @@ export function ownTableCells(doc: Document): Map<Element, OwnTable> {
   const isCell = new Set<Element>(doc.querySelectorAll("th, td"));
 
   const stack: Array<{ el: Element; table: OwnTable | null; row: OwnRow | null }> = [];
-  const pushChildren = (parent: ParentNode, table: OwnTable | null, row: OwnRow | null) => {
+  const pushChildren = (parent: ChildrenParent, table: OwnTable | null, row: OwnRow | null) => {
     const children = parent.children;
     for (let i = children.length - 1; i >= 0; i--) {
       stack.push({ el: children[i] as Element, table, row });
