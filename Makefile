@@ -5,7 +5,7 @@ APP_DIR := apps/cli
 VERSION ?= 0.0.0
 PLATFORMS := darwin-arm64 darwin-x64 linux-x64 linux-arm64 linux-x64-musl linux-arm64-musl windows-x64
 
-.PHONY: format format-check lint typecheck test test-release-tooling check ci build build-all sign-darwin manifest clean dev release
+.PHONY: format format-check lint typecheck test test-release-tooling check ci build build-all build-ci sign-darwin manifest clean dev release
 
 format:
 	@cd $(APP_DIR) && bun run format
@@ -43,6 +43,17 @@ build: ci
 # or the HTML report crashes calling an undefined jsxDEV.
 # The dev build (`bun run build` in apps/cli, also behind `make build`) carries the same
 # two flags for the same reasons (#1855); it just skips --minify.
+# One flag set for the shipped artifact shape, shared by `build-all` (release) and
+# `build-ci` (the CI compile job) so they cannot drift (#1414).
+RELEASE_FLAGS := --compile --splitting --minify --production \
+	--no-compile-autoload-dotenv --no-compile-autoload-bunfig \
+	--define process.env.NODE_ENV='"production"'
+
+# Host-target build with the release flags, no ci prerequisite (CI runs the
+# checks as separate jobs). Output path matches `bun run build`.
+build-ci:
+	@cd $(APP_DIR) && bun build src/cli.ts $(RELEASE_FLAGS) --outfile=build/squirrelscan
+
 build-all: ci
 	@for platform in $(PLATFORMS); do \
 		echo "==> Building $$platform..."; \
@@ -54,9 +65,7 @@ build-all: ci
 			linux-x64-musl) target="linux-x64-musl-baseline";; \
 			windows-x64) target="windows-x64-baseline";; \
 		esac; \
-		(cd $(APP_DIR) && bun build src/cli.ts --compile --splitting --minify --production \
-			--no-compile-autoload-dotenv --no-compile-autoload-bunfig \
-			--define process.env.NODE_ENV='"production"' \
+		(cd $(APP_DIR) && bun build src/cli.ts $(RELEASE_FLAGS) \
 			--target=bun-$$target \
 			--outfile=build/squirrel-$(VERSION)-$$platform$$ext); \
 	done
