@@ -268,6 +268,7 @@ export {
   coverageLine,
   carriedTag,
   timeAgo,
+  scanScopeErrorPages,
   scanScopeLine,
   partialAuditLine,
   robotsScope,

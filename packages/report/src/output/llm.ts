@@ -61,6 +61,7 @@ import { ignoredLine, safeIgnored } from "../ignored";
 import {
   followedStartRedirect,
   publishedReportNote,
+  scanScopeErrorPages,
   scanScopeUnfetched,
   robotsScope,
   robotsHonouredNote,
@@ -500,7 +501,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       ? ` respect-robots="${robots.respectRobots}" robots-blocked-pages="${robots.robotsBlockedPages}"`
       : "";
     lines.push(
-      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}${robotsAttrs}/>`,
+      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}${robotsAttrs}${scanScopeErrorPages(report) > 0 ? ` error-pages="${scanScopeErrorPages(report)}"` : ""}/>`,
     );
     const robotsNote = robotsHonouredNote(report);
     if (robotsNote) lines.push(`<robots-note>${escapeXml(robotsNote)}</robots-note>`);

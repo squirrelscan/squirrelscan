@@ -191,6 +191,12 @@ export function partialAuditLine(report: Pick<AuditReport, "partialAudit">): str
   return `Partial audit: ${parts.join("; ")}.${scored}`;
 }
 
+/** `scanScope.errorPages` (repo#2404) read off a stored report of any origin: a positive whole number, else 0. */
+export function scanScopeErrorPages(report: Pick<AuditReport, "scanScope">): number {
+  const n: unknown = report.scanScope?.errorPages;
+  return typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0;
+}
+
 export function scanScopeLine(report: AuditReport): string | null {
   const raw = report.scanScope;
   if (!raw) return null;
@@ -229,7 +235,11 @@ export function scanScopeLine(report: AuditReport): string | null {
   const types = pageTypeCoverageLine(report);
   const targeted = targetedRunNote(report);
   const robots = robotsHonouredNote(report);
-  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}${robots ? ` ${robots}` : ""}`;
+  // Crawled pages that returned an error status (repo#2404). Read off a stored report of any origin: only a
+  // positive whole number up to the crawled count prints, so a clean crawl's line is unchanged.
+  const errors = Math.min(scanScopeErrorPages(report), s.pagesCrawled);
+  const errorNote = errors > 0 ? ` (${errors} returned ${errors === 1 ? "an error" : "errors"})` : "";
+  return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled${errorNote} from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}${robots ? ` ${robots}` : ""}`;
 }
 
 /**

@@ -11,7 +11,7 @@ import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
 import { isWcagLevel } from "@squirrelscan/core-contracts/wcag";
-import { partialAuditLine, followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
+import { partialAuditLine, followedStartRedirect, scanScopeErrorPages, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { ignoredLine, safeIgnored } from "../ignored";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
@@ -86,8 +86,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     const stop = s.stopReason ? ` stop-reason="${escapeXml(s.stopReason)}"` : "";
     const left = scanScopeUnfetched(report);
     const unfetched = left > 0 ? ` unfetched="${left}"` : "";
+    const errorAttr = scanScopeErrorPages(report) > 0 ? ` error-pages="${scanScopeErrorPages(report)}"` : "";
     lines.push(
-      `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
+      `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${errorAttr}/>`,
     );
     // Pages known against pages audited, per URL-based page type (#1744).
     for (const t of scanScopePageTypes(report)) {
