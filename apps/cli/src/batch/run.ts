@@ -5,16 +5,15 @@
 // and a kill switch for a wedged crawl. The orchestrator is the only writer of `results.jsonl`. A re-run resumes from it.
 
 import {
-  appendFileSync,
   closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readFileSync,
   readSync,
   renameSync,
   rmSync,
-  statSync,
   unlinkSync,
   writeSync,
 } from "node:fs";
@@ -267,7 +266,12 @@ function acquireLock(outDir: string): (() => void) | string {
         return `cannot create ${path}: ${(e as Error).message}`;
       let held: { pid?: unknown; host?: unknown } = {};
       try {
-        held = JSON.parse(readFileSync(path, "utf8"));
+        const fd = openSync(path, "r");
+        try {
+          held = JSON.parse(readFileSync(fd, "utf8"));
+        } finally {
+          closeSync(fd);
+        }
       } catch {
         // unreadable: treated as stale below only when we cannot tell, so refuse
         return `another batch holds ${path} (unreadable lock); delete it if no batch is running`;
@@ -292,21 +296,15 @@ function readFileCapped(
   path: string,
   maxBytes: number
 ): string | { error: string } {
-  let size: number;
-  try {
-    size = statSync(path).size;
-  } catch (e) {
-    return {
-      error: `cannot read ${path}: ${(e as NodeJS.ErrnoException).code ?? "error"}`,
-    };
-  }
-  if (size > maxBytes)
-    return {
-      error: `${path} is ${size} bytes, over the ${maxBytes} byte limit`,
-    };
   try {
     const fd = openSync(path, "r");
     try {
+      // Sized from the open descriptor, so the file cannot change between the check and the read.
+      const size = fstatSync(fd).size;
+      if (size > maxBytes)
+        return {
+          error: `${path} is ${size} bytes, over the ${maxBytes} byte limit`,
+        };
       const buf = Buffer.alloc(Math.min(size, maxBytes) + 1);
       const n = readSync(fd, buf, 0, buf.length, 0);
       return new TextDecoder("utf-8", { fatal: false }).decode(
@@ -376,21 +374,36 @@ export async function executeBatch(opts: BatchOptions): Promise<number> {
     log(`Error: ${lock}`);
     return BATCH_EXIT.cannotRun;
   }
+  let manifestFd = -1;
   try {
     return await runLocked();
   } finally {
+    if (manifestFd >= 0) closeSync(manifestFd);
     lock();
   }
 
   async function runLocked(): Promise<number> {
     const manifestPath = join(outDir, "results.jsonl");
-    if (opts.restart && existsSync(manifestPath)) {
+    if (opts.restart) {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      renameSync(manifestPath, join(outDir, `results.${stamp}.jsonl`));
+      try {
+        renameSync(manifestPath, join(outDir, `results.${stamp}.jsonl`));
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+      }
     }
+    // One descriptor for every read and append: no path is checked and then reused.
+    manifestFd = openSync(manifestPath, "a+", 0o600);
+    const fd = manifestFd;
+    const readManifest = (): string => {
+      const size = fstatSync(fd).size;
+      const buf = Buffer.alloc(size);
+      const n = readSync(fd, buf, 0, size, 0);
+      return buf.subarray(0, n).toString("utf8");
+    };
     let prior: BatchRecord[] = [];
-    if (existsSync(manifestPath)) {
-      const text = readFileSync(manifestPath, "utf8");
+    {
+      const text = readManifest();
       const m = parseManifest(text);
       prior = m.records;
       if (m.skipped > 0)
@@ -398,11 +411,10 @@ export async function executeBatch(opts: BatchOptions): Promise<number> {
           `Note: ${m.skipped} line(s) of results.jsonl were not records and were ignored.`
         );
       // A line cut short by a crash must end before the next record is appended.
-      if (text.length > 0 && !text.endsWith("\n"))
-        appendFileSync(manifestPath, "\n");
+      if (text.length > 0 && !text.endsWith("\n")) writeSync(fd, "\n");
     }
     const append = (record: BatchRecord): void => {
-      appendFileSync(manifestPath, formatRecord(record), { mode: 0o600 });
+      writeSync(fd, formatRecord(record));
     };
 
     // Rejected lines get a record the first time they are seen.
@@ -595,9 +607,7 @@ export async function executeBatch(opts: BatchOptions): Promise<number> {
     opts.stopSignal?.removeEventListener("abort", onAbort);
 
     // 4. The summary and the exit code, both read from the manifest so a resumed batch agrees with a fresh one.
-    const finalRecords = parseManifest(
-      readFileSync(manifestPath, "utf8")
-    ).records;
+    const finalRecords = parseManifest(readManifest()).records;
     const latest = latestRecords(finalRecords);
     const counts = new Map<BatchStatus, number>();
     let gate = false;
