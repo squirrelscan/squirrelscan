@@ -235,7 +235,12 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
   test("robots.txt is respected below aggressive", async () => {
     const active = await run({}, { robotsTxt: robots(["/api/"]) });
     expect(active.sent).toHaveLength(0);
-    expect(active.checks[0]).toMatchObject({ status: "pass", details: { skippedRobots: 4 } });
+    // Nothing probed is not a clean result (#1920, squirrelscan#1886 release gate).
+    expect(active.checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: "no-endpoints",
+      details: { skippedRobots: 4 },
+    });
     restore?.();
     restore = undefined;
     const aggressive = await run({}, { level: "aggressive", robotsTxt: robots(["/api/"]) });

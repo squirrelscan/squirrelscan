@@ -75,6 +75,10 @@ A field name that looks like data itself, such as an email address, a long numbe
 - `unauthenticated-api` (pass): every probed endpoint answered and none returned records.
 - `unauthenticated-api-unchecked` (skipped): probing is passive (`probing-passive`), no API endpoint was found in page code (`no-endpoints`), the shared probe budget ran out before or partway through the endpoints (`probe-budget`), every probe failed with a network error or timeout (`probe-errors`), or some endpoints were not verified (`probe-incomplete`). An endpoint is not verified when it answers with an HTTP `429`, a bot challenge (a challenge page, or a `403` that carries WAF markers such as `cf-mitigated`, `x-amzn-waf-*`, `x-sucuri-id` or a DataDome cookie) or a `5xx`, or when the probe times out. A `429` or a challenge stops the run at once. Findings for the endpoints that did answer are still reported, and the message names how many were not verified. A run with any endpoint not verified is never a pass.
 
+### One finding per endpoint
+
+`security/auth-endpoint-disclosure` probes current-user and session endpoints such as `/api/me` with the same anonymous `GET`. One audit sends that request once and both rules read the answer. When it carries a password, a password hash, a credential secret or the internal user record, `security/auth-endpoint-disclosure` reports it, as the more specific finding, and this rule leaves the endpoint out (the pass check's details count it as `deferredToAuth`). If `security/auth-endpoint-disclosure` is disabled, this rule reports the endpoint as usual.
+
 ### What is not flagged
 
 - A `401`, a `403` the app sent itself (a JSON or plain answer with no WAF marker), any other `4xx`, or a redirect (to a login page, for example). The endpoint is protected, and that counts as a real answer.

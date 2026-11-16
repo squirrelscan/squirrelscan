@@ -34,15 +34,23 @@
 // lockout state, salts). Findings name the JSON path of each field, never its
 // value.
 
-import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
-import { fetchUndecoded } from "@squirrelscan/utils/response-body";
+import { PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
 import type { EndpointCandidate } from "../endpoint-surface";
 import type { ProbeBudget } from "../probe-budget";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { isStateChangingPath } from "./graphql-probe";
-import { readCapped } from "./probe-http";
+import {
+  ANONYMOUS_GET_CAP,
+  ANONYMOUS_GET_TIMEOUT_MS,
+  buildAnonymousGet,
+  isThrottledOrChallenged,
+  isUnverifiedReply,
+  sendAnonymousGet,
+} from "./probe-http";
+
+export const AUTH_ENDPOINT_DISCLOSURE_RULE_ID = "security/auth-endpoint-disclosure";
 
 const CHECK_PROBLEM = "auth-endpoint-disclosure";
 const CHECK_CLEAN = "auth-endpoint-clean";
@@ -60,10 +68,10 @@ export const AUTH_CONVENTION_PATHS: readonly string[] = [
 export const MAX_AUTH_ENDPOINTS = 6;
 
 /** Per-request timeout, on top of the shared probe budget's deadline. */
-export const AUTH_PROBE_TIMEOUT_MS = 10_000;
+export const AUTH_PROBE_TIMEOUT_MS = ANONYMOUS_GET_TIMEOUT_MS;
 
 /** Decoded response bytes read per endpoint. A longer answer is not parsed. */
-export const AUTH_RESPONSE_CAP = 256 * 1024;
+export const AUTH_RESPONSE_CAP = ANONYMOUS_GET_CAP;
 
 /** Field paths listed per endpoint. */
 const MAX_FIELDS_PER_ENDPOINT = 20;
@@ -282,6 +290,8 @@ export interface AuthProbeResponse {
   contentType: string;
   body: string;
   truncated: boolean;
+  /** Response headers, read for a rate limit or bot challenge (`cf-mitigated`). */
+  headers?: Headers;
 }
 
 export type AuthProbeOutcome =
@@ -291,49 +301,21 @@ export type AuthProbeOutcome =
 
 /** The exact URL and init for one probe. Exported so tests can pin what is sent. */
 export function buildAuthProbe(endpointUrl: string): { url: string; init: RequestInit } {
-  const u = new URL(endpointUrl);
-  u.search = "";
-  u.hash = "";
-  return {
-    url: u.href,
-    init: {
-      method: "GET",
-      credentials: "omit",
-      redirect: "manual",
-      headers: { Accept: "application/json", "User-Agent": SQUIRRELSCAN_USER_AGENT },
-    },
-  };
+  // The same anonymous GET security/unauthenticated-api sends: one answer per
+  // endpoint per audit serves both rules (squirrelscan#1886).
+  return buildAnonymousGet(endpointUrl);
 }
 
-/** Send one GET, if the shared budget allows a quiet probe. */
-export async function sendAuthProbe(
+/**
+ * Send one GET, if the shared budget allows a quiet probe. An endpoint another
+ * rule already probed in this audit is answered from that probe and costs
+ * nothing (sendAnonymousGet).
+ */
+export function sendAuthProbe(
   probe: ProbeBudget | undefined,
   endpointUrl: string
 ): Promise<AuthProbeOutcome> {
-  if (!probe || !probe.allows("quiet")) return { sent: false };
-  const { url, init } = buildAuthProbe(endpointUrl);
-  // Aborted once the probe is done, so a capped read does not keep pulling an
-  // endless answer off the wire until the timeout (see graphql-probe.ts).
-  const done = new AbortController();
-  const signal = AbortSignal.any([probe.signal(), AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS), done.signal]);
-  probe.record();
-  try {
-    const res = await fetchUndecoded(url, { ...init, signal });
-    const { text, truncated } = await readCapped(res, AUTH_RESPONSE_CAP);
-    return {
-      sent: true,
-      response: {
-        status: res.status,
-        contentType: (res.headers.get("content-type") ?? "").toLowerCase(),
-        body: text,
-        truncated,
-      },
-    };
-  } catch (err) {
-    return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
-  } finally {
-    done.abort();
-  }
+  return sendAnonymousGet(probe, endpointUrl);
 }
 
 // ── reading ─────────────────────────────────────────────────────────
@@ -553,13 +535,22 @@ type EndpointVerdict =
   | { kind: "json" }
   | { kind: "not-json" }
   | { kind: "errored" }
+  /** Throttled (429) or a bot or WAF challenge: says nothing about the endpoint, and the site is pushing back. */
+  | { kind: "pushback" }
+  /** A server error (5xx): cannot show whether the endpoint is open. */
+  | { kind: "server-error" }
   | { kind: "not-sent" };
 
 async function probeEndpoint(ctx: RuleContext, candidate: AuthCandidate): Promise<EndpointVerdict> {
   const outcome = await sendAuthProbe(ctx.probe, candidate.url);
   if (!outcome.sent) return { kind: "not-sent" };
   if ("error" in outcome) return { kind: "errored" };
-  const json = parseJsonAnswer(outcome.response);
+  const { response } = outcome;
+  const reply = { status: response.status, headers: response.headers, text: response.body };
+  // Never read a throttled, challenged or 5xx answer as "no disclosure" (#1920).
+  if (isThrottledOrChallenged(reply)) return { kind: "pushback" };
+  if (isUnverifiedReply(reply)) return { kind: "server-error" };
+  const json = parseJsonAnswer(response);
   if (json === undefined) return { kind: "not-json" };
   const fields = findDisclosures(json);
   return fields.length > 0 ? { kind: "leaks", fields } : { kind: "json" };
@@ -605,11 +596,13 @@ export const authEndpointDisclosureRule: Rule = {
       skippedRobots: selection.skippedRobots,
       skippedCap: selection.skippedCap,
     };
+    // No candidate is not a clean result: nothing was probed (#1920).
     if (selection.candidates.length === 0) {
       checks.push({
-        name: CHECK_CLEAN,
-        status: "pass",
-        message: "No same-origin auth or session endpoint could be probed",
+        name: CHECK_SKIPPED,
+        status: "skipped",
+        skipReason: "no-endpoints",
+        message: "Not checked: no same-origin auth or session endpoint could be probed",
         details,
       });
       return { checks };
@@ -618,15 +611,25 @@ export const authEndpointDisclosureRule: Rule = {
     let probed = 0;
     let jsonAnswers = 0;
     let errored = 0;
+    let serverErrors = 0;
     let budgetStopped = false;
+    let pushback = false;
     const leaks: Array<{ candidate: AuthCandidate; fields: DisclosedField[] }> = [];
     for (const candidate of selection.candidates) {
       const verdict = await probeEndpoint(ctx, candidate);
       if (verdict.kind === "not-sent") {
+        // Keep going: a later endpoint another rule already probed in this
+        // audit is answered from that probe at no cost (squirrelscan#1886).
         budgetStopped = true;
-        break;
+        continue;
       }
       probed++;
+      if (verdict.kind === "pushback") {
+        // The site is pushing back, so no further probe is sent (#1920).
+        pushback = true;
+        break;
+      }
+      if (verdict.kind === "server-error") serverErrors++;
       if (verdict.kind === "errored") errored++;
       if (verdict.kind === "leaks" || verdict.kind === "json") jsonAnswers++;
       if (verdict.kind === "leaks") leaks.push({ candidate, fields: verdict.fields });
@@ -680,21 +683,43 @@ export const authEndpointDisclosureRule: Rule = {
       });
     }
 
-    // A run the budget cut short is not a clean result.
-    if (leaks.length === 0 && budgetStopped) {
+    // An endpoint that was never answered (budget, throttle, challenge, 5xx)
+    // could be leaking, so a run that left one unread is not clean (#1920).
+    const total = selection.candidates.length;
+    const unverified = total - probed + serverErrors + (pushback ? 1 : 0);
+    const runDetails = { ...details, probed, jsonAnswers, errored, serverErrors, pushback, budgetStopped, unverified };
+    const onlyBudget = budgetStopped && !pushback && serverErrors === 0;
+    if (leaks.length === 0 && unverified > 0 && onlyBudget) {
       checks.push({
         name: CHECK_SKIPPED,
         status: "skipped",
         skipReason: "probe-budget",
-        message: `The probe budget ran out after ${probed} of ${selection.candidates.length} auth endpoint(s). None of those probed disclosed a password, secret or user record, but the rest were not checked`,
-        details: { ...details, probed, jsonAnswers, errored, budgetStopped },
+        message: `The probe budget ran out after ${probed} of ${total} auth endpoint(s). None of those probed disclosed a password, secret or user record, but the rest were not checked`,
+        details: runDetails,
+      });
+    } else if (leaks.length === 0 && unverified > 0) {
+      const why: string[] = [];
+      if (pushback) {
+        why.push(
+          `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`
+        );
+      }
+      if (budgetStopped) why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
+      if (serverErrors > 0) why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
+      checks.push({
+        name: CHECK_SKIPPED,
+        status: "skipped",
+        skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+        message: `Auth endpoint check incomplete: ${why.join("; ")}. ${unverified} of ${total} auth endpoint(s) were not checked and may disclose a password, secret or user record`,
+        value: "not-checked",
+        details: runDetails,
       });
     } else if (leaks.length === 0) {
       checks.push({
         name: CHECK_CLEAN,
         status: "pass",
         message: `No auth or session endpoint disclosed a password, password hash, credential secret or internal user record (${probed} endpoint(s) probed, ${jsonAnswers} answered with JSON)`,
-        details: { ...details, probed, jsonAnswers, errored, budgetStopped },
+        details: runDetails,
       });
     }
     return { checks };

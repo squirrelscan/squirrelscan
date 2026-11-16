@@ -58,25 +58,36 @@
 // leak except by the field names.
 
 import { PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
-import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
-import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
 import type { EndpointCandidate } from "../endpoint-surface";
 import type { ProbeBudget } from "../probe-budget";
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import {
+  AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+  findDisclosures,
+  parseJsonAnswer,
+  selectAuthCandidates,
+} from "./auth-endpoint-disclosure";
 import { isGraphqlPath, isStateChangingPath } from "./graphql-probe";
-import { isThrottledOrChallenged, isUnverifiedReply, readCapped } from "./probe-http";
+import {
+  ANONYMOUS_GET_CAP,
+  ANONYMOUS_GET_TIMEOUT_MS,
+  buildAnonymousGet,
+  isThrottledOrChallenged,
+  isUnverifiedReply,
+  sendAnonymousGet,
+} from "./probe-http";
 
 /** Endpoints probed per run. */
 export const MAX_API_ENDPOINTS = 10;
 
 /** Per-request timeout, on top of the shared probe budget's deadline. */
-export const API_PROBE_TIMEOUT_MS = 10_000;
+export const API_PROBE_TIMEOUT_MS = ANONYMOUS_GET_TIMEOUT_MS;
 
 /** Decoded response bytes read per endpoint. A longer body is read as a prefix. */
-export const API_RESPONSE_CAP = 256 * 1024;
+export const API_RESPONSE_CAP = ANONYMOUS_GET_CAP;
 
 /** Records whose field names are read per endpoint. */
 const MAX_RECORDS_SCANNED = 25;
@@ -324,60 +335,21 @@ export type ApiProbeOutcome =
 
 /** The exact URL and init for one probe. Exported so tests can pin what is sent. */
 export function buildApiProbe(endpointUrl: string): { url: string; init: RequestInit } {
-  const u = new URL(endpointUrl);
-  u.search = "";
-  u.hash = "";
-  return {
-    url: u.href,
-    init: {
-      method: "GET",
-      credentials: "omit",
-      redirect: "manual",
-      // No Cookie and no Authorization header, ever: the point is what an
-      // anonymous caller gets.
-      headers: {
-        Accept: "application/json, */*;q=0.1",
-        "User-Agent": SQUIRRELSCAN_USER_AGENT,
-      },
-    },
-  };
+  // The same anonymous GET security/auth-endpoint-disclosure sends: one answer
+  // per endpoint per audit serves both rules (squirrelscan#1886).
+  return buildAnonymousGet(endpointUrl);
 }
 
-/** Send one quiet GET, if the shared budget allows it. Sends nothing otherwise. */
-export async function sendApiProbe(
+/**
+ * Send one quiet GET, if the shared budget allows it. Sends nothing otherwise.
+ * An endpoint another rule already probed in this audit is answered from that
+ * probe and costs nothing (sendAnonymousGet).
+ */
+export function sendApiProbe(
   probe: ProbeBudget | undefined,
   endpointUrl: string
 ): Promise<ApiProbeOutcome> {
-  if (!probe || !probe.allows("quiet")) return { sent: false };
-  const { url, init } = buildApiProbe(endpointUrl);
-  const done = new AbortController();
-  const signal = AbortSignal.any([
-    probe.signal(),
-    AbortSignal.timeout(API_PROBE_TIMEOUT_MS),
-    done.signal,
-  ]);
-  // Counted before the request leaves, so a request that fails still uses budget.
-  probe.record();
-  try {
-    // Never `fetch` itself: Bun inflates a Content-Encoding body in full before
-    // any capped read (#722).
-    const res = await fetchUndecoded(url, { ...init, signal });
-    const { text, truncated } = await readCapped(res, API_RESPONSE_CAP);
-    return {
-      sent: true,
-      response: {
-        status: res.status,
-        contentType: (res.headers.get("content-type") ?? "").toLowerCase(),
-        body: text,
-        truncated,
-        headers: res.headers,
-      },
-    };
-  } catch (err) {
-    return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
-  } finally {
-    done.abort();
-  }
+  return sendAnonymousGet(probe, endpointUrl);
 }
 
 // ── reading ─────────────────────────────────────────────────────────
@@ -986,6 +958,14 @@ export const unauthenticatedApiRule: Rule = {
       return { checks };
     }
 
+    // An endpoint security/auth-endpoint-disclosure also probes is reported
+    // once: by that rule when the answer carries a password, secret or the
+    // user record (the more specific finding), by this rule otherwise
+    // (squirrelscan#1886). Undefined `ruleEnabled` means the default rule set.
+    const authRuleOn = ctx.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
+    const authUrls = new Set(authRuleOn ? selectAuthCandidates(ctx).candidates.map((c) => c.url) : []);
+    let deferredToAuth = 0;
+
     let probed = 0;
     let errored = 0;
     let serverErrors = 0;
@@ -1017,6 +997,10 @@ export const unauthenticatedApiRule: Rule = {
       }
       const verdict = readApiResponse(response);
       if (verdict.kind === "records") {
+        if (authUrls.has(candidate.url) && disclosesToAuthRule(response)) {
+          deferredToAuth++;
+          continue;
+        }
         flagged.push({ candidate, verdict, tier: tierOf(verdict.summary) });
       }
     }
@@ -1050,7 +1034,17 @@ export const unauthenticatedApiRule: Rule = {
     const total = selection.candidates.length;
     const verified = probed - errored - serverErrors - (pushback ? 1 : 0);
     const unverified = total - verified;
-    const runDetails = { ...details, probed, errored, serverErrors, pushback, budgetStopped, verified, unverified };
+    const runDetails = {
+      ...details,
+      probed,
+      errored,
+      serverErrors,
+      pushback,
+      budgetStopped,
+      verified,
+      unverified,
+      ...(deferredToAuth > 0 ? { deferredToAuth } : {}),
+    };
     if (unverified > 0) {
       const why: string[] = [];
       if (pushback) {
@@ -1075,10 +1069,19 @@ export const unauthenticatedApiRule: Rule = {
       checks.push({
         name: CHECK_CLEAN,
         status: "pass",
-        message: `No API endpoint returned records without authentication (${probed} endpoint(s) probed)`,
+        message:
+          deferredToAuth > 0
+            ? `No other API endpoint returned records without authentication (${probed} endpoint(s) probed; ${deferredToAuth} reported by ${AUTH_ENDPOINT_DISCLOSURE_RULE_ID})`
+            : `No API endpoint returned records without authentication (${probed} endpoint(s) probed)`,
         details: runDetails,
       });
     }
     return { checks };
   },
 };
+
+/** True when security/auth-endpoint-disclosure reports this answer itself. */
+function disclosesToAuthRule(response: ApiProbeResponse): boolean {
+  const json = parseJsonAnswer(response);
+  return json !== undefined && findDisclosures(json).length > 0;
+}
