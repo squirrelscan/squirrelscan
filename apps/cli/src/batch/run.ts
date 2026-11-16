@@ -266,7 +266,13 @@ function acquireLock(outDir: string): (() => void) | string {
         return `cannot create ${path}: ${(e as Error).message}`;
       let held: { pid?: unknown; host?: unknown } = {};
       try {
-        held = JSON.parse(readFileSync(path, "utf8"));
+        // Read through one descriptor so the content is the file we opened, not a re-resolved path.
+        const lockFd = openSync(path, "r");
+        try {
+          held = JSON.parse(readFileSync(lockFd, "utf8"));
+        } finally {
+          closeSync(lockFd);
+        }
       } catch {
         // unreadable: treated as stale below only when we cannot tell, so refuse
         return `another batch holds ${path} (unreadable lock); delete it if no batch is running`;
