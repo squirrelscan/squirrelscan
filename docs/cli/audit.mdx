@@ -10,13 +10,14 @@ The `audit` command crawls a website and runs SEO rules to generate a report.
 
 ```bash
 squirrel audit <url> [options]
+squirrel audit --urls-file <file> --out-dir <dir> [options]
 ```
 
 ## Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `url` | The URL to audit (required). Without a scheme, `https://` is assumed, or `http://` for a local or private host such as `localhost:3000`, `192.168.1.10` or `myapp.test` (see [local audits](/guides/local-audits-cli#local-and-private-hosts-stay-local)) |
+| `url` | The URL to audit (required unless you use [`--urls-file`](#batch-audits)). Without a scheme, `https://` is assumed, or `http://` for a local or private host such as `localhost:3000`, `192.168.1.10` or `myapp.test` (see [local audits](/guides/local-audits-cli#local-and-private-hosts-stay-local)) |
 
 ## Options
 
@@ -25,6 +26,14 @@ squirrel audit <url> [options]
 | `--max-pages` | `-m` | Maximum pages to crawl | the [level's](/guides/audit-levels) page budget |
 | `--max-depth` | | Maximum crawl depth from the seed (start page = 0) | unlimited |
 | `--max-duration` | | Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work and writes a `partial` report (see [Time limit](#time-limit)) | no limit |
+| `--urls-file` | | [Batch mode](#batch-audits): audit every URL in this file, one per line (`-` reads stdin) | |
+| `--out-dir` | | Batch mode: directory for the reports and `results.jsonl` (required with `--urls-file`) | |
+| `--concurrency` | | With `--urls-file`: audits run at once (1 to 16). Without it, the crawl worker pool size | batch: up to 4, at most half the cores |
+| `--retry-failed` | | Batch mode: run the URLs that failed earlier again | off |
+| `--restart` | | Batch mode: move the old results file aside and audit every URL again | off |
+| `--url-timeout` | | Batch mode: hard time limit per URL, in seconds | `--max-duration` x 1.5 + 60, else none |
+| `--max-urls` | | Batch mode: most URLs in the file | 100000 |
+| `--allow-private-hosts` | | Batch mode: audit loopback and private hosts, which are refused by default | off |
 | `--crawl-timeout` | | Wall-clock backstop for the crawl phase alone, in seconds (max 21600). A long value weakens the wedge backstop. At the limit the crawl stops and the audit writes a `partial` report with reason code `crawl_timeout` and a `crawlPhase` object. See [`crawl_timeout`](/configuration/crawler#crawl_timeout) | derived from pages and per-host rate, at most 60 min |
 | `--concurrency` | | Global crawl worker pool size (overrides `[crawler] concurrency`) | `5` |
 | `--per-host` | | Max concurrent requests per host (overrides `[crawler] per_host_concurrency`) | `5` |
@@ -500,6 +509,73 @@ Use it for sites you do not own or manage (prospects, clients, competitors), one
 
 The server has to support the option. If it does not confirm the run as ephemeral (an older server that ignores the field), the CLI prints a warning that the site may have been added and scheduled, so you can remove it from the dashboard, and it publishes nothing, even with `--publish`.
 
+### Batch audits
+
+`--urls-file` audits a list of sites in one command. Each URL runs as its own `squirrel audit` process, so one site that hangs or crashes cannot take the batch down.
+
+```bash
+squirrel audit --urls-file urls.txt --out-dir reports/ --concurrency 4 --max-pages 25 --offline
+```
+
+The file has one URL per line. Blank lines and lines that start with `#` are ignored, and a URL without a scheme is read as `https://`. Only `http` and `https` URLs are accepted, a URL with a username or password is refused, and so is a host on a private network, loopback or link-local address unless you pass `--allow-private-hosts`. The file may be 64 MB, each line 2048 characters, and list up to `--max-urls` URLs (100000 by default). The file is treated as untrusted: a refused line is recorded with its reason, with any password and query values masked.
+
+Every other audit option is passed to each audit. `-o/--output`, `--resume`, `--project-name` and `--summary` are refused with `--urls-file`: a batch writes one report per URL, and resumes on its own. `-f/--format` applies to every report and defaults to `json`. `--concurrency` sets how many audits run at once, not the crawl worker pool of each one (use `--per-host` or `[crawler] concurrency` for that). Two URLs on the same host never run at the same time. Batch mode is local only for now: signed-in runs must pass `--offline`.
+
+Each URL's report is `<out-dir>/<key>.<ext>`, where `key` is the first 16 hex characters of the SHA-256 of the URL, so a name never comes from a path or query. A lock file `<out-dir>/.batch.lock` stops two batches on one directory; it is taken over when its process is gone.
+
+#### Results file
+
+`<out-dir>/results.jsonl` has one JSON object per line, appended as each URL starts and finishes. A later line for the same `key` replaces an earlier one. Treat every field as data: URLs and messages come from the list and the sites.
+
+| Field | Meaning |
+|-------|---------|
+| `v` | Record format, `1` |
+| `url` | The URL as audited |
+| `key` | Stable name of the URL's report and record |
+| `status` | `running`, `completed`, `partial`, `blocked`, `unreachable`, `redirected`, `failed`, `timeout`, `crashed`, `rejected` or `skipped-budget` |
+| `reason` | Why: the audit's reason code (`dns`, `max_duration`, ...), `url_timeout`, `signal_<name>` or the refusal for a `rejected` line |
+| `exitCode` | The audit's [exit code](#exit-codes); absent when it was killed by a signal |
+| `attempt` | `1`, plus one for each `--retry-failed` run |
+| `startedAt`, `finishedAt`, `durationMs` | Timings |
+| `report` | The report file, relative to `--out-dir` |
+| `score`, `pages` | Overall score and pages crawled |
+| `finalUrl` | The site that was audited |
+| `error` | A short one-line message for a failed URL |
+
+`blocked`, `unreachable` and `redirected` come from exit codes `3`, `5` and `4`. A `running` line with nothing after it means the batch died while auditing that URL, and it is read as `crashed`.
+
+#### Resume and retry
+
+Run the same command again to resume, after a crash, a reboot or Ctrl-C. URLs that are `completed` or `partial` are skipped, and new URLs in the file run. URLs that failed are skipped too, so a resume does not hammer a dead site: add `--retry-failed` to run them again (`attempt` goes up). `--restart` moves `results.jsonl` to `results.<timestamp>.jsonl` and starts over. Changing `--max-pages` or `--level` does not invalidate completed URLs: use `--restart`. A `SIGINT` or `SIGTERM` stops starting new audits, asks the running ones to stop, and exits `130`.
+
+`--max-duration` applies to each URL, not to the batch, so 500 URLs with `--max-duration 60` can still take hours. `--url-timeout` is the hard kill per URL and defaults to `--max-duration` x 1.5 + 60 when `--max-duration` is set.
+
+#### Batch exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Every URL ended `completed` or `partial` and no `--fail-on` gate tripped |
+| `1` | The batch could not run: bad arguments, an unreadable or oversized file, an out-dir that cannot be written, or another batch holds the lock |
+| `2` | No URL failed, but a `--fail-on` gate tripped for at least one |
+| `6` | At least one URL ended `failed`, `blocked`, `unreachable`, `redirected`, `timeout`, `crashed`, `rejected` or `skipped-budget` (outranks `2`). `--retry-failed` runs exactly these again |
+| `130` | Stopped by `SIGINT` or `SIGTERM`; run it again to resume |
+
+A summary with the count per status goes to stderr in every case, so `-f json` leaves stdout alone.
+
+#### Batch and corpus retention
+
+The defaults are tuned for one site: a project keeps `keep_audits = 3` audits and the content store is capped at 1 GB (least recently used pages go first). Hundreds of sites in one batch change the picture:
+
+```toml
+[storage]
+keep_audits = 1                      # 0 for report-only corpora: nothing to resume or diff from
+content_store_max_bytes = 21474836480 # 20 GB, sized to the corpus if you analyse stored HTML later
+```
+
+`SQUIRREL_CONTENT_STORE_MAX_BYTES` sets the cap for a single run. Fetched HTML lives only in the content store, so once it is evicted it is gone: keep the JSON reports, which hold the findings. Every audit in a batch is a normal audit, so `squirrel report <domain>` works for the kept audits afterwards.
+
+Plan roughly 600 MB of memory per concurrent audit, and prefer a lower `--concurrency` on a laptop.
+
 ### Gate CI on audit results
 
 Use `--fail-on` to fail a CI build when an audit crosses a threshold you set.
@@ -859,6 +935,7 @@ Change the window, or turn it off, with
 | `3` | The audited page was blocked, so nothing was audited: a WAF or bot manager challenge or block page, or a bare 403 or 429 from the server (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)). Every report with `status: "blocked"` exits `3` |
 | `4` | The start URL redirected to another site and the run was not told to follow it (or the chain looped, passed 5 hops, or reached a refused hop), so nothing was audited. See [Start URLs that redirect](#start-urls-that-redirect) |
 | `5` | The start URL could not be reached (DNS failure, connect timeout, connection reset or refused, a TLS error), so nothing was audited. With `-f json`, `-f xml` or `-f llm` the run still writes a report with `status: "unreachable"` (see [Unreachable start URLs](#unreachable-start-urls)) |
+| `6` | Batch mode only (`--urls-file`): at least one URL failed. See [batch exit codes](#batch-exit-codes) |
 
 ### Which code wins
 

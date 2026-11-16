@@ -99,6 +99,7 @@ import {
   findUnknownRulePatterns,
   formatUnknownRuleWarning,
 } from "@/audit/unknown-rule-patterns";
+import { writeChildRecord } from "@/batch/child-record";
 import { emitRedirectedOutcome, resolveAuditStart } from "@/cli/start-redirect";
 import { emitUnreachableOutcome, unreachableOutcome } from "@/cli/unreachable";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
@@ -1164,8 +1165,47 @@ export const audit = defineCommand({
   args: {
     url: {
       type: "positional",
-      description: "URL to audit",
-      required: true,
+      description: "URL to audit (or use --urls-file)",
+      required: false,
+    },
+    "urls-file": {
+      type: "string",
+      description:
+        "Batch mode: audit every URL in this file (one per line, # comments, - for stdin) and write one report each into --out-dir",
+    },
+    "out-dir": {
+      type: "string",
+      description:
+        "Batch mode: directory for the reports and results.jsonl (required with --urls-file)",
+    },
+    "retry-failed": {
+      type: "boolean",
+      description:
+        "Batch mode: run the URLs whose last record is a failure again (a re-run otherwise skips them)",
+    },
+    restart: {
+      type: "boolean",
+      description:
+        "Batch mode: move the old results.jsonl aside and audit every URL again",
+    },
+    "url-timeout": {
+      type: "string",
+      description:
+        "Batch mode: hard wall-clock limit per URL, in seconds (default: --max-duration x 1.5 + 60 when --max-duration is set, else none)",
+    },
+    "max-urls": {
+      type: "string",
+      description: "Batch mode: most URLs in the file (default 100000)",
+    },
+    "allow-private-hosts": {
+      type: "boolean",
+      description:
+        "Batch mode: audit URLs on loopback, private and link-local hosts (refused by default)",
+    },
+    "batch-record": {
+      type: "string",
+      description:
+        "Internal: where a batch orchestrator wants this run's record",
     },
     "max-pages": {
       type: "string",
@@ -1470,6 +1510,19 @@ export const audit = defineCommand({
     const commandStartedAt = Date.now();
     // Configure logging before any output
     configureLogger({ debug: args.debug, trace: args.trace });
+
+    if (args["urls-file"] !== undefined) {
+      const { runBatch } = await import("@/batch/run");
+      await runBatch({ args, rawArgs });
+      return;
+    }
+    if (args["out-dir"] !== undefined || args["retry-failed"] || args.restart) {
+      console.error(
+        `${fmt.red("Error:")} --out-dir, --retry-failed and --restart only apply with --urls-file`
+      );
+      exitWith({ early: "validation" });
+      return;
+    }
 
     // The one URL check, before anything else: no cloud client, balance read,
     // trace upload or log line sees a URL the audit cannot run on.
@@ -3580,7 +3633,24 @@ export const audit = defineCommand({
         emit: () => {
           if (deferEmission) emitReport();
         },
-        apply: applyExitCode,
+        apply: (code) => {
+          applyExitCode(code);
+          // #1231: a batch orchestrator asked for a record of how this audit ended.
+          const batchRecord = args["batch-record"];
+          if (typeof batchRecord === "string" && batchRecord !== "") {
+            writeChildRecord(batchRecord, {
+              status: report.status ?? "completed",
+              ...(report.statusReasonCode
+                ? { reason: report.statusReasonCode }
+                : {}),
+              ...(report.healthScore?.overall != null
+                ? { score: report.healthScore.overall }
+                : {}),
+              pages: report.totalPages,
+              finalUrl: report.baseUrl,
+            });
+          }
+        },
       });
       const settle = settler.settle;
       finishReport = settler.finish;
