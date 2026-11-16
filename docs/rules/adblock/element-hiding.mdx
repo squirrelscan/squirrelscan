@@ -3,7 +3,9 @@ title: "Adblock cosmetic filters: classes that get hidden"
 description: "A block named .ad-container is hidden for anyone running an ad blocker, whatever is in it. squirrel matches your selectors against EasyList."
 ---
 
-<Note>**Cloud rule** - requires login (`squirrel auth login`). All three [adblock rules](/rules/adblock) share a single blocklist check per audit, **included in the audit base charge**. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `blocklist-check` cloud service (per site; included in the audit base charge). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
 
 ## What a cosmetic filter is
 

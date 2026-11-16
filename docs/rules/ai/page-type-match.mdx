@@ -3,7 +3,9 @@ title: "Page type mismatch: when schema disagrees with the page"
 description: "A page that reads as a listing but declares Product schema. squirrel compares the classified type against the declared JSON-LD."
 ---
 
-<Note>**Cloud rule** - requires login (`squirrel auth login`); the analysis is **included in the audit base charge** (shared with [LLM Parsability](/rules/ai/llm-parsability) - both read the same analysis). Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `ai-parse` cloud service (per page; included in the audit base charge). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
 
 ## What a page type mismatch is
 

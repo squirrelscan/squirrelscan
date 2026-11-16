@@ -3,6 +3,10 @@ title: "Content that needs JavaScript: invisible to raw-HTML agents"
 description: "Most of a page's text arriving only after JavaScript runs. squirrel compares the raw HTML against the rendered DOM and reports the gap."
 ---
 
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `render` cloud service (per page; 2 credits per page). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
+
 ## What JavaScript-gated content is
 
 Many crawlers and most AI agents fetch a URL and read the bytes the server sent. They do not run a browser. Content a framework injects on the client is therefore absent from what they see, even though it is on screen for a person.

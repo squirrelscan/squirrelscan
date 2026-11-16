@@ -3,7 +3,9 @@ title: "Cloud dead-link checking: the shared external link cache"
 description: "Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead."
 ---
 
-<Note>**Cloud rule** - requires login (`squirrel auth login`). In an audit with external link checking on, a [cloud audit](/guides/cloud-audits) or a signed-in `squirrel audit`, each distinct external link the service verifies (it works, redirects or is broken) costs 1 credit, at most one per page of the audit's page limit, retries and browser escalation included. A link it cannot verify costs nothing. Links the CLI checks on your machine are free. Internal links are always free. Skipped when not logged in (external links are then checked locally as usual). See [Credits and pricing](/cloud/credits).</Note>
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `dead-links` cloud service (per external link; 1 credit per url). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
 
 ## What the cloud dead-links service is
 
