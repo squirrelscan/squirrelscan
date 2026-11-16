@@ -89,6 +89,42 @@ describe("crawl/custom-404", () => {
     expect((checks[0]!.details as { location?: string }).location).toBe(`${origin}/login`);
   });
 
+  test("redirect Location with a token query and fragment never reaches message or details", async () => {
+    const assertRedacted = (check: CheckResult, expected: string) => {
+      const location = (check.details as { location?: string }).location ?? "";
+      for (const text of [check.message, location]) {
+        expect(text).not.toContain("token");
+        expect(text).not.toContain("SECRET");
+        expect(text).not.toContain("next=");
+        expect(text).not.toContain("#");
+      }
+      expect(location).not.toContain("?");
+      expect(location).toBe(expected);
+      expect(check.message).toContain(`to ${expected})`);
+      expect(JSON.stringify(check)).not.toContain("SECRET");
+    };
+
+    const abs = serve(
+      () => new Response(null, { status: 302, headers: { location: "https://example.com/login?token=SECRET#frag" } }),
+    );
+    assertRedacted((await run(ctx(abs.origin)))[0]!, "https://example.com/login");
+
+    const rel = serve(() => new Response(null, { status: 301, headers: { location: "/login?next=x" } }));
+    assertRedacted((await run(ctx(rel.origin)))[0]!, `${rel.origin}/login`);
+  });
+
+  test("an unparsable redirect Location becomes a fixed placeholder, never the raw string", async () => {
+    const { origin } = serve(
+      () => new Response(null, { status: 302, headers: { location: "http://[SECRET?token=1" } }),
+    );
+    const check = (await run(ctx(origin)))[0]!;
+    expect(check.name).toBe("custom-404-redirect");
+    expect(JSON.stringify(check)).not.toContain("SECRET");
+    expect(JSON.stringify(check)).not.toContain("token");
+    expect((check.details as { location?: string }).location).toBe("(unparsable Location header)");
+    expect(check.message).toContain("to (unparsable Location header)");
+  });
+
   test("warn: the stock nginx page is a bare default, and is also indexable", async () => {
     const { origin } = serve(html(NGINX));
     const checks = await run(ctx(origin));

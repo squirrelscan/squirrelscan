@@ -104,6 +104,24 @@ export function buildNotFoundProbe(origin: string, path: string): { url: string;
   };
 }
 
+/** Placeholder for a Location header that does not parse as a URL. */
+export const UNPARSABLE_LOCATION = "(unparsable Location header)";
+
+/**
+ * A redirect target safe to put in a report: origin and path only. The query
+ * string and fragment can carry tokens, so they are dropped, and a Location
+ * that does not parse becomes a fixed placeholder, never the raw header.
+ */
+export function redactLocation(raw: string | null, base: string): string {
+  if (!raw) return "";
+  try {
+    const u = new URL(raw, base);
+    return u.origin + u.pathname;
+  } catch {
+    return UNPARSABLE_LOCATION;
+  }
+}
+
 async function sendProbe(ctx: RuleContext, origin: string): Promise<ProbeOutcome> {
   const probe = ctx.probe;
   if (!probe || !probe.allows("quiet")) return { kind: "not-allowed" };
@@ -291,16 +309,7 @@ export const custom404Rule: Rule = {
       return { checks };
     }
     if (status >= 300 && status < 400) {
-      const rawLocation = answer.headers.get("location") ?? "";
-      let location = "";
-      if (rawLocation) {
-        try {
-          const u = new URL(rawLocation, url);
-          location = u.origin + u.pathname;
-        } catch {
-          location = "";
-        }
-      }
+      const location = redactLocation(answer.headers.get("location"), url);
       checks.push({
         name: REDIRECT,
         status: "warn",
