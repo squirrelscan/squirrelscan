@@ -31,7 +31,11 @@ import { dlitemRule } from "./dlitem";
 import { duplicateIdActiveRule } from "./duplicate-id-active";
 import { duplicateIdAriaRule } from "./duplicate-id-aria";
 import { emptyHeadingRule } from "./empty-heading";
+import { focusIndicatorRule } from "./focus-indicator";
+import { focusNotObscuredRule } from "./focus-not-obscured";
+import { focusOrderRule } from "./focus-order";
 import { focusVisibleRule } from "./focus-visible";
+import { keyboardTrapRule } from "./keyboard-trap";
 import { formFieldMultipleLabelsRule } from "./form-field-multiple-labels";
 import { formLabelsRule } from "./form-labels";
 import { frameTitleRule } from "./frame-title";
@@ -73,6 +77,10 @@ export const rules: Rule[] = [
   pasteInputsRule,
   colorContrastRule,
   focusVisibleRule,
+  focusIndicatorRule,
+  focusOrderRule,
+  focusNotObscuredRule,
+  keyboardTrapRule,
   touchTargetsRule,
   landmarkRegionsRule,
   headingOrderRule,
@@ -185,8 +193,12 @@ export {
   duplicateIdActiveRule,
   duplicateIdAriaRule,
   emptyHeadingRule,
+  focusIndicatorRule,
+  focusNotObscuredRule,
+  focusOrderRule,
   focusVisibleRule,
   formFieldMultipleLabelsRule,
+  keyboardTrapRule,
   formLabelsRule,
   frameTitleRule,
   headingOrderRule,

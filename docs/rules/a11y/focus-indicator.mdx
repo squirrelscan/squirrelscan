@@ -1,0 +1,61 @@
+---
+title: "Focus indicator: controls that show no change when focused"
+description: "Controls with no visible focus indicator leave keyboard users lost. squirrel measures computed styles while each control holds focus, not the page source."
+---
+
+## What it is
+
+When a keyboard user tabs through a page, each control needs a visible sign that it holds focus. WCAG success criterion 2.4.7 Focus Visible, Level AA, requires it. Whether a sign appears depends on the cascade, which only a browser can resolve.
+
+## What squirrel checks
+
+While each stop holds focus, the render service reads its computed outline, box-shadow, border color, background color and text decoration, and the same values before focus. A stop shows an indicator when its outline paints (not `none`, not zero width, not transparent) or when any of the other values changes. A stop with neither is reported. Unlike [`a11y/focus-visible`](/rules/a11y/focus-visible), which scans the source text, this sees stylesheet and framework rules. Severity is warning. It reads the keyboard pass the cloud render returns with the page's render result, so it adds no credit charge beyond the page's audit.
+
+- `focus-indicator` warns when one or more focusable elements show no indicator. Each item carries the selector and the measured focused outline and box-shadow.
+
+## How to fix it
+
+Restore the outline or add a `:focus-visible` rule that changes the border, box-shadow or background by at least 3:1 contrast.
+
+## When it does not run
+
+The rule reports one skipped check, named `focus-indicator`, with the reason, and never a pass or a fail, when there is no render result for the page: an offline audit (`--offline`), a CLI audit without the cloud, a run with rendering disabled, out of credits, or a render that carried no keyboard pass. The static [`a11y/focus-visible`](/rules/a11y/focus-visible) rule still runs in those cases.
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/focus-indicator` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+| **WCAG** | 2.4.7 Focus Visible, Level AA |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/focus-indicator"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `focus-indicator` | Problem |  |
+| `focus-indicator` | Clean | `focus-indicator` |
+| `focus-indicator` | Not checked |  |
+
+{/* rule-checks:end */}

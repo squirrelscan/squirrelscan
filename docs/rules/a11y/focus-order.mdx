@@ -1,0 +1,61 @@
+---
+title: "Focus order: Tab order that contradicts the visual order"
+description: "A Tab order that jumps backward against the layout disorients keyboard users. squirrel runs a scripted Tab pass in a browser render and reports each backward jump."
+---
+
+## What it is
+
+Keyboard users move through a page with Tab, and the order should match what they see. When the DOM order and the visual layout disagree, focus jumps around the screen and the user loses their place. WCAG success criterion 2.4.3 Focus Order, Level A, asks for an order that preserves meaning and operability.
+
+## What squirrel checks
+
+It compares the order Tab visits focusable elements with where they sit on screen. A step is a backward jump when the next stop sits wholly above the previous one, or on the same row but wholly before it (to the left in left to right text, to the right in right to left text). Severity is warning. It reads the keyboard pass the cloud render returns with the page's render result, so it adds no credit charge beyond the page's audit.
+
+- `focus-order` warns when one or more Tab steps jump backward. Each item names the destination selector and carries both elements with their positions (`x,y WxH` in CSS pixels from the document origin) and the step number.
+
+## How to fix it
+
+Reorder the DOM so it matches the layout. Avoid CSS `order`, `flex-direction: row-reverse`, grid placement and absolute positioning to rearrange boxes the DOM lists in another order, and avoid positive `tabindex` values.
+
+## When it does not run
+
+The rule reports one skipped check, named `focus-order`, with the reason, and never a pass or a fail, when there is no render result for the page: an offline audit (`--offline`), a CLI audit without the cloud, a run with rendering disabled, out of credits, or a render that carried no keyboard pass. The static [`a11y/focus-visible`](/rules/a11y/focus-visible) rule still runs in those cases.
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/focus-order` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+| **WCAG** | 2.4.3 Focus Order, Level A |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/focus-order"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `focus-order` | Problem |  |
+| `focus-order` | Clean | `focus-order` |
+| `focus-order` | Not checked |  |
+
+{/* rule-checks:end */}

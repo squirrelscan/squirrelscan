@@ -1,0 +1,61 @@
+---
+title: "Keyboard trap: focus that Tab and Escape cannot leave"
+description: "A region that keeps keyboard focus and will not release it locks keyboard users out of the rest of the page. squirrel detects it with a scripted Tab pass."
+---
+
+## What it is
+
+A keyboard trap is a place focus can enter and cannot leave. A user without a mouse is stuck until they reload the page. WCAG success criterion 2.1.2 No Keyboard Trap, Level A, requires that focus can always be moved away using the keyboard. A modal dialog may hold focus while it is open as long as it releases it.
+
+## What squirrel checks
+
+The render service tabs through the page until focus either leaves or cycles inside one region, then presses Escape and sees whether focus got out. A modal dialog that holds focus while open and releases it on Escape passes. Severity is error. It reads the keyboard pass the cloud render returns with the page's render result, so it adds no credit charge beyond the page's audit.
+
+- `keyboard-trap` fails when focus cycled in a region and Escape did not release it. The item carries the container selector, the last focused element, the number of Tab presses before the cycle repeated and whether the region is a dialog. It passes when no region kept focus, or when Escape released it.
+
+## How to fix it
+
+Let every component be left with the keyboard. Make Escape close a modal and return focus to the control that opened it, document an exit key for widgets that cycle focus, and never move focus back to the element the user just left.
+
+## When it does not run
+
+The rule reports one skipped check, named `keyboard-trap`, with the reason, and never a pass or a fail, when there is no render result for the page: an offline audit (`--offline`), a CLI audit without the cloud, a run with rendering disabled, out of credits, or a render that carried no keyboard pass. The static [`a11y/focus-visible`](/rules/a11y/focus-visible) rule still runs in those cases.
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/keyboard-trap` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+| **WCAG** | 2.1.2 No Keyboard Trap, Level A |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/keyboard-trap"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `keyboard-trap` | Problem |  |
+| `keyboard-trap` | Clean | `keyboard-trap` |
+| `keyboard-trap` | Not checked |  |
+
+{/* rule-checks:end */}

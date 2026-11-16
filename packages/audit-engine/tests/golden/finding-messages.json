@@ -167,6 +167,24 @@
    "empty-heading|pass|All headings have content||"
   ]
  },
+ "a11y/focus-indicator": {
+  "digest": "213760009949658",
+  "lines": [
+   "focus-indicator|skipped|Rendered keyboard check skipped||"
+  ]
+ },
+ "a11y/focus-not-obscured": {
+  "digest": "252273821081605",
+  "lines": [
+   "focus-not-obscured|skipped|Rendered keyboard check skipped||"
+  ]
+ },
+ "a11y/focus-order": {
+  "digest": "128567946460277",
+  "lines": [
+   "focus-order|skipped|Rendered keyboard check skipped||"
+  ]
+ },
  "a11y/focus-visible": {
   "digest": "20496801235168",
   "lines": [
@@ -233,6 +251,12 @@
    "enterkeyhint|skipped|No forms with # or more fields found||",
    "form-novalidate|skipped|No forms set novalidate||",
    "input-types|skipped|No inputs with an evident type found||"
+  ]
+ },
+ "a11y/keyboard-trap": {
+  "digest": "66927004923609",
+  "lines": [
+   "keyboard-trap|skipped|Rendered keyboard check skipped||"
   ]
  },
  "a11y/label-content-name-mismatch": {

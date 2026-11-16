@@ -1,0 +1,61 @@
+---
+title: "Focus not obscured: sticky headers and banners over the focused control"
+description: "A sticky header or fixed banner that covers the focused control hides it from keyboard users. squirrel measures the cover while each element holds focus (WCAG 2.2, 2.4.11)."
+---
+
+## What it is
+
+A sticky header, a fixed banner or a cookie bar can sit on top of the control Tab just scrolled to, so the user focuses something they cannot see. WCAG 2.2 success criterion 2.4.11 Focus Not Obscured (Minimum), Level AA, requires that a focused component is not entirely hidden by author-created content.
+
+## What squirrel checks
+
+While each stop holds focus, the render service samples a grid of points inside the element and asks the browser which element is on top. A stop is flagged when the browser reports a fixed or sticky element covering all of it. A control that is only partly covered is not flagged, matching the criterion, and a control with no fixed or sticky cover is not judged. Severity is warning. It reads the keyboard pass the cloud render returns with the page's render result, so it adds no credit charge beyond the page's audit.
+
+- `focus-not-obscured` warns when one or more focused elements are entirely hidden. Each item carries the selector of the hidden element, the covering element, its position type and both rectangles.
+
+## How to fix it
+
+Add `scroll-padding-top` on the scrolling element, or `scroll-margin-top` on controls, equal to the height of the sticky header, so the browser scrolls focus clear of it. Keep cookie bars and chat widgets from covering the end of the page.
+
+## When it does not run
+
+The rule reports one skipped check, named `focus-not-obscured`, with the reason, and never a pass or a fail, when there is no render result for the page: an offline audit (`--offline`), a CLI audit without the cloud, a run with rendering disabled, out of credits, or a render that carried no keyboard pass. The static [`a11y/focus-visible`](/rules/a11y/focus-visible) rule still runs in those cases.
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/focus-not-obscured` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+| **WCAG** | 2.4.11 Focus Not Obscured (Minimum), Level AA (WCAG 2.2) |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/focus-not-obscured"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `focus-not-obscured` | Problem |  |
+| `focus-not-obscured` | Clean | `focus-not-obscured` |
+| `focus-not-obscured` | Not checked |  |
+
+{/* rule-checks:end */}

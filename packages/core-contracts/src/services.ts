@@ -616,6 +616,79 @@ export interface RenderJobResponse {
   chargedBreakdown?: RenderChargeLine[];
 }
 
+/** A rectangle in CSS pixels, relative to the document origin. */
+export interface FocusRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The computed focus-indicator styles of one element, read from `getComputedStyle` in the
+ * browser: once while the element was not focused and once while it held keyboard focus.
+ */
+export interface FocusIndicatorStyle {
+  outlineStyle: string;
+  outlineWidthPx: number;
+  outlineColor: string;
+  boxShadow: string;
+  borderColor: string;
+  backgroundColor: string;
+  textDecoration: string;
+}
+
+/** One stop of the scripted Tab pass: the element that held focus after a Tab press. */
+export interface FocusStop {
+  /** A selector that finds the element (tag, id or nth-of-type path). */
+  selector: string;
+  /** Lowercase tag name. */
+  tag: string;
+  /** Position of the focused element's box when it held focus, after the browser scrolled it into view. */
+  rect: FocusRect;
+  /** The element's `tabindex` attribute when it has one. */
+  tabindex?: number;
+  /** Computed styles before focus (`unfocused`) and while focused (`focused`). */
+  unfocused: FocusIndicatorStyle;
+  focused: FocusIndicatorStyle;
+  /**
+   * Share of the focused element's box (0 to 1) that was not covered by another element, measured
+   * with `elementFromPoint` on a grid of points inside the box while the element held focus.
+   */
+  visibleFraction: number;
+  /** The fixed or sticky element covering most of the box, when any covers it. */
+  obscuredBy?: { selector: string; position: "fixed" | "sticky"; rect: FocusRect };
+}
+
+/** A keyboard trap the Tab pass hit: focus cycled inside a region and did not leave. */
+export interface FocusTrap {
+  /** Selector of the element focus was on when the pass detected the cycle. */
+  selector: string;
+  /** Selector of the container the cycle stayed in, when one is identifiable (a dialog, a widget). */
+  container?: string;
+  /** Tab presses made before the cycle repeated. */
+  tabPresses: number;
+  /** Whether the container was an open dialog (`dialog[open]`, `role=dialog` or `aria-modal`). */
+  inDialog: boolean;
+  /** Whether pressing Escape after the trap moved focus out of the cycle or closed the container. */
+  releasedByEscape: boolean;
+}
+
+/**
+ * A scripted keyboard pass over a rendered page. Absent from a render service that does not
+ * run it; the focus rules then skip with a reason and nothing else changes.
+ */
+export interface RenderFocusSnapshot {
+  /** Focus stops in the order Tab visited them, capped by the service. */
+  stops: FocusStop[];
+  /** True when the pass stopped at its cap before it came back to the start. */
+  truncated?: boolean;
+  /** True when the document direction is right to left (affects visual order). */
+  rtl?: boolean;
+  /** Set when the pass found a keyboard trap. */
+  trap?: FocusTrap;
+}
+
 export interface RenderResultItem {
   url: string;
   status: number | null;
@@ -631,6 +704,8 @@ export interface RenderResultItem {
    * code removed after hydration, so the script rules still see them.
    */
   serverHtml?: string;
+  /** The scripted Tab pass over the rendered page, read by the rendered focus rules. Absent when the service did not run it. */
+  focus?: RenderFocusSnapshot;
   /** Browser render cost only, mirrored from crawler-worker. Absent on a render-cache hit (#826). */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started. Absent on a render-cache hit (#826). */
