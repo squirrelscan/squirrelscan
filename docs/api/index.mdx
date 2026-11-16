@@ -177,6 +177,63 @@ The set of phase names is not a stable enum: match on the ones you know and igno
 The hosted MCP `run_audit` takes the same two sets as `rules` and `disable_rules`, with the same validation and the same errors, plus `editor_summary` for `config.editorSummary`. See [MCP](/developers/mcp).
 </Note>
 
+## Queued runs
+
+When the audit containers are busy, or your organization is already running its plan's limit of audits at once, `POST /v1/agent-runs` still answers `201`, with `status` `queued` instead of `pending` and a `queue` object:
+
+```json
+{
+  "id": "01J...",
+  "status": "queued",
+  "createdAt": "2026-11-16T09:00:00.000Z",
+  "queue": {
+    "position": 2,
+    "etaMinutes": 4,
+    "reason": "capacity",
+    "message": "..."
+  }
+}
+```
+
+A queued run starts by itself, so there is nothing to retry and nothing more to charge. Poll `GET /v1/agent-runs/{id}`: while the status is `queued` the same `queue` object says where the run stands, and it moves to `pending` and then `running` when a slot frees.
+
+- `position`: your place in line, `1` is next. `null` when it could not be read.
+- `etaMinutes`: estimated minutes until the run starts, or `null` when there is no estimate.
+- `reason`: `capacity` when the containers are busy, `org_limit` when your organization is at its plan's limit of audits running at once.
+- `message`: a sentence for a person. It may change, so do not match on it.
+
+A run that waits more than 60 minutes is stopped and fully refunded; run it again. Only audits you start yourself wait in line. Scheduled audits queue behind them and are skipped, and refunded, if they wait more than 6 hours.
+
+### Waiting limits per plan
+
+Each plan caps how many audits run at once and how many may wait:
+
+| Plan | Running at once | Waiting |
+|------|-----------------|---------|
+| Free | 1 | 3 |
+| Starter | 3 | 10 |
+| Team | 5 | 20 |
+| Enterprise | 10 | 50 |
+
+Enterprise figures are the default a contract starts from. Scheduled audits do not count toward the waiting limit.
+
+### When the waiting line is full
+
+A request made while you already have the maximum number of audits waiting is refused with `429` and code `QUEUE_FULL`, before anything is charged:
+
+```json
+{
+  "error": {
+    "code": "QUEUE_FULL",
+    "message": "You already have 3 audits waiting to start. Nothing was charged for this one. Wait for one of them to start, or cancel one from your runs list, then try again.",
+    "queued": 3,
+    "maxQueued": 3
+  }
+}
+```
+
+`error.queued` is how many of your audits are waiting and `error.maxQueued` is the limit for your plan. Wait for a queued run to start, or cancel one, then send the request again. Unlike the per-key rate limit, this `429` uses the typed envelope and carries no `Retry-After`.
+
 ## Error envelope
 
 All errors use one stable, typed shape:
