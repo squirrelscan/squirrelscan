@@ -193,4 +193,18 @@ describe("content/cross-page-contradictions rule", () => {
       expect(snippet).toContain(part);
     }
   });
+
+  test("clips long quotes and caps details.contradictions", () => {
+    const long = "x".repeat(1000);
+    const claims = Array.from({ length: 40 }, (_, n) => [
+      claim({ url: "https://x.test/a", type: "price", subject: `p${n}`, value: "$1", quote: long }),
+      claim({ url: "https://x.test/b", type: "price", subject: `p${n}`, value: "$2", quote: long }),
+    ]).flat();
+    const c = run({ pagesSampled: 2, claims }).checks[0]!;
+    expect(c.items).toHaveLength(25);
+    const d = (c as unknown as { details: unknown }).details as { contradictions: Array<{ first: { quote: string } }> };
+    expect(d.contradictions).toHaveLength(25);
+    expect(d.contradictions[0]!.first.quote.length).toBe(240);
+    expect(c.items![0]!.snippet!.length).toBeLessThan(600);
+  });
 });

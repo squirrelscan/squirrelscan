@@ -22,6 +22,9 @@ export const CLAIM_MIN_CONFIDENCE = 0.8;
 
 /** Contradictions listed as items. */
 const MAX_ITEMS = 25;
+const MAX_QUOTE = 240;
+
+const clip = (s: string): string => (s.length > MAX_QUOTE ? `${s.slice(0, MAX_QUOTE - 1)}…` : s);
 
 export interface Contradiction {
   type: PageClaimType;
@@ -210,7 +213,7 @@ export const crossPageContradictionsRule: Rule = {
       id: `${c.type}:${c.subject}:${c.context}`,
       label: describe(c),
       sourcePages: [c.a.url, c.b.url],
-      snippet: `${c.a.url}: "${c.a.quote}" | ${c.b.url}: "${c.b.quote}"`,
+      snippet: `${c.a.url}: "${clip(c.a.quote)}" | ${c.b.url}: "${clip(c.b.quote)}"`,
     }));
 
     const check: CheckResult = {
@@ -221,12 +224,12 @@ export const crossPageContradictionsRule: Rule = {
       items,
       details: {
         pagesSampled,
-        contradictions: found.map((c) => ({
+        contradictions: found.slice(0, MAX_ITEMS).map((c) => ({
           type: c.type,
           subject: c.subject,
           context: c.context,
-          first: { url: c.a.url, quote: c.a.quote },
-          second: { url: c.b.url, quote: c.b.quote },
+          first: { url: c.a.url, quote: clip(c.a.quote) },
+          second: { url: c.b.url, quote: clip(c.b.quote) },
         })),
       },
     };
