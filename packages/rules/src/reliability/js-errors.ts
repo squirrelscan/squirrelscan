@@ -160,8 +160,6 @@ export const jsErrorsRule: Rule = {
       checks: [{ name: "js-errors", status: "skipped", message, skipReason }],
     });
 
-    if (!site)
-      return skip("Site data not available", "Site data not available");
     if (!renders || renders.size === 0) {
       return skip(
         "JavaScript errors were not checked",
@@ -169,7 +167,7 @@ export const jsErrorsRule: Rule = {
       );
     }
 
-    const isFirstParty = firstPartyChecker(site.baseUrl);
+    const isFirstParty = site ? firstPartyChecker(site.baseUrl) : () => false;
     const groups = new Map<string, Group>();
     const add = (
       category: Category,
@@ -210,6 +208,9 @@ export const jsErrorsRule: Rule = {
         unmeasured++;
         continue;
       }
+      // Without site data the first-party split is unknowable: skip rather than misclassify.
+      if (!site)
+        return skip("Site data not available", "Site data not available");
       measured++;
       const {
         pageErrors = [],
