@@ -62,6 +62,19 @@ export interface ScriptFetchResult {
   responseMs?: number;
 }
 
+/**
+ * An optional body cache the caller injects (the CLI backs it with its content
+ * store), so the engine stays dependency-free. Keyed by the script URL: the
+ * implementation hashes it (the CLI uses `hashContent`) and owns freshness, so
+ * `get` returns null for a missing OR stale entry. There is no validator: a
+ * script at a stable URL is replayed until the implementation's max age lapses,
+ * as the CLI's own cache did before repo#1415.
+ */
+export interface ScriptContentCache {
+  get(url: string): string | null;
+  put(url: string, body: string): void;
+}
+
 export interface ScriptFetcherOptions {
   concurrency: number;
   timeoutMs: number;
@@ -106,6 +119,12 @@ export interface ScriptFetcherOptions {
    * reads as ASSET_FETCH_REFUSED_ERROR. Absent: hosts are unrestricted.
    */
   egress?: EgressPolicy;
+  /**
+   * Replay bodies from this cache instead of requesting them, and store each
+   * fresh fetch. Absent: every script is fetched afresh. Ignored with
+   * `anyContentType`, whose bodies are not scripts.
+   */
+  contentCache?: ScriptContentCache;
 }
 
 /** The `error` of a script the fetcher dropped for its size (over `maxSizeBytes`). */
@@ -376,12 +395,40 @@ function scriptOutcome(result: ScriptFetchResult, anyContentType = false): Fetch
   return "ok";
 }
 
+function readCache(cache: ScriptContentCache, url: string): string | null {
+  try {
+    return cache.get(url);
+  } catch {
+    return null;
+  }
+}
+
 function fetchSingleScript(
   url: string,
   options: ScriptFetcherOptions
 ): Effect.Effect<ScriptFetchResult, never, never> {
-  // No cache: every audit, and `squirrel analyze`, fetches its scripts afresh.
+  const cache = options.anyContentType ? undefined : options.contentCache;
   return Effect.promise(async () => {
+    // A cache hit never touches the network, so it spends no budget. A body
+    // over the size cap (a lowered limit) is a miss and is fetched again.
+    const cached = cache ? readCache(cache, url) : null;
+    if (cached !== null) {
+      const sizeBytes = new TextEncoder().encode(cached).length;
+      if (options.maxSizeBytes == null || sizeBytes <= options.maxSizeBytes) {
+        // contentEncoding is left unset: no response headers were seen, and
+        // null would read as "observed, not compressed" (#9).
+        return {
+          url,
+          status: 200,
+          error: null,
+          contentType: "application/javascript",
+          sizeBytes,
+          content: cached,
+          redirected: false,
+          fromCache: true,
+        } satisfies ScriptFetchResult;
+      }
+    }
     // #1252: skip before launching once the budget is spent or the host tarpits.
     if (options.budget?.shouldSkip(url)) {
       return { ...emptyScriptResult(url), error: ASSET_FETCH_SKIPPED_ERROR };
@@ -396,6 +443,13 @@ function fetchSingleScript(
         : scriptOutcome(result, options.anyContentType === true);
     const elapsed = Date.now() - startedAt;
     options.budget?.record(url, elapsed, outcome);
+    if (cache && result.content !== null && result.error === null) {
+      try {
+        cache.put(url, result.content);
+      } catch {
+        // A cache that cannot store costs the next run a fetch, never this one.
+      }
+    }
     return result.status !== null && result.error !== ASSET_FETCH_REFUSED_ERROR
       ? { ...result, responseMs: elapsed }
       : result;

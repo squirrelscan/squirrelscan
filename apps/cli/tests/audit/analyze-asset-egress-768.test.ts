@@ -17,16 +17,21 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   test,
 } from "bun:test";
 import { Effect } from "effect";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { CrawlMetadata, PageRecord } from "@/crawler/storage/types";
 
 import { getDefaultConfig } from "@/config";
 import { analyzeStoredCrawl, configForCrawl } from "@/controllers/analyze";
+import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
 const SCRIPT = "window.squirrel = 1;";
@@ -86,9 +91,25 @@ afterAll(() => {
   server.stop(true);
 });
 
+// repo#1415: analyze replays cached script bodies, so each test gets its own
+// content store or a body cached by an earlier test would hide the request.
+const priorStorePath = process.env.SQUIRREL_CONTENT_STORE_PATH;
+let storeDir: string;
+
+beforeEach(() => {
+  closeGlobalContentStore();
+  storeDir = mkdtempSync(join(tmpdir(), "analyze-768-"));
+  process.env.SQUIRREL_CONTENT_STORE_PATH = join(storeDir, "content-store.db");
+});
+
 afterEach(() => {
   sent.length = 0;
   received.length = 0;
+  closeGlobalContentStore();
+  if (priorStorePath === undefined)
+    delete process.env.SQUIRREL_CONTENT_STORE_PATH;
+  else process.env.SQUIRREL_CONTENT_STORE_PATH = priorStorePath;
+  rmSync(storeDir, { recursive: true, force: true });
 });
 
 function pageRecord(url: string, html: string): PageRecord {
