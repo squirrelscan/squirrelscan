@@ -19,7 +19,13 @@ import {
   isRedirectSourcePage,
   type RuleTally,
 } from "@squirrelscan/audit-engine";
-import { buildCacheStats, isScoreless } from "@squirrelscan/core-contracts";
+import {
+  buildCacheFreshness,
+  buildCacheStats,
+  isScoreless,
+  staleCacheSignal,
+  type StaleCachePage,
+} from "@squirrelscan/core-contracts";
 import {
   crawlTimeoutReason,
   maxDurationReason,
@@ -453,6 +459,11 @@ export interface ReconstructOptions {
    * is "not in the registry".
    */
   additionalNamespaces?: RuleNamespace[];
+  /**
+   * The caller rendered pages fresh, without the render cache (#2032): the report then says so.
+   * The CLI never sets it; a cloud runner that bypassed its render cache does.
+   */
+  freshRender?: boolean;
 }
 
 /**
@@ -782,6 +793,9 @@ export function reconstructReport(
       statusCode: number;
     }> = [];
     const pageStatuses: Array<{ status: number }> = [];
+    // #2032: on a `no-cache` crawl, pages whose response still looked cached.
+    const noCacheCrawl = crawl.config.noCache === true;
+    const staleCachePages: StaleCachePage[] = [];
 
     // #2343: every scalar this walk wants off a parsed page was already computed
     // while the DOM was live, and now lands in `page_features`, so the second
@@ -880,6 +894,10 @@ export function reconstructReport(
           statusCode: page.status,
         });
         pageStatuses.push({ status: page.status });
+        if (noCacheCrawl) {
+          const signal = staleCacheSignal(page.headers);
+          if (signal) staleCachePages.push({ url: page.normalizedUrl, signal });
+        }
         // A variant is not a page of its own in the report (#858): it is counted with its canonical.
         if (isVariant) {
           variantPages += 1;
@@ -1208,6 +1226,11 @@ export function reconstructReport(
     // is something to report.
     const cacheStats =
       buildCacheStats(crawl.stats, resourceSizeRecords) ?? undefined;
+    const cacheFreshness =
+      buildCacheFreshness(
+        { noCache: noCacheCrawl, freshRender: options?.freshRender === true },
+        staleCachePages
+      ) ?? undefined;
 
     // Audit validity (#489): a down/403/0-page crawl must not publish "A/100%".
     // Shared with the cloud/live report builder (generateReportFromStorage) so
@@ -1372,6 +1395,7 @@ export function reconstructReport(
             },
           }
         : {}),
+      ...(cacheFreshness ? { cacheFreshness } : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }
         : {}),

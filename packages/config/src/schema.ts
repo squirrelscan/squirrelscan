@@ -90,6 +90,9 @@ export const CrawlerConfigSchema = z.object({
     )
     .max(50)
     .default([]),
+  // Send `Cache-Control: no-cache` on page fetches so a CDN revalidates after a deploy (#2032).
+  // TOML: `[crawler] no_cache = true`. Off by default.
+  no_cache: z.boolean().default(false),
   follow_redirects: z.boolean().default(true),
   concurrency: z.number().default(DEFAULT_CRAWLER_CONCURRENCY),
   // Single-host bump (#265): per-host caps gate throughput; robots crawl-delay

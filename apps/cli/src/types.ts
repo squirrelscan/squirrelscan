@@ -204,6 +204,7 @@ import type {
   MaxDurationCut as _MDC,
   CrawlPhaseCut as _CPC,
   CacheStats as _CST,
+  CacheFreshness as _CFR,
   CategoryScore as _CS,
   CheckItemSource,
   ComponentOccurrence as _CO,
@@ -240,6 +241,7 @@ export type EditorSummary = _ES;
 export type EntityMap = _EM;
 export type DomainStats = _DST;
 export type CacheStats = _CST;
+export type CacheFreshness = _CFR;
 export type ComponentOccurrence = _CO;
 export type SiteResourceOccurrence = _SRO;
 
@@ -659,6 +661,8 @@ export interface AuditReport {
    * incremental re-audits with cache reuse; absent on a cold run.
    */
   cacheStats?: CacheStats;
+  /** Fresh-fetch note (#2032). REPORT-ONLY. */
+  cacheFreshness?: CacheFreshness;
   /**
    * Per-phase wall-clock breakdown in ms (#857) — DEBUG/DIAGNOSTIC ONLY, never
    * rendered in the report and never scoring. Keys are a fixed, low-cardinality
@@ -884,6 +888,8 @@ export interface AuditOptions {
   headers?: Record<string, string>;
   /** `--header-host`: extra hosts that get the custom headers on asset requests (#732). */
   headerHosts?: string[];
+  /** `--bypass-cache`: send `Cache-Control: no-cache` on page fetches (#2032). */
+  bypassCache?: boolean;
   // --rule-include/--rule-exclude (#1066): resolved patterns from
   // parseRuleFilters, applied over config.rules by mergeOptionsToConfig via
   // resolveRulesConfig. include REPLACES config.rules.enable, exclude APPENDS

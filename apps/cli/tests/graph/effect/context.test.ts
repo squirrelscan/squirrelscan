@@ -43,6 +43,7 @@ const mockConfig: Config = {
     robots_user_agent: "SquirrelScan",
     headers: {},
     header_hosts: [],
+    no_cache: false,
     follow_redirects: true,
     concurrency: 3,
     per_host_concurrency: 2,

@@ -265,7 +265,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --full-report --max-duration --no-ignore" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --bypass-cache --rule-include --rule-exclude --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --full-report --max-duration --no-ignore" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -683,6 +683,7 @@ _squirrel() {
             '--no-classifier[Do not run the page classifier (markup-only link sections)]' \\
             '*--fail-on[Exit 2 when a threshold trips (e.g. score<90, severity>=error)]:expr' \\
             '*'{-H,--header}'[Custom HTTP header on every crawl request, format "Name: Value" (repeatable)]:header' \\
+            '--bypass-cache[Send Cache-Control: no-cache on page fetches]' \\
             '*--header-host[Host that also gets the custom headers on page and asset requests (repeatable)]:host' \\
             '*--target-url[Audit exactly this URL and nothing else (repeatable)]:url' \\
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
@@ -1014,6 +1015,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-internal-links
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-classifier -d "Do not run the page classifier (markup-only link sections)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l fail-on -d "Exit 2 when a threshold trips (e.g. score<90, severity>=error)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "Custom HTTP header on every crawl request, format \\"Name: Value\\" (repeatable)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l bypass-cache -d "Send Cache-Control: no-cache on page fetches"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l header-host -d "Host that also gets the custom headers on page and asset requests (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l target-url -r -d "Audit exactly this URL and nothing else (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"

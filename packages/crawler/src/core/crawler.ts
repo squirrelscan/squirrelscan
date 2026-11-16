@@ -293,6 +293,12 @@ function preferRootFailure(
 // WP Engine/Yoast sites commonly ship "Crawl-delay: 10", which stretched a
 // 25-page quick audit past 4 minutes of pure sleep.
 const MAX_ROBOTS_CRAWL_DELAY_MS = 2000;
+/** Request headers a no-cache crawl adds to every page fetch (#2032). */
+export const NO_CACHE_HEADERS: Readonly<Record<string, string>> = {
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+};
+
 // Max crawl-time ParsedPage retentions (#267 cache, #858 cap). Pinned to the
 // quick-coverage page limit so quick audits keep the full fast path; beyond it
 // the audit re-parses (~12.5ms/page) instead of holding every DOM in memory
@@ -1630,7 +1636,11 @@ export function createCrawler(
             followRedirects: config.followRedirects,
             // Custom headers first (audited origin only, #959); conditional
             // (If-None-Match / If-Modified-Since) wins on collision.
-            headers: mergeHeaderRecords(customHeadersFor(entry.normalizedUrl), conditionalHeaders),
+            headers: mergeHeaderRecords(
+              config.noCache ? NO_CACHE_HEADERS : undefined,
+              customHeadersFor(entry.normalizedUrl),
+              conditionalHeaders,
+            ),
             fetcher: config.documentFetcher,
             // Stored normalized-source hash so the render-all gate can reuse the
             // cached render when the origin rolls its validators (#839). Its
@@ -3258,6 +3268,7 @@ export function createCrawler(
             allowQueryParams: config.allowQueryParams,
             dropQueryPrefixes: config.dropQueryPrefixes,
             allowedDomains: config.allowedDomains,
+            ...(config.noCache ? { noCache: true } : {}),
             ...(isTargetedRun() ? { targetUrls: config.targetUrls!.slice(0, MAX_TARGET_URLS) } : {}),
           },
           stats: {

@@ -2,6 +2,7 @@
 
 import type {
   AuditOutcome,
+  CacheFreshness,
   CacheStats,
   AuditStatusReasonCode,
   LockedRuleReason,
@@ -366,6 +367,8 @@ interface SlimJsonReport {
    * a fully reused audit may be a cache artifact rather than a fix. Informational, never scored.
    */
   cacheStats?: CacheStats;
+  /** Fresh-fetch note (#2032): `no-cache` crawl, pages that still looked cached, fresh-render statement. */
+  cacheFreshness?: CacheFreshness;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -785,6 +788,7 @@ function buildSlimReport(
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
     ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
     ...(report.cacheStats && report.cacheStats.hits > 0 ? { cacheStats: report.cacheStats } : {}),
+    ...(report.cacheFreshness ? { cacheFreshness: report.cacheFreshness } : {}),
     ...(locked
       ? {
           lockedRules: {
