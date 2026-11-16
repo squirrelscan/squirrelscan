@@ -379,6 +379,7 @@
                   "rules/a11y/form-labels",
                   "rules/a11y/color-contrast",
                   "rules/a11y/focus-visible",
+                  "rules/a11y/reduced-motion",
                   "rules/a11y/touch-targets",
                   "rules/a11y/landmark-regions",
                   "rules/a11y/heading-order",

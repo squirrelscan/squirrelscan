@@ -297,6 +297,12 @@
    "paste-inputs|info|No text inputs found||"
   ]
  },
+ "a11y/reduced-motion": {
+  "digest": "257640622534600",
+  "lines": [
+   "reduced-motion|pass|No motion that needs reduced-motion handling||"
+  ]
+ },
  "a11y/select-name": {
   "digest": "129516861387362",
   "lines": [

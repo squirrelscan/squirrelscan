@@ -52,6 +52,7 @@ import { listitemRule } from "./listitem";
 import { metaRefreshRule } from "./meta-refresh";
 import { objectAltRule } from "./object-alt";
 import { pasteInputsRule } from "./paste-inputs";
+import { reducedMotionRule } from "./reduced-motion";
 import { selectNameRule } from "./select-name";
 import { skipLinkRule } from "./skip-link";
 import { svgImgAltRule } from "./svg-img-alt";
@@ -80,6 +81,7 @@ export const rules: Rule[] = [
   tableHeadersRule,
   videoCaptionsRule,
   zoomDisabledRule,
+  reducedMotionRule,
 
   // ARIA validation
   ariaValidAttrRule,
@@ -206,6 +208,7 @@ export {
   metaRefreshRule,
   objectAltRule,
   pasteInputsRule,
+  reducedMotionRule,
   selectNameRule,
   skipLinkRule,
   svgImgAltRule,
