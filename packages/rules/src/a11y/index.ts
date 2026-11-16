@@ -52,6 +52,7 @@ import { listitemRule } from "./listitem";
 import { metaRefreshRule } from "./meta-refresh";
 import { objectAltRule } from "./object-alt";
 import { pasteInputsRule } from "./paste-inputs";
+import { renderedLayoutRule } from "./rendered-layout";
 import { selectNameRule } from "./select-name";
 import { skipLinkRule } from "./skip-link";
 import { svgImgAltRule } from "./svg-img-alt";
@@ -80,6 +81,7 @@ export const rules: Rule[] = [
   tableHeadersRule,
   videoCaptionsRule,
   zoomDisabledRule,
+  renderedLayoutRule,
 
   // ARIA validation
   ariaValidAttrRule,
@@ -213,6 +215,7 @@ export {
   tabindexRule,
   tableHeadersRule,
   tdHeadersAttrRule,
+  renderedLayoutRule,
   thHasDataCellsRule,
   touchTargetsRule,
   validLangRule,

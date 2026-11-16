@@ -616,8 +616,44 @@ export interface RenderJobResponse {
   chargedBreakdown?: RenderChargeLine[];
 }
 
+/** One element a layout probe flagged: a selector a coding agent can act on, plus what was measured. */
+export interface RenderLayoutElement {
+  /** CSS selector path for the element, capped by the producer. */
+  selector: string;
+  /** Rendered width of the element in CSS px. */
+  width?: number;
+  /** Pixels of content hidden by clipping (scrollWidth/scrollHeight minus the box), for a clipped element. */
+  clippedPx?: number;
+}
+
+/** One viewport or style condition the browser measured the page under. */
+export interface RenderLayoutProbeResult {
+  /** Width of the document's scrollable area under the condition, in CSS px. */
+  scrollWidth: number;
+  /** Viewport width the condition rendered at, in CSS px. */
+  viewportWidth: number;
+  /** Elements that overflow the viewport horizontally or clip their text, worst first, capped by the producer. */
+  elements: RenderLayoutElement[];
+}
+
+/**
+ * Layout measurements from the render service's browser, taken in the SAME render as the page's HTML so
+ * no second browser pass is paid for (repo#3091). Each key is one WCAG condition and is absent when the
+ * producer did not run it.
+ */
+export interface RenderLayoutProbe {
+  /** 1.4.10 Reflow: rendered at a 320 CSS px wide viewport. */
+  reflow?: RenderLayoutProbeResult;
+  /** 1.4.12 Text Spacing: line-height 1.5, paragraph spacing 2em, letter spacing 0.12em, word spacing 0.16em applied. */
+  textSpacing?: RenderLayoutProbeResult;
+  /** 1.4.4 Resize Text: text size raised to 200%. */
+  textResize?: RenderLayoutProbeResult;
+}
+
 export interface RenderResultItem {
   url: string;
+  /** Layout probe measured in the same browser render. Absent from services that do not send it (repo#3091). */
+  layout?: RenderLayoutProbe;
   status: number | null;
   html?: string;
   /** Response headers from the browser render (lowercase keys). Absent on failure. */
