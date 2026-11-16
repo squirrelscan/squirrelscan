@@ -457,7 +457,10 @@ function hasContent(value: unknown): boolean {
 }
 
 function childPath(parent: string, key: string): string {
-  const safe = key.length > 80 ? `${key.slice(0, 80)}…` : key;
+  // Only plain field names reach the report. A key with a digit, "@", "." or
+  // any other character may be data (an email, user id or session token used
+  // as a map key), so it is masked rather than copied into the finding.
+  const safe = /^[A-Za-z_-]{1,32}$/.test(key) ? key : "*";
   return parent === "" ? safe : `${parent}.${safe}`;
 }
 

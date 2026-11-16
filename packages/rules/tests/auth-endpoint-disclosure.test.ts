@@ -313,4 +313,24 @@ describe("security/auth-endpoint-disclosure: helpers", () => {
     for (let i = 0; i < 50; i++) deep = { n: deep };
     expect(findDisclosures(deep)).toEqual([]);
   });
+
+  test("a map keyed by email, id or token never puts the key in a path", () => {
+    const token = "sess_9f8e7d6c5b4a39281706f5e4d3c2b1a0";
+    const found = findDisclosures({
+      users: {
+        "alice@example.com": { password_digest: BCRYPT },
+        "12345": { password: "plain" },
+      },
+      sessions: { [token]: { encrypted_password: BCRYPT } },
+    });
+    expect(found).toEqual([
+      { path: "users.*.password", kind: "password" },
+      { path: "users.*.password_digest", kind: "password-hash" },
+      { path: "sessions.*.encrypted_password", kind: "password-hash" },
+    ]);
+    const paths = JSON.stringify(found);
+    expect(paths).not.toContain("alice");
+    expect(paths).not.toContain("12345");
+    expect(paths).not.toContain(token);
+  });
 });
