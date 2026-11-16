@@ -22,10 +22,11 @@ Everything except the two opt-in gap rules is included in the audit's base charg
 | [`third-party/*`](/cloud/third-party) | Ten rules on who else loads code on your pages: compromised, proxied and unpinned vendor scripts, session replay and tag managers on sign-in and checkout, vendor counts | none, the scan never charges credits |
 | [`gaps/keywords`](/rules/gaps/keywords) | Keywords competitors rank for that you don't | 25 credits per audit, **opt-in** |
 | [`gaps/content`](/rules/gaps/content) | Topic clusters with search demand you don't cover | 25 credits per audit, **opt-in** |
+| [`gaps/recommendations`](/rules/gaps/recommendations) | Content to create or improve, from your niche and existing pages | 25 credits per audit, **opt-in** |
 
 The three [Blocking](/rules/adblock) rules (IDs keep the `adblock/` prefix) share a single blocklist check per audit, included in the audit base charge. They report as warnings in their own report section.
 
-The two gap-analysis rules are **disabled by default** because of their cost. Enable them explicitly:
+The three gap-analysis rules are **disabled by default** because of their cost. Enable them explicitly:
 
 ```toml squirrel.toml
 [rules]

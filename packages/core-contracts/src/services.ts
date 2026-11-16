@@ -16,6 +16,7 @@ export type CloudServiceId =
   | "site-metadata"
   | "blocklist-check"
   | "content-gaps"
+  | "content-recommendations"
   | "keyword-gaps"
   | "dead-links"
   | "tech-detect"
@@ -254,6 +255,64 @@ export interface ContentGapItem {
 
 export interface ContentGapsResponse {
   gaps: ContentGapItem[];
+  summary: string;
+}
+
+// --- content-recommendations ------------------------------------------------
+// Generative, competitor-independent content suggestions (run-unit feature
+// `content_recommendations`). The CLI sends the site's content inventory (one
+// slim row per crawled page); the server synthesises prioritised suggestions
+// with an LLM. Sibling to content-gaps, which is competitor/search-data driven.
+
+export type ContentRecommendationCategory =
+  | "net-new-topic"
+  | "content-refresh"
+  | "cluster-completion"
+  | "format"
+  | "funnel-coverage";
+
+export type ContentRecommendationPriority = "high" | "medium" | "low";
+
+/** One crawled page of the content inventory. */
+export interface ContentInventoryPage {
+  url: string;
+  title?: string;
+  /** Visible words in the body. */
+  wordCount: number;
+  /** Last-Modified header or page-declared modified date, when known. */
+  lastModified?: string;
+  /** Clicks from the start page in the crawl (deep pages are orphan/buried candidates). */
+  depth?: number;
+}
+
+export interface ContentRecommendationsRequest {
+  auditId?: string;
+  domain: string;
+  country?: string;
+  language?: string;
+  /** Topics the site already covers (from titles/headings). */
+  coveredTopics?: string[];
+  /** Content inventory sample (capped by SERVICE_LIMITS.recommendationsMaxPages). */
+  pages: ContentInventoryPage[];
+}
+
+export interface ContentRecommendationItem {
+  category: ContentRecommendationCategory;
+  /** Short suggestion title (topic, page action, format or funnel stage). */
+  title: string;
+  /** LLM-written rationale. */
+  rationale: string;
+  priority: ContentRecommendationPriority;
+  /** Existing crawled pages this refers to (always set for content-refresh). */
+  pages?: string[];
+  /** The signal that triggered a refresh: thin word count or stale freshness. */
+  signal?: "thin" | "stale";
+  /** Funnel stage for funnel-coverage items. */
+  funnelStage?: "tofu" | "mofu" | "bofu";
+}
+
+export interface ContentRecommendationsResponse {
+  recommendations: ContentRecommendationItem[];
   summary: string;
 }
 

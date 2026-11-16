@@ -22,6 +22,7 @@ import {
   type CloudPagePayload,
   type CloudServiceId,
   type ContentGapsRequest,
+  type ContentRecommendationsRequest,
   type CreditFeature,
   type KeywordGapsRequest,
   type RenderResultItem,
@@ -54,6 +55,7 @@ export const SUPPORTED_SERVICES: ReadonlySet<CloudServiceId> = new Set([
   "blocklist-check",
   "keyword-gaps",
   "content-gaps",
+  "content-recommendations",
   "archive-indexing",
   "render",
 ]);
@@ -70,6 +72,7 @@ export interface CloudSitePayloads {
   "blocklist-check"?: Omit<BlocklistCheckRequest, "auditId">;
   "keyword-gaps"?: Omit<KeywordGapsRequest, "auditId">;
   "content-gaps"?: Omit<ContentGapsRequest, "auditId">;
+  "content-recommendations"?: Omit<ContentRecommendationsRequest, "auditId">;
   "archive-indexing"?: Omit<ArchiveIndexingRequest, "auditId">;
 }
 
@@ -1154,6 +1157,10 @@ async function runPrefetch(
           case "content-gaps": {
             const p = input.sitePayloads?.["content-gaps"];
             return p ? client.contentGaps({ auditId, ...p }) : null;
+          }
+          case "content-recommendations": {
+            const p = input.sitePayloads?.["content-recommendations"];
+            return p ? client.contentRecommendations({ auditId, ...p }) : null;
           }
           case "archive-indexing": {
             const p = input.sitePayloads?.["archive-indexing"];

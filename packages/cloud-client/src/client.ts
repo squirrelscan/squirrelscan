@@ -28,6 +28,8 @@ import type {
   BlocklistCheckResponse,
   ContentGapsRequest,
   ContentGapsResponse,
+  ContentRecommendationsRequest,
+  ContentRecommendationsResponse,
   CreditFeature,
   CreditPrice,
   DeadLinksRequest,
@@ -181,6 +183,10 @@ export interface CloudServicesClient {
   keywordGaps(req: KeywordGapsRequest, opts?: CallOpts): Promise<KeywordGapsResponse>;
   /** Content gap analysis for the site (single run). */
   contentGaps(req: ContentGapsRequest, opts?: CallOpts): Promise<ContentGapsResponse>;
+  contentRecommendations(
+    req: ContentRecommendationsRequest,
+    opts?: CallOpts,
+  ): Promise<ContentRecommendationsResponse>;
   /**
    * Fingerprint the site's technology stack (single run). Idempotent — the
    * server derives the key from the payload, so a transport retry is deduped.
@@ -458,6 +464,8 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
       postJson<KeywordGapsResponse>("/v1/services/keyword-gaps", req, opts),
     contentGaps: (req, opts) =>
       postJson<ContentGapsResponse>("/v1/services/content-gaps", req, opts),
+    contentRecommendations: (req, opts) =>
+      postJson<ContentRecommendationsResponse>("/v1/services/content-recommendations", req, opts),
     detectTechnologies: (req, opts) =>
       postJson<TechDetectResponse>("/v1/services/technologies", req, opts),
     siteMetadata: (req, opts) => postJson<SiteMetadataResponse>("/v1/services/metadata", req, opts),

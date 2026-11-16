@@ -1,0 +1,79 @@
+---
+title: "Content recommendations: what to create or improve next"
+description: "Generative suggestions for new topics, page refreshes, cluster completion, formats and funnel coverage, built from your site and its existing content with no competitor data."
+---
+
+<Note>**Cloud rule, opt-in** - requires login (`squirrel auth login`), costs **25 credits per audit**, and is **disabled by default**. See [Cloud rules](/cloud/rules).</Note>
+
+## What content recommendations are
+
+[Content gaps](/rules/gaps/content) compare you against search demand and competitors. Content recommendations are generative: squirrel sends a slim inventory of the pages it crawled (URL, title, word count, last-modified date and crawl depth) to the cloud service, which writes prioritised suggestions with an LLM. No competitor data is needed.
+
+Each suggestion has a title, a written rationale and a priority of high, medium or low. The suggestions fall into five categories:
+
+- **Net-new topics**: content the site should own given its niche and audience.
+- **Content refresh**: existing pages that are thin or stale. Each one names the page and the signal that triggered it, a low word count or an old modified date.
+- **Cluster completion**: topic clusters the site started but did not finish, and orphan or deeply buried pages that need linking in.
+- **Formats**: FAQ, comparison, how-to, glossary or landing pages where the niche warrants them.
+- **Funnel coverage**: top, middle or bottom of funnel stages with no content.
+
+## What squirrel checks
+
+The rule is site-wide and reads a result the cloud content-recommendations service produced before the rules ran.
+
+- `content-recommendations` is skipped when no result is available, because the rule was not enabled, you are on the free plan, the audit is local-only, or the service skipped. Message: `Content recommendations skipped`, with a readable skip reason.
+- `content-recommendations` passes when the service had no suggestions. Message: `No content recommendations`.
+- One info check per category that has suggestions: `recommendations-net-new-topics`, `recommendations-content-refresh`, `recommendations-cluster-completion`, `recommendations-formats` and `recommendations-funnel-coverage`. Message: `3 net-new topic recommendations`, or `1 content refresh recommendation` for one. Items are listed high priority first.
+
+Severity for the rule is info and the weight is 1. The suggestions appear in the console, `llm`, JSON and HTML reports with the rest of the Gap Analysis section.
+
+## How to fix it
+
+Start with the high-priority items. Refresh suggestions are the cheapest win: the page already exists and is already indexed, so expanding or updating it is faster than writing from scratch. Treat net-new topics as a content plan, and link each new page from the pages in its cluster.
+
+| | |
+|---|---|
+| **Rule ID** | `gaps/recommendations` |
+| **Category** | [Gap Analysis](/rules/gaps) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+| **Default** | Disabled (opt-in) |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `country` | string | `US` | ISO country for search data |
+| `language` | string | `en` | Language code for search data |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."gaps/recommendations"]
+country = "AU"
+language = "en"
+```
+
+## Enable / disable
+
+This rule is opt-in - enable it explicitly:
+
+```toml squirrel.toml
+[rules]
+enable = ["*", "gaps/recommendations"]
+```
+
+## Related rules
+
+- [gaps/content](/rules/gaps/content): competitor and search-demand driven topic clusters.
+- [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm): existing pages that under-cover their topic.
+- [links/orphan-pages](/rules/links/orphan-pages): making sure the new pages are reachable.
+
+## References
+
+- [Creating helpful, reliable content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+
+## Check your site
+
+Run `squirrel audit https://example.com --rule-include gaps/recommendations` while signed in and open the Gap Analysis section of the report. Signed-out local audits need no account and cost nothing.

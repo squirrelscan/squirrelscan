@@ -10,6 +10,7 @@ import type {
   AuditReport,
   CloudPagePayload,
   CloudServiceId,
+  ContentInventoryPage,
   DomainStats,
   EditorSummary,
   SiteMetadata,
@@ -324,7 +325,10 @@ const MIN_SEED_LENGTH = 3;
 const MAX_SEED_LENGTH = 80;
 const TITLE_SEPARATOR_CHARS = new Set(["|", "·", "—", "–"]);
 
-export type GapsPayloads = Pick<CloudSitePayloads, "keyword-gaps" | "content-gaps">;
+export type GapsPayloads = Pick<
+  CloudSitePayloads,
+  "keyword-gaps" | "content-gaps" | "content-recommendations"
+>;
 
 interface GapsRuleOptions {
   country?: string;
@@ -423,12 +427,35 @@ function absorbSeeds(
   }
 }
 
+/** Append content-inventory rows for 2xx pages, capped at `recommendationsMaxPages`.
+ * Mirrors apps/cli/src/audit/cloud-payloads-gaps.ts. */
+export function absorbInventory(
+  inventory: ContentInventoryPage[],
+  siteContext: SiteContextPage[],
+): void {
+  for (const { page, parsed } of siteContext) {
+    if (inventory.length >= SERVICE_LIMITS.recommendationsMaxPages) return;
+    if (!parsed || page.status < 200 || page.status >= 300) continue;
+    const row: ContentInventoryPage = {
+      url: detachFromPage(page.finalUrl || page.url, "cloud-payload"),
+      wordCount: parsed.content.wordCount,
+      depth: page.depth,
+    };
+    const title = parsed.meta.title?.trim();
+    if (title) row.title = detachFromPage(title, "cloud-payload");
+    if (page.lastModified) row.lastModified = detachFromPage(page.lastModified, "cloud-payload");
+    inventory.push(row);
+  }
+}
+
 export function buildGapsPayloads(
   siteContext: SiteContextPage[],
   baseUrl: string,
   config: Config,
 ): GapsPayloads {
-  return buildGapsPayloadsFromSeeds(collectSeeds(siteContext), baseUrl, config);
+  const inventory: ContentInventoryPage[] = [];
+  absorbInventory(inventory, siteContext);
+  return buildGapsPayloadsFromSeeds(collectSeeds(siteContext), baseUrl, config, inventory);
 }
 
 /** {@link buildGapsPayloads} over seeds gathered elsewhere — the streamed
@@ -437,11 +464,13 @@ export function buildGapsPayloadsFromSeeds(
   seeds: string[],
   baseUrl: string,
   config: Config,
+  inventory: ContentInventoryPage[] = [],
 ): GapsPayloads {
   const domain = apexDomain(baseUrl);
   if (!domain || seeds.length === 0) return {};
   const keywordOpts = gapsOptions(config, "gaps/keywords");
   const contentOpts = gapsOptions(config, "gaps/content");
+  const recOpts = gapsOptions(config, "gaps/recommendations");
   return {
     "keyword-gaps": {
       domain,
@@ -456,6 +485,13 @@ export function buildGapsPayloadsFromSeeds(
       language: contentOpts.language,
       competitors: contentOpts.competitors,
       coveredTopics: seeds,
+    },
+    "content-recommendations": {
+      domain,
+      country: recOpts.country,
+      language: recOpts.language,
+      coveredTopics: seeds,
+      pages: inventory,
     },
   };
 }
@@ -487,6 +523,8 @@ export interface CloudPrefetchPayloadSet {
   metadataPages: SiteMetadataPagePayload[];
   blocklist: { urls: string[]; selectors: string[] } | null;
   gapsSeeds: string[];
+  /** Content inventory rows for content-recommendations. */
+  gapsInventory?: ContentInventoryPage[];
   renderedPageUrls: Set<string>;
 }
 
@@ -523,6 +561,7 @@ export function createCloudPrefetchCollector(siteUrl: string): {
   const blocklistUrls = new Set<string>();
   const selectorState = { selectors: new Set<string>(), pagesScanned: 0 };
   const seedState = { seeds: [] as string[], seen: new Set<string>() };
+  const inventory: ContentInventoryPage[] = [];
 
   // Retained metadata sample (see the doc above) — bounded, never page-scaled.
   const metadataPrefix: SiteContextPage[] = [];
@@ -542,6 +581,7 @@ export function createCloudPrefetchCollector(siteUrl: string): {
       absorbBlocklistUrls(blocklistUrls, siteContext);
       absorbBlocklistSelectors(selectorState, siteContext);
       absorbSeeds(seedState, siteContext);
+      absorbInventory(inventory, siteContext);
 
       for (const entry of siteContext) {
         // Same "usable" test buildMetadataPayload applies.
@@ -587,6 +627,7 @@ export function createCloudPrefetchCollector(siteUrl: string): {
         metadataPages,
         blocklist: urls.length === 0 && selectors.length === 0 ? null : { urls, selectors },
         gapsSeeds: seedState.seeds,
+        gapsInventory: inventory,
         renderedPageUrls,
       };
     },
@@ -689,7 +730,12 @@ export async function runContainerCloudPrefetchFromPayloads(
 
   const sitePayloads: CloudSitePayloads = {
     ...(payloads.blocklist ? { "blocklist-check": payloads.blocklist } : {}),
-    ...buildGapsPayloadsFromSeeds(payloads.gapsSeeds, input.siteUrl, input.config),
+    ...buildGapsPayloadsFromSeeds(
+      payloads.gapsSeeds,
+      input.siteUrl,
+      input.config,
+      payloads.gapsInventory,
+    ),
     // Archive Indexing (#789) — payload is just the site URL.
     "archive-indexing": { url: input.siteUrl },
   };

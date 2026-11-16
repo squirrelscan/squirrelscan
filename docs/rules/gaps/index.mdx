@@ -1,12 +1,12 @@
 ---
 title: "Keyword and content gap analysis (cloud)"
 sidebarTitle: "Gap Analysis"
-description: "Cloud rules for keyword and content gaps: the searches competitors rank for and the topics your site does not cover, from live search data."
+description: "Cloud rules for keyword gaps, content gaps and content recommendations: competitor demand, uncovered topics and content to create or improve."
 ---
 
 <Note>**Cloud rules, opt-in** - these rules require login (`squirrel auth login`), cost **25 credits each per audit**, and are **disabled by default** so a routine audit never spends them by surprise. See [Cloud rules](/cloud/rules).</Note>
 
-Gap analysis compares your site against live search demand data: what people search for, what competitors rank for, and which of those topics your site doesn't cover. Both rules read a result the cloud service produced before the rules ran, report at info severity with a weight of 1, and flag anything above 500 monthly searches as high volume. They are research output rather than defects, which is why they barely move a score.
+Gap analysis compares your site against live search demand data: what people search for, what competitors rank for, and which of those topics your site doesn't cover. The keyword and content gap rules read a result the cloud service produced before the rules ran, report at info severity with a weight of 1, and flag anything above 500 monthly searches as high volume. They are research output rather than defects, which is why they barely move a score. [Content recommendations](/rules/gaps/recommendations) is the generative sibling: it needs no competitor data and suggests content from your niche and the pages you already have.
 
 ## Run only these rules
 
@@ -14,7 +14,7 @@ Gap analysis compares your site against live search demand data: what people sea
 squirrel audit https://example.com --rule-include gaps
 ```
 
-Both rules are opt-in cloud rules: they need you signed in and cost 25 credits each per audit. The default `enable = ["*"]` deliberately leaves them out; selecting the `gaps` category or either rule explicitly turns them on.
+All three rules are opt-in cloud rules: they need you signed in and cost 25 credits each per audit. The default `enable = ["*"]` deliberately leaves them out; selecting the `gaps` category or any one rule explicitly turns them on.
 
 {/* hub:start-here:start */}
 
@@ -23,6 +23,7 @@ Both rules are opt-in cloud rules: they need you signed in and cost 25 credits e
 These carry the highest severity and weight in the category.
 
 - [Content gaps: topic clusters your site does not cover](/rules/gaps/content): A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters.
+- [Content recommendations: what to create or improve next](/rules/gaps/recommendations): Generative suggestions for new topics, page refreshes, cluster completion, formats and funnel coverage, built from your site and its existing content with no competitor data.
 - [Keyword gaps: terms competitors rank for and you do not](/rules/gaps/keywords): A keyword gap is demand your competitors capture and you do not. squirrel compares your ranking footprint against theirs using live search data.
 
 {/* hub:start-here:end */}
@@ -34,13 +35,14 @@ These carry the highest severity and weight in the category.
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
 | [Content gaps: topic clusters your site does not cover](/rules/gaps/content) | A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters. | info | Site-wide |
+| [Content recommendations: what to create or improve next](/rules/gaps/recommendations) | Generative suggestions for new topics, page refreshes, cluster completion, formats and funnel coverage, built from your site and its existing content with no competitor data. | info | Site-wide |
 | [Keyword gaps: terms competitors rank for and you do not](/rules/gaps/keywords) | A keyword gap is demand your competitors capture and you do not. squirrel compares your ranking footprint against theirs using live search data. | info | Site-wide |
 
 {/* hub:rules:end */}
 
 ## Enable gap analysis
 
-Both rules are opt-in:
+All three rules are opt-in:
 
 ```toml squirrel.toml
 [rules]
