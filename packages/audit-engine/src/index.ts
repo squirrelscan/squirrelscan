@@ -254,7 +254,7 @@ export type {
 // Re-export checker types + impl for consumers (CLI re-exports checkResourceSizes)
 export { checkResourceSizes, normalizeEncoding, varyForbidsReuse } from "./resource-checker";
 export type { ResourceCheckResult, ResourceCheckerOptions } from "./resource-checker";
-export type { ScriptFetchResult } from "./script-fetcher";
+export type { ScriptContentCache, ScriptFetchResult } from "./script-fetcher";
 export type { ExternalCheckResult, LinkCache, LinkCacheEntry } from "./external-checker";
 
 // SiteQuery factory (#1022) — streaming-engine aggregate view over a crawl.

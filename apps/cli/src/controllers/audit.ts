@@ -20,6 +20,7 @@ import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
 import type { AuditReport, AuditOptions } from "@/types";
 
 import { createCrawler } from "@/crawler/core";
+import { createScriptContentCache } from "@/crawler/storage/script-cache";
 
 export type { CrawlerEvent } from "@/crawler/core/types";
 
@@ -1993,6 +1994,8 @@ export async function runAudit(
           resourceOverrides: {
             resourceCheckMaxItems: options.resourceCheckMaxItems,
             resourceCheckTimeoutMs: options.resourceCheckTimeoutMs,
+            // repo#1415: a re-audit replays unchanged script bodies from the content store.
+            scriptContentCache: createScriptContentCache(),
             // #1271: the asset checks end inside the margin past the budget.
             ...(durationBudget
               ? { resourceCheckBudgetMs: msUntil(durationBudget.checksDoneAt) }
