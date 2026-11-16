@@ -863,6 +863,7 @@
               "cloud/deploy-hooks",
               "cloud/firewall",
               "cloud/team",
+              "cloud/ownership-confirmation",
               "cloud/version",
               "cloud/changelog"
             ]
