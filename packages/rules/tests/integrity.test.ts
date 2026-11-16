@@ -171,6 +171,7 @@ function siteCtx(pages: SiteData["pages"], opts?: {
           orphanPages: [],
           missingPages: [],
           failed: [],
+          readState: "complete",
         }
       : null,
   };
@@ -568,6 +569,17 @@ describe("integrity/orphan-page", () => {
       expect((review?.items ?? []).some((i) => i.id.includes("/calendly"))).toBe(true);
     });
   }
+
+  // #1869: a sitemap whose read state was never recorded is unknown, not complete.
+  test("absent readState never escalates a hidden page", async () => {
+    const pages = fullSitePages();
+    const sitemapLocs = [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`];
+    const ctx = siteCtx(pages, { sitemapLocs });
+    delete ctx.site!.sitemaps!.readState;
+    const checks = await run(orphanPageRule, ctx);
+    expect(checks.find((c) => c.name === "orphan-page" && c.status === "fail")).toBeUndefined();
+    expect(find(checks, "orphan-page-review")?.status).toBe("info");
+  });
 
   test("all pages linked + in sitemap → pass", async () => {
     const home = themed(
