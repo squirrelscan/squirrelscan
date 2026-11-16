@@ -291,7 +291,16 @@ export const custom404Rule: Rule = {
       return { checks };
     }
     if (status >= 300 && status < 400) {
-      const location = answer.headers.get("location") ?? "";
+      const rawLocation = answer.headers.get("location") ?? "";
+      let location = "";
+      if (rawLocation) {
+        try {
+          const u = new URL(rawLocation, url);
+          location = u.origin + u.pathname;
+        } catch {
+          location = "";
+        }
+      }
       checks.push({
         name: REDIRECT,
         status: "warn",
