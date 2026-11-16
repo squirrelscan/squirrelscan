@@ -36,4 +36,23 @@ describe("script fetcher tarpit budget (repo#1415)", () => {
     expect(budget.summary().tarpitHosts).toHaveLength(1);
     expect(budget.summary().skipped).toBeGreaterThan(0);
   });
+
+  test("an oversized script body is rejected by the capped read", async () => {
+    const big = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response("a".repeat(5000), { headers: { "content-type": "application/javascript" } }),
+    });
+    try {
+      const results = await Effect.runPromise(
+        fetchScriptContents([`http://127.0.0.1:${big.port}/big.js`], {
+          concurrency: 1,
+          maxSizeBytes: 100,
+        }),
+      );
+      expect(results[0]?.error).toBeTruthy();
+    } finally {
+      big.stop(true);
+    }
+  });
 });
