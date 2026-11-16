@@ -1296,7 +1296,7 @@ ensure_musl_runtime() {
   else
     echo "  Install libstdc++ (and libgcc) with your package manager, then re-run." >&2
   fi
-  echo "  More: https://docs.squirrelscan.com/quickstart (Alpine / musl Linux note)" >&2
+  echo "  More: https://docs.squirrelscan.com/install (Alpine / musl Linux note)" >&2
   error "Missing libstdc++ (required by the musl build)"
 }
 

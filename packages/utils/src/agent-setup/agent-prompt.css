@@ -1,0 +1,117 @@
+/* "Onboard your agent" button, shared by the docs (tangly) and the website
+   (Tailwind). One pill: the label on the left, the agents' marks on the
+   right. Clicking copies the setup prompt; the prompt itself is not shown.
+
+   Markup on the website:
+     .sq-onboard-action > button.sq-onboard > span (label), .sq-onboard-marks > img
+                        + .sq-onboard-toast (while copied)
+   The docs wrap tangly's <CopyPrompt> in .sq-onboard-action; the rules below
+   restyle its button to the same pill (marks moved to the right, no stacking).
+
+   Tokens resolve the docs theme first, then the website's, then a literal. */
+
+.sq-onboard-action {
+  --sq-ob-border: var(--tangly-color-border, var(--border, #dedfdc));
+  --sq-ob-border-hover: var(--tangly-color-muted, var(--muted-foreground, #acb59e));
+  --sq-ob-bg: var(--tangly-color-bg, var(--card, #fff));
+  --sq-ob-fg: var(--tangly-color-fg, var(--foreground, #191b19));
+  --sq-ob-primary: var(--tangly-color-primary, var(--primary, #16a34a));
+
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.sq-onboard,
+.sq-onboard-action .tangly-copy-prompt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 48px;
+  max-width: 100%;
+  padding: 9px 17px;
+  border: 1.5px solid var(--sq-ob-border);
+  border-radius: 9999px;
+  background: var(--sq-ob-bg);
+  color: var(--sq-ob-fg);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(37 48 35 / 0.05);
+  transition:
+    border-color 150ms,
+    background 150ms;
+}
+.sq-onboard:hover,
+.sq-onboard-action .tangly-copy-prompt:hover {
+  border-color: var(--sq-ob-border-hover);
+}
+.sq-onboard:focus-visible,
+.sq-onboard-action .tangly-copy-prompt:focus-visible {
+  outline: 2px solid var(--sq-ob-primary);
+  outline-offset: 2px;
+}
+
+/* Marks: a flat row on the right, not a stacked avatar group. */
+.sq-onboard-marks,
+.sq-onboard-action .tangly-copy-prompt-icons {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  order: 2;
+}
+.sq-onboard-marks img,
+.sq-onboard-action .tangly-copy-prompt-icons img,
+.sq-onboard-action .tangly-copy-prompt-icons img:last-child,
+.prose-tang .sq-onboard-action img {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  object-fit: contain;
+  background: none;
+  box-shadow: none;
+}
+
+.sq-onboard-done,
+.sq-onboard-action .tangly-copy-prompt-done {
+  color: var(--sq-ob-primary);
+}
+
+.sq-onboard-toast {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 10px 16px;
+  border: 1px solid var(--sq-ob-border);
+  border-radius: 12px;
+  background: var(--sq-ob-bg);
+  color: var(--sq-ob-fg);
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgb(37 48 35 / 0.08);
+}
+
+@media (max-width: 480px) {
+  .sq-onboard,
+  .sq-onboard-action .tangly-copy-prompt {
+    gap: 12px;
+    min-height: 46px;
+    padding: 9px 15px;
+    font-size: 15px;
+  }
+  .sq-onboard-marks img,
+  .sq-onboard-action .tangly-copy-prompt-icons img {
+    width: 20px;
+    height: 20px;
+  }
+}

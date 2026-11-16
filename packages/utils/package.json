@@ -41,7 +41,9 @@
     "./tls-certificate": "./src/tls-certificate.ts",
     "./agent-skills": "./src/agent-skills/index.ts",
     "./geoip": "./src/geoip/index.ts",
-    "./geoip/edge": "./src/geoip/edge.ts"
+    "./geoip/edge": "./src/geoip/edge.ts",
+    "./agent-setup": "./src/agent-setup/index.ts",
+    "./agent-setup/agent-prompt.css": "./src/agent-setup/agent-prompt.css"
   },
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*",
