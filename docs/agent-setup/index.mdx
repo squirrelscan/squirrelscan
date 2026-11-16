@@ -5,36 +5,33 @@ description: "One line, pasted into any coding agent. It installs the CLI, wires
 icon: "bot"
 ---
 
+import "../../packages/utils/src/agent-setup/agent-prompt.css";
+
 {/* Default page mode, so the shell keeps the sidebar, breadcrumb and TOC and
     renders the frontmatter title as the h1. This wrapper only scopes the
     design-system tokens the sections below use. */}
 <div class="agent-setup-page">
 
 <div class="agent-hero">
-  <div class="agent-prompt">
-    <div class="agent-prompt-bar">
-      <span class="agent-prompt-dot" /><span class="agent-prompt-dot" /><span class="agent-prompt-dot" />
-      <span class="agent-prompt-title">the whole setup</span>
-    </div>
-    <div class="agent-prompt-body">
-      <span class="agent-prompt-caret">&gt;</span>
-      <code>Fetch and follow the setup instructions for squirrelscan at https://docs.squirrelscan.com/agent-setup/prompt.md</code>
-    </div>
-    <div class="agent-prompt-foot">
-      <CopyPrompt
-        href="/agent-setup/prompt.md"
-        subject="squirrelscan"
-        icons={[
-          "/logo/agents/claude-code.png",
-          "/logo/agents/codex.png",
-          "/logo/agents/cursor.png",
-          "/logo/agents/opencode.png",
-        ]}
-        title="Sets your agent up for squirrelscan"
-      />
-      <span class="agent-prompt-note">Works in all six below. And most of the ones that are not.</span>
-    </div>
+  <div class="sq-onboard-action">
+    <CopyPrompt
+      href="/agent-setup/prompt.md"
+      subject="squirrelscan"
+      label="Onboard your agent to squirrelscan"
+      icons={[
+        "/logo/agents/claude-code.png",
+        "/logo/agents/codex.png",
+        "/logo/agents/cursor.png",
+        "/logo/agents/opencode.png",
+      ]}
+      title="Copies a one-line prompt that sets your agent up for squirrelscan"
+    />
   </div>
+  <p class="agent-hero-note">
+    Copies one line for your agent: fetch and follow
+    [the setup instructions](/agent-setup/prompt). It installs the CLI, adds the
+    skill and MCP, and runs a first audit.
+  </p>
 </div>
 
 ## Rather do it by hand
@@ -133,74 +130,14 @@ published reports) need an account: run `squirrel auth login`. Free accounts get
 .agent-hero {
   margin-bottom: 2.5rem;
 }
+.prose-tang .agent-hero-note {
+  margin-top: 0.9rem;
+  font-size: 0.8125rem;
+  color: var(--tangly-color-muted);
+}
 
-/* Terminal block. Showing the prompt beats hiding it behind a button: you can
-   read exactly what is going on your clipboard before you paste it into
-   something that will act on it. */
-.agent-prompt {
-  border: 1px solid var(--tangly-color-border);
-  border-radius: 0.375rem;
-  overflow: hidden;
-}
-.agent-prompt-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.55rem 0.75rem;
-  background: var(--tangly-color-bg-elevated);
-  border-bottom: 1px solid var(--tangly-color-border);
-}
-.agent-prompt-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 9999px;
-  background: var(--tangly-color-border);
-}
-.agent-prompt-title {
-  margin-left: 0.4rem;
-  font-family: var(--tangly-font-mono);
-  font-size: 0.6875rem;
-  color: var(--tangly-color-muted);
-}
-.agent-prompt-body {
-  display: flex;
-  gap: 0.6rem;
-  padding: 1rem 1rem 1.1rem;
-  background: var(--sq-term-bg);
-}
-.agent-prompt-caret {
-  color: var(--sq-term-text);
-  font-family: var(--tangly-font-mono);
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  user-select: none;
-}
-/* Scoped under .prose-tang deliberately: the theme styles inline code as a
-   light chip (background + hairline border), which is invisible on the
-   terminal's dark surface. Matching its specificity is the only way to undo
-   it without !important. */
-.prose-tang .agent-prompt-body code {
-  font-family: var(--tangly-font-mono);
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  color: #e8e8e8;
-  word-break: break-word;
-  background: none;
-  border: 0;
-  padding: 0;
-}
-.agent-prompt-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-top: 1px solid var(--tangly-color-border);
-}
-.agent-prompt-note {
-  font-size: 0.75rem;
-  color: var(--tangly-color-muted);
-}
+/* The onboard button is shared with the website:
+   packages/utils/src/agent-setup/agent-prompt.css. */
 
 /* Agent grid. Hairline gaps come from the grid background showing through, so
    each cell needs an opaque surface of its own. */

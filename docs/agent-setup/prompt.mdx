@@ -1,7 +1,7 @@
 ---
 title: "Agent setup prompt"
 sidebarTitle: "Setup prompt"
-description: "The instructions a coding agent fetches and follows to install squirrelscan, connect MCP, and run a first audit."
+description: "The instructions a coding agent fetches and follows to install squirrelscan, add its skill and MCP, and run a first audit."
 mode: "center"
 ---
 
@@ -12,11 +12,30 @@ are an agent, the rest of this page is your task.
 ## Task
 
 Set up squirrelscan for this project so you can audit the website and fix what
-you find. Work through the steps in order. The install is not done until the
-first audit has run: do not stop at "installed". Report what you did at the end,
-including the first audit's score and top issues.
+you find. Work through the steps in order. The setup is not done until the
+first audit has run: do not stop at "installed". Finish with the report in
+step 6.
 
-## 1. Install the CLI
+## Ground rules
+
+- Use only the commands on this page to install or update squirrelscan. Do not
+  invent another installer, package name or download URL.
+- Never ask for, paste or store an API key or token. Signing in is the person's
+  step: tell them to run `squirrel auth login` themselves.
+- Audit sites the person owns or is allowed to test. Probing security checks
+  (`--probe active` or `aggressive`) send requests a site's firewall may treat as
+  an attack: only use them on the person's own site, and only if they ask.
+
+## 1. Check for an existing install
+
+```bash
+squirrel self version
+```
+
+If it prints a version, run `squirrel self update` and go to step 3. If the
+command is not found, install it in step 2.
+
+## 2. Install the CLI
 
 squirrelscan ships as a single binary with no runtime dependency.
 
@@ -43,7 +62,28 @@ expects it there.
 On Alpine or another musl Linux, the binary needs `libstdc++`. The installer
 adds it when run as root; otherwise `apk add libstdc++` first.
 
-## 2. Run the first audit
+## 3. Add the squirrelscan skill
+
+The skill teaches you the audit and fix loop: which flags to use, how to read a
+report and how to work through issues. Install it for the agent you are:
+
+```bash
+squirrel skills install
+```
+
+It detects installed agents and installs for each one. Pass `--agent <name>` to
+pick one, or `--project` to install into this repository instead of your user
+folder. In Claude Code you can install the plugin instead, which brings the
+skill and MCP together:
+
+```text
+/plugin marketplace add squirrelscan/skills
+/plugin install squirrelscan@squirrelscan
+```
+
+Check the result with `squirrel skills status`.
+
+## 4. Run the first audit
 
 Signed out, local audits need no account and cost no credits. Run one now against
 the project's site so there is something concrete to work from:
@@ -54,19 +94,26 @@ squirrel audit <url> --format json
 
 Use the site's production URL if you can find one in the project (check
 `package.json`, a sitemap, `README`, or the deploy config). Otherwise ask the
-user which URL to audit, or point it at the local dev server.
+person which URL to audit, or point it at the local dev server.
 
 `--format json` gives you structured output. Each issue carries a rule id, a
 severity, the affected URL, and a description of the fix.
 
-Show the user the result now: the score and the top issues. Do this before
-connecting MCP. If a later step fails, the user still has seen what squirrelscan
+Show the person the result now: the score and the top issues. Do this before
+connecting MCP. If a later step fails, they have still seen what squirrelscan
 found.
 
-## 3. Connect over MCP
+If most pages come back blocked, challenged or rate limited, the site's firewall
+is stopping the crawler. Do not retry harder and do not suggest turning the
+firewall off. Point the person to [Firewall and WAF exceptions](https://docs.squirrelscan.com/cloud/firewall)
+and [Web Bot Auth](https://docs.squirrelscan.com/guides/web-bot-auth), which
+let the audit through without weakening the site.
+
+## 5. Connect over MCP
 
 MCP gives you the audit tools directly, so you can run audits and read issues
-without shelling out. Pick the line matching the agent you are:
+without shelling out. Skip this if you installed the Claude Code plugin in step
+3. Otherwise pick the line matching the agent you are:
 
 - **Claude Code**: `claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp`
 - **Codex**: `codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp`
@@ -76,13 +123,20 @@ without shelling out. Pick the line matching the agent you are:
 
 The server works unauthenticated for anonymous audits. Cloud features
 (AI page analysis, browser rendering, the shared issue tracker, published
-reports) need an account: tell the user to run `squirrel auth login`.
+reports) need an account: tell the person to run `squirrel auth login`.
 
 Full per-client instructions: https://docs.squirrelscan.com/developers/mcp-clients
 
-## 4. Fix what you found
+## 6. Report, then fix what you found
 
-Work the issues in severity order, highest first. For each one:
+Report this to the person, one line each:
+
+- squirrelscan version (`squirrel self version`)
+- skill installed, and for which agents (`squirrel skills status`)
+- MCP connected, or why not
+- first audit: the URL, the score and the top three issues
+
+Then work the issues in severity order, highest first. For each one:
 
 1. Read the rule's explanation. Every issue references a rule id, documented at
    `https://docs.squirrelscan.com/rules/<category>/<rule-id>`.
@@ -96,9 +150,10 @@ positive for this project, say so and explain why rather than silencing it.
 
 ## Notes
 
-- Audits run without an account never cost credits. Signed-in audits cost 50
-  credits plus 2 per audited page, plus 1 per external link the cloud verifies
-  for the audit (at most 1 per page), and free accounts get 500 credits a month.
+- Audits run without an account never cost credits. Signed-in cloud audits use
+  credits: see [Credits](https://docs.squirrelscan.com/cloud/credits) for the
+  current prices. Free accounts get monthly credits.
 - `squirrel audit --help` lists the audit levels, output formats, and crawl limits.
-- If the site blocks the crawler, check `robots.txt` first: squirrelscan
-  respects it, and a blocked root produces an audit with no pages.
+- squirrelscan does not follow `robots.txt` by default, so a site that blocks
+  crawlers there is still audited. Set `respect_robots = true` under
+  `[crawler]` in `squirrel.toml` to honour it.

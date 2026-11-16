@@ -65,7 +65,7 @@ Check for and apply updates to the CLI.
 
 ### Automatic updates
 
-You usually don't need this command. With `auto_update` enabled (the default), squirrel updates itself: any CLI run checks for a new release in the background, and when one is found a detached background process downloads it, verifies its SHA-256 checksum (and its GitHub build attestation when `gh` is installed and logged in, see [Verifying a release](/quickstart#verifying-a-release)), and switches over silently. A background update skips the attestation check without a message when `gh` is not installed, not logged in or otherwise unusable, so only the checksum applies. Your next run prints a one-line notice:
+You usually don't need this command. With `auto_update` enabled (the default), squirrel updates itself: any CLI run checks for a new release in the background, and when one is found a detached background process downloads it, verifies its SHA-256 checksum (and its GitHub build attestation when `gh` is installed and logged in, see [Verifying a release](/install#verifying-a-release)), and switches over silently. A background update skips the attestation check without a message when `gh` is not installed, not logged in or otherwise unusable, so only the checksum applies. Your next run prints a one-line notice:
 
 ```text
 ✓ squirrel auto-updated v0.0.42 → v0.0.43
@@ -81,7 +81,7 @@ squirrel self settings set auto_update false
 
 With auto-update off you still get an update notification box (unless `notifications` is also off), and `squirrel self update` applies updates manually.
 
-Automatic updates only run for managed installs (installed via the install script, npm, Homebrew, or `self install`). A Homebrew install is a managed install after its first run: update it with `squirrel self update`, not `brew upgrade`. See [Homebrew](/quickstart#homebrew). If you copied the binary somewhere yourself, squirrel tells you how to update instead of touching your setup.
+Automatic updates only run for managed installs (installed via the install script, npm, Homebrew, or `self install`). A Homebrew install is a managed install after its first run: update it with `squirrel self update`, not `brew upgrade`. See [Homebrew](/install#homebrew). If you copied the binary somewhere yourself, squirrel tells you how to update instead of touching your setup.
 
 #### Check frequency
 
@@ -707,7 +707,7 @@ Besides audit and update events, the CLI reports the first run so we can see whe
 | `login_completed` | `squirrel auth login` succeeds | none |
 | `first_audit_ok`, `first_audit_failed` | Your first audit on this install ends, once | A failure class such as `dns` or `timeout` |
 
-The install registration (sent once) also reports where the install came from: a short `source` label such as `binary` or `npm`. Installers set it with `SQUIRREL_INSTALL_SOURCE` (lowercase letters, digits and hyphens, up to 32 characters; anything else is ignored). On macOS it also reports two booleans, `cpu_translated` (running under Rosetta) and `hw_arm64` (Apple Silicon hardware), read with `sysctl`. The installers also set `SQUIRREL_PATH_SETUP`, which the registration reports as `path_setup`: `on_path`, `added`, `opted_out`, `ci` or `failed` (what the installer did about your PATH; see the [quickstart](/quickstart#how-the-installer-sets-up-your-path)).
+The install registration (sent once) also reports where the install came from: a short `source` label such as `binary` or `npm`. Installers set it with `SQUIRREL_INSTALL_SOURCE` (lowercase letters, digits and hyphens, up to 32 characters; anything else is ignored). On macOS it also reports two booleans, `cpu_translated` (running under Rosetta) and `hw_arm64` (Apple Silicon hardware), read with `sysctl`. The installers also set `SQUIRREL_PATH_SETUP`, which the registration reports as `path_setup`: `on_path`, `added`, `opted_out`, `ci` or `failed` (what the installer did about your PATH; see [Install](/install#how-the-installer-sets-up-your-path)).
 
 The CLI shows this disclosure once before its first telemetry-enabled command, and once more on installs that saw an earlier wording, because the user ID after login is new. Disable telemetry in user settings with:
 
