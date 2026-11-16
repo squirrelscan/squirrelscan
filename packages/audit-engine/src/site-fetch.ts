@@ -284,31 +284,6 @@ export function parsePageRecord(page: PageRecord, options?: ParsePageOptions): P
 }
 
 /**
- * Get parsed pages from storage for rule execution
- */
-export function getParsedPages(
-  storage: CrawlStorage,
-  crawlId: string,
-): Effect.Effect<Array<{ url: string; parsed: ParsedPage }>, never, never> {
-  return Effect.gen(function* () {
-    const pages = yield* storage.getPages(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
-
-    const result: Array<{ url: string; parsed: ParsedPage }> = [];
-
-    for (const page of pages) {
-      if (!hasAuditableHtmlBody(page) || !isHtmlContentType(page.contentType)) continue;
-
-      const parsed = parsePageRecord(page);
-      if (parsed) {
-        result.push({ url: page.url, parsed });
-      }
-    }
-
-    return result;
-  });
-}
-
-/**
  * Flatten a stored page's typed `headers`/`securityHeaders` into the loose
  * `Record<string, string>` rules read via `ctx.page.headers`. Exported (not
  * just a `runRulesOnStorage` closure helper) so it's directly unit-testable —

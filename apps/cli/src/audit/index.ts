@@ -18,7 +18,6 @@ export {
   runRulesOnStorage,
   generateReportFromStorage,
   parsePageRecord,
-  getParsedPages,
   type RuleExecutionResult,
   type ProgressCallback,
 } from "./adapter";

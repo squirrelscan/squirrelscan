@@ -1,5 +1,6 @@
 // Analyze controller - runs rules on existing crawl data
 
+import type { PageResultSink } from "@squirrelscan/audit-engine";
 import type { EntityMap } from "@squirrelscan/core-contracts";
 
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
@@ -15,11 +16,7 @@ import type {
 } from "@/crawler/storage/types";
 import type { CheckResult } from "@/types";
 
-import {
-  runRulesOnStorage,
-  buildSiteContext,
-  fetchResourceAssets,
-} from "@/audit/adapter";
+import { runStreamingPreRules, runStreamingRules } from "@/audit/adapter";
 import { startLeaseForStorage } from "@/audit/crawl-lease";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import {
@@ -306,43 +303,38 @@ export async function runAnalyze(
       );
     }
 
-    logger.debug("building site context", crawlId);
-    const pages = await Effect.runPromise(
-      storage.getPages(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])))
-    );
-    const siteContext = await Effect.runPromise(buildSiteContext(pages));
-
     onProgress({ phase: "rules" });
 
-    // Entity map (#2091) built BEFORE the rules, because the thirteen
-    // `schema/entity-*` rules read it (#2093). `siteContext` is already
-    // resident here, so this costs one fold over pages that are in memory
-    // regardless. A failure degrades to undefined and those rules skip; it
-    // never fails an analyze.
-    let entityMap: EntityMap | undefined;
-    try {
-      const collector = createEntityMapCollector();
-      collector.absorb(siteContext);
-      entityMap = collector.build(entityMapSite(crawl));
-    } catch (error) {
-      logger.warn(
-        `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-
-    const { ruleResults } = await Effect.runPromise(
-      analyzeStoredCrawl(storage, crawl, siteContext, config, entityMap)
+    // Streamed (#1021): the pages are walked in batches, never held as one
+    // array, and each batch's checks go to `rule_results` as they are produced.
+    // The entity map (#2091) is built during the walk because the thirteen
+    // `schema/entity-*` rules read it (#2093); a failure degrades to undefined
+    // and those rules skip, it never fails an analyze.
+    const sqlite = storage as SQLiteStorage;
+    const tally = createCheckTally();
+    const writer = createReplacingRuleResultsWriter(sqlite, crawlId);
+    const { ruleResults, entityMap, pageStatuses } = await Effect.runPromise(
+      analyzeStoredCrawl(sqlite, crawl, config, {
+        pageSink: {
+          writePage(pageUrl, entries) {
+            for (const [, checks] of entries) tally.add(checks);
+            return writer.writePage(pageUrl, entries);
+          },
+          flush: () => writer.flush(),
+        },
+      })
     );
+    for (const checks of ruleResults.siteRuleResults.values()) {
+      tally.add(checks);
+    }
+    await writer.writeSite(ruleResults.siteRuleResults);
 
-    await saveAnalyzeRuleResults(storage, crawlId, ruleResults);
-
-    // The map built above is written to the project store, exactly as
+    // The map built during the walk is written to the project store, exactly as
     // `squirrel audit` does, so re-analyzing a crawl refreshes its entity rows
-    // instead of leaving the last audit's behind. Built once and reused rather
-    // than folded a second time here.
+    // instead of leaving the last audit's behind.
     if (entityMap && "saveEntityMap" in storage) {
       await storeEntityMap({
-        storage: storage as import("@/crawler/storage/sqlite").SQLiteStorage,
+        storage: sqlite,
         crawlId,
         map: entityMap,
       });
@@ -357,41 +349,29 @@ export async function runAnalyze(
       storage,
       crawl,
       crawlId,
-      pages,
+      pages: pageStatuses,
       project,
       byId: Boolean(options.crawlId),
       config,
       onRetention: options.onRetention,
     });
 
-    // Calculate stats
-    const allChecks = [
-      ...Array.from(ruleResults.pageResults.values()).flat(),
-      ...ruleResults.siteResults,
-    ];
-    const scorableChecks = allChecks.filter(
-      (c) => c.status !== "skipped" && c.status !== "info"
-    );
-    const passed = scorableChecks.filter((c) => c.status === "pass").length;
-    const warnings = scorableChecks.filter((c) => c.status === "warn").length;
-    const failed = scorableChecks.filter((c) => c.status === "fail").length;
+    const { checksTotal, passed, warnings, failed } = tally.totals();
+    const rulesRun = ruleResults.tallies.size;
 
-    logger.debug(
-      "analysis complete",
-      `rules=${ruleResults.ruleResultsMap.size}`
-    );
+    logger.debug("analysis complete", `rules=${rulesRun}`);
 
     onProgress({
       phase: "complete",
-      current: ruleResults.ruleResultsMap.size,
-      total: ruleResults.ruleResultsMap.size,
+      current: rulesRun,
+      total: rulesRun,
     });
 
     return ok({
       crawlId,
       baseUrl,
-      rulesRun: ruleResults.ruleResultsMap.size,
-      checksTotal: allChecks.length,
+      rulesRun,
+      checksTotal,
       passed,
       warnings,
       failed,
@@ -479,99 +459,159 @@ async function retainAfterAnalyze(args: {
   }
 }
 
+type RuleRows = { ruleId: string; checks: CheckResult[] }[];
+
 /**
- * Store an analyze run's rule results in place of the crawl's previous ones
- * (#844). `squirrel analyze` re-runs the rules over a stored crawl, so a plain
- * insert appended a second copy of every check and the report then merged the
- * two, showing the old items. On SQLite the delete and the inserts are one
- * transaction, so a failed write keeps the previous results.
+ * Writes an analyze run's rule results in place of the crawl's previous ones
+ * (#844), as the streaming pipeline produces them (#1021). `squirrel analyze`
+ * re-runs the rules over a stored crawl, so a plain insert would append a second
+ * copy of every check and the report would merge the two.
+ *
+ * The first write deletes the crawl's old results in the same SQLite
+ * transaction as its inserts, so a first batch that fails to write keeps the
+ * previous results. Later batches append. A run killed after the first batch
+ * leaves a partial set, the same as `squirrel audit`'s spilled results; the
+ * crawl is then left at its earlier status and the next analyze replaces it.
+ * Nothing holds more than one batch of checks.
  */
-export async function saveAnalyzeRuleResults(
-  storage: CrawlStorage,
-  crawlId: string,
-  ruleResults: {
-    pageRuleResults: Map<string, Map<string, CheckResult[]>>;
-    siteRuleResults: Map<string, CheckResult[]>;
-  }
-): Promise<void> {
-  // Use pageRuleResults which has proper rule IDs (e.g., "core/meta-title")
-  const batchResults = new Map<
-    string,
-    { ruleId: string; checks: CheckResult[] }[]
-  >();
-  for (const [url, ruleChecksMap] of ruleResults.pageRuleResults) {
-    const pageResultsList: { ruleId: string; checks: CheckResult[] }[] = [];
-    for (const [ruleId, checks] of ruleChecksMap) {
-      pageResultsList.push({ ruleId, checks });
-    }
-    batchResults.set(url, pageResultsList);
-  }
+export function createReplacingRuleResultsWriter(
+  storage: SQLiteStorage,
+  crawlId: string
+) {
+  let pending = new Map<string, RuleRows>();
+  let replaced = false;
 
-  // Add site-scope rule results (empty page_url convention)
-  const siteResultsList: { ruleId: string; checks: CheckResult[] }[] = [];
-  for (const [ruleId, checks] of ruleResults.siteRuleResults) {
-    siteResultsList.push({ ruleId, checks });
-  }
-  if (siteResultsList.length > 0) {
-    batchResults.set("", siteResultsList);
-  }
+  const write = async (rows: Map<string, RuleRows>) => {
+    if (rows.size === 0 && replaced) return;
+    await Effect.runPromise(
+      storage.saveRuleResultsBatch(crawlId, rows, { replace: !replaced })
+    );
+    replaced = true;
+  };
 
-  if ("saveRuleResultsBatch" in storage) {
-    await Effect.runPromise(
-      (storage as SQLiteStorage).saveRuleResultsBatch(crawlId, batchResults, {
-        replace: true,
-      })
-    );
-    return;
-  }
-  // Fallback for a storage without the batch writer: clear, then save each.
-  if ("clearRuleResults" in storage) {
-    await Effect.runPromise(
-      (storage as SQLiteStorage).clearRuleResults(crawlId)
-    );
-  }
-  for (const [url, results] of batchResults) {
-    for (const { ruleId, checks } of results) {
-      await Effect.runPromise(
-        storage.saveRuleResults(crawlId, url, ruleId, checks)
+  return {
+    writePage(
+      pageUrl: string,
+      entries: ReadonlyArray<readonly [string, ReadonlyArray<unknown>]>
+    ) {
+      pending.set(
+        pageUrl,
+        entries.map(([ruleId, checks]) => ({
+          ruleId,
+          checks: checks as CheckResult[],
+        }))
       );
-    }
-  }
+    },
+    async flush() {
+      if (pending.size === 0) return;
+      // Swap rather than clear: the write is async and the next batch's pages
+      // must not land in a transaction already in flight.
+      const rows = pending;
+      pending = new Map();
+      await write(rows);
+    },
+    /** Site-scope results under the empty page_url convention; always the last write. */
+    async writeSite(siteResults: ReadonlyMap<string, CheckResult[]>) {
+      await this.flush();
+      const rows = new Map<string, RuleRows>();
+      if (siteResults.size > 0) {
+        rows.set(
+          "",
+          Array.from(siteResults, ([ruleId, checks]) => ({ ruleId, checks }))
+        );
+      }
+      await write(rows);
+    },
+  };
+}
+
+/** Counts checks the way the analyze summary reports them, without keeping any. */
+export function createCheckTally() {
+  let checksTotal = 0;
+  let passed = 0;
+  let warnings = 0;
+  let failed = 0;
+  return {
+    add(checks: ReadonlyArray<unknown>) {
+      for (const check of checks as CheckResult[]) {
+        checksTotal++;
+        if (check.status === "pass") passed++;
+        else if (check.status === "warn") warnings++;
+        else if (check.status === "fail") failed++;
+      }
+    },
+    totals: () => ({ checksTotal, passed, warnings, failed }),
+  };
 }
 
 /**
  * The asset phase, then the rules, over a stored crawl, both with the
  * crawl's own config ({@link configForCrawl}): the same asset phase
- * `squirrel audit` runs (#768, #799).
+ * `squirrel audit` runs (#768, #799), through the same streaming pipeline
+ * (#1021): one page batch is resident at a time, never the whole crawl.
+ *
+ * With a `pageSink` the page-scope checks go to it as they are produced and
+ * the result carries site rules only; without one they are retained in the
+ * result maps (tests and small callers).
  */
 export function analyzeStoredCrawl(
-  storage: CrawlStorage,
+  storage: SQLiteStorage,
   crawl: CrawlMetadata,
-  siteContext: Parameters<typeof fetchResourceAssets>[2],
   config: Config,
-  entityMap?: EntityMap
+  opts?: { pageSink?: PageResultSink; batchSize?: number }
 ) {
   const crawlConfig = configForCrawl(config, crawl);
   return Effect.gen(function* () {
     logger.debug("fetching resource assets", crawl.id);
-    const assets = yield* fetchResourceAssets(
+    // Entity map (#2091): folded during the walk, built before the rules.
+    const collector = createEntityMapCollector();
+    let entityMapFailed = false;
+    // normalizedUrl-free: status only, for the run status the retention pass derives.
+    const pageStatuses: Array<{ status: number }> = [];
+    const preRules = yield* runStreamingPreRules(
       storage,
       crawl.id,
-      siteContext,
       crawlConfig,
-      // squirrelscan/repo#3430: the site's own hosts are vetted and pinned.
-      { pinOwnHosts: pinOwnHosts() }
+      {
+        ...(opts?.batchSize ? { batchSize: opts.batchSize } : {}),
+        resourceOverrides: {
+          // squirrelscan/repo#3430: the site's own hosts are vetted and pinned.
+          pinOwnHosts: pinOwnHosts(),
+        },
+        onBatchContext: (batchContext) => {
+          for (const { page } of batchContext) {
+            pageStatuses.push({ status: page.status });
+          }
+          if (entityMapFailed) return;
+          try {
+            collector.absorb(batchContext);
+          } catch (error) {
+            entityMapFailed = true;
+            logger.warn(
+              `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+        },
+      }
     );
+    let entityMap: EntityMap | undefined;
+    if (!entityMapFailed) {
+      try {
+        entityMap = collector.build(entityMapSite(crawl));
+      } catch (error) {
+        logger.warn(
+          `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
     // Offline over stored data: no request tool, so a live-probe rule reports not-checked (#1269).
     clearRequestAsync();
     logger.debug("running rules on crawl", crawl.id);
-    // Run rules on site context (no additional parsing)
-    const ruleResults = yield* runRulesOnStorage(
+    const ruleResults = yield* runStreamingRules(
       storage,
       crawl.id,
-      siteContext,
       crawlConfig,
-      assets,
+      preRules.assets,
       {
         ...(entityMap ? { entityMap } : {}),
         // #712: security/tls-certificate's handshake, vetted and pinned. It
@@ -582,9 +622,17 @@ export function analyzeStoredCrawl(
           proxyResolvesNames:
             crawlConfig.crawler?.tls_proxy_resolves_names === true,
         }),
+      },
+      {
+        ...(opts?.batchSize ? { batchSize: opts.batchSize } : {}),
+        ...(opts?.pageSink
+          ? { pageSink: opts.pageSink, retainPageResults: false }
+          : {}),
+        // repo#3430: the end-of-crawl probes vet and pin the site's own hosts.
+        pinOwnHosts: pinOwnHosts(),
       }
     );
-    return { assets, ruleResults };
+    return { assets: preRules.assets, ruleResults, entityMap, pageStatuses };
   });
 }
 

@@ -15,7 +15,6 @@ export {
   robotsBlockedFrontierCount,
   parsePageRecord,
   parseHtmlForRules,
-  getParsedPages,
   isRenderedFetch,
   renderedPageUrlsFrom,
   setAdapterLogger,
