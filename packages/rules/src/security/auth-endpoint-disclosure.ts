@@ -49,7 +49,6 @@ import {
   isUnverifiedReply,
   peekAnonymousGet,
   sendAnonymousGet,
-  type AnonymousGetOutcome,
 } from "./probe-http";
 
 export const AUTH_ENDPOINT_DISCLOSURE_RULE_ID = "security/auth-endpoint-disclosure";
@@ -548,7 +547,7 @@ async function probeEndpoint(
   candidate: AuthCandidate,
   cachedOnly = false
 ): Promise<EndpointVerdict> {
-  const pending: Promise<AnonymousGetOutcome> | undefined = cachedOnly
+  const pending: Promise<AuthProbeOutcome> | undefined = cachedOnly
     ? peekAnonymousGet(ctx.probe, candidate.url)
     : sendAuthProbe(ctx.probe, candidate.url);
   const outcome = pending ? await pending : ({ sent: false } as const);
