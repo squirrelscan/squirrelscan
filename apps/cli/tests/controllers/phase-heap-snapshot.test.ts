@@ -2,12 +2,11 @@
 // one V8 snapshot per asked-for boundary when on, and never charged to the
 // phase it observes.
 
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
   mkdtempSync,
   readdirSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -25,6 +24,7 @@ const saved = {
   phases: process.env.SQUIRREL_HEAP_SNAPSHOT_PHASES,
 };
 const dirs: string[] = [];
+const CHILD = join(import.meta.dir, "../fixtures/phase-heap-snapshot-child.ts");
 
 afterEach(() => {
   for (const [key, value] of [
@@ -36,12 +36,6 @@ afterEach(() => {
   }
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
-});
-
-// Snapshot writing and parsing leave a large heap in the shared test process,
-// which skews the timing tests that run after this file. Collect it away.
-afterAll(() => {
-  Bun.gc(true);
 });
 
 function tempDir(): string {
@@ -56,25 +50,39 @@ describe("phaseHeapSnapshotWriter", () => {
     expect(phaseHeapSnapshotWriter()).toBeUndefined();
   });
 
-  test("writes one numbered V8 snapshot per boundary, filtered by SQUIRREL_HEAP_SNAPSHOT_PHASES", () => {
+  test("writes one numbered V8 snapshot per boundary, filtered by SQUIRREL_HEAP_SNAPSHOT_PHASES", async () => {
+    // Runs in a child process: parsing the snapshot JSON would otherwise leave a
+    // large heap in this shared runner and skew the timing tests after it.
     const dir = join(tempDir(), "nested");
-    process.env.SQUIRREL_HEAP_SNAPSHOT_DIR = dir;
-    process.env.SQUIRREL_HEAP_SNAPSHOT_PHASES = "rules, report";
-    const write = phaseHeapSnapshotWriter();
-    expect(write).toBeDefined();
-    write?.("crawl");
-    write?.("rules");
-    write?.("report");
-    expect(readdirSync(dir).sort()).toEqual([
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        CHILD,
+        dir,
+        "rules, report",
+        "crawl",
+        "rules",
+        "report",
+      ],
+      { stdout: "pipe", stderr: "pipe" }
+    );
+    const [out, err, code] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(err).toContain("rules snapshot written");
+    expect(code).toBe(0);
+    const facts = JSON.parse(out.trim().split("\n").pop() ?? "");
+    expect(facts.writerDefined).toBe(true);
+    expect(facts.files).toEqual([
       "01-rules.heapsnapshot",
       "02-report.heapsnapshot",
     ]);
-    const snap = JSON.parse(
-      readFileSync(join(dir, "01-rules.heapsnapshot"), "utf8")
-    );
-    expect(snap.snapshot.meta.node_fields).toContain("self_size");
-    expect(snap.nodes.length).toBeGreaterThan(0);
-  });
+    expect(facts.first).toBe("01-rules.heapsnapshot");
+    expect(facts.nodeFields).toContain("self_size");
+    expect(facts.nodeCount).toBeGreaterThan(0);
+  }, 60_000);
 
   test("a failed write is reported, never thrown into the audit", () => {
     const file = join(tempDir(), "not-a-dir");
