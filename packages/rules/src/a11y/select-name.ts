@@ -3,10 +3,10 @@
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-import { labelsFor } from "../shared/attribute-lookup";
+import { labelsFor, type AttrReadable } from "../shared/attribute-lookup";
 import { elementSelector } from "../element-path";
 
-function hasAccessibleName(el: Element, doc: Document): boolean {
+function hasAccessibleName(el: AttrReadable, doc: Document): boolean {
   // Check aria-label
   if (el.getAttribute("aria-label")?.trim()) return true;
 
@@ -58,7 +58,7 @@ export const selectNameRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const selects = doc.querySelectorAll("select");
+    const selects = doc.querySelectorAll<Element>("select");
     // pub#991: a select out of the accessibility tree is not reported, and
     // one a style may hide is unconfirmed, like the other naming checks.
     const unnamed = sortUnnamedControls<{ id: string; selector?: string }>();

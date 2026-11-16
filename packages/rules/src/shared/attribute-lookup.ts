@@ -8,7 +8,7 @@
 // plain string instead.
 
 /** Elements whose `attr` equals `value` exactly, in document order. */
-export function elementsWithAttribute(root: ParentNode, attr: string, value: string): Element[] {
+export function elementsWithAttribute(root: QueryRoot, attr: string, value: string): Element[] {
   const out: Element[] = [];
   for (const el of root.querySelectorAll(`[${attr}]`)) {
     if (el.getAttribute(attr) === value) out.push(el);
@@ -32,4 +32,26 @@ export function labelsFor(doc: Document, id: string): Element[] {
     labelsByFor.set(doc, index);
   }
   return index.get(id) ?? [];
+}
+
+/**
+ * Structural stand-ins for the DOM `Element` and `ParentNode` parameters of the
+ * rule helpers. Under `@cloudflare/workers-types` the global `Element` is the
+ * HTMLRewriter class, which the parser's DOM elements are not assignable to
+ * (repo#4562), so helpers that only read attributes and children type what they
+ * use instead of the global name.
+ */
+export interface AttrReadable {
+  getAttribute(name: string): string | null;
+  hasAttribute(name: string): boolean;
+  readonly textContent: string | null;
+  closest(selector: string): { textContent: string | null } | null;
+}
+
+export interface QueryRoot {
+  querySelectorAll(selector: string): Iterable<Element>;
+}
+
+export interface ChildrenParent {
+  readonly children: ArrayLike<unknown>;
 }

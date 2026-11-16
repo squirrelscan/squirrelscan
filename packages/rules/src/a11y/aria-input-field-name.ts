@@ -5,9 +5,9 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { inputRoles } from "./aria-data";
-import { elementsWithAttribute, labelsFor } from "../shared/attribute-lookup";
+import { elementsWithAttribute, labelsFor, type AttrReadable } from "../shared/attribute-lookup";
 
-function getAccessibleName(el: Element, doc: Document): string | null {
+function getAccessibleName(el: AttrReadable, doc: Document): string | null {
   // Check aria-label
   const ariaLabel = el.getAttribute("aria-label")?.trim();
   if (ariaLabel) return ariaLabel;
@@ -111,7 +111,7 @@ export const ariaInputFieldNameRule: Rule = {
     }
 
     // Check select elements
-    const selects = doc.querySelectorAll("select");
+    const selects = doc.querySelectorAll<Element>("select");
     for (const select of selects) {
       if (select.hasAttribute("role")) continue;
       if (!getAccessibleName(select, doc)) {

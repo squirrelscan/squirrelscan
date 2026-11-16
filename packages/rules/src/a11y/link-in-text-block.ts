@@ -2,6 +2,7 @@
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import type { ChildrenParent } from "../shared/attribute-lookup";
 
 const TEXT_BLOCK_SELECTOR = "p, li, td, th, dd, blockquote, figcaption";
 
@@ -18,7 +19,7 @@ function linksInTextBlocks(doc: Document): Element[] {
   const isBlock = new Set<Element>(doc.querySelectorAll(TEXT_BLOCK_SELECTOR));
   const links: Element[] = [];
   const stack: Array<{ el: Element; inBlock: boolean }> = [];
-  const pushChildren = (parent: ParentNode, inBlock: boolean) => {
+  const pushChildren = (parent: ChildrenParent, inBlock: boolean) => {
     const children = parent.children;
     for (let i = children.length - 1; i >= 0; i--) {
       stack.push({ el: children[i] as Element, inBlock });
