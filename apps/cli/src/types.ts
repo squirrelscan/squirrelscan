@@ -729,6 +729,8 @@ export interface AuditReport {
     stopReason?: "time" | "credits";
     /** In-scope URLs left queued, never fetched, when the crawl stopped. */
     unfetched?: number;
+    /** Distinct in-scope URLs the crawl knew of, split by sitemap and links (repo#3079). */
+    discovered?: { total: number; sitemap: number; links: number };
     /** Discovered and audited page counts per URL-based page type (#1744). */
     pageTypes?: Array<{ type: string; discovered: number; audited: number }>;
     /** The start URL's followed redirect (#1281), so a rebuilt report still carries it. */

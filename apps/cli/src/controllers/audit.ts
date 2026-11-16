@@ -44,6 +44,7 @@ import {
   unfetchedFrontierCount,
   robotsBlockedFrontierCount,
   pageTypeCoverageFor,
+  discoveredCoverageFor,
   isRedirectSourcePage,
   targetedCoverageFor,
 } from "@squirrelscan/audit-engine";
@@ -2656,6 +2657,10 @@ export async function runAudit(
             report.pages.map((p) => p.url)
           )
         );
+        // Distinct URLs the crawl knew of, split by sitemap and links (repo#3079).
+        const discovered = await Effect.runPromise(
+          discoveredCoverageFor(sqliteStorage, crawlId)
+        );
         // A targeted run (#1777) accounts for every URL it was given.
         const targeted =
           options.targetUrls && options.targetUrls.length > 0
@@ -2680,6 +2685,7 @@ export async function runAudit(
             ? { canonicalVariants: report.canonicalVariants }
             : {}),
           ...(unfetched > 0 ? { unfetched } : {}),
+          ...(discovered ? { discovered } : {}),
           ...(pageTypes.length > 0 ? { pageTypes } : {}),
           ...(targeted ? { targeted } : {}),
           ...(options.startRedirect

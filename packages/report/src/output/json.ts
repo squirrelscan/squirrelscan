@@ -73,6 +73,7 @@ import {
   scanScopePageTypes,
   scanScopeTargeted,
   scanScopeUnfetched,
+  scanScopeDiscovered,
   seedRedirect,
 } from "../coverage";
 import { safeIgnored } from "../ignored";
@@ -712,6 +713,8 @@ function buildSlimReport(
         ? { stopReason: report.scanScope.stopReason }
         : {}),
       ...(unfetched > 0 ? { unfetched } : {}),
+      // repo#3079: distinct URLs the crawl knew of, split by sitemap and links.
+      ...(scanScopeDiscovered(report) ? { discovered: scanScopeDiscovered(report) } : {}),
       // #1782: whether robots.txt was honoured and how many pages it kept out of the audit.
       ...(robotsScope(report) ?? {}),
       // #1744: pages known and pages audited per URL-based page type.

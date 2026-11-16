@@ -305,6 +305,25 @@ export function pageTypeCoverageLine(report: Pick<AuditReport, "scanScope">): st
 }
 
 /**
+ * `scanScope.discovered` (repo#3079) read off a stored report of any origin, or null when the report has
+ * none or it is malformed (the caller then falls back to sitemap URLs plus crawled pages). `total` is
+ * recomputed as `sitemap + links`, so a stored total that disagrees cannot be shown. Never read by scoring.
+ */
+export function scanScopeDiscovered(
+  report: Pick<AuditReport, "scanScope">,
+): { total: number; sitemap: number; links: number } | null {
+  const raw: unknown = report.scanScope?.discovered;
+  if (typeof raw !== "object" || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  const whole = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+  const sitemap = whole(r.sitemap);
+  const links = whole(r.links);
+  if (sitemap === undefined || links === undefined) return null;
+  return { total: sitemap + links, sitemap, links };
+}
+
+/**
  * In-scope URLs the crawl queued but never fetched (`scanScope.unfetched`), as
  * a whole number, or 0. Read off stored reports of any origin, so a value that
  * is not a safe non-negative integer counts as none.

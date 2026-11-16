@@ -274,6 +274,7 @@ export {
   targetedRunNote,
   scanScopeTargeted,
   scanScopeUnfetched,
+  scanScopeDiscovered,
   scanScopePageTypes,
   pageTypeCoverageLine,
   publishedReportNote,

@@ -69,6 +69,8 @@ export type { AuditStatusSignals } from "./scoring";
 export {
   pageTypeCoverage,
   pageTypeCoverageFor,
+  discoveredCoverage,
+  discoveredCoverageFor,
   targetedCoverage,
   targetedCoverageFor,
 } from "./report-stream";

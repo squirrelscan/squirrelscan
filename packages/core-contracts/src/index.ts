@@ -1475,6 +1475,15 @@ export interface MaxDurationCut {
   probesSkipped?: string[];
 }
 
+export interface ScanScopeDiscovered {
+  /** Distinct in-scope URLs known to the crawl, fetched or not. `sitemap + links`. */
+  total: number;
+  /** Of `total`, URLs the sitemap contributed. */
+  sitemap: number;
+  /** Of `total`, URLs found only by following links (or the start URL, or carried over). */
+  links: number;
+}
+
 export interface ScanScopePageType {
   /** The crawler's URL-based page type, e.g. `product`, `article`, `home`, or `unknown`. */
   type: string;
@@ -1563,6 +1572,15 @@ export interface ScanScope {
    * when nothing was left over, and on reports from before it. REPORT-ONLY.
    */
   unfetched?: number;
+  /**
+   * Distinct in-scope URLs the crawl knew of, deduped by normalised URL: the pages it fetched plus the
+   * ones it queued and never fetched. `sitemap` counts those the sitemap put in the frontier first and
+   * `links` the rest (found by following links, the start URL, or carried from earlier audits), so
+   * `total = sitemap + links`. A URL in both the sitemap and a page's links counts under whichever the
+   * crawler queued first. A floor, like `unfetched`. REPORT-ONLY: never feeds `healthScore`. Absent on
+   * reports from before it; readers fall back to sitemap URLs plus crawled pages missing from them.
+   */
+  discovered?: ScanScopeDiscovered;
   /**
    * Discovered and audited page counts per page type (#1744), so a sampled audit can say
    * "1 of 36 product pages". `discovered >= audited` for every row, and `discovered` is

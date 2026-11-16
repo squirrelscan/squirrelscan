@@ -51,6 +51,7 @@ import type {
   OpenGraphData,
   RedirectChain,
   ScanScope,
+  ScanScopeDiscovered,
   ScanScopePageType,
   ScanScopeTargeted,
   TargetedRunUnaudited,
@@ -187,6 +188,37 @@ export function pageTypeCoverageFor(
       ),
     ),
     Effect.catchAll(() => Effect.succeed([] as ScanScopePageType[])),
+  );
+}
+
+/**
+ * `scanScope.discovered` (repo#3079): the distinct in-scope URLs the crawl knew of, split by how the
+ * frontier first queued them. Counts rows that were fetched (`done`) or are still `pending`, the same
+ * population as `pagesCrawled + unfetched`; skipped (out of scope, robots, dedupe) and failed rows are not
+ * pages of the site. Frontier rows are unique by normalised URL, so the count is already deduped. Pure.
+ */
+export function discoveredCoverage(entries: readonly FrontierRecord[]): ScanScopeDiscovered {
+  let sitemap = 0;
+  let links = 0;
+  for (const e of entries) {
+    if (e.status !== "done" && e.status !== "pending") continue;
+    if (e.source === "sitemap") sitemap += 1;
+    else links += 1;
+  }
+  return { total: sitemap + links, sitemap, links };
+}
+
+/** {@link discoveredCoverage} for a stored crawl. A failed read gives none, never a failed report. */
+export function discoveredCoverageFor(
+  storage: CrawlStorage,
+  crawlId: string,
+): Effect.Effect<ScanScopeDiscovered | undefined, never, never> {
+  return storage.getAllFrontierEntries(crawlId).pipe(
+    Effect.map((entries) => {
+      const d = discoveredCoverage(entries);
+      return d.total > 0 ? d : undefined;
+    }),
+    Effect.catchAll(() => Effect.succeed(undefined)),
   );
 }
 
