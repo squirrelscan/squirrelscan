@@ -244,32 +244,56 @@ squirrel report
 
 **Output:**
 ```text
-================================================================================
+──────────────────────────────────────────────────
 SQUIRRELSCAN REPORT
-https://example.com • 42 pages • 87/100 (B)
-================================================================================
+https://nutshop.squirrelscan.com • 25 pages • 94/100 (A)
+──────────────────────────────────────────────────
 
-Health Score: 87/100 (B)
+Health Score: 94/100 (A)
+Weighted audit score. Errors are failed checks; heuristic warnings are signals to review, not proof of a vulnerability. Info recommendations do not affect the score.
+
+Group Breakdown:
+──────────────────────────────────────────────────
+SEO                    ███████████████████░   96%   ✓2858  ⚠27  ✗0
+Performance            ████████████████░░░░   80%   ✓ 483  ⚠26  ✗0
+Security               ████████████████████   99%   ✓ 313  ⚠ 1  ✗0
+Agents                 ███████████████████░   96%   ✓  67  ⚠ 9  ✗0
+  The Agents score covers the scored agent experience rules; it does not include llms.txt, Markdown response or AGENTS.md, which are shown separately as site-level signals.
+  Site-level signals (not scored): llms.txt present, Markdown response missing, AGENTS.md missing
 
 Category Breakdown:
---------------------------------------------------
-Core SEO             ██████████ 100%
-  Passed: 45 | Warnings: 0 | Failed: 0
-Links                ████████░░ 85%
-  Passed: 23 | Warnings: 5 | Failed: 3
-Images               ███████░░░ 72%
-  Passed: 15 | Warnings: 8 | Failed: 6
+──────────────────────────────────────────────────
+Content                ███████████████░░░░░   76%   ✓ 341  ⚠26  ✗0
+Performance            ████████████████░░░░   80%   ✓ 481  ⚠26  ✗0
+Agent Experience       ███████████████████░   96%   ✓  67  ⚠ 9  ✗0
+E-E-A-T                ██████████████████░░   90%   ✓   7  ⚠ 1  ✗0
+Security               ████████████████████   98%   ✓ 185  ⚠ 1  ✗0
+...
 
-Total: 83 passed, 13 warnings, 9 errors
+Total: 3721 passed, 63 warnings, 0 errors
+
+...
 
 ISSUES
 
-Content (2 errors, 3 warnings)
-  content/word-count Word Count (warning)
-    ✗ Low word count: 150 words (min: 300) (3 pages)
-      → /blog/post-1
-      → /blog/post-2
-      → /about
+┌ Content (26 warnings)
+│
+│  content/word-count Word Count (warning)
+│    ⚠ word-count: Thin content: 157 to 245 words (min 300) (10 pages)
+│      → /categories/baking
+│      → /categories/gift-boxes
+│      → /categories/nut-butters
+│      → /categories/raw-nuts
+│      → /categories/roasted-nuts
+│      ... +5 more
+│      → Thin content: 171 words (min 300)
+│      → Thin content: 210 words (min 300)
+│      → Thin content: 191 words (min 300)
+│      → Thin content: 200 words (min 300)
+│      → Thin content: 213 words (min 300)
+│      ... +5 more
+│
+└────────────────────────────────────────────────
 ```
 
 **Features:**
@@ -765,16 +789,17 @@ squirrel report --list
 
 **Output:**
 ```text
-Recent Audits:
-================================================================================
-ID       Date                   Pages    Status
---------------------------------------------------------------------------------
-a7b3c2d1 1/17/2026, 10:30 AM    42       complete
-  https://example.com
-5e9f1a3b 1/16/2026, 3:45 PM     38       complete
-  https://test.com
+Recent Audits:
+==========================================================================================
+ID         Date                  Pages   Status      Published
+------------------------------------------------------------------------------------------
+985ac861   11/17/2026, 10:32:20 AM25      analyzed    -
+  https://nutshop.squirrelscan.com
+a85d0a3b   11/17/2026, 10:32:08 AM25      analyzed    -
+  https://nutshop.squirrelscan.com
 
 Total: 2 audits
+Use "squirrel report <audit-id>" to view a specific audit.
 ```
 
 ### View specific audit

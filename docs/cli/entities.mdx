@@ -44,12 +44,23 @@ squirrel entities
 
 ```text
 ENTITY MAP
-https://docs.squirrelscan.com/ · 4f2ab91c · 13/09/2026, 00:23
+https://nutshop.squirrelscan.com/ · 985ac861 · 11/17/2026, 10:32:20 AM
 
-183 entities, 489 references, 100% with a stable @id, across 60 pages
+89 entities · 62 references · 69% with a stable @id
 
-squirrelscan (WebSite) 60x on 60 page(s) https://docs.squirrelscan.com/#website
-Introduction (WebPage) 1x on 1 page(s) https://docs.squirrelscan.com/
+The Nut Shop (Organization) 25x on 25 page(s) https://nutshop.squirrelscan.com/#organization
+The Nut Shop (WebSite) 25x on 25 page(s) https://nutshop.squirrelscan.com/#website
+The Nut Shop (Brand) 9x on 9 page(s) no @id
+(unnamed FAQPage) (FAQPage) 1x on 1 page(s) https://nutshop.squirrelscan.com/faq#faq
+Almond butter (Product) 1x on 1 page(s) https://nutshop.squirrelscan.com/products/almond-butter#product
+The big nut hamper (Product) 1x on 1 page(s) https://nutshop.squirrelscan.com/products/big-nut-hamper#product
+Breakfast crunch mix (Product) 1x on 1 page(s) https://nutshop.squirrelscan.com/products/breakfast-crunch-mix#product
+Cashew butter (Product) 1x on 1 page(s) https://nutshop.squirrelscan.com/products/cashew-butter#product
+Chilli lime cashews (Product) 1x on 1 page(s) https://nutshop.squirrelscan.com/products/chilli-lime-cashews#product
+Chocolate orchard mix (Product) 1x on 1 page(s) https://nutshop.squirrelscan.com/products/chocolate-orchard-mix#product
+
+• 2 declared on several pages with no @id
+squirrel entities --problem no-id|conflict|dangling for the detail
 ```
 
 ## One entity
@@ -155,12 +166,12 @@ squirrel entities --list
 ```
 
 ```text
-Entity maps:
-==============================================================================================
-ID         Date                  Pages   Entities  Stable @id  Conflicts  Site
-----------------------------------------------------------------------------------------------
-4f2ab91c   13/09/2026, 00:23     60      183       100%        0          https://docs.squirrelscan.com/
-9c1de77a   12/09/2026, 23:04     60      0         0%          0          https://docs.squirrelscan.com/
+Entity maps:
+================================================================================================
+ID         Date                    Pages   Entities  Stable @id  Conflicts  Site
+------------------------------------------------------------------------------------------------
+985ac861   11/17/2026, 10:32:20 AM 25      89        69%         0          https://nutshop.squirrelscan.com
+a85d0a3b   11/17/2026, 10:32:08 AM 25      89        69%         0          https://nutshop.squirrelscan.com
 ```
 
 ## Exit codes

@@ -52,26 +52,37 @@ Rich terminal output optimized for human readability.
 **Example output:**
 
 ```text
-🔍 Crawling https://example.com...
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✓ Fetched 100 pages in 12.3s
+Account   not signed in — run squirrel auth login to unlock cloud features
+Dashboard https://app.squirrelscan.com
+Auditing  https://nutshop.squirrelscan.com/
+Level     quick · max 25 pages
+Probing   passive · no probe rules
+Config    defaults
 
-📊 Running audit rules...
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+...
 
-ISSUES FOUND (23)
+✓ Audited 25 pages in 8.7s
 
-❌ core/meta-title (8 pages)
-  /about - Missing page title
-  /contact - Title too short (12 chars, min 30)
+──────────────────────────────────────────────────
+SQUIRRELSCAN REPORT
+https://nutshop.squirrelscan.com • 25 pages • 94/100 (A)
+──────────────────────────────────────────────────
 
-⚠️  links/broken-links (15 links)
-  /blog/post-1 → /missing-page (404)
+...
 
-✓ All other checks passed
+ISSUES
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Health Score: 78/100 (Good)
+┌ Security (1 warning)
+│
+│  security/csp Content Security Policy (warning)
+│    ⚠ csp-unsafe-scripts: CSP allows 'unsafe-inline'
+│      → /
+│
+└────────────────────────────────────────────────
+
+...
+
+──────────────────────────────────────────────────
 ```
 
 **Configuration:**

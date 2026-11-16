@@ -52,21 +52,27 @@ squirrel audit https://nutshop.squirrelscan.com
 You get a crawl and a scored report in the terminal:
 
 ```text
-✓ Audited 12 pages in 2.1s
+✓ Audited 25 pages in 8.7s
 
 ──────────────────────────────────────────────────
 SQUIRRELSCAN REPORT
-https://example.com • 12 pages • 72/100 (C)
+https://nutshop.squirrelscan.com • 25 pages • 94/100 (A)
 ──────────────────────────────────────────────────
 
-Core SEO (1 error, 3 warnings)
-  core/meta-description Meta Description (error)
-    ✗ meta-description: Missing meta description
-      → /about
-      → /contact
+...
 
-──────────────────────────────────────────────────
-87 passed • 12 warnings • 3 failed
+ISSUES
+
+┌ Security (1 warning)
+│
+│  security/csp Content Security Policy (warning)
+│    ⚠ csp-unsafe-scripts: CSP allows 'unsafe-inline'
+│      → /
+│
+└────────────────────────────────────────────────
+
+...
+
 ──────────────────────────────────────────────────
 ```
 

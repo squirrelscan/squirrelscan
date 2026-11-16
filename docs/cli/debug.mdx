@@ -58,8 +58,9 @@ Logs are written to `~/.squirrel/logs/`:
 ### Log format
 
 ```text
-2025-01-10T14:30:45.123Z [debug] [request] url="https://example.com" status=200 loadTimeMs=120
-2025-01-10T14:30:45.200Z [info] ========== COMMAND END: audit (success, 5432ms) ==========
+2026-11-16T23:32:51.084Z [debug] request {"url":"http://nutshop.squirrelscan.com/","method":"HEAD","status":301,"ttfb":28}
+2026-11-16T23:32:51.128Z [debug] request {"url":"https://nutshop.squirrelscan.com/","method":"HEAD","status":200,"ttfb":44}
+2026-11-16T23:32:52.093Z [info] ========== COMMAND END: audit (success, 5698ms) ==========
 ```
 
 ## Log rotation
@@ -91,8 +92,9 @@ squirrel audit https://nutshop.squirrelscan.com --trace
 This writes timing data to `~/.squirrel/logs/trace.log`:
 
 ```text
-2025-01-10T14:30:45.123Z [trace] [fetch:https://example.com] duration=145.32ms
-2025-01-10T14:30:45.300Z [trace] [rule:meta/title] duration=2.15ms {"checks":1}
+2026-11-16T23:32:59.678Z [trace] [resource checks] {"css":1,"images":62,"fonts":0,"scripts":1,"preloads":10,"pdfs":0,"sitemap":25,"elapsed":"994ms"}
+2026-11-16T23:32:59.681Z [trace] [fetchResourceAssets] duration=997.55ms {"cssCount":1,"imageCount":62,"scriptCount":1,"pdfCount":0}
+2026-11-16T23:33:01.961Z [trace] [phase timings] {"crawl":3204.132542,"pre_rules":1105.4106660000002,"rules":2072.884167,"report":189.2417919999998}
 ```
 
 Traces include:
