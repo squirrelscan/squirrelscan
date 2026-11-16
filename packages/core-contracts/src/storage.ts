@@ -557,6 +557,14 @@ export interface ResponseHeaders {
    * records that predate it; absent reads as "none sent".
    */
   techHeaders?: Record<string, string> | null;
+  /**
+   * `false` when the response headers were NOT recorded for this page (a record
+   * stored without them, or a fetcher that did not return them), so a null
+   * header here means "unknown", not "the response had no such header". Absent
+   * or `true` reads as recorded. Rules that judge a header's absence
+   * (perf/bad-caching) report "not checked" for a page marked `false` (repo#4641).
+   */
+  recorded?: boolean;
 }
 
 export interface PageRecord {

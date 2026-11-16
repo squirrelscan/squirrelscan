@@ -13,7 +13,7 @@ import { badCachingRule } from "../src/performance/bad-caching";
 import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
 function siteCtx(
-  pages: { url: string; headers: Record<string, string>; fetchedAt?: number }[]
+  pages: { url: string; headers: Record<string, string>; fetchedAt?: number; headersRecorded?: boolean }[]
 ): RuleContext {
   const html = "<html><head><title>t</title></head><body></body></html>";
   const sitePages: SiteData["pages"] = pages.map((p) => ({
@@ -22,6 +22,7 @@ function siteCtx(
     parsed: parsePage(html, p.url),
     headers: { "content-type": "text/html", ...p.headers },
     ...(p.fetchedAt !== undefined ? { fetchedAt: p.fetchedAt } : {}),
+    ...(p.headersRecorded !== undefined ? { headersRecorded: p.headersRecorded } : {}),
   }));
   return {
     page: {
@@ -815,5 +816,71 @@ describe("perf/bad-caching sub-resources (repo#4492)", () => {
       cacheHeaders: { cacheControl: null, expires: null, date: null, etag: null, lastModified: null },
     }] as unknown as NonNullable<SiteData["scripts"]>;
     expect(check(await run(badCachingRule, ctx), "bad-caching-subresources")?.status).toBe("warn");
+  });
+});
+
+describe("perf/bad-caching header case and not-recorded headers (repo#4641)", () => {
+  const mixedCase = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      url: `https://example.com/m${i}`,
+      headers: {
+        "Content-Type": "text/html",
+        "Cache-Control": "public, max-age=3600",
+        ETag: '"abc"',
+        "Content-Encoding": "br",
+      },
+    }));
+
+  test("mixed-case ETag and Cache-Control read the same as lowercase", async () => {
+    const checks = await run(badCachingRule, siteCtx(mixedCase(4)));
+    expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
+    expect(verdict(checks, "bad-caching-compression")).toBe("ok");
+  });
+
+  test("a mixed-case Last-Modified counts as a validator", async () => {
+    const pages = Array.from({ length: 3 }, (_, i) => ({
+      url: `https://example.com/l${i}`,
+      headers: { "Last-Modified": "Wed, 01 Jan 2025 00:00:00 GMT" },
+    }));
+    expect(check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators")?.status).toBe("pass");
+  });
+
+  test("headers not recorded: not checked with a reason, never a failure", async () => {
+    const pages = Array.from({ length: 3 }, (_, i) => ({
+      url: `https://example.com/u${i}`,
+      headers: {},
+      headersRecorded: false,
+    }));
+    const checks = await run(badCachingRule, siteCtx(pages));
+    expect(checks).toHaveLength(1);
+    const c = checks[0]!;
+    expect(c.name).toBe("bad-caching");
+    expect(c.status).toBe("skipped");
+    expect(c.skipReason).toBe("headers-not-recorded");
+    expect(c.status).not.toBe("fail");
+    expect(check(checks, "bad-caching-validators")).toBeUndefined();
+  });
+
+  test("the absence of a header on a recorded page still warns", async () => {
+    const pages = Array.from({ length: 3 }, (_, i) => ({
+      url: `https://example.com/r${i}`,
+      headers: {},
+      headersRecorded: true,
+    }));
+    expect(check(await run(badCachingRule, siteCtx(pages)), "bad-caching-validators")?.status).toBe("warn");
+  });
+
+  test("some pages unrecorded: they are left out of the shares and listed as not checked", async () => {
+    const pages = [
+      ...mixedCase(3),
+      { url: "https://example.com/x", headers: {}, headersRecorded: false },
+    ];
+    const checks = await run(badCachingRule, siteCtx(pages));
+    expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
+    const note = check(checks, "bad-caching-headers-not-recorded");
+    expect(note?.status).toBe("skipped");
+    expect(note?.skipReason).toBe("headers-not-recorded");
+    expect(note?.pages).toEqual(["https://example.com/x"]);
   });
 });

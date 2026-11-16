@@ -191,6 +191,7 @@ import {
   buildTechHeadersMap,
   ensureSiteContextDocuments,
   isRenderedFetch,
+  recordsResponseHeaders,
   recordsVersionHeaders,
   releaseSiteContextDocuments,
   type SiteContextPage,
@@ -206,6 +207,7 @@ export {
   isRenderedFetch,
   parseHtmlForRules,
   parsePageRecord,
+  recordsResponseHeaders,
   recordsVersionHeaders,
   releaseSiteContextDocuments,
   renderedPageUrlsFrom,
@@ -1738,6 +1740,7 @@ export function runRulesOnStorage(
       fetchedAt?: number;
       rendered?: boolean;
       versionHeadersRecorded?: boolean;
+      headersRecorded?: boolean;
       redirectSource?: boolean;
     }> = [];
     const wafBlockedPages: Array<{
@@ -1826,6 +1829,7 @@ export function runRulesOnStorage(
         fetchedAt: page.fetchedAt,
         rendered: isRenderedFetch(page.fetcherId),
         versionHeadersRecorded: recordsVersionHeaders(page),
+        headersRecorded: recordsResponseHeaders(page),
       });
       pageDataMap.set(page.normalizedUrl, { page, parsed, headers });
     }
@@ -2484,6 +2488,7 @@ type StreamParsedPage = {
   fetchedAt?: number;
   rendered?: boolean;
   versionHeadersRecorded?: boolean;
+  headersRecorded?: boolean;
   /** A URL that redirected: in the list for its hops, not a page (#1762). */
   redirectSource?: boolean;
 };
@@ -2657,6 +2662,7 @@ function createParsedUniverseAccumulator(): {
           fetchedAt: page.fetchedAt,
           rendered: isRenderedFetch(page.fetcherId),
           versionHeadersRecorded: recordsVersionHeaders(page),
+        headersRecorded: recordsResponseHeaders(page),
         });
         // Scalars only — NOT the PageRecord (see StreamPageIdentity).
         pageDataMap.set(page.normalizedUrl, {

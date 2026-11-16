@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { PageRecord } from "@squirrelscan/core-contracts";
-import { buildHeadersMap, recordsVersionHeaders } from "../src/adapter";
+import { buildHeadersMap, recordsResponseHeaders, recordsVersionHeaders } from "../src/adapter";
 
 function page(overrides: Partial<PageRecord["headers"]> = {}): PageRecord {
   return {
@@ -126,5 +126,14 @@ describe("buildHeadersMap", () => {
     expect(buildHeadersMap(page({ contentType: "text/html" }))["content-type"]).toBe("text/html");
     // No media type, no content-type at all, charset or not.
     expect(buildHeadersMap(page({ contentTypeCharset: "utf-8" }))["content-type"]).toBeUndefined();
+  });
+});
+
+describe("recordsResponseHeaders (repo#4641)", () => {
+  test("only an explicit recorded: false marks headers as not recorded", () => {
+    const base = page();
+    expect(recordsResponseHeaders(base)).toBe(true);
+    expect(recordsResponseHeaders({ ...base, headers: { ...base.headers, recorded: true } })).toBe(true);
+    expect(recordsResponseHeaders({ ...base, headers: { ...base.headers, recorded: false } })).toBe(false);
   });
 });

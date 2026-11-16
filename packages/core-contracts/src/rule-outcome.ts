@@ -58,6 +58,8 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "tls-certificate-not-checked": gap(true),
   "external-links-not-checked": gap(true),
   "link-targets-not-fetched": gap(true),
+  // The page record carries no response headers: a missing header proves nothing (repo#4641).
+  "headers-not-recorded": gap(true),
   "external-links-over-cap": gap(true),
   "external-links-out-of-time": gap(true),
   // A targeted run (#1777) fetched only the URLs it was given: a whole-site rule has nothing to judge.
