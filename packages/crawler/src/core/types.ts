@@ -73,6 +73,12 @@ export interface CrawlerConfig {
    * crawled without the custom headers (#959).
    */
   headerHosts?: string[];
+  /**
+   * Send `Cache-Control: no-cache` and `Pragma: no-cache` on every page fetch, so a shared cache
+   * revalidates instead of serving a copy from before a deploy (#2032). Off by default. A custom
+   * header of the same name wins, and a conditional request keeps its own validators.
+   */
+  noCache?: boolean;
   /** Follow redirects */
   followRedirects: boolean;
   /**

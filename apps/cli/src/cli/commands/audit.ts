@@ -1337,6 +1337,11 @@ export const audit = defineCommand({
       description:
         'Custom HTTP header on every crawl request (repeatable), format "Name: Value"; merges over [crawler] headers. Values are secrets (redacted in output)',
     },
+    "bypass-cache": {
+      type: "boolean",
+      description:
+        "Send Cache-Control: no-cache on page fetches so a CDN revalidates, for audits right after a deploy (same as [crawler] no_cache = true). The report notes pages whose response still looks cached",
+    },
     "header-host": {
       type: "string",
       description:
@@ -2284,6 +2289,7 @@ export const audit = defineCommand({
         offline: args.offline,
         ...(concurrency !== undefined ? { concurrency } : {}),
         ...(perHostConcurrency !== undefined ? { perHostConcurrency } : {}),
+        ...(args["bypass-cache"] ? { bypassCache: true } : {}),
         ...(args.includePages && args.format === "json"
           ? { includePages: true }
           : {}),

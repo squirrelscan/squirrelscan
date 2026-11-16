@@ -12,6 +12,7 @@ import type {
   CacheStats,
   CrawlStats,
   ResourceSizeRecord,
+  ResponseHeaders,
 } from "./storage";
 
 /**
@@ -130,3 +131,76 @@ export function buildCacheStats(
 
 /** Re-exported for callers that only need the reason total. */
 export { sumReasons as sumCacheReasons };
+
+// ---------------------------------------------------------------------------
+// Fresh-fetch note for deploy-triggered audits (#2032)
+// ---------------------------------------------------------------------------
+
+/** One page whose response still looked cached on a crawl that asked for `no-cache`. */
+export interface StaleCachePage {
+  url: string;
+  /** What said so, e.g. `Age: 120` or `cf-cache-status: HIT`. */
+  signal: string;
+}
+
+/**
+ * Whether the audit asked caches to revalidate and what it saw. Report-only, never scored.
+ * Present only when the crawl sent `Cache-Control: no-cache` or the caller asked for the
+ * fresh-render statement.
+ */
+export interface CacheFreshness {
+  /** The crawl sent `Cache-Control: no-cache` on page fetches. */
+  noCache: boolean;
+  /** The caller asked the report to state that pages were rendered fresh, without the render cache. */
+  freshRender: boolean;
+  /** Pages that still looked cached. Only checked when `noCache` is true. */
+  stalePageCount: number;
+  stalePages: StaleCachePage[];
+}
+
+/** Cap on stale pages listed in a report; the count stays true. */
+export const MAX_STALE_CACHE_PAGES = 50;
+
+const CACHE_HIT_VALUE = /\b(hit|stale|revalidated)\b/i;
+
+/**
+ * The first sign that a response came out of a shared cache: a positive `Age`, or a HIT/STALE
+ * cache-status header (`X-Cache`, `CF-Cache-Status`, `X-Vercel-Cache`). `null` when none.
+ */
+export function staleCacheSignal(
+  headers:
+    | Partial<Pick<ResponseHeaders, "age" | "xCache" | "cfCacheStatus" | "xVercelCache">>
+    | null
+    | undefined
+): string | null {
+  if (!headers) return null;
+  const age = Number.parseInt(headers.age ?? "", 10);
+  if (Number.isFinite(age) && age > 0) return `Age: ${age}`;
+  const named: Array<[string, string | null | undefined]> = [
+    ["cf-cache-status", headers.cfCacheStatus],
+    ["x-vercel-cache", headers.xVercelCache],
+    ["x-cache", headers.xCache],
+  ];
+  for (const [name, value] of named) {
+    if (value && CACHE_HIT_VALUE.test(value)) return `${name}: ${value}`;
+  }
+  return null;
+}
+
+/**
+ * Build the {@link CacheFreshness} note. `null` when the crawl did not send `no-cache` and the
+ * caller did not ask for the fresh-render statement, so ordinary reports are unchanged.
+ */
+export function buildCacheFreshness(
+  opts: { noCache: boolean; freshRender: boolean },
+  stalePages: readonly StaleCachePage[]
+): CacheFreshness | null {
+  if (!opts.noCache && !opts.freshRender) return null;
+  const pages = opts.noCache ? stalePages : [];
+  return {
+    noCache: opts.noCache,
+    freshRender: opts.freshRender,
+    stalePageCount: pages.length,
+    stalePages: pages.slice(0, MAX_STALE_CACHE_PAGES),
+  };
+}

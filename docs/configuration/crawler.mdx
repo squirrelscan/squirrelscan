@@ -901,6 +901,36 @@ and refuse a hop to a link-local or cloud metadata address.
   sourced from secrets.
 </Warning>
 
+### `no_cache`
+
+**Type:** `boolean`
+**Default:** `false`
+
+Send `Cache-Control: no-cache` and `Pragma: no-cache` on every page fetch, so a
+CDN or proxy revalidates with your origin instead of serving a copy from before a
+deploy. Use it for audits that start right after a deploy. A custom
+[header](#headers) with the same name wins. Pair it with `--refresh` when an
+earlier audit exists, because a page reused from the local cache sends no request.
+
+```toml
+[crawler]
+no_cache = true
+```
+
+**CLI override:** `--bypass-cache`.
+
+```bash
+squirrel audit https://example.com --bypass-cache --refresh
+```
+
+When it is on, the report notes every page whose response still looks cached: a
+positive `Age` header, or a HIT or STALE value in `X-Cache`, `CF-Cache-Status` or
+`X-Vercel-Cache`. Those pages may describe a copy from before the deploy. The note
+is in the text and markdown reports and as `cacheFreshness` in JSON
+(`noCache`, `freshRender`, `stalePageCount`, `stalePages`). It never changes the
+score. When a caller rendered pages fresh, without the render cache, it can have the
+report state that (`freshRender: true`); the CLI does not set it.
+
 ### `header_hosts`
 
 **Type:** `array` of hosts

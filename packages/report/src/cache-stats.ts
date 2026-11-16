@@ -2,7 +2,7 @@
 // rendered across all output formats. Cache stats are informational — they
 // NEVER affect the score (mirrors site-metadata.ts / technologies.ts).
 
-import type { CacheHitReason, CacheStats } from "./types";
+import type { CacheFreshness, CacheHitReason, CacheStats } from "./types";
 import { formatBytes } from "./utils";
 
 /** Human label per hit reason, in the order we display them. */
@@ -64,6 +64,32 @@ export function cacheReasonsLabel(stats: CacheStats): string {
   return cacheReasonRows(stats)
     .map((r) => `${r.label}: ${r.count}`)
     .join(", ");
+}
+
+/**
+ * Plain lines for the fresh-fetch note (#2032), shared by the text and markdown reports. Empty
+ * when there is no note. Informational, never part of the score.
+ */
+export function cacheFreshnessLines(note: CacheFreshness): string[] {
+  const lines: string[] = [];
+  if (note.noCache) {
+    lines.push("Fetched with Cache-Control: no-cache.");
+    if (note.stalePageCount === 0) {
+      lines.push("No page response looked cached.");
+    } else {
+      lines.push(
+        `${note.stalePageCount} page${note.stalePageCount === 1 ? "" : "s"} still looked cached (stale-cache note): the audit may describe a copy from before the deploy.`
+      );
+      for (const p of note.stalePages) lines.push(`  ${p.url} (${p.signal})`);
+      if (note.stalePageCount > note.stalePages.length) {
+        lines.push(`  ...and ${note.stalePageCount - note.stalePages.length} more`);
+      }
+    }
+  }
+  if (note.freshRender) {
+    lines.push("Pages were rendered fresh, without the render cache.");
+  }
+  return lines;
 }
 
 export { formatBytes };

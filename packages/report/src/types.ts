@@ -4,6 +4,7 @@ import type { AuditReport as CoreAuditReport } from "@squirrelscan/core-contract
 export type {
   AuditStatus,
   CacheHitReason,
+  CacheFreshness,
   CacheStats,
   CategoryScore,
   CheckItem,

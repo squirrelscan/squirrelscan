@@ -489,6 +489,8 @@ export interface CrawlerConfigSnapshot {
   allowQueryParams: string[];
   dropQueryPrefixes: string[];
   allowedDomains: string[];
+  /** The crawl sent `Cache-Control: no-cache` on page fetches (#2032). Absent when it did not. */
+  noCache?: boolean;
   /**
    * The URL list of a targeted run (#1777), kept so a resume under another list, or a normal one, is
    * refused: it would mix two scopes in one crawl. Absent on a normal crawl.

@@ -4,7 +4,7 @@ import type { ReportBranding } from "@squirrelscan/core-contracts";
 import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
-import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
+import { cacheFreshnessLines, cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
@@ -554,6 +554,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     const cs = report.cacheStats;
     const byReason = cacheReasonsLabel(cs);
     lines.push(`_${cacheStatsSummaryLine(cs)}${byReason ? ` (${byReason})` : ""}_`);
+    lines.push("");
+  }
+  if (report.cacheFreshness) {
+    for (const line of cacheFreshnessLines(report.cacheFreshness)) {
+      lines.push(line.startsWith("  ") ? `- ${line.trim()}` : `_${line}_`);
+    }
     lines.push("");
   }
   lines.push("---");

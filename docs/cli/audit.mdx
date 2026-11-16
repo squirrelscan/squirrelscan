@@ -33,6 +33,7 @@ squirrel audit <url> [options]
 | `--format` | `-f` | Output format: `console`, `text`, `json`, `html`, `markdown`, `xml`, `llm` | `console` |
 | `--output` | `-o` | Output file path | auto |
 | `--refresh` | `-r` | Ignore cache, fetch all pages fresh (full re-scan) | `false` |
+| `--bypass-cache` |  | Send `Cache-Control: no-cache` on page fetches so a CDN revalidates; the report notes pages that still look cached (see [`no_cache`](/configuration/crawler#no_cache)) | `false` |
 | `--store-scripts` | | Keep every fetched first-party script in the content store for this run, for corpus and research runs (see [`store_scripts`](/configuration/storage#store_scripts)) | `false` |
 | `--no-store-scripts` | | Turn [`[storage] store_scripts`](/configuration/storage#store_scripts) off for this run | config |
 | `--fresh-ua` | | Re-roll the project's pinned random user-agent (the new one is pinned for later runs) | `false` |

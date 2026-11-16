@@ -4,7 +4,7 @@ import type { ReportBranding } from "@squirrelscan/core-contracts";
 import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
-import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
+import { cacheFreshnessLines, cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, undecodableFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
@@ -455,6 +455,10 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     const cs = report.cacheStats;
     const byReason = cacheReasonsLabel(cs);
     write(`${cacheStatsSummaryLine(cs)}${byReason ? ` — ${byReason}` : ""}`);
+    write("");
+  }
+  if (report.cacheFreshness) {
+    for (const line of cacheFreshnessLines(report.cacheFreshness)) write(line);
     write("");
   }
 

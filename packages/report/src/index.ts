@@ -345,6 +345,7 @@ export {
   cacheReasonRows,
   cacheReasonsLabel,
   cacheStatsSummaryLine,
+  cacheFreshnessLines,
 } from "./cache-stats";
 export { formatBytes } from "./utils";
 export type { CacheStats, CacheHitReason } from "./types";

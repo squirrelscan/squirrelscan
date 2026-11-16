@@ -72,6 +72,7 @@ export type {
 } from "./entity-mcp";
 
 // Import storage types needed locally by interfaces in this file
+import type { CacheFreshness } from "./cache-stats";
 import type { IgnoreSummary } from "./ignore";
 import type { SeedRedirectHop, SeedRedirectRecord } from "./seed-redirect";
 import type { SeedVerification } from "./seed-verification";
@@ -1241,6 +1242,12 @@ export interface AuditReport {
    * REPORT-ONLY context — NEVER contributes to `healthScore`.
    */
   cacheStats?: CacheStats;
+  /**
+   * Fresh-fetch note (#2032): the crawl sent `Cache-Control: no-cache`, which pages still looked
+   * cached, and whether the caller asked for the fresh-render statement. Absent on ordinary audits.
+   * REPORT-ONLY, never scored.
+   */
+  cacheFreshness?: CacheFreshness;
   /**
    * Resolved, absolute URL of the website's full-page screenshot in R2/assets
    * (`getScreenshotUrl(websiteId)`), injected into the rendered public HTML at

@@ -1439,6 +1439,7 @@ export async function runAudit(
         robotsUserAgent: mergedConfig.crawler.robots_user_agent || undefined,
         headers: mergedConfig.crawler.headers,
         headerHosts: mergedConfig.crawler.header_hosts,
+        noCache: mergedConfig.crawler.no_cache,
         followRedirects: mergedConfig.crawler.follow_redirects,
         respectRobots: mergedConfig.crawler.respect_robots,
         // repo#3430: the site's own hosts are resolved once and connected to by
@@ -3362,6 +3363,8 @@ export function mergeOptionsToConfig(
             ),
           }
         : {}),
+      // --bypass-cache turns [crawler] no_cache on for this run (#2032).
+      ...(options.bypassCache ? { no_cache: true } : {}),
       // --header-host adds to [crawler] header_hosts (#732).
       ...(options.headerHosts && options.headerHosts.length > 0
         ? {
