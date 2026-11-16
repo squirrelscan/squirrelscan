@@ -349,7 +349,7 @@ Back off for `Retry-After` seconds, then retry. The counter is approximate: it i
 
 If the limiter itself fails, the request gets a `500` (a `503` on the MCP server): retry with backoff.
 
-Other `429` responses on `POST /v1/agent-runs` are not this limit. They use the typed envelope and say why: `QUEUE_FULL`, `EPHEMERAL_LIMIT` and `HOST_RATE_LIMITED` (the audited host's own crawl limit, with its own `Retry-After`).
+Other `429` responses on `POST /v1/agent-runs` are not this limit. They use the typed envelope and say why: `QUEUE_FULL`, `EPHEMERAL_LIMIT` and `HOST_RATE_LIMITED` (the audited host's own crawl limit for a website whose ownership is not confirmed, with its own `Retry-After`; see [Website ownership confirmation](/cloud/ownership-confirmation)).
 
 ## Credits
 
