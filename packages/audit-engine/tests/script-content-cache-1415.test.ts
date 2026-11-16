@@ -120,4 +120,27 @@ describe("script content cache (repo#1415)", () => {
       slow.stop(true);
     }
   });
+
+  test("a cache that throws degrades to a fetch", async () => {
+    const contentCache: ScriptContentCache = {
+      get: () => {
+        throw new Error("db locked");
+      },
+      put: () => {
+        throw new Error("db locked");
+      },
+    };
+    const results = await run({ contentCache });
+    expect(hits).toHaveLength(2);
+    expect(results.every((r) => r.error === null && r.content === "var a=1;")).toBe(true);
+  });
+
+  test("anyContentType passes (manifests, stylesheets) bypass the cache", async () => {
+    const contentCache = memoryCache();
+    contentCache.put(`${base}/a.js`, "stale");
+    const results = await run({ contentCache, anyContentType: true });
+    expect(hits).toHaveLength(2);
+    expect(results[0]?.content).toBe("var a=1;");
+    expect(contentCache.map.get(`${base}/a.js`)).toBe("stale");
+  });
 });
