@@ -98,6 +98,18 @@ while IFS= read -r version; do
     continue
   fi
 
+  # Tags cut before CHANGELOG.md existed carry no snapshot. Only these known
+  # tags are exempt (v0.0.78 notes were folded under v0.0.79 until their heading
+  # was restored, #1520); any other missing snapshot still fails closed below.
+  case "$version" in
+    v0.0.78 | v0.0.79)
+      if [ -z "$(git -C "$root" ls-tree --name-only "refs/tags/$version" -- CHANGELOG.md)" ]; then
+        echo "NOTE: tag $version predates CHANGELOG.md, no snapshot to compare." >&2
+        continue
+      fi
+      ;;
+  esac
+
   tagged_changelog="$tmp/tagged-changelog"
   tagged_section="$tmp/tagged-section"
 
