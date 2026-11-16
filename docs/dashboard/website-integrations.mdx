@@ -1,0 +1,60 @@
+---
+title: "Website integrations"
+description: "Connect GitHub, link a repository to a website and choose which GitHub events start an audit"
+icon: "github"
+---
+
+The **Integrations** tab links a GitHub repository to a website, so GitHub activity on that repository can start audits of the site.
+
+Open it at **Dashboard → your website → Settings → Integrations**.
+
+## Connect GitHub
+
+The **GitHub repository** card starts in one of three states.
+
+| State | What you see | What to do |
+| --- | --- | --- |
+| No GitHub account connected | **Connect GitHub** | Click it. It opens the GitHub App install page, where you pick the account and repositories to grant. |
+| Connected, no repository linked | A list of your GitHub accounts and a searchable list of repositories | Link a repository. |
+| Repository linked | The repository name, its default branch and the audit triggers | Change the triggers, or unlink. |
+
+To grant more accounts later, click **Add account** beside your connected accounts. If the list says **No accessible repositories found**, the GitHub App was not given access to any: use **Manage permissions on GitHub** (or the install page) to add repositories.
+
+## Link a repository
+
+1. Optionally type in **Search repositories** to filter by name. Repositories are grouped by owner.
+2. Select the repository that holds this website's code.
+3. Click **Link Repository**. A **Repository linked** message appears.
+
+A website links to one repository. The link is stored against the website's canonical URL, so each website has its own.
+
+## Audit triggers
+
+Once a repository is linked, three switches choose which GitHub events start an audit. They save as you flip them.
+
+| Switch | Starts an audit when |
+| --- | --- |
+| **Auto-audit on pull requests** | A pull request event arrives for the linked repository. |
+| **Auto-audit on push to main** | A push to main arrives for the linked repository. |
+| **Audit on @mention** | The squirrelscan app is mentioned in a GitHub comment. |
+
+GitHub-triggered audits are a fixed 25-page quick crawl, send no custom request headers and are never [authorised crawls](/dashboard/crawl-settings#authorised-crawls). Crawl scope and include and exclude patterns from [Crawl settings](/dashboard/crawl-settings) still apply.
+
+## Manage permissions
+
+The **Manage permissions on GitHub** link under the repository name opens that installation's settings on GitHub. There you change which repositories the squirrelscan GitHub App can see, or uninstall it. The link opens in a new tab.
+
+## Unlink a repository
+
+Click **Unlink** at the bottom of the card. The repository is unlinked from this website, a **Repository unlinked** message appears and the card returns to the repository list. This does not uninstall the GitHub App and does not touch your repository.
+
+## See also
+
+<CardGroup cols={2}>
+  <Card title="Website details" icon="pencil" href="/dashboard/website-details">
+    Title, summary and website ID.
+  </Card>
+  <Card title="Crawl settings" icon="route" href="/dashboard/crawl-settings">
+    What GitHub-triggered audits crawl.
+  </Card>
+</CardGroup>
