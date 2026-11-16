@@ -1,4 +1,4 @@
-import type { RedirectChain, RenderedRequest } from "@squirrelscan/core-contracts";
+import type { RedirectChain, RenderedRequest, RenderLayout } from "@squirrelscan/core-contracts";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   fetchUndecoded,
@@ -112,6 +112,8 @@ export interface FetchResponse {
   serverHtml?: string;
   /** XHR and fetch requests the rendered page issued, when the render service reported them. */
   renderedRequests?: RenderedRequest[];
+  /** Mobile-viewport layout payload from the cloud render, when it ran the mobile pass (repo#4218). */
+  layout?: RenderLayout;
   /**
    * Set on a 304 the conditional-render gate made from a 200 whose source was
    * unchanged (repo#4765). Its headers are that 200's full set, so the crawler

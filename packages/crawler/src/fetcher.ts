@@ -8,6 +8,7 @@ import type {
   RedirectChain,
   RedirectHop,
   RenderedRequest,
+  RenderLayout,
   ResponseHeaders,
   SecurityHeaders,
 } from "@squirrelscan/core-contracts";
@@ -579,6 +580,8 @@ export interface FetchResult {
   synthesizedNotModified?: boolean;
   /** XHR and fetch requests the rendered page issued, when the render service reported them. */
   renderedRequests?: RenderedRequest[];
+  /** Mobile-viewport layout payload, when the cloud render ran the mobile pass (repo#4218). */
+  layout?: RenderLayout;
   /** Browser render cost only, threaded from the browser-queue fetcher's server-measured value (#826). Absent for non-rendered fetches. */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started (#826). Absent for non-rendered fetches. */
@@ -1089,6 +1092,7 @@ function fetchWithDocumentFetcher(
       serverHtml: response.serverHtml,
       synthesizedNotModified: response.synthesizedNotModified,
       renderedRequests: response.renderedRequests,
+      ...(response.layout ? { layout: response.layout } : {}),
       // Queue-wait vs render-time breakdown, set only by the browser-queue
       // fetcher (#826).
       renderTimeMs: response.renderTimeMs,

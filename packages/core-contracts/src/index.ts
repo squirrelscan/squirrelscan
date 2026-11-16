@@ -29,6 +29,7 @@ export * from "./api-keys";
 
 // Cloud-service request/response contracts.
 export * from "./services";
+export * from "./render-layout";
 
 // Site-metadata cloud-service contracts (enums + SiteMetadata profile).
 export * from "./site-metadata";

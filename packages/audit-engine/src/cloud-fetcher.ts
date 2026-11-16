@@ -38,7 +38,7 @@
 // cancels the SUBMIT: the server debits on submit, so the submit runs to its
 // own bound and the debit is recorded whether or not anyone still wants the page.
 
-import { MAX_RENDERED_REQUESTS_PER_PAGE } from "@squirrelscan/core-contracts";
+import { MAX_RENDERED_REQUESTS_PER_PAGE, normalizeRenderLayout } from "@squirrelscan/core-contracts";
 import type {
   RenderChargeLine,
   RenderJobResponse,
@@ -246,6 +246,7 @@ export function mapRenderItemToResponse(
     item.headers && Object.keys(item.headers).length > 0
       ? item.headers
       : { "content-type": "text/html; charset=utf-8" };
+  const layout = normalizeRenderLayout(item.layout);
   return {
     url: requestUrl,
     finalUrl,
@@ -271,6 +272,8 @@ export function mapRenderItemToResponse(
     ...(Array.isArray(item.requests) && item.requests.length > 0
       ? { renderedRequests: item.requests.slice(0, MAX_RENDERED_REQUESTS_PER_PAGE) }
       : {}),
+    // Mobile layout payload (repo#4218), re-capped here; absent when the render had no mobile pass.
+    ...(layout ? { layout } : {}),
     // Queue-wait vs render-time breakdown, absent on a render-cache hit (#826).
     renderTimeMs: item.renderTimeMs,
     queueWaitMs: item.queueWaitMs,
