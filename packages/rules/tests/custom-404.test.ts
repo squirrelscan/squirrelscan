@@ -76,7 +76,17 @@ describe("crawl/custom-404", () => {
     const { origin } = serve(() => new Response(null, { status: 302, headers: { location: "/" } }));
     const checks = await run(ctx(origin));
     expect(checks.map((c) => [c.name, c.status])).toEqual([["custom-404-redirect", "warn"]]);
-    expect(checks[0]!.message).toContain("to /");
+    expect(checks[0]!.message).toContain(`to ${origin}/)`.slice(0, -1));
+  });
+
+  test("redirect Location is stripped to origin and path (no query string)", async () => {
+    const { origin } = serve(
+      () => new Response(null, { status: 302, headers: { location: "/login?token=secret&next=/x" } }),
+    );
+    const checks = await run(ctx(origin));
+    expect(checks[0]!.message).toContain(`to ${origin}/login `.trim());
+    expect(JSON.stringify(checks[0])).not.toContain("secret");
+    expect((checks[0]!.details as { location?: string }).location).toBe(`${origin}/login`);
   });
 
   test("warn: the stock nginx page is a bare default, and is also indexable", async () => {
