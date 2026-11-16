@@ -113,9 +113,6 @@ async function fetchWithRetry(url, attempts = 3) {
 }
 
 /**
- * Compute SHA256 hash
- */
-/**
  * Warning lines for a finished `self install` spawn (empty on success).
  * A signal kill reports status null, so the signal has to be read too: a
  * SIGKILL is almost always the out-of-memory killer, and "retry by hand"
@@ -146,6 +143,9 @@ function selfInstallWarnings(result) {
   return [];
 }
 
+/**
+ * Compute SHA256 hash
+ */
 function sha256(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
