@@ -18,6 +18,7 @@ import {
   cacheControlLifetimeSeconds,
   parseCacheControl,
 } from "@squirrelscan/utils/cache-control";
+import { SUBRESOURCE_CACHING_LIMITS } from "@squirrelscan/utils/constants";
 import { detectCdnFromHeaders, hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -71,6 +72,14 @@ export const optionsSchema = z.object({
     .describe(
       "Minimum fraction of pages that should expose a validator (ETag or Last-Modified) for cheap revalidation"
     ),
+  max_subresources: z
+    .number()
+    .int()
+    .min(1)
+    .default(SUBRESOURCE_CACHING_LIMITS.MAX_SAMPLE)
+    .describe(
+      "Most same-site sub-resources (CSS, scripts, fonts, images), taken in URL order, whose caching headers are judged for a freshness lifetime"
+    ),
   min_compression_ratio: z
     .number()
     .default(0.8)
@@ -120,6 +129,143 @@ function judgeExpires(
       : undefined;
   if (reference === undefined) return "unknown";
   return expiresAt > reference ? "lifetime" : "expired";
+}
+
+interface SubresourceCaching {
+  url: string;
+  kind: "css" | "script" | "font" | "image";
+  status: number | null;
+  error: string | null;
+  contentType: string | null;
+  sourcePages: string[];
+  cacheReason?: string | null;
+  headers?: {
+    cacheControl: string | null;
+    expires: string | null;
+    date: string | null;
+  };
+}
+
+// Same-site sub-resources whose caching headers were observed on THIS crawl. A record reused from a
+// prior crawl, an errored or non-2xx one, and one fetched without a header read (the CLI content
+// store) cannot show what the server sends now, so none of them is judged.
+function observedSubresources(ctx: RuleContext): SubresourceCaching[] {
+  const site = ctx.site;
+  if (!site) return [];
+  const sizes = site.resourceSizes;
+  const fromSizes = (
+    kind: SubresourceCaching["kind"],
+    list: NonNullable<typeof sizes>["css"] | undefined
+  ): SubresourceCaching[] =>
+    (list ?? []).map((r) => ({
+      url: r.url,
+      kind,
+      status: r.status,
+      error: r.error,
+      contentType: r.contentType,
+      sourcePages: r.sourcePages,
+      cacheReason: r.cacheReason,
+      ...(r.cacheControl !== undefined
+        ? {
+            headers: {
+              cacheControl: r.cacheControl,
+              expires: r.expires ?? null,
+              date: r.date ?? null,
+            },
+          }
+        : {}),
+    }));
+  const scripts: SubresourceCaching[] = (site.scripts ?? []).map((r) => ({
+    url: r.url,
+    kind: "script",
+    status: r.status,
+    error: r.error,
+    contentType: r.contentType,
+    sourcePages: r.sourcePages,
+    ...(r.cacheHeaders ? { headers: r.cacheHeaders } : {}),
+  }));
+  const origin = (() => {
+    try {
+      return new URL(site.pages[0]?.url ?? "").hostname;
+    } catch {
+      return undefined;
+    }
+  })();
+  const sameSite = (url: string): boolean => {
+    if (origin === undefined) return true;
+    try {
+      return new URL(url).hostname === origin;
+    } catch {
+      return false;
+    }
+  };
+  return [
+    ...fromSizes("css", sizes?.css),
+    ...fromSizes("font", sizes?.fonts),
+    ...fromSizes("image", sizes?.images),
+    ...scripts,
+  ].filter(
+    (r) =>
+      r.headers !== undefined &&
+      r.status !== null &&
+      r.status >= 200 &&
+      r.status < 300 &&
+      r.error === null &&
+      (r.cacheReason ?? null) === null &&
+      sameSite(r.url)
+  );
+}
+
+function judgeSubresources(ctx: RuleContext, maxSample: number): CheckResult | undefined {
+  const sample = observedSubresources(ctx)
+    .sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0))
+    .slice(0, maxSample);
+  if (sample.length === 0) return undefined;
+
+  const missing: SubresourceCaching[] = [];
+  let withLifetime = 0;
+  let noStore = 0;
+  let unjudged = 0;
+  for (const r of sample) {
+    const h = r.headers!;
+    const cc = parseCacheControl(h.cacheControl);
+    if (cc.noStore) {
+      noStore++; // a deliberate policy, not a forgotten one
+      continue;
+    }
+    const lifetime = cacheControlLifetimeSeconds(cc);
+    const verdict = judgeExpires(h.expires ?? undefined, h.date ?? undefined, ctx.site?.pages[0]?.fetchedAt);
+    const fresh = !cc.noCache && ((lifetime !== undefined && lifetime > 0) || verdict === "lifetime");
+    if (fresh) withLifetime++;
+    else if (!cc.noCache && lifetime === undefined && verdict === "unknown") unjudged++;
+    else missing.push(r);
+  }
+
+  const judged = sample.length;
+  const note =
+    (noStore > 0 ? `, ${noStore} send Cache-Control: no-store (deliberate)` : "") +
+    (unjudged > 0 ? `, ${unjudged} send only Expires with nothing to judge it against` : "");
+  if (missing.length === 0) {
+    return {
+      name: "bad-caching-subresources",
+      status: "pass",
+      message: `${withLifetime}/${judged} sampled sub-resources declare a freshness lifetime${note}`,
+      details: { sampled: judged, withLifetime, maxSample },
+    };
+  }
+  return {
+    name: "bad-caching-subresources",
+    status: "warn",
+    message: `${missing.length}/${judged} sampled sub-resources (CSS, JS, fonts, images) have no freshness lifetime, so every repeat visit revalidates or re-downloads them${note}`,
+    value: `${Math.round((withLifetime / judged) * 100)}%`,
+    expected: "Cache-Control max-age (long, with immutable, for fingerprinted assets) or Expires on every static sub-resource",
+    items: missing.map((r) => ({
+      id: r.url,
+      sourcePages: r.sourcePages,
+      meta: { kind: r.kind, contentType: r.contentType ?? undefined },
+    })),
+    details: { sampled: judged, withLifetime, missing: missing.length, maxSample },
+  };
 }
 
 export const badCachingRule: Rule = {
@@ -385,6 +531,9 @@ export const badCachingRule: Rule = {
         });
       }
     }
+
+    const sub = judgeSubresources(ctx, opts.max_subresources);
+    if (sub) checks.push(sub);
 
     return { checks };
   },
