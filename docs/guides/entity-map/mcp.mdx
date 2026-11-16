@@ -55,6 +55,8 @@ Collapsing is by resolved `@id`, or by type and name when there is no `@id`. The
 | `include_page_local` | Include a page's own `WebPage`, `BreadcrumbList` and unnamed images. False by default. |
 | `limit`, `offset` | Paging. Default 25, maximum 100. Ordered by page count descending, then by key. |
 
+`type`, `page` and `problem` each accept a single value or an array of values: `"problem": "no-id"` and `"problem": ["no-id"]` are the same call, on the CLI server and the cloud server alike.
+
 Several values in one filter are an OR. Two different filters are an AND: `type` plus `problem` keeps the entities that match a listed type **and** have a listed problem.
 
 Returns the site-wide `summary`, a `filtered` block with the `nodes` and `edges` counts that survived the filters, a page of nodes, and `total` and `hasMore`. `summary` does not change with the filters. Those last two matter: they are how you tell a page from the whole list before describing a site from 25 of its entities.

@@ -248,6 +248,7 @@ async function call(
 
 /** One JSON Schema property, as a client is sent it. */
 interface SchemaProperty {
+  anyOf?: SchemaProperty[];
   type?: string;
   description?: string;
   enum?: string[];
@@ -355,20 +356,29 @@ describe("the five tools are registered with the shared contract", () => {
 
       for (const [field, spec] of Object.entries(fields)) {
         const property = properties[field]!;
+        if (spec.kind === "string[]") {
+          // Scalar-or-array, like the cloud (repo#4559): anyOf the member and
+          // an array of it. Unwrap to the array branch for the checks below.
+          const branches = property.anyOf ?? [];
+          expect(branches).toHaveLength(2);
+          const scalar = branches.find((b) => b.type !== "array")!;
+          const arrayBranch = branches.find((b) => b.type === "array")!;
+          expect(scalar.type).toBe("string");
+          expect(arrayBranch.items?.type).toBe("string");
+          if (spec.values) {
+            expect(scalar.enum).toEqual([...spec.values]);
+            expect(arrayBranch.items?.enum).toEqual([...spec.values]);
+          }
+          expect(property.description).toBe(fieldDescription(tool, field));
+          continue;
+        }
         expect(property.type).toBe(expectedJsonType[spec.kind]);
         // A description on every field, matching the shared wording. The
         // descriptions ARE the interface for a model, so drift between the two
         // servers' wording is drift in the tool.
         expect(property.description).toBe(fieldDescription(tool, field));
 
-        if (spec.values) {
-          // On the items for an array, on the property itself for a scalar.
-          const holder = spec.kind === "string[]" ? property.items! : property;
-          expect(holder.enum).toEqual([...spec.values]);
-        }
-        if (spec.kind === "string[]") {
-          expect(property.items?.type).toBe("string");
-        }
+        if (spec.values) expect(property.enum).toEqual([...spec.values]);
         if (spec.min !== undefined) expect(property.minimum).toBe(spec.min);
         if (spec.max !== undefined) expect(property.maximum).toBe(spec.max);
       }
@@ -511,6 +521,66 @@ describe("against the docs snapshots as a seeded store", () => {
       all.data.total as number
     );
     expect(singlePage.data.total as number).toBeGreaterThan(0);
+  });
+
+  // repo#4559: scalar-or-array, like the cloud. A bare value is a one-element
+  // array, and an array call is unchanged.
+  test("list_entities takes problem, type and page as a scalar or an array", async () => {
+    const asArray = await call("list_entities", {
+      limit: 100,
+      problem: ["single-page"],
+    });
+    const asScalar = await call("list_entities", {
+      limit: 100,
+      problem: "single-page",
+    });
+    expect(asScalar.data.total).toBe(asArray.data.total);
+    expect(asScalar.data.entities).toEqual(asArray.data.entities);
+
+    const typeArray = await call("list_entities", {
+      limit: 100,
+      type: ["Organization"],
+    });
+    const typeScalar = await call("list_entities", {
+      limit: 100,
+      type: "Organization",
+    });
+    expect(typeScalar.data.total).toBe(typeArray.data.total);
+    expect(typeScalar.data.entities).toEqual(typeArray.data.entities);
+
+    const pageUrl = "https://docs.squirrelscan.com/";
+    const pageArray = await call("list_entities", {
+      limit: 100,
+      page: [pageUrl],
+    });
+    const pageScalar = await call("list_entities", {
+      limit: 100,
+      page: pageUrl,
+    });
+    expect(pageScalar.data.total).toBe(pageArray.data.total);
+    expect(pageScalar.data.entities).toEqual(pageArray.data.entities);
+  });
+
+  test("get_entity_graph takes problem, type and page as a scalar or an array", async () => {
+    for (const [field, array, scalar] of [
+      ["problem", ["single-page"], "single-page"],
+      ["type", ["Organization"], "Organization"],
+      [
+        "page",
+        ["https://docs.squirrelscan.com/"],
+        "https://docs.squirrelscan.com/",
+      ],
+    ] as const) {
+      const a = await call("get_entity_graph", { [field]: array });
+      const b = await call("get_entity_graph", { [field]: scalar });
+      expect(b.data.nodeCount).toBe(a.data.nodeCount);
+      expect(b.data.edgeCount).toBe(a.data.edgeCount);
+    }
+  });
+
+  test("an invalid scalar problem is still rejected", async () => {
+    const result = await call("list_entities", { problem: "bogus" });
+    expect(result.ok).toBe(false);
   });
 
   test("list_entities reads an older audit when asked", async () => {
