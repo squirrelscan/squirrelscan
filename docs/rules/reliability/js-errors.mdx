@@ -1,0 +1,94 @@
+---
+title: "JavaScript errors and failed requests: what breaks after load"
+description: "A page can answer 200 with clean HTML and still throw an uncaught exception, fail to hydrate or leave a section empty after an API call answers 500. squirrel reads the errors the cloud render recorded and groups them across the site."
+---
+
+## What this rule detects
+
+Clean HTML says nothing about what the browser does next. An uncaught `TypeError` can stop the menu, the form or the checkout from working. A framework hydration mismatch makes React or Vue discard the server HTML and render again. `ChunkLoadError: Loading chunk 123 failed` appears after a deploy removes a code-split chunk. A `fetch('/api/data')` made after load answers 500 and a section stays empty.
+
+This rule reads what the browser reported while the page ran: uncaught exceptions, `console.error` messages and requests that failed at runtime. The renderer keeps listening for a few seconds after `load`, so a script that throws on a timer is caught too.
+
+It needs a rendered page, so it is a cloud check. A local or `--http` audit does not run it and lists it among the cloud checks that did not run, with the prompt to run a cloud audit.
+
+## What squirrel checks
+
+The rule is site-wide. It groups findings across pages by normalised message and source file, so one exception on 14 pages is one finding with a page count and sample pages, not 14.
+
+- **Error:** an uncaught exception thrown from a first-party script. First-party means the same registrable domain as the site. An inline script counts as first-party. Check name `js-errors`.
+- **Warning, hydration:** a hydration mismatch, recognised by message: React "Hydration failed" and minified errors #418, #423 and #425, and Vue "Hydration ... mismatch". Check name `hydration-errors`.
+- **Warning, requests:** a first-party request made after load that answers 5xx or 404. Check name `failed-runtime-requests`.
+- **Warning, console:** a `console.error` from first-party code. Check name `console-errors`.
+- **Warning, third party:** any exception, console error or failed request from another registrable domain. Check name `third-party-js-errors`.
+- **Not reported:** 401 and 403 from the site's own API (normal for a signed-out visitor), requests the renderer blocked or aborted, `net::ERR_ABORTED` on beacons and navigation, `ResizeObserver loop` messages, Chrome's `Failed to load resource` echo of a request that is already reported, CSP violations (owned by the CSP violations rule), and pages that answered with a WAF or bot challenge.
+- **Not checked:** when the renderer returned no runtime data for a page, the page is counted in an information note named `unchecked-pages`. If no page has runtime data, the rule is skipped, never passed.
+
+## How to fix it
+
+Fix the error at the source file and line in the finding. For a hydration mismatch, make the server and the client render the same markup: avoid `Date.now()`, random values and browser-only checks during render.
+
+```js
+// Differs between server and client: hydration mismatch
+const label = `Updated ${new Date().toLocaleTimeString()}`;
+```
+
+For a `ChunkLoadError` after a deploy, keep the previous release's hashed chunks online while cached pages may still reference them. For a failing API call, fix the endpoint or handle the failure in the UI. For a third-party failure, check the provider or remove the tag.
+
+| | |
+|---|---|
+| **Rule ID** | `reliability/js-errors` |
+| **Category** | [Reliability](/rules/reliability) |
+| **Scope** | Site-wide |
+| **Cloud** | Yes, needs a rendered page |
+| **Severity** | error for first-party uncaught exceptions; warning for hydration, failed requests, console errors and third-party failures |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["reliability/js-errors"]
+```
+
+### Disable all Reliability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["reliability/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["reliability/js-errors"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it.
+
+## Related rules
+
+- [reliability/broken-resources](/rules/reliability/broken-resources): scripts, stylesheets and fonts the HTML references that fail to load, with no render.
+- [reliability/broken-forms](/rules/reliability/broken-forms): forms that lose submissions.
+- [ax/content-without-js](/rules/ax/content-without-js): content that only exists after JavaScript runs.
+
+## References
+
+- [React hydration errors](https://react.dev/errors/418)
+- [Window: error event, MDN](https://developer.mozilla.org/en-US/docs/Web/API/Window/error_event)
+- [HTTP response status codes, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status)
+
+## Check your site
+
+Run a cloud audit of `https://example.com` and open the Reliability section of the report. Each error lists its message, source file and the pages it appears on. Local audits list this rule among the cloud checks that did not run.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Reliability section looks like on a real site.
+  </Card>
+</CardGroup>

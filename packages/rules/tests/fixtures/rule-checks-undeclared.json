@@ -247,6 +247,7 @@
   "perf/unminified-js",
   "reliability/broken-forms",
   "reliability/broken-resources",
+  "reliability/js-errors",
   "schema/article",
   "schema/breadcrumb",
   "schema/coverage-outlier",
