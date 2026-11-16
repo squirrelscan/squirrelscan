@@ -25,7 +25,7 @@ One `GET` to a random path that cannot exist (the baseline), then one request pe
 
 Every request is a `GET`. Nothing else is sent: no `POST`, no query string, no cookies. Every URL is built on the audited origin (scheme, host and port), and a redirect is never followed, wherever it points. At most 16 KB of each answer is read, counted after decompression, so a large archive is never pulled in full. Every request counts against the shared [probe budget](/configuration/security#budget) and robots.txt is ignored on purpose, as it is for every `aggressive` probe.
 
-Spring Boot Actuator endpoints (`/actuator/env`, `/actuator/heapdump` and the rest) are not on this list: they are covered by `security/exposed-actuator`, so one exposure is never reported by two rules.
+Spring Boot Actuator endpoints (`/actuator/env`, `/actuator/heapdump` and the rest) are not on this list and are not probed.
 
 ### How a hit is confirmed
 
