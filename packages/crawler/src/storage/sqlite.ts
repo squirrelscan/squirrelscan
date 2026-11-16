@@ -2043,6 +2043,26 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * Just `parsed_data` for one page (repo#4525): `getPage` is `SELECT *`, so a
+   * caller that needs only the parse pays for the HTML too. Null when the page
+   * is absent or has no stored parse.
+   */
+  getPageParsedData(
+    crawlId: string,
+    normalizedUrl: string
+  ): Effect.Effect<string | null, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const row = this.getDb()
+          .query("SELECT parsed_data FROM pages WHERE crawl_id = ? AND normalized_url = ?")
+          .get(crawlId, normalizedUrl) as { parsed_data: string | null } | undefined;
+        return row?.parsed_data ?? null;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
   getPages(
     crawlId: string,
     options?: PaginationOptions
