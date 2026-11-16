@@ -51,6 +51,11 @@ describe("crawl/sitemap-coverage with an incomplete sitemap corpus (#1760)", () 
         expect(c?.skipReason).toContain("incomplete");
       });
     }
+    test(`absent readState (precomputed=${precomputed}) is unknown, not checked (#1869)`, async () => {
+      const c = await cov(ctx({}, precomputed));
+      expect(c?.status).toBe("skipped");
+      expect(c?.skipReason).toContain("unknown");
+    });
     test(`control: a complete corpus (precomputed=${precomputed}) still warns`, async () => {
       const c = await cov(ctx({ readState: "complete" }, precomputed));
       expect(c?.status).toBe("warn");

@@ -81,12 +81,12 @@ function readSitemaps(ctx: RuleContext) {
       }
     }
   }
-  // A truncated or partly read sitemap corpus cannot prove a page is unlisted, so absence
+  // A truncated, partly read or unrecorded-state sitemap corpus (#1869) cannot prove a page is unlisted, so absence
   // from it is not evidence (#1760): such a page is reported for review only and is
   // never escalated toward "likely injected".
   const sm = ctx.site?.sitemaps;
   const corpusIncomplete =
-    sm?.truncated === true || sm?.readState === "partial" || sm?.readState === "unreadable";
+    sm?.truncated === true || ((sm?.discovered.length ?? 0) > 0 && sm?.readState !== "complete");
   return { sitemapUrls, corpusIncomplete, hasSitemap: sitemapUrls.size > 0 };
 }
 
