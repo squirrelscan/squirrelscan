@@ -24,7 +24,7 @@ import {
 } from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
-import { parseHTML } from "linkedom";
+import { parseDocument } from "@squirrelscan/parser";
 
 import { readCappedBytes } from "../security/probe-http";
 import { hasRequestTool } from "../tools";
@@ -152,7 +152,7 @@ const NOINDEX = /(?:^|[\s,])(?:noindex|none)(?:[\s,]|$)/i;
 /** What an HTML 404 page offers. Pure, so tests can feed it fixtures directly. */
 export function readErrorPage(html: string, origin: string, headers: Headers): ErrorPageReading {
   const defaultServer = DEFAULT_SIGNATURES.find((s) => s.pattern.test(html))?.name ?? null;
-  const { document } = parseHTML(html);
+  const document = parseDocument(html);
 
   const metaNoindex = [...document.querySelectorAll("meta[name]")].some((m) => {
     const name = (m.getAttribute("name") ?? "").toLowerCase();
