@@ -1748,6 +1748,16 @@ export interface CrawlStorage {
     crawlId: string,
     normalizedUrl: string,
   ): Effect.Effect<PageRecord | null, StorageError, never>;
+  /**
+   * One page's stored `parsed_data` JSON and nothing else: a single-column read
+   * that never touches the HTML or other large columns. Null when the page is
+   * absent or has no stored parse. Same key as `getPage` (crawl id plus
+   * normalized URL).
+   */
+  getPageParsedData(
+    crawlId: string,
+    normalizedUrl: string,
+  ): Effect.Effect<string | null, StorageError, never>;
   getPages(
     crawlId: string,
     options?: PaginationOptions,
