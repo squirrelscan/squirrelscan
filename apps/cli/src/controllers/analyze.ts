@@ -36,6 +36,7 @@ import {
 } from "@/controllers/types";
 import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { createStorage } from "@/crawler/storage";
+import { createScriptContentCache } from "@/crawler/storage/script-cache";
 import { deriveCrawlRunStatus } from "@/reports/reconstruct";
 import { retiredAuditReason } from "@/reports/retired";
 import { getProjectsPath } from "@/self/paths";
@@ -582,6 +583,7 @@ export function analyzeStoredCrawl(
         resourceOverrides: {
           // squirrelscan/repo#3430: the site's own hosts are vetted and pinned.
           pinOwnHosts: pinOwnHosts(),
+          scriptContentCache: createScriptContentCache(),
         },
         onBatchContext: (batchContext) => {
           for (const { page } of batchContext) {

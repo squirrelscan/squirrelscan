@@ -168,7 +168,7 @@ import {
   type WebAppManifestOccurrences,
 } from "./web-app-manifest";
 import { toStylesheetContentData } from "./stylesheet-content";
-import { fetchScriptContents, scriptRuleLimit, type ScriptFetchResult } from "./script-fetcher";
+import { fetchScriptContents, scriptRuleLimit, type ScriptContentCache, type ScriptFetchResult } from "./script-fetcher";
 import { initialViewportFlags, selectImageCandidate } from "@squirrelscan/utils/image-loading";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
@@ -281,6 +281,8 @@ function buildRslData(rsl: RslRecord | null): RslData | null {
  * @param siteContext - Pre-parsed site context (eliminates redundant parsing)
  */
 export interface ResourceCheckOverrides {
+  /** Replays script and preload bodies from the caller's cache (the CLI's content store); absent: always fetched. */
+  scriptContentCache?: ScriptContentCache;
   resourceCheckMaxItems?: number;
   resourceCheckTimeoutMs?: number;
   /** Total time budget for all resource checks combined (CSS + images + scripts + sitemap). */
@@ -1013,6 +1015,7 @@ export function fetchAssetsFromOccurrences(
         ? { customHeaders: config.crawler.headers, headerScope }
         : {}),
       ...(fetchBudget ? { budget: fetchBudget } : {}),
+      ...(overrides?.scriptContentCache ? { contentCache: overrides.scriptContentCache } : {}),
       egress: ownSiteEgress,
     };
 
