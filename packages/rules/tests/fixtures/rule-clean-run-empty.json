@@ -1,0 +1,8 @@
+[
+  "a11y/aria-labels",
+  "a11y/svg-img-alt",
+  "integrity/kit-signature",
+  "mobile/input-zoom",
+  "schema/website-search",
+  "security/password-form-get"
+]
