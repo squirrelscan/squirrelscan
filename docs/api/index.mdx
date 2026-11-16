@@ -210,7 +210,7 @@ patterns.
 
 `POST /v1/reports` accepts a request body of up to **1 MiB** (1,048,576 bytes). A body over the limit is refused before it is parsed. The squirrel CLI caps its own report to fit, from version 0.0.109. Other clients should keep the report under the limit.
 
-Until 2026-11-12 (UTC), CLIs older than 0.0.109 were allowed up to 2 MiB. That allowance has ended: every client now gets the 1 MiB limit. The version floor stays, so an older CLI that sends an oversized report gets the `422` below.
+Until 2026-11-12 (UTC), every client that does not cap its own report was allowed up to 2 MiB: CLIs older than 0.0.109, API-key integrations, curl, and requests with no User-Agent. That allowance has ended: every client now gets the 1 MiB limit. The version floor stays, so a CLI older than 0.0.109 that sends an oversized report gets the `422` below.
 
 A body over the limit gets `413` with the code `PAYLOAD_TOO_LARGE`. `error.details.budgetBytes` is the limit, and `error.details.bodyBytes` is the declared `Content-Length` (absent when the body had no declared length):
 
