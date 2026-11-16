@@ -594,6 +594,71 @@ export interface RenderRequest {
    * Entries for urls not in `urls`, or that aren't 64-hex, are ignored.
    */
   sourceHashes?: Record<string, string>;
+  /**
+   * Ask the render service to also return a per-page accessibility snapshot
+   * (`RenderResultItem.a11ySnapshot`): computed colours, a11y tree, focus order and
+   * boxes (repo#3087). Same render debit, no extra charge line. Absent = html only.
+   */
+  a11ySnapshot?: boolean;
+}
+
+/** Hard caps on one page's accessibility snapshot (repo#3087); the service and the client both enforce them. */
+export const A11Y_SNAPSHOT_LIMITS = {
+  /** Max text nodes carrying computed colours. */
+  textNodes: 500,
+  /** Max interactive elements carrying role and accessible name. */
+  interactive: 300,
+  /** Max entries in the tab order. */
+  tabOrder: 300,
+  /** Max element bounding boxes. */
+  boxes: 500,
+  /** Max chars kept of an accessible name or selector. */
+  stringChars: 200,
+} as const;
+
+/** Computed colours for one text node's parent element (CSS `rgb()/rgba()` strings). */
+export interface A11ySnapshotText {
+  selector: string;
+  text: string;
+  color: string;
+  /** Effective background after compositing ancestors; absent when it could not be resolved (image, gradient). */
+  backgroundColor?: string;
+  fontSizePx?: number;
+  fontWeight?: number;
+}
+
+/** Role and accessible name of one interactive element. */
+export interface A11ySnapshotInteractive {
+  selector: string;
+  role: string;
+  /** Computed accessible name; empty string = no name. */
+  name: string;
+  disabled?: boolean;
+}
+
+/** Bounding box in CSS pixels relative to the document. */
+export interface A11ySnapshotBox {
+  selector: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Which snapshot sections were cut at the caps; a section is listed when elements were dropped. */
+export type A11ySnapshotSection = "textNodes" | "interactive" | "tabOrder" | "boxes";
+
+/** Per-page accessibility snapshot returned by the render service (repo#3087). */
+export interface A11ySnapshot {
+  textNodes: A11ySnapshotText[];
+  interactive: A11ySnapshotInteractive[];
+  /** Selectors in sequential focus (tab) order. */
+  tabOrder: string[];
+  boxes: A11ySnapshotBox[];
+  /** True when any section was cut at the caps; never silent. */
+  truncated: boolean;
+  /** Sections that were cut, with how many elements were dropped. */
+  dropped?: Partial<Record<A11ySnapshotSection, number>>;
 }
 
 /**
@@ -635,6 +700,8 @@ export interface RenderResultItem {
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started. Absent on a render-cache hit (#826). */
   queueWaitMs?: number;
+  /** Accessibility snapshot, present only when the request set `a11ySnapshot` and the page rendered (repo#3087). */
+  a11ySnapshot?: A11ySnapshot;
 }
 
 export interface RenderResultResponse {

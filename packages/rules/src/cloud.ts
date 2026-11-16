@@ -9,6 +9,10 @@
 // opens a socket or knows about credits.
 
 import {
+  A11Y_SNAPSHOT_LIMITS,
+  type A11ySnapshot,
+  type A11ySnapshotSection,
+  type RenderResultItem,
   CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
   type CloudServiceId,
   type CreditFeature,
@@ -54,6 +58,12 @@ export interface RuleCloudSpec {
   unit: "page" | "site" | "link";
   /** Credit feature billed for this service (drives estimate + ledger). */
   creditFeature: CreditFeature;
+  /**
+   * The rule reads the per-page accessibility snapshot on the `render` result (repo#3087).
+   * The prefetch then asks the render service for it, and renders pages a rendered crawl
+   * would otherwise skip (the snapshot is not self-identical to the crawl's HTML).
+   */
+  a11ySnapshot?: boolean;
 }
 
 /** Site-scoped store key — services with `unit: "site"` register under this. */
@@ -141,4 +151,54 @@ export function isNotApplicableCloudSkip(skipReason: string | undefined): boolea
  */
 export function isRenderDisabledCloudSkip(skipReason: string | undefined): boolean {
   return skipReason === humanizeCloudSkip("render-disabled");
+}
+
+/** Outcome of reading a page's accessibility snapshot (repo#3087). */
+export type A11ySnapshotRead =
+  | { status: "ok"; snapshot: A11ySnapshot; truncated: boolean }
+  | { status: "skipped"; skipReason: CloudSkipReason };
+
+/**
+ * Read one page's accessibility snapshot from the prefetched `render` result. A skipped
+ * envelope keeps its reason; a render that returned no html, no snapshot or a malformed
+ * one is `render-failed`; a missing envelope is `not-prefetched`. Caps are re-enforced
+ * here (an older or misbehaving service cannot blow the report size), and anything cut
+ * is flagged `truncated` with per-section drop counts instead of vanishing.
+ */
+export function readA11ySnapshot(
+  store: CloudResultStore | undefined,
+  pageUrl: string,
+): A11ySnapshotRead {
+  const env = readCloudResult<RenderResultItem>(store, "render", pageUrl);
+  if (!env) return { status: "skipped", skipReason: "not-prefetched" };
+  if (env.status === "skipped") {
+    return { status: "skipped", skipReason: env.skipReason ?? "not-prefetched" };
+  }
+  const raw = env.data?.a11ySnapshot;
+  if (
+    !raw ||
+    !Array.isArray(raw.textNodes) ||
+    !Array.isArray(raw.interactive) ||
+    !Array.isArray(raw.tabOrder) ||
+    !Array.isArray(raw.boxes)
+  ) {
+    return { status: "skipped", skipReason: "render-failed" };
+  }
+  const dropped: Partial<Record<A11ySnapshotSection, number>> = { ...raw.dropped };
+  const cap = <T>(section: A11ySnapshotSection, items: T[], max: number): T[] => {
+    if (items.length <= max) return items;
+    dropped[section] = (dropped[section] ?? 0) + (items.length - max);
+    return items.slice(0, max);
+  };
+  const L = A11Y_SNAPSHOT_LIMITS;
+  const snapshot: A11ySnapshot = {
+    textNodes: cap("textNodes", raw.textNodes, L.textNodes),
+    interactive: cap("interactive", raw.interactive, L.interactive),
+    tabOrder: cap("tabOrder", raw.tabOrder, L.tabOrder),
+    boxes: cap("boxes", raw.boxes, L.boxes),
+    truncated: raw.truncated === true,
+    ...(Object.keys(dropped).length > 0 ? { dropped } : {}),
+  };
+  if (Object.keys(dropped).length > 0) snapshot.truncated = true;
+  return { status: "ok", snapshot, truncated: snapshot.truncated };
 }

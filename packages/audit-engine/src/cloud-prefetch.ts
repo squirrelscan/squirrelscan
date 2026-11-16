@@ -338,11 +338,7 @@ export class CloudPrefetchAccumulator {
   private nextCallId = 0;
 
   /** @internal Record a call as dispatched; pass the id to {@link endCall} when it returns. */
-  beginCall(
-    service: CloudServiceId,
-    units: number,
-    batch?: { index: number; of: number },
-  ): number {
+  beginCall(service: CloudServiceId, units: number, batch?: { index: number; of: number }): number {
     const id = this.nextCallId++;
     this.openCalls.set(id, { service, units, startedAt: Date.now(), ...(batch ? { batch } : {}) });
     return id;
@@ -815,7 +811,7 @@ async function fetchPageBatch(
   batch: CloudPagePayload[],
   auditId: string,
   runId: string | undefined,
-  hooks: { onCharged: () => void; abandoned: () => boolean },
+  hooks: { onCharged: () => void; abandoned: () => boolean; a11ySnapshot?: boolean },
 ): Promise<Map<string, unknown>> {
   if (service === "render") {
     // Charge-on-submit + non-idempotent (client pins maxAttempts:1 → no double-charge on retry). A submit
@@ -826,6 +822,7 @@ async function fetchPageBatch(
     const job = await client.render({
       urls: batch.map((p) => p.url),
       ...(runId ? { runId } : {}),
+      ...(hooks.a11ySnapshot ? { a11ySnapshot: true } : {}),
     });
     // The submit is acknowledged, so the server has charged it: tell the accumulator before the poll, so a
     // prefetch abandoned mid-poll still reports this batch's spend (#280).
@@ -889,7 +886,16 @@ async function runPrefetch(
   // loopback / private-network target the hosted renderer is refused access to.
   // Both are "this comparison cannot happen for this run", both must land
   // BEFORE the charge, so they share one skip.
-  if (input.crawlRendered || input.hostUnreachableByCloud || input.renderDisabled) {
+  // A snapshot-reading rule (repo#3087) wants the render even on a rendered crawl: the snapshot is not
+  // self-identical to the crawl's HTML. Only the "cannot render at all" reasons still skip it.
+  const wantsSnapshot = input.rules.some(
+    (r) => r.cloud.service === "render" && r.cloud.a11ySnapshot,
+  );
+  if (
+    (input.crawlRendered && !wantsSnapshot) ||
+    input.hostUnreachableByCloud ||
+    input.renderDisabled
+  ) {
     const spec = specs.get("render");
     if (spec) {
       skipService(
@@ -1213,7 +1219,12 @@ async function runPrefetch(
     // on a diff the rule's per-page `page.rendered` guard discards anyway. Skip them `not-applicable` and
     // submit only the raw pages. Non-render services are unaffected (they want every page).
     let pagesToFetch = plan.pages;
-    if (plan.service === "render" && input.renderedPageUrls && input.renderedPageUrls.size > 0) {
+    if (
+      plan.service === "render" &&
+      !wantsSnapshot &&
+      input.renderedPageUrls &&
+      input.renderedPageUrls.size > 0
+    ) {
       const rendered = input.renderedPageUrls;
       const alreadyRendered = plan.pages.filter((p) => rendered.has(p.url));
       if (alreadyRendered.length > 0) {
@@ -1287,6 +1298,7 @@ async function runPrefetch(
               inFlight.charged[i] = true;
             },
             abandoned,
+            a11ySnapshot: wantsSnapshot,
           },
         );
         acc.endCall(callId, "completed");
