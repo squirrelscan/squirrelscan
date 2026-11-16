@@ -88,4 +88,32 @@ describe("crawl/robots-meta-conflict (pub#556)", () => {
     expect([...withNoindex].sort()).toEqual([...withoutNoindex].sort());
     expect([...withNoindex].sort()).toEqual([`${BASE}/blocked-a`, `${BASE}/dir/other`, `${BASE}/x.php`].sort());
   });
+
+  test("an unparseable page URL does not throw on the legacy path, other pages are still checked", async () => {
+    const bad = { url: "http://", statusCode: 200, headers: {}, parsed: page("/x", { meta: NOINDEX_META }).parsed };
+    const pages = [bad, page("/blocked-ok", { meta: NOINDEX_META })] as ReturnType<typeof page>[];
+    const row = await redundant(pages);
+    expect(row?.pages).toEqual([`${BASE}/blocked-ok`]);
+  });
+
+  test("an unparseable page URL does not throw on the streaming path, other pages are still checked", async () => {
+    const rows = ["http://", "not a url", `${BASE}/blocked-ok`].map((normalizedUrl) => ({
+      normalizedUrl,
+      indexableReasons: ["meta:noindex"],
+    }));
+    const siteQuery = {
+      pageCount: () => rows.length,
+      async *pagesMatching(pred: (r: unknown) => boolean) {
+        for (const r of rows) if (pred(r)) yield r;
+      },
+    };
+    const c = {
+      ...ctx([]),
+      site: { baseUrl: BASE, pages: [], robotsTxt: ROBOTS, sitemaps: null },
+      siteQuery,
+    } as unknown as RuleContext;
+    const { checks } = await Promise.resolve(robotsMetaConflictRule.run(c));
+    const row = (checks as CheckResult[]).find((x) => x.name === "redundant-noindex");
+    expect(row?.pages).toEqual([`${BASE}/blocked-ok`]);
+  });
 });
