@@ -20,7 +20,7 @@ Without hreflang, a search engine has to work out for itself which version suits
 
 ## How squirrelscan checks it
 
-[i18n/hreflang](/rules/i18n/hreflang) reads every `link[rel="alternate"][hreflang]` on each page. A page with none is noted at info level, since a single-language site does not need them. On a page that has them, it warns when there is no `x-default` and when no annotation's URL matches the page's own URL exactly. A trailing slash or query string difference counts as a mismatch. After an HTTP redirect, the page's own URL is where the redirect ended. The rule does not validate language codes, and it cannot check return links from one page: those live on the other versions. It reads HTML annotations only, not headers or sitemaps.
+[i18n/hreflang](/rules/i18n/hreflang) reads every `link[rel="alternate"][hreflang]` on each page. A page with none is noted at info level, since a single-language site does not need them. On a page that has them, it warns when there is no `x-default` and when no annotation's URL matches the page's own URL exactly. A trailing slash or query string difference counts as a mismatch. After an HTTP redirect, the page's own URL is where the redirect ended. It also warns on invalid language and region codes such as `en_US` or `en-uk`. Return links live on the other versions, so [i18n/hreflang-targets](/rules/i18n/hreflang-targets) checks them across the crawled pages. It reads HTML annotations only, not headers or sitemaps.
 
 {/* glossary:rules:start */}
 
