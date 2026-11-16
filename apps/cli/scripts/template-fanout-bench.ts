@@ -5,6 +5,17 @@
 //   bun run scripts/template-fanout-bench.ts --db <path> --verify       # equivalence, not timing
 //   bun run scripts/template-fanout-bench.ts --db <path> --profile      # per-rule attribution
 //   bun run scripts/template-fanout-bench.ts --db <path> --coverage [--signature derived|current]
+//   bun run scripts/template-fanout-bench.ts --db <path> --rule-cache cold --repeat 15
+//
+// `--rule-cache off|cold|warm` (#1971) measures the per-page rule-result cache
+// (#1990) instead of fan-out. Fan-out is ON in every run of this mode, so the
+// comparison is the one #296 AC3 states: cache off vs cache on. `off` disables the
+// cache. `cold` TRUNCATES `page_rule_cache` in the disposable copy before every
+// run, so each run pays full rules plus the cache writes. `warm` populates the
+// cache once and then runs against it. The report pairs each `off` run with the
+// `cold` (or `warm`) run of the same repeat: the median of the paired CPU
+// differences is the AC3 number, with the unpaired medians, min and max beside it.
+// Run it through the heavy-command wrapper at a load average under 4.
 //
 // `--coverage` (#1373) is not a timing run either: it groups the crawl's pages by the
 // fan-out key and reports how many would inherit a verdict, with the signature as
@@ -52,14 +63,20 @@
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { SiteData } from "@squirrelscan/rules";
 
-import { measureSignatureCoverage, streamPageRules } from "@squirrelscan/audit-engine";
+import {
+  bindRuleCache,
+  measureSignatureCoverage,
+  streamPageRules,
+} from "@squirrelscan/audit-engine";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { createRunner } from "@squirrelscan/rules";
+import { Database } from "bun:sqlite";
 import { Effect } from "effect";
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { createProjectRuleCacheStore } from "@/audit/rule-cache-store";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -97,6 +114,31 @@ const SIGNATURE = arg("signature", "current");
 if (SIGNATURE !== "current" && SIGNATURE !== "derived") {
   console.error(`--signature must be "current" or "derived", got ${JSON.stringify(SIGNATURE)}`);
   process.exit(1);
+}
+const RULE_CACHE = arg("rule-cache", "");
+if (RULE_CACHE !== "" && !["off", "cold", "warm"].includes(RULE_CACHE)) {
+  console.error(`--rule-cache must be "off", "cold" or "warm", got ${JSON.stringify(RULE_CACHE)}`);
+  process.exit(1);
+}
+/** Constant: the bench needs the same key on every run, and the engine's real context hash needs a full audit context. */
+const BENCH_CONTEXT_HASH = "template-fanout-bench";
+
+/** Empty the cache table of a disposable copy. Done by the child, before its timer starts. */
+function truncateRuleCache(db: string): void {
+  const conn = new Database(db);
+  try {
+    conn.run("DELETE FROM page_rule_cache");
+  } finally {
+    conn.close();
+  }
+}
+
+/** The median of the paired (a - b) differences, in the order given. */
+function pairedMedian(a: number[], b: number[]): number {
+  const n = Math.min(a.length, b.length);
+  const d = Array.from({ length: n }, (_, i) => a[i]! - b[i]!).sort((x, y) => x - y);
+  const mid = d.length >> 1;
+  return d.length % 2 ? d[mid]! : (d[mid - 1]! + d[mid]!) / 2;
 }
 const REPEATS = positiveInt("repeat", "3");
 const BATCH = positiveInt("batch", "200");
@@ -154,16 +196,25 @@ async function openCrawl(db: string) {
 // ── child: one measurement ───────────────────────────────────────────────────
 
 if (flag("child")) {
-  const fanout = arg("arm", "on") === "on";
+  const fanout = RULE_CACHE !== "" || arg("arm", "on") === "on";
+  // Before the open and the timer: truncating is setup, not the thing measured.
+  if (RULE_CACHE === "cold") truncateRuleCache(DB);
   // The parent hands the child the disposable COPY as --db, so the child never
   // opens the corpus it was pointed at.
   const { storage, crawlId, siteData } = await openCrawl(DB);
+  const cacheStore =
+    RULE_CACHE === "cold" || RULE_CACHE === "warm"
+      ? createProjectRuleCacheStore(storage, crawlId)
+      : undefined;
   const started = performance.now();
   const cpuStart = process.cpuUsage();
   const result = await run(
     streamPageRules(storage, crawlId, createRunner(CONFIG), siteData, {
       batchSize: BATCH,
       templateFanout: fanout,
+      ...(cacheStore
+        ? { ruleCache: bindRuleCache(cacheStore, BENCH_CONTEXT_HASH) }
+        : {}),
     })
   );
   // Wall time on a box running other work is mostly a measurement of the other
@@ -182,6 +233,8 @@ if (flag("child")) {
       clusters: result.templateFanout.clusters,
       fannedPages: result.templateFanout.fannedPages,
       fannedRuleRuns: result.templateFanout.fannedRuleRuns,
+      replayedPages: result.ruleCache.replayedPages,
+      freshPages: result.ruleCache.freshPages,
     })}`
   );
   process.exit(0);
@@ -212,6 +265,23 @@ try {
       )
     );
     await run(warm.storage.close());
+  }
+
+  // `warm` needs a populated cache before the first timed run. One untimed run
+  // with the cache on fills it; the timed `warm` children then replay it.
+  if (RULE_CACHE === "warm") {
+    const fill = await openCrawl(corpus.db);
+    await run(
+      streamPageRules(fill.storage, fill.crawlId, createRunner(CONFIG), fill.siteData, {
+        batchSize: BATCH,
+        templateFanout: true,
+        ruleCache: bindRuleCache(
+          createProjectRuleCacheStore(fill.storage, fill.crawlId),
+          BENCH_CONTEXT_HASH
+        ),
+      })
+    );
+    await run(fill.storage.close());
   }
 
   if (flag("coverage")) {
@@ -293,6 +363,101 @@ try {
       console.log("");
       console.log("PASS        byte-identical with and without fan-out");
     }
+  } else if (RULE_CACHE !== "") {
+    // ── rule-cache timing (#1971) ──────────────────────────────────────────────
+    interface CacheSample {
+      ms: number;
+      cpuMs: number;
+      pages: number;
+      replayedPages: number;
+      freshPages: number;
+    }
+    const runChild = (mode: string): CacheSample | null => {
+      const proc = Bun.spawnSync({
+        cmd: [
+          process.execPath,
+          "run",
+          import.meta.path,
+          "--child",
+          "--rule-cache",
+          mode,
+          "--db",
+          corpus.db,
+          "--batch",
+          String(BATCH),
+          ...(arg("crawl", "") ? ["--crawl", arg("crawl", "")] : []),
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      if (proc.exitCode !== 0) {
+        console.error(`  ${mode}: exit ${proc.exitCode}\n${(proc.stderr?.toString() ?? "").slice(-800)}`);
+        return null;
+      }
+      const line = proc.stdout.toString().split("\n").find((l) => l.startsWith("CHILD "));
+      if (!line) return null;
+      const sample = JSON.parse(line.slice(6)) as CacheSample;
+      for (const field of ["ms", "cpuMs", "pages"] as const) {
+        if (typeof sample[field] !== "number" || Number.isNaN(sample[field])) {
+          console.error(`  ${mode}: child reported no usable ${field}`);
+          return null;
+        }
+      }
+      return sample;
+    };
+    // The arm under test is `off` against whichever of cold|warm was asked for.
+    // `--rule-cache off` alone compares off against itself: a noise floor.
+    const armB = RULE_CACHE;
+    const offRuns: CacheSample[] = [];
+    const armRuns: CacheSample[] = [];
+    for (let i = 0; i < REPEATS; i++) {
+      // A repeat counts only when BOTH halves succeeded, so the pairs stay aligned.
+      const a = runChild("off");
+      const b = a ? runChild(armB) : null;
+      if (a && b) {
+        offRuns.push(a);
+        armRuns.push(b);
+      }
+      process.stderr.write(`\r  repeat ${i + 1}/${REPEATS}   `);
+    }
+    process.stderr.write("\n");
+    if (offRuns.length === 0) {
+      console.error("no successful pairs");
+      process.exit(1);
+    }
+    const med = (xs: number[]): number => {
+      const s = [...xs].sort((x, y) => x - y);
+      const m = s.length >> 1;
+      return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+    };
+    const off = offRuns.map((r) => r.cpuMs);
+    const arm = armRuns.map((r) => r.cpuMs);
+    const diff = pairedMedian(arm, off);
+    const pct = (diff / med(off)) * 100;
+    const fmt = (xs: number[]) => xs.map((x) => x.toFixed(0)).join(", ");
+    console.log(`db            ${DB}`);
+    console.log(`pages         ${offRuns[0]!.pages}`);
+    console.log(`pairs         ${offRuns.length} of ${REPEATS} interleaved (off, then ${armB})`);
+    console.log(`load average  ${loadavg().map((x) => x.toFixed(2)).join(" ")} (should be under 4)`);
+    console.log("");
+    console.log("              median cpu ms      min      max   median wall ms");
+    console.log(
+      `cache off   ${med(off).toFixed(0).padStart(14)} ${Math.min(...off).toFixed(0).padStart(8)} ${Math.max(...off).toFixed(0).padStart(8)} ${med(offRuns.map((r) => r.ms)).toFixed(0).padStart(16)}`
+    );
+    console.log(
+      `cache ${armB.padEnd(5)} ${med(arm).toFixed(0).padStart(14)} ${Math.min(...arm).toFixed(0).padStart(8)} ${Math.max(...arm).toFixed(0).padStart(8)} ${med(armRuns.map((r) => r.ms)).toFixed(0).padStart(16)}`
+    );
+    console.log("");
+    console.log(`paired (${armB} minus off) median cpu difference  ${diff.toFixed(0)} ms = ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% of the off median`);
+    console.log(`unpaired median difference                        ${(((med(arm) - med(off)) / med(off)) * 100).toFixed(1)}%`);
+    console.log(`AC3 (#296, at or under +3%)                       ${pct <= 3 ? "PASS" : "FAIL"}`);
+    console.log("");
+    const lastRun = armRuns[armRuns.length - 1]!;
+    console.log(`cache pages   ${armB}: ${lastRun.replayedPages} replayed, ${lastRun.freshPages} fresh (last run)`);
+    console.log(`cpu samples   off ${fmt(off)}`);
+    console.log(`              ${armB.padEnd(3)} ${fmt(arm)}`);
+    console.log(`wall samples  off ${fmt(offRuns.map((r) => r.ms))}`);
+    console.log(`              ${armB.padEnd(3)} ${fmt(armRuns.map((r) => r.ms))}`);
   } else {
     // ── timing ─────────────────────────────────────────────────────────────────
 
