@@ -1,4 +1,4 @@
-import type { RedirectChain } from "@squirrelscan/core-contracts";
+import type { RedirectChain, RenderedRequest } from "@squirrelscan/core-contracts";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   fetchUndecoded,
@@ -110,6 +110,8 @@ export interface FetchResponse {
    * the rendered DOM lacks, since client code may remove them after hydration.
    */
   serverHtml?: string;
+  /** XHR and fetch requests the rendered page issued, when the render service reported them. */
+  renderedRequests?: RenderedRequest[];
   /**
    * Set on a 304 the conditional-render gate made from a 200 whose source was
    * unchanged (repo#4765). Its headers are that 200's full set, so the crawler

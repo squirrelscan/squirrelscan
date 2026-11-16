@@ -28,6 +28,7 @@ import type {
   RenderChargeLine,
   RunPhase,
 } from "@squirrelscan/core-contracts";
+import type { RenderedRequestSink } from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import {
@@ -1273,6 +1274,8 @@ export async function runAudit(
 
     // Crawler stashes each ParsedPage here so the audit skips a re-parse (#267)
     const parsedPageCache: ParsedPageCache = new Map();
+    // XHR and fetch requests rendered pages issue, for endpoint discovery (repo#4188).
+    const renderedRequestSink: RenderedRequestSink = new Map();
 
     // The page classifier (#2307): on unless [classifier] enabled = false or --no-classifier. The
     // module is imported only here, so a command that never audits never loads it, and the model
@@ -1530,6 +1533,7 @@ export async function runAudit(
           config: crawlerConfig,
           storage,
           parsedPageCache,
+          renderedRequestSink,
           ...(classify ? { classify } : {}),
         })
       );
@@ -1855,6 +1859,7 @@ export async function runAudit(
       // batch parses its own: drop them here rather than carrying up to
       // PARSED_PAGE_CACHE_MAX_PAGES documents through the rest of the run.
       parsedPageCache.clear();
+      renderedRequestSink.clear();
       phaseTimer.mark("crawl");
 
       // One batch size for every streamed walk, derived from this site's own
@@ -2421,6 +2426,7 @@ export async function runAudit(
         },
         {
           batchSize: streamBatchSize,
+          renderedRequests: renderedRequestSink,
           onPhase: streamPhaseHook(streamPhaseMemoryLogger(), heapSnapshot),
           // #1271: no page starts its rules after this.
           ...(durationBudget

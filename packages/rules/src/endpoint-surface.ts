@@ -20,9 +20,8 @@
 
 /** Where a candidate came from. */
 /**
- * `render` is accepted by `buildEndpointSurface` (`renderedRequests`) but nothing in
- * the engine feeds it today: the render result does not carry the requests a page
- * issued.
+ * `render` is a request the page issued while it rendered. It reaches the surface
+ * as a ref whose `discoveredVia` is `render-request` (or as `renderedRequests`).
  */
 export type EndpointSource = "static-js" | "static-html" | "convention" | "render";
 
@@ -63,6 +62,9 @@ export interface EndpointSurface {
   /** Same-origin scripts with content that the scan budget did not read. */
   scriptsSkipped: number;
 }
+
+/** `discoveredVia` of a request captured while the page rendered. */
+export const RENDER_REQUEST_VIA = "render-request";
 
 /** A page-time reference, already resolved to an absolute URL. DOM-free. */
 export interface PageEndpointRef {
@@ -422,11 +424,14 @@ export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurfa
   const scriptsSkipped = sameOriginScripts.length - scanned;
 
   for (const page of input.pages) {
-    for (const ref of page.refs) add(ref.url, "static-html", ref.discoveredVia, ref.method);
+    for (const ref of page.refs) {
+      const source = ref.discoveredVia === RENDER_REQUEST_VIA ? "render" : "static-html";
+      add(ref.url, source, ref.discoveredVia, ref.method);
+    }
   }
 
   for (const req of input.renderedRequests ?? []) {
-    add(req.url, "render", "render-request", normalizeMethod(req.method));
+    add(req.url, "render", RENDER_REQUEST_VIA, normalizeMethod(req.method));
   }
 
   // Drop a method-less record when the same URL has a method-carrying one.

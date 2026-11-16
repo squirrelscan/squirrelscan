@@ -7,6 +7,8 @@
 // linkRecordToSiteLink, imageRecordToSiteImage: the engine has no legacy
 // `@/infra/context` shapes), and the crawler event subscription.
 
+import type { RenderedRequest } from "@squirrelscan/core-contracts";
+
 import {
   fetchResourceAssets as fetchResourceAssetsCore,
   generateReportFromStorage as generateReportFromStorageCore,
@@ -302,6 +304,8 @@ export function runStreamingRules(
   scope?: RunnerScope,
   opts?: {
     batchSize?: number;
+    /** Requests rendered pages issued, for endpoint discovery (repo#4188). */
+    renderedRequests?: ReadonlyMap<string, readonly RenderedRequest[]>;
     onPhase?: (phase: StreamingRulePhase, boundary: "start" | "end") => void;
     /** Per-page rule-result cache (#1990); omitted → every page runs. */
     ruleCache?: {

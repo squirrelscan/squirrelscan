@@ -618,6 +618,24 @@ export interface RenderJobResponse {
   chargedBreakdown?: RenderChargeLine[];
 }
 
+/**
+ * One request a rendered page issued, as the render service saw it. Only the
+ * fetch and XHR ones are kept (`resourceType`), already capped by the service.
+ */
+export interface RenderedRequest {
+  url: string;
+  /** Upper-case HTTP method, when the service sent one. */
+  method?: string;
+  /** Browser resource type: `fetch` or `xhr`. */
+  resourceType?: string;
+}
+
+/** Rendered-page requests retained per page. The endpoint surface caps further. */
+export const MAX_RENDERED_REQUESTS_PER_PAGE = 100;
+
+/** Rendered requests by the page's normalized URL, filled during a crawl and read by the audit. */
+export type RenderedRequestSink = Map<string, RenderedRequest[]>;
+
 export interface RenderResultItem {
   url: string;
   status: number | null;
@@ -633,6 +651,11 @@ export interface RenderResultItem {
    * code removed after hydration, so the script rules still see them.
    */
   serverHtml?: string;
+  /**
+   * The XHR and fetch requests the page issued while it rendered. Absent from services that do not send
+   * it, and then nothing changes: endpoint discovery stays static.
+   */
+  requests?: RenderedRequest[];
   /** Browser render cost only, mirrored from crawler-worker. Absent on a render-cache hit (#826). */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started. Absent on a render-cache hit (#826). */

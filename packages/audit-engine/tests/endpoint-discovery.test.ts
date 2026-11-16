@@ -293,3 +293,40 @@ describe("endpoint discovery collector", () => {
     expect(calls).toBe(0);
   });
 });
+
+describe("render-time request capture (repo#4188)", () => {
+  const page = {
+    normalizedUrl: "https://example.com/",
+    finalUrl: "https://example.com/",
+    html: "<html></html>",
+  } as unknown as PageRecord;
+  const parsed = parseHtmlForRules("<html><body></body></html>", "https://example.com/");
+  const make = (requests?: { url: string; method?: string }[]) =>
+    createEndpointCollector({
+      headersOf: () => ({}),
+      entryUrl: "https://example.com/",
+      renderedRequestsOf: requests ? () => requests : undefined,
+    });
+
+  test("captured requests become render candidates, cross-origin recorded but not probeable", () => {
+    const c = make([
+      { url: "/api/live", method: "post" },
+      { url: "https://cdn.other.com/x.json", method: "GET" },
+      { url: "data:text/plain,hi" },
+    ]);
+    c.collect(page, parsed);
+    const surface = c.finish({ baseUrl: "https://example.com/", scripts: [] });
+    const render = surface.candidates.filter((x) => x.source === "render");
+    expect(render.map((x) => [x.url, x.method, x.probeEligible])).toEqual([
+      ["https://cdn.other.com/x.json", "GET", false],
+      ["https://example.com/api/live", "POST", true],
+    ]);
+  });
+
+  test("no capture leaves the surface static", () => {
+    const c = make();
+    c.collect(page, parsed);
+    const surface = c.finish({ baseUrl: "https://example.com/", scripts: [] });
+    expect(surface.candidates.some((x) => x.source === "render")).toBe(false);
+  });
+});

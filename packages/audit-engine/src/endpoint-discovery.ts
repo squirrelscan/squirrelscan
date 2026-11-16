@@ -7,8 +7,9 @@
 // The pass is passive. It reads the page DOM the page loop already has live, the
 // script bodies the engine already fetched, and the first page's html and headers
 // for technology detection. It makes no request. The render pipeline hands back
-// only the final html, status and headers for a rendered page, not the requests
-// the page issued, so the render-request source is not fed here.
+// only the final html, status and headers for a rendered page. The requests the
+// page issued reach the collector separately, when the crawler captured them
+// (repo#4188): `renderedRequestsOf` feeds them in as `render-request` refs.
 
 import type { PageRecord } from "@squirrelscan/core-contracts";
 import type {
@@ -21,6 +22,9 @@ import type {
 
 import { buildEndpointSurface, extractEndpointRefsFromDocument } from "@squirrelscan/rules";
 import { detectTechnologies } from "@squirrelscan/tech-detect";
+
+import { RENDER_REQUEST_VIA } from "@squirrelscan/rules";
+import type { RenderedRequest } from "@squirrelscan/core-contracts";
 
 import type { PageSignalCollector } from "./streaming";
 import { trimTrailing } from "@squirrelscan/utils/trim";
@@ -104,6 +108,19 @@ function scriptUrls(parsed: ParsedPage, pageUrl: string): { url: string }[] {
   return out;
 }
 
+/** A captured request as a ref, or null when its URL is not an http(s) URL. */
+function renderedRef(req: RenderedRequest, pageUrl: string): PageEndpointRef | null {
+  try {
+    const u = new URL(req.url, pageUrl);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    u.hash = "";
+    const method = req.method?.trim().toUpperCase();
+    return { url: u.href, ...(method ? { method } : {}), discoveredVia: RENDER_REQUEST_VIA };
+  } catch {
+    return null;
+  }
+}
+
 /** Stable total order over refs: method-carrying first, then URL, then method. */
 function refKey(ref: PageEndpointRef): string {
   return `${ref.method ? 0 : 1}\u0000${ref.url}\u0000${ref.method ?? ""}`;
@@ -167,6 +184,12 @@ export function createEndpointCollector(opts: {
    * inside the attempt window, as a fallback when no entry page is collected.
    */
   entryUrl?: string;
+  /**
+   * XHR and fetch requests a rendered page issued, by the page's normalized URL.
+   * Omitted or empty: the pass stays static. Captured requests become refs, so
+   * the same-origin filter, the caps and the rule cache snapshot apply to them.
+   */
+  renderedRequestsOf?: (pageUrl: string) => readonly RenderedRequest[] | undefined;
 }): EndpointCollector {
   const same = new SmallestKeys(MAX_RETAINED_REFS);
   const cross = new SmallestKeys(MAX_RETAINED_CROSS_ORIGIN_REFS);
@@ -218,6 +241,10 @@ export function createEndpointCollector(opts: {
         pageUrl: page.normalizedUrl,
         refs: parsed.document ? extractEndpointRefsFromDocument(parsed.document, pageUrl) : [],
       };
+      for (const req of opts.renderedRequestsOf?.(page.normalizedUrl) ?? []) {
+        const ref = renderedRef(req, pageUrl);
+        if (ref) record.refs.push(ref);
+      }
       // Detect until a stack is found or enough pages have a result. An explicit
       // empty array means "ran, found nothing", which differs from a snapshot that
       // never ran (`undefined`). If the entry page replays from a run where it was
