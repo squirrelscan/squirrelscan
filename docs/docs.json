@@ -284,6 +284,7 @@
                   "rules/content/meta-in-body",
                   "rules/content/mime-type",
                   "rules/content/placeholder-contact",
+                  "rules/content/conversion-path",
                   "rules/content/placeholder-text",
                   "rules/content/placeholder-media",
                   "rules/content/common-misspellings",

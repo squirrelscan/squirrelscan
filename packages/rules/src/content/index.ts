@@ -6,6 +6,7 @@ import { articleLinksRule } from "./article-links";
 import { authorInfoRule } from "./author-info";
 import { brokenHtmlRule } from "./broken-html";
 import { commonMisspellingsRule } from "./common-misspellings";
+import { conversionPathRule } from "./conversion-path";
 import { dateAgreementRule } from "./date-agreement";
 import { devLeakageRule } from "./dev-leakage";
 import { duplicateContentRule } from "./duplicate-content";
@@ -62,6 +63,7 @@ export const rules: Rule[] = [
   commonMisspellingsRule,
   h1TitleAlignmentRule,
   voiceConsistencyRule,
+  conversionPathRule,
 ];
 
 export {
@@ -70,6 +72,7 @@ export {
   brokenHtmlRule,
   commonMisspellingsRule,
   contentQualityRule,
+  conversionPathRule,
   dateAgreementRule,
   devLeakageRule,
   duplicateDescriptionRule,

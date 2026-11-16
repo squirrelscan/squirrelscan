@@ -1,0 +1,68 @@
+---
+title: "Money pages whose only calls to action leave the site"
+description: "A pricing, service or product page whose buttons all open a social profile, with no form, email, phone or booking link, loses the lead. squirrel warns on it and notes off-site booking and checkout tools."
+---
+
+## What a conversion path is
+
+A conversion path is the way a visitor on a commercial page becomes a lead or a customer on your site: a form, an email address, a phone number, a link to a contact, booking or checkout page. When the only buttons on a pricing page open the founder's LinkedIn profile, the lead leaves, and your analytics and attribution never see it. This is conversion QA rather than SEO, and it is cheap to fix.
+
+## What squirrel checks
+
+The rule runs on money pages only and emits a single check named `conversion-path`.
+
+A money page is a page whose path ends in `/pricing`, `/prices`, `/plans`, `/packages`, `/solutions`, `/service`, `/services`, `/product` or `/products` (with up to two further path segments after it), or whose structured data declares `Product`, `Offer`, `AggregateOffer` or `Service`. A path under `/blog`, `/news`, `/articles`, `/docs`, `/help`, `/support`, `/learn`, `/guides`, `/changelog` or `/case-studies`, or a page declaring `Article`, `BlogPosting`, `NewsArticle` or `TechArticle`, is never a money page. The page type from the classifier is not used, because its pricing, service and product classes are not certified yet.
+
+A prominent call to action is an `<a href>` that is styled as a button (a `btn`, `button` or `cta` class, `role="button"`, or inside a `<button>`) and is not inside `<header>`, `<nav>`, `<footer>` or `<aside>`.
+
+- Skipped when there is no parsed document, or no `<body>`.
+- Skipped on pages that are not money pages. Skip reason: `not-applicable`.
+- Pass when the page has no prominent call to action.
+- Pass when the page has any on-site conversion path: a `<form>` (site search does not count), a `mailto:` or `tel:` link, a link to a same-site contact, booking, demo, quote, checkout or cart page, or a call to action that stays on the site (subdomains count as the site).
+- Info when every call to action is off-site and at least one goes to a booking or checkout tool: Calendly, Cal.com, SavvyCal, TidyCal, Acuity, YouCanBook.me, HubSpot meetings, Stripe Checkout and payment links, PayPal, Gumroad, Lemon Squeezy, Paddle, FastSpring or Typeform. Message: `The only conversion path is off-site, to a booking or checkout tool (<hosts>)`.
+- Warn when every call to action leaves the site for a social profile (LinkedIn, X, Facebook, Instagram, TikTok, YouTube, Threads, Bluesky, Telegram, WhatsApp or Discord) and the page has none of the paths above. Message: `Every prominent call to action (N) leaves the site for a social profile (<hosts>), and the page has no form, mailto:, tel: or contact, booking or checkout link`.
+- Pass when the calls to action go elsewhere off-site that is neither a social profile nor a booking tool, such as a separate product app.
+
+Severity for the rule is warning, weight 4. The rule is skipped on soft 404 pages.
+
+## How to fix it
+
+Add a way to convert on your own site: a contact or enquiry form, a `mailto:` or `tel:` link, or a button to a contact, booking or checkout page. Keep an off-site booking tool if it works for you, and consider adding a form or an email address next to it.
+
+| | |
+|---|---|
+| **Rule ID** | `content/conversion-path` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/conversion-path"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/conversion-path"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/placeholder-contact](/rules/content/placeholder-contact): template-default contact details that are on the page.
+- [eeat/contact-page](/rules/eeat/contact-page): a site with no contact page at all.
