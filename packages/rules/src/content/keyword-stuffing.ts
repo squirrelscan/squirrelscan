@@ -3,6 +3,8 @@
 import { getDomainWithoutSuffix } from "tldts";
 import { z } from "zod";
 
+import { getDocumentPlacer } from "@squirrelscan/parser";
+
 import { primaryLangSubtag } from "../shared/generic-link-phrases";
 import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
 import { getRenderedProseText, getRenderedProseTextWhere } from "./text-content";
@@ -326,6 +328,36 @@ function createLinkListTest(body: Element): (element: Element) => boolean {
   };
 }
 
+/** Region labels the page classifier gives to site furniture (page-classifier `SITE_CHROME_CLASSES` plus its group label). */
+const MODEL_CHROME_REGIONS = new Set(["site_header", "navigation", "footer", "sidebar", "site_chrome"]);
+
+/**
+ * Which elements the page classifier placed in site chrome (repo#3544), or null when this page was
+ * not classified (classifier off, or a page rebuilt from cached HTML). Memoised per element, so a
+ * text walk over a deep page asks the placer once per node on a path, not once per visit.
+ */
+function createModelChromeTest(
+  doc: NonNullable<ParsedPage["document"]>,
+  regions: ReadonlySet<string> = MODEL_CHROME_REGIONS,
+): ((element: Element) => boolean) | null {
+  const place = getDocumentPlacer(doc);
+  if (!place) return null;
+  const known = new WeakMap<Element, boolean>();
+  return (element) => {
+    const cached = known.get(element);
+    if (cached !== undefined) return cached;
+    let answer = false;
+    try {
+      const placement = place(element);
+      answer = !!placement?.region && regions.has(placement.region.label) && !placement.truncated;
+    } catch {
+      answer = false;
+    }
+    known.set(element, answer);
+    return answer;
+  };
+}
+
 interface ContentSelection {
   readonly root: Element;
   readonly words: string[];
@@ -335,6 +367,7 @@ interface ContentSelection {
 function selectMainContent(
   doc: NonNullable<ParsedPage["document"]>,
   body: Element,
+  isModelChrome: ((element: Element) => boolean) | null,
 ): ContentSelection {
   const isInSiteChrome = createSiteChromeAncestorTest(body);
   let largest: { readonly root: Element; readonly words: string[] } | undefined;
@@ -348,11 +381,13 @@ function selectMainContent(
     if (isInSiteChrome(root)) continue;
     if (measuredMainLandmarks >= MAX_MAIN_LANDMARK_CANDIDATES) break;
     measuredMainLandmarks += 1;
-    const words = keywordTokens(getRenderedProseText(root));
+    const words = keywordTokens(
+      isModelChrome ? getRenderedProseTextWhere(root, isModelChrome) : getRenderedProseText(root),
+    );
     if (!largest || words.length > largest.words.length) largest = { root, words };
   }
   if (largest && largest.words.length >= 100) {
-    return { ...largest, isInExcludedChrome: null };
+    return { ...largest, isInExcludedChrome: isModelChrome };
   }
 
   // One substantial article is the page's primary copy. A listing with several
@@ -360,12 +395,15 @@ function selectMainContent(
   const articles = doc.querySelectorAll("article");
   if (articles.length === 1 && !isInSiteChrome(articles[0])) {
     const root = articles[0];
-    const words = keywordTokens(getRenderedProseText(root));
-    if (words.length >= 100) return { root, words, isInExcludedChrome: null };
+    const words = keywordTokens(
+      isModelChrome ? getRenderedProseTextWhere(root, isModelChrome) : getRenderedProseText(root),
+    );
+    if (words.length >= 100) return { root, words, isInExcludedChrome: isModelChrome };
   }
 
   const isInLinkList = createLinkListTest(body);
-  const isExcluded = (element: Element): boolean => isInSiteChrome(element) || isInLinkList(element);
+  const isExcluded = (element: Element): boolean =>
+    isInSiteChrome(element) || isInLinkList(element) || (isModelChrome?.(element) ?? false);
   const words = keywordTokens(getRenderedProseTextWhere(body, isExcluded));
   return { root: body, words, isInExcludedChrome: isExcluded };
 }
@@ -517,6 +555,15 @@ export const keywordStuffingRule: Rule = {
   },
 
   run(ctx: RuleContext): RuleResult {
+    const result = runDensity(ctx);
+    // Footer link blocks are dropped from the density count above, so a keyword repeated down a
+    // footer link list gets its own check (repo#3544). Emitted only when it fires.
+    const footer = footerLinkCheck(ctx);
+    return footer ? { ...result, checks: [...result.checks, footer] } : result;
+  },
+};
+
+function runDensity(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
     const doc = ctx.parsed.document;
@@ -540,7 +587,8 @@ export const keywordStuffingRule: Rule = {
     // Prefer substantial main copy. Otherwise retain body copy but drop only
     // site-wide chrome, not headers and footers inside articles or sections.
     // Both paths are non-mutating because every rule shares this document.
-    const { root: contentRoot, words, isInExcludedChrome } = selectMainContent(doc, body);
+    const isModelChrome = createModelChromeTest(doc);
+    const { root: contentRoot, words, isInExcludedChrome } = selectMainContent(doc, body, isModelChrome);
 
     // A lang attribute is page-controlled and must not turn off a scored rule.
     // Skip only when the measured copy itself is predominantly written in a
@@ -715,5 +763,80 @@ export const keywordStuffingRule: Rule = {
     }
 
     return { checks };
-  },
-};
+}
+
+/** Footer anchors looked at per page (a bound), and what a footer link block must look like to be flagged. */
+const FOOTER_MAX_ANCHORS = 1000;
+const FOOTER_MIN_LINKS = 12;
+const FOOTER_MIN_SHARE = 0.5;
+const FOOTER_MIN_OCCURRENCES = 8;
+
+function isFooterElement(el: Element): boolean {
+  const tag = el.tagName?.toLowerCase();
+  return tag === "footer" || el.getAttribute?.("role")?.toLowerCase() === "contentinfo";
+}
+
+/**
+ * A commercial keyword repeated down a footer link block ("emergency plumber london", "emergency
+ * plumber leeds", ...) is a real spam pattern, and the footer is left out of the density count, so
+ * it is judged here on its own (repo#3544). A footer is the markup `<footer>` / `role=contentinfo`
+ * (not an article's own) or a region the page classifier labelled `footer`. Navigation and header
+ * regions are NOT judged: a menu of categories legitimately repeats its category word.
+ *
+ * Fires when one word is in at least half of at least 12 footer link labels and appears at least
+ * 8 times. Brand terms, whitelisted words and function words never count.
+ */
+function footerLinkCheck(ctx: RuleContext): CheckResult | null {
+  const doc = ctx.parsed.document;
+  const body = doc?.querySelector("body");
+  if (!doc || !body) return null;
+  const opts = optionsSchema.parse(ctx.options);
+  const modelFooter = createModelChromeTest(doc, new Set(["footer"]));
+  const isChromeAncestor = createSiteChromeAncestorTest(body);
+  const inFooter = (el: Element): boolean => {
+    if (modelFooter?.(el)) return true;
+    for (let cur: Element | null = el; cur && cur !== body; cur = cur.parentElement) {
+      if (isFooterElement(cur) && isChromeAncestor(cur)) return true;
+    }
+    return false;
+  };
+
+  const labels: string[][] = [];
+  let seen = 0;
+  for (const a of body.querySelectorAll("a")) {
+    if (++seen > FOOTER_MAX_ANCHORS * 4) break;
+    if (labels.length >= FOOTER_MAX_ANCHORS) break;
+    if (!inFooter(a)) continue;
+    const tokens = keywordTokens(a.textContent || "");
+    if (tokens.length > 0) labels.push(tokens);
+  }
+  if (labels.length < FOOTER_MIN_LINKS) return null;
+
+  const pageStopWords = LANGUAGE_STOP_WORDS.get(primaryLangSubtag(doc.documentElement?.getAttribute("lang")));
+  const skip = new Set(opts.whitelist.map((w) => w.normalize("NFKC").toLowerCase()));
+  for (const term of brandTerms(ctx.page.url, doc)) skip.add(term);
+  const counts = new Map<string, { links: number; total: number }>();
+  for (const tokens of labels) {
+    for (const word of new Set(tokens)) {
+      if (COMMON_WORDS.has(word) || pageStopWords?.has(word) || skip.has(word)) continue;
+      const entry = counts.get(word) ?? { links: 0, total: 0 };
+      entry.links += 1;
+      entry.total += tokens.filter((t) => t === word).length;
+      counts.set(word, entry);
+    }
+  }
+  const hits = [...counts]
+    .filter(([, e]) => e.total >= FOOTER_MIN_OCCURRENCES && e.links >= labels.length * FOOTER_MIN_SHARE)
+    .sort((a, b) => b[1].links - a[1].links);
+  if (hits.length === 0) return null;
+  return {
+    name: "keyword-stuffing-footer",
+    status: "warn",
+    message: `${hits.length} word(s) repeated across footer links`,
+    items: hits.map(([word, e]) => ({
+      id: word,
+      label: `"${word}" in ${e.links} of ${labels.length} footer links`,
+      meta: { links: e.links, footerLinks: labels.length, count: e.total },
+    })),
+  };
+}

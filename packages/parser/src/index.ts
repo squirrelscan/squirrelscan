@@ -34,6 +34,8 @@ export { isHiddenFromMarkup } from "./hidden-markup";
 
 export {
   runClassifier,
+  getDocumentPlacer,
+  setDocumentPlacer,
   type PageClassifierHook,
   type PageClassifierOutput,
   type ParsePageOptions,
