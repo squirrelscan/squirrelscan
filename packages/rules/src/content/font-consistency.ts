@@ -275,7 +275,7 @@ export function buildChecks(rollup: FontRollup, sitePageCount: number, maxFamili
   if (rollup.pagesWithFonts === 0) {
     return [
       skip(
-        `No font declarations found in inline styles on ${rollup.pageCount} page(s); linked stylesheets are not read, so this is not a clean pass`,
+        "No font declarations found in inline styles; linked stylesheets are not read, so this is not a clean pass",
         { coverage: "inline-only", pagesWithLinkedStylesheets: rollup.pagesWithLinkedCss },
       ),
     ];
