@@ -13,6 +13,8 @@ An agent that wants to call an API needs three things it can fetch rather than r
 
 Without the last one, an agent can find the authorization server and then stop, because a human still has to create a client by hand.
 
+API discovery is one input to how a site performs in AI answers, and the [GEO checker](https://squirrelscan.com/learn/geo-checker) covers the rest.
+
 ## What squirrel checks
 
 The rule runs once per crawl against probed well-known paths. An OAuth or OpenAPI probe counts as a hit when it returned 200, the body parsed as JSON, and it did not sniff as HTML; the api-catalog is validated as described below. It emits one or two checks:

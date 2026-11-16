@@ -9,6 +9,8 @@ Many crawlers and most AI agents fetch a URL and read the bytes the server sent.
 
 Server rendering or static generation puts the text in the initial HTML, which is what fixes this. Interactive parts can stay on the client; the question is only whether the content an agent needs to understand the page is in the response body. A page whose raw HTML is an empty shell reads to an agent as a page with nothing on it.
 
+Rendering is one factor in how AI answer engines see a page, and the [GEO checker](https://squirrelscan.com/learn/geo-checker) places it in the wider picture.
+
 ## What squirrel checks
 
 The rule compares the raw crawl HTML with a browser-rendered copy of the same page, extracting words from both with the same pipeline so the two counts are comparable. Rendering is a cloud service, so the check needs a cloud audit. It emits one check:

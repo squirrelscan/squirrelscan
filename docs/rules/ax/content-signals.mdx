@@ -14,6 +14,8 @@ Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 It sits inside a normal robots.txt group, so a directive under `User-agent: *` speaks for every crawler and one under a named group speaks only for those agents. Cloudflare's managed robots.txt also emits a `use=` key with the values `immediate`, `reference` or `full`, describing how a collected page may be consumed. Declaring a signal is optional.
 
+Stating policy per purpose is part of generative engine optimization, so the [GEO checker guide](https://squirrelscan.com/learn/geo-checker) is a useful next step.
+
 ## What squirrel checks
 
 The rule runs once per crawl against the raw robots.txt. It strips comments, tracks which user-agent group each `Content-Signal:` line sits under, and emits one to four checks. Each carries `details.state`: `absent`, `declared`, `invalid` or `not-checked`. A declared policy with a malformed token is both `declared` and, on the syntax check, `invalid`. The rule reads the robots.txt the crawl already fetched and sends no request of its own:

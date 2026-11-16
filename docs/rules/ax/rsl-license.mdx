@@ -9,6 +9,8 @@ Really Simple Licensing is an XML format for stating machine-readable terms for 
 
 It answers a question robots.txt cannot. A `Disallow` says a crawler may not fetch a path. A licence says what may be done with content that was fetched. Publishing one is optional and this rule never asks for one. A reference that points at nothing is the defect it exists to catch.
 
+A machine-readable license is one way to state terms for AI use, and the [GEO checker guide](https://squirrelscan.com/learn/geo-checker) explains where it fits.
+
 ## What squirrel checks
 
 The rule runs once per crawl. It looks for a `License:` directive in robots.txt, a `Link: rel=license` header, and any licence URLs those produce, then reads the result of fetching each URL. It emits one or two checks:
