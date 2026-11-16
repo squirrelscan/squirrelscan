@@ -666,7 +666,7 @@ export interface AuditReport {
   /** Fresh-fetch note (#2032). REPORT-ONLY. */
   cacheFreshness?: CacheFreshness;
   /**
-   * Content-store outcomes for this run (#1914) — DIAGNOSTIC / non-scoring.
+   * Content-store outcomes for this run (#1914): DIAGNOSTIC / non-scoring.
    * `stored` bodies were written fresh; `reused` were already in the global
    * content store (shared by every project), so a high `reused` count means the
    * run was not cold.
