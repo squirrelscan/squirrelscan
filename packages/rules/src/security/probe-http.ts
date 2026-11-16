@@ -2,8 +2,11 @@
 // response body read up to a fixed number of DECODED bytes, so a site cannot
 // answer a probe with an endless or compression-bomb body (#722).
 
-import { decodedBody } from "@squirrelscan/utils/response-body";
+import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { hasWafChallengeEvidence } from "@squirrelscan/utils/waf-markers";
+
+import type { ProbeBudget } from "../probe-budget";
 
 // The per-chunk cap is the guard; `content-length` is not trusted. A stalled
 // body is bounded by the request signal, which also aborts `reader.read()`.
@@ -108,4 +111,118 @@ export function isThrottledOrChallenged(reply: ProbeReply): boolean {
  */
 export function isUnverifiedReply(reply: ProbeReply): boolean {
   return reply.status >= 500 || isThrottledOrChallenged(reply);
+}
+
+// ── one anonymous GET per endpoint per audit ────────────────────────
+
+/** What one anonymous JSON GET answered, as every probing rule that shares it reads it. */
+export interface AnonymousGetResponse {
+  status: number;
+  contentType: string;
+  /** The body as text, at most ANONYMOUS_GET_CAP decoded bytes. */
+  body: string;
+  /** True when the decoded body was longer than the cap; `body` is then a prefix. */
+  truncated: boolean;
+  /** Response headers, read for a rate limit or bot challenge (`cf-mitigated`). */
+  headers: Headers;
+}
+
+export type AnonymousGetOutcome =
+  | { sent: false }
+  | { sent: true; response: AnonymousGetResponse }
+  | { sent: true; error: string };
+
+/** Per-request timeout, on top of the shared probe budget's deadline. */
+export const ANONYMOUS_GET_TIMEOUT_MS = 10_000;
+
+/** Decoded-body cap for one anonymous GET. */
+export const ANONYMOUS_GET_CAP = 256 * 1024;
+
+/**
+ * The exact URL and init for an anonymous GET of an API or auth endpoint:
+ * query and fragment dropped, no cookie, no Authorization header, no redirect
+ * followed. security/unauthenticated-api and security/auth-endpoint-disclosure
+ * send this same request, so one answer serves both (squirrelscan#1886).
+ */
+export function buildAnonymousGet(endpointUrl: string): { url: string; init: RequestInit } {
+  const u = new URL(endpointUrl);
+  u.search = "";
+  u.hash = "";
+  return {
+    url: u.href,
+    init: {
+      method: "GET",
+      credentials: "omit",
+      redirect: "manual",
+      // No Cookie and no Authorization header, ever: the point is what an
+      // anonymous caller gets.
+      headers: {
+        Accept: "application/json, */*;q=0.1",
+        "User-Agent": SQUIRRELSCAN_USER_AGENT,
+      },
+    },
+  };
+}
+
+// Keyed on the audit's probe budget, so the memo lives exactly as long as one
+// audit's probing and two audits never share an answer.
+const anonymousGets = new WeakMap<ProbeBudget, Map<string, Promise<AnonymousGetOutcome>>>();
+
+/**
+ * Send the anonymous GET for `endpointUrl` once per audit. The first caller
+ * spends one quiet probe from the shared budget; every later caller (another
+ * rule asking for the same URL) gets the same answer and spends nothing, so the
+ * endpoint is requested once however many rules read it (squirrelscan#1886).
+ * Sends nothing, and remembers nothing, when the budget refuses.
+ */
+export function sendAnonymousGet(
+  probe: ProbeBudget | undefined,
+  endpointUrl: string
+): Promise<AnonymousGetOutcome> {
+  if (!probe) return Promise.resolve({ sent: false });
+  const { url, init } = buildAnonymousGet(endpointUrl);
+  let memo = anonymousGets.get(probe);
+  const cached = memo?.get(url);
+  if (cached) return cached;
+  if (!probe.allows("quiet")) return Promise.resolve({ sent: false });
+  if (!memo) {
+    memo = new Map();
+    anonymousGets.set(probe, memo);
+  }
+  // Counted before the request leaves, so a request that fails still uses budget.
+  probe.record();
+  const pending = fetchAnonymousGet(url, init, probe.signal());
+  memo.set(url, pending);
+  return pending;
+}
+
+async function fetchAnonymousGet(
+  url: string,
+  init: RequestInit,
+  deadline: AbortSignal
+): Promise<AnonymousGetOutcome> {
+  // Aborted once the read is done, so a capped read does not keep pulling an
+  // endless answer off the wire until the timeout (see graphql-probe.ts).
+  const done = new AbortController();
+  const signal = AbortSignal.any([deadline, AbortSignal.timeout(ANONYMOUS_GET_TIMEOUT_MS), done.signal]);
+  try {
+    // Never `fetch` itself: Bun inflates a Content-Encoding body in full before
+    // any capped read (#722).
+    const res = await fetchUndecoded(url, { ...init, signal });
+    const { text, truncated } = await readCapped(res, ANONYMOUS_GET_CAP);
+    return {
+      sent: true,
+      response: {
+        status: res.status,
+        contentType: (res.headers.get("content-type") ?? "").toLowerCase(),
+        body: text,
+        truncated,
+        headers: res.headers,
+      },
+    };
+  } catch (err) {
+    return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
+  } finally {
+    done.abort();
+  }
 }
