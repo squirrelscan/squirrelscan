@@ -10,6 +10,7 @@ import {
   classifierInfo,
   isClassifierLoaded,
   loadBundledClassifier,
+  loadClassifierFromBytes,
   resetBundledClassifier,
 } from "../../src/classifier";
 import {
@@ -73,5 +74,56 @@ describe("doctor check", () => {
     });
     expect(stale.status).toBe("warn");
     expect(stale.message).toContain("v0.0.1");
+  });
+});
+
+describe("runtime hash check", () => {
+  const bytes = readFileSync(BUNDLED_ARTIFACT_PATH);
+
+  test("a matching artifact loads and reports the hash of the bytes read", () => {
+    const result = loadClassifierFromBytes(bytes, BUNDLED_ARTIFACT_MANIFEST);
+    expect(result.hashMatches).toBe(true);
+    expect(result.model).not.toBeNull();
+    expect(result.loadedSha256).toBe(BUNDLED_ARTIFACT_MANIFEST.sha256);
+    expect(result.loadedBytes).toBe(bytes.length);
+  });
+
+  test("a flipped byte falls back to no classifier", () => {
+    const flipped = Buffer.from(bytes);
+    flipped[1000] ^= 0x01;
+    const result = loadClassifierFromBytes(flipped, BUNDLED_ARTIFACT_MANIFEST);
+    expect(result.hashMatches).toBe(false);
+    expect(result.model).toBeNull();
+    expect(result.reason).toContain("does not match its manifest");
+    expect(result.loadedSha256).not.toBe(BUNDLED_ARTIFACT_MANIFEST.sha256);
+  });
+
+  test("doctor fails on a mismatch and prints the loaded hash", () => {
+    const flipped = Buffer.from(bytes);
+    flipped[1000] ^= 0x01;
+    const r = loadClassifierFromBytes(flipped, BUNDLED_ARTIFACT_MANIFEST);
+    const base = classifierInfo();
+    const check = checkClassifier({
+      info: () => ({
+        ...base,
+        loaded: false,
+        loadedSha256: r.loadedSha256,
+        loadedBytes: r.loadedBytes,
+        hashMatches: false,
+      }),
+    });
+    expect(check.status).toBe("fail");
+    expect(check.message).toContain(r.loadedSha256.slice(0, 12));
+  });
+
+  test("hash cost is small next to the load", () => {
+    const { createHash: hash } =
+      require("node:crypto") as typeof import("node:crypto");
+    const t0 = performance.now();
+    hash("sha256").update(bytes).digest("hex");
+    const hashMs = performance.now() - t0;
+    resetBundledClassifier();
+    const loadMs = loadBundledClassifier().loadMs;
+    expect(hashMs).toBeLessThan(loadMs);
   });
 });

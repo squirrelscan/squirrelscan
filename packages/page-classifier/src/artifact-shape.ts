@@ -82,3 +82,46 @@ export function findStrayStrings(artifact: unknown): string[] {
   }
   return stray;
 }
+
+/**
+ * Whether the artifact has the layout the runtime expects: all three heads, each with a class
+ * list that matches `numClass`, per-class thresholds of the same length, and a tree block.
+ * Names every departure; an empty list means the topology is right.
+ */
+export function findTopologyProblems(artifact: unknown): string[] {
+  const problems: string[] = [];
+  const top = (artifact ?? {}) as Record<string, unknown>;
+  for (const name of HEADS) {
+    const head = top[name] as Record<string, unknown> | undefined;
+    if (head === undefined || typeof head !== "object") {
+      problems.push(`${name} head missing`);
+      continue;
+    }
+    const classes = head.classes;
+    if (!Array.isArray(classes) || classes.length === 0) {
+      problems.push(`${name}.classes empty or missing`);
+    } else if (head.numClass !== classes.length) {
+      problems.push(`${name}.numClass does not match classes`);
+    }
+    if (
+      Array.isArray(head.classThresholds) &&
+      Array.isArray(classes) &&
+      head.classThresholds.length !== classes.length
+    ) {
+      problems.push(`${name}.classThresholds length does not match classes`);
+    }
+    if (typeof head.trees !== "string" || head.trees.length === 0) {
+      problems.push(`${name}.trees missing`);
+    }
+  }
+  return problems;
+}
+
+/** The two files an install leaves in assets/, and nothing else. */
+export const EXPECTED_ASSET_FILES = ["classifier-v2.json", "classifier-v2.manifest.json"] as const;
+
+/** Files in an assets listing that are not part of the expected layout. */
+export function findAssetLayoutProblems(files: readonly string[]): string[] {
+  const expected = new Set<string>(EXPECTED_ASSET_FILES);
+  return files.filter((file) => !expected.has(file)).map((file) => `unexpected file ${file}`);
+}

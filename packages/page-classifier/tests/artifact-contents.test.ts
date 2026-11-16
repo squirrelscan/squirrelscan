@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 
-import { findStrayStrings } from "../src/artifact-shape";
+import { findAssetLayoutProblems, findStrayStrings, findTopologyProblems } from "../src/artifact-shape";
 
 const ASSETS = join(import.meta.dir, "../assets");
 const ARTIFACT = join(ASSETS, "classifier-v2.json");
@@ -63,5 +63,32 @@ describe.if(existsSync(ARTIFACT))("the bundled artifact", () => {
     expect(createHash("sha256").update(text).digest("hex")).toBe(manifest.sha256);
     expect(Buffer.byteLength(text)).toBe(manifest.bytes);
     expect(JSON.parse(text).featurizerVersion).toBe(manifest.featurizerVersion);
+  });
+});
+
+describe("install topology", () => {
+  const head = { classes: ["a", "b"], numClass: 2, classThresholds: [0.5, 0.5], trees: "U1FEQw==" };
+  const good = { region: head, pageType: head, section: head };
+
+  test("accepts all three heads, consistent", () => {
+    expect(findTopologyProblems(good)).toEqual([]);
+    if (existsSync(ARTIFACT)) {
+      expect(findTopologyProblems(JSON.parse(readFileSync(ARTIFACT, "utf8")))).toEqual([]);
+    }
+  });
+
+  test("rejects a missing head and inconsistent counts", () => {
+    expect(findTopologyProblems({ region: head, pageType: head })).toEqual(["section head missing"]);
+    expect(
+      findTopologyProblems({ ...good, region: { ...head, numClass: 3 } }),
+    ).toEqual(["region.numClass does not match classes"]);
+    expect(
+      findTopologyProblems({ ...good, pageType: { ...head, classThresholds: [0.5] } }),
+    ).toEqual(["pageType.classThresholds length does not match classes"]);
+  });
+
+  test("rejects stray files in assets/", () => {
+    expect(findAssetLayoutProblems(["classifier-v2.json", "classifier-v2.manifest.json"])).toEqual([]);
+    expect(findAssetLayoutProblems(["classifier-v2.json", "old.json"])).toEqual(["unexpected file old.json"]);
   });
 });

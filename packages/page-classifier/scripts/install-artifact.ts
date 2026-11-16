@@ -5,10 +5,10 @@
 // that does not load or still holds a stray string after the strip.
 
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { findStrayStrings } from "../src/artifact-shape";
+import { findAssetLayoutProblems, findStrayStrings, findTopologyProblems } from "../src/artifact-shape";
 import { tryLoadModel } from "../src/predict";
 
 const source = process.argv[2];
@@ -54,6 +54,10 @@ for (const head of ["region", "pageType", "section"] as const) {
 
 const stray = findStrayStrings(clean);
 if (stray.length > 0) throw new Error(`artifact holds disallowed strings: ${stray.join(", ")}`);
+const topology = findTopologyProblems(clean);
+if (topology.length > 0) throw new Error(`artifact has the wrong topology: ${topology.join(", ")}`);
+const layout = findAssetLayoutProblems(readdirSync(assets).filter((file) => !file.startsWith(".")));
+if (layout.length > 0) throw new Error(`assets/ layout is wrong: ${layout.join(", ")}`);
 const { model, reason } = tryLoadModel(clean);
 if (!model) throw new Error(`artifact does not load: ${reason}`);
 
