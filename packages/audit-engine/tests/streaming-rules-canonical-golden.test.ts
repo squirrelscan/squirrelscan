@@ -225,7 +225,8 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 109738 -> 109739 (eeat/byline-consistency, squirrelscan/repo#1364): a site rule adds one row; the
       // fixture has no page type with a byline convention, so it is a skipped check and the score is unmoved.
       // 109739 -> 110239 (repo#1357): content/stale-dated-copy adds one row per page (500 pages run it).
-      expect(v1.findings.length).toBe(110239);
+      // 110239 -> 110241 (repo#4681): perf/unused-javascript and perf/long-tasks each add one skipped site row.
+      expect(v1.findings.length).toBe(110241);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -258,9 +259,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 316 -> 317 links/anchor-mismatch, 317 -> 326 the 2026-11 batch of nine rules (crawl/rendered-signal-mismatch, a11y/svg-img-alt, security/password-form-get, url/session-ids, crawl/indexable-search-results, links/click-depth, analytics/duplicate-tags, i18n/hreflang-targets, content/duplicate-content), 326 -> 327 crawl/conflicting-index-signals, 327 -> 328 content/voice-consistency,
       // 328 -> 329 security/unauthenticated-api, 329 -> 330 security/json-sensitive-fields,
       // 330 -> 331 security/exposed-files (#1932), 331 -> 332 eeat/byline-consistency (squirrelscan/repo#1364),
-      // 332 -> 333 content/stale-dated-copy;
+      // 332 -> 333 content/stale-dated-copy, 333 -> 335 perf/unused-javascript and perf/long-tasks (repo#4681);
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(333);
+      expect(v1.perRuleTally.length).toBe(335);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,

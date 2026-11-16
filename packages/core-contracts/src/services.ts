@@ -23,6 +23,7 @@ export type CloudServiceId =
   | "domain-stats"
   | "archive-indexing"
   | "third-party-scan"
+  | "runtime-perf"
   | "render";
 
 // Slim per-page payload sent from the CLI for AI analysis.
@@ -664,4 +665,46 @@ export interface CloudServiceError {
     message: string;
     required?: number;
   };
+}
+
+// --- runtime-perf ---------------------------------------------------------------
+// Runtime performance signal from the cloud runner's browser (repo#4681). Cloud audits
+// only: the browser render that fills it runs on squirrelscan's infrastructure, so the
+// numbers describe that runner, never a visitor's device. The CLI never fetches it; the
+// rules read the envelope from the collected signals and skip when it is absent.
+// Read by perf/unused-javascript and perf/long-tasks.
+
+/** One script's JavaScript coverage on one sampled page. */
+export interface RuntimePerfScript {
+  url: string;
+  /** Bytes the script transferred as measured by coverage (its full text length). */
+  totalBytes: number;
+  /** Bytes of the script never executed during the measured load. */
+  unusedBytes: number;
+  /** The script is served from a different registrable domain than the audited site. */
+  thirdParty: boolean;
+}
+
+/** Main-thread long-task measurement for one sampled page. */
+export interface RuntimePerfLongTasks {
+  /** Tasks over 50 ms between first contentful paint and the end of the measured load. */
+  count: number;
+  longestMs: number;
+  /** Total blocking time: the sum of each long task's time past 50 ms. */
+  tbtMs: number;
+}
+
+/** What the runner measured on one sampled page. */
+export interface RuntimePerfPage {
+  url: string;
+  scripts: RuntimePerfScript[];
+  longTasks: RuntimePerfLongTasks | null;
+}
+
+/** The runtime-perf envelope's `data`: only the pages the runner sampled. */
+export interface RuntimePerfResult {
+  pages: RuntimePerfPage[];
+  /** Pages the audit crawled in total, so the rules can say how few were sampled. */
+  totalPages?: number;
+  capturedAt: string;
 }

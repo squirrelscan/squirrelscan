@@ -3554,6 +3554,12 @@
    "legacy-js|info|No legacy JavaScript patterns detected||"
   ]
  },
+ "perf/long-tasks": {
+  "digest": "57793113793101",
+  "lines": [
+   "long-tasks|skipped|long-tasks skipped: no runtime measurement for this run||"
+  ]
+ },
  "perf/preconnect": {
   "digest": "170835921464753",
   "lines": [
@@ -3594,6 +3600,12 @@
   "digest": "150702328530301",
   "lines": [
    "minified-js|pass|JavaScript appears to be minified||"
+  ]
+ },
+ "perf/unused-javascript": {
+  "digest": "257793333244848",
+  "lines": [
+   "unused-javascript|skipped|unused-javascript skipped: no runtime measurement for this run||"
   ]
  },
  "reliability/broken-forms": {

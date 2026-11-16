@@ -59,11 +59,14 @@ export const CLOUD_SITE_KEY = "site";
  * always skip `not-prefetched`, on free AND paid runs alike, so the locked-rules
  * upsell must not advertise them. Remove entries as the services get wired.
  *
+ * `runtime-perf` is filled only by the hosted cloud runner (repo#4681), never by a CLI prefetch, so a CLI run
+ * reads it as `not-prefetched` and the two rules skip.
+ *
  * `render` was wired into cloud-prefetch for ax/content-without-js (#673), so it
  * left this set — it now runs on raw-HTML crawls (skipped, not advertised-unwired,
  * on rendered crawls).
  */
-export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>([]);
+export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>(["runtime-perf"]);
 
 /**
  * Read a single prefetched cloud result from a per-run store. `key` is the page
