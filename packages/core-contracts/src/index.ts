@@ -3099,9 +3099,35 @@ export const RUN_PHASES = [
   "cloud",
   "rules",
   "walk",
+  "publishing",
   "complete",
 ] as const;
 export type RunPhase = (typeof RUN_PHASES)[number];
+
+/**
+ * Raw worker and API stage names that all mean "the audit is done and the report is being assembled
+ * and published". A hosted run shows them as the single `publishing` phase.
+ */
+export const PUBLISH_STAGE_RAW_PHASES: ReadonlySet<string> = new Set([
+  "complete",
+  "editor_summary",
+  "publish-init",
+  "publish-chunk",
+  "publish-finalize",
+  "publish-finalizing",
+]);
+
+/**
+ * The phase a person watching a hosted run sees for a raw stage name. The raw publish-stage names
+ * (`complete` included) collapse into `publishing`, `crawl` is `crawling`, any other known phase is
+ * itself, and a name this version does not know is null.
+ */
+export function visiblePhaseOf(raw: string | null | undefined): RunPhase | null {
+  if (typeof raw !== "string") return null;
+  if (PUBLISH_STAGE_RAW_PHASES.has(raw)) return "publishing";
+  if (raw === "crawl") return "crawling";
+  return isRunPhase(raw) ? raw : null;
+}
 
 /**
  * Events a run reports that are not a phase: they say something happened (memory was tight, the crawl

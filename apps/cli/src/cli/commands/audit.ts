@@ -3005,6 +3005,7 @@ export const audit = defineCommand({
                   walkHeartbeat.update(p.current, p.total);
                 }
                 break;
+              case "publishing":
               case "complete":
                 break;
             }
