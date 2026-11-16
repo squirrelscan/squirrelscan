@@ -377,6 +377,7 @@
                   "rules/a11y/aria-labels",
                   "rules/a11y/form-labels",
                   "rules/a11y/color-contrast",
+                  "rules/a11y/color-contrast-rendered",
                   "rules/a11y/focus-visible",
                   "rules/a11y/touch-targets",
                   "rules/a11y/landmark-regions",

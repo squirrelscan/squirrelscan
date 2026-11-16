@@ -78,6 +78,7 @@ export * as crawl from "./crawl";
 export * as url from "./url";
 export * as mobile from "./mobile";
 export { colorContrastRule, stylesheetBackgroundOf, stylesheetBackgroundSelectorsOf } from "./a11y/color-contrast";
+export { colorContrastRenderedRule, CONTRAST_THRESHOLDS } from "./a11y/color-contrast-rendered";
 export { listWebAppManifestIconUrls, WEB_APP_MANIFEST_ICON_LIMIT } from "./mobile/web-app-manifest";
 export * as legal from "./legal";
 export * as local from "./local";

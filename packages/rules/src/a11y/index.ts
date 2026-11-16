@@ -26,6 +26,7 @@ import { ariaValidAttrValueRule } from "./aria-valid-attr-value";
 import { autocompleteTokensRule } from "./autocomplete-tokens";
 import { buttonNameRule } from "./button-name";
 import { colorContrastRule } from "./color-contrast";
+import { colorContrastRenderedRule } from "./color-contrast-rendered";
 import { definitionListRule } from "./definition-list";
 import { dlitemRule } from "./dlitem";
 import { duplicateIdActiveRule } from "./duplicate-id-active";
@@ -72,6 +73,7 @@ export const rules: Rule[] = [
   formLabelsRule,
   pasteInputsRule,
   colorContrastRule,
+  colorContrastRenderedRule,
   focusVisibleRule,
   touchTargetsRule,
   landmarkRegionsRule,
@@ -180,6 +182,7 @@ export {
   autocompleteTokensRule,
   buttonNameRule,
   colorContrastRule,
+  colorContrastRenderedRule,
   definitionListRule,
   dlitemRule,
   duplicateIdActiveRule,

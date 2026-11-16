@@ -618,6 +618,31 @@ export interface RenderJobResponse {
   chargedBreakdown?: RenderChargeLine[];
 }
 
+/**
+ * One text element's computed style from the render snapshot. Colors are the browser's computed CSS
+ * strings (`rgb(r, g, b)` or `rgba(r, g, b, a)`), so they are untrusted text until parsed.
+ */
+export interface RenderedTextStyle {
+  /** A CSS selector or short path that finds the element. */
+  selector: string;
+  /** Computed `color`. */
+  color: string;
+  /** Computed `font-size` in CSS pixels. */
+  fontSizePx: number;
+  /** Computed `font-weight` (400 normal, 700 bold). */
+  fontWeight: number;
+  /**
+   * Computed `background-color` of the element and its ancestors, nearest first, up to and including
+   * the first opaque one (or the root). A page whose chain ends without an opaque layer sits on white.
+   */
+  backgroundLayers: string[];
+  /**
+   * Set when a `background-image` (a bitmap, or a gradient) sits on the element or an ancestor above
+   * the first opaque layer, so the color behind the text cannot be read from the chain.
+   */
+  backgroundImage?: "image" | "gradient";
+}
+
 export interface RenderResultItem {
   url: string;
   status: number | null;
@@ -633,6 +658,12 @@ export interface RenderResultItem {
    * code removed after hydration, so the script rules still see them.
    */
   serverHtml?: string;
+  /**
+   * Computed text styles the browser measured on the rendered page (repo#3088), one per visible text
+   * element, for `a11y/color-contrast-rendered`. Capped by the render service. Absent from services
+   * that do not send it, and then the rule reports the page as not checked.
+   */
+  textStyles?: RenderedTextStyle[];
   /** Browser render cost only, mirrored from crawler-worker. Absent on a render-cache hit (#826). */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started. Absent on a render-cache hit (#826). */

@@ -1,0 +1,111 @@
+---
+title: "Rendered color contrast: AA and AAA measured in the browser"
+description: "Text contrast measured from the browser's computed styles. squirrel checks WCAG AA, reports AAA as a separate lower-severity check and lists backgrounds it cannot measure as unconfirmed."
+---
+
+## What rendered contrast is
+
+Contrast ratio compares the relative luminance of text and its background on a scale from 1:1 to 21:1. WCAG success criterion 1.4.3 (Level AA) asks for 4.5:1 for normal text and 3:1 for large text. Criterion 1.4.6 (Level AAA) asks for 7:1 and 4.5:1.
+
+Large text is 18 point (24px) and up, or 14 point (about 18.66px) and up when bold. Anything smaller is normal text.
+
+The ratio belongs to the pixels a visitor sees, so it depends on the stylesheet, the theme, transparency and whatever sits behind the text. The static [color contrast](/rules/a11y/color-contrast) rule only reads inline colors. This rule reads what the browser computed.
+
+## What squirrel checks
+
+The rule reads the computed text styles that the cloud render service measured for each page: the text color, the font size and weight, and the background colors of the element and its ancestors. It composites any transparency, so `rgba(0, 0, 0, 0.3)` on white is judged as the gray it paints. It emits three checks:
+
+- `color-contrast-rendered`, at warning severity, for each text element below the AA ratio. Each finding carries the selector, the measured ratio, the required ratio and the computed colors, for example `p.muted: #b9b9b9 on #ffffff (1.96:1, needs 4.5:1)`.
+- `color-contrast-rendered-aaa`, at info severity, for text that meets AA but not AAA. It is a separate check, so AAA findings never dilute the AA result. Text that already fails AA is listed only under the AA check.
+- `color-contrast-rendered-unconfirmed`, an info check for text whose background squirrel cannot resolve: a background image, a gradient, or a color the browser reported in a form it could not read. It is never counted as a pass or a failure, and carries the inconclusive marker. Check these with browser DevTools or a contrast checker.
+
+Each check lists up to ten elements and the count of the rest.
+
+The rule is skipped, with the reason named, when the audit is not a cloud audit, the render service was not available, the page could not be rendered, or the render service returned no computed styles. It is also skipped on a crawl that rendered every page itself, because that crawl does not keep computed styles. The static rule still runs offline and is unchanged.
+
+## How to fix it
+
+```css
+.muted {
+  color: #595959; /* 7:1 on white */
+}
+```
+
+Darken the foreground or lighten the background until the pair clears the required ratio. Check the pair the browser paints, including opacity, not the color token alone. For text over an image or gradient, add a solid or semi-opaque scrim behind it and check the result by hand.
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/color-contrast-rendered` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/color-contrast-rendered"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/color-contrast-rendered"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `color-contrast-rendered` | Problem |  |
+| `color-contrast-rendered` | Clean | `color-contrast-rendered` |
+| `color-contrast-rendered` | Not checked |  |
+| `color-contrast-rendered-aaa` | Problem |  |
+| `color-contrast-rendered-aaa` | Clean | `color-contrast-rendered-aaa` |
+| `color-contrast-rendered-unconfirmed` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [a11y/color-contrast](/rules/a11y/color-contrast): the static check of inline colors, which runs offline.
+- [a11y/link-in-text-block](/rules/a11y/link-in-text-block): links told apart from body text by color alone.
+- [mobile/font-size](/rules/mobile/font-size): small type, which makes a marginal ratio worse.
+
+Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. This rule needs a cloud audit.
+
+## References
+
+- [Understanding SC 1.4.3 Contrast (Minimum), W3C](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+- [Understanding SC 1.4.6 Contrast (Enhanced), W3C](https://www.w3.org/WAI/WCAG22/Understanding/contrast-enhanced.html)
+- [Contrast ratio, WCAG 2.2](https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio)
+
+## Check your site
+
+Run `squirrel audit https://example.com` signed in and open the Accessibility section of the report. Cloud audits render the pages and spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>
