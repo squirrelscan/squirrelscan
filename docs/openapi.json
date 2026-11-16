@@ -1489,8 +1489,89 @@
           "id": { "type": "string" },
           "url": { "type": "string", "format": "uri" },
           "visibility": { "$ref": "#/components/schemas/Visibility" },
-          "createdAt": { "type": "string", "format": "date-time" }
+          "createdAt": { "type": "string", "format": "date-time" },
+          "schedule": {
+            "$ref": "#/components/schemas/WebsiteScheduleSummary",
+            "description": "What this website's recurring audits are doing, for the line a client prints after a publish. The key is ABSENT, never `null`, when there is nothing honest to say (no website, no org, or no readable org slug): read absence as \"say nothing\", not as \"there is no schedule\". A site with no schedule at all is present with `state: \"off\"`."
+          }
         }
+      },
+      "WebsiteScheduleState": {
+        "type": "string",
+        "enum": ["off", "active", "capped", "unschedulable", "paused"],
+        "description": "Why a website is, or is not, being re-audited. `off`: nothing recurring is set up and nothing is stopping one (a choice). `active`: recurring audits are running. `capped`: wanted, but the plan's scheduled-website slots are spent. `unschedulable`: wanted, but the host can never be audited from the cloud. `paused`: was running and was stopped by the system (a failure streak or credits)."
+      },
+      "WebsiteScheduleSummary": {
+        "type": "object",
+        "required": [
+          "kind",
+          "frequency",
+          "requested",
+          "state",
+          "stateReason",
+          "nextRunAt",
+          "cadenceLabel",
+          "settingsUrl",
+          "pauseUrl",
+          "cap",
+          "upgradeUrl"
+        ],
+        "description": "What a website's recurring audits are doing, as one server-rendered object. String fields are ready to print: clients render them rather than recompute them.",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["recurring", "always_on"],
+            "description": "`recurring` is the cadence-driven schedule. `always_on` is reserved for continuous monitoring, has no cadence, and is not populated yet."
+          },
+          "frequency": {
+            "type": ["string", "null"],
+            "enum": ["daily", "weekly", "monthly", null],
+            "description": "The cadence that actually fires. `null` for `always_on` and for a site that is not running a schedule."
+          },
+          "requested": {
+            "type": "boolean",
+            "description": "What the owner asked for, which is not always what they got. Read with `state`: `requested: true` with `state: \"capped\"` means a schedule was wanted and refused by the plan."
+          },
+          "state": { "$ref": "#/components/schemas/WebsiteScheduleState" },
+          "stateReason": {
+            "type": ["string", "null"],
+            "description": "Machine-readable cause behind a non-`active` state, for example `plan_cap`, `reserved_host`, `plan_no_schedule`, `consecutive_failures` or `insufficient_credits`. `null` when `state` says everything. An open string: fall back to `state` on an unknown value."
+          },
+          "nextRunAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Next run. `null` unless the schedule is active and recurring."
+          },
+          "cadenceLabel": {
+            "type": "string",
+            "description": "The cadence as it reads in a sentence, such as \"every week\", \"off\" or \"always on\"."
+          },
+          "settingsUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "This website's schedule settings page in the dashboard. Always present."
+          },
+          "pauseUrl": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "Signed, no-login pause link. `null` unless there is something running to pause, and not minted on every surface."
+          },
+          "cap": {
+            "type": ["object", "null"],
+            "required": ["limit", "used"],
+            "properties": {
+              "limit": { "type": "integer", "description": "Scheduled websites the plan allows." },
+              "used": { "type": "integer", "description": "Scheduled websites already spent." }
+            },
+            "description": "The plan's scheduled-website allowance and what has been spent of it. `null` on a plan that caps nothing."
+          },
+          "upgradeUrl": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "Where to buy a way out of `capped` or `plan_no_schedule`. `null` otherwise."
+          }
+        },
+        "additionalProperties": true
       },
       "Report": {
         "type": "object",
