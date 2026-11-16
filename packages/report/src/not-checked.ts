@@ -11,6 +11,7 @@
 // checked" line with the reason and what to run instead.
 
 import {
+  CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
   CRAWL_CAPPED_SKIP_REASON,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
@@ -88,6 +89,9 @@ const HINTS: Record<string, string> = {
   // #1144: the inbound-link rules on a crawl that stopped at its page cap.
   [CRAWL_CAPPED_SKIP_REASON]:
     "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
+  // repo#2129: the cloud prefetch hit its time budget before this service answered.
+  [CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON]:
+    "The cloud analysis ran out of its time budget on this audit before this result came back. Run the audit again, or audit fewer pages, to check it.",
   // #1794: a discovery probe that gave no verdict. The file may exist, so these never read as "checked, absent".
   "discovery-probe-not-approved":
     "Add the path to [crawler] discovery_probe_paths (or pass --discovery-probe-path) to check it.",

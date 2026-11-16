@@ -170,6 +170,37 @@ export interface CloudPrefetchInput {
    * Single use: one accumulator per prefetch run.
    */
   accumulator?: CloudPrefetchAccumulator;
+  /**
+   * The plan's `renderConcurrency` (repo#2129): how many page batches of one
+   * service are in flight at once. The prefetch never runs wider than the plan
+   * renders, and never changes how many calls it makes, only how many overlap.
+   * Absent → {@link BATCH_CONCURRENCY}, exactly as before.
+   */
+  planRenderConcurrency?: number;
+  /**
+   * One event per cloud service call, with its duration (repo#2129): a
+   * site-unit call, the Stage-0 site-metadata call, or one page batch (a render
+   * batch counts its submit and poll as one call). A call still in flight when
+   * the prefetch is abandoned at its budget reports `timeout` at that moment,
+   * and nothing more when it later returns. Display-only: it never changes what
+   * the prefetch does.
+   */
+  onCall?: (event: CloudPrefetchCallEvent) => void;
+}
+
+/** One cloud service call made by the prefetch, as told to {@link CloudPrefetchInput.onCall}. */
+export interface CloudPrefetchCallEvent {
+  service: CloudServiceId;
+  /** 1-based batch number and batch count of a page-unit call; absent on a site-unit call. */
+  batch?: { index: number; of: number };
+  /** Pages in the call, or 1 for a site-unit call. */
+  units: number;
+  /** Wall clock from dispatch to return, or to the budget cut-off for `timeout`. */
+  durationMs: number;
+  /** `timeout`: still in flight when the prefetch hit its budget. */
+  status: "completed" | "failed" | "timeout";
+  /** The failure cause, or {@link PREFETCH_DEADLINE_DETAIL} for `timeout`. */
+  detail?: string;
 }
 
 export interface CloudSpendLine {
@@ -224,7 +255,8 @@ export interface CloudPrefetchResult {
   /**
    * Set only on a result from {@link CloudPrefetchAccumulator.abandon} taken
    * before the prefetch finished: the phase hit its deadline, and keys that had
-   * not returned read `service-unavailable`. Absent on a completed prefetch.
+   * not returned read `prefetch-out-of-time` (repo#2129), which every report
+   * lists as "Not checked". Absent on a completed prefetch.
    */
   abandoned?: true;
   /**
@@ -239,6 +271,21 @@ export interface CloudPrefetchResult {
 
 /** Operator-facing cause recorded for calls cut off by an abandoned prefetch. */
 export const PREFETCH_DEADLINE_DETAIL = "prefetch deadline reached";
+
+/**
+ * Skip reason for every key an abandoned prefetch had not got back (repo#2129).
+ * Not `service-unavailable`: nothing failed, the run ran out of time, and the
+ * rules reading these keys must say "not checked", never pass.
+ */
+export const PREFETCH_OUT_OF_TIME: CloudSkipReason = "prefetch-out-of-time";
+
+/** A call the accumulator has dispatched and not yet seen return. */
+interface OpenCall {
+  service: CloudServiceId;
+  batch?: { index: number; of: number };
+  units: number;
+  startedAt: number;
+}
 
 /** The page-unit service whose batches are in flight, as the accumulator sees it. */
 interface InFlightPageService {
@@ -270,7 +317,7 @@ interface InFlightPageService {
  * arrived, so the container cannot tell whether the server will charge it. The
  * one exception is a `render` batch whose submit was acknowledged, which the
  * server charged on submit, so it is reported as spent even though its pages
- * read `service-unavailable`. After abandon the prefetch dispatches no new
+ * read `prefetch-out-of-time`. After abandon the prefetch dispatches no new
  * call, so nothing further is charged on the caller's behalf.
  */
 export class CloudPrefetchAccumulator {
@@ -283,8 +330,55 @@ export class CloudPrefetchAccumulator {
   planned: Map<CloudServiceId, RuleCloudSpec["unit"]> | null = null;
   /** @internal */ pages: CloudPagePayload[] = [];
   /** @internal */ inFlight: InFlightPageService | null = null;
+  /** @internal Per-call listener (repo#2129), set by the prefetch from its input. */
+  onCall: ((event: CloudPrefetchCallEvent) => void) | undefined = undefined;
   private settled: CloudPrefetchResult | null = null;
   private wasAbandoned = false;
+  private readonly openCalls = new Map<number, OpenCall>();
+  private nextCallId = 0;
+
+  /** @internal Record a call as dispatched; pass the id to {@link endCall} when it returns. */
+  beginCall(
+    service: CloudServiceId,
+    units: number,
+    batch?: { index: number; of: number },
+  ): number {
+    const id = this.nextCallId++;
+    this.openCalls.set(id, { service, units, startedAt: Date.now(), ...(batch ? { batch } : {}) });
+    return id;
+  }
+
+  /**
+   * @internal Report a call's return. A call the abandon already reported as
+   * `timeout` reports nothing more, so every call is one event.
+   */
+  endCall(id: number, status: "completed" | "failed", detail?: string): void {
+    const call = this.openCalls.get(id);
+    if (!call) return;
+    this.openCalls.delete(id);
+    this.emitCall(call, status, detail);
+  }
+
+  private emitCall(
+    call: OpenCall,
+    status: CloudPrefetchCallEvent["status"],
+    detail?: string,
+  ): void {
+    const listener = this.onCall;
+    if (!listener) return;
+    try {
+      listener({
+        service: call.service,
+        ...(call.batch ? { batch: call.batch } : {}),
+        units: call.units,
+        durationMs: Math.max(0, Date.now() - call.startedAt),
+        status,
+        ...(detail !== undefined ? { detail } : {}),
+      });
+    } catch {
+      // Display-only: a throwing listener must not fail the prefetch.
+    }
+  }
 
   /** True once {@link abandon} cut the run short; the prefetch then stops dispatching. */
   get abandoned(): boolean {
@@ -299,13 +393,19 @@ export class CloudPrefetchAccumulator {
   /**
    * The result as of now. On a prefetch that already finished this is its
    * result, unchanged. Otherwise it is a snapshot of what has returned, every
-   * key that has not reads `service-unavailable`, and the run stops dispatching
-   * new calls. Idempotent: every call returns the same object, so spend is
+   * key that has not reads `prefetch-out-of-time`, every call still in flight
+   * reports a `timeout` event, and the run stops dispatching new calls.
+   * Idempotent: every call returns the same object, so spend is
    * never reported twice.
    */
   abandon(): CloudPrefetchResult {
     if (this.settled) return this.settled;
     this.wasAbandoned = true;
+    // The budget cut-off, one event per call it cut (repo#2129).
+    for (const call of this.openCalls.values()) {
+      this.emitCall(call, "timeout", PREFETCH_DEADLINE_DETAIL);
+    }
+    this.openCalls.clear();
 
     // Copies throughout: the prefetch may still be awaiting calls that land
     // after this, and they must not reach a result the caller already holds.
@@ -353,18 +453,18 @@ export class CloudPrefetchAccumulator {
           failedUnits,
           attemptedUnits: inFlight.attemptedUnits,
           failedBatches,
-          ...(failure ?? { reason: "service-unavailable", detail: PREFETCH_DEADLINE_DETAIL }),
+          ...(failure ?? { reason: PREFETCH_OUT_OF_TIME, detail: PREFETCH_DEADLINE_DETAIL }),
         });
       }
       if (line.credits > 0) spend.push(line);
     }
 
     // Every key the run would have stamped but had not reached reads
-    // `service-unavailable`; skipService fills gaps only, so nothing that
-    // returned is overwritten.
+    // `prefetch-out-of-time` (repo#2129); skipService fills gaps only, so
+    // nothing that returned is overwritten.
     for (const [service, unit] of this.planned ?? []) {
       const before = store.get(service)?.size ?? 0;
-      skipService(store, service, unit, this.pages, "service-unavailable");
+      skipService(store, service, unit, this.pages, PREFETCH_OUT_OF_TIME);
       const missed = (store.get(service)?.size ?? 0) - before;
       if (missed > 0 && service !== inFlight?.service) {
         failures.push({
@@ -372,7 +472,7 @@ export class CloudPrefetchAccumulator {
           failedUnits: missed,
           attemptedUnits: missed,
           failedBatches: 0,
-          reason: "service-unavailable",
+          reason: PREFETCH_OUT_OF_TIME,
           detail: PREFETCH_DEADLINE_DETAIL,
         });
       }
@@ -492,6 +592,20 @@ export const BATCH_BYTE_BUDGET = 4 * 1024 * 1024;
 
 /** Page-batches dispatched concurrently per page-unit service — small to stay polite to the shared cloud API. */
 export const BATCH_CONCURRENCY = 4;
+
+/**
+ * How many page batches of one service the prefetch keeps in flight (repo#2129).
+ * With the plan's `renderConcurrency` it is exactly that (free 2, Pro 5, Team
+ * and Enterprise 10, from `PLANS`), so a paid run overlaps more of its calls
+ * but never runs wider than its plan renders. Without one it is
+ * {@link BATCH_CONCURRENCY}. The number of calls is the same either way.
+ */
+export function prefetchBatchConcurrency(planRenderConcurrency?: number): number {
+  if (planRenderConcurrency === undefined || !Number.isFinite(planRenderConcurrency)) {
+    return BATCH_CONCURRENCY;
+  }
+  return Math.max(1, Math.floor(planRenderConcurrency));
+}
 
 /**
  * Split pages into batches bounded by BOTH a page count and a serialized byte
@@ -656,7 +770,10 @@ function describeError(error: unknown): string {
  * dispatching: abandon() has already built the caller's result, so the outcome
  * these batches produce is never read.
  */
-const ABANDONED_STOP = { reason: "service-unavailable", detail: PREFETCH_DEADLINE_DETAIL } as const;
+const ABANDONED_STOP: { reason: CloudSkipReason; detail: string } = {
+  reason: PREFETCH_OUT_OF_TIME,
+  detail: PREFETCH_DEADLINE_DETAIL,
+};
 
 /** Bound the prefetch wait on a render job — a browser render is slow, but must not wedge the phase. */
 export const RENDER_POLL_TIMEOUT_MS = 90_000;
@@ -741,6 +858,7 @@ async function runPrefetch(
   // visible to an abandon() taken mid-run (#280).
   const store = acc.store;
   acc.pages = input.pages;
+  acc.onCall = input.onCall;
   const specs = planServices(input.rules);
   if (specs.size === 0) return emptyResult(store);
 
@@ -892,6 +1010,7 @@ async function runPrefetch(
     } else if (!acc.abandoned) {
       // (Abandoned already: dispatch nothing more, the abandon result is final.)
       input.onProgress?.(`cloud: ${SITE_METADATA_SERVICE}`);
+      const callId = acc.beginCall(SITE_METADATA_SERVICE, 1);
       try {
         const data = await client.siteMetadata({
           auditId: input.auditId,
@@ -907,6 +1026,7 @@ async function runPrefetch(
         store.set(SITE_METADATA_SERVICE, byKey);
         siteMetadata = data;
         acc.siteMetadata = data;
+        acc.endCall(callId, "completed");
         if (credits > 0) {
           spend.push({
             service: SITE_METADATA_SERVICE,
@@ -919,6 +1039,7 @@ async function runPrefetch(
         }
       } catch (error) {
         const reason = reasonForError(error);
+        acc.endCall(callId, "failed", describeError(error));
         stop ??= latchFatal(error, reason);
         skipService(store, SITE_METADATA_SERVICE, "site", [], reason);
         failures.push({
@@ -1050,8 +1171,10 @@ async function runPrefetch(
       }
 
       input.onProgress?.(`cloud: ${plan.service}`);
+      const callId = acc.beginCall(plan.service, 1);
       try {
         const data = await call;
+        acc.endCall(callId, "completed");
         const byKey = store.get(plan.service) ?? new Map<string, CloudResultEnvelope>();
         // Cache-aware services (archive-indexing) return `cached: true` on a
         // 0-credit server cache hit — mirror that in the spend accounting
@@ -1064,6 +1187,7 @@ async function runPrefetch(
         line.credits = cost;
       } catch (error) {
         const reason = reasonForError(error);
+        acc.endCall(callId, "failed", describeError(error));
         stop ??= latchFatal(error, reason);
         skipService(store, plan.service, plan.unit, [], reason);
         failures.push({
@@ -1147,6 +1271,10 @@ async function runPrefetch(
         };
       }
       input.onProgress?.(`cloud: ${plan.service} ${i + 1}/${batches.length}`);
+      const callId = acc.beginCall(plan.service, batch.length, {
+        index: i + 1,
+        of: batches.length,
+      });
       try {
         const byUrl = await fetchPageBatch(
           client,
@@ -1161,6 +1289,7 @@ async function runPrefetch(
             abandoned,
           },
         );
+        acc.endCall(callId, "completed");
         // Pages the server omitted from results are a partial provider failure — skipped, not refunded.
         // (For render, charge-on-submit already billed the batch, so a missing page is skipped-not-refunded
         // exactly like the single-call services — the batch credits below still cover every submitted url.)
@@ -1183,6 +1312,7 @@ async function runPrefetch(
         };
       } catch (error) {
         const reason = reasonForError(error);
+        acc.endCall(callId, "failed", describeError(error));
         stop ??= latchFatal(error, reason);
         input.onProgress?.(
           `cloud: ${plan.service} ${i + 1}/${batches.length} failed (${describeError(error)})`,
@@ -1200,7 +1330,7 @@ async function runPrefetch(
 
     const outcomes = await mapWithConcurrency(
       batches.map((batch, i) => () => runBatch(batch, i)),
-      BATCH_CONCURRENCY,
+      prefetchBatchConcurrency(input.planRenderConcurrency),
     );
 
     // Merge in batch order — byte-identical to serial accumulation.

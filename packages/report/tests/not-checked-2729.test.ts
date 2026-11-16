@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
   CRAWL_CAPPED_SKIP_REASON,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
@@ -145,6 +146,30 @@ describe("notCheckedRules / notCheckedLines", () => {
         reason: CRAWL_CAPPED_SKIP_REASON,
         message,
         hint: expect.stringContaining("--max-pages"),
+      }),
+    ]);
+  });
+
+  test("a cloud rule the prefetch budget cut off is not checked, never clean (repo#2129)", () => {
+    const message = "Page type classification skipped";
+    const report = {
+      ruleResults: {
+        "ai/page-type-match": rule("ai/page-type-match", "Page Type Match", "warning", [
+          {
+            name: "page-type-match",
+            status: "skipped",
+            message,
+            skipReason: CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
+          },
+        ]),
+      },
+    };
+    expect(notCheckedRules(report)).toEqual([
+      expect.objectContaining({
+        ruleId: "ai/page-type-match",
+        reason: CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
+        message,
+        hint: expect.stringContaining("time budget"),
       }),
     ]);
   });

@@ -628,6 +628,10 @@ export interface ContainerPrefetchInput {
    * Ignored when `deadlineMs` is set (that path owns its accumulator).
    */
   accumulator?: CloudPrefetchAccumulator;
+  /** The plan's `renderConcurrency`: page batches in flight at once (repo#2129). */
+  planRenderConcurrency?: number;
+  /** One event per cloud call, with its duration and the budget cut-off (repo#2129). */
+  onCall?: CloudPrefetchInput["onCall"];
 }
 
 /**
@@ -663,6 +667,8 @@ export async function runContainerCloudPrefetch(
       renderDisabled: input.renderDisabled,
       deadlineMs: input.deadlineMs,
       accumulator: input.accumulator,
+      planRenderConcurrency: input.planRenderConcurrency,
+      onCall: input.onCall,
     },
     payloads,
   );
@@ -711,6 +717,10 @@ export async function runContainerCloudPrefetchFromPayloads(
     // Per-page render provenance (#673/#964): the render service skips pages the crawl already rendered, so an
     // "auto" hybrid crawl doesn't pay to re-render its upgraded pages.
     renderedPageUrls: payloads.renderedPageUrls,
+    ...(input.planRenderConcurrency !== undefined
+      ? { planRenderConcurrency: input.planRenderConcurrency }
+      : {}),
+    ...(input.onCall ? { onCall: input.onCall } : {}),
     // No `confirm` — the dashboard spendAck already consented; the cap bounds spend.
   };
   if (input.deadlineMs !== undefined) {

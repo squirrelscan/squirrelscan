@@ -117,6 +117,28 @@ export const AUDIT_RUNTIME = {
     surface: 300_000,
     full: 600_000,
   } satisfies Record<CoverageMode, number>,
+  // repo#1995 / repo#2129: the cloud prefetch budget scales with the crawl.
+  // The cloud runner (private worker-agent timeouts.ts) sizes it from these
+  // two values; they moved here unchanged so the rule is written down once:
+  //
+  //   scaled = maxPages x cloudPrefetchPerPageMs
+  //   share  = runBudget x cloudPrefetchRunShare
+  //   budget = min(max(floor, min(scaled, share)), runBudget / 2)
+  //
+  // where floor is cloudPrefetchBudgetByCoverageMs[coverage] (600s for full)
+  // and runBudget is the run's page-scaled wall clock. So a full-coverage
+  // prefetch gets 600 ms a page, never more than a quarter of the run, never
+  // less than its 600s floor, and never more than half the run.
+  //
+  // 600 ms a page is a doubled LOWER BOUND, not a measurement: the first
+  // hosted 2,000-page run spent its full 600s and had not finished, so it
+  // needed more than 300 ms a page. An over-estimate is safe because the
+  // share, not the rate, bounds the phase. When the budget fires the engine
+  // keeps every result that returned, and every rule reading a service that
+  // had not answered reports "not checked"
+  // (CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON), never passed.
+  cloudPrefetchPerPageMs: 600,
+  cloudPrefetchRunShare: 0.25,
   // #1214: per-stage wall-clock budget for each SINGLE-CALL post-crawl cloud
   // stage (tech-detect / editor-summary / domain-stats / threat-intel). Sized
   // ABOVE cloudCallTimeoutByCoverageMs so the client's per-request timeout fires
