@@ -594,11 +594,15 @@ export interface ReportRuleResult {
  * (guarded by apps/cli/tests/rules/category-alias-consistency.test.ts).
  * (Dedup into a single source is a tracked follow-up.)
  */
-const CATEGORY_ALIASES: Record<string, string> = { adblock: "blocking", ai: "ax" };
+// A Map: a category code can arrive from user config, so `constructor` or `__proto__` must miss.
+const CATEGORY_ALIASES: ReadonlyMap<string, string> = new Map([
+  ["adblock", "blocking"],
+  ["ai", "ax"],
+]);
 
 /** Map a (possibly legacy) category code to its current canonical code. */
 export function normalizeCategoryCode(code: string): string {
-  return CATEGORY_ALIASES[code] ?? code;
+  return CATEGORY_ALIASES.get(code) ?? code;
 }
 
 /**
