@@ -14,6 +14,7 @@ export * from "./cache-stats";
 
 // Plans, credits, and service limits.
 export * from "./plans";
+export * from "./brand-color";
 export * from "./credits";
 // #2184: the one shape every surface reads a website's recurring audits from.
 export * from "./schedule";

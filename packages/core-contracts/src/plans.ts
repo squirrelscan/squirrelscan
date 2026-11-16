@@ -388,4 +388,10 @@ export interface ReportBranding {
   websiteUrl?: string;
   /** Plain-text footer shown in place of the squirrelscan footer credit. */
   footerText?: string;
+  /**
+   * Accent colour as lowercase `#rrggbb`. Applied only when it passes
+   * `validateBrandColor` (AA text contrast and 3:1 against white); absent or
+   * invalid = the default theme. (squirrelscan/repo#3130)
+   */
+  brandColor?: string;
 }
