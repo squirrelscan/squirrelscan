@@ -1036,6 +1036,10 @@
                       "type": "object",
                       "properties": {
                         "required": { "type": "integer", "description": "Credits needed for this operation." },
+                        "upgrade": {
+                          "allOf": [{ "$ref": "#/components/schemas/UpgradeOffer" }],
+                          "description": "The org-targeted upgrade offer. Absent for an unmetered organization and for an organization already on Pro or above (those get a top-up message instead)."
+                        },
                         "balance": {
                           "type": "object",
                           "description": "The org's credit balance at the time of the failure.",
@@ -1057,7 +1061,16 @@
                 "code": "INSUFFICIENT_CREDITS",
                 "message": "Insufficient credits",
                 "required": 50,
-                "balance": { "monthly": 0, "pack": 12, "total": 12, "periodEnd": "2026-07-01T00:00:00Z" }
+                "balance": { "monthly": 0, "pack": 12, "total": 12, "periodEnd": "2026-07-01T00:00:00Z" },
+                "upgrade": {
+                  "url": "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=org_123&src=api",
+                  "plan": "pro",
+                  "interval": "month",
+                  "name": "Pro",
+                  "priceMonthUsd": 19,
+                  "priceYearUsd": 190,
+                  "monthlyCredits": 3000
+                }
               }
             }
           }
@@ -2045,7 +2058,40 @@
           "pricingVersion": {
             "type": "integer",
             "description": "Monotonic version of the pricing table."
+          },
+          "upgrade": {
+            "allOf": [{ "$ref": "#/components/schemas/UpgradeOffer" }],
+            "description": "The org-targeted upgrade offer, present on every read so a client can render a credit wall without a 402 (the CLI preflight does). Absent for an unmetered organization and for an organization already on Pro or above."
           }
+        },
+        "example": {
+          "balance": 0,
+          "plan": { "id": "free", "name": "Free" },
+          "pricing": {},
+          "pricingVersion": 1,
+          "upgrade": {
+            "url": "https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=org_123&src=cli",
+            "plan": "pro",
+            "interval": "month",
+            "name": "Pro",
+            "priceMonthUsd": 19,
+            "priceYearUsd": 190,
+            "monthlyCredits": 3000
+          }
+        }
+      },
+      "UpgradeOffer": {
+        "type": "object",
+        "description": "The upgrade offer attached to a credit wall. The API builds it once; clients render it and never derive a price or link themselves.",
+        "required": ["url", "plan", "interval", "name", "priceMonthUsd", "priceYearUsd", "monthlyCredits"],
+        "properties": {
+          "url": { "type": "string", "format": "uri", "description": "Deep link to checkout for the organization that hit the wall, after login." },
+          "plan": { "type": "string", "enum": ["pro"], "description": "Plan slug used in the link." },
+          "interval": { "type": "string", "enum": ["month"], "description": "Billing interval the link preselects." },
+          "name": { "type": "string", "description": "Display name of the plan." },
+          "priceMonthUsd": { "type": "number", "description": "Monthly price in USD." },
+          "priceYearUsd": { "type": "number", "description": "Annual price in USD." },
+          "monthlyCredits": { "type": "integer", "description": "Credits granted each month." }
         }
       },
       "OrganizationDetail": {
