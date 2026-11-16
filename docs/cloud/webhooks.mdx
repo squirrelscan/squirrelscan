@@ -63,7 +63,61 @@ Every delivery is a JSON body with a stable, versioned envelope:
 - `event` is one of the [event types](#event-types) above; `data` is the payload for that event.
 - `id` is the delivery's unique ID (also sent in `X-Squirrel-Delivery`) - use it to dedupe retries.
 
-The `data` shape varies by event. `issues.detected` carries `created`/`updated`/`resolved` counts; `schedule.completed` carries the completed run + report identifiers and `healthScore` (`null` for a failed or rule-filtered run).
+The `data` shape varies by event. `issues.detected` carries `created`/`updated`/`resolved` counts and, once issue triage has filed the audit's issues, the issues themselves (see [`issues.detected` payload](#issuesdetected-payload)); `schedule.completed` carries the completed run + report identifiers and `healthScore` (`null` for a failed or rule-filtered run).
+
+### `issues.detected` payload
+
+At most one `issues.detected` delivery is sent per audit. It always has the audit identifiers and counts:
+
+```json
+{
+  "version": "1",
+  "event": "issues.detected",
+  "id": "del_01J...",
+  "timestamp": "2026-06-15T12:34:56.000Z",
+  "orgId": "org_01J...",
+  "data": {
+    "websiteId": "...",
+    "auditId": "...",
+    "runId": "...",
+    "domain": "example.com",
+    "created": 3,
+    "updated": 1,
+    "resolved": 2,
+    "source": "triage",
+    "issues": [
+      {
+        "id": "...",
+        "number": 12,
+        "priority": "high",
+        "critical": false,
+        "transition": "created"
+      }
+    ],
+    "moreIssues": 0
+  }
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `websiteId`, `auditId`, `runId`, `domain` | The website and audit the event belongs to |
+| `created`, `updated`, `resolved` | How many issues the audit created, updated and resolved |
+| `source` | Absent on the counts-only delivery. `"triage"` when issue triage filed the audit's issues; only then are `issues` and `moreIssues` present |
+| `issues` | The issues the audit created, reopened or raised in priority: at most 100, ordered by `number` |
+| `moreIssues` | How many further issues are not listed in `issues` |
+
+Each entry in `issues` has:
+
+| Field | Meaning |
+|-------|---------|
+| `id` | The issue ID. It is stable across audits and is the ID the API and MCP issue tools take |
+| `number` | The issue's number on its website (`#12`) |
+| `priority` | `critical`, `high`, `medium`, `low`, or `null` when unprioritized |
+| `critical` | `true` when the issue is in the critical set, such as a leaked secret, an expiring certificate or critical pages set to noindex |
+| `transition` | Why it is listed: `created`, `reopened` or `priority_raised` |
+
+Handle both forms: check `source` before reading `issues`, and use the envelope `id` to dedupe retries.
 
 ## Headers
 
