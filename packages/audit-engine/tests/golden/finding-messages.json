@@ -3069,6 +3069,12 @@
    "lang-attribute|pass|Lang attribute present: en|\"en\"|"
   ]
  },
+ "i18n/locale-mixing": {
+  "digest": "159167900419355",
+  "lines": [
+   "locale-mixing|pass|No mixed locale conventions in the page text||"
+  ]
+ },
  "images/alt-text": {
   "digest": "198609838525897",
   "lines": [
