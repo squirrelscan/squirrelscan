@@ -1,0 +1,71 @@
+---
+title: "What squirrel can and cannot tell you about accessibility"
+sidebarTitle: "Accessibility coverage"
+icon: "universal-access"
+description: "Which accessibility problems squirrel finds automatically, what it cannot judge, what browser rendering changes, and why a clean report is not a compliance statement."
+---
+
+squirrel finds common, mechanical accessibility problems and gives your coding agent the exact element to fix. It does not certify anything. This page says where that line sits, so you can decide what still needs a person.
+
+<Warning>squirrel is not a conformance audit and gives no legal advice. A report with no accessibility findings does not mean a page meets WCAG, the ADA, the European Accessibility Act, Section 508 or any other law or standard. Whether you comply is a question for a qualified accessibility auditor or lawyer.</Warning>
+
+## What the rules are
+
+The [accessibility rules](/rules/a11y) are hand-written checks in the `a11y` category that read each page's markup. They are not an axe-core run, and they do not load a page in a browser to measure it. Each rule page states the exact report message and the cases it skips.
+
+Run only these rules with:
+
+```bash
+squirrel audit https://example.com --rule-include a11y
+```
+
+## What squirrel checks
+
+These are things a parser can establish from the markup.
+
+| Area | Example rules |
+|---|---|
+| Accessible names on controls | [`a11y/button-name`](/rules/a11y/button-name), [`a11y/form-labels`](/rules/a11y/form-labels), [`a11y/select-name`](/rules/a11y/select-name), [`a11y/input-image-alt`](/rules/a11y/input-image-alt), [`a11y/frame-title`](/rules/a11y/frame-title) |
+| ARIA validity | [`a11y/aria-roles`](/rules/a11y/aria-roles), [`a11y/aria-valid-attr`](/rules/a11y/aria-valid-attr), [`a11y/aria-required-children`](/rules/a11y/aria-required-children), [`a11y/aria-hidden-focus`](/rules/a11y/aria-hidden-focus) |
+| Structure | [`a11y/heading-order`](/rules/a11y/heading-order), [`a11y/empty-heading`](/rules/a11y/empty-heading), [`a11y/landmark-regions`](/rules/a11y/landmark-regions), [`a11y/skip-link`](/rules/a11y/skip-link) |
+| Tables and lists | [`a11y/table-headers`](/rules/a11y/table-headers), [`a11y/th-has-data-cells`](/rules/a11y/th-has-data-cells), [`a11y/list-structure`](/rules/a11y/list-structure) |
+| Language | [`a11y/html-lang-valid`](/rules/a11y/html-lang-valid), [`a11y/valid-lang`](/rules/a11y/valid-lang) |
+| Zoom and keyboard | [`a11y/zoom-disabled`](/rules/a11y/zoom-disabled), [`a11y/tabindex`](/rules/a11y/tabindex), [`a11y/accesskeys`](/rules/a11y/accesskeys) |
+
+Image alt text lives in the images category, as [`images/alt-text`](/rules/images/alt-text).
+
+## What squirrel only partly checks
+
+Some rules look at one part of a problem and say so when they cannot see the rest.
+
+- **Color contrast**: [`a11y/color-contrast`](/rules/a11y/color-contrast) measures text that has an inline color, against a background it can work out from inline styles, a plain `html` or `body` rule or a same-site stylesheet. Text it cannot measure is counted as not measured, not as a pass.
+- **Focus visibility**: [`a11y/focus-visible`](/rules/a11y/focus-visible) flags `outline: none` with no `:focus-visible` fallback. When it finds nothing to judge it reports that focus styles were not analyzed.
+- **Touch targets**: [`a11y/touch-targets`](/rules/a11y/touch-targets) reads inline `style` attributes only. A target sized by a stylesheet or utility class is invisible to it.
+- **Video captions**: [`a11y/video-captions`](/rules/a11y/video-captions) checks for a caption track on native video and flags third-party embeds. It cannot tell whether captions are accurate.
+
+## What browser rendering changes
+
+[Cloud browser rendering](/guides/browser-rendering) changes the markup the rules read: they see the page after JavaScript has built it, so a button added by a script is checked instead of missed. It does not add separate accessibility checks. The same rules run on the rendered HTML, which means no computed-style contrast measurement, no keyboard walk-through and no reflow or text-spacing test.
+
+## What needs a person
+
+No parser can judge these, so squirrel does not claim to:
+
+- Whether alt text describes the image, and whether a decorative image really is decorative.
+- Whether link text, headings and labels make sense out of context.
+- Whether captions and transcripts match the audio.
+- Whether a keyboard user can complete a task, in a sensible order, without a trap.
+- How the page behaves with a screen reader, with 400% zoom, with increased text spacing or in forced-colors mode.
+- Whether motion, timing and error handling suit the people using the page.
+
+Test those yourself, ideally with people who use assistive technology.
+
+## Using the report well
+
+Treat a finding as a lead worth fixing and a pass as "nothing mechanical was found". Fix the errors first, then work through the manual list above before you describe the site as accessible to anyone. If you need a statement for legal or procurement purposes, get it from a qualified auditor.
+
+## Related
+
+- [Accessibility audit rules](/rules/a11y)
+- [Read your report](/guides/read-your-report)
+- [Browser rendering](/guides/browser-rendering)
