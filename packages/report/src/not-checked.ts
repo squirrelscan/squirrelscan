@@ -64,7 +64,7 @@ export interface NotCheckedReportShape {
   ruleResults: Record<string, ReportRuleResult>;
 }
 
-const HINTS: Record<string, string> = {
+const HINTS: ReadonlyMap<string, string> = new Map(Object.entries({
   // #1259: no handshake was made. The rule's message names why.
   [TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON]:
     "Run the audit again from a network that can open a direct TLS connection to the host (with --offline it contacts the audited host only, and behind an HTTP proxy it needs one that allows CONNECT to the address), or check the certificate with a TLS tool.",
@@ -105,7 +105,7 @@ const HINTS: Record<string, string> = {
     "The request went out and nothing answered (a timeout or a refused connection). Run the audit again to check it.",
   "discovery-probe-redirect-not-followed":
     "The request was redirected off its approved path. Approve the destination path in [crawler] discovery_probe_paths to check it.",
-};
+}));
 
 // #3922: a hosted audit's user cannot change where it runs, so no advice about
 // networks, proxies or --offline.
@@ -124,7 +124,7 @@ const DEFAULT_HINT = "Run a Surface or Full audit to check them.";
 function linkTargetsHint(details: Record<string, unknown> | undefined): string {
   const notFetched = details?.notFetched;
   if (typeof notFetched !== "object" || notFetched === null) {
-    return HINTS[LINK_TARGETS_NOT_FETCHED_SKIP_REASON]!;
+    return HINTS.get(LINK_TARGETS_NOT_FETCHED_SKIP_REASON)!;
   }
   const causes = notFetched as Record<string, unknown>;
   const present = Object.keys(causes).filter((key) => causes[key]);
@@ -183,7 +183,8 @@ function causeOf(check: { details?: Record<string, unknown> }): {
   };
 }
 
-function hintFor(check: { skipReason?: string; details?: Record<string, unknown> }): string {
+/** The advice line for a not-checked check (exported for the own-property test, #3368). */
+export function hintFor(check: { skipReason?: string; details?: Record<string, unknown> }): string {
   const { cause, causeDetail } = causeOf(check);
   if (cause) return causeDetail ? `${CAUSE_HINTS[cause]} ${causeDetail}` : CAUSE_HINTS[cause];
   if (classifyRuleOutcome({ status: "skipped", ...check }) === "errored")
@@ -195,7 +196,7 @@ function hintFor(check: { skipReason?: string; details?: Record<string, unknown>
     check.details?.environment === "cloud"
   )
     return TLS_CLOUD_HINT;
-  return (check.skipReason && HINTS[check.skipReason]) || DEFAULT_HINT;
+  return (check.skipReason && HINTS.get(check.skipReason)) || DEFAULT_HINT;
 }
 
 /**

@@ -414,7 +414,18 @@ function rulePageCount(classes: Iterable<CheckResult[]>): number | undefined {
 const FOLD_SUFFIX = / \(\+\d+ more pages\)$/;
 
 /** Lower sorts first: what a reader most needs to see survives a cut. */
-const STATUS_RANK: Record<string, number> = { fail: 0, warn: 1, info: 2, skipped: 3, pass: 4 };
+const STATUS_RANK: ReadonlyMap<string, number> = new Map([
+  ["fail", 0],
+  ["warn", 1],
+  ["info", 2],
+  ["skipped", 3],
+  ["pass", 4],
+]);
+
+/** Cut priority of a check status; an unknown status (including `constructor`) ranks last. */
+export function statusRank(status: string): number {
+  return STATUS_RANK.get(status) ?? 5;
+}
 
 /** Rules whose site checks the critical-penalty scorer reads by name. */
 const PINNED_RULES = new Set<string>([RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS]);
@@ -483,7 +494,7 @@ function compareUnits(a: ClassUnit, b: ClassUnit): number {
   if (pinned !== 0) return pinned;
   const notChecked = Number(isNotCheckedUnit(b)) - Number(isNotCheckedUnit(a));
   if (notChecked !== 0) return notChecked;
-  const rank = (STATUS_RANK[a.check.status] ?? 5) - (STATUS_RANK[b.check.status] ?? 5);
+  const rank = statusRank(a.check.status) - statusRank(b.check.status);
   if (rank !== 0) return rank;
   if (a.size !== b.size) return b.size - a.size;
   if (a.ruleId !== b.ruleId) return a.ruleId < b.ruleId ? -1 : 1;
