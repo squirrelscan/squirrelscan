@@ -63,7 +63,7 @@
         },
         "responses": {
           "201": {
-            "description": "Run created (status `pending`).",
+            "description": "Run created (status `pending`, or `queued` with a `queue` object when the run is waiting for a container slot).",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/CreateAuditRunResponse" }
@@ -1132,6 +1132,17 @@
         "type": "string",
         "enum": ["queued", "pending", "running", "completed", "failed", "cancelled"]
       },
+      "AuditRunQueue": {
+        "type": "object",
+        "description": "Where a `queued` run stands. A queued run is waiting for a container slot and starts by itself: there is nothing to retry and nothing more is charged. Present on the create response and on `GET /v1/agent-runs/{id}` while `status` is `queued`.",
+        "required": ["position", "etaMinutes", "reason", "message"],
+        "properties": {
+          "position": { "type": ["integer", "null"], "minimum": 1, "description": "Place in line, `1` is next. `null` when it could not be read." },
+          "etaMinutes": { "type": ["integer", "null"], "description": "Estimated minutes until the run starts. `null` when there is no estimate." },
+          "reason": { "type": "string", "enum": ["capacity", "org_limit"], "description": "`capacity`: the audit containers are busy. `org_limit`: the organization is already running its plan's limit of audits at once." },
+          "message": { "type": "string", "description": "A sentence ready to show a person. May change; do not match on it." }
+        }
+      },
       "AuditRunMode": {
         "type": "string",
         "enum": ["audit", "audit-fix", "fix", "recommend"]
@@ -1194,6 +1205,7 @@
           "id": { "type": "string" },
           "status": { "type": "string", "enum": ["pending", "queued"], "description": "`pending` once dispatched; `queued` when the run is waiting for a container slot and starts by itself (the response then carries `queue`)." },
           "createdAt": { "type": "string", "format": "date-time" },
+          "queue": { "$ref": "#/components/schemas/AuditRunQueue" },
           "notice": { "$ref": "#/components/schemas/PageLimitClampNotice" },
           "disabledRulePatterns": { "type": "array", "items": { "type": "string" }, "description": "The disable list this request sent, as expanded. Present only when `config.disabledRulePatterns` was sent and not empty." },
           "enabledRulePatterns": { "type": "array", "items": { "type": "string" }, "description": "The include filter the run applies, as expanded (`ax` becomes `ax/*`). Present only when `config.enabledRulePatterns` was sent." },
@@ -1240,6 +1252,10 @@
                 "description": "Internal owner user id (the caller's own — runs are scoped to the authenticated user). Treat as an opaque identifier; do not log/forward outside an authenticated context."
               },
               "orgId": { "type": ["string", "null"] },
+              "queue": {
+                "oneOf": [{ "$ref": "#/components/schemas/AuditRunQueue" }, { "type": "null" }],
+                "description": "Where the run stands while `status` is `queued`; `null` otherwise."
+              },
               "progress": {
                 "type": ["object", "null"],
                 "description": "Live progress while `status` is `queued`/`pending`/`running` (#692): the latest phase/page-count event streamed by the run. Null once the run is terminal, or if no progress event has been recorded yet.",
