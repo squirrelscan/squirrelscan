@@ -39,3 +39,21 @@ describe("build-all targets", () => {
     expect(makefile).toContain("--outfile=build/squirrel-$(VERSION)-$$platform$$ext");
   });
 });
+
+describe("release flags (#1414)", () => {
+  test("RELEASE_FLAGS carries minify and splitting", () => {
+    const flags = makefile.match(/^RELEASE_FLAGS\s*:=((?:.*\\\n)*.*)$/m)?.[1] ?? "";
+    expect(flags).toContain("--minify");
+    expect(flags).toContain("--splitting");
+    expect(flags).toContain("--compile");
+  });
+
+  test("build-all and build-ci both use RELEASE_FLAGS, with no inline flag copies", () => {
+    const body = (name: string) =>
+      makefile.match(new RegExp(`^${name}:.*\\n((?:\\t.*\\n?)+)`, "m"))?.[1] ?? "";
+    expect(body("build-all")).toContain("$(RELEASE_FLAGS)");
+    expect(body("build-ci")).toContain("$(RELEASE_FLAGS)");
+    expect(body("build-all")).not.toContain("--minify");
+    expect(body("build-ci")).not.toContain("--minify");
+  });
+});
