@@ -16,6 +16,8 @@ import type {
 
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
+
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
@@ -69,6 +71,8 @@ class MemStore implements SmartAuditStore {
     return 0;
   }
 }
+
+describeSitePagesContract("outside-crawled-refuse-2078.test.ts MemStore", () => new MemStore());
 
 const meta = {
   id: "meta-title",
