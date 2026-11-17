@@ -13,6 +13,7 @@ import { describe, expect, test } from "bun:test";
 
 import type {
   CheckResult,
+  CheckTallies,
   FindingState,
   HealthScore,
   PageFindingRecord,
@@ -31,6 +32,7 @@ import {
 
 import {
   aggregateUntouchedCarried,
+  carriedChecksPerPageFor,
   isAggregatableCarriedRow,
   type UntouchedCarriedPage,
 } from "../src/complete-store-fold";
@@ -799,6 +801,17 @@ describe("chunked partial re-audit over a sampled store (repo#4626)", () => {
       }
     }, 120_000);
 
+    test(`${driver}: a 3-name rule's passes equal the full store's, fold and estimator share one K (#3360 review)`, async () => {
+      const shapes: PageShape[] = range(0, 60).map((i) => ({ i, tri: true }));
+      const s = await seed(shapes);
+      const rerun: PageShape[] = range(60, 80).map((i) => ({ i, tri: false }));
+      const full = await reauditChunked(s.full, rerun, driver);
+      const estimated = await reauditChunked(s.sampled, rerun, driver, s.marker);
+      expect(estimated.sampledStoreScored).toBe(true);
+      expect(tallies(full).get("x/tri")!.tally).toMatchObject({ failed: 144, passed: 48 });
+      expect(tallies(estimated).get("x/tri")!.tally).toEqual(tallies(full).get("x/tri")!.tally);
+    }, 30_000);
+
     test(`${driver}: without the marker the result is unchanged`, async () => {
       const shapes = busyShapes(range(0, 60));
       const rerun = busyShapes(range(0, 20));
@@ -811,6 +824,21 @@ describe("chunked partial re-audit over a sampled store (repo#4626)", () => {
       expect(a.sampledStoreScored).toBeUndefined();
     }, 30_000);
   }
+});
+
+describe("one checks-per-page rule for the fold and the estimator (repo#3360)", () => {
+  const perPage = {
+    "x/tri": { a: { passed: 2, failed: 0 }, b: { passed: 2, failed: 0 }, c: { passed: 1, failed: 0 } },
+  } as CheckTallies;
+  const complete = { "x/tri": { a: { passed: 1, failed: 0 } } } as CheckTallies;
+  test("complete-store reads the complete tallies (1 without), others the per-page tallies", () => {
+    const k = (completeStore: boolean, completeTallies?: CheckTallies) =>
+      carriedChecksPerPageFor({ completeStore, completeTallies, perPageTallies: perPage }, "x/tri");
+    expect(k(true)).toBe(1);
+    expect(k(true, complete)).toBe(1);
+    expect(k(false)).toBe(k(false, complete));
+    expect(k(false)).toBeGreaterThan(1);
+  });
 });
 
 function structuredCloneStore(store: MemStore): MemStore {
