@@ -425,8 +425,11 @@ function notFetchedCauses(
     const overLimit = Math.min(notAsked, Math.max(0, probe.unfetched - probe.cap));
     const left = notAsked - overLimit;
     const outOfScope = Math.min(left, probe.outOfScope ?? 0);
-    const action = Math.min(outOfScope, probe.actionLinks ?? 0);
-    const excluded = outOfScope - action;
+    // When the count is clipped, `excluded` keeps its targets first: `action`
+    // claims the gap is stable between audits, so it never takes a target that
+    // may be a robots or scope exclusion.
+    const excluded = Math.min(outOfScope, Math.max(0, (probe.outOfScope ?? 0) - (probe.actionLinks ?? 0)));
+    const action = outOfScope - excluded;
     causes = {
       overLimit,
       action,
