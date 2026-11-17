@@ -23,6 +23,7 @@
   "a11y/autocomplete-tokens": 500,
   "a11y/button-name": 500,
   "a11y/color-contrast": 500,
+  "a11y/color-contrast-rendered": 500,
   "a11y/definition-list": 500,
   "a11y/dlitem": 500,
   "a11y/duplicate-id-active": 500,
