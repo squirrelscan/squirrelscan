@@ -142,6 +142,23 @@ export function zeroRulesError(
 }
 
 /**
+ * Whether a run is partial: narrowed by `--rule-include`/`--rule-exclude` (repo#1082) or by a WCAG level
+ * (`--wcag-level` or `[rules] wcag_level`, repo#3093). `buildPartialAudit` returns a marker exactly when this
+ * is true, and `squirrel audit`'s publish guard reads it, so a run that carries the marker is the run auto-publish
+ * skips as `rule-filter`, and `squirrel report --publish` (which reads the marker) gets the same answer.
+ */
+export function isPartialRun(
+  filter: { enable: readonly string[]; disable: readonly string[] },
+  wcagLevel?: WcagLevel
+): boolean {
+  return (
+    filter.enable.length > 0 ||
+    filter.disable.length > 0 ||
+    wcagLevel !== undefined
+  );
+}
+
+/**
  * The partial-audit marker for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082) or a WCAG
  * level (repo#3093), or undefined for an unfiltered run. `includedCategories` is every category with at least
  * one rule that still runs under the filter, decided per rule with the engine's own `isRuleEnabled`, so
@@ -157,9 +174,7 @@ export function buildPartialAudit(
   }[] = [],
   wcagLevel?: WcagLevel
 ): PartialAudit | undefined {
-  if (filter.enable.length === 0 && filter.disable.length === 0 && !wcagLevel) {
-    return undefined;
-  }
+  if (!isPartialRun(filter, wcagLevel)) return undefined;
   // No include list means every rule is enabled (the engine's default `*`).
   const enable = filter.enable.length > 0 ? filter.enable : ["*"];
   const disable = [...filter.disable, ...wcagRuleDisables(wcagLevel)];
