@@ -123,6 +123,13 @@ describe("content/truncation-artifacts", () => {
     expect(run("<h1>Introducing the new dashboard for teams</h1>", { title: "Introducing the new dashboard" }).status).toBe("pass");
   });
 
+  test("pass: a title that ends where an H1 <br> breaks the line", () => {
+    const c = run("<h1>The best project management tool<br>for remote teams</h1>", {
+      title: "The best project management tool",
+    });
+    expect(c.status).toBe("pass");
+  });
+
   test("skipped: a noindex page", () => {
     const c = run("<h1>Introducing the new dashboard for teams</h1>", {
       title: "Introducing the new dashbo",
