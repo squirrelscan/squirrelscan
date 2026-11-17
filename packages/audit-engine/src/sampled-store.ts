@@ -156,6 +156,11 @@ interface LeavingRule {
   dirtyPages: Set<string>;
   /** Per check name, re-checked pages that held a sampled fail / warn row. */
   byName: Map<string, { fail: Set<string>; warn: Set<string> }>;
+  /**
+   * Per check name, every page in `dirtyPages` holding a sampled row of it,
+   * evaluated this run or not: each has left the pass candidates (#3360 review).
+   */
+  dirtyByName: Map<string, Set<string>>;
 }
 
 /** A safe count off a published tally: a finite non-negative integer, else 0. */
@@ -250,10 +255,20 @@ export class SampledStoreEstimator {
     if (this.carriedPages.has(url)) return;
     let rule = this.leaving.get(ruleId);
     if (!rule) {
-      rule = { dirtyPages: new Set(), byName: new Map() };
+      rule = { dirtyPages: new Set(), byName: new Map(), dirtyByName: new Map() };
       this.leaving.set(ruleId, rule);
     }
     rule.dirtyPages.add(url);
+    // Recorded before the evaluated() return below, as dirtyPages is: a page
+    // re-crawled without the check (a truncated signal key leaves every page
+    // unevaluated) is still not a carried pass page, so the estimate must not
+    // count it among the check's dirty pass pages (#3360 review).
+    let dirty = rule.dirtyByName.get(checkName);
+    if (!dirty) {
+      dirty = new Set();
+      rule.dirtyByName.set(checkName, dirty);
+    }
+    dirty.add(url);
     // A crawled page this run did not evaluate the check on still carries the row:
     // it has not left the carried side for that check.
     if (!this.scope.removed(url) && !this.scope.evaluated(url, ruleId, checkName)) return;
@@ -411,8 +426,7 @@ export class SampledStoreEstimator {
         classPages += advisoryPages;
         if (!t) continue;
         if (perPage > 1) {
-          const knownSets = leaving?.byName.get(name);
-          const knownPages = knownSets ? new Set([...knownSets.fail, ...knownSets.warn]).size : 0;
+          const knownPages = leaving?.dirtyByName.get(name)?.size ?? 0;
           estimatedPassNames += Math.min(
             passCandidates,
             Math.max(0, failed + warnings + advisoryPages - knownPages),
@@ -456,10 +470,16 @@ export class SampledStoreEstimator {
       const estimatedDirty = Math.min(passCandidates, sampledDirty + otherDirtyPassPages);
       // Passes the union gave that the estimate does not. Never negative: the
       // estimate only ever takes passes away. A rule with K > 1 checks per page
-      // (repo#3360) loses one pass per (page, check name) holding a row.
+      // (repo#3360) loses one pass per (page, check name) holding a row, capped
+      // at the passes the union credited the carried pass pages with (K per page,
+      // less the names holding a row there): beyond that it would take fresh
+      // passes away when a page holds more names than the rounded K.
       const passDelta =
         perPage > 1
-          ? Math.max(0, estimatedPassNames + otherPassNames - unionPassNames)
+          ? Math.min(
+              Math.max(0, perPage * passCandidates - unionPassNames),
+              Math.max(0, estimatedPassNames + otherPassNames - unionPassNames),
+            )
           : Math.max(0, estimatedDirty - dirtyPassPages);
 
       const tally = entry.tally;

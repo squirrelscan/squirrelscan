@@ -130,6 +130,12 @@ interface PageShape {
   emptyAlt?: boolean;
   ttfb?: "slow" | "skipped";
   readability?: boolean;
+  /**
+   * x/tri: a rule with three check names on some pages and two on others, so
+   * its rounded checks per page is below what some pages hold. The rule is only
+   * in the report when a shape sets this (true fails every check, false passes).
+   */
+  tri?: boolean;
 }
 
 /** A full per-page report: every page rule emits one row per page and check name. */
@@ -169,6 +175,22 @@ function fullReport(shapes: PageShape[]) {
         },
       ]),
     },
+    ...(shapes.some((s) => s.tri !== undefined)
+      ? {
+          "x/tri": {
+            meta: meta("x/tri", "core", "page", "error", 5),
+            checks: rows((s) => {
+              const status = s.tri ? ("fail" as const) : ("pass" as const);
+              const out: CheckResult[] = [
+                { name: "a", status, message: "a", pageUrl: url(s.i) },
+                { name: "b", status, message: "b", pageUrl: url(s.i) },
+              ];
+              if (s.i % 5 < 2) out.push({ name: "c", status, message: "c", pageUrl: url(s.i) });
+              return out;
+            }),
+          },
+        }
+      : {}),
     "perf/ttfb": {
       meta: meta("perf/ttfb", "perf", "page", "warning", 6),
       checks: rows((s) => ({
@@ -237,7 +259,13 @@ async function cappedBody(report: Report) {
   };
 }
 
-/** What the API stores after the rescore: the score and the report's totals (in check units, repo#3360). */
+/**
+ * The score and the report's totals after the rescore, in check units (repo#3360).
+ * On the scoringTallies path this is what the API stores. On the no-tallies path
+ * it is what the API WILL store once the private applyUnionToReport follow-up
+ * skips carried continuation rows too; until then the API's stored totals count
+ * those rows and can differ from these.
+ */
 function rescored(r: CloudSmartAuditsResult): {
   healthScore: HealthScore;
   totals: { passed: number; warnings: number; failed: number };
@@ -544,6 +572,54 @@ describe("partial re-audit over a sampled store (repo#3373)", () => {
     expect(results[1]).toEqual(results[0]!);
     expect(results[0]!.scoringTallies).toBeUndefined();
     expect(results[0]!.sampledStoreScored).toBeUndefined();
+  }, 30_000);
+
+  test("a re-crawled sampled-dirty page that did not evaluate the check is no carried pass page (#3360 review)", async () => {
+    // img-alt fails on 15 of 20 pages, 3 items each. The re-audit crawls 3 pages
+    // the sample holds an img-alt row for, with img-alt left out (as under a
+    // truncated signal key, where evaluated() is false everywhere), plus 1 new
+    // page that runs it. No page is unknown, so the estimate equals the full store.
+    const shapes: PageShape[] = range(0, 20).map((i) => ({ i, altItems: i < 15 ? 3 : 0 }));
+    const s = await seed(shapes);
+    const sampled = s.sampledPages.get("a11y/img-alt") ?? new Set<string>();
+    const recrawled = shapes.filter((sh) => sampled.has(url(sh.i))).slice(0, 3);
+    expect(recrawled).toHaveLength(3);
+    const report = fullReport([...recrawled, { i: 20 }]);
+    report.ruleResults["a11y/img-alt"]!.checks = report.ruleResults["a11y/img-alt"]!.checks.filter(
+      (c) => c.pageUrl === url(20),
+    );
+    const body = uncappedBody(report);
+    const full = await runCloudSmartAudits({ store: s.full, siteKey: "site", crawlId: "cloud_2", now: SECOND, ...body });
+    const estimated = await runCloudSmartAudits({
+      store: s.sampled,
+      siteKey: "site",
+      crawlId: "cloud_2",
+      now: SECOND,
+      ...body,
+      sampledStore: s.marker,
+    });
+    expect(tallies(full).get("a11y/img-alt")!.tally).toMatchObject({ failed: 15, failUnits: 45, passed: 24 });
+    expect(tallies(estimated).get("a11y/img-alt")!.tally).toEqual(tallies(full).get("a11y/img-alt")!.tally);
+    expect(comparable(rescored(estimated))).toEqual(comparable(rescored(full)));
+  }, 30_000);
+
+  test("K > 1 pass delta never takes fresh passes: 3-name rule, rounded K of 2 (#3360 review)", async () => {
+    // Every x/tri check fails on 60 pages (3 names on 24 of them, 2 on the rest,
+    // so K rounds to 2); the re-audit adds 20 new clean pages.
+    const shapes: PageShape[] = range(0, 60).map((i) => ({ i, tri: true }));
+    const s = await seed(shapes);
+    const rerun: PageShape[] = range(60, 80).map((i) => ({ i, tri: false }));
+    const { full, estimated } = await reaudit(s, rerun);
+    const truth = await runCloudSmartAudits({
+      store: new MemStore(),
+      siteKey: "site",
+      crawlId: "fresh",
+      now: SECOND,
+      ...uncappedBody(fullReport([...shapes, ...rerun])),
+    });
+    expect(tallies(truth).get("x/tri")!.tally).toMatchObject({ failed: 144, passed: 48 });
+    expect(tallies(estimated).get("x/tri")!.tally).toMatchObject({ failed: 144, passed: 48 });
+    expect(tallies(estimated).get("x/tri")!.tally).toEqual(tallies(full).get("x/tri")!.tally);
   }, 30_000);
 
   test("without pagesAudited every estimated warning scores as a failure, never higher", async () => {

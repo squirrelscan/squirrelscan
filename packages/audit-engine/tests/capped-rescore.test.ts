@@ -1044,9 +1044,11 @@ describe("a capped report published chunked scores as published in one POST (rep
     expect(comparable(rescored(afterChunked))).toEqual(comparable(rescored(afterUncapped)));
     expect(afterChunked.coverage).toEqual(afterUncapped.coverage);
     // The carried side is the whole class, counted in the full audit's check units
-    // (repo#3360), so the unchanged site scores as it did.
+    // (repo#3360), so the unchanged site scores as it did. The 1-point gap (47 vs
+    // 46) predates repo#3360: carried pages earn perf/ttfb passes the full audit
+    // skipped for want of timing data.
     const fullScore = rescored(first).healthScore.overall!;
-    expect(Math.abs(rescored(afterChunked).healthScore.overall! - fullScore)).toBeLessThanOrEqual(2);
+    expect(Math.abs(rescored(afterChunked).healthScore.overall! - fullScore)).toBeLessThanOrEqual(1);
     // After the sampled store the re-run scores the clipped pages clean.
     expect(rescored(afterCapped).healthScore.overall!).toBeGreaterThan(fullScore);
   });
