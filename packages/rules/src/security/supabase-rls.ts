@@ -352,6 +352,11 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       scope: "site",
       severity: "error",
       weight: 8,
+      checks: [
+        { name: CHECK, outcome: "problem" },
+        { name: CHECK, outcome: "clean", clears: [CHECK] },
+        { name: CHECK, outcome: "skipped" },
+      ],
     },
 
     async run(ctx: RuleContext): Promise<RuleResult> {
