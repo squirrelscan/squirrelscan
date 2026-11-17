@@ -3297,6 +3297,12 @@
    "external-links|info|No external links on page|#|"
   ]
  },
+ "links/generic-anchor-density": {
+  "digest": "145104975846676",
+  "lines": [
+   "generic-anchor-density|pass|#% of internal anchors are generic (# of #), below the #% threshold||"
+  ]
+ },
  "links/https-downgrade": {
   "digest": "277201086173962",
   "lines": [
