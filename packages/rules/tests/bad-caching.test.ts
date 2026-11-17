@@ -770,10 +770,29 @@ describe("perf/bad-caching sub-resources (repo#4492)", () => {
   test("cross-site, reused and unobserved records are not judged", async () => {
     const checks = await run(badCachingRule, withAssets([
       { url: "https://cdn.other.com/a.css", cacheControl: null },
-      { url: "https://example.com/b.css", cacheControl: null, extra: { cacheReason: "fresh" } },
+      { url: "https://example.com/b.css", cacheControl: null, extra: { cacheReason: "max-age" } },
       { url: "https://example.com/c.css", cacheControl: undefined as unknown as null },
     ]));
     expect(check(checks, "bad-caching-subresources")).toBeUndefined();
+  });
+
+  test("an asset revalidated with a 304 on this crawl is judged like a fresh fetch", async () => {
+    // The CLI audits incrementally by default, so a re-audit sees an asset with a
+    // validator and no lifetime as a 304, never a 200. It must still be flagged.
+    const checks = await run(badCachingRule, withAssets([
+      { url: "https://example.com/a.css", cacheControl: null, extra: { etag: '"a"', cacheReason: "304" } },
+      { url: "https://example.com/b.css", cacheControl: "max-age=0", extra: { etag: '"b"', cacheReason: "304" } },
+    ]));
+    const sub = check(checks, "bad-caching-subresources");
+    expect(sub?.status).toBe("warn");
+    expect(sub?.items?.map((i) => i.id)).toEqual(["https://example.com/a.css", "https://example.com/b.css"]);
+  });
+
+  test("a 304 with a lifetime passes", async () => {
+    const checks = await run(badCachingRule, withAssets([
+      { url: "https://example.com/a.css", cacheControl: "max-age=600", extra: { etag: '"a"', cacheReason: "304" } },
+    ]));
+    expect(check(checks, "bad-caching-subresources")?.status).toBe("pass");
   });
 
   test("the sample is bounded by max_subresources, in URL order", async () => {
