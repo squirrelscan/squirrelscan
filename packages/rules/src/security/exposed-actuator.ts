@@ -29,8 +29,9 @@
 // request asks for its first 64 bytes with a Range header and reads at most
 // that many, whatever the server sends. The Range header does not stop an open
 // JVM writing a full dump, so a run asks for at most one heap dump: no heapdump
-// is requested after one is confirmed, or after a heapdump request timed out
-// (a large heap can take longer than the timeout to start answering).
+// is requested after any heapdump answer other than a 401, 403 or 404 (a
+// confirmed dump, any other 2xx, a 5xx, a redirect, an error or a timeout: a
+// large heap can take longer than the timeout to start answering).
 // Requests carry no cookies, do not
 // follow redirects, are bounded by the shared probe budget, a per-request
 // timeout (one timeout ends that base) and the rule's own total time budget,
@@ -50,7 +51,8 @@
 // What is reported. An endpoint counts only when its 2xx answer has the shape
 // that actuator endpoint has (`_links` naming actuator endpoints,
 // `activeProfiles` with `propertySources`, configuration property beans,
-// request mappings, the HPROF "JAVA PROFILE" header), never on status alone, so
+// request mappings, the HPROF "JAVA PROFILE" header, or for Spring Boot 1.x the
+// gzip magic plus a `.hprof`/`.hprof.gz` attachment name), never on status alone, so
 // a single-page app that answers every path with its 200 shell is not a
 // finding. Findings name the endpoint and the kind of evidence only. A response
 // body, and any value in it, never leaves this file.
@@ -113,6 +115,7 @@ export type ActuatorEvidence =
   | "configprops-beans"
   | "request-mappings"
   | "hprof-header"
+  | "hprof-gzip"
   | "listed-in-index";
 
 interface ActuatorEndpointSpec {
@@ -443,12 +446,42 @@ export function isHprofResponse(response: ActuatorResponse): boolean {
   return true;
 }
 
-const EVIDENCE: Record<ActuatorEndpointId, { evidence: ActuatorEvidence; confirm: (r: ActuatorResponse) => boolean }> = {
-  index: { evidence: "actuator-index-links", confirm: (r) => readActuatorIndex(r) !== null },
-  env: { evidence: "env-property-sources", confirm: isEnvResponse },
-  configprops: { evidence: "configprops-beans", confirm: isConfigpropsResponse },
-  mappings: { evidence: "request-mappings", confirm: isMappingsResponse },
-  heapdump: { evidence: "hprof-header", confirm: isHprofResponse },
+/** The file name a Content-Disposition header gives (`filename*` or `filename`), lowercased. */
+function dispositionFilename(header: string | null): string | null {
+  if (!header) return null;
+  const ext = /filename\*\s*=\s*[^']*'[^']*'([^;]+)/i.exec(header);
+  if (ext) {
+    try {
+      return decodeURIComponent(ext[1]!.trim()).toLowerCase();
+    } catch {
+      return ext[1]!.trim().toLowerCase();
+    }
+  }
+  const plain = /filename\s*=\s*(?:"([^"]*)"|([^;]+))/i.exec(header);
+  const name = plain?.[1] ?? plain?.[2];
+  return name ? name.trim().toLowerCase() : null;
+}
+
+/**
+ * `/heapdump` on Spring Boot 1.x: the dump file gzipped, sent as an attachment
+ * named `*.hprof.gz`. Both must hold: the gzip magic (1f 8b) opens the body
+ * AND the Content-Disposition names a `.hprof` or `.hprof.gz` file. The gzip
+ * is the file itself, not a Content-Encoding, so the bytes read here are the
+ * raw file bytes (only a Content-Encoding layer is ever decoded before this).
+ */
+export function isGzipHprofAttachment(response: ActuatorResponse): boolean {
+  if (response.bytes[0] !== 0x1f || response.bytes[1] !== 0x8b) return false;
+  const name = dispositionFilename(response.headers.get("content-disposition"));
+  return name !== null && (name.endsWith(".hprof") || name.endsWith(".hprof.gz"));
+}
+
+/** The evidence a 2xx answer confirms the endpoint with, or `null` when it does not. */
+const EVIDENCE: Record<ActuatorEndpointId, (r: ActuatorResponse) => ActuatorEvidence | null> = {
+  index: (r) => (readActuatorIndex(r) !== null ? "actuator-index-links" : null),
+  env: (r) => (isEnvResponse(r) ? "env-property-sources" : null),
+  configprops: (r) => (isConfigpropsResponse(r) ? "configprops-beans" : null),
+  mappings: (r) => (isMappingsResponse(r) ? "request-mappings" : null),
+  heapdump: (r) => (isHprofResponse(r) ? "hprof-header" : isGzipHprofAttachment(r) ? "hprof-gzip" : null),
 };
 
 const EVIDENCE_LABEL: Record<ActuatorEvidence, string> = {
@@ -457,6 +490,7 @@ const EVIDENCE_LABEL: Record<ActuatorEvidence, string> = {
   "configprops-beans": "configuration property beans",
   "request-mappings": "request mappings",
   "hprof-header": "HPROF heap dump header",
+  "hprof-gzip": "gzipped heap dump sent as a .hprof attachment",
   "listed-in-index": "listed by the open actuator index, not downloaded (it may still require authentication)",
 };
 
@@ -499,7 +533,8 @@ type UncheckedWhy =
   | "no-definite-answer"
   | "heapdump-timeout"
   | "heapdump-already-confirmed"
-  | "heapdump-stopped-after-timeout";
+  | "heapdump-stopped-after-timeout"
+  | "heapdump-stopped-after-answer";
 
 interface UncheckedEndpoint {
   url: string;
@@ -522,6 +557,8 @@ const WHY_LABEL: Record<UncheckedWhy, string> = {
     "not requested: a heap dump was already confirmed under another base, and each request makes the server write one",
   "heapdump-stopped-after-timeout":
     "not requested: an earlier heapdump request timed out, so the run asks for no further heap dump",
+  "heapdump-stopped-after-answer":
+    "not requested: an earlier heapdump request got an answer other than 401, 403 or 404 (or failed), which may mean a dump was written, so the run asks for no further heap dump",
 };
 
 function item(e: ExposedEndpoint): CheckItem {
@@ -620,7 +657,11 @@ export async function runExposedActuator(
   // for at most one: none after a confirmed dump, and none after a heapdump
   // request timed out (a large heap can take longer than the timeout to start
   // answering, so a timeout may mean a dump is being written).
-  let heapdumpStop: "heapdump-already-confirmed" | "heapdump-stopped-after-timeout" | null = null;
+  let heapdumpStop:
+    | "heapdump-already-confirmed"
+    | "heapdump-stopped-after-timeout"
+    | "heapdump-stopped-after-answer"
+    | null = null;
   const exposed: ExposedEndpoint[] = [];
   const unchecked: UncheckedEndpoint[] = [];
 
@@ -686,6 +727,18 @@ export async function runExposedActuator(
       probed++;
       if ("error" in outcome) {
         errored++;
+        if (spec.id === "heapdump" && outcome.error !== "TimeoutError") {
+          // A failed heapdump request may still have reached the server and
+          // started a dump: no further heapdump request this run.
+          heapdumpStop = "heapdump-stopped-after-answer";
+          unchecked.push({ url, endpoint: "heapdump", why: "error" });
+          if (Date.now() >= deadline) {
+            timeStopped = true;
+            leaveRest(b, s + 1, listed, "time");
+            break outer;
+          }
+          continue;
+        }
         if (spec.id === "heapdump" && outcome.error === "TimeoutError") {
           // Never closed, and no further heapdump request this run.
           heapdumpStop = "heapdump-stopped-after-timeout";
@@ -727,22 +780,31 @@ export async function runExposedActuator(
         leaveRest(b, s, listed, "throttled");
         break outer;
       }
+      // Any heapdump answer but a 401, 403 or 404 may mean a dump was
+      // written (a 2xx, with or without a recognised header, a 5xx from a
+      // dump that failed half way, a redirect to where it lands): no further
+      // heapdump request this run. A confirmed dump overrides this below.
+      if (spec.id === "heapdump" && !HEAPDUMP_CLOSED_STATUSES.has(response.status)) {
+        heapdumpStop = "heapdump-stopped-after-answer";
+      }
       if (response.status >= 500) {
         unchecked.push({ url, endpoint: spec.id, why: "server-error" });
         continue;
       }
       if (response.status >= 200 && response.status < 300) {
         if (spec.id === "index") listed = readActuatorIndex(response);
-        if (EVIDENCE[spec.id].confirm(response)) {
-          exposed.push({ url, endpoint: spec.id, severity: spec.severity, evidence: EVIDENCE[spec.id].evidence, base });
+        const evidence = EVIDENCE[spec.id](response);
+        if (evidence) {
+          exposed.push({ url, endpoint: spec.id, severity: spec.severity, evidence, base });
           if (spec.id === "heapdump") heapdumpStop = "heapdump-already-confirmed";
           continue;
         }
       }
       if (spec.id === "heapdump") {
         // Only a definite refusal or absence passes the heapdump: a 2xx
-        // without the HPROF header, a redirect or another status may be a
-        // proxy or error page in front of a dump that is still there.
+        // without the HPROF header or a gzipped .hprof attachment, a redirect
+        // or another status may be a proxy or error page in front of a dump
+        // that is still there.
         if (HEAPDUMP_CLOSED_STATUSES.has(response.status)) heapdumpClosed++;
         else unchecked.push({ url, endpoint: "heapdump", why: "no-definite-answer" });
       }
