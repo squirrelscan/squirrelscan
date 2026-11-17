@@ -390,6 +390,20 @@ describe("links/broken-links when the crawl did not follow links", () => {
     );
   });
 
+  test("a clipped out-of-scope count gives its targets to excluded before action", async () => {
+    // The probe counted 3 out of scope (1 an action link) but only 2 targets are left
+    // after the one past the limit, so the 2 may both be exclusions: none is claimed as an action.
+    const { checks } = await brokenLinksRule.run(
+      ctx(issuePages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: issueStatuses.slice(0, 2),
+        internalLinkProbe: { unfetched: 3, probed: 2, cap: 2, outOfScope: 3, actionLinks: 1 },
+      }),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.details?.notFetched).toEqual({ overLimit: 1, excluded: 2 });
+  });
+
   test("every cause at once gets a count each", async () => {
     const { checks } = await brokenLinksRule.run(
       ctx(issuePages, {
