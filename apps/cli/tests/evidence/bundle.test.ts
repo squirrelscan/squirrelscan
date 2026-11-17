@@ -22,7 +22,7 @@ import {
   verifyEvidenceBundle,
 } from "@/evidence/bundle";
 import {
-  redactHeaders,
+  ShareableRedactor,
   redactText,
   redactUrl,
   newRedactionCounts,
@@ -493,15 +493,26 @@ describe("shareable export", () => {
     expect(verifyEvidenceBundle(dir).ok).toBe(true);
   });
 
-  test("redactUrl, redactHeaders and redactText unit behaviour", () => {
+  test("redactUrl, credential keys and redactText unit behaviour", () => {
     const counts = newRedactionCounts();
     expect(redactUrl("https://u:p@a.test/x?q=1&password=hunter2", counts)).toBe(
       "https://a.test/x?q=1&password=[redacted]"
     );
     expect(redactUrl("not a url", counts)).toBe("not a url");
+    const redactor = new ShareableRedactor();
     expect(
-      redactHeaders({ Authorization: "Bearer x", server: "nginx" }, counts)
-    ).toEqual({ Authorization: "[redacted]", server: "nginx" });
+      redactor.json("pages.json", {
+        Authorization: "Bearer x",
+        server: "nginx",
+        nested: { password: { a: 1 } },
+      })
+    ).toEqual({
+      Authorization: "[redacted]",
+      server: "nginx",
+      nested: { password: { "[redacted]": "[redacted]" } },
+    });
+    expect(redactor.counts.headers).toBe(1);
+    expect(redactor.counts.keys).toBe(1);
     expect(
       redactText("Authorization: Bearer abcdefghijklmnop", counts)
     ).not.toContain("abcdefghijklmnop");
