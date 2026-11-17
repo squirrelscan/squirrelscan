@@ -231,6 +231,8 @@ export interface BatchOptions {
   log?: (line: string) => void;
   /** Resolves when the batch should stop starting URLs and stop the children (SIGINT/SIGTERM). */
   stopSignal?: AbortSignal;
+  /** Resolves when the running children must be killed now (a second SIGINT/SIGTERM); implies {@link stopSignal}. */
+  killSignal?: AbortSignal;
 }
 
 function pidAlive(pid: number): boolean {
@@ -536,12 +538,20 @@ export async function executeBatch(opts: BatchOptions): Promise<number> {
     const queue = plan.run.slice();
     const activeProjects = new Set<string>();
     const children = new Set<ChildHandle>();
-    const state = { stopping: opts.stopSignal?.aborted === true };
+    const state = {
+      stopping:
+        opts.stopSignal?.aborted === true || opts.killSignal?.aborted === true,
+    };
     const onAbort = (): void => {
       state.stopping = true;
       for (const c of children) c.terminate();
     };
+    const onKill = (): void => {
+      state.stopping = true;
+      for (const c of children) c.kill();
+    };
     opts.stopSignal?.addEventListener("abort", onAbort);
+    opts.killSignal?.addEventListener("abort", onKill);
 
     const projectOf = (url: string): string => domainToProjectName(url);
 
@@ -606,9 +616,12 @@ export async function executeBatch(opts: BatchOptions): Promise<number> {
         reason = "url_timeout";
       } else if (result.exitCode === null) {
         status = "crashed";
-        reason = state.stopping
-          ? "interrupted"
-          : `signal_${result.signal ?? "unknown"}`;
+        // A child that died of SIGINT was stopped by a Ctrl-C (the terminal signals the whole process group), even when
+        // it exited before the orchestrator saw its own copy of the signal: a resume runs it again.
+        reason =
+          state.stopping || result.signal === "SIGINT"
+            ? "interrupted"
+            : `signal_${result.signal ?? "unknown"}`;
       } else {
         const s = statusFromExit(result.exitCode, childRecord);
         status = s.status;
@@ -683,6 +696,7 @@ export async function executeBatch(opts: BatchOptions): Promise<number> {
       pump();
     });
     opts.stopSignal?.removeEventListener("abort", onAbort);
+    opts.killSignal?.removeEventListener("abort", onKill);
 
     // 4. The summary and the exit code, both read from the manifest so a resumed batch agrees with a fresh one.
     const finalRecords = parseManifest(readManifest()).records;
@@ -782,18 +796,43 @@ export async function runBatch(input: {
       );
   }
 
+  // First signal: start nothing new and ask the children to stop. Second: kill them, so each still gets its `interrupted`
+  // record and the lock is released (exiting here would leave `running` lines a resume reads as crashed). Third: exit now.
   const controller = new AbortController();
+  const killer = new AbortController();
   let signals = 0;
-  const onSignal = (): void => {
-    if (++signals > 1) process.exit(BATCH_EXIT.interrupted);
-    console.error(
-      "Stopping: asking the running audits to finish. Run the same command again to resume."
-    );
-    controller.abort();
+  const say = (line: string): void => {
+    try {
+      console.error(line);
+    } catch {
+      // The terminal is gone (SIGHUP).
+    }
+  };
+  const onSignal = (signal: NodeJS.Signals): void => {
+    if (signal === "SIGHUP") {
+      // Writes to a closed terminal fail with EIO: keep them from taking the process down before the records are written.
+      process.stdout.on("error", () => {});
+      process.stderr.on("error", () => {});
+    }
+    signals++;
+    if (signals === 1) {
+      say(
+        "Stopping: asking the running audits to finish. Run the same command again to resume."
+      );
+      controller.abort();
+    } else if (signals === 2) {
+      say(
+        "Stopping now: killing the running audits. Run the same command again to resume."
+      );
+      killer.abort();
+    } else {
+      process.exit(BATCH_EXIT.interrupted);
+    }
   };
   const emitter = process as NodeJS.EventEmitter;
   emitter.on("SIGINT", onSignal);
   emitter.on("SIGTERM", onSignal);
+  emitter.on("SIGHUP", onSignal);
   try {
     process.exitCode = await executeBatch({
       urlsFile,
@@ -807,9 +846,11 @@ export async function runBatch(input: {
       format,
       passthrough: passthroughArgs(rawArgs),
       stopSignal: controller.signal,
+      killSignal: killer.signal,
     });
   } finally {
     emitter.off("SIGINT", onSignal);
     emitter.off("SIGTERM", onSignal);
+    emitter.off("SIGHUP", onSignal);
   }
 }
