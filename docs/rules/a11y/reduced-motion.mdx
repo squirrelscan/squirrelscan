@@ -7,7 +7,7 @@ description: "Parallax, looping animation and autoplay can make people with vest
 
 Every major operating system has a reduce motion setting, and browsers expose it to pages as the media query `@media (prefers-reduced-motion: reduce)`. Parallax heroes, scroll-triggered fade-ins, auto-advancing carousels and looping animation can make people with vestibular disorders dizzy or nauseous. A page that animates without ever reading that query ignores the setting completely.
 
-Two WCAG criteria apply. 2.3.3 Animation from Interactions (Level AAA) asks that motion triggered by interaction can be disabled. 2.2.2 Pause, Stop, Hide (Level A) asks that moving content that starts automatically and lasts more than five seconds can be paused. Technique C39 uses `prefers-reduced-motion` to meet 2.3.3. A static check cannot prove 2.2.2, because a pause button may exist, so this rule reports missing reduced-motion handling, not a WCAG failure.
+This rule declares one WCAG criterion: 2.3.3 Animation from Interactions (Level AAA), which asks that motion animation triggered by interaction can be disabled, and for which technique C39 uses `prefers-reduced-motion`. It does not declare 2.2.2 Pause, Stop, Hide (Level A), which asks that moving content that starts automatically and lasts more than five seconds can be paused: the rule never looks for a pause control, which may exist. So it reports missing reduced-motion handling, not a WCAG failure.
 
 ## What squirrel checks
 
@@ -109,3 +109,15 @@ Each check name this rule can emit, by what it means to a tool comparing two aud
 | `reduced-motion` | Clean | `reduced-motion-aos`, `reduced-motion-gsap-scrolltrigger`, `reduced-motion-lottie`, `reduced-motion-animate-wow`, `reduced-motion-parallax`, `reduced-motion-smooth-scroll-lib`, `reduced-motion-carousel-autoplay`, `reduced-motion-marquee`, `reduced-motion-autoplay-video`, `reduced-motion-css-infinite-animation`, `reduced-motion-css-smooth-scroll` |
 
 {/* rule-checks:end */}
+
+## WCAG success criteria
+
+{/* rule-wcag:start */}
+
+The WCAG success criteria this rule's findings map to. These automated checks cover part of WCAG; passing them does not mean a site conforms. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules mapped to a criterion at Level A or AA.
+
+| Criterion | Level | Introduced in |
+| --- | --- | --- |
+| 2.3.3 Animation from Interactions | AAA | WCAG 2.1 |
+
+{/* rule-wcag:end */}

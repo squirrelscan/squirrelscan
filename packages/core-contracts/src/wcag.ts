@@ -20,7 +20,7 @@ interface WcagEntry {
 }
 
 /**
- * Only the criteria some rule cites, in its `wcag` list or its `wcagNone` reason (2.1.4, 3.3.8); add a row
+ * Only the criteria some rule cites, in its `wcag` list or its `wcagNone` reason (2.1.4, 2.3.3, 3.3.8); add a row
  * when a rule cites a new one. No 4.1.1 Parsing: WCAG 2.2 removed it.
  */
 export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
@@ -33,6 +33,7 @@ export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
   "1.4.4": { title: "Resize Text", level: "AA", version: "2.0" },
   "2.1.4": { title: "Character Key Shortcuts", level: "A", version: "2.1" },
   "2.2.1": { title: "Timing Adjustable", level: "A", version: "2.0" },
+  "2.3.3": { title: "Animation from Interactions", level: "AAA", version: "2.1" },
   "2.4.1": { title: "Bypass Blocks", level: "A", version: "2.0" },
   "2.4.3": { title: "Focus Order", level: "A", version: "2.0" },
   "2.4.4": { title: "Link Purpose (In Context)", level: "A", version: "2.0" },
