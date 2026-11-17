@@ -104,7 +104,7 @@ The one-time install registration reports what happened as `path_setup` (`on_pat
 
 `install.sh` and `install.ps1` are published with each release, not on every merge to `main`. Serving them from `main` would put every merged change live in `curl | sh` at once, so they are release-gated on purpose. The consequence: a fix to the installer reaches users with the next release, and an urgent installer fix means cutting a patch release.
 
-Each response from `install.squirrelscan.com` carries an `x-squirrel-installer-version` header naming the release the served script was published from. A daily check compares the served `install.sh` and `install.ps1` with the same files at the latest release tag and raises an alert when they differ.
+Each `install.sh` and `install.ps1` response from `install.squirrelscan.com` carries an `x-squirrel-installer-version` header meant to name the release the served script was published from (release manifests and other responses do not carry it). The release workflow does not record that version yet, so today the header reads `unknown`. A daily check compares the served `install.sh` and `install.ps1` with the same files at the latest release tag and raises an alert when they differ.
 
 ## What the installer host records
 
