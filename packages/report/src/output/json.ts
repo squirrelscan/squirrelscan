@@ -439,7 +439,7 @@ interface SlimJsonReport {
     /** Top-level group code (#626), e.g. "seo" — which group the issue rolls up into. */
     group: string;
     subcategory?: string;
-    /** WCAG success criteria of an a11y rule and the easiest level among them (schema 1.23, repo#3093). */
+    /** WCAG success criteria of an a11y rule and the easiest level among them (schema 1.27, repo#3093). */
     wcag?: WcagCriterion[];
     wcagLevel?: WcagLevel;
     severity: "error" | "warning" | "info";
@@ -543,7 +543,7 @@ interface SlimJsonReport {
    */
   rules?: RuleRun[];
   /**
-   * The a11y issues' rule ids grouped by the easiest WCAG level among their criteria (schema 1.23, repo#3093).
+   * The a11y issues' rule ids grouped by the easiest WCAG level among their criteria (schema 1.27, repo#3093).
    * Present only when an a11y issue carries criteria.
    */
   wcagByLevel?: Partial<Record<WcagLevel, string[]>>;
