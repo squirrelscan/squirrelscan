@@ -538,3 +538,25 @@ describe("support completion (#1090)", () => {
     }
   });
 });
+
+describe("audit --wcag-level completion (pub#2024 review)", () => {
+  test("bash offers the flag once and completes A AA AAA after it", () => {
+    const block = commandBlock("bash", script("bash"), "audit");
+    const flagList = block.slice(block.indexOf("esac"));
+    expect(flagList.match(/--wcag-level(?![a-z0-9-])/g)).toHaveLength(1);
+    const arm = block.indexOf("--wcag-level)");
+    expect(arm).toBeGreaterThan(-1);
+    expect(block.slice(arm).match(/compgen -W "([^"]+)"/)?.[1]).toBe(
+      "A AA AAA"
+    );
+  });
+
+  test("zsh and fish complete A AA AAA", () => {
+    expect(commandBlock("zsh", script("zsh"), "audit")).toMatch(
+      /--wcag-level\[[^\]]+\]:level:\(A AA AAA\)/
+    );
+    expect(commandBlock("fish", script("fish"), "audit")).toMatch(
+      /-l wcag-level -x -a "A AA AAA"/
+    );
+  });
+});

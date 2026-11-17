@@ -553,7 +553,7 @@ export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set(
   Object.keys(SKIP_REASON_CLASSES).filter((reason) => SKIP_REASON_CLASSES[reason]!.notChecked),
 );
 
-import type { WcagCriterion } from "./wcag";
+import type { WcagCriterion, WcagLevel } from "./wcag";
 
 export type RuleScope = "page" | "site";
 export type RuleSeverity = "error" | "warning" | "info";
@@ -861,9 +861,9 @@ export interface ReportRender {
 }
 
 /**
- * Marks a report whose rules were narrowed with `--rule-include` / `--rule-exclude` (repo#1082).
- * The score covers `includedCategories` only, so the report must not read as the site's full state.
- * Absent on an unfiltered run.
+ * Marks a report whose rules were narrowed with `--rule-include` / `--rule-exclude` (repo#1082) or
+ * `--wcag-level` / `[rules] wcag_level` (repo#3093). The score covers `includedCategories` only, so the
+ * report must not read as the site's full state. Absent on an unfiltered run.
  */
 export interface PartialAudit {
   /** Resolved `--rule-include` patterns. */
@@ -872,6 +872,11 @@ export interface PartialAudit {
   exclude: string[];
   /** Categories that could run under the filter (canonical codes). */
   includedCategories: string[];
+  /**
+   * The WCAG level the run's accessibility rules were narrowed to (repo#3093): only rules mapped to a
+   * criterion at or below it ran. Absent when no level was set.
+   */
+  wcagLevel?: WcagLevel;
 }
 
 export interface AuditReport {

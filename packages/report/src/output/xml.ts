@@ -10,6 +10,7 @@ import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
+import { isWcagLevel } from "@squirrelscan/core-contracts/wcag";
 import { partialAuditLine, followedStartRedirect, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { ignoredLine, safeIgnored } from "../ignored";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
@@ -74,7 +75,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     const attr = (v: unknown) =>
       escapeXml((Array.isArray(v) ? v.filter((x) => typeof x === "string") : []).join(","));
     lines.push(
-      `${indent(2)}<partial-audit include="${attr(pa.include)}" exclude="${attr(pa.exclude)}" included-categories="${attr(pa.includedCategories)}"/>`,
+      `${indent(2)}<partial-audit include="${attr(pa.include)}" exclude="${attr(pa.exclude)}" included-categories="${attr(pa.includedCategories)}"${isWcagLevel(pa.wcagLevel) ? ` wcag-level="${pa.wcagLevel}"` : ""}/>`,
     );
   }
   if (report.scanScope) {

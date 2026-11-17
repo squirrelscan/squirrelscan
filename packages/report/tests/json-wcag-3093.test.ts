@@ -3,8 +3,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderMarkdown } from "../src/output/markdown";
+import { renderText } from "../src/output/text";
+import { renderXml } from "../src/output/xml";
 import type { AuditReport } from "../src/types";
 
 function rule(id: string, category: string, criteria?: ReturnType<typeof wcag>[]) {
@@ -66,5 +69,42 @@ describe("renderJson wcag (repo#3093)", () => {
 
   test("markdown shows the criterion and level", () => {
     expect(renderMarkdown(report())).toContain("**WCAG:** 1.4.3 Contrast (Minimum), Level AA (WCAG 2.0)");
+  });
+});
+
+describe("html wcag line (pub#2024 review)", () => {
+  test("says the counts are of accessibility rules with findings", () => {
+    const html = renderHtml(report());
+    expect(html).toContain("Accessibility rules with findings, by WCAG level: Level A: 1, Level AA: 1, Level AAA: 1");
+  });
+});
+
+describe("a run narrowed by a WCAG level is marked partial (pub#2024 review)", () => {
+  const narrowed = (): AuditReport => ({
+    ...report(),
+    partialAudit: { include: [], exclude: [], includedCategories: ["a11y", "core"], wcagLevel: "AA" },
+  });
+
+  test("json meta.partialAudit carries the level", () => {
+    const meta = JSON.parse(renderJson(narrowed())).meta;
+    expect(meta.partialAudit).toEqual({
+      include: [],
+      exclude: [],
+      includedCategories: ["a11y", "core"],
+      wcagLevel: "AA",
+    });
+  });
+
+  test("text, markdown and xml name the level", () => {
+    expect(renderText(narrowed())).toContain("Partial audit: accessibility rules narrowed to WCAG Level AA.");
+    expect(renderMarkdown(narrowed())).toContain("accessibility rules narrowed to WCAG Level AA");
+    expect(renderXml(narrowed())).toContain('wcag-level="AA"');
+  });
+
+  test("a stored level that is not A, AA or AAA is dropped", () => {
+    const r = narrowed();
+    (r.partialAudit as unknown as { wcagLevel: string }).wcagLevel = "<b>";
+    expect("partialAudit" in JSON.parse(renderJson(r)).meta).toBe(false);
+    expect(renderXml(r)).not.toContain("wcag-level");
   });
 });

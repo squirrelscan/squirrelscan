@@ -12,7 +12,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../../src/types";
 
-import { buildPartialAudit } from "../../src/audit/rule-filter";
+import {
+  buildPartialAudit,
+  resolveRulesConfig,
+  wcagRuleDisables,
+  zeroRulesError,
+} from "../../src/audit/rule-filter";
 import { lockedRulesFooterLine } from "../../src/cli/banner";
 import {
   computeLockedRules,
@@ -64,6 +69,62 @@ describe("buildPartialAudit", () => {
   test("including one rule scores only its category", () => {
     const p = buildPartialAudit({ enable: ["core/meta-title"], disable: [] });
     expect(p?.includedCategories).toEqual(["core"]);
+  });
+});
+
+describe("a run narrowed by a WCAG level (repo#3093)", () => {
+  test("is partial and names the level, keeping the user's patterns as they were", () => {
+    const p = buildPartialAudit({ enable: [], disable: [] }, [], "AA");
+    expect(p).toBeDefined();
+    expect(p?.wcagLevel).toBe("AA");
+    expect(p?.include).toEqual([]);
+    expect(p?.exclude).toEqual([]);
+    expect(p?.includedCategories).toContain("a11y");
+    expect(p?.includedCategories).toContain("core");
+  });
+
+  test("an include filter plus a level records both", () => {
+    const p = buildPartialAudit({ enable: ["a11y/*"], disable: [] }, [], "A");
+    expect(p?.include).toEqual(["a11y/*"]);
+    expect(p?.wcagLevel).toBe("A");
+    expect(p?.includedCategories).toEqual(["a11y"]);
+  });
+
+  test("an unfiltered run with no level has no marker and no wcagLevel", () => {
+    expect(
+      buildPartialAudit({ enable: [], disable: [] }, [], undefined)
+    ).toBeUndefined();
+    expect(
+      buildPartialAudit({ enable: ["ax/*"], disable: [] })
+    ).not.toHaveProperty("wcagLevel");
+  });
+});
+
+describe("zero-rules pre-check sees the WCAG level (repo#3093)", () => {
+  const config = { enable: ["*"], disable: [] };
+  const check = (
+    enable: string[],
+    disable: string[],
+    level?: "A" | "AA" | "AAA"
+  ) =>
+    zeroRulesError(enable, resolveRulesConfig(config, { enable, disable }), {
+      level,
+      disables: wcagRuleDisables(level),
+    });
+
+  test("--rule-include a11y/touch-targets --wcag-level AA is refused", () => {
+    expect(check(["a11y/touch-targets"], [], "AA")).toContain("WCAG level AA");
+  });
+
+  test("a rule the level keeps, or no level, is not refused", () => {
+    expect(check(["a11y/touch-targets"], [], "AAA")).toBeNull();
+    expect(check(["a11y/touch-targets"], [])).toBeNull();
+    expect(check(["a11y/color-contrast"], [], "AA")).toBeNull();
+    expect(check(["a11y/*"], [], "A")).toBeNull();
+  });
+
+  test("the include/exclude contradiction keeps its own message", () => {
+    expect(check(["ax/*"], ["ax/*"], "AA")).toContain("contradict each other");
   });
 });
 

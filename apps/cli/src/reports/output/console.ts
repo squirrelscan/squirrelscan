@@ -531,17 +531,24 @@ export function generateConsoleReport(
  * here" and undercount how much of the site was actually scored. */
 function partialAuditLine(
   filter: ConsoleRuleFilter | undefined,
-  healthScore: HealthScore | undefined
+  healthScore: HealthScore | undefined,
+  /** repo#3093: the WCAG level the run's accessibility rules were narrowed to. */
+  wcagLevel?: string
 ): string | null {
-  if (!filter || (filter.enable.length === 0 && filter.disable.length === 0)) {
+  const enable = filter?.enable ?? [];
+  const disable = filter?.disable ?? [];
+  if (enable.length === 0 && disable.length === 0 && !wcagLevel) {
     return null;
   }
-  const included = filter.enable.length > 0;
+  const included = enable.length > 0;
   const shorten = (p: string) => (p.endsWith("/*") ? p.slice(0, -2) : p);
   const parts: string[] = [];
-  if (included) parts.push(`included ${filter.enable.map(shorten).join(", ")}`);
-  if (filter.disable.length > 0) {
-    parts.push(`excluded ${filter.disable.map(shorten).join(", ")}`);
+  if (included) parts.push(`included ${enable.map(shorten).join(", ")}`);
+  if (disable.length > 0) {
+    parts.push(`excluded ${disable.map(shorten).join(", ")}`);
+  }
+  if (wcagLevel) {
+    parts.push(`accessibility rules narrowed to WCAG Level ${wcagLevel}`);
   }
   const scored =
     included && healthScore && healthScore.overall !== null
@@ -690,7 +697,11 @@ function printReportDetail(
   // pub#629: once, here, rather than a skipped line per rule and page.
   const privateTarget = privateTargetLine(report);
   if (privateTarget) scan.push(fmt.dim(privateTarget));
-  const partial = partialAuditLine(opts.ruleFilter, report.healthScore);
+  const partial = partialAuditLine(
+    opts.ruleFilter,
+    report.healthScore,
+    report.partialAudit?.wcagLevel
+  );
   if (partial) scan.push(fmt.dim(partial));
   if (notChecked.length === 0 && !report.structure && scan.length === 0) return;
 

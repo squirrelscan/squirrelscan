@@ -4,7 +4,14 @@
 // CLI import path and test is unchanged. What stays here needs the loaded rule
 // set (`isCategoryExcluded`), which the worker-clean core must not import.
 
-import { isRuleEnabled, loadAllRules } from "@squirrelscan/rules";
+import type { WcagLevel } from "@squirrelscan/core-contracts/wcag";
+
+import {
+  filterResolvesToZeroCategories,
+  isRuleEnabled,
+  loadAllRules,
+  wcagLevelDisablePatterns,
+} from "@squirrelscan/rules";
 import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
 
 import type { PartialAudit } from "@/types";
@@ -95,23 +102,70 @@ export function isCategoryExcluded(
 }
 
 /**
- * The partial-audit marker for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082), or
- * undefined for an unfiltered run. `includedCategories` is every category with at least one rule that
- * still runs under the filter, decided per rule with the engine's own `isRuleEnabled`, so excluding one
- * rule (`--rule-exclude core/meta-title`) keeps its category while `--rule-exclude core/*` drops it.
+ * `--wcag-level` / `[rules] wcag_level` (repo#3093): the exact ids of the a11y rules the level leaves out,
+ * as disable patterns. Empty when no level is set.
+ */
+export function wcagRuleDisables(level: WcagLevel | undefined): string[] {
+  if (!level) return [];
+  return wcagLevelDisablePatterns(
+    loadAllRules()
+      .values()
+      .map((r) => r.meta),
+    level
+  );
+}
+
+/**
+ * The pre-crawl refusal for a filter that leaves no rule to run, or null. `--rule-include X --rule-exclude X`
+ * is a contradiction; `--rule-include a11y/touch-targets --wcag-level AA` (repo#3093) selects only rules the
+ * level leaves out. `resolved` carries the `--rule-exclude` and config disables, `wcagDisables` the level's.
+ */
+export function zeroRulesError(
+  enable: string[],
+  resolved: { enable: string[]; disable: string[] },
+  wcag: { level: WcagLevel | undefined; disables: string[] }
+): string | null {
+  if (filterResolvesToZeroCategories(enable, resolved)) {
+    return "--rule-include/--rule-exclude contradict each other: every included category is also excluded, so no rules would run";
+  }
+  if (
+    wcag.level &&
+    wcag.disables.length > 0 &&
+    filterResolvesToZeroCategories(enable, {
+      enable: resolved.enable,
+      disable: [...resolved.disable, ...wcag.disables],
+    })
+  ) {
+    return `--rule-include selects only accessibility rules that WCAG level ${wcag.level} (--wcag-level or [rules] wcag_level) leaves out, so no rules would run`;
+  }
+  return null;
+}
+
+/**
+ * The partial-audit marker for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082) or a WCAG
+ * level (repo#3093), or undefined for an unfiltered run. `includedCategories` is every category with at least
+ * one rule that still runs under the filter, decided per rule with the engine's own `isRuleEnabled`, so
+ * excluding one rule (`--rule-exclude core/meta-title`) keeps its category while `--rule-exclude core/*` drops
+ * it. `exclude` stays the user's patterns; the level is recorded as `wcagLevel`.
  */
 export function buildPartialAudit(
   filter: { enable: string[]; disable: string[] },
-  pluginRules: readonly { id: string; category: string; optIn?: boolean }[] = []
+  pluginRules: readonly {
+    id: string;
+    category: string;
+    optIn?: boolean;
+  }[] = [],
+  wcagLevel?: WcagLevel
 ): PartialAudit | undefined {
-  if (filter.enable.length === 0 && filter.disable.length === 0) {
+  if (filter.enable.length === 0 && filter.disable.length === 0 && !wcagLevel) {
     return undefined;
   }
   // No include list means every rule is enabled (the engine's default `*`).
   const enable = filter.enable.length > 0 ? filter.enable : ["*"];
+  const disable = [...filter.disable, ...wcagRuleDisables(wcagLevel)];
   const scored = new Set<string>();
   const consider = (id: string, category: string, optIn?: boolean) => {
-    if (isRuleEnabled(id, enable, filter.disable, undefined, optIn === true)) {
+    if (isRuleEnabled(id, enable, disable, undefined, optIn === true)) {
       scored.add(normalizeCategoryCode(category));
     }
   };
@@ -126,5 +180,6 @@ export function buildPartialAudit(
     include: [...filter.enable],
     exclude: [...filter.disable],
     includedCategories,
+    ...(wcagLevel ? { wcagLevel } : {}),
   };
 }
