@@ -48,6 +48,7 @@ import {
   calculateHealthScore,
   calculateHealthScoreFromTallies,
   foldRuleResultIntoTallies,
+  isCarriedContinuation,
   type RuleTally,
 } from "../src/scoring";
 import { buildStreamFindings } from "../src/stream-findings";
@@ -236,7 +237,7 @@ async function cappedBody(report: Report) {
   };
 }
 
-/** What the API stores after the rescore: the score and the report's totals. */
+/** What the API stores after the rescore: the score and the report's totals (in check units, repo#3360). */
 function rescored(r: CloudSmartAuditsResult): {
   healthScore: HealthScore;
   totals: { passed: number; warnings: number; failed: number };
@@ -251,6 +252,10 @@ function rescored(r: CloudSmartAuditsResult): {
   for (const rule of r.unionRuleResults.values()) {
     const advisory = rule.meta.severity === "info";
     for (const c of rule.checks) {
+      // (repo#3360) A carried item row after the first of its (page, check, status)
+      // is no extra check, as the engine's reportTotals skip it (the API's
+      // applyUnionToReport loop follows in the private follow-up).
+      if (isCarriedContinuation(c)) continue;
       if (c.status === "pass") totals.passed++;
       else if (c.status === "warn" && !advisory) totals.warnings++;
       else if (c.status === "fail") totals.failed++;
