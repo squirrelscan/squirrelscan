@@ -1,6 +1,5 @@
 // a11y/heading-order - Heading levels don't skip
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const headingOrderRule: Rule = {
@@ -11,7 +10,8 @@ export const headingOrderRule: Rule = {
     solution:
       "Headings should follow a logical hierarchy without skipping levels. Screen reader users navigate by headings, so skipping from H1 to H3 is confusing. Correct order: H1 -> H2 -> H3 (not H1 -> H3). You can have multiple headings at the same level, and you can go back up (H3 -> H2 is fine). Think of headings as an outline - they should make sense when read alone.",
     category: "a11y",
-    wcag: [wcag("1.3.1")],
+    wcagNone:
+      "It flags a heading that skips a level (an H3 after an H1), which no WCAG success criterion forbids; 1.3.1 Info and Relationships asks that headings be marked up as headings, not that their levels run in sequence.",
     scope: "page",
     verdictScope: "page",
     severity: "warning",

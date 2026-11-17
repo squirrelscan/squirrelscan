@@ -61,13 +61,9 @@ enable = ["a11y/accesskeys"]
 
 ## WCAG success criteria
 
-The WCAG success criteria this rule's findings map to. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules with a criterion at Level A or AA.
-
 {/* rule-wcag:start */}
 
-| Criterion | Level | Introduced in |
-| --- | --- | --- |
-| 2.1.4 Character Key Shortcuts | A | WCAG 2.1 |
+No WCAG success criterion: It flags two elements that share an accesskey value, which no WCAG success criterion forbids; 2.1.4 Character Key Shortcuts covers single-key shortcuts with no modifier, and an access key always has one. A run narrowed with `--wcag-level` leaves this rule out.
 
 {/* rule-wcag:end */}
 

@@ -4,7 +4,6 @@
 // the wrong `type`, no `enterkeyhint` on a long form, and `novalidate` on a
 // form that still declares constraints and ships no validation of its own.
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
 import {
@@ -101,7 +100,8 @@ export const inputTypesRule: Rule = {
     solution:
       "Use the input type that matches the data: type='email', type='tel', type='url' and type='number' each summon the right mobile keyboard and bring free browser validation with them, while type='text' gives users the full QWERTY keyboard and no help at all. Never use type='number' for a digit string such as a postal code, phone number or card number: it strips leading zeros, adds a spinner, and silently discards anything that is not a valid float. If you need a numeric keypad without those side effects, keep type='text' and add inputmode='numeric'. On forms with several fields, set enterkeyhint='next' on each field and enterkeyhint='send' or 'done' on the last one so the mobile return key says what it does. Only add novalidate when your own JavaScript takes over validation: on a form that still declares required or pattern and ships no replacement, it removes the browser's error messages and hands users nothing back.",
     category: "a11y",
-    wcag: [wcag("1.3.5")],
+    wcagNone:
+      "It checks that fields use the input type and enterkeyhint that match their data and that forms keep native validation, which are usability practices; 1.3.5 Identify Input Purpose is about autocomplete tokens, which a11y/autocomplete-tokens checks.",
     scope: "page",
     verdictScope: "page",
     severity: "warning",

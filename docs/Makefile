@@ -6,7 +6,7 @@ validate:
 	bun scripts/glossary.ts --check
 	bun scripts/rule-checks.ts --check
 	bun scripts/rule-wcag.ts --check
-	bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts
+	bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts ./scripts/rule-wcag.test.ts
 
 dev:
 	bun x tangly dev

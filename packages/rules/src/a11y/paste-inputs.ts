@@ -1,6 +1,5 @@
 // a11y/paste-inputs - Detect paste-blocking inputs
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const pasteInputsRule: Rule = {
@@ -11,7 +10,8 @@ export const pasteInputsRule: Rule = {
     solution:
       "Remove any JavaScript that prevents pasting in form inputs. Blocking paste forces users to manually type passwords, email addresses, or other data, which increases errors and frustrates users with password managers. Users with motor impairments may rely on paste functionality. Remove onpaste='return false', event.preventDefault() on paste events, and similar anti-paste code.",
     category: "a11y",
-    wcag: [wcag("3.3.8")],
+    wcagNone:
+      "It flags paste, copy or cut blocking on any text field, not only the authentication fields 3.3.8 Accessible Authentication (Minimum) covers, so the rule as a whole maps to no criterion (narrowing it is squirrelscan/squirrelscan#2106).",
     scope: "page",
     verdictScope: "page",
     severity: "warning",

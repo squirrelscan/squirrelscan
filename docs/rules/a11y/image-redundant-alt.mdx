@@ -71,13 +71,9 @@ enable = ["a11y/image-redundant-alt"]
 
 ## WCAG success criteria
 
-The WCAG success criteria this rule's findings map to. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules with a criterion at Level A or AA.
-
 {/* rule-wcag:start */}
 
-| Criterion | Level | Introduced in |
-| --- | --- | --- |
-| 1.1.1 Non-text Content | A | WCAG 2.0 |
+No WCAG success criterion: It flags alt text that names the image type ("image of", "photo"), repeats the filename or repeats nearby text, which are wording practices; such an image still has a text alternative, so 1.1.1 Non-text Content is not what it tests. A run narrowed with `--wcag-level` leaves this rule out.
 
 {/* rule-wcag:end */}
 
