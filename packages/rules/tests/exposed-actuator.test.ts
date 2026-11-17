@@ -9,8 +9,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   ACTUATOR_ENDPOINTS,
+  ACTUATOR_PROBE_TIMEOUT_MS,
+  ACTUATOR_TOTAL_BUDGET_MS,
   exposedActuatorRule,
   MAX_ACTUATOR_BASES,
+  runExposedActuator,
   selectActuatorBases,
 } from "../src/security/exposed-actuator";
 import type { CheckResult, RuleContext } from "../src/types";
@@ -137,21 +140,23 @@ describe("security/exposed-actuator", () => {
     expect(sent.every((r) => r.body === null && r.credentials === "omit" && r.redirect === "manual")).toBe(true);
   });
 
-  test("active: a heapdump listed by an open index is critical from the listing, and is not requested", async () => {
+  test("active: a heapdump listed by an open index is a warning from the listing, never critical, and is not requested", async () => {
     const { checks, sent } = await run({
       [`${BASE}/actuator`]: () => json(INDEX(`${BASE}/actuator`, ["health", "heapdump"])),
     });
     expect(sent.some((r) => r.url.includes("heapdump"))).toBe(false);
-    const critical = checks.find((c) => c.name === "exposed-actuator-critical");
-    expect(critical?.status).toBe("fail");
-    expect(critical?.items?.find((i) => i.id === `${BASE}/actuator/heapdump`)?.meta).toMatchObject({
+    // The index lists endpoints even when Spring Security protects them, so the
+    // listing alone is not proof a heap dump can be downloaded.
+    expect(checks.find((c) => c.name === "exposed-actuator-critical")).toBeUndefined();
+    const warn = checks.find((c) => c.name === "exposed-actuator-endpoints");
+    expect(warn?.status).toBe("warn");
+    expect(warn?.items?.map((i) => i.meta?.endpoint)).toEqual(["index", "heapdump"]);
+    expect(warn?.items?.find((i) => i.id === `${BASE}/actuator/heapdump`)?.meta).toMatchObject({
       endpoint: "heapdump",
       evidence: "listed-in-index",
-      severity: "critical",
+      severity: "warning",
       confidence: "lower",
     });
-    const warn = checks.find((c) => c.name === "exposed-actuator-endpoints");
-    expect(warn?.items?.map((i) => i.meta?.endpoint)).toEqual(["index"]);
   });
 
   test("an open index limits the requests to the endpoints it lists", async () => {
@@ -246,10 +251,45 @@ describe("security/exposed-actuator", () => {
     expect(sent.some((r) => /shutdown|refresh|loggers|caches|logout/.test(r.url))).toBe(false);
   });
 
-  test("robots.txt-disallowed actuator paths are skipped below aggressive", async () => {
+  test("robots.txt disallowing every actuator path: nothing sent, not checked, and a prior critical finding is not cleared", async () => {
     const { sent, checks } = await run({}, { robotsTxt: robots(["/actuator"]) });
     expect(sent).toHaveLength(0);
-    expect(checks[0]).toMatchObject({ status: "pass", details: { skippedRobots: 4 } });
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      name: "exposed-actuator-not-checked",
+      status: "skipped",
+      skipReason: "robots-disallowed",
+      details: { skippedRobots: 4, probed: 0 },
+    });
+    // The clean check is the only one that clears a prior finding; a skipped run clears nothing.
+    const clean = exposedActuatorRule.meta.checks?.find((c) => c.name === "exposed-actuator");
+    expect(clean?.clears).toEqual(["exposed-actuator-critical", "exposed-actuator-endpoints"]);
+    expect(checks.some((c) => c.name === "exposed-actuator")).toBe(false);
+    const notChecked = exposedActuatorRule.meta.checks?.find((c) => c.name === checks[0]!.name);
+    expect(notChecked).toMatchObject({ outcome: "skipped" });
+    expect((notChecked as { clears?: string[] } | undefined)?.clears).toBeUndefined();
+  });
+
+  test("a rate-limited (429) or WAF-challenged answer is not checked, never a pass, and probing stops", async () => {
+    const challenge = () =>
+      new Response("<html><head><title>Just a moment...</title></head></html>", {
+        status: 403,
+        headers: { "content-type": "text/html", "cf-mitigated": "challenge" },
+      });
+    const limited = () => json({ error: "Too Many Requests" }, 429);
+    for (const route of [limited, challenge]) {
+      const routes = Object.fromEntries(ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, route]));
+      const { checks, sent } = await run(routes);
+      expect(sent).toHaveLength(1);
+      expect(checks).toHaveLength(1);
+      expect(checks[0]).toMatchObject({
+        name: "exposed-actuator-not-checked",
+        status: "skipped",
+        skipReason: "probe-incomplete",
+        details: { throttled: true },
+      });
+      restore?.();
+    }
   });
 
   test("no probe budget left: not checked, nothing sent", async () => {
@@ -363,6 +403,78 @@ describe("security/exposed-actuator against a fixture server", () => {
       [`${origin}/actuator/heapdump`, "hprof-header"],
     ]);
     expect(JSON.stringify(checks)).not.toContain("JAVA PROFILE");
+  }, 30_000);
+
+  test("a server that hangs on unknown paths: one timeout ends the base, not checked, bounded by one request timeout", async () => {
+    const seen: string[] = [];
+    using server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        seen.push(new URL(req.url).pathname);
+        return new Promise<Response>(() => {});
+      },
+    });
+    const started = Date.now();
+    const { checks } = await exposedActuatorRule.run(serverCtx(`http://localhost:${server.port}`, "active"));
+    const elapsed = Date.now() - started;
+    expect(seen).toEqual(["/actuator"]);
+    expect(elapsed).toBeLessThan(ACTUATOR_PROBE_TIMEOUT_MS + 3_000);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      name: "exposed-actuator-not-checked",
+      status: "skipped",
+      details: { timedOutBases: 1 },
+    });
+  }, 30_000);
+
+  test("the rule's total time budget ends the run: bases not reached are not checked", async () => {
+    // The worst case at the defaults: one request timeout per base, capped by the total.
+    expect(ACTUATOR_TOTAL_BUDGET_MS).toBe(MAX_ACTUATOR_BASES * ACTUATOR_PROBE_TIMEOUT_MS);
+    const seen: string[] = [];
+    using server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        seen.push(new URL(req.url).pathname);
+        return new Promise<Response>(() => {});
+      },
+    });
+    const ctx = serverCtx(`http://localhost:${server.port}`, "active");
+    ctx.endpointSurface = surface(
+      ["/a", "/b"].map((p) => candidate(`http://localhost:${server.port}${p}/actuator/health`, { method: "GET", sameOrigin: true, probeEligible: true }))
+    );
+    const started = Date.now();
+    const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 400, totalBudgetMs: 600 });
+    const elapsed = Date.now() - started;
+    // /a times out at 400 ms and ends its base; /b is cut at the 600 ms total; /actuator is never reached.
+    expect(seen).toEqual(["/a/actuator", "/b/actuator"]);
+    expect(elapsed).toBeLessThan(2_000);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      name: "exposed-actuator-not-checked",
+      status: "skipped",
+      skipReason: "probe-incomplete",
+      details: { timeStopped: true, timedOutBases: 1, bases: 3 },
+    });
+  }, 30_000);
+
+  test("a base that times out ends only that base; a clean answer elsewhere still leaves the run not checked", async () => {
+    const seen: string[] = [];
+    using server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const { pathname } = new URL(req.url);
+        seen.push(pathname);
+        if (pathname.startsWith("/a/")) return new Promise<Response>(() => {});
+        return new Response("Not Found", { status: 404 });
+      },
+    });
+    const ctx = serverCtx(`http://localhost:${server.port}`, "active");
+    ctx.endpointSurface = surface([
+      candidate(`http://localhost:${server.port}/a/actuator/health`, { method: "GET", sameOrigin: true, probeEligible: true }),
+    ]);
+    const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 300, totalBudgetMs: 10_000 });
+    expect(seen).toEqual(["/a/actuator", "/actuator", "/actuator/env", "/actuator/configprops", "/actuator/mappings"]);
+    expect(checks.map((c) => [c.name, c.skipReason])).toEqual([["exposed-actuator-not-checked", "probe-incomplete"]]);
   }, 30_000);
 
   test("an SPA fixture that answers every path with its 200 shell: no finding", async () => {
