@@ -546,7 +546,7 @@ Each URL's report is `<out-dir>/<key>.<ext>`, where `key` is the first 16 hex ch
 
 #### Resume and retry
 
-Run the same command again to resume, after a crash, a reboot or Ctrl-C. URLs that are `completed` or `partial` are skipped, and new URLs in the file run. URLs that failed are skipped too, so a resume does not hammer a dead site: add `--retry-failed` to run them again (`attempt` goes up). `--restart` moves `results.jsonl` to `results.<timestamp>.jsonl` and starts over. Changing `--max-pages` or `--level` does not invalidate completed URLs: use `--restart`. A `SIGINT` or `SIGTERM` stops starting new audits, asks the running ones to stop, and exits `130`.
+Run the same command again to resume, after a crash, a reboot or Ctrl-C. URLs that are `completed` or `partial` are skipped, and new URLs in the file run. URLs that failed are skipped too, so a resume does not hammer a dead site: add `--retry-failed` to run them again (`attempt` goes up). A URL the batch itself stopped (`crashed` with reason `interrupted`) is not a failure of the site: it runs again on a plain resume, as the next attempt. `--restart` moves `results.jsonl` to `results.<timestamp>.jsonl` and starts over. Changing `--max-pages` or `--level` does not invalidate completed URLs: use `--restart`. A `SIGINT`, `SIGTERM` or `SIGHUP` stops starting new audits, asks the running ones to stop, and exits `130`. A second one kills the running audits, still recording each as `interrupted`, and a third exits at once.
 
 `--max-duration` applies to each URL, not to the batch, so 500 URLs with `--max-duration 60` can still take hours. `--url-timeout` is the hard kill per URL and defaults to `--max-duration` x 1.5 + 60 when `--max-duration` is set.
 

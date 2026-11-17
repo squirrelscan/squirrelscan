@@ -304,6 +304,18 @@ describe("latestRecords and planBatch resume a batch", () => {
     expect(plan.run.map((x) => [x.entry.url, x.attempt])).toEqual([[a.url, 2]]);
   });
 
+  test("a URL the batch itself stopped (crashed, interrupted) runs again as the next attempt, without --retry-failed", () => {
+    const plan = planBatch(
+      [a, b],
+      [
+        record(a, "crashed", 1, { reason: "interrupted" }),
+        record(b, "crashed", 1, { reason: "signal_SIGKILL" }),
+      ]
+    );
+    expect(plan.run.map((x) => [x.entry.url, x.attempt])).toEqual([[a.url, 2]]);
+    expect(plan.failedKept).toBe(1); // a crash of its own is still a failure
+  });
+
   test("a URL retried and completed is done; one retried and failed again stays a failure", () => {
     expect(
       planBatch([a], [record(a, "failed", 1), record(a, "completed", 2)], {

@@ -180,12 +180,74 @@ describe("executeBatch", () => {
     await Bun.sleep(150);
     controller.abort();
     expect(await pending).toBe(130);
+    const stopped = latestRecords(records()).values();
+    expect([...stopped].find((r) => r.url === "https://b.com/")).toMatchObject({
+      status: "crashed",
+      reason: "interrupted",
+      attempt: 1,
+    });
+    // Plain re-run, no --retry-failed: the interrupted URL and the one never started both run.
     const second = fakeSpawn(() => ({ status: "completed" }));
-    expect(await run(urls, second.spawn, { retryFailed: true })).toBe(0);
+    expect(await run(urls, second.spawn)).toBe(0);
     expect(second.stats.starts.sort()).toEqual([
       "https://b.com/",
       "https://c.com/",
     ]);
+    const b = [...latestRecords(records()).values()].find(
+      (r) => r.url === "https://b.com/"
+    );
+    expect(b).toMatchObject({ status: "completed", attempt: 2 });
+  });
+
+  test("a second signal kills a child that ignores the first, records it interrupted and resumes it", async () => {
+    const stop = new AbortController();
+    const kill = new AbortController();
+    const urls = ["https://a.com"];
+    let killed = false;
+    // A child that does not stop on SIGTERM, only on SIGKILL.
+    const stubborn: SpawnChild = () => {
+      let done!: (r: ChildResult) => void;
+      const result = new Promise<ChildResult>((resolve) => {
+        done = resolve;
+      });
+      return {
+        result,
+        terminate: () => {},
+        kill: () => {
+          killed = true;
+          done({ exitCode: null, signal: "SIGKILL", stderrTail: "" });
+        },
+      };
+    };
+    const pending = run(urls, stubborn, {
+      stopSignal: stop.signal,
+      killSignal: kill.signal,
+    });
+    await Bun.sleep(50);
+    stop.abort();
+    await Bun.sleep(50);
+    expect(killed).toBe(false);
+    kill.abort();
+    expect(await pending).toBe(130);
+    expect(killed).toBe(true);
+    expect(records().at(-1)).toMatchObject({
+      status: "crashed",
+      reason: "interrupted",
+    });
+    const again = fakeSpawn(() => ({ status: "completed" }));
+    expect(await run(urls, again.spawn)).toBe(0);
+    expect(again.stats.starts).toEqual(["https://a.com/"]);
+  });
+
+  test("a child that died of SIGINT is interrupted even before the batch saw the signal", async () => {
+    const { spawn } = fakeSpawn(() => ({ signal: "SIGINT" }));
+    expect(await run(["https://a.com"], spawn)).toBe(6);
+    expect(records().at(-1)).toMatchObject({
+      status: "crashed",
+      reason: "interrupted",
+    });
+    const again = fakeSpawn(() => ({ status: "completed" }));
+    expect(await run(["https://a.com"], again.spawn)).toBe(0);
   });
 
   test("a stale running record (a killed orchestrator) reads as crashed and is retried on request", async () => {

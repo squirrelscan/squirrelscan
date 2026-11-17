@@ -259,7 +259,8 @@ export interface Plan {
  * the URL's record). A URL with no record runs. A URL whose last record is done (including a refusal, which a retry cannot
  * change) is skipped. One that ended in a failure (`failed`, `unreachable`, `timeout`, `crashed`, `blocked`, `redirected`, or
  * a `running` line left by a process that died) is skipped too, unless `retryFailed`, which runs it again as the next
- * attempt. One that was not started (`skipped-budget`) runs.
+ * attempt. One that was not started (`skipped-budget`) runs, and so does one the batch itself stopped (`crashed` with reason
+ * `interrupted`, left by Ctrl-C or SIGTERM), each as the next attempt: neither says anything about the URL.
  */
 export function planBatch(
   urls: readonly BatchUrl[],
@@ -275,7 +276,10 @@ export function planBatch(
     const record = latest.get(entry.key);
     if (!record) {
       plan.run.push({ entry, attempt: 1 });
-    } else if (record.status === "skipped-budget") {
+    } else if (
+      record.status === "skipped-budget" ||
+      (record.status === "crashed" && record.reason === "interrupted")
+    ) {
       plan.run.push({ entry, attempt: record.attempt + 1 });
     } else if (isFailedStatus(record.status)) {
       if (options.retryFailed === true)
