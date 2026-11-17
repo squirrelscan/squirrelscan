@@ -3730,9 +3730,9 @@
   ]
  },
  "schema/expected-type": {
-  "digest": "254514333225501",
+  "digest": "148560408533416",
   "lines": [
-   "expected-type|info|Page type not classified with enough confidence to expect structured data||"
+   "expected-type|skipped|Not checked: the page classifier is off (--no-classifier or classifier.enabled = false)||"
   ]
  },
  "schema/faq": {
