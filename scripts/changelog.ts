@@ -90,6 +90,9 @@ export function renderUnreleased(entries: Entry[]): string {
 }
 
 const VERSION_HEADING = /^## \[?v?\d+\.\d+\.\d+/m;
+/** The version token of a `## [v]X.Y.Z...` heading line. */
+const HEADING_VERSION = /^## \[?v?(\d+\.\d+\.\d+[0-9A-Za-z.+-]*)/;
+const RELEASE_VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 
 /** Inserts the version's section above the newest release. Pure: the caller deletes the files. */
 export function insertRelease(
@@ -99,9 +102,16 @@ export function insertRelease(
   entries: Entry[],
 ): string {
   const v = version.replace(/^v/, "");
+  if (!RELEASE_VERSION.test(v)) {
+    throw new ChangelogError(`"${version}" is not a release version (X.Y.Z or X.Y.Z-pre.N)`);
+  }
   if (entries.length === 0) throw new ChangelogError(`no entries in ${ENTRY_DIR}/ to release`);
-  const escaped = v.replace(/\./g, "\\.");
-  if (new RegExp(`^## \\[?v?${escaped}([^0-9A-Za-z.-]|$)`, "m").test(changelog)) {
+  // Exact token match, so a stable X.Y.Z may follow its own X.Y.Z-beta.N heading.
+  const existing = changelog
+    .split("\n")
+    .map((line) => HEADING_VERSION.exec(line)?.[1])
+    .filter((token): token is string => token !== undefined);
+  if (existing.includes(v)) {
     throw new ChangelogError(`${CHANGELOG} already has a section for v${v}`);
   }
   const section = `## v${v} (${date})\n\n${renderSections(entries)}\n\n`;

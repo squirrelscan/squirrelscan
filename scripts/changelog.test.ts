@@ -134,6 +134,15 @@ Header prose.
     expect(release(root, "1.1.0", "2026-01-03")).toBe(1);
   });
 
+  test("a version argument that is not X.Y.Z or X.Y.Z-pre.N is refused before anything changes", () => {
+    const root = repo({ "1-a.added.md": "- a\n" });
+    for (const bad of ["1.1", "1.1.0 (x)", "1.*.0", "1.1.0\n## v9"]) {
+      expect(() => release(root, bad, "2026-01-03")).toThrow("is not a release version");
+    }
+    expect(readFileSync(join(root, "CHANGELOG.md"), "utf8")).toBe(CHANGELOG);
+    expect(release(root, "v1.1.0-beta.2", "2026-01-03")).toBe(1);
+  });
+
   test("a multi-line entry is kept verbatim", () => {
     const root = repo({ "1-long.changed.md": "- First line\n  continued\n  - nested\n" });
     release(root, "1.1.0", "2026-01-03");
