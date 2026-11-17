@@ -11,8 +11,41 @@
 export const REDACTED = "[redacted]";
 
 /** Headers whose values carry credentials, sessions or account identity. */
-const SENSITIVE_HEADER =
-  /^(set-cookie2?|cookie|authorization|proxy-authorization|proxy-authenticate|www-authenticate|x-api-key|x-auth-token|x-csrf-token|x-xsrf-token|x-amz-security-token|x-forwarded-user|x-user(-id|-email)?|x-account(-id)?)$/i;
+const SENSITIVE_HEADER_NAMES: readonly string[] = [
+  "set-cookie",
+  "set-cookie2",
+  "cookie",
+  "authorization",
+  "proxy-authorization",
+  "proxy-authenticate",
+  "www-authenticate",
+  "x-api-key",
+  "x-auth-token",
+  "x-csrf-token",
+  "x-xsrf-token",
+  "x-amz-security-token",
+  "x-forwarded-user",
+  "x-user",
+  "x-user-id",
+  "x-user-email",
+  "x-account",
+  "x-account-id",
+];
+
+const SENSITIVE_HEADER = new RegExp(
+  `^(?:${SENSITIVE_HEADER_NAMES.join("|")})$`,
+  "i"
+);
+
+/**
+ * The same names as they appear in a header line quoted as plain text: any
+ * case, and with `_` for `-` (`x_api_key`, `set_cookie`) as env-style text and
+ * some dumps write them. Longest first so `set-cookie2` is not cut at `set-cookie`.
+ */
+const HEADER_LINE_NAME = [...SENSITIVE_HEADER_NAMES]
+  .sort((a, b) => b.length - a.length)
+  .map((n) => n.replace(/-/g, "[-_]"))
+  .join("|");
 
 /** Query parameter names that carry credentials, sessions or identity. */
 const SENSITIVE_PARAM =
@@ -86,6 +119,17 @@ const PATTERNS: Array<{
     name: "provider-key",
     re: /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b|\bgh[pousr]_[A-Za-z0-9]{30,}\b|\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g,
     replace: REDACTED,
+  },
+  {
+    // `Cookie: sid=...`, `"Authorization": "Token ..."`, `x_api_key=...`: the
+    // value runs to the closing quote when quoted, else to the end of the line.
+    name: "header-line",
+    re: new RegExp(
+      `(?<![\\w-])(["']?)(${HEADER_LINE_NAME})\\1([^\\S\\r\\n]*[:=][^\\S\\r\\n]*)(?:(["'])[^\\r\\n]*?\\4|[^\\r\\n]+)`,
+      "gi"
+    ),
+    replace: (_m, nq, name, sep, vq) =>
+      `${nq}${name}${nq}${sep}${vq ? `${vq}${REDACTED}${vq}` : REDACTED}`,
   },
   {
     name: "bearer-token",

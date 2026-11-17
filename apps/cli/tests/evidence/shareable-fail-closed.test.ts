@@ -66,10 +66,24 @@ const SHAPES: ReadonlyArray<(m: string) => string> = [
   (m) => `-----BEGIN RSA PRIVATE KEY-----\n${m}\n-----END RSA PRIVATE KEY-----`,
   (m) => `<meta name="csrf-token" content="${m}">`,
   (m) => `<input type="hidden" name="authenticity_token" value="${m}">`,
+  // Header lines quoted as plain text (dumps, logs, error messages).
+  (m) => `Authorization: Basic ${m}`,
+  (m) => `{"Authorization": "Token ${m}"}`,
+  (m) => `Cookie: sid=${m}`,
+  (m) => `Set-Cookie: session=${m}; Path=/`,
+  (m) => `X-API-Key: ${m}`,
+  (m) => `Proxy-Authorization: Basic ${m}`,
+  (m) => `x_api_key=${m}`,
+  (m) => `authorization: token ${m}`,
 ];
 
+/**
+ * One shape per line: a header-line value runs to the end of its line, so a
+ * shape sharing a line with the next would hide whether the next is caught.
+ */
+
 function blob(): string {
-  return SHAPES.map((shape) => shape(marker())).join(" ");
+  return SHAPES.map((shape) => shape(marker())).join("\n");
 }
 
 // ── Template: every field of the source model, filled ────────────────────────────
