@@ -128,7 +128,10 @@ describe("unreachableOutcome classes", () => {
 });
 
 describe("squirrel audit -f json on a start URL it cannot reach", () => {
-  test.concurrent("connection refused: a report on stdout, exit 5", async () => {
+  // Serial on purpose: the probe frees an ephemeral port, and a concurrent test
+  // in this file binding port 0 (the 403 server below) can be handed that same
+  // port, turning "refused" into a blocked report that exits 3.
+  test("connection refused: a report on stdout, exit 5", async () => {
     // A port that was open a moment ago and is now closed.
     const probe = createServer().listen(0, "127.0.0.1");
     await new Promise((resolve) => probe.once("listening", resolve));
