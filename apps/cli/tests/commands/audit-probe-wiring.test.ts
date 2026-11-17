@@ -12,6 +12,7 @@ import {
   beforeEach,
   describe,
   expect,
+  setDefaultTimeout,
   spyOn,
   test,
 } from "bun:test";
@@ -30,6 +31,10 @@ import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 
 import { fastCrawlConfig } from "../helpers/fast-crawl-config";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
+
+// Each test runs a real audit; a cold first run on CI can pass bun's 5s
+// default, and a timed-out run then leaks its budget into the next test.
+setDefaultTimeout(60_000);
 
 // Same isolation as audit-discovery-probes-wiring.test.ts: every store the
 // audit writes goes to a scratch dir, and the process-wide stores are closed
