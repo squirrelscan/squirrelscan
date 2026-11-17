@@ -1264,6 +1264,21 @@ const DJANGO_SIGNED_KEY = /^[A-Za-z0-9_-]{1,64}:[A-Za-z0-9]{4,10}:[A-Za-z0-9_-]{
 const DJANGO_UIDB64 = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
+ * Where a run of trailing `)`, `.` and `,` starts in `text` (its length when
+ * none). A backwards scan, not `/[).,]+$/`, whose backtracking is quadratic
+ * on a segment of many `)` that does not end in one.
+ */
+function trailingPunctuationStart(text: string): number {
+  let end = text.length;
+  while (end > 0) {
+    const char = text[end - 1];
+    if (char !== ")" && char !== "." && char !== ",") break;
+    end--;
+  }
+  return end;
+}
+
+/**
  * How much of a path segment is a token after a context: the whole of it, or
  * the part before a markdown link's closing `)` or a file extension
  * (`/reset/<hex>)`, `/reset/<hex>.html`, #3433); 0 when none is.
@@ -1273,7 +1288,7 @@ function pathTokenLength(head: string, zeroXIds: ZeroXIds, context: "credential"
     looksLikeAToken(part, zeroXIds) ||
     (context === "credential" && (DJANGO_RESET_TOKEN.test(part) || DJANGO_SIGNED_KEY.test(part)));
   if (isToken(head)) return head.length;
-  const bare = head.replace(/[).,]+$/, "");
+  const bare = head.slice(0, trailingPunctuationStart(head));
   if (bare !== head && isToken(bare)) return bare.length;
   const stem = bare.replace(/\.[A-Za-z0-9]{1,5}$/, "");
   return stem !== bare && isToken(stem) ? stem.length : 0;
