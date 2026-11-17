@@ -20,7 +20,7 @@ interface WcagEntry {
 }
 
 /**
- * Only the criteria some rule cites, in its `wcag` list or its `wcagNone` reason (2.1.4, 2.3.3, 3.3.8); add a row
+ * Only the criteria some rule cites, in its `wcag` list or its `wcagNone` reason (2.1.4, 3.3.8); add a row
  * when a rule cites a new one. No 4.1.1 Parsing: WCAG 2.2 removed it.
  */
 export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
