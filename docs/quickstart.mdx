@@ -4,8 +4,6 @@ icon: "play"
 description: "From nothing to your first audit in two minutes: let your coding agent set it up, or install the CLI yourself."
 ---
 
-import "../packages/utils/src/agent-setup/agent-prompt.css";
-
 ## 1. Set it up
 
 Pick one. Both end with the `squirrel` CLI installed and a first audit run.
@@ -18,7 +16,7 @@ first audit of your site.
 
 <div class="sq-onboard-action">
   <CopyPrompt
-    href="/agent-setup/prompt.md"
+    href="/agent-setup/prompt.md?ref=docs-quickstart"
     subject="squirrelscan"
     label="Onboard your agent to squirrelscan"
     icons={[
@@ -38,7 +36,7 @@ first audit of your site.
 <div class="sq-install">
 <CodeGroup>
 
-```bash macOS/Linux
+```bash macOS / Linux
 curl -fsSL https://install.squirrelscan.com | bash
 ```
 
@@ -262,14 +260,3 @@ All seven formats work with both `squirrel audit --format` and `squirrel report 
 - [Configuration](/configuration): tune the crawl and rules with `squirrel.toml`
 - [CLI reference](/cli/audit): every audit option
 - The [GitHub repo](https://github.com/squirrelscan/squirrelscan): if squirrelscan caught something your agent missed, a star helps other developers find it
-
-<style>
-{`
-/* tangly hides the Copy button inside a CodeGroup; install commands are made
-   to be copied. Remove once tangly ships the CodeGroup copy fix. */
-html .sq-install .tangly-code-group .tangly-code-figure[data-chrome="bare"] > .tangly-code-copy {
-  display: inline-flex;
-  opacity: 1;
-}
-`}
-</style>

@@ -1,7 +1,0 @@
-/* squirrelscan docs - minimal overrides */
-
-/* Code blocks use monospace */
-pre,
-code {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-}
