@@ -206,9 +206,13 @@ When re-fetching a URL, the crawler walks three levels, cheapest first:
    keep a page out of revalidation within a single audit.
 2. **Conditional GET (304).** If the cached copy is stale, the crawler sends
    `If-None-Match` (ETag) and/or `If-Modified-Since`. A **304 Not Modified**
-   reuses the cached body (one cheap round-trip, no body download).
+   reuses the cached body (one cheap round-trip, no body download). Headers the
+   304 sends replace the cached ones; a header it leaves out keeps its cached
+   value, as in any HTTP cache.
 3. **Content-hash compare.** On a full `200`, the new body is hashed against the
-   cached hash: identical content is treated as unchanged.
+   cached hash: identical content is treated as unchanged. The body is reused,
+   but the headers are the new response's, so a header the site stopped sending
+   (an `X-Robots-Tag: noindex`, say) is gone from the audit.
 
 This makes re-crawling fast: fresh pages are instant (zero requests), and
 changed pages are still detected correctly. **Caching never changes audit

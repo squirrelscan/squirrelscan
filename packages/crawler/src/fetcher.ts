@@ -574,6 +574,8 @@ export interface FetchResult {
   sourceHash?: string;
   /** The HTML the server sent, on a rendered page whose probe succeeded (#1769). */
   serverHtml?: string;
+  /** A 304 synthesized from a full 200 by the conditional-render gate: its headers are complete (repo#4765). */
+  synthesizedNotModified?: boolean;
   /** Browser render cost only, threaded from the browser-queue fetcher's server-measured value (#826). Absent for non-rendered fetches. */
   renderTimeMs?: number;
   /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait before rendering started (#826). Absent for non-rendered fetches. */
@@ -1082,6 +1084,7 @@ function fetchWithDocumentFetcher(
       // and rendered — persisted as the page's source_hash for next-run reuse (#839).
       sourceHash: response.sourceHash,
       serverHtml: response.serverHtml,
+      synthesizedNotModified: response.synthesizedNotModified,
       // Queue-wait vs render-time breakdown, set only by the browser-queue
       // fetcher (#826).
       renderTimeMs: response.renderTimeMs,
