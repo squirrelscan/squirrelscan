@@ -101,6 +101,18 @@ describe("a run narrowed by a WCAG level is marked partial (pub#2024 review)", (
     expect(renderXml(narrowed())).toContain('wcag-level="AA"');
   });
 
+  test("html names the level, so a narrowed run does not look like a full audit", () => {
+    expect(renderHtml(narrowed())).toContain("accessibility rules narrowed to WCAG Level AA");
+  });
+
+  test("html marks a --rule-include run partial too (repo#1082)", () => {
+    const r: AuditReport = {
+      ...report(),
+      partialAudit: { include: ["a11y/*"], exclude: [], includedCategories: ["a11y"] },
+    };
+    expect(renderHtml(r)).toContain("Partial audit: included a11y. Scored on a11y only");
+  });
+
   test("a stored level that is not A, AA or AAA is dropped", () => {
     const r = narrowed();
     (r.partialAudit as unknown as { wcagLevel: string }).wcagLevel = "<b>";

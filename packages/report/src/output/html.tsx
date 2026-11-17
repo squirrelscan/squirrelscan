@@ -66,6 +66,7 @@ import {
   checkUnrenderedLabel,
   coverageLine,
   fullScanHint,
+  partialAuditLine,
   publishedReportNote,
   ruleCarriedRollupLine,
   seedRedirectLine,
@@ -1869,8 +1870,12 @@ function ReportPage({
   const blockedNote = blockedSummary
     ? `${blockedSummary}${blockedListed.length > 0 ? ` ${blockedListed.slice(0, 3).join("; ")}` : ""}`
     : null;
+  // repo#1082, pub#2024: a run narrowed by --rule-include, --rule-exclude or a
+  // WCAG level says so, so the saved HTML never reads as a full audit.
+  const partial = partialAuditLine(report);
   const notes = [
     cov,
+    partial,
     priv,
     ...notChecked,
     seed,
