@@ -17,7 +17,7 @@ import { renderLlm } from "../src/output/llm";
 function rule(
   id: string,
   category: string,
-  severity: "error" | "warning" | "info",
+  severity: "error" | "warning" | "info" | "recommendation",
   checks: ReportRuleResult["checks"],
 ): ReportRuleResult {
   return {
@@ -109,4 +109,53 @@ describe("renderers emit one global severity order (#1536)", () => {
       expect(at("core/rec")).toBeLessThan(at("perf/warn"));
     });
   }
+});
+
+describe("info and recommendation share one Recommendations section", () => {
+  function mixedAdvisory(): AuditReport {
+    return {
+      baseUrl: "https://example.com",
+      timestamp: "2024-01-15T10:30:00.000Z",
+      totalPages: 5,
+      passed: 10,
+      warnings: 3,
+      failed: 2,
+      ruleResults: {
+        "core/err": rule("core/err", "core", "error", [fail("no title")]),
+        "core/info": rule("core/info", "core", "info", [warn("consider a subtitle")]),
+        "gaps/content": rule("gaps/content", "gaps", "recommendation", [warn("3 content gap topics found")]),
+        "core/warn": rule("core/warn", "core", "warning", [warn("short title")]),
+      },
+    } as unknown as AuditReport;
+  }
+
+  test("flatten keeps them adjacent, between errors and warnings", () => {
+    const flat = flattenIssuesBySeverity(groupIssuesByCategory(mixedAdvisory().ruleResults));
+    expect(flat.map((r) => r.id)).toEqual(["core/err", "core/info", "gaps/content", "core/warn"]);
+  });
+
+  test("text: one RECOMMENDATIONS header", () => {
+    const out = renderText(mixedAdvisory());
+    expect(out.match(/=== RECOMMENDATIONS ===/g)).toHaveLength(1);
+    expect(out).toContain("[recommendation] core/info");
+    expect(out).toContain("[recommendation] gaps/content");
+  });
+
+  test("markdown: one Recommendations heading counting both rules", () => {
+    const md = renderMarkdown(mixedAdvisory());
+    expect(md.match(/^### Recommendations$/gm)).toHaveLength(1);
+    expect(md).toContain("*2 rule(s)*");
+  });
+
+  test("html: one Recommendations band counting both rules", () => {
+    const html = renderHtml(mixedAdvisory());
+    expect(html.match(/>Recommendations \d+<\/span>/g)).toHaveLength(1);
+    expect(html).toMatch(/>Recommendations 2<\/span>/);
+  });
+
+  test("json keeps the raw recommendation severity", () => {
+    const parsed = JSON.parse(renderJson(mixedAdvisory()));
+    const issue = parsed.issues.find((i: { ruleId: string }) => i.ruleId === "gaps/content");
+    expect(issue.severity).toBe("recommendation");
+  });
 });

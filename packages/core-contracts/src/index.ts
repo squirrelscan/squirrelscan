@@ -552,7 +552,17 @@ export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set(
 );
 
 export type RuleScope = "page" | "site";
-export type RuleSeverity = "error" | "warning" | "info";
+export type RuleSeverity = "error" | "warning" | "info" | "recommendation";
+
+/**
+ * Advisory rules (`info` and `recommendation`) surface their warn checks as
+ * recommendations but never lower the health score. Their fail checks still
+ * count as before; only warn is score-neutral. Single source of truth for
+ * every scorer, tally and report path.
+ */
+export function isAdvisorySeverity(severity: string): boolean {
+  return severity === "info" || severity === "recommendation";
+}
 
 export interface RuleMetaLite {
   id: string;
@@ -2267,7 +2277,7 @@ export interface UsageEvent {
 
 export interface AuditIssueAggregate {
   category: string;
-  severity: "error" | "warning" | "info";
+  severity: "error" | "warning" | "info" | "recommendation";
   count: number;
 }
 

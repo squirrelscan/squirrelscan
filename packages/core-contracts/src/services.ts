@@ -250,6 +250,50 @@ export interface ContentGapItem {
   topic: string;
   volume: number | null;
   reason: string;
+  /** Member keywords of the topic cluster. */
+  keywords?: string[];
+  /** Keyword difficulty, 0-100. Absent or null when unknown. */
+  difficulty?: number | null;
+  /** Relevance of the topic to the site, 0-1. Absent or null when unknown. */
+  relevance?: number | null;
+}
+
+/** A content gap with its opportunity score attached. */
+export interface RankedContentGap extends ContentGapItem {
+  score: number;
+}
+
+/** Difficulty assumed when the service reports none (the midpoint of 0-100). */
+export const CONTENT_GAP_DEFAULT_DIFFICULTY = 50;
+
+/**
+ * Opportunity score for a content gap: volume x relevance / difficulty.
+ * Defaults: missing volume is 0, missing relevance is 1, missing difficulty is
+ * 50. Difficulty is clamped to a minimum of 1 so it never divides by zero.
+ * Rounded to 2 decimal places.
+ */
+export function contentGapOpportunityScore(
+  item: Pick<ContentGapItem, "volume" | "difficulty" | "relevance">,
+): number {
+  const volume = item.volume ?? 0;
+  const relevance = item.relevance ?? 1;
+  const difficulty = Math.max(item.difficulty ?? CONTENT_GAP_DEFAULT_DIFFICULTY, 1);
+  return Math.round(((volume * relevance) / difficulty) * 100) / 100;
+}
+
+/**
+ * Attach the opportunity score to each gap and sort: score descending, then
+ * volume descending, then topic ascending. Deterministic for equal inputs.
+ */
+export function rankContentGaps(items: readonly ContentGapItem[]): RankedContentGap[] {
+  return items
+    .map((item) => ({ ...item, score: contentGapOpportunityScore(item) }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (b.volume ?? 0) - (a.volume ?? 0) ||
+        (a.topic < b.topic ? -1 : a.topic > b.topic ? 1 : 0),
+    );
 }
 
 export interface ContentGapsResponse {

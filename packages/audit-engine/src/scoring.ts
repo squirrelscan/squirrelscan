@@ -6,6 +6,7 @@
 // tsconfig (e.g. the API Worker). types.ts is the leaf type module. (#195)
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
+import { isAdvisorySeverity } from "@squirrelscan/core-contracts";
 import { unpackSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import type {
   AuditFailureDetail,
@@ -570,7 +571,7 @@ function calculateCategoryScoreFromResults(
   const tally = emptyTally();
 
   for (const { meta, checks, syntheticPassCount } of ruleResults) {
-    const advisory = meta.severity === "info";
+    const advisory = isAdvisorySeverity(meta.severity);
     // #918: carried-clean passes ride as a count, not per-page objects.
     const synthetic = syntheticPassCount ?? 0;
     const passRate = calculateRuleScore(checks, advisory, synthetic);
@@ -1160,7 +1161,7 @@ export function foldRuleResultIntoTallies(
     entry = { meta: result.meta, tally: emptyTally() };
     tallies.set(ruleId, entry);
   }
-  const advisory = result.meta.severity === "info";
+  const advisory = isAdvisorySeverity(result.meta.severity);
   addChecksToTally(
     entry.tally,
     result.checks,

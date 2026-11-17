@@ -63,7 +63,7 @@ import type {
   TwitterData,
 } from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleRunResult } from "@squirrelscan/rules";
-import { isScoreless } from "@squirrelscan/core-contracts";
+import { isAdvisorySeverity, isScoreless } from "@squirrelscan/core-contracts";
 import { isRedirectSourcePage } from "./redirect-source";
 
 // ============================================
@@ -830,7 +830,7 @@ export function buildV1Report(
     let warnings = 0;
     let failed = 0;
     for (const { meta, checks } of ruleResults.ruleResultsMap.values()) {
-      const advisory = meta.severity === "info";
+      const advisory = isAdvisorySeverity(meta.severity);
       for (const c of checks) {
         if (c.status === "pass") passed++;
         else if (c.status === "warn" && !advisory) warnings++;

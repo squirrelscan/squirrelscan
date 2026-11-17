@@ -21,7 +21,7 @@ import { renderHtml } from "../src/output/html";
 function rule(
   id: string,
   category: string,
-  severity: "error" | "warning" | "info",
+  severity: "error" | "warning" | "info" | "recommendation",
   checks: ReportRuleResult["checks"],
   weight = 5
 ): ReportRuleResult {

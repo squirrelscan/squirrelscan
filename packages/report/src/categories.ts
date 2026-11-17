@@ -177,15 +177,15 @@ export function isValidGroup(code: string): boolean {
 /**
  * Human-facing label for a rule severity, for HUMAN renderers (text/markdown)
  * only — machine formats (json/xml/llm) keep the raw `error`/`warning`/`info`
- * value since downstream parsers depend on it. `info` reads as "recommendation"
- * (product framing: a suggestion, not a warning); error/warning pass through
- * unchanged. Pass `titleCase` for renderers that capitalize (e.g. markdown badges).
+ * value since downstream parsers depend on it. Both `info` (legacy) and
+ * `recommendation` read as "recommendation"; error/warning pass through.
+ * Pass `titleCase` for renderers that capitalize (e.g. markdown badges).
  */
 export function severityLabel(
-  severity: "error" | "warning" | "info",
+  severity: "error" | "warning" | "info" | "recommendation",
   options?: { titleCase?: boolean; plural?: boolean }
 ): string {
-  const singular = severity === "info" ? "recommendation" : severity;
+  const singular = severity === "info" || severity === "recommendation" ? "recommendation" : severity;
   // Every label is regular, so a bare "s" is enough for the section headings
   // the severity-first renderers emit (#1536).
   const label = options?.plural ? `${singular}s` : singular;

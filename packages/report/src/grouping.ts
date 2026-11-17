@@ -140,7 +140,7 @@ export interface GroupedRule {
   name: string;
   description: string;
   solution?: string;
-  severity: "error" | "warning" | "info";
+  severity: "error" | "warning" | "info" | "recommendation";
   weight: number;
   /** Optional sub-group within the category (e.g. blocking → "ad" | "privacy"). */
   subcategory?: string;
@@ -180,9 +180,10 @@ export interface GroupedGroup {
  * "Error, Recommendation, Warning" top to bottom (info displays as
  * "Recommendation" in human renderers, see categories.ts `severityLabel`).
  */
-const RULE_SEVERITY_RANK: Record<"error" | "info" | "warning", number> = {
+const RULE_SEVERITY_RANK: Record<"error" | "info" | "recommendation" | "warning", number> = {
   error: 0,
   info: 1,
+  recommendation: 1,
   warning: 2,
 };
 
@@ -655,8 +656,8 @@ export function groupIssuesByCategory(
     // meta severity only applies when a check failed. A rule with
     // severity "error" whose checks all came back "warn" is a warning —
     // reporting it as an error misstates the audit result.
-    const metaSeverity = meta.severity as "error" | "warning" | "info";
-    const severity: "error" | "warning" | "info" =
+    const metaSeverity = meta.severity as "error" | "warning" | "info" | "recommendation";
+    const severity: "error" | "warning" | "info" | "recommendation" =
       failCount > 0 ? metaSeverity : metaSeverity === "error" ? "warning" : metaSeverity;
 
     const actionableComponentFixGroups = componentFixGroups(ruleId, result.checks);

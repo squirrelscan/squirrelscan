@@ -469,7 +469,7 @@ export interface ReportRuleResult {
     category: RuleCategory;
     subcategory?: string;
     scope: "page" | "site";
-    severity: "error" | "warning" | "info";
+    severity: "error" | "warning" | "info" | "recommendation";
     weight: number;
   };
   checks: CheckResult[];

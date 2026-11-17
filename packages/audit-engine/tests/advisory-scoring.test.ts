@@ -39,7 +39,7 @@ const ANCHOR = {
   checks: [check("pass", "anchor-check")],
 };
 
-describe("advisory scoring (severity info rules)", () => {
+describe("advisory scoring (info and recommendation rules)", () => {
   test("warn in an info rule does not move the category score", () => {
     const withoutRec = score([ANCHOR]);
     const withRec = score([
@@ -50,6 +50,20 @@ describe("advisory scoring (severity info rules)", () => {
     expect(ax(withRec)?.score).toBe(ax(withoutRec)?.score);
     // ...and it is not counted as a warning in the score summary.
     expect(ax(withRec)?.warnings).toBe(0);
+  });
+
+  test("warn in a recommendation rule does not move the category score", () => {
+    const withoutRecommendation = score([ANCHOR]);
+    const withRecommendation = score([
+      ANCHOR,
+      {
+        meta: meta({ id: "gaps/content", name: "Content Gaps", severity: "recommendation" }),
+        checks: [check("warn")],
+      },
+    ]);
+    const ax = (s: ReturnType<typeof score>) => s.categories.find((c) => c.category === "ax");
+    expect(ax(withRecommendation)?.score).toBe(ax(withoutRecommendation)?.score);
+    expect(ax(withRecommendation)?.warnings).toBe(0);
   });
 
   test("warn in a warning rule still lowers the score", () => {
@@ -87,5 +101,17 @@ describe("advisory scoring (severity info rules)", () => {
     expect(withOnlyRec.categories.find((c) => c.category === "ax")?.score).toBe(
       base.categories.find((c) => c.category === "ax")?.score,
     );
+  });
+
+  test("overall health score is unchanged by a recommendation rule with warn checks", () => {
+    const base = score([ANCHOR]);
+    const withRecommendation = score([
+      ANCHOR,
+      {
+        meta: meta({ id: "gaps/content", name: "Content Gaps", category: "gaps", severity: "recommendation", weight: 9 }),
+        checks: [check("warn", "content-gaps"), check("warn", "content-gaps-high-volume")],
+      },
+    ]);
+    expect(withRecommendation.overall).toBe(base.overall);
   });
 });

@@ -249,11 +249,12 @@ const CLOUD_FEATURES: Array<[string, string]> = [
   ],
 ];
 
-type Severity = "error" | "warning" | "info";
+type Severity = "error" | "warning" | "info" | "recommendation";
 
 const SEVERITY: Record<Severity, { color: BadgeColor; title: string; blurb: string }> = {
   error: { color: "red", title: "Errors", blurb: "Broken or harmful. Fix these first." },
   info: { color: "blue", title: "Recommendations", blurb: "Worth doing, not hurting you today." },
+  recommendation: { color: "blue", title: "Recommendations", blurb: "Worth doing, not hurting you today." },
   warning: { color: "yellow", title: "Warnings", blurb: "Likely to cost you over time." },
 };
 const BAND_ORDER: Severity[] = ["error", "info", "warning"];
@@ -1292,7 +1293,8 @@ function Issues({
       />
       <div className="bands">
         {BAND_ORDER.map((sev) => {
-          const rows = issues.filter((i) => i.severity === sev);
+          // info and recommendation share the Recommendations band.
+          const rows = issues.filter((i) => SEVERITY[i.severity].title === SEVERITY[sev].title);
           if (rows.length === 0) return null;
           return (
             <div className="band mb-7" key={sev}>

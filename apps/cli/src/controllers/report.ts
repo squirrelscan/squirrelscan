@@ -201,7 +201,7 @@ interface SlimJsonReport {
     /** The category's display name ("Reliability"); absent in hand-built slim JSON. */
     category?: string;
     subcategory?: string;
-    severity: "error" | "warning" | "info";
+    severity: "error" | "warning" | "info" | "recommendation";
     checks: Array<{
       name: string;
       status: "fail" | "warn";

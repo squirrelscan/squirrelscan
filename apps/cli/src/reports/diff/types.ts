@@ -17,7 +17,7 @@ export interface IssueInstance {
   ruleId: string;
   ruleName: string;
   category: string;
-  severity: "error" | "warning" | "info";
+  severity: "error" | "warning" | "info" | "recommendation";
   weight: number;
   checkName: string;
   status: "fail" | "warn";
