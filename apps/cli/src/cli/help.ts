@@ -27,6 +27,7 @@ export const COMMAND_GROUPS: readonly CommandGroup[] = [
       ["analyze", "Run the audit rules on a stored crawl"],
       ["entities", "Query the entity map of a stored audit"],
       ["pages", "List the pages of a stored audit as a table"],
+      ["evidence", "Write a replayable evidence bundle for a stored audit"],
       ["ci", "Audit a deployed URL in the cloud and fail on new findings"],
       ["init", "Create a squirrel.toml for this project"],
     ],
