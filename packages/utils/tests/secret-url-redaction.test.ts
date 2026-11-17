@@ -164,6 +164,18 @@ describe("path-token forms left after #3339 (#3433)", () => {
     ).toBe("https://example.com/go?next=https%3A%2F%2Fpartner.example.org%2Freset%2FREDACTED");
   });
 
+  test("a segment of many `)` after a context word stays linear (CodeQL js/polynomial-redos)", () => {
+    const parens = ")".repeat(50_000);
+    const start = performance.now();
+    expect(redact(`https://example.com/reset/${parens}x`)).toBe(
+      `https://example.com/reset/${parens}x`,
+    );
+    expect(redact(`https://example.com/reset/${HEX}${parens}`)).toBe(
+      `https://example.com/reset/REDACTED${parens}`,
+    );
+    expect(performance.now() - start).toBeLessThan(2_000);
+  });
+
   test("`&#38;` and `;` separate parameters in the site's own URLs", () => {
     expect(redact(`https://example.com/p?a=1&#38;token=${HEX}`)).toBe(
       "https://example.com/p?a=1&#38;token=REDACTED",
