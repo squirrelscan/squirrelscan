@@ -1253,8 +1253,8 @@
               },
               "orgId": { "type": ["string", "null"] },
               "queue": {
-                "oneOf": [{ "$ref": "#/components/schemas/AuditRunQueue" }, { "type": "null" }],
-                "description": "Where the run stands while `status` is `queued`; `null` otherwise."
+                "$ref": "#/components/schemas/AuditRunQueue",
+                "description": "Where the run stands while `status` is `queued`. Omitted otherwise."
               },
               "progress": {
                 "type": ["object", "null"],
