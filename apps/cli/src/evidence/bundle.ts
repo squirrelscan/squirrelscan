@@ -34,7 +34,7 @@ import {
   REDACTION_PATTERN_NAMES,
   newRedactionCounts,
   redactHeaders,
-  redactText,
+  redactString,
   redactUrl,
   redactValue,
 } from "./redact";
@@ -364,7 +364,7 @@ export function exportEvidenceBundle(
   const url = (value: string): string =>
     shareable ? redactUrl(value, counts) : value;
   const text = (value: string): string =>
-    shareable ? redactText(value, counts) : value;
+    shareable ? redactString(value, counts) : value;
   // Free-form fields (rule observations, reasons, stats, scope): every string
   // inside is redacted, including URLs embedded in it.
   const deep = <T>(value: T): T =>
