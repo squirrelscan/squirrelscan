@@ -37,7 +37,9 @@ export function redactHeaders<T extends Record<string, unknown>>(
       out[name] = REDACTED;
       counts.headers++;
     } else {
-      out[name] = value;
+      // Non-sensitive names can still carry secrets in their values: Location,
+      // Content-Location, Link and Refresh hold URLs with tokens in the query.
+      out[name] = redactValue(value, counts);
     }
   }
   return out as T;
@@ -141,11 +143,52 @@ export function redactText(text: string, counts: RedactionCounts): string {
   let out = text;
   for (const { name, re, replace } of PATTERNS) {
     out = out.replace(re, (...args: unknown[]) => {
-      counts.patterns[name] = (counts.patterns[name] ?? 0) + 1;
-      return typeof replace === "string"
-        ? replace
-        : replace(...(args as [string, ...string[]]));
+      const match = args[0] as string;
+      const next =
+        typeof replace === "string"
+          ? replace
+          : replace(...(args as [string, ...string[]]));
+      // An already-redacted match is not a new hit.
+      if (next !== match)
+        counts.patterns[name] = (counts.patterns[name] ?? 0) + 1;
+      return next;
     });
   }
   return out;
+}
+
+/** Absolute URLs inside free text, stopping at quotes, whitespace and angle brackets. */
+const EMBEDDED_URL = /\bhttps?:\/\/[^\s"'<>]+/gi;
+/** Query parameters in absolute or relative URLs (`/cb?session=x`, `?code=y`). */
+const QUERY_PARAM = /([?&;])([^=&\s"'<>#?;]+)=([^&\s"'<>#;]*)/g;
+
+/**
+ * Redact one free-form string: URLs embedded anywhere in it (userinfo and
+ * sensitive query params, absolute or relative), then the body patterns.
+ */
+export function redactString(value: string, counts: RedactionCounts): string {
+  let out = value.replace(EMBEDDED_URL, (m) => redactUrl(m, counts));
+  out = out.replace(QUERY_PARAM, (m, sep: string, key: string, v: string) => {
+    if (v === REDACTED || v === "" || !SENSITIVE_PARAM.test(key)) return m;
+    counts.urlParams++;
+    return `${sep}${key}=${REDACTED}`;
+  });
+  return redactText(out, counts);
+}
+
+/**
+ * Redact every string inside a JSON-like value (rule observations, failure
+ * reasons, crawl stats, header values), keeping its shape and keys.
+ */
+export function redactValue<T>(value: T, counts: RedactionCounts): T {
+  if (typeof value === "string") return redactString(value, counts) as T;
+  if (Array.isArray(value))
+    return value.map((v) => redactValue(v, counts)) as T;
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>))
+      out[k] = redactValue(v, counts);
+    return out as T;
+  }
+  return value;
 }

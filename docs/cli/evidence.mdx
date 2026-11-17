@@ -31,9 +31,9 @@ Export is opt-in and never overwrites. It verifies the bundle it just wrote and 
 | Kind | Contents | Permissions |
 |------|----------|-------------|
 | raw (default) | Exactly what the site sent: response bodies, headers, cookies, URLs. Restricted: it can hold credentials and account data | directory `0700`, files `0600`, with a `README.txt` warning |
-| shareable (`--shareable`) | Headers, URLs and every body pass through redaction | normal |
+| shareable (`--shareable`) | Headers, URLs, every body and every free-text field (finding observations, skip and failure reasons, crawl stats and scope) pass through redaction | normal |
 
-Shareable redaction covers cookie and authorization headers, credential-looking query parameters (`token`, `key`, `password`, `session`, `email` and similar), URL userinfo, JWTs, provider API keys, bearer tokens, email addresses, CSRF meta tags, hidden token inputs and credential assignments in scripts. The patterns are conservative but cannot prove a body holds no secret. The manifest lists the patterns and how often each matched. Share the raw bundle with nobody.
+Shareable redaction covers cookie and authorization headers, credential-looking query parameters (`token`, `key`, `password`, `session`, `email` and similar), URL userinfo (including URLs inside other header values such as `Location`, `Link` and `Refresh`), JWTs, provider API keys, bearer tokens, email addresses, CSRF meta tags, hidden token inputs and credential assignments in scripts. The patterns are conservative but cannot prove a body holds no secret. The manifest lists the patterns and how often each matched. Share the raw bundle with nobody.
 
 ## What a bundle contains
 
