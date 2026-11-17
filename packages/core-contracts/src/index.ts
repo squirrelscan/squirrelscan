@@ -1243,7 +1243,7 @@ export interface AuditReport {
    */
   cacheStats?: CacheStats;
   /**
-   * Fresh-fetch note (#2032): the crawl sent `Cache-Control: no-cache`, which pages still looked
+   * Fresh-fetch note (#2032, schema 1.26): the crawl sent `Cache-Control: no-cache`, which pages still looked
    * cached, and whether the caller asked for the fresh-render statement. Absent on ordinary audits.
    * REPORT-ONLY, never scored.
    */
