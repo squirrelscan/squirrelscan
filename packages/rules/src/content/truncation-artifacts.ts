@@ -231,7 +231,9 @@ export const truncationArtifactsRule: Rule = {
 
     const findings: TruncationFinding[] = [];
     if (title) {
-      const h1 = squash(doc.querySelector("h1")?.textContent ?? "");
+      // Rendered text, so `<br>` and block children separate words as the browser shows them.
+      const h1El = doc.querySelector("h1");
+      const h1 = h1El ? squash(getRenderedProseText(h1El)) : "";
       const f = judgeSerpField(
         "title",
         title,
