@@ -8,6 +8,7 @@ import {
   isRenderedFetcher,
   renderFallbackLine,
   renderModeOf,
+  storedPagesRender,
 } from "../../src/audit/render-summary";
 
 describe("renderModeOf", () => {
@@ -186,5 +187,44 @@ describe("renderFallbackLine", () => {
       })
     ).toBeNull();
     expect(renderFallbackLine(undefined)).toBeNull();
+  });
+});
+
+// repo#3094: a report rebuilt from the store reads what rendering did from each page's fetcher.
+describe("storedPagesRender", () => {
+  test("no rendered page is no render block, like an audit that did no render", () => {
+    expect(storedPagesRender([])).toBeUndefined();
+    expect(
+      storedPagesRender([{ fetcherId: "fetch" }, { fetcherId: undefined }])
+    ).toBeUndefined();
+  });
+
+  test("every page rendered is mode all", () => {
+    expect(
+      storedPagesRender([
+        { fetcherId: "cloud-render" },
+        { fetcherId: "browser" },
+      ])
+    ).toEqual({
+      requested: true,
+      mode: "all",
+      pagesRendered: 2,
+      pagesFetchedPlain: 0,
+    });
+  });
+
+  test("some pages rendered is mode auto, with the plain pages counted", () => {
+    expect(
+      storedPagesRender([
+        { fetcherId: "cloud-render" },
+        { fetcherId: "fetch" },
+        {},
+      ])
+    ).toEqual({
+      requested: true,
+      mode: "auto",
+      pagesRendered: 1,
+      pagesFetchedPlain: 2,
+    });
   });
 });

@@ -99,3 +99,26 @@ export function renderFallbackLine(
       : `${render.pagesRendered.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} pages were rendered, the rest fetched as plain HTML`;
   return `Cloud rendering fell back to plain HTTP (${render.fallbackReason}): ${split}.`;
 }
+
+/**
+ * The `render` block of a report rebuilt from the store (`squirrel report`, repo#3094). The crawl row
+ * keeps no render settings, so this is read from what each stored page says served it: the same
+ * `fetcherId` the live tally counts. Undefined when no stored page was rendered, which reads the same
+ * as an audit that did no render. `requested` is true because a page is only rendered when rendering
+ * was asked for; `mode` is `all` when every page was rendered and `auto` otherwise, and a fallback
+ * reason is not stored, so it is absent.
+ */
+export function storedPagesRender(
+  pages: readonly { fetcherId?: string }[]
+): ReportRender | undefined {
+  let rendered = 0;
+  for (const page of pages) if (isRenderedFetcher(page.fetcherId)) rendered++;
+  if (rendered === 0) return undefined;
+  const plain = pages.length - rendered;
+  return {
+    requested: true,
+    mode: plain === 0 ? "all" : "auto",
+    pagesRendered: rendered,
+    pagesFetchedPlain: plain,
+  };
+}
