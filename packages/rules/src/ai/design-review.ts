@@ -45,7 +45,7 @@ export const designReviewRule: Rule = {
     cloud: { service: "design-review", unit: "site", creditFeature: "llm_rules_page" },
     checks: [
       { name: "design-review", outcome: "skipped" },
-      { name: "design-review", outcome: "clean" },
+      { name: "design-review", outcome: "clean", clears: ["design-review-deviation"] },
       { name: "design-review-deviation", outcome: "problem" },
     ],
   },

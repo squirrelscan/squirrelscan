@@ -67,8 +67,13 @@ export const CLOUD_SITE_KEY = "site";
  * `render` was wired into cloud-prefetch for ax/content-without-js (#673), so it
  * left this set — it now runs on raw-HTML crawls (skipped, not advertised-unwired,
  * on rendered crawls).
+ *
+ * `design-review` (repo#1382) declares its contract and rule ahead of the cloud
+ * service that fulfils it; remove it here once the prefetch can call it.
  */
-export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>([]);
+export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>([
+  "design-review",
+]);
 
 /**
  * Read a single prefetched cloud result from a per-run store. `key` is the page

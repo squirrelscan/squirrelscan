@@ -381,6 +381,12 @@
    "privacy-blocked|skipped|Privacy filter check skipped||"
   ]
  },
+ "ai/design-review": {
+  "digest": "213337113210228",
+  "lines": [
+   "design-review|skipped|Design review skipped||"
+  ]
+ },
  "ai/llm-parsability": {
   "digest": "116140735398276",
   "lines": [
