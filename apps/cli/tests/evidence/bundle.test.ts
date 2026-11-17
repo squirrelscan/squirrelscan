@@ -271,6 +271,17 @@ describe("evidence bundle export", () => {
     ).toBe("let a=1");
   });
 
+  test("findInlineScripts ends a script at an end tag with whitespace or junk before >", () => {
+    const html =
+      "<script>let a=1</script\t\n bar><p>x</p><script>let b=2</SCRIPT >";
+    const refs = findInlineScripts(html, "p");
+    expect(
+      refs.map((r) =>
+        Buffer.from(html).subarray(r.byteStart, r.byteEnd).toString()
+      )
+    ).toEqual(["let a=1", "let b=2"]);
+  });
+
   test("refuses to overwrite a non-empty target", () => {
     const dir = tmp();
     writeFileSync(join(dir, "x"), "x");

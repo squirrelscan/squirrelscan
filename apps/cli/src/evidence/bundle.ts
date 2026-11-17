@@ -281,7 +281,7 @@ export function pageArtifactType(fetcherId: string | undefined): ArtifactType {
   return "rendered-dom";
 }
 
-const SCRIPT_TAG = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+const SCRIPT_TAG = /<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi;
 
 /** Inline scripts and inline data blocks, with byte ranges into the page artifact. */
 export function findInlineScripts(
