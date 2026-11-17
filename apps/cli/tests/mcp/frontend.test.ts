@@ -19,6 +19,11 @@ import { SIGNED_OUT_MESSAGE } from "@/mcp/forward";
 import { createFrontEnd } from "@/mcp/server";
 import { UpstreamHandle, connectUpstream } from "@/mcp/upstream";
 
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
+
+// The old local tool names (`quick_check`, `audit_website`) are called here; keep any store or settings access off the real ~/.squirrel (#626).
+isolateSquirrelHome("mcp-frontend-737");
+
 const cliRoot = join(import.meta.dir, "../..");
 const MODERN = "2026-07-28";
 
