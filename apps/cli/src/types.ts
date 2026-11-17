@@ -735,6 +735,8 @@ export interface AuditReport {
     /** Requested page cap, when it exceeded MAX_PAGES_CAP and was clamped (#1909). */
     requestedMaxPages?: number;
     pagesCrawled: number;
+    /** The `render` block the audit wrote, saved so a rebuilt report restores it (repo#3094). */
+    render?: import("@squirrelscan/core-contracts").ReportRender;
     /** Whether robots.txt was honoured (#1782). */
     respectRobots?: boolean;
     /** Frontier URLs skipped as robots_disallowed (#1782). */

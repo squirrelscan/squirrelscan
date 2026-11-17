@@ -322,7 +322,7 @@ interface SlimJsonReport {
     message: string;
     rules: Array<{ id: string; name: string; reason?: LockedRuleReason; detail?: string }>;
   };
-  /** What cloud rendering did (#1664): mode, pages rendered and fetched plain, and why it fell back; present on a report an audit just wrote. */
+  /** What cloud rendering did (#1664): mode, pages rendered and fetched plain, and why it fell back; present on a report an audit just wrote and on one `squirrel report` rebuilds (the block the audit saved; approximate, with no fallback reason, for an older store). */
   render?: ReportRender;
   /** Short human reason, present when `status` is failed/blocked. */
   statusReason?: string;

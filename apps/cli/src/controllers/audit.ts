@@ -3081,6 +3081,25 @@ export async function runAudit(
           rendered,
           plain,
         });
+        // repo#3094: the scan scope was saved before this block existed. Save the exact block with
+        // it, so `squirrel report` restores what this audit wrote instead of guessing it from the
+        // stored pages. A copy: the report's own `scanScope` keeps its shape.
+        if (report.scanScope) {
+          await Effect.runPromise(
+            storage
+              .updateCrawl(crawlId, {
+                scanScope: { ...report.scanScope, render: report.render },
+              })
+              .pipe(
+                Effect.catchAll((error) => {
+                  logger.warn(
+                    `Could not store this audit's render summary: ${String(error)}`
+                  );
+                  return Effect.void;
+                })
+              )
+          );
+        }
       }
       const totalSpent = spendLines.reduce((sum, l) => sum + l.credits, 0);
       if (totalSpent > 0) {
