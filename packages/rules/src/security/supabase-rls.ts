@@ -440,6 +440,12 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         return { checks };
       }
 
+      // The engine leaves `externalLinks` undefined only when external link
+      // checking is off for the run (`--offline`, a targeted run,
+      // `[external_links] enabled = false`); checking on with no external links
+      // is `[]`. The rule context has no other "may request other hosts" signal,
+      // so the rule is in LINK_VERDICT_RULE_IDS and runs after the link check
+      // binds this field (repo#2144).
       if (ctx.site?.externalLinks === undefined) {
         checks.push({
           name: CHECK,

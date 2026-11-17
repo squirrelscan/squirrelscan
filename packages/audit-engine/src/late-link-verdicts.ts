@@ -46,9 +46,10 @@ import { checkExternalLinks, type ExternalCheckResult, type LinkCache } from "./
 
 /**
  * Time kept back, before the run's own deadline, for the link rules and the
- * report after the verdict deadline. The link rules are four site rules over at
- * most `max_links` verdicts, and the report build after them is the same as in
- * the blocking mode, so this is a margin, not a measured cost.
+ * report after the verdict deadline. The link rules are the site rules in
+ * `LINK_VERDICT_RULE_IDS`, over at most `max_links` verdicts, and the report
+ * build after them is the same as in the blocking mode, so this is a margin, not
+ * a measured cost.
  */
 export const LINK_RULES_RESERVE_MS = 30_000;
 

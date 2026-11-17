@@ -13,7 +13,7 @@ import { Effect } from "effect";
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-import { LINK_VERDICT_RULE_IDS } from "@squirrelscan/rules";
+import { getAllRuleIds, LINK_VERDICT_RULE_IDS } from "@squirrelscan/rules";
 
 import { runStreamingRules, type StreamingRulePhase } from "../src/adapter";
 import { BULK_CHECK_CHUNK_SIZE, type ExternalCheckResult } from "../src/external-checker";
@@ -145,13 +145,18 @@ interface AuditOptions {
   budgetMs?: number;
   events?: string[];
   onLinkVerdictsStart?: () => void;
+  /** Rules enabled on top of CONFIG's. */
+  alsoEnable?: string[];
 }
 
 async function audit(home: string, o: AuditOptions) {
   const { storage, crawlId } = await crawl(home);
   const events = o.events ?? [];
+  const config = o.alsoEnable
+    ? ({ ...CONFIG, rules: { enable: [...CONFIG.rules!.enable!, ...o.alsoEnable] } } as Config)
+    : CONFIG;
   const preRules = await Effect.runPromise(
-    runStreamingPreRules(storage, crawlId, CONFIG, {
+    runStreamingPreRules(storage, crawlId, config, {
       resourceOverrides: { resolveHost },
       externalLinks: {
         config: CONFIG.external_links,
@@ -164,7 +169,7 @@ async function audit(home: string, o: AuditOptions) {
   );
   events.push("pre-rules:end");
   const ran = (await Effect.runPromise(
-    runStreamingRules(storage, crawlId, CONFIG, preRules.assets, undefined, {
+    runStreamingRules(storage, crawlId, config, preRules.assets, undefined, {
       onPhase: (phase: StreamingRulePhase, boundary) => events.push(`${phase}:${boundary}`),
       ...(preRules.linkVerdicts ? { linkVerdicts: preRules.linkVerdicts } : {}),
       onLinkVerdicts: (boundary) => {
@@ -251,6 +256,40 @@ describe("late-bound link verdicts (repo#2144)", () => {
       expect(checksOf(late.ran, "links/dead-links").map((c) => c.message)).toEqual([
         "Checked 30 external link(s); 3 dead",
       ]);
+    },
+    T,
+  );
+
+  test(
+    "security/supabase-rls runs after the link check binds site.externalLinks, not before it",
+    async () => {
+      // The rule reads `site.externalLinks === undefined` as "this audit may not
+      // request other hosts" (pub#1883), so it must never read the field before
+      // the link check fills it: on an aggressive online run, read early, it
+      // could skip as external-requests-off. Proven on site-rule order: the late
+      // pass sets its results after every rule of the first pass, and
+      // security/security-txt (a site rule that reads no verdicts) comes right
+      // after security/supabase-rls in the registry, so it is first-pass and
+      // the rule lands after it only when it runs late.
+      const ids = await getAllRuleIds();
+      expect(ids.indexOf("security/security-txt")).toBeGreaterThan(ids.indexOf("security/supabase-rls"));
+      expect(LINK_VERDICT_RULE_IDS.has("security/security-txt")).toBe(false);
+
+      const { home } = serveSite(3);
+      const service = async (urls: string[]) => new Map(urls.map((u) => [u, verdict(u)] as const));
+      const late = await audit(home, {
+        bulkChecker: service,
+        late: true,
+        alsoEnable: ["security/supabase-rls", "security/security-txt"],
+      });
+
+      const order = [...late.ran.siteRuleResults.keys()];
+      expect(order).toContain("security/supabase-rls");
+      expect(order).toContain("security/security-txt");
+      expect(order.indexOf("security/supabase-rls")).toBeGreaterThan(order.indexOf("security/security-txt"));
+      for (const check of checksOf(late.ran, "security/supabase-rls")) {
+        expect(check.skipReason).not.toBe("external-requests-off");
+      }
     },
     T,
   );
