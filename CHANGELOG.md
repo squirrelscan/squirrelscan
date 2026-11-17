@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `ax/agent-tasks` (squirrelscan/repo#3880): scripted, deterministic agent task checks (`find-contact`, `reach-form`, `find-price`) that report pass, fail with the failing step, or blocked. No LLM, nothing is submitted, and tasks can be forced on or off per site through `[rule_options."ax/agent-tasks"]`.
+
 ### Fixed
 
 - An incremental audit that refetches an unchanged page now reports the headers that response carried, not the ones stored with the page (squirrelscan/repo#4765). A site that dropped an `X-Robots-Tag: noindex`, or added HSTS, without changing its HTML kept the old header in every later audit, and `core/robots-meta` reported a noindex the site no longer sent. A 200 whose body matched and a reused render (the conditional-render gate's probe) now replace the stored headers; an origin's own 304 updates the headers it resends and keeps the ones it omits, as HTTP caches do.
@@ -28,7 +32,6 @@ Four new probing security rules check what a site hands to anyone who asks: open
 ### Added
 
 - **New rule `i18n/locale-mixing`: one page that follows two locale conventions.** It flags US and UK spellings of the same word (color/colour, center/centre, license/licence, organize/organise and more), day-first and month-first dates on one page (a failing check, since 3/4/2026 cannot be resolved), a bare `$` next to USD, CAD, AUD or NZD amounts, and spellings that contradict the page's `lang` (UK spellings under `lang="en-US"`). Pages whose `lang` is not English are skipped, so translations on a multilingual site are not judged. (squirrelscan/repo#1359)
-- New rule `ax/agent-tasks` (squirrelscan/repo#3880): scripted, deterministic agent task checks (`find-contact`, `reach-form`, `find-price`) that report pass, fail with the failing step, or blocked. No LLM, nothing is submitted, and tasks can be forced on or off per site through `[rule_options."ax/agent-tasks"]`.
 - `squirrel audit -f json` now carries `cacheStats` (squirrelscan/repo#1981) when the audit reused any page or sub-resource, so a fully cached re-audit is distinguishable from a fresh one. The field is absent on a cold audit. Added in JSON schema 1.21; this release ships 1.22.
 - `squirrel audit -f json` checks in `issues`, `infoChecks` and `notChecked` now carry optional `observation` metadata (squirrelscan/repo#2302): `mode` (static, crawl, browser or field), `applicability` (applicable, not-applicable or unknown) and an optional `uncertainty` that qualifies the result. JSON schema version is 1.22.
 - `ax/agent-blocking` can probe every AI token (squirrelscan/repo#3788). Set `[crawler] agent_access_all_tokens = true` to fetch the homepage as 17 AI bots that send their own User-Agent (GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Perplexity-User, CCBot and more), about 15 extra homepage requests. Each probe records its status and `X-Robots-Tag`, and one `agent-access-probes` info check lists them. It is off by default and the default request count and timing are unchanged. Verdicts now say `UA probe`, because a spoofed User-Agent is not the real bot, and a blocked `ChatGPT-User`, `Perplexity-User`, `Meta-ExternalFetcher` or `MistralAI-User` fails like `Claude-User` does.
