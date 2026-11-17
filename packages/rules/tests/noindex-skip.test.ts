@@ -67,12 +67,13 @@ async function runPage(page: PageData, siteData?: SiteData) {
 }
 
 describe("the skip list is explicit and conservative", () => {
-  test("exactly core/meta-title, core/meta-description, core/h1, content/word-count and content/h1-title-alignment declare skipOnNoindex", () => {
+  test("exactly core/meta-title, core/meta-description, core/h1, content/word-count, content/h1-title-alignment and ax/answer-blocks declare skipOnNoindex", () => {
     const declared = [...loadAllRules().values()]
       .filter((r) => r.meta.skipOnNoindex)
       .map((r) => r.meta.id)
       .sort();
     expect(declared).toEqual([
+      "ax/answer-blocks",
       "content/h1-title-alignment",
       "content/word-count",
       "core/h1",
