@@ -34,6 +34,40 @@ export interface CssMotionSummary {
   hasSmoothScroll: boolean;
   /** Selectors of the rules that carry an infinite animation: at most 100, each at most 200 characters. */
   infiniteAnimationSelectors: string[];
+  /** Selectors of the rules that set `scroll-behavior: smooth`, capped like the animation selectors. */
+  smoothScrollSelectors: string[];
+}
+
+/**
+ * Third-party stylesheet hosts that serve only `@font-face` rules, so an unread sheet from
+ * one cannot hold motion or reduced-motion handling and does not make the check partial.
+ * use.fontawesome.com is deliberately absent: its CSS ships `fa-spin` and `fa-pulse` animations.
+ */
+export const FONT_ONLY_STYLESHEET_HOSTS: readonly string[] = [
+  // Google Fonts CSS API: @font-face rules only.
+  "fonts.googleapis.com",
+  // Bunny Fonts, a Google Fonts compatible API: @font-face rules only.
+  "fonts.bunny.net",
+  // Adobe Fonts (Typekit) kit CSS: @font-face rules only.
+  "use.typekit.net",
+  // Adobe Fonts (Typekit) tracking and font CSS imported by kits: @font-face rules only.
+  "p.typekit.net",
+  // Fontshare CSS API: @font-face rules only.
+  "api.fontshare.com",
+];
+
+function isFontOnlyHost(abs: string): boolean {
+  try {
+    return FONT_ONLY_STYLESHEET_HOSTS.includes(new URL(abs).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+function pushSelector(list: string[], selector: string): void {
+  if (list.length < MAX_MOTION_SELECTORS && selector.length <= MAX_SELECTOR_CHARS && !list.includes(selector)) {
+    list.push(selector);
+  }
 }
 
 function isInfiniteAnimation(property: string, value: string): boolean {
@@ -59,6 +93,7 @@ export function stylesheetMotionOf(css: string): CssMotionSummary {
     hasInfiniteAnimation: false,
     hasSmoothScroll: false,
     infiniteAnimationSelectors: [],
+    smoothScrollSelectors: [],
   };
   // Cheap pre-filter: nothing to parse when none of these words appear.
   if (!/infinite|smooth|prefers-reduced-motion/i.test(text)) return summary;
@@ -68,16 +103,13 @@ export function stylesheetMotionOf(css: string): CssMotionSummary {
     if (!/infinite|smooth/i.test(rule.body)) continue;
     for (const [property, raw] of parseDeclarations(rule.body)) {
       const value = raw.toLowerCase();
-      if (property === "scroll-behavior" && /\bsmooth\b/.test(value)) summary.hasSmoothScroll = true;
+      if (property === "scroll-behavior" && /\bsmooth\b/.test(value)) {
+        summary.hasSmoothScroll = true;
+        pushSelector(summary.smoothScrollSelectors, rule.selector);
+      }
       if (isInfiniteAnimation(property, value)) {
         summary.hasInfiniteAnimation = true;
-        if (
-          summary.infiniteAnimationSelectors.length < MAX_MOTION_SELECTORS &&
-          rule.selector.length <= MAX_SELECTOR_CHARS &&
-          !summary.infiniteAnimationSelectors.includes(rule.selector)
-        ) {
-          summary.infiniteAnimationSelectors.push(rule.selector);
-        }
+        pushSelector(summary.infiniteAnimationSelectors, rule.selector);
       }
     }
   }
@@ -117,10 +149,14 @@ function staticSelector(sel: string): string {
   return out;
 }
 
+/** Selectors that match every HTML page, checked without a `querySelector` call. */
+const ALWAYS_MATCHES = new Set(["html", ":root", "body", "*"]);
+
 /** True when any selector in the lists matches an element on the page. Bounded by `budget` querySelector calls. */
 function anySelectorMatches(doc: Document, lists: readonly string[], budget: { left: number }): boolean {
   for (const list of lists) {
     for (const part of splitSelectorList(list)) {
+      if (ALWAYS_MATCHES.has(part.trim().toLowerCase())) return true;
       if (budget.left <= 0) return false;
       const sel = staticSelector(part);
       if (!sel) continue;
@@ -285,7 +321,7 @@ export const reducedMotionRule: Rule = {
     }
     let cssInfinite =
       attrInfinite || (inline.hasInfiniteAnimation && anySelectorMatches(doc, inline.infiniteAnimationSelectors, budget));
-    let cssSmooth = inline.hasSmoothScroll;
+    let cssSmooth = inline.hasSmoothScroll && anySelectorMatches(doc, inline.smoothScrollSelectors, budget);
     let cssSource = cssInfinite || cssSmooth ? "inline <style>" : "";
     for (const el of doc.querySelectorAll("link[href]")) {
       const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
@@ -300,7 +336,7 @@ export const reducedMotionRule: Rule = {
       if (!abs) continue;
       const sheet = motionSheets.get(abs);
       if (!sheet || !sheet.read) {
-        unreadSheets++;
+        if (!isFontOnlyHost(abs)) unreadSheets++;
         continue;
       }
       if (sheet.mentionsReducedMotion) handled = true;
@@ -312,7 +348,7 @@ export const reducedMotionRule: Rule = {
         cssInfinite = true;
         cssSource ||= shownUrl(abs);
       }
-      if (sheet.hasSmoothScroll && !cssSmooth) {
+      if (sheet.hasSmoothScroll && !cssSmooth && anySelectorMatches(doc, sheet.smoothScrollSelectors ?? [], budget)) {
         cssSmooth = true;
         cssSource ||= shownUrl(abs);
       }

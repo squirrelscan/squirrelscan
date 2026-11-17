@@ -46,6 +46,7 @@ const sheet = (over: Partial<StylesheetMotionData> = {}): StylesheetMotionData =
   hasInfiniteAnimation: false,
   hasSmoothScroll: false,
   infiniteAnimationSelectors: [],
+  smoothScrollSelectors: [],
   ...over,
 });
 
@@ -91,7 +92,7 @@ describe("a11y/reduced-motion", () => {
   test("a stylesheet href's query string never reaches the finding", () => {
     const href = "https://example.com/app.css?token=s3cr3t&email=a%40b.com";
     const checks = run(page(`<link rel="stylesheet" href="${href}">`), {
-      stylesheetMotion: [sheet({ url: href, hasInfiniteAnimation: true, hasSmoothScroll: true })],
+      stylesheetMotion: [sheet({ url: href, hasInfiniteAnimation: true, hasSmoothScroll: true, smoothScrollSelectors: ["html"] })],
     });
     expect(checks.length).toBeGreaterThan(0);
     for (const c of checks) {
@@ -298,5 +299,53 @@ describe("a11y/reduced-motion", () => {
     expect(stylesheetMotionOf(many).infiniteAnimationSelectors).toHaveLength(100);
     expect(stylesheetMotionOf("/* prefers-reduced-motion */ a{color:red}").mentionsReducedMotion).toBe(false);
     expect(stylesheetMotionOf("a{content:'prefers-reduced-motion'}").mentionsReducedMotion).toBe(false);
+  });
+
+  // pub#2050 round 2: known font hosts are not unread stylesheets
+  test("a page with only a Google Fonts sheet and no motion passes", () => {
+    const fonts = `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter&display=swap">`;
+    const checks = runAll(page(fonts), { stylesheetMotion: [] });
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion:pass"]);
+  });
+
+  test("a Google Fonts sheet does not turn a looping animation with no handling into info", () => {
+    const head = `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter"><style>.spin{animation:spin 1s infinite}</style>`;
+    const checks = run(page(head, `<i class="spin"></i>`), { stylesheetMotion: [] });
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-css-infinite-animation:warn"]);
+  });
+
+  test("a third-party CDN stylesheet stays unverified", () => {
+    const cdn = `<link rel="stylesheet" href="https://cdn.shopify.com/s/files/theme.css">`;
+    const checks = runAll(page(cdn), { stylesheetMotion: [] });
+    expect(checks.map((c) => c.name)).toEqual(["reduced-motion-unverified"]);
+  });
+
+  test("use.fontawesome.com is not a font host", () => {
+    const fa = `<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css">`;
+    expect(runAll(page(fa), { stylesheetMotion: [] }).map((c) => c.name)).toEqual(["reduced-motion-unverified"]);
+  });
+
+  // pub#2050 round 2: smooth scrolling needs a matching selector too
+  test("an unused .scroll-smooth rule is not a finding", () => {
+    expect(run(page(`<style>.scroll-smooth{scroll-behavior:smooth}</style>`))).toHaveLength(0);
+  });
+
+  test("html, :root, body and * smooth scrolling always warn", () => {
+    for (const sel of ["html", ":root", "body", "*"]) {
+      const checks = run(page(`<style>${sel}{scroll-behavior:smooth}</style>`));
+      expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-css-smooth-scroll:warn"]);
+    }
+  });
+
+  test("a used .scroll-smooth rule warns, inline or in a read stylesheet", () => {
+    const used = run(page(`<style>.scroll-smooth{scroll-behavior:smooth}</style>`, `<div class="scroll-smooth"></div>`));
+    expect(used.map((c) => c.name)).toEqual(["reduced-motion-css-smooth-scroll"]);
+    const link = `<link rel="stylesheet" href="/app.css">`;
+    const s = sheet({ hasSmoothScroll: true, smoothScrollSelectors: [".scroll-smooth"] });
+    expect(run(page(link, `<p>x</p>`), { stylesheetMotion: [s] })).toHaveLength(0);
+    expect(run(page(link, `<div class="scroll-smooth"></div>`), { stylesheetMotion: [s] }).map((c) => c.name)).toEqual([
+      "reduced-motion-css-smooth-scroll",
+    ]);
+    expect(stylesheetMotionOf("html,.a{scroll-behavior:smooth}").smoothScrollSelectors).toEqual(["html,.a"]);
   });
 });

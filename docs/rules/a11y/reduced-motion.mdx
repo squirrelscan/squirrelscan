@@ -13,9 +13,12 @@ Two WCAG criteria apply. 2.3.3 Animation from Interactions (Level AAA) asks that
 
 The rule reads the page markup, inline `<style>` blocks, inline scripts, same-site scripts the audit fetched, and a summary of each same-site stylesheet the audit fetched. It runs in the CLI and in HTTP-only audits.
 
+Third-party stylesheets are not read, so a page that links one (a theme on a CDN, for example) gets a partial result, except sheets from font-only hosts (`fonts.googleapis.com`, `fonts.bunny.net`, `use.typekit.net`, `p.typekit.net`, `api.fontshare.com`), which hold only `@font-face` rules and are ignored.
+
 A page has a motion signal when it has any of:
 
-- a looping CSS animation (`animation`, `-webkit-animation` or `animation-iteration-count` set to `infinite`) in an inline `style` attribute, or in an inline `<style>` or read stylesheet rule whose selector matches an element on the page (so an unused `.fa-spin` rule from an icon font does not count), or `scroll-behavior: smooth`
+- a looping CSS animation (`animation`, `-webkit-animation` or `animation-iteration-count` set to `infinite`) in an inline `style` attribute, or in an inline `<style>` or read stylesheet rule whose selector matches an element on the page (so an unused `.fa-spin` rule from an icon font does not count)
+- `scroll-behavior: smooth` in a rule whose selector matches an element on the page; `html`, `:root`, `body` and `*` always match, so an unused `.scroll-smooth` utility class does not count
 - a `<video>` with both `autoplay` and `loop`
 - `<marquee>`
 - a motion library: AOS (`data-aos`), GSAP ScrollTrigger, Lottie players, animate.css or WOW.js, parallax (`data-parallax`, Rellax, Jarallax), Locomotive Scroll or Lenis. Library names are matched only in the path of a `<script src>` or a stylesheet, preload or modulepreload link, never in canonical, alternate or icon links, a hostname or a query string
