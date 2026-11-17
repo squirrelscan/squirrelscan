@@ -431,6 +431,68 @@ describe("shareable export", () => {
     expect(raw).toContain("OBSTOKEN");
   });
 
+  test("artifact bodies, scripts, selectors and snippets get the full query-param redaction", () => {
+    const base = source();
+    const [first, ...rest] = [...base.pages];
+    const linkHtml =
+      '<html><body><a id="cb" href="/cb?session=BODYSESSION&uid=BODYUID">x</a>' +
+      '<img src="https://cdn.test/i.png?auth=BODYAUTH"></body></html>';
+    const leaky: EvidenceSource = {
+      ...base,
+      pages: [{ ...first!, html: linkHtml }, ...rest],
+      scripts: [
+        {
+          ...[...base.scripts][0]!,
+          body: 'fetch("/api?refresh_token=SCRIPTREFRESH&acct=SCRIPTACCT")',
+        },
+      ],
+      findings: [
+        {
+          ruleId: "core/link",
+          name: "link",
+          status: "fail",
+          message: "link",
+          pageUrl: first!.url,
+          items: [
+            {
+              id: "l1",
+              snippet: '<a id="cb" href="/cb?session=BODYSESSION&uid=BODYUID">',
+              selector: 'a[href="/cb?session=SELECTORSESSION"]',
+            },
+          ],
+        },
+      ],
+    };
+    const dir = join(tmp(), "share-artifacts");
+    const { manifest } = exportEvidenceBundle(leaky, dir, {
+      kind: "shareable",
+    });
+    const everything =
+      manifest.files
+        .map((f) => readFileSync(join(dir, ...f.path.split("/")), "utf-8"))
+        .join("\n") + JSON.stringify(manifest);
+    for (const secret of [
+      "BODYSESSION",
+      "BODYUID",
+      "BODYAUTH",
+      "SCRIPTREFRESH",
+      "SCRIPTACCT",
+      "SELECTORSESSION",
+    ]) {
+      expect(everything).not.toContain(secret);
+    }
+    // The redacted snippet still locates in the redacted body.
+    const findings = JSON.parse(
+      readFileSync(join(dir, "findings.json"), "utf-8")
+    );
+    const link = findings.find(
+      (f: { ruleId: string }) => f.ruleId === "core/link"
+    );
+    expect(link.evidence[0].state).toBe("located");
+    expect(link.evidence[0].locator.byteRange).toBeDefined();
+    expect(verifyEvidenceBundle(dir).ok).toBe(true);
+  });
+
   test("redactUrl, redactHeaders and redactText unit behaviour", () => {
     const counts = newRedactionCounts();
     expect(redactUrl("https://u:p@a.test/x?q=1&password=hunter2", counts)).toBe(
