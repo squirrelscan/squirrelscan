@@ -1,10 +1,11 @@
 // a11y/reduced-motion - motion with no prefers-reduced-motion handling (#711)
 //
-// WCAG 2.3.3 Animation from Interactions (AAA) and 2.2.2 Pause, Stop, Hide (A);
-// technique C39 uses `prefers-reduced-motion`. A static check cannot prove 2.2.2
-// (a pause button may exist), so the rule reports missing reduced-motion handling,
-// not a WCAG failure.
+// Declares WCAG 2.3.3 Animation from Interactions (AAA) only: technique C39 uses
+// `prefers-reduced-motion`, which is exactly what run() looks for. 2.2.2 Pause,
+// Stop, Hide (A) is not declared: run() never looks for a pause control (one may
+// exist), so the rule reports missing reduced-motion handling, not a WCAG failure.
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Document } from "linkedom";
 
 import { parseDeclarations, parseRules } from "../content/hidden-text";
@@ -227,6 +228,7 @@ export const reducedMotionRule: Rule = {
     solution:
       "Parallax, scroll-triggered fade-ins, auto-advancing carousels and looping animation can make people with vestibular disorders dizzy or nauseous. Every major OS has a reduce motion setting, which browsers expose as @media (prefers-reduced-motion: reduce). Wrap looping animation and smooth scrolling so they switch off under that query (@media (prefers-reduced-motion: reduce) { * { animation: none !important; scroll-behavior: auto !important } }), and in script check window.matchMedia('(prefers-reduced-motion: reduce)') before starting scroll animation or autoplay.",
     category: "a11y",
+    wcag: [wcag("2.3.3")],
     scope: "page",
     verdictScope: "page",
     severity: "warning",
