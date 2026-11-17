@@ -531,6 +531,14 @@ describe("security/supabase-rls", () => {
     expect(checks[0]).toMatchObject({ status: "skipped", skipReason: "external-requests-off" });
   });
 
+  test("external link checking on with zero external links is not off: the table is probed", async () => {
+    // `ctx()` gives `externalLinks: []`, what the engine binds when checking ran and the pages link nowhere outside.
+    const sent = stubFetch({ [`${HOST}/rest/v1/todos`]: () => answer(401) });
+    const checks = await run(ctx({ scripts: [script(bundle(`sb.from("todos").select()`))] }));
+    expect(sent).toHaveLength(1);
+    expect(checks[0]!.skipReason).not.toBe("external-requests-off");
+  });
+
   test("no Supabase anon key on the site: not applicable, nothing sent", async () => {
     const sent = stubFetch({});
     const checks = await run(
