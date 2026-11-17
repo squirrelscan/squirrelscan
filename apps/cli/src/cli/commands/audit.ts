@@ -86,6 +86,7 @@ import {
 import { formatRetentionNotice } from "@/audit/retention";
 import {
   isCategoryExcluded,
+  isPartialRun,
   parseRuleFilters,
   resolvePendingRuleFilters,
   resolveRulesConfig,
@@ -827,6 +828,28 @@ export async function resolveCloudRendering(opts: {
  * Signed-in + online ⇒ publish unlisted by default; opt out per-run with
  * --no-publish/--offline or persistently via [cloud] publish = false.
  */
+
+/** Printed when auto-publish skipped a partial run (rule filter or WCAG level) that would otherwise publish. */
+export const RULE_FILTER_PUBLISH_SKIP_LINE =
+  "Rule filter active — auto-publish skipped for this partial run (use --publish to publish anyway).";
+
+/**
+ * The skip line for a partial run (`isPartialRun`: --rule-include, --rule-exclude or a WCAG level), only when
+ * being partial is what kept it from publishing: a --no-publish, config-off or signed-out skip would
+ * misattribute it (#1066, pub#2024).
+ */
+export function auditPublishSkipLine(opts: {
+  shouldPublish: boolean;
+  wouldPublishWithoutFilter: boolean;
+  partialRun: boolean;
+}): string | null {
+  return !opts.shouldPublish &&
+    opts.wouldPublishWithoutFilter &&
+    opts.partialRun
+    ? RULE_FILTER_PUBLISH_SKIP_LINE
+    : null;
+}
+
 /**
  * Whether this run registers with the cloud at all (#271).
  *
@@ -1722,6 +1745,14 @@ export const audit = defineCommand({
       // Load config silently — the preamble below prints the config source
       const configPath = getGlobalConfigPath() ?? findConfigFile() ?? undefined;
       const config = await loadConfig(configPath, { silent: true });
+      // pub#2024: a run narrowed by --wcag-level or [rules] wcag_level is partial
+      // like a --rule-include/--rule-exclude run (it carries the same
+      // `partialAudit` marker), so the publish guard below treats it the same:
+      // no auto-publish without an explicit --publish, skipped as `rule-filter`.
+      const partialRun = isPartialRun(
+        ruleFilter,
+        wcagLevel ?? config.rules.wcag_level
+      );
 
       // #1599: plugins named in squirrel.toml load only when the user's own
       // ~/.squirrel/settings.json allowlists them. Loaded once here and handed to
@@ -3413,7 +3444,7 @@ export const audit = defineCommand({
           explicitPublish: !!args.publish,
           noPublish,
           configPublish: config.cloud.publish,
-          ruleFilterActive,
+          ruleFilterActive: partialRun,
           targeted: targetUrls.length > 0,
           nonPublicHost: !!nonPublicHost,
           ephemeral,
@@ -3440,7 +3471,7 @@ export const audit = defineCommand({
           explicitPublish: !!args.publish,
           noPublish,
           configPublish: config.cloud.publish,
-          ruleFilterActive,
+          ruleFilterActive: partialRun,
           targeted: targetUrls.length > 0,
           nonPublicHost: false,
           ephemeral,
@@ -3460,12 +3491,13 @@ export const audit = defineCommand({
         nonPublicHost: !!nonPublicHost,
         ephemeral,
       });
-      if (!shouldPublish && wouldPublishWithoutFilter && ruleFilterActive) {
-        log(
-          fmt.dim(
-            "Rule filter active — auto-publish skipped for this partial run (use --publish to publish anyway)."
-          )
-        );
+      const partialSkipLine = auditPublishSkipLine({
+        shouldPublish,
+        wouldPublishWithoutFilter,
+        partialRun,
+      });
+      if (partialSkipLine) {
+        log(fmt.dim(partialSkipLine));
       } else if (
         !shouldPublish &&
         targetUrls.length > 0 &&
@@ -3475,7 +3507,7 @@ export const audit = defineCommand({
           explicitPublish: !!args.publish,
           noPublish,
           configPublish: config.cloud.publish,
-          ruleFilterActive,
+          ruleFilterActive: partialRun,
           nonPublicHost: !!nonPublicHost,
           ephemeral,
         })
@@ -3502,7 +3534,7 @@ export const audit = defineCommand({
           offline: !!args.offline,
           ephemeral: !!ephemeral,
           explicitPublish: !!args.publish,
-          ruleFilterActive: !!ruleFilterActive,
+          ruleFilterActive: partialRun,
           targeted: targetUrls.length > 0,
           noPublish: !!noPublish,
           configPublish: config.cloud.publish,
@@ -3781,7 +3813,7 @@ export const audit = defineCommand({
               everPublished: hasEverPublished(effectiveSettings),
               nudgeShown: effectiveSettings?.publish_nudge_shown === true,
               nonPublicHost: !!nonPublicHost,
-              ruleFilterActive: ruleFilterActive || targetUrls.length > 0,
+              ruleFilterActive: partialRun || targetUrls.length > 0,
               stderrIsTTY: process.stderr.isTTY === true,
               isConsoleFormat,
               outputPath: args.output,
