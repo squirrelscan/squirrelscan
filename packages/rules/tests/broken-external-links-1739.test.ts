@@ -188,3 +188,15 @@ describe("bot-blocked responses do not affect the score (#2747)", () => {
   });
 });
 
+
+describe("the checker's wall verdict is trusted (#2747)", () => {
+  test.each([
+    ["an object store 403", link({ href: "https://bucket.example-live.net/gone.zip", status: 403 })],
+    ["an HTTP auth 401", link({ href: "https://auth.example-live.net/", status: 401 })],
+    ["a 405 without GET", link({ href: "https://post-only.example-live.net/", status: 405 })],
+  ])("%s the checker kept broken is not reported as bot-blocked", async (_name, l) => {
+    const checks = await run([l]);
+    expect(named(checks, "waf-blocked-external-links")).toBeUndefined();
+    expect(named(checks, "possibly-broken-external-links")?.items?.map((item) => item.id)).toEqual([l.href]);
+  });
+});
