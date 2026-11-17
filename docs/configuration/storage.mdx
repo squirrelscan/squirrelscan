@@ -309,9 +309,9 @@ run. It takes a file path, not a folder, and the file is created if it does not
 exist. Delete the file when you are done; the default store is not touched.
 
 When a run reused page bodies, the summary says how many, for example
-`Content store: 812 of 900 page bodies were already stored`. The JSON report
-carries the same counts as `contentStore: { stored, reused }`. A run with a high
-`reused` count was not cold, which also explains a suspiciously fast re-run.
+`Content store: 812 of 900 page bodies were already stored`. The counts are
+printed in the console output only. A run with a high `reused` count was not
+cold, which also explains a suspiciously fast re-run.
 
 ## Running several audits at once
 
