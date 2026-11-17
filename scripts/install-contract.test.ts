@@ -1194,11 +1194,11 @@ describe.concurrent("install.sh report_error payload", () => {
     const noSudo =
       'command() { if [ "$1" = "-v" ] && [ "$2" = "sudo" ]; then return 1; fi; builtin command "$@"; }';
 
-    test("non-root with sudo: names sudo apk add and links the quickstart", async () => {
+    test("non-root with sudo: names sudo apk add and links the install page", async () => {
       const r = await run("id() { echo 1000; }\nsudo() { :; }");
       expect(r.code).not.toBe(0);
       expect(r.stderr).toContain("sudo apk add libstdc++");
-      expect(r.stderr).toContain("https://docs.squirrelscan.com/quickstart");
+      expect(r.stderr).toContain("https://docs.squirrelscan.com/install");
       expect(r.stderr).toContain("Missing libstdc++");
     }, 30_000);
 
