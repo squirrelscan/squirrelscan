@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { reducedMotionRule, stylesheetMotionOf } from "../src/a11y/reduced-motion";
+import { DYNAMIC_PSEUDO, reducedMotionRule, staticSelector, stylesheetMotionOf } from "../src/a11y/reduced-motion";
 import type { CheckResult, RuleContext, StylesheetMotionData } from "../src/types";
 
 const URL_ = "https://example.com/";
@@ -347,5 +347,23 @@ describe("a11y/reduced-motion", () => {
       "reduced-motion-css-smooth-scroll",
     ]);
     expect(stylesheetMotionOf("html,.a{scroll-behavior:smooth}").smoothScrollSelectors).toEqual(["html,.a"]);
+  });
+
+  // pub#2050 round 3: DYNAMIC_PSEUDO alternation order and name boundary
+  test("an ungated html:focus-within smooth scroll warns", () => {
+    const checks = run(page(`<style>html:focus-within{scroll-behavior:smooth}</style>`));
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-css-smooth-scroll:warn"]);
+  });
+
+  test("a:focus-visible .x reduces to a .x", () => {
+    expect(staticSelector("a:focus-visible .x")).toBe("a .x");
+  });
+
+  test("a longer hyphenated pseudo starting with any listed name is left whole", () => {
+    const names = DYNAMIC_PSEUDO.source.match(/\^?::\?\(([^)]*)\)\(\?!/)![1]!.split("|");
+    expect(names.length).toBeGreaterThan(10);
+    for (const name of names) {
+      expect(staticSelector(`a:${name}-foo`)).toBe(`a:${name}-foo`);
+    }
   });
 });
