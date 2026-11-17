@@ -1,6 +1,5 @@
 // a11y/aria-text - Elements with role="text" have no focusable descendants
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI } from "@squirrelscan/utils";
@@ -75,7 +74,8 @@ export const ariaTextRule: Rule = {
     solution:
       "Elements with role='text' tell screen readers to treat the content as a single text string. If focusable elements (links, buttons, inputs) are nested inside, screen reader users cannot interact with them properly. Remove role='text' from the parent, or restructure so focusable elements are outside the role='text' container.",
     category: "a11y",
-    wcag: [wcag("1.3.1")],
+    wcagNone:
+      "It flags focusable elements inside role=\"text\", a role that is not part of WAI-ARIA, so no WCAG success criterion covers it.",
     scope: "page",
     verdictScope: "page",
     severity: "warning",

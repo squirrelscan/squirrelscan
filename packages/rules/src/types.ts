@@ -231,8 +231,16 @@ export interface RuleMeta {
   solution?: string; // optional 1-2 paragraphs of guidance for fixing issues
   category: RuleCategory;
   subcategory?: string; // optional sub-group within a category (e.g. "ad" | "privacy")
-  /** WCAG success criteria the rule's findings map to (repo#3093). Required for every a11y rule (tests/a11y-wcag.test.ts). */
+  /**
+   * WCAG success criteria the rule's findings map to (repo#3093). Every a11y rule declares exactly one of
+   * `wcag` or `wcagNone` (tests/a11y-wcag.test.ts).
+   */
   wcag?: WcagCriterion[];
+  /**
+   * Why an a11y rule maps to no WCAG success criterion: one non-empty sentence grounded in what its run()
+   * checks. Shown on the rule's docs page; `--wcag-level` leaves such a rule out.
+   */
+  wcagNone?: string;
   scope: RuleScope;
   severity: RuleSeverity;
   weight: number; // scoring weight (1-10)

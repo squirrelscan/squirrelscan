@@ -68,13 +68,9 @@ enable = ["a11y/duplicate-id-active"]
 
 ## WCAG success criteria
 
-The WCAG success criteria this rule's findings map to. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules with a criterion at Level A or AA.
-
 {/* rule-wcag:start */}
 
-| Criterion | Level | Introduced in |
-| --- | --- | --- |
-| 4.1.1 Parsing | A | WCAG 2.0 |
+No WCAG success criterion: It flags duplicate ids on focusable elements, and the criterion that covered duplicate ids, 4.1.1 Parsing, is obsolete in WCAG 2.2 and always satisfied for HTML in WCAG 2.1. A run narrowed with `--wcag-level` leaves this rule out.
 
 {/* rule-wcag:end */}
 

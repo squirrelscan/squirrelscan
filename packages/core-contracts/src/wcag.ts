@@ -73,9 +73,9 @@ export function lowestWcagLevel(criteria: readonly WcagCriterion[] | undefined):
 }
 
 /**
- * Whether findings of a rule belong in a run targeting `target`. The target is a conformance
- * target: AA keeps level A and AA criteria, A keeps only A, AAA keeps everything. A rule with
- * several criteria stays when any one is at or below the target; a rule with none stays.
+ * Whether a rule's criteria reach `target`: AA keeps level A and AA criteria, A keeps only A, AAA keeps
+ * every level. A rule with several criteria stays when any one is at or below the target. True for no
+ * criteria; `wcagLevelDisablePatterns` (packages/rules) leaves a rule with none out of a level-narrowed run.
  */
 export function meetsWcagTarget(
   criteria: readonly WcagCriterion[] | undefined,

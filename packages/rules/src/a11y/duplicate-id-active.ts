@@ -1,6 +1,5 @@
 // a11y/duplicate-id-active - No duplicate IDs on focusable elements
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI } from "@squirrelscan/utils";
@@ -21,7 +20,8 @@ export const duplicateIdActiveRule: Rule = {
     solution:
       "Duplicate IDs on focusable elements (links, buttons, inputs) break keyboard navigation and label associations. Browsers only recognize the first element with a given ID, so labels, focus management, and ARIA references will target the wrong element. Ensure every focusable element with an id attribute has a unique value.",
     category: "a11y",
-    wcag: [wcag("4.1.1")],
+    wcagNone:
+      "It flags duplicate ids on focusable elements, and the criterion that covered duplicate ids, 4.1.1 Parsing, is obsolete in WCAG 2.2 and always satisfied for HTML in WCAG 2.1.",
     scope: "page",
     verdictScope: "page",
     severity: "error",

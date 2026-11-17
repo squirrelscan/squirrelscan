@@ -1,6 +1,5 @@
 // a11y/landmark-one-main - Page has one main landmark
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
@@ -12,7 +11,8 @@ export const landmarkOneMainRule: Rule = {
     solution:
       "Each page should have exactly one <main> element or element with role='main'. This helps screen reader users quickly navigate to the primary content. Multiple main landmarks confuse navigation. Use <aside>, <nav>, or other landmarks for secondary content.",
     category: "a11y",
-    wcag: [wcag("1.3.1")],
+    wcagNone:
+      "It checks that a page has exactly one main landmark, a best practice no WCAG success criterion requires; 2.4.1 Bypass Blocks can be met without landmarks.",
     scope: "page",
     verdictScope: "template",
     severity: "warning",

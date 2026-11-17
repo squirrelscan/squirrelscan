@@ -66,13 +66,9 @@ enable = ["a11y/paste-inputs"]
 
 ## WCAG success criteria
 
-The WCAG success criteria this rule's findings map to. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules with a criterion at Level A or AA.
-
 {/* rule-wcag:start */}
 
-| Criterion | Level | Introduced in |
-| --- | --- | --- |
-| 3.3.8 Accessible Authentication (Minimum) | AA | WCAG 2.2 |
+No WCAG success criterion: It flags paste, copy or cut blocking on any text field, not only the authentication fields 3.3.8 Accessible Authentication (Minimum) covers, so the rule as a whole maps to no criterion (narrowing it is squirrelscan/squirrelscan#2106). A run narrowed with `--wcag-level` leaves this rule out.
 
 {/* rule-wcag:end */}
 
