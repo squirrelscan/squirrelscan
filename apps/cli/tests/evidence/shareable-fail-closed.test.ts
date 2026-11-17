@@ -75,6 +75,41 @@ const SHAPES: ReadonlyArray<(m: string) => string> = [
   (m) => `Proxy-Authorization: Basic ${m}`,
   (m) => `x_api_key=${m}`,
   (m) => `authorization: token ${m}`,
+  // 1. Escaped quotes inside a quoted value.
+  (m) => String.raw`{"cookie": "a=\"b\"; session=${m}"}`,
+  (m) => String.raw`'authorization': 'Token it\'s-${m}'`,
+  // 2. Unquoted name, value starting with a quote: the value is the line.
+  (m) => `Cookie: "a"; session=${m}`,
+  (m) => `Authorization: 'Basic' ${m}`,
+  (m) => `X-API-Key: "k" ${m}`,
+  // 3. Folded values and values on the next line.
+  (m) => `Cookie: a=b\r\n\tsid=${m}`,
+  (m) => `Cookie:\n  sid=${m}`,
+  (m) => `Authorization:\n\tBasic ${m}`,
+  (m) => `Set-Cookie: a=1\n sid=${m}; Path=/`,
+  (m) => `"cookie":\n  "sid=${m}"`,
+  // 4. CGI environment names and print_r / error-page dumps.
+  (m) => `HTTP_COOKIE=sid=${m}`,
+  (m) => `HTTP_AUTHORIZATION: Basic ${m}`,
+  (m) => `[HTTP_COOKIE] => sid=${m}`,
+  (m) => `[Cookie] => sid=${m}`,
+  (m) => `HTTP_X_API_KEY=${m}`,
+  (m) => `Cookie -> sid=${m}`,
+  (m) => "`x-api-key`: `" + m + "`",
+  // 5. Escaped and entity-encoded quotes around the name and the value.
+  (m) => String.raw`"{\"Authorization\": \"Basic ${m}\"}"`,
+  (m) => String.raw`\"cookie\": \"sid=${m}\"`,
+  (m) => `{&quot;Authorization&quot;: &quot;Basic ${m}&quot;}`,
+  (m) => `{&#34;Cookie&#34;: &#34;sid=${m}&#34;}`,
+  (m) => `{&#39;Cookie&#39;: &#39;sid=${m}&#39;}`,
+  // 6. Credential header names outside the exact list, as lines.
+  (m) => `X-Goog-Api-Key: ${m}`,
+  (m) => `Private-Token: ${m}`,
+  (m) => `X-Access-Token: ${m}`,
+  (m) => `X-Shopify-Access-Token: ${m}`,
+  (m) => `CF-Access-Client-Secret: ${m}`,
+  (m) => `X-Session-Id: ${m}`,
+  (m) => `X-JWT: ${m}`,
 ];
 
 /**
@@ -121,6 +156,18 @@ const headers = (): Record<string, unknown> => ({
   Cookie: PLAIN,
   "Set-Cookie": [PLAIN, PLAIN],
   "X-API-Key": PLAIN,
+  // Credential headers outside the exact list: caught by the name rule.
+  "x-access-token": PLAIN,
+  "x-session-token": PLAIN,
+  "x-refresh-token": PLAIN,
+  "x-session-id": PLAIN,
+  "x-shopify-access-token": PLAIN,
+  "cf-access-client-secret": PLAIN,
+  "private-token": PLAIN,
+  "x-goog-api-key": PLAIN,
+  "x-jwt": PLAIN,
+  "Cookie ": PLAIN,
+  X_Signature: PLAIN,
   location: S,
   link: S,
   server: S,

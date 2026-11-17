@@ -38,14 +38,63 @@ const SENSITIVE_HEADER = new RegExp(
 );
 
 /**
- * The same names as they appear in a header line quoted as plain text: any
- * case, and with `_` for `-` (`x_api_key`, `set_cookie`) as env-style text and
- * some dumps write them. Longest first so `set-cookie2` is not cut at `set-cookie`.
+ * A credential header outside the exact list (`x-goog-api-key`,
+ * `private-token`, `cf-access-client-secret`, `x-session-id`, `x-jwt`): the
+ * name, normalised (trimmed, lower case, `_` read as `-`), contains one of
+ * these words. Applied to header-map keys, where every key is a header name.
  */
-const HEADER_LINE_NAME = [...SENSITIVE_HEADER_NAMES]
+const CREDENTIAL_WORD =
+  /token|secret|session|auth|key|cookie|jwt|signature|credential|password/;
+
+function normaliseHeaderName(name: string): string {
+  return name.trim().toLowerCase().replace(/_/g, "-");
+}
+
+/**
+ * Header names as they appear in a header line quoted as plain text: any case,
+ * `_` for `-` (`x_api_key`, `set_cookie`), and an optional CGI `HTTP_` prefix
+ * (`HTTP_COOKIE`). Longest first so `set-cookie2` is not cut at `set-cookie`.
+ * Besides the exact list, any `x-`, `cf-` or `private-` name containing a
+ * credential word counts, bounded so a long hyphenated word cannot backtrack.
+ */
+const HEADER_LINE_NAME = `(?:http_)?(?:${[...SENSITIVE_HEADER_NAMES]
   .sort((a, b) => b.length - a.length)
   .map((n) => n.replace(/-/g, "[-_]"))
-  .join("|");
+  .join(
+    "|"
+  )}|(?:x|cf|private)[-_][\\w-]{0,40}?(?:${CREDENTIAL_WORD.source})[\\w-]{0,40})`;
+
+/**
+ * Quote characters a header name or value can be wrapped in: plain quotes and
+ * backticks, a backslash-escaped quote (JSON inside a JSON string) and the HTML
+ * entities (`data-*` attributes).
+ */
+const QUOTE = `\\\\?["'\`]|&quot;|&#34;|&#39;`;
+
+/** An unquoted value, or one continuation line, is cut at 16 KB (minified code). */
+const MAX_RUN = 16384;
+
+/**
+ * The header-line pattern:
+ *   name     optional quote (repeated after the name), optional `]` (print_r)
+ *   sep      `:`, `=`, `=>` or `->`, with spaces or tabs around it
+ *   value    a quoted value, when its closing quote is followed by the end of
+ *            the line or `,` `}` `]` `)`; escapes (`\"`) do not close it. Else
+ *            the rest of the line (capped), plus any folded continuation lines
+ *            that start with a space or tab; the first line may be empty.
+ */
+const HEADER_LINE = new RegExp(
+  [
+    `(?<![\\w-])`,
+    `((${QUOTE})?(?:${HEADER_LINE_NAME})\\2\\]?[^\\S\\r\\n]*(?:=>|->|[:=])[^\\S\\r\\n]*)`,
+    `(?:`,
+    `(${QUOTE})(?:\\\\[^\\r\\n]|(?!\\3)[^\\\\\\r\\n]){0,${MAX_RUN}}\\3(?=[^\\S\\r\\n]*(?:[\\r\\n,})\\]]|$))`,
+    `|`,
+    `(?:[^\\r\\n]{1,${MAX_RUN}}|(?=\\r?\\n[ \\t]))(?:\\r?\\n[ \\t][^\\r\\n]{0,${MAX_RUN}}){0,16}`,
+    `)`,
+  ].join(""),
+  "gi"
+);
 
 /** Query parameter names that carry credentials, sessions or identity. */
 const SENSITIVE_PARAM =
@@ -121,15 +170,12 @@ const PATTERNS: Array<{
     replace: REDACTED,
   },
   {
-    // `Cookie: sid=...`, `"Authorization": "Token ..."`, `x_api_key=...`: the
-    // value runs to the closing quote when quoted, else to the end of the line.
+    // `Cookie: sid=...`, `"Authorization": "Token ..."`, `HTTP_COOKIE=...`,
+    // `[Cookie] => ...`: see HEADER_LINE.
     name: "header-line",
-    re: new RegExp(
-      `(?<![\\w-])(["']?)(${HEADER_LINE_NAME})\\1([^\\S\\r\\n]*[:=][^\\S\\r\\n]*)(?:(["'])[^\\r\\n]*?\\4|[^\\r\\n]+)`,
-      "gi"
-    ),
-    replace: (_m, nq, name, sep, vq) =>
-      `${nq}${name}${nq}${sep}${vq ? `${vq}${REDACTED}${vq}` : REDACTED}`,
+    re: HEADER_LINE,
+    replace: (_m, pre, _nq, vq) =>
+      `${pre}${vq ? `${vq}${REDACTED}${vq}` : REDACTED}`,
   },
   {
     name: "bearer-token",
@@ -137,8 +183,10 @@ const PATTERNS: Array<{
     replace: (_m, scheme) => `${scheme} ${REDACTED}`,
   },
   {
+    // Starts only at the start of a run (not at every `\b` inside it), so a long
+    // run of name characters with no `@` is scanned once, not quadratically.
     name: "email",
-    re: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g,
+    re: /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g,
     replace: REDACTED,
   },
   {
@@ -322,11 +370,19 @@ function allowRule(file: string, path: readonly string[]): AllowRule | null {
   return null;
 }
 
-function isCredentialKey(key: string): "header" | "key" | null {
-  if (SENSITIVE_HEADER.test(key)) return "header";
-  if (SENSITIVE_PARAM.test(key)) return "key";
+function isCredentialKey(
+  key: string,
+  inHeaderMap: boolean
+): "header" | "key" | null {
+  const name = normaliseHeaderName(key);
+  if (SENSITIVE_HEADER.test(name)) return "header";
+  if (inHeaderMap && CREDENTIAL_WORD.test(name)) return "header";
+  if (SENSITIVE_PARAM.test(key.trim())) return "key";
   return null;
 }
+
+/** A map of header names to values: `headers`, `requestHeaders`, `responseHeaders`. */
+const HEADER_MAP_KEY = /headers$/i;
 
 /** Replace every scalar under a credential key; keep the shape (and nulls). */
 function blank(value: unknown): unknown {
@@ -372,12 +428,13 @@ export class ShareableRedactor {
       return value.map((v) => this.walk(file, v, [...path, "[]"]));
     if (value !== null && typeof value === "object") {
       const out: Record<string, unknown> = {};
+      const inHeaderMap = HEADER_MAP_KEY.test(path.at(-1) ?? "");
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
         const base = this.text(k);
         let key = base;
         let n = 1;
         while (Object.hasOwn(out, key)) key = `${base} (${++n})`;
-        const credential = isCredentialKey(k);
+        const credential = isCredentialKey(k, inHeaderMap);
         if (credential && v !== null && v !== undefined) {
           if (credential === "header") this.counts.headers++;
           else this.counts.keys++;
