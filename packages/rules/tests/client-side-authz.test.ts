@@ -273,6 +273,9 @@ describe("verdicts", () => {
     expect(readExposedData({ data: { items: [{ id: 1 }, { id: 2 }] } })?.records).toBe(2);
     expect(readExposedData({ totalUsers: 120, mrr: 4000, status: "ok" })?.fields).toEqual(["totalUsers", "mrr"]);
     expect(readExposedData({ id: 1 })).toBeNull();
+    // A single record with an empty collection field is still a record.
+    expect(readExposedData({ id: 1, email: "a@b.c", name: "x", roles: [] })).not.toBeNull();
+    expect(readExposedData({ data: { id: 1, email: "a@b.c", orders: [] } })).not.toBeNull();
     expect(readExposedData([null, ""])).toBeNull();
     expect(readExposedData("ok")).toBeNull();
   });
@@ -281,10 +284,28 @@ describe("verdicts", () => {
     const r = (body: unknown) => classifyAdminResponse({ status: 200, contentType: "application/json", body: JSON.stringify(body), truncated: false });
     expect(r({ users: [], total: 0, page: 1, per_page: 20 }).kind).toBe("not-data");
     expect(r({ data: [] }).kind).toBe("not-data");
+    expect(r({ users: [], totalCount: 0, total_pages: 0, page_size: 20, pageInfo: { hasNextPage: false }, next_cursor: "x" }).kind).toBe("not-data");
     expect(r({ items: [], count: 0, limit: 50, offset: 0, next: null, prev: null, cursor: "abc", has_more: false }).kind).toBe("not-data");
     const populated = r({ users: [{ id: 1, email: "a@b.c" }], total: 1 });
     expect(populated.kind).toBe("exposed");
     expect(populated.kind === "exposed" && populated.data).toMatchObject({ records: 1, fields: ["id", "email"], sensitiveFields: ["email"] });
+  });
+
+  test("a single record with an empty collection field is still data; an empty list envelope is not", () => {
+    const r = (body: unknown) => classifyAdminResponse({ status: 200, contentType: "application/json", body: JSON.stringify(body), truncated: false });
+    const withRoles = readExposedData({ id: 1, email: "a@b.c", name: "x", roles: [] });
+    expect(withRoles).not.toBeNull();
+    expect(withRoles?.sensitiveFields).toContain("email");
+    expect(r({ id: 1, email: "a@b.c", name: "x", roles: [] }).kind).toBe("exposed");
+    const nested = readExposedData({ data: { id: 1, email: "a@b.c", orders: [] } });
+    expect(nested).not.toBeNull();
+    expect(nested?.sensitiveFields).toContain("email");
+    expect(r({ data: { id: 1, email: "a@b.c", orders: [] } }).kind).toBe("exposed");
+    expect(readExposedData({ users: [], total: 0, page: 1 })).toBeNull();
+    expect(r({ users: [], total: 0, page: 1 }).kind).toBe("not-data");
+    expect(readExposedData({ items: [], total_count: 0, next_cursor: null })).toBeNull();
+    expect(r({ items: [], total_count: 0, next_cursor: null }).kind).toBe("not-data");
+    expect(r({ items: [], totalCount: 3, pageInfo: { hasNextPage: false }, nextCursor: "x", page_size: 20, totalPages: 1 }).kind).toBe("not-data");
   });
 
   test("a JSON answer longer than the cap is flagged at lower confidence", () => {
