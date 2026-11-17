@@ -947,7 +947,11 @@ export interface AuditReport {
   outcome?: AuditOutcome;
   /** Page bodies evicted from the local content store since this audit ran (#1667); absent when none were. */
   storeIntegrity?: StoreIntegrityEvicted;
-  /** What cloud rendering did on this audit (#1664). Set by `squirrel audit`. */
+  /**
+   * What cloud rendering did on this audit (#1664). Set by `squirrel audit` and restored by `squirrel report`
+   * (repo#3094): exactly, from the block saved with the crawl; approximately, without `fallbackReason`, for an
+   * audit stored before it was saved.
+   */
   render?: ReportRender;
   /** Short human reason shown when `status` is failed/blocked (e.g. "No pages were crawled"). */
   statusReason?: string;
@@ -1583,6 +1587,12 @@ export interface ScanScope {
    * scan line says why the crawled count is larger than the audited one. Absent when none, and on older reports.
    */
   errorPages?: number;
+  /**
+   * The `render` block the audit wrote (repo#3094), saved with the crawl so `squirrel report` restores
+   * it exactly. Stored crawl data: a report does not carry it under `scanScope`, only as top-level
+   * `render`. Absent on a crawl stored before it was saved.
+   */
+  render?: ReportRender;
   /**
    * Whether the crawl honoured robots.txt (`[crawler] respect_robots`, #1782). robots.txt is read either
    * way: false means pages it disallows were fetched and audited. Absent on reports from before it.

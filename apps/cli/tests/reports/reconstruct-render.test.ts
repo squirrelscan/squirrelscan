@@ -10,6 +10,7 @@ import type {
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
+import { buildReportRender, createRenderTally } from "@/audit/render-summary";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { reconstructReport } from "@/reports/reconstruct";
 
@@ -79,7 +80,10 @@ function page(n: number, fetcherId?: string): PageRecord {
   };
 }
 
-async function store(rows: PageRecord[]) {
+async function store(
+  rows: PageRecord[],
+  scanScope?: CrawlMetadata["scanScope"]
+) {
   const db = new SQLiteStorage(":memory:");
   await run(db.init());
   const crawlId = await run(
@@ -92,11 +96,29 @@ async function store(rows: PageRecord[]) {
       stats: STATS,
     })
   );
+  if (scanScope) await run(db.updateCrawl(crawlId, { scanScope }));
   for (const row of rows) await run(db.upsertPage(crawlId, row));
   return { db, crawlId };
 }
 
 describe("render block of a report rebuilt from the store (repo#3094)", () => {
+  // An audit written before the block was saved has no scanScope.render: the block is guessed from
+  // the stored pages, so its mode and counts are approximate and it never has a fallback reason.
+  test("an old store with no saved block gets the approximate block", async () => {
+    const { db, crawlId } = await store(
+      [page(1, "cloud-render"), page(2, "fetch")],
+      { origin: "cli", pagesCrawled: 2, capped: false }
+    );
+    const report = await run(reconstructReport(db, crawlId));
+    expect(report.render).toEqual({
+      requested: true,
+      mode: "auto",
+      pagesRendered: 1,
+      pagesFetchedPlain: 1,
+    });
+    await run(db.close());
+  });
+
   test("rendered pages restore the render block", async () => {
     const { db, crawlId } = await store([
       page(1, "cloud-render"),
@@ -118,4 +140,128 @@ describe("render block of a report rebuilt from the store (repo#3094)", () => {
     expect(report.render).toBeUndefined();
     await run(db.close());
   });
+});
+
+// Parity: the block the audit wrote is the block `squirrel report` rebuilds. The live block is built
+// as the controller builds it (a tally of each page's fetcher, then buildReportRender) and saved in
+// the scan scope the way the controller saves it; expected values below are literals.
+describe("rebuilt render block equals the one the audit wrote (repo#3094)", () => {
+  interface Case {
+    name: string;
+    fetchers: (string | undefined)[];
+    requested: boolean;
+    fetcherId: string | undefined;
+    fallbackReason?: string;
+    expected: unknown;
+  }
+  const cases: Case[] = [
+    {
+      name: "A: all, fell back after 1 of 3",
+      fetchers: ["cloud-render", "fetch", "fetch"],
+      requested: true,
+      fetcherId: "cloud-render",
+      fallbackReason: "balance ran out",
+      expected: {
+        requested: true,
+        mode: "all",
+        fallbackReason: "balance ran out",
+        pagesRendered: 1,
+        pagesFetchedPlain: 2,
+      },
+    },
+    {
+      name: "B: all rendered",
+      fetchers: ["cloud-render", "cloud-render", "cloud-render"],
+      requested: true,
+      fetcherId: "cloud-render",
+      expected: {
+        requested: true,
+        mode: "all",
+        pagesRendered: 3,
+        pagesFetchedPlain: 0,
+      },
+    },
+    {
+      name: "C: auto, every page a shell",
+      fetchers: ["cloud-render", "cloud-render", "cloud-render"],
+      requested: true,
+      fetcherId: "hybrid-http-first",
+      expected: {
+        requested: true,
+        mode: "auto",
+        pagesRendered: 3,
+        pagesFetchedPlain: 0,
+      },
+    },
+    {
+      name: "D: auto, mixed",
+      fetchers: ["cloud-render", "fetch", "fetch"],
+      requested: true,
+      fetcherId: "hybrid-http-first",
+      expected: {
+        requested: true,
+        mode: "auto",
+        pagesRendered: 1,
+        pagesFetchedPlain: 2,
+      },
+    },
+    {
+      name: "E: plain HTTP",
+      fetchers: ["fetch", "fetch", undefined],
+      requested: false,
+      fetcherId: undefined,
+      expected: {
+        requested: false,
+        mode: "http",
+        pagesRendered: 0,
+        pagesFetchedPlain: 3,
+      },
+    },
+    {
+      // The live tally also counted a redirect row the store keeps as a page.
+      name: "F: auto plus a redirect row",
+      fetchers: ["cloud-render", "fetch", "fetch"],
+      requested: true,
+      fetcherId: "hybrid-http-first",
+      expected: {
+        requested: true,
+        mode: "auto",
+        pagesRendered: 1,
+        pagesFetchedPlain: 2,
+      },
+    },
+  ];
+
+  for (const c of cases) {
+    test(c.name, async () => {
+      const tally = createRenderTally();
+      for (const f of c.fetchers) tally.note(f);
+      const { rendered, plain } = tally.counts();
+      const live = buildReportRender({
+        requested: c.requested,
+        fetcherId: c.fetcherId,
+        fallbackReason: c.fallbackReason,
+        rendered,
+        plain,
+      });
+      expect(live).toEqual(c.expected as typeof live);
+
+      const rows = c.fetchers.map((f, i) => page(i + 1, f));
+      if (c.name.startsWith("F")) {
+        rows[2] = { ...rows[2]!, status: 301, finalUrl: `${SITE}/page-1` };
+      }
+      const { db, crawlId } = await store(rows, {
+        origin: "cli",
+        pagesCrawled: rows.length,
+        capped: false,
+        render: live,
+      });
+      const report = await run(reconstructReport(db, crawlId));
+      expect(report.render).toEqual(live);
+      expect(report.render).toEqual(c.expected as typeof live);
+      // the saved block is stored crawl data, not a new key under the report's scanScope
+      expect(report.scanScope?.render).toBeUndefined();
+      await run(db.close());
+    });
+  }
 });

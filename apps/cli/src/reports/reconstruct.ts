@@ -1291,9 +1291,11 @@ export function reconstructReport(
       (p) => p.fallbackReason === "render-block"
     ).length;
 
-    // repo#3094: what rendering did, read back from each stored page's fetcher, so a rebuilt report
-    // says the audit rendered pages, as the live report did.
-    const render = storedPagesRender(pages);
+    // repo#3094: the `render` block the audit saved in the scan scope, exactly. Only a crawl stored
+    // before it was saved has none; for that one the block is guessed from each stored page's fetcher,
+    // so its mode and counts are approximate and the fallback reason is absent.
+    const { render: savedRender, ...reportScanScope } = crawl.scanScope ?? {};
+    const render = savedRender ?? storedPagesRender(pages);
 
     const requestedUrl = requestedDeepUrl(crawl);
     const report: AuditReport = {
@@ -1363,7 +1365,9 @@ export function reconstructReport(
       // The original audit stamps this after reconstruction and persists it on
       // the crawl (#1050). A later database report restores that exact scope;
       // old crawl rows have no stamp and deliberately gain no inferred one.
-      ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
+      ...(crawl.scanScope
+        ? { scanScope: reportScanScope as typeof crawl.scanScope }
+        : {}),
       ...(durationCut ? { maxDuration: durationCut } : {}),
       ...(phaseCut ? { crawlPhase: phaseCut } : {}),
       ...(ignored ? { ignored } : {}),
