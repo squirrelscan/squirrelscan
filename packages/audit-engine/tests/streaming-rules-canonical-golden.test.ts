@@ -72,7 +72,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 54 -> 56 (#1765): core/meta-title, core/meta-description and links/internal-links report too short and too
       // long as separate checks, so a page inside both limits records two passes where it recorded one. More
       // passes lift the weighted overall past two more rounding boundaries. Failing pages are unchanged.
-      expect(v1.healthScore.overall).toBe(56);
+      // 56 -> 57 (#711): a11y/reduced-motion adds a pass row on each of the 500 pages with a document (the
+      // fixture has no looping animation or smooth scrolling), which lifts the weighted overall past one more
+      // rounding boundary. Without the rule the number is 56.
+      expect(v1.healthScore.overall).toBe(57);
       // Per-rule finding totals live in golden/canonical-rule-totals.json, one
       // sorted line per rule, so two new-rule PRs touch different lines and
       // rebase cleanly (#2055). There is no grand total or rule count to edit:
