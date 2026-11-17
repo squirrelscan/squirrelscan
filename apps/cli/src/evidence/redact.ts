@@ -30,6 +30,19 @@ export const SENSITIVE_HEADER_NAMES: readonly string[] = [
   "x-user-email",
   "x-account",
   "x-account-id",
+  // Well-known credential headers without an x-/cf-/private- prefix.
+  "api-key",
+  "apikey",
+  "ocp-apim-subscription-key",
+  "auth-token",
+  "access-token",
+  "id-token",
+  "refresh-token",
+  "session-id",
+  "session-token",
+  "secret-key",
+  "client-secret",
+  "authentication",
 ];
 
 const SENSITIVE_HEADER = new RegExp(
@@ -100,18 +113,20 @@ const MAX_RUN = 16384;
  *   name     optional quote (repeated after the name), optional `]` (print_r)
  *   sep      `:`, `=`, `=>` or `->`, with spaces or tabs around it
  *   value    a quoted value, when its closing quote is followed by the end of
- *            the line or `,` `}` `]` `)`; escapes (`\"`) do not close it. Else
+ *            the line or `,` `}` `]`; escapes (`\"`) do not close it. Else
  *            the rest of the line (capped), plus any folded continuation lines
- *            that start with a space or tab; the first line may be empty.
+ *            that start with a space or tab. When the first line is empty
+ *            (`Cookie:\nsid=...`), the whole next line is the value, whatever
+ *            it starts with, plus its folded continuations.
  */
 const HEADER_LINE = new RegExp(
   [
     `(?<![\\w-])`,
     `((${QUOTE})?(?:${HEADER_LINE_NAME})\\2\\]?[^\\S\\r\\n]*(?:=>|->|[:=])[^\\S\\r\\n]*)`,
     `(?:`,
-    `(${QUOTE})(?:\\\\[^\\r\\n]|(?!\\3)[^\\\\\\r\\n]){0,${MAX_RUN}}\\3(?=[^\\S\\r\\n]*(?:[\\r\\n,})\\]]|$))`,
+    `(${QUOTE})(?:\\\\[^\\r\\n]|(?!\\3)[^\\\\\\r\\n]){0,${MAX_RUN}}\\3(?=[^\\S\\r\\n]*(?:[\\r\\n,}\\]]|$))`,
     `|`,
-    `(?:[^\\r\\n]{1,${MAX_RUN}}|(?=\\r?\\n[ \\t]))(?:\\r?\\n[ \\t][^\\r\\n]{0,${MAX_RUN}}){0,16}`,
+    `(?:\\r?\\n[^\\r\\n]{0,${MAX_RUN}}|[^\\r\\n]{1,${MAX_RUN}})(?:\\r?\\n[ \\t][^\\r\\n]{0,${MAX_RUN}}){0,16}`,
     `)`,
   ].join(""),
   "gi"
@@ -195,8 +210,9 @@ const PATTERNS: Array<{
     // `[Cookie] => ...`: see HEADER_LINE.
     name: "header-line",
     re: HEADER_LINE,
-    replace: (_m, pre, _nq, vq) =>
-      `${pre}${vq ? `${vq}${REDACTED}${vq}` : REDACTED}`,
+    // A value on the next line keeps its line break: `Cookie:\n[redacted]`.
+    replace: (m, pre, _nq, vq) =>
+      `${pre}${vq ? `${vq}${REDACTED}${vq}` : `${/^\r?\n/.exec(m.slice(pre.length))?.[0] ?? ""}${REDACTED}`}`,
   },
   {
     name: "bearer-token",

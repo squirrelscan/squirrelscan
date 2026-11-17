@@ -110,6 +110,25 @@ const SHAPES: ReadonlyArray<(m: string) => string> = [
   (m) => `CF-Access-Client-Secret: ${m}`,
   (m) => `X-Session-Id: ${m}`,
   (m) => `X-JWT: ${m}`,
+  // 7. A value on the next line that is not indented.
+  (m) => `Cookie:\nsid=${m}`,
+  (m) => `Authorization:\r\nBasic ${m}`,
+  (m) => `Set-Cookie:  \nsession=${m}; Path=/`,
+  // 8. A quoted value closed by `)` and followed by more of the line.
+  (m) => `cookie: "a") + "${m}"`,
+  // 9. Well-known credential headers without an x-, cf- or private- prefix.
+  (m) => `api-key: ${m}`,
+  (m) => `apikey: ${m}`,
+  (m) => `Ocp-Apim-Subscription-Key: ${m}`,
+  (m) => `Auth-Token: ${m}`,
+  (m) => `access-token: ${m}`,
+  (m) => `ID-Token: ${m}`,
+  (m) => `refresh_token: ${m}`,
+  (m) => `session-id: ${m}`,
+  (m) => `Session-Token: ${m}`,
+  (m) => `secret-key: ${m}`,
+  (m) => `Client-Secret: ${m}`,
+  (m) => `Authentication: ${m}`,
 ];
 
 /**
