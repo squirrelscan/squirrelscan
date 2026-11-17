@@ -1568,8 +1568,10 @@ export function createCrawler(
               // fresh (Cache-Control max-age / Expires / immutable), skip the
               // request ENTIRELY — bounded by maxStalenessSeconds so an absurd
               // max-age can't silently freeze a whole audit. SWR serves stale
-              // now and revalidates in the background.
-              if (config.useCacheControl) {
+              // now and revalidates in the background. A no-cache crawl skips
+              // both shortcuts (#2032): it exists to see the post-deploy copy,
+              // so every cached page is revalidated with a conditional GET below.
+              if (config.useCacheControl && !config.noCache) {
                 const freshness = cacheLookup.freshness;
 
                 if (freshness.state === "fresh") {
@@ -1602,7 +1604,7 @@ export function createCrawler(
                 }
               }
 
-              // Stale (or cache-control disabled): fall back to a conditional
+              // Stale (or cache-control disabled, or no-cache): fall back to a conditional
               // GET so the server can answer 304 if nothing changed.
               const cond = buildConditionalHeaders({
                 etag: cachedPage.etag,

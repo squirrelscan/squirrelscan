@@ -76,7 +76,9 @@ export interface CrawlerConfig {
   /**
    * Send `Cache-Control: no-cache` and `Pragma: no-cache` on every page fetch, so a shared cache
    * revalidates instead of serving a copy from before a deploy (#2032). Off by default. A custom
-   * header of the same name wins, and a conditional request keeps its own validators.
+   * header of the same name wins, and a conditional request keeps its own validators. It also
+   * skips the `useCacheControl` shortcuts (fresh `max-age` and stale-while-revalidate reuse), so an
+   * incrementally cached page is always revalidated with a conditional GET.
    */
   noCache?: boolean;
   /** Follow redirects */

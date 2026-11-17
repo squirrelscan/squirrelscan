@@ -909,8 +909,10 @@ and refuse a hop to a link-local or cloud metadata address.
 Send `Cache-Control: no-cache` and `Pragma: no-cache` on every page fetch, so a
 CDN or proxy revalidates with your origin instead of serving a copy from before a
 deploy. Use it for audits that start right after a deploy. A custom
-[header](#headers) with the same name wins. Pair it with `--refresh` when an
-earlier audit exists, because a page reused from the local cache sends no request.
+[header](#headers) with the same name wins. It also turns off the local cache
+shortcuts for the run: a page cached by an earlier audit is never reused on the
+strength of its `max-age` or `stale-while-revalidate`, it is revalidated with a
+conditional request, so only a page the origin confirms unchanged (`304`) is reused.
 
 ```toml
 [crawler]
@@ -920,7 +922,7 @@ no_cache = true
 **CLI override:** `--bypass-cache`.
 
 ```bash
-squirrel audit https://example.com --bypass-cache --refresh
+squirrel audit https://example.com --bypass-cache
 ```
 
 When it is on, the report notes every page whose response still looks cached: a
