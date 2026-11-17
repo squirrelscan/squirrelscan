@@ -831,7 +831,7 @@ export async function resolveCloudRendering(opts: {
 
 /** Printed when auto-publish skipped a partial run (rule filter or WCAG level) that would otherwise publish. */
 export const RULE_FILTER_PUBLISH_SKIP_LINE =
-  "Rule filter active — auto-publish skipped for this partial run (use --publish to publish anyway).";
+  "Rule filter active: auto-publish skipped for this partial run (use --publish to publish anyway).";
 
 /**
  * The skip line for a partial run (`isPartialRun`: --rule-include, --rule-exclude or a WCAG level), only when
@@ -1801,7 +1801,7 @@ export const audit = defineCommand({
       if (ruleFilterActive) {
         const resolvedRules = resolveRulesConfig(config.rules, ruleFilter);
         // --rule-include X --rule-exclude X would crawl everything and score
-        // nothing — reject the contradiction before the crawl starts. The
+        // nothing: reject the contradiction before the crawl starts. The
         // WCAG level's disables count too (repo#3093): `--rule-include
         // a11y/touch-targets --wcag-level AA` leaves no rule to run.
         const effectiveWcagLevel = wcagLevel ?? config.rules.wcag_level;
