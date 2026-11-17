@@ -7,8 +7,8 @@
  *  - `cloud/rules.mdx`: a table of every rule that declares `meta.cloud`, with its service, unit and
  *    credit cost, between `{/* cloud-rules:start *\/}` and `{/* cloud-rules:end *\/}`.
  *  - each of those rules' pages: a "requires cloud" note between `{/* cloud-note:start *\/}` and
- *    `{/* cloud-note:end *\/}`, right after the frontmatter. A hand-written `<Note>**Cloud rule**` line there is
- *    replaced by the generated note on the first `--write`.
+ *    `{/* cloud-note:end *\/}`, right after the frontmatter. A hand-written `<Note>**Cloud rule**` (or
+ *    `**Cloud rule, opt-in**`) line there is replaced by the generated note on the first `--write`.
  *
  * `--write` refreshes both. `--check` (run by `make validate`) exits 1 with `file: message` when a cloud rule
  * is missing from the table, has no page or note, or any block differs from what `--write` produces, so a
@@ -42,7 +42,7 @@ export function costText(meta: CloudMeta): string {
 }
 
 export function cloudRules(): CloudMeta[] {
-  return [...loadAllRules().values()]
+  return [...loadAllRules({ includeOptIn: true }).values()]
     .map((r) => r.meta)
     .filter((m): m is CloudMeta => m.cloud !== undefined)
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -57,7 +57,8 @@ export function renderTable(rules: CloudMeta[]): string {
 }
 
 export function renderNote(meta: CloudMeta): string {
-  return `${NOTE_START}\n<Note>**Requires cloud.** This rule reads the \`${meta.cloud.service}\` cloud service (per ${UNIT_LABEL[meta.cloud.unit]}; ${costText(meta)}). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>\n${NOTE_END}`;
+  const optIn = meta.optIn ? ` It is opt-in and disabled by default: enable it with \`enable = ["*", "${meta.id}"]\`.` : "";
+  return `${NOTE_START}\n<Note>**Requires cloud.** This rule reads the \`${meta.cloud.service}\` cloud service (per ${UNIT_LABEL[meta.cloud.unit]}; ${costText(meta)}).${optIn} An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>\n${NOTE_END}`;
 }
 
 const SECTION_INTRO =
@@ -79,7 +80,7 @@ export function withNote(text: string, meta: CloudMeta): string {
   const start = text.indexOf(NOTE_START);
   const end = text.indexOf(NOTE_END);
   if (start >= 0 && end > start) return text.slice(0, start) + block + text.slice(end + NOTE_END.length);
-  const legacy = text.match(/^<Note>\*\*Cloud rule\*\*.*<\/Note>$/m);
+  const legacy = text.match(/^<Note>\*\*Cloud rule[^*]*\*\*.*<\/Note>$/m);
   if (legacy?.index !== undefined) return text.slice(0, legacy.index) + block + text.slice(legacy.index + legacy[0].length);
   const fm = text.match(/^---\n[\s\S]*?\n---\n/);
   const at = fm ? fm[0].length : 0;

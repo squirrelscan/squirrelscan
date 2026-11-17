@@ -3,7 +3,9 @@ title: "Content gaps: topic clusters your site does not cover"
 description: "A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters."
 ---
 
-<Note>**Cloud rule, opt-in** - requires login (`squirrel auth login`), costs **25 credits per audit**, and is **disabled by default**. See [Cloud rules](/cloud/rules).</Note>
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `content-gaps` cloud service (per site; 25 credits per run). It is opt-in and disabled by default: enable it with `enable = ["*", "gaps/content"]`. An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
 
 ## What a content gap is
 
