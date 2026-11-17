@@ -4,8 +4,6 @@ icon: "house"
 description: "The website QA tool for your coding agent"
 ---
 
-import "../packages/utils/src/agent-setup/agent-prompt.css";
-
 squirrelscan audits your website for SEO, performance, security, accessibility and agent experience issues, and gives your coding agent exact fixes. Run it from the CLI, inside your coding agent, in the cloud, or over MCP.
 
 Combine your coding agent with a deterministic and extensible audit tool.
@@ -17,7 +15,7 @@ CLI, adds the skill and MCP, and runs a first audit.
 
 <div class="sq-onboard-action">
   <CopyPrompt
-    href="/agent-setup/prompt.md"
+    href="/agent-setup/prompt.md?ref=docs-home"
     subject="squirrelscan"
     label="Onboard your agent to squirrelscan"
     icons={[
@@ -37,7 +35,7 @@ Or install the CLI yourself:
 <div class="sq-install">
 <CodeGroup>
 
-```bash macOS/Linux
+```bash macOS / Linux
 curl -fsSL https://install.squirrelscan.com | bash
 ```
 
@@ -55,18 +53,6 @@ npm install -g squirrelscan
 
 </CodeGroup>
 </div>
-
-<style>
-{`
-/* tangly hides the per-block Copy button inside a CodeGroup and offers no
-   replacement, and the site-wide hover reveal hides it again. Install
-   commands are made to be copied, so this group always shows it. */
-html .sq-install .tangly-code-group .tangly-code-figure[data-chrome="bare"] > .tangly-code-copy {
-  display: inline-flex;
-  opacity: 1;
-}
-`}
-</style>
 
 Then audit a site: `squirrel audit example.com`. Walk through the first run in the [Quickstart](/quickstart), or see every install option in [Install](/install).
 

@@ -5,8 +5,6 @@ description: "One line, pasted into any coding agent. It installs the CLI, wires
 icon: "bot"
 ---
 
-import "../../packages/utils/src/agent-setup/agent-prompt.css";
-
 {/* Default page mode, so the shell keeps the sidebar, breadcrumb and TOC and
     renders the frontmatter title as the h1. This wrapper only scopes the
     design-system tokens the sections below use. */}
@@ -15,7 +13,7 @@ import "../../packages/utils/src/agent-setup/agent-prompt.css";
 <div class="agent-hero">
   <div class="sq-onboard-action">
     <CopyPrompt
-      href="/agent-setup/prompt.md"
+      href="/agent-setup/prompt.md?ref=docs-agent-setup"
       subject="squirrelscan"
       label="Onboard your agent to squirrelscan"
       icons={[
@@ -136,8 +134,7 @@ published reports) need an account: run `squirrel auth login`. Free accounts get
   color: var(--tangly-color-muted);
 }
 
-/* The onboard button is shared with the website:
-   packages/utils/src/agent-setup/agent-prompt.css. */
+/* The onboard button's styles are in docs/onboard.css. */
 
 /* Agent grid. Hairline gaps come from the grid background showing through, so
    each cell needs an opaque surface of its own. */

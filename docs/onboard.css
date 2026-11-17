@@ -1,12 +1,14 @@
-/* "Onboard your agent" button, shared by the docs (tangly) and the website
-   (Tailwind). One pill: the label on the left, the agents' marks on the
-   right. Clicking copies the setup prompt; the prompt itself is not shown.
+/* "Onboard your agent" button on the docs home, quickstart and agent setup
+   pages. One pill: the label on the left, the agents' marks on the right.
+   Clicking copies the setup prompt; the prompt itself is not shown.
 
-   Markup on the website:
-     .sq-onboard-action > button.sq-onboard > span (label), .sq-onboard-marks > img
-                        + .sq-onboard-toast (while copied)
-   The docs wrap tangly's <CopyPrompt> in .sq-onboard-action; the rules below
-   restyle its button to the same pill (marks moved to the right, no stacking).
+   tangly loads every .css file beside docs.json on every page (0.7.0), after
+   the theme CSS, so this needs no import. The pages wrap tangly's <CopyPrompt>
+   in .sq-onboard-action; the rules below restyle its button to the pill (marks
+   moved to the right, no stacking).
+
+   The website (apps/web in the private repo) carries its own copy of these
+   rules for the same button. Change both when the design changes.
 
    Tokens resolve the docs theme first, then the website's, then a literal. */
 
@@ -114,4 +116,13 @@
     width: 20px;
     height: 20px;
   }
+}
+
+/* Install commands are made to be copied: in an install CodeGroup the Copy
+   button is always shown, not only on hover (docs.json sets copyButton to
+   "hover" for every other block). The selectors repeat tangly's own, one class
+   more specific, so they win over its hover rule. */
+:root[data-copy] .sq-install .tangly-code-group .tangly-code-figure .tangly-code-copy,
+:root[data-copy] .sq-install .tangly-code-figure[data-chrome="bare"] > .tangly-code-copy {
+  opacity: 1;
 }
