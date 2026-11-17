@@ -51,7 +51,6 @@ function isRateLimitedLink(link: { status: number | null; rateLimited?: boolean 
 
 function isPossiblyBlockedLink(link: ExternalLinkCheckData): boolean {
   if (link.wafBlocked) return true;
-  if ([401, 403, 405, 406, 999].includes(link.status ?? 0)) return true;
   return (
     (link.wafProvider === "cloudflare" || link.wafProvider === "akamai") &&
     (link.status ?? 0) >= 520 &&
