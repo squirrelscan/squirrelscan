@@ -92,6 +92,12 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
     expect(lowestWcagLevel(meta.wcag)).toBe("AAA");
   });
 
+  test("reduced-motion cites 2.3.3 at AAA, not 2.2.2", () => {
+    const meta = a11y.find((r) => r.meta.id === "a11y/reduced-motion")!.meta;
+    expect(meta.wcag).toEqual([wcag("2.3.3")]);
+    expect(lowestWcagLevel(meta.wcag)).toBe("AAA");
+  });
+
   test("wcag() rejects an unknown criterion", () => {
     expect(() => wcag("9.9.9")).toThrow();
   });
