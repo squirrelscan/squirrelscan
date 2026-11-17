@@ -154,6 +154,20 @@ describe("structure and markdown", () => {
     );
   });
 
+  test("table cells escape backslashes so a trailing backslash cannot escape the separator", () => {
+    const out = run(`<main><table><tr><th>Path</th><th>Note</th></tr>
+      <tr><td>C:\\dir\\</td><td>x\\|y</td></tr></table></main>`);
+    expect(out.blocks[0]!.markdown).toBe(
+      "| Path | Note |\n| --- | --- |\n| C:\\\\dir\\\\ | x\\\\\\|y |",
+    );
+  });
+
+  test("code blocks drop trailing whitespace without slow backtracking on long whitespace runs", () => {
+    const run_ = "\t".repeat(50_000);
+    const out = run(`<main><pre><code>a${run_}b${run_}</code></pre></main>`);
+    expect(out.blocks[0]!.text).toBe(`a${run_}b`);
+  });
+
   test("a layout table is walked through, not flattened into one table block", () => {
     const out = run(`<table role="presentation"><tr><td><h2>Heading</h2><p>Para</p></td></tr></table>`);
     expect(out.blocks.map((b) => b.kind)).toEqual(["heading", "paragraph"]);

@@ -630,7 +630,8 @@ function tableBlock(root: Element): { text: string; md: string } | null {
   let width = 0;
   for (const r of grid) if (r.length > width) width = r.length;
   const pad = (r: string[]): string[] => [...r, ...Array<string>(width - r.length).fill("")];
-  const cell = (c: string): string => c.replace(/\|/g, "\\|");
+  // Escape backslashes as well as pipes, so a cell ending in a backslash cannot escape the column separator.
+  const cell = (c: string): string => c.replace(/[\\|]/g, "\\$&");
   const line = (r: string[]): string => `| ${pad(r).map(cell).join(" | ")} |`;
   const md = [
     line(grid[0]!),
@@ -682,7 +683,7 @@ function codeText(root: Element): string {
   return out
     .join("")
     .replace(/^\r?\n/, "")
-    .replace(/\s+$/, "");
+    .trimEnd();
 }
 
 function fenceFor(code: string): string {
