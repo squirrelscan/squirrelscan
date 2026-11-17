@@ -33,10 +33,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.26, the version that added `cacheFreshness` (after 1.25 `meta.partialAudit`, 1.24 `meta.discovered`), on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.26");
-    expect(parse().meta.schemaVersion).toBe("1.26");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.26");
+  test("is 1.27, the version that added WCAG criteria on a11y issues (after 1.26 `cacheFreshness`, 1.25 `meta.partialAudit`), on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.27");
+    expect(parse().meta.schemaVersion).toBe("1.27");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.27");
   });
 });
 
