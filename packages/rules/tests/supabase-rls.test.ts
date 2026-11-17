@@ -17,6 +17,7 @@ import {
   createSupabaseRlsRule,
   discoverSupabase,
   MAX_TABLE_PROBES,
+  MAX_TABLES_PER_PROJECT,
   readSupabaseJwt,
   tableTargets,
 } from "../src/security/supabase-rls";
@@ -542,8 +543,10 @@ describe("security/supabase-rls", () => {
     expect(sent.every((r) => r.method === "HEAD")).toBe(true);
     expect(bodyPulls).toBe(0);
     expect(new Set(sent.map((r) => r.host))).toEqual(new Set([HOST, `${second}.supabase.co`]));
-    // Six tables were left out by the cap: they could be open, so the run is
-    // incomplete (not checked), never a pass.
+    // 2 projects x 12 code tables = 24 planned, 10 sent. Left out by a cap:
+    // 4 per project past MAX_TABLES_PER_PROJECT (8), so 8, plus 6 of the second
+    // project's 8 targets past the per-run cap of 10: 14. They could be open,
+    // so the run is incomplete (not checked), never a pass.
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
       status: "skipped",
@@ -551,7 +554,32 @@ describe("security/supabase-rls", () => {
       value: "not-checked",
     });
     expect(checks.some((c) => c.status === "pass")).toBe(false);
-    expect(checks[0]!.details).toMatchObject({ tablesProbed: 10, tablesCapped: 6 });
+    expect(checks[0]!.details).toMatchObject({ tablesProbed: 10, tablesCapped: 14 });
+    expect(checks[0]!.message).toContain("14 of 24 table probe(s)");
+  });
+
+  test("tables past the per-project cap count as unanswered: eight 401s and a ninth never sent is not a pass", async () => {
+    bodyPulls = 0;
+    const names = Array.from({ length: MAX_TABLES_PER_PROJECT + 1 }, (_, i) => `t${i}`);
+    const routes: Record<string, () => Response> = {};
+    for (const n of names) routes[`${HOST}/rest/v1/${n}`] = () => answer(401);
+    const sent = stubFetch(routes);
+    const checks = await run(
+      ctx({ scripts: [script(bundle(names.map((n) => `sb.from("${n}").select()`).join(";")))] }),
+    );
+    // The ninth table is never probed, so it has no answer and may be open.
+    expect(sent).toHaveLength(MAX_TABLES_PER_PROJECT);
+    expect(sent.some((r) => r.url.endsWith(`/rest/v1/t${MAX_TABLES_PER_PROJECT}`))).toBe(false);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+      value: "not-checked",
+    });
+    expect(checks.some((c) => c.status === "pass")).toBe(false);
+    expect(checks[0]!.message).toContain(`${MAX_TABLES_PER_PROJECT} tables per project`);
+    expect(checks[0]!.message).toContain(`1 of ${MAX_TABLES_PER_PROJECT + 1} table probe(s)`);
+    expect(checks[0]!.details).toMatchObject({ tablesProbed: MAX_TABLES_PER_PROJECT, tablesCapped: 1 });
   });
 
   test("a 401 then 429s: the run stops at the first 429 and is not a pass", async () => {

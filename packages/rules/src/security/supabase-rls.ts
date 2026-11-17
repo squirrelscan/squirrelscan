@@ -503,10 +503,16 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           } else result.errored++;
         }
       }
-      // Tables the run never reached: past the per-run cap, after a stop, or
-      // in a project past MAX_PROJECTS. None of them got an answer.
-      const planned = (discovery.projects.length + discovery.projectsSkipped) * targets.length;
+      // Tables the run never reached: past the per-project or per-run cap,
+      // after a stop, or in a project past MAX_PROJECTS. None of them got an
+      // answer. discovery.tables is deduped, so it is every table the code names.
+      const planned = (discovery.projects.length + discovery.projectsSkipped) * discovery.tables.length;
       const unanswered = planned - sentTotal;
+      // Left out by a cap in the projects that were probed: past the per-run
+      // cap, plus the tables past MAX_TABLES_PER_PROJECT in each project.
+      // Projects past MAX_PROJECTS are reported as projectsSkipped.
+      const perProjectDropped = discovery.tables.length - targets.length;
+      capped += discovery.projects.length * perProjectDropped;
 
       const summary = {
         ...discovered,
@@ -608,8 +614,10 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
         if (notChecked > 0)
           why.push(`${notChecked} answer(s) had no status and row count squirrel can judge`);
-        if (capped + discovery.projectsSkipped * targets.length > 0)
-          why.push(`the per-audit cap of ${MAX_TABLE_PROBES} table probes and ${MAX_PROJECTS} projects was reached`);
+        if (capped + discovery.projectsSkipped * targets.length > 0 || discovery.tables.length > targets.length)
+          why.push(
+            `the per-audit cap of ${MAX_TABLE_PROBES} table probes, ${MAX_TABLES_PER_PROJECT} tables per project and ${MAX_PROJECTS} projects was reached`,
+          );
         checks.push({
           name: CHECK,
           status: "skipped",
