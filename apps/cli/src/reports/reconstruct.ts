@@ -63,6 +63,7 @@ import type {
 } from "@/types";
 
 import { hasAuditableHtmlBody, parsePageRecord } from "@/audit/adapter";
+import { storedPagesRender } from "@/audit/render-summary";
 import {
   calculateHealthScore,
   deriveAuditStatusFromPages,
@@ -1290,6 +1291,10 @@ export function reconstructReport(
       (p) => p.fallbackReason === "render-block"
     ).length;
 
+    // repo#3094: what rendering did, read back from each stored page's fetcher, so a rebuilt report
+    // says the audit rendered pages, as the live report did.
+    const render = storedPagesRender(pages);
+
     const requestedUrl = requestedDeepUrl(crawl);
     const report: AuditReport = {
       crawlId,
@@ -1400,6 +1405,7 @@ export function reconstructReport(
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }
         : {}),
+      ...(render ? { render } : {}),
     };
 
     return report;
