@@ -2,7 +2,8 @@
 //
 // The raw bundle holds what the site sent: cookies, tokens in URLs, account data
 // in page bodies. The shareable bundle is what you can hand to someone else, so
-// it passes every header, URL and artifact body through here. This is pattern
+// every byte of it leaves through `ShareableRedactor` (the bundle writer's one
+// exit): every JSON string and key, and every artifact body. This is pattern
 // based and deliberately conservative: it cannot prove a body holds no secret,
 // so the manifest records which patterns ran and how often they matched, and the
 // raw bundle stays the restricted copy.
@@ -18,31 +19,16 @@ const SENSITIVE_PARAM =
   /^(token|access[_-]?token|id[_-]?token|refresh[_-]?token|auth|authorization|api[_-]?key|apikey|key|secret|client[_-]?secret|password|passwd|pwd|pass|session|sessionid|sid|jsessionid|phpsessid|sig|signature|code|otp|email|e-?mail|user|username|uid|account|acct|ticket|csrf|nonce|bearer|credential|x-amz-signature|x-amz-credential|x-amz-security-token)$/i;
 
 export interface RedactionCounts {
+  /** Values under a credential-bearing header name (Cookie, Authorization, ...). */
   headers: number;
+  /** Values under any other credential-bearing key name (token, password, ...). */
+  keys: number;
   urlParams: number;
   patterns: Record<string, number>;
 }
 
 export function newRedactionCounts(): RedactionCounts {
-  return { headers: 0, urlParams: 0, patterns: {} };
-}
-
-export function redactHeaders<T extends Record<string, unknown>>(
-  headers: T,
-  counts: RedactionCounts
-): T {
-  const out: Record<string, unknown> = {};
-  for (const [name, value] of Object.entries(headers)) {
-    if (SENSITIVE_HEADER.test(name) && value !== null && value !== undefined) {
-      out[name] = REDACTED;
-      counts.headers++;
-    } else {
-      // Non-sensitive names can still carry secrets in their values: Location,
-      // Content-Location, Link and Refresh hold URLs with tokens in the query.
-      out[name] = redactValue(value, counts);
-    }
-  }
-  return out as T;
+  return { headers: 0, keys: 0, urlParams: 0, patterns: {} };
 }
 
 /** Redact sensitive query parameters and URL userinfo; leaves unparseable strings alone. */
@@ -176,19 +162,188 @@ export function redactString(value: string, counts: RedactionCounts): string {
   return redactText(out, counts);
 }
 
+// ── The shareable bundle's one exit ──────────────────────────────────────────────
+//
+// Deny by default: every string value and every object key in every JSON file,
+// and every artifact body, goes through `redactString`. A value under a key that
+// names a credential (the SENSITIVE_HEADER and SENSITIVE_PARAM lists above,
+// matched against JSON keys anywhere: header maps, rule observations, config)
+// is replaced whole, because a cookie or API key value has no recognisable
+// shape on its own. The only exemptions are the paths in SHAREABLE_ALLOWLIST.
+
 /**
- * Redact every string inside a JSON-like value (rule observations, failure
- * reasons, crawl stats, header values), keeping its shape and keys.
+ * `<file>:<path>`, path dot-separated. `[]` is any array index, `*` any object
+ * key (inline-scripts.json is a map keyed by page URL).
  */
-export function redactValue<T>(value: T, counts: RedactionCounts): T {
-  if (typeof value === "string") return redactString(value, counts) as T;
-  if (Array.isArray(value))
-    return value.map((v) => redactValue(v, counts)) as T;
-  if (value !== null && typeof value === "object") {
+type PathPattern = string;
+
+interface AllowRule {
+  paths: readonly PathPattern[];
+  /** An exempt value must also have this shape; anything else is redacted after all. */
+  shape: RegExp | "subtree";
+  reason: string;
+}
+
+/**
+ * The fields the shareable pass leaves alone. Each is produced by the exporter,
+ * never copied from the site, and is read back exactly by verify, replay or the
+ * retention gate. Keep this list short: a field not on it is redacted.
+ */
+export const SHAREABLE_ALLOWLIST: readonly AllowRule[] = [
+  {
+    paths: [
+      "findings.json:[].evidence.[].contentSha256",
+      "findings.json:[].evidence.[].locator.byteRange.snippetSha256",
+      "pages.json:[].artifacts.[].sha256",
+      "scripts.json:[].artifact.sha256",
+      "scripts.json:[].referencedFrom.[].pageArtifactSha256",
+      "inline-scripts.json:*.[].sha256",
+      "inline-scripts.json:*.[].parentSha256",
+      "manifest.json:files.[].sha256",
+      "manifest.json:bundleSha256",
+    ],
+    shape: /^[0-9a-f]{64}$/,
+    reason:
+      "sha256 digests the exporter computed; verify and replay compare them byte for byte",
+  },
+  {
+    paths: [
+      "pages.json:[].artifacts.[].path",
+      "scripts.json:[].artifact.path",
+      "manifest.json:files.[].path",
+    ],
+    shape:
+      /^(?:[a-z-]+\.(?:json|txt)|artifacts\/(?:response-body|rendered-dom|script)\/[0-9a-f]{64})$/,
+    reason: "file names the writer generated; verify opens them",
+  },
+  {
+    paths: [
+      "findings.json:[].evidence.[].artifactType",
+      "pages.json:[].artifacts.[].type",
+      "scripts.json:[].artifact.type",
+    ],
+    shape: /^(?:response-body|rendered-dom|script)$/,
+    reason: "artifact type enum; replay builds the artifact path from it",
+  },
+  {
+    paths: [
+      "findings.json:[].evidence.[].state",
+      "pages.json:[].artifacts.[].state",
+      "scripts.json:[].artifact.state",
+    ],
+    shape: /^(?:located|page-only|truncated|unavailable|stored)$/,
+    reason:
+      "evidence and artifact state enums; verify and replay branch on them",
+  },
+  {
+    paths: [
+      "manifest.json:format",
+      "manifest.json:kind",
+      "manifest.json:sensitivity",
+    ],
+    shape: /^(?:squirrelscan-evidence|raw|shareable|restricted)$/,
+    reason:
+      "format markers; verify rejects a bundle whose format it does not know",
+  },
+  {
+    paths: ["manifest.json:crawlId"],
+    shape: /^[A-Za-z0-9_-]{1,128}$/,
+    reason: "the local crawl id; the retention gate compares it exactly",
+  },
+  {
+    paths: ["manifest.json:redaction"],
+    shape: "subtree",
+    reason:
+      "written by this redactor: its own pattern names and integer counts, nothing from the site",
+  },
+];
+
+function matches(
+  pattern: PathPattern,
+  file: string,
+  path: readonly string[]
+): boolean {
+  const colon = pattern.indexOf(":");
+  if (pattern.slice(0, colon) !== file) return false;
+  const want = pattern.slice(colon + 1).split(".");
+  if (want.length !== path.length) return false;
+  return want.every((seg, i) =>
+    seg === "*" ? path[i] !== "[]" : seg === path[i]
+  );
+}
+
+function allowRule(file: string, path: readonly string[]): AllowRule | null {
+  for (const rule of SHAREABLE_ALLOWLIST)
+    if (rule.paths.some((p) => matches(p, file, path))) return rule;
+  return null;
+}
+
+function isCredentialKey(key: string): "header" | "key" | null {
+  if (SENSITIVE_HEADER.test(key)) return "header";
+  if (SENSITIVE_PARAM.test(key)) return "key";
+  return null;
+}
+
+/** Replace every scalar under a credential key; keep the shape (and nulls). */
+function blank(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map(blank);
+  if (typeof value === "object") {
+    // Nested keys are blanked too: under a credential, nothing is kept.
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>))
-      out[k] = redactValue(v, counts);
-    return out as T;
+    for (const [i, v] of Object.values(value).entries())
+      out[i === 0 ? REDACTED : `${REDACTED} (${i + 1})`] = blank(v);
+    return out;
   }
-  return value;
+  return REDACTED;
+}
+
+/**
+ * The single redaction point for a `--shareable` bundle. The bundle writer
+ * calls `json` for every JSON file and `text` for every artifact body; nothing
+ * reaches disk any other way.
+ */
+export class ShareableRedactor {
+  readonly counts: RedactionCounts = newRedactionCounts();
+
+  /** Artifact bodies and any other free text. */
+  text(value: string): string {
+    return redactString(value, this.counts);
+  }
+
+  /** A JSON document about to be written as `file`. Returns a redacted copy. */
+  json(file: string, value: unknown): unknown {
+    return this.walk(file, value, []);
+  }
+
+  private walk(file: string, value: unknown, path: string[]): unknown {
+    const rule = path.length > 0 ? allowRule(file, path) : null;
+    if (rule?.shape === "subtree") return value;
+    // Exempt only a string of the expected shape; anything else at an
+    // allowlisted path (another shape, an object) goes through the pass.
+    if (rule && typeof value === "string" && rule.shape.test(value))
+      return value;
+    if (typeof value === "string") return this.text(value);
+    if (Array.isArray(value))
+      return value.map((v) => this.walk(file, v, [...path, "[]"]));
+    if (value !== null && typeof value === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        const base = this.text(k);
+        let key = base;
+        let n = 1;
+        while (Object.hasOwn(out, key)) key = `${base} (${++n})`;
+        const credential = isCredentialKey(k);
+        if (credential && v !== null && v !== undefined) {
+          if (credential === "header") this.counts.headers++;
+          else this.counts.keys++;
+          out[key] = blank(v);
+        } else {
+          out[key] = this.walk(file, v, [...path, k]);
+        }
+      }
+      return out;
+    }
+    return value;
+  }
 }

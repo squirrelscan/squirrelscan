@@ -14,7 +14,9 @@
 //   artifacts/<type>/<sha> the bytes: response-body, rendered-dom and script are separate types.
 //
 // `kind: "raw"` is what the site sent and is RESTRICTED (0700/0600, README warns).
-// `kind: "shareable"` passes headers, URLs and every body through `redact.ts`.
+// `kind: "shareable"` sends every byte through `BundleWriter.serialize`, the one exit, which runs
+// every JSON string and key and every artifact body through `ShareableRedactor` (`redact.ts`).
+// Deny by default: only the named `SHAREABLE_ALLOWLIST` paths are exempt.
 // Verification and replay need nothing but the directory: no network, no store.
 
 import { createHash } from "node:crypto";
@@ -32,11 +34,7 @@ import { dirname, join, relative, sep } from "node:path";
 import {
   type RedactionCounts,
   REDACTION_PATTERN_NAMES,
-  newRedactionCounts,
-  redactHeaders,
-  redactString,
-  redactUrl,
-  redactValue,
+  ShareableRedactor,
 } from "./redact";
 
 export const EVIDENCE_FORMAT = "squirrelscan-evidence";
@@ -242,13 +240,40 @@ class BundleWriter {
   readonly files: ManifestFile[] = [];
   private readonly seen = new Set<string>();
 
+  /** `redactor` is set for a shareable bundle and null for a raw one. */
   constructor(
     readonly dir: string,
-    private readonly restricted: boolean
+    private readonly redactor: ShareableRedactor | null
   ) {}
 
-  add(path: string, data: string | Uint8Array): ManifestFile {
-    const bytes = typeof data === "string" ? Buffer.from(data, "utf-8") : data;
+  /**
+   * THE exit: every file of the bundle, manifest included, is turned into bytes
+   * here, and nowhere else. For a shareable bundle that is where redaction
+   * happens: JSON is walked (every string value and key), text is redacted whole.
+   */
+  private serialize(
+    path: string,
+    payload: { json: unknown } | { text: string }
+  ): string {
+    if ("text" in payload)
+      return this.redactor ? this.redactor.text(payload.text) : payload.text;
+    const value = this.redactor
+      ? this.redactor.json(path, payload.json)
+      : payload.json;
+    return JSON.stringify(value, null, 2) + "\n";
+  }
+
+  /**
+   * The form a fragment of an artifact body takes once written, so a rule's
+   * snippet can be located in the written bytes. The result is only hashed and
+   * searched for; it is never written itself.
+   */
+  asWritten(fragment: string): string {
+    return this.serialize("", { text: fragment });
+  }
+
+  private write(path: string, data: string): ManifestFile {
+    const bytes = Buffer.from(data, "utf-8");
     const entry: ManifestFile = {
       path,
       sha256: sha256(bytes),
@@ -259,15 +284,40 @@ class BundleWriter {
     const full = join(this.dir, ...path.split("/"));
     mkdirSync(dirname(full), {
       recursive: true,
-      mode: this.restricted ? 0o700 : 0o755,
+      mode: this.redactor ? 0o755 : 0o700,
     });
-    writeFileSync(full, bytes, { mode: this.restricted ? 0o600 : 0o644 });
+    writeFileSync(full, bytes, { mode: this.redactor ? 0o644 : 0o600 });
     this.files.push(entry);
     return entry;
   }
 
+  /** A content-addressed artifact. Returns the entry and the text as written. */
+  addArtifact(
+    type: ArtifactType,
+    body: string
+  ): { entry: ManifestFile; written: string } {
+    const written = this.serialize("artifact", { text: body });
+    return {
+      entry: this.write(artifactPath(type, sha256(written)), written),
+      written,
+    };
+  }
+
+  addText(path: string, text: string): ManifestFile {
+    return this.write(path, this.serialize(path, { text }));
+  }
+
   addJson(path: string, value: unknown): ManifestFile {
-    return this.add(path, JSON.stringify(value, null, 2) + "\n");
+    return this.write(path, this.serialize(path, { json: value }));
+  }
+
+  /** Written last and not listed in itself. Returns the manifest as written. */
+  writeManifest(manifest: Manifest): Manifest {
+    const data = this.serialize("manifest.json", { json: manifest });
+    writeFileSync(join(this.dir, "manifest.json"), data, {
+      mode: this.redactor ? 0o644 : 0o600,
+    });
+    return JSON.parse(data) as Manifest;
   }
 }
 
@@ -360,16 +410,10 @@ export function exportEvidenceBundle(
   mkdirSync(dir, { recursive: true, mode: shareable ? 0o755 : 0o700 });
   if (!shareable) chmodSync(dir, 0o700);
 
-  const counts = newRedactionCounts();
-  const url = (value: string): string =>
-    shareable ? redactUrl(value, counts) : value;
-  const text = (value: string): string =>
-    shareable ? redactString(value, counts) : value;
-  // Free-form fields (rule observations, reasons, stats, scope): every string
-  // inside is redacted, including URLs embedded in it.
-  const deep = <T>(value: T): T =>
-    shareable ? redactValue(value, counts) : value;
-  const writer = new BundleWriter(dir, !shareable);
+  // Everything below builds the bundle from the raw values. Redaction is not
+  // done here: the writer applies it to every file on the way out.
+  const redactor = shareable ? new ShareableRedactor() : null;
+  const writer = new BundleWriter(dir, redactor);
 
   // Pages: write artifacts, keep a per-page buffer for locating findings.
   const pageEntries: unknown[] = [];
@@ -396,27 +440,13 @@ export function exportEvidenceBundle(
       ruleId: finding.ruleId,
       check: finding.name,
       status: finding.status,
-      message: deep(finding.message),
-      pageUrl: finding.pageUrl ? url(finding.pageUrl) : null,
-      ...(finding.value !== undefined
-        ? {
-            value:
-              typeof finding.value === "string"
-                ? deep(finding.value)
-                : finding.value,
-          }
-        : {}),
-      ...(finding.expected !== undefined
-        ? {
-            expected:
-              typeof finding.expected === "string"
-                ? deep(finding.expected)
-                : finding.expected,
-          }
-        : {}),
-      ...(finding.skipReason ? { skipReason: deep(finding.skipReason) } : {}),
+      message: finding.message,
+      pageUrl: finding.pageUrl ?? null,
+      ...(finding.value !== undefined ? { value: finding.value } : {}),
+      ...(finding.expected !== undefined ? { expected: finding.expected } : {}),
+      ...(finding.skipReason ? { skipReason: finding.skipReason } : {}),
       ...(finding.observation !== undefined
-        ? { observation: deep(finding.observation) }
+        ? { observation: finding.observation }
         : {}),
       evidence,
     });
@@ -427,10 +457,9 @@ export function exportEvidenceBundle(
     item?: NonNullable<SourceFinding["items"]>[number]
   ): EvidenceRef => {
     const artifact = pageArtifacts.get(pageUrl);
-    const shownUrl = url(pageUrl);
     if (!artifact || artifact.state !== "stored") {
       return {
-        pageUrl: shownUrl,
+        pageUrl,
         artifactType: artifact?.type ?? null,
         contentSha256: null,
         locator: {},
@@ -442,12 +471,13 @@ export function exportEvidenceBundle(
     let state: EvidenceRef["state"] = "page-only";
     let reason: string | undefined;
     if (item?.selector) {
-      locator.selector = text(item.selector);
+      locator.selector = item.selector;
       state = "located";
     }
     if (item?.snippet) {
       const buffer = pageBuffers.get(pageUrl);
-      const snippet = text(item.snippet);
+      // Located in the bytes as written, so the snippet takes the same form.
+      const snippet = writer.asWritten(item.snippet);
       const range = buffer ? locate(buffer, snippet) : null;
       if (range) {
         locator.byteRange = range;
@@ -464,7 +494,7 @@ export function exportEvidenceBundle(
     }
     if (state === "page-only" && !reason) reason = "rule gave no location";
     return {
-      pageUrl: shownUrl,
+      pageUrl,
       artifactType: artifact.type,
       contentSha256: artifact.sha256 ?? null,
       locator,
@@ -515,8 +545,7 @@ export function exportEvidenceBundle(
           "body was not stored or has been evicted from the content store",
       };
     } else {
-      const body = text(page.html);
-      const entry = writer.add(artifactPath(type, sha256(body)), body);
+      const { entry, written: body } = writer.addArtifact(type, page.html);
       artifact = {
         type,
         state: "stored",
@@ -529,7 +558,7 @@ export function exportEvidenceBundle(
       pageBuffers.set(page.url, buffer);
       pageBuffers.set(page.normalizedUrl, buffer);
       const inline = findInlineScripts(body, entry.sha256);
-      if (inline.length > 0) inlineByPage[url(page.url)] = inline;
+      if (inline.length > 0) inlineByPage[page.url] = inline;
     }
     pageArtifacts.set(page.url, artifact);
     pageArtifacts.set(page.normalizedUrl, artifact);
@@ -542,11 +571,11 @@ export function exportEvidenceBundle(
           : "fetched through a renderer: the original response bytes were not retained",
     };
     pageEntries.push({
-      url: url(page.url),
-      normalizedUrl: url(page.normalizedUrl),
-      finalUrl: url(page.finalUrl),
+      url: page.url,
+      normalizedUrl: page.normalizedUrl,
+      finalUrl: page.finalUrl,
       depth: page.depth,
-      ...(page.parentUrl ? { parentUrl: url(page.parentUrl) } : {}),
+      ...(page.parentUrl ? { parentUrl: page.parentUrl } : {}),
       status: page.status,
       contentType: page.contentType,
       sizeBytes: page.sizeBytes,
@@ -555,24 +584,15 @@ export function exportEvidenceBundle(
       fetch: {
         mode: type === "response-body" ? "http" : "render",
         fetcher: page.fetcherId ?? null,
-        fallbackReason: page.fallbackReason ? deep(page.fallbackReason) : null,
+        fallbackReason: page.fallbackReason ?? null,
       },
-      requestHeaders: page.requestHeaders
-        ? shareable
-          ? redactHeaders(page.requestHeaders, counts)
-          : page.requestHeaders
-        : null,
-      responseHeaders: shareable
-        ? redactHeaders(page.headers, counts)
-        : page.headers,
+      requestHeaders: page.requestHeaders ?? null,
+      responseHeaders: page.headers,
       redirect: page.redirectChain
         ? {
-            sourceUrl: url(page.redirectChain.sourceUrl),
-            finalUrl: url(page.redirectChain.finalUrl),
-            hops: page.redirectChain.hops.map((h) => ({
-              ...h,
-              url: url(h.url),
-            })),
+            sourceUrl: page.redirectChain.sourceUrl,
+            finalUrl: page.redirectChain.finalUrl,
+            hops: page.redirectChain.hops.map((h) => ({ ...h })),
             chainLength: page.redirectChain.chainLength,
             isLoop: page.redirectChain.isLoop,
             endsInError: page.redirectChain.endsInError,
@@ -603,8 +623,7 @@ export function exportEvidenceBundle(
   for (const script of source.scripts) {
     let artifact: ArtifactRef;
     if (script.body !== null) {
-      const body = text(script.body);
-      const entry = writer.add(artifactPath("script", sha256(body)), body);
+      const { entry } = writer.addArtifact("script", script.body);
       artifact = {
         type: "script",
         state: "stored",
@@ -620,27 +639,27 @@ export function exportEvidenceBundle(
         reason: script.evicted
           ? "body evicted from the content store"
           : script.skipReason
-            ? `not fetched: ${deep(script.skipReason)}`
+            ? `not fetched: ${script.skipReason}`
             : "body not stored",
       };
     }
     scriptEntries.push({
-      url: url(script.url),
-      finalUrl: script.finalUrl ? url(script.finalUrl) : null,
+      url: script.url,
+      finalUrl: script.finalUrl ?? null,
       referencedFrom: script.sourcePages.map((p) => {
         const parent = pageArtifacts.get(p);
-        return { page: url(p), pageArtifactSha256: parent?.sha256 ?? null };
+        return { page: p, pageArtifactSha256: parent?.sha256 ?? null };
       }),
       artifact,
     });
   }
 
   const failures = [...source.failures].map((f) => ({
-    url: url(f.url),
+    url: f.url,
     status: f.status,
-    reason: f.reason ? deep(f.reason) : null,
+    reason: f.reason ?? null,
     depth: f.depth,
-    ...(f.parentUrl ? { parentUrl: url(f.parentUrl) } : {}),
+    ...(f.parentUrl ? { parentUrl: f.parentUrl } : {}),
     source: f.source,
     retryCount: f.retryCount,
   }));
@@ -651,18 +670,16 @@ export function exportEvidenceBundle(
   writer.addJson("audit.json", {
     crawl: {
       id: source.crawl.id,
-      site: url(source.crawl.baseUrl),
-      seedUrl: source.crawl.seedUrl ? url(source.crawl.seedUrl) : null,
-      originalUrl: source.crawl.originalUrl
-        ? url(source.crawl.originalUrl)
-        : null,
+      site: source.crawl.baseUrl,
+      seedUrl: source.crawl.seedUrl ?? null,
+      originalUrl: source.crawl.originalUrl ?? null,
       startedAt: new Date(source.crawl.startedAt).toISOString(),
       completedAt: source.crawl.completedAt
         ? new Date(source.crawl.completedAt).toISOString()
         : null,
     },
     scanner: source.scanner,
-    configuration: deep(config),
+    configuration: config,
     // Completion: why the crawl stopped, and every cap that could have cut it short.
     completion: {
       crawlStatus: source.crawl.status,
@@ -671,8 +688,8 @@ export function exportEvidenceBundle(
         ? new Date(source.crawl.retiredAt).toISOString()
         : null,
       hitPageLimit: pagesCap !== null && pageCount >= pagesCap,
-      stats: deep(stats),
-      scanScope: deep(source.crawl.scanScope ?? null),
+      stats,
+      scanScope: source.crawl.scanScope ?? null,
     },
     limits: {
       maxPages: pagesCap,
@@ -689,7 +706,7 @@ export function exportEvidenceBundle(
   writer.addJson("failures.json", failures);
   writer.addJson("findings.json", bundleFindings);
   if (!shareable) {
-    writer.add(
+    writer.addText(
       "README.txt",
       "RESTRICTED: this is a raw squirrelscan evidence bundle.\n" +
         "It holds the response bodies and headers the site sent, which can include cookies,\n" +
@@ -710,7 +727,7 @@ export function exportEvidenceBundle(
     createdAt: (options.now?.() ?? new Date()).toISOString(),
     scanner: source.scanner,
     crawlId: source.crawl.id,
-    site: url(source.crawl.baseUrl),
+    site: source.crawl.baseUrl,
     counts: {
       pages: pageCount,
       artifacts: artifactFiles,
@@ -720,18 +737,20 @@ export function exportEvidenceBundle(
       pagesWithoutArtifact,
       evidenceUnavailable,
     },
-    ...(shareable
-      ? { redaction: { patterns: REDACTION_PATTERN_NAMES, counts } }
+    ...(redactor
+      ? {
+          // A snapshot: the manifest's own pass must not change what it reports.
+          redaction: {
+            patterns: REDACTION_PATTERN_NAMES,
+            counts: structuredClone(redactor.counts),
+          },
+        }
       : {}),
     files,
     bundleSha256: bundleHash(files),
   };
   // Last: its presence is what says the export finished.
-  const manifestPath = join(dir, "manifest.json");
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", {
-    mode: shareable ? 0o644 : 0o600,
-  });
-  return { manifest, dir };
+  return { manifest: writer.writeManifest(manifest), dir };
 }
 
 // ── Verify ───────────────────────────────────────────────────────────────────────
