@@ -615,3 +615,18 @@ describe("keys join the report's redacted href (#3384)", () => {
     expect(canonicalLinkKey(`https://partner.example.org/p?q=${"a".repeat(40_000)}`)).toBeNull();
   });
 });
+
+// repo#3433, re-copied into the public redactor: a list-indexed credential name
+// keeps no secret in the shared key. Keys use off-site semantics, so per-visitor
+// names and path tokens stay in them by design (#3339).
+describe("an indexed credential name is dropped from the key (repo#3433)", () => {
+  const HEX = "3f2a9c1b8e7d6a5f4e3d";
+
+  test.each([
+    [`https://example.com/x?token[0]=${HEX}`, "https://example.com/x"],
+    [`https://example.com/x?token[]=${HEX}&page=2`, "https://example.com/x?page=2"],
+    [`https://example.com/x?access_token[0][1]=${HEX}&page=2`, "https://example.com/x?page=2"],
+  ])("%s keys as %s", (raw, key) => {
+    expect(canonicalLinkKey(raw)?.key).toBe(key);
+  });
+});

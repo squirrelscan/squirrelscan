@@ -54,11 +54,23 @@
  * loses an escape, except that a `;`, `'` or `\` with more of the value glued
  * on (`token=<a>;<b>`) is read as part of it. Every pass is linear in the text.
  *
+ * Path tokens (#3433) are also read in a hash route (`/#/reset/<t>`), in a
+ * path percent-encoded in a value (`?next=%2Freset%2F<t>`), before a markdown
+ * link's `)` or a file extension, after a split or plural word (`/sign-in/`,
+ * `/account_activations/`) or a word between (`/invite/accept/<t>`), and in
+ * Django's and django-allauth's shapes (`/reset/<uidb64>/<ts>-<hex>/`,
+ * `/confirm-email/<v>:<ts>:<sig>/`). A short value is a secret under a
+ * credential word's code or key (`otp_code`, `activation_key`) and as the
+ * OAuth `code` on the site's callback URL.
+ *
  * Out of scope, on purpose: a site obfuscating its own tokens (an escaped JWT
  * header character, a third level of percent-encoding), a short one-time code
- * (`?otp=123456` is the same shape as a page number). Known gap on a crawl that
- * spans several hosts: a page host that only a compact resolution signal names
- * (decoded after this runs) is not the site's in free text.
+ * under a bare name (`?otp=123456` is the same shape as a page number), and a
+ * 16 to 19 character token of one letter case and digits under an ambiguous
+ * name (`?sid=a1b2c3d4e5f6g7h8` is a slug's shape; mixed case is caught). Known
+ * gap on a crawl that spans several hosts: a page host that only a compact
+ * resolution signal names (decoded after this runs) is not the site's in free
+ * text.
  */
 
 import { clampItemId } from "@squirrelscan/core-contracts/clamp";
@@ -130,7 +142,7 @@ const CREDENTIAL_KEYS = new Set(
     "sessionid",
     "session_id",
     // (#3347) Key and token names the lists above missed: a generic or app key
-    // (bare base64 only: a `base64:` prefix is not token-shaped), a GitLab token,
+    // (a Laravel `base64:` prefix is read past, #3433), a GitLab token,
     // an Azure Cognitive/API Management key, a Rails signed global id, Django's
     // CSRF field, a Firebase out-of-band code.
     "access_key",
@@ -179,7 +191,7 @@ const SESSION_KEYS = new Set([
  * `csrfToken`, `session_id` is a credential above): a whole word at the end, so
  * `tokenId`, `sessions` and `nonce_page` do not match.
  */
-const SESSION_WORDS = /(?:^|_)(?:token|sess|session|sessid|nonce|csrf|xsrf|verifier|ticket)$/;
+const SESSION_WORDS = /(?:^|_)(?:token|sess|session|sessid|sid|nonce|csrf|xsrf|verifier|ticket)$/;
 
 /** Cursors that page a list: per-request, but each value is a different page. */
 const PAGINATION_NAMES =
@@ -204,8 +216,15 @@ function paramWords(rawName: string): string {
       break;
     }
   }
+  // A list index, empty or numeric (`token[]`, `reset_token[0]`, #3433).
   let end = name.length;
-  while (end > 1 && name[end - 1] === "]" && name[end - 2] === "[") end -= 2;
+  for (;;) {
+    if (end < 2 || name[end - 1] !== "]") break;
+    let open = end - 2;
+    while (open >= 0 && name[open]! >= "0" && name[open]! <= "9") open--;
+    if (open < 0 || name[open] !== "[") break;
+    end = open;
+  }
   name = name.slice(0, end);
   if (name.endsWith("]")) {
     const open = name.lastIndexOf("[");
@@ -282,14 +301,17 @@ const NEVER_CONTENT_KEYS = new Set(
 );
 
 /**
- * A `*_token` or `*_nonce` with a word before it that makes it a credential
- * (#3339 review round 3), right before or not (`confirmation_token`,
- * `reset_user_token`, `invite_token`, `remember_token`, `csrf_token`,
- * `oauth_nonce`). Devise, Laravel and most auth kits name theirs this way;
- * none selects a page. Pagination cursors are excluded before this is asked.
+ * A `*_token`, `*_nonce`, `*_ticket`, `*_code` or `*_key` with a word before
+ * it that makes it a credential (#3339 review round 3, #3433), right before or
+ * not (`confirmation_token`, `reset_user_token`, `invite_token`,
+ * `remember_token`, `csrf_token`, `oauth_nonce`, `otp_code`, `activation_key`,
+ * `sso_ticket`). Devise, Laravel and most auth kits name theirs this way; none
+ * selects a page, and a one-time code under one is short (`otp_code=123456`).
+ * A code or key under any other word (`promo_code`, `sort_key`) is content.
+ * Pagination cursors are excluded before this is asked.
  */
 const CREDENTIAL_TOKEN_NAME =
-  /(?:^|_)(?:reset|verify|verification|confirm|confirmation|invite|invitation|magic|login|activation|unlock|unsubscribe|remember|csrf|xsrf|session|oauth|password|email)_(?:[a-z0-9]+_)*(?:token|nonce)$/;
+  /(?:^|_)(?:reset|verify|verification|confirm|confirmation|invite|invitation|magic|login|activate|activation|unlock|unsubscribe|remember|csrf|xsrf|session|oauth|password|email|sso|otp)_(?:[a-z0-9]+_)*(?:token|nonce|ticket|code|key)$/;
 
 /** A name that never selects content ({@link NEVER_CONTENT_KEYS}, {@link CREDENTIAL_TOKEN_NAME}). */
 function isNeverContentName(words: string): boolean {
@@ -330,6 +352,8 @@ export function isSessionName(rawName: string): boolean {
   return (
     SESSION_KEYS.has(words.replace(/_/g, "")) ||
     SESSION_WORDS.test(words) ||
+    // A credential word's code or key (`otp_code`, `activation_key`, #3433).
+    CREDENTIAL_TOKEN_NAME.test(words) ||
     words.startsWith("aspsessionid") ||
     words.startsWith("__cf_chl")
   );
@@ -352,7 +376,7 @@ export type ZeroXIds = "both" | "address" | "none";
  * id too unless `zeroXIds` says otherwise. Percent-decoded first.
  */
 export function looksLikeAToken(raw: string, zeroXIds: ZeroXIds = "both"): boolean {
-  const value = percentDecoded(raw);
+  const value = tokenCore(raw);
   if (value.length < 16 || /\s/.test(value)) return false;
   // An Ethereum-style address or hash (`/token/0x6b17…`, `/tx/0x…`) is a page's id.
   if (zeroXIds !== "none" && /^0x[0-9a-f]{40}$/i.test(value)) return false;
@@ -371,6 +395,34 @@ export function looksLikeAToken(raw: string, zeroXIds: ZeroXIds = "both"): boole
     /[a-z]/.test(value) &&
     /[A-Z]/.test(value)
   );
+}
+
+/**
+ * A value as {@link looksLikeAToken} judges it: percent-decoded once, without
+ * the braces a COM-style GUID is written in (`{3f2a…}`, `?sid={uuid}`) or the
+ * `base64:` prefix of a Laravel `APP_KEY` (#3433).
+ */
+function tokenCore(raw: string): string {
+  const value = percentDecoded(raw);
+  if (value.startsWith("{") && value.endsWith("}")) return value.slice(1, -1);
+  return /^base64:/i.test(value) ? value.slice(7) : value;
+}
+
+/**
+ * A random 16 to 19 character run of letters and digits (#3433): every class
+ * in it (upper, lower, digit), and the class changing at least every other
+ * character, so a camelCase run of words and numbers (`KeynoteDay1Track2`) is
+ * not one. Asked only under an ambiguous name; {@link looksLikeAToken} starts
+ * at 20.
+ */
+function looksLikeAShortToken(raw: string): boolean {
+  const value = percentDecoded(raw);
+  if (!/^[A-Za-z0-9]{16,19}$/.test(value)) return false;
+  if (!/\d/.test(value) || !/[a-z]/.test(value) || !/[A-Z]/.test(value)) return false;
+  const kind = (ch: string) => (ch >= "0" && ch <= "9" ? 0 : ch >= "a" && ch <= "z" ? 1 : 2);
+  let changes = 0;
+  for (let i = 1; i < value.length; i++) if (kind(value[i]!) !== kind(value[i - 1]!)) changes++;
+  return changes * 2 >= value.length - 1;
 }
 
 /** A value percent-decoded once, as {@link looksLikeAToken} judges it; as written when it does not decode. */
@@ -848,6 +900,44 @@ function wpResetQueries(text: string) {
 }
 
 /**
+ * The path an OAuth provider redirects back to with a one-time `code`
+ * (#3433): `/callback`, `/auth/callback`, `/auth/google/callback`,
+ * `/api/auth/callback/github` (NextAuth), `/oauth2callback`,
+ * `/login/oauth2/code/google` (Spring). Read on the path right before the query.
+ */
+const OAUTH_CALLBACK_PATH =
+  /(?:\/(?:oauth2?_?)?callback(?:\/[a-z0-9_-]{1,32})?|\/oauth2\/code\/[a-z0-9_-]{1,32})\/?$/i;
+/** How far back a callback query's `?` is looked for: further, it is not one. */
+const CALLBACK_LOOKBACK = 512;
+
+/**
+ * Whether the parameter whose separator ends at `at` is in a query that follows an OAuth callback
+ * path (`/auth/callback?state=x&code=<c>`), its own or a nested one
+ * (`?next=%2Fauth%2Fcallback%3Fcode%3D…`): the query is the one whose `?`
+ * (raw or encoded) came last before it. Reads back a bounded distance, so a
+ * run of `&code=` stays linear.
+ */
+function inOAuthCallbackQuery(text: string, at: number): boolean {
+  let from = Math.max(0, at - CALLBACK_LOOKBACK);
+  for (let i = at; i > from; i--) {
+    if (URL_BOUNDARY.has(text[i - 1]!)) {
+      from = i;
+      break;
+    }
+  }
+  const window = text.slice(from, at);
+  let query = -1;
+  for (const mark of [/\?/g, /%3F/gi, /%253F/gi]) {
+    for (const m of window.matchAll(mark)) query = Math.max(query, m.index);
+  }
+  if (query === -1) return false;
+  let path = window.slice(Math.max(0, query - 80), query).replace(/%(?:25)?2F/gi, "/");
+  const nested = path.lastIndexOf("=");
+  if (nested !== -1) path = path.slice(nested + 1);
+  return OAUTH_CALLBACK_PATH.test(path);
+}
+
+/**
  * Every parameter `start` finds whose value is a secret has it replaced (see
  * the module comment for what counts). A parameter that is not one keeps its
  * value AND has it searched, so a secret nested in it (`?next=/reset?token=…`)
@@ -873,7 +963,11 @@ function redactParams(
     const words = paramWords(match[2]!);
     const password = PASSWORD_KEYS.has(words.replace(/_/g, ""));
     const credential = password || isCredentialName(words);
-    const session = !credential && isSessionName(match[2]!);
+    // An OAuth authorization code on the site's callback URL, whatever its
+    // shape: one-time, and as short as a page number (#3433).
+    const oauthCode =
+      words === "code" && inOAuthCallbackQuery(text, match.index + match[1]!.length);
+    const session = !credential && (oauthCode || isSessionName(match[2]!));
     // A reset link's own `key`: the first parameter after its `?`, or a later
     // one after an `&` (or `&amp;`), before its `#`, the link the run's last one so far
     // (nested too: `?next=/wp-login.php?action=rp&key=…`). Not an outer URL's
@@ -908,13 +1002,14 @@ function redactParams(
     // A token, or a token a query value runs on from (`?a=1;token=<hex>/more`),
     // or one glued on after a `;`, `'` or `\` (`token=x;<hex>`).
     const head = prefix.split("/", 1)[0]!;
-    if (!password && !wpKey && !isNeverContentName(words)) {
+    if (!password && !wpKey && !oauthCode && !isNeverContentName(words)) {
       // An ambiguous name: only a token-shaped value is a secret, and for some
       // of them a UUID is a record's id (`?session=<uuid>`).
       const uuidIsId = UUID_ID_KEYS.has(words.replace(/_/g, ""));
       const zeroXIds = HASH_IS_SECRET_NAME.test(words) ? "address" : "both";
       const shaped = (part: string) =>
-        looksLikeAToken(part, zeroXIds) && !(uuidIsId && UUID.test(percentDecoded(part)));
+        (looksLikeAToken(part, zeroXIds) && !(uuidIsId && UUID.test(tokenCore(part)))) ||
+        looksLikeAShortToken(part);
       if (!shaped(prefix) && !head.split(/[;'\\]/).some(shaped)) continue;
     }
     cursor.seek(from);
@@ -1032,6 +1127,14 @@ const CONTEXT_PAIR_WORDS = new Set(["email", "link", "account", "code", "key", "
  */
 const PREVIOUS_PAIR_WORDS = new Set(["email", "link", "account", "login"]);
 /**
+ * A segment that can sit between a credential word and its token, saying what
+ * the token is for (`/invite/accept/<t>`, `/activate/account/<t>`), or, after
+ * a weak word, who it is for (`/verify/email/<t>`, the order
+ * `/email/verify/<t>` reads too).
+ */
+const BETWEEN_WORDS = new Set(["accept", "email", "account"]);
+
+/**
  * A segment naming a chain object: an `0x` value after it is the object's id,
  * whatever word comes between (`/tx/confirm/0x<64>`, `/token/magic/0x<40>`).
  */
@@ -1076,6 +1179,17 @@ function segmentContext(words: string[]): "credential" | "weak" | null {
 function contextAfter(previous: string[], words: string[]): "credential" | "weak" | null {
   const own = segmentContext(words);
   if (own) return own;
+  if (words.length === 1 && BETWEEN_WORDS.has(words[0]!)) {
+    // A word between the credential word and its token (#3433):
+    // `/invite/accept/<t>`, `/confirm/email/<t>`, `/verify/email/<t>`.
+    const before = segmentContext(previous);
+    if (before === "credential") return before;
+    return previous.length === 1 &&
+      WEAK_CONTEXT_WORDS.has(previous[0]!) &&
+      PREVIOUS_PAIR_WORDS.has(words[0]!)
+      ? "weak"
+      : null;
+  }
   if (words.length !== 1 || !WEAK_CONTEXT_WORDS.has(words[0]!)) return null;
   const before = segmentContext(previous);
   if (before) return before;
@@ -1104,17 +1218,101 @@ function contextZeroXIds(
  * A URL path in text: after a host (with a scheme, or protocol-relative), or a
  * relative one at the start of a run or a value.
  */
-const URL_PATH = /(?:(?:\bhttps?:)?\/\/[^\s/?#"'<>\\]+|(?<=^|[\s"'<>=(]))(\/[^\s?#&"'<>\\]*)/g;
+const URL_PATH = /(?:(?:\bhttps?:)?\/\/[^\s/?#"'<>\\]+|(?<=^|[\s"'<>=(]|#!?))(\/[^\s?#&"'<>\\]*)/g;
 /** Where a path that is not a parameter's value ends: it can hold an `&`. */
 const PATH_END = /[\s?#"'<>\\]/g;
 
 /** A path segment's words: camelCase split, lowercase, split on anything not a letter or digit. */
 function segmentWords(segment: string): string[] {
-  return segment
+  const words = segment
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((w) => w !== "");
+  // (#3433) A credential word split in two (`/sign-in/<t>`, `/sign_in`,
+  // `/log-in`) is one, and a Rails resource's plural is its word
+  // (`/account_activations/<t>/edit`, `/invitations/<t>`).
+  const out: string[] = [];
+  for (const word of words) {
+    const last = out.length - 1;
+    if (word === "in" && (out[last] === "sign" || out[last] === "log")) out[last] += "in";
+    else out.push(PLURAL_CONTEXT_WORDS.get(word) ?? word);
+  }
+  return out;
+}
+
+/** Rails resource plurals of context words, as their word (#3433). */
+const PLURAL_CONTEXT_WORDS = new Map([
+  ["activations", "activation"],
+  ["confirmations", "confirmation"],
+  ["invitations", "invitation"],
+  ["invites", "invite"],
+  ["verifications", "verification"],
+]);
+
+/**
+ * A Django password-reset token, `<timestamp base36>-<hmac hex>`
+ * (`PasswordResetTokenGenerator`, 20 hex for SHA-1, 32 for SHA-256), and a
+ * django-allauth email confirmation key, a signed `<value>:<timestamp>:<sig>`
+ * (`TimestampSigner`). Neither is one run of letters and digits, so
+ * {@link looksLikeAToken} does not see them; after a credential word they are
+ * a credential (#3433).
+ */
+const DJANGO_RESET_TOKEN = /^[0-9a-z]{1,13}-[0-9a-f]{20,64}$/;
+const DJANGO_SIGNED_KEY = /^[A-Za-z0-9_-]{1,64}:[A-Za-z0-9]{4,10}:[A-Za-z0-9_-]{20,}$/;
+/** A Django `uidb64` segment before its reset token: a user's id, base64url, not the secret. */
+const DJANGO_UIDB64 = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * How much of a path segment is a token after a context: the whole of it, or
+ * the part before a markdown link's closing `)` or a file extension
+ * (`/reset/<hex>)`, `/reset/<hex>.html`, #3433); 0 when none is.
+ */
+function pathTokenLength(head: string, zeroXIds: ZeroXIds, context: "credential" | "weak"): number {
+  const isToken = (part: string) =>
+    looksLikeAToken(part, zeroXIds) ||
+    (context === "credential" && (DJANGO_RESET_TOKEN.test(part) || DJANGO_SIGNED_KEY.test(part)));
+  if (isToken(head)) return head.length;
+  const bare = head.replace(/[).,]+$/, "");
+  if (bare !== head && isToken(bare)) return bare.length;
+  const stem = bare.replace(/\.[A-Za-z0-9]{1,5}$/, "");
+  return stem !== bare && isToken(stem) ? stem.length : 0;
+}
+
+/**
+ * Every token segment in `segments` after a short segment that says it is one
+ * ({@link contextAfter}), replaced in place; whether any was. `cut` ends a
+ * segment's token part (a matrix parameter, a value's `&`).
+ */
+function redactSegments(segments: string[], cut: RegExp): boolean {
+  let changed = false;
+  let previous: string[] = [];
+  for (let i = 0; i + 1 < segments.length; i++) {
+    const words = segmentWords(segments[i]!.split(cut)[0]!);
+    const context = contextAfter(previous, words);
+    const before = previous;
+    previous = words;
+    if (!context) continue;
+    const next = segments[i + 1]!;
+    const head = next.split(cut)[0]!;
+    const zeroXIds = contextZeroXIds(context, before, words);
+    const length = pathTokenLength(head, zeroXIds, context);
+    if (length > 0) {
+      segments[i + 1] = `${REDACTED_VALUE}${next.slice(length)}`;
+      changed = true;
+      continue;
+    }
+    // Django's `/reset/<uidb64>/<token>/`: the token is two segments on.
+    const after = segments[i + 2];
+    if (context === "credential" && after !== undefined && DJANGO_UIDB64.test(head)) {
+      const token = after.split(cut)[0]!;
+      if (DJANGO_RESET_TOKEN.test(token)) {
+        segments[i + 2] = `${REDACTED_VALUE}${after.slice(token.length)}`;
+        changed = true;
+      }
+    }
+  }
+  return changed;
 }
 
 /** What ends a parameter name, reading back from its `=`. */
@@ -1194,38 +1392,90 @@ function redactPathTokens(text: string, site: SiteHosts): string {
       URL_PATH.lastIndex = end;
     }
     if (path.length < 18) continue;
+    // A hash route (`/#/reset/<t>`, `#!/reset/<t>`, #3433) is its URL's.
+    const hashRoute = !host && text[pathAt - 1] !== undefined && "#!".includes(text[pathAt - 1]!);
     if (host && site !== null) {
       const authority = host.slice(host.indexOf("//") + 2);
       if (!site.has(canonicalHostKey(authority.slice(authority.lastIndexOf("@") + 1)))) continue;
-    } else if (!host && site !== null && paramValue) {
-      // A parameter's value: the URL it is nested in decides. A relative path
-      // anywhere else (a run's start, after `(`) is the site's own.
+    } else if (!host && site !== null && (paramValue || hashRoute)) {
+      // A parameter's value or a hash route: the URL it is in decides. A
+      // relative path anywhere else (a run's start, after `(`) is the site's own.
       cursor ??= urlCursor(text, site);
       cursor.seek(pathAt);
       if (!cursor.onSite()) continue;
     }
     const segments = path.split("/");
-    let changed = false;
-    let previous: string[] = [];
-    for (let i = 0; i + 1 < segments.length; i++) {
-      const words = segmentWords(segments[i]!.split(";")[0]!);
-      const context = contextAfter(previous, words);
-      const before = previous;
-      previous = words;
-      if (!context) continue;
-      const next = segments[i + 1]!;
-      // A path that runs on past `&` (not a parameter's value) ends its token
-      // there too: `<a href=/reset/<t>&lang=en>`.
-      const head = next.split(/[;&]/)[0]!;
-      if (!looksLikeAToken(head, contextZeroXIds(context, before, words))) continue;
-      segments[i + 1] = `${REDACTED_VALUE}${next.slice(head.length)}`;
-      changed = true;
-    }
-    if (!changed) continue;
+    // A path that runs on past `&` (not a parameter's value) ends its token
+    // there too: `<a href=/reset/<t>&lang=en>`.
+    if (!redactSegments(segments, /[;&]/)) continue;
     out += `${text.slice(copied, pathAt)}${segments.join("/")}`;
     copied = pathAt + path.length;
   }
   return copied === 0 ? text : out + text.slice(copied);
+}
+
+/**
+ * A relative or absolute path percent-encoded once or twice as a parameter's
+ * value (`?next=%2Freset%2F<t>`, `?next=https%3A%2F%2Fexample.com%2Freset%2F<t>`,
+ * #3433), or as an encoded URL's hash route (`%23%2Freset%2F<t>`); not a
+ * protocol-relative `%2F%2F`, whose host is not read here. Group 1 is the `=`
+ * of a value.
+ */
+function encodedPathPattern(pct: "%" | "%25") {
+  return {
+    path: new RegExp(
+      `(?:(=)(?:https?${pct}3A${pct}2F${pct}2F(?:(?!${pct}2F|${pct}3F|${pct}23)[^\\s&#/?"'<>\\\\])+)?|${pct}23(?:${pct}21|!)?)(${pct}2F)(?!${pct}2F)`,
+      "gi",
+    ),
+    /**
+     * Where the path ends: its encoded query or fragment, or what ends the
+     * value. Searched forward from the path's first `/` rather than scanned
+     * greedily and cut back, which made a run of `%23%2F` quadratic (#3433).
+     */
+    end: new RegExp(`${pct}3F|${pct}23|[\\s&#"'<>\\\\]`, "gi"),
+    separator: new RegExp(`${pct}2F`, "gi"),
+    /** What ends a segment's token: a matrix parameter, an encoded `&`. */
+    cut: new RegExp(`${pct}3B|${pct}26|[;&]`, "i"),
+  };
+}
+const ENCODED_PATHS = [encodedPathPattern("%"), encodedPathPattern("%25")];
+
+/**
+ * {@link redactPathTokens} for a path percent-encoded in a parameter's value:
+ * the segments are split at the encoded `/`, judged as the plain pass judges
+ * them, and the URL the value is in decides whether it is the site's.
+ */
+function redactEncodedPathTokens(text: string, site: SiteHosts): string {
+  for (const pattern of ENCODED_PATHS) {
+    let out = "";
+    let copied = 0;
+    let cursor: ReturnType<typeof urlCursor> | null = null;
+    pattern.path.lastIndex = 0;
+    for (let match = pattern.path.exec(text); match !== null; match = pattern.path.exec(text)) {
+      if (match[1] !== undefined && !endsParamName(text, match.index)) continue;
+      const pathAt = match.index + match[0].length - match[2]!.length;
+      pattern.end.lastIndex = pathAt + match[2]!.length;
+      const end = pattern.end.exec(text);
+      const path = text.slice(pathAt, end === null ? text.length : end.index);
+      // What follows the path (its query, a hash route) is read from there.
+      pattern.path.lastIndex = pathAt + path.length;
+      if (path.length < 18) continue;
+      if (site !== null) {
+        cursor ??= urlCursor(text, site);
+        cursor.seek(pathAt);
+        if (!cursor.onSite()) continue;
+      }
+      const separators = path.match(pattern.separator) ?? [];
+      const segments = path.split(pattern.separator);
+      if (!redactSegments(segments, pattern.cut)) continue;
+      let rebuilt = segments[0]!;
+      for (let i = 1; i < segments.length; i++) rebuilt += separators[i - 1]! + segments[i]!;
+      out += `${text.slice(copied, pathAt)}${rebuilt}`;
+      copied = pathAt + path.length;
+    }
+    if (copied !== 0) text = out + text.slice(copied);
+  }
+  return text;
 }
 
 /**
@@ -1276,6 +1526,7 @@ function redactOnce(text: string, site: SiteHosts): string {
   }
   if (JWT_HEADER_START.test(out)) out = redactJwts(out);
   out = redactPathTokens(out, site);
+  if (/%(?:25)?2F/i.test(out)) out = redactEncodedPathTokens(out, site);
   return redactAspNetSegments(out, site);
 }
 
@@ -1287,6 +1538,11 @@ const PROBE_TOKEN = "0123456789abcdef0123";
  * reads the same and is treated the same: not a URL to fetch.
  */
 const PROBE_JWT = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0.c2lnbmF0dXJl";
+/**
+ * A Django reset token's shape, for a marker two segments after its word
+ * (`/reset/<uidb64>/REDACTED/`), which only that shape is redacted at (#3433).
+ */
+const PROBE_DJANGO = "c4r1ze-0123456789abcdef0123";
 const WHOLE_MARKER_BEFORE = new Set(["/", "="]);
 const WHOLE_MARKER_AFTER = new Set([undefined, "/", "?", "&", "#", ";"]);
 /** A short password's `*` replacement (`replacementFor`). */
@@ -1302,7 +1558,7 @@ export function carriesRedactedValue(url: string): boolean {
   for (let at = url.indexOf(REDACTED_VALUE); at !== -1; at = url.indexOf(REDACTED_VALUE, at + 1)) {
     const end = at + REDACTED_VALUE.length;
     const whole = WHOLE_MARKER_BEFORE.has(url[at - 1]!) && WHOLE_MARKER_AFTER.has(url[end]);
-    for (const token of whole ? [PROBE_TOKEN, PROBE_JWT] : [PROBE_TOKEN]) {
+    for (const token of whole ? [PROBE_TOKEN, PROBE_JWT, PROBE_DJANGO] : [PROBE_TOKEN]) {
       const probe = `${url.slice(0, at)}${token}${url.slice(end)}`;
       if (redactSecretText(probe) !== probe) return true;
     }
