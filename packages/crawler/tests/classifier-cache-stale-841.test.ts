@@ -140,7 +140,7 @@ function hookFor(version: string): PageClassifierHook {
 
 // Pass 1 classifies with `first` (undefined = classifier off) and caches the page; pass 2 is an
 // incremental re-run with `second`. Returns what pass 2 fetched and its stored label's stamp.
-async function run(first: string | undefined, second: string | undefined) {
+async function run(first: string | undefined, second: string | undefined, pass2: { maxParseBytes?: number } = {}) {
   const storage = await Effect.runPromise(createTestStorage());
   const cfg1 = { ...baseConfig, incremental: false, useCacheControl: false };
   const crawlId1 = await createCrawlRecord(storage, cfg1);
@@ -155,7 +155,7 @@ async function run(first: string | undefined, second: string | undefined) {
   await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
 
   const fetched: string[] = [];
-  const cfg2 = { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999 };
+  const cfg2 = { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999, ...pass2 };
   const crawlId2 = await createCrawlRecord(storage, cfg2);
   await seedFrontier(storage, crawlId2, [{ path: "/", source: "seed" }]);
   const crawler2 = await Effect.runPromise(
@@ -204,6 +204,18 @@ describe("a cached page is reclassified when the classifier changed", () => {
 
   test("a new model or rules version: the page is re-classified from stored html (no fetch) and carries the new stamp", async () => {
     const r = await run("m1", "m2");
+    expect(r.fetched).toEqual([]);
+    expect(r.model).toBe("m2");
+  }, 30000);
+
+  test("a stored page over the parse cap is not re-parsed from stored html: it goes back to the fetch path (#1502)", async () => {
+    const r = await run("m1", "m2", { maxParseBytes: 10 });
+    expect(r.fetched).toEqual([`${ORIGIN}/`]);
+    expect(r.model).toBeUndefined();
+  }, 30000);
+
+  test("a stored page under the parse cap is still re-classified without a fetch", async () => {
+    const r = await run("m1", "m2", { maxParseBytes: 1_000_000 });
     expect(r.fetched).toEqual([]);
     expect(r.model).toBe("m2");
   }, 30000);
