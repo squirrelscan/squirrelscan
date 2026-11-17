@@ -1,0 +1,1 @@
+- `squirrel evidence export|verify|replay`: a versioned, replayable audit evidence bundle (raw and redacted shareable) and `[storage] evidence_archive_dir`, which stops retention retiring an audit that has no verified bundle (repo#2301).

@@ -1,0 +1,1 @@
+- `@squirrelscan/core-contracts` `RUN_PHASES` now includes `publishing`, the single phase a hosted run shows while its report is assembled and published (squirrelscan/squirrelscan#2077). `visiblePhaseOf` maps the raw publish stage names (`complete`, `editor_summary`, `publish-init`, `publish-chunk`, `publish-finalize`, `publish-finalizing`) to it.

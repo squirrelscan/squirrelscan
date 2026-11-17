@@ -2,7 +2,7 @@
 # Released changelog sections are immutable: any tagged section changed by a PR
 # must match the CHANGELOG.md snapshot stored in that tag. Limiting the check to
 # sections changed from the PR base avoids making unrelated historical drift a
-# permanent failure. New entries belong under ## [Unreleased]. A new release
+# permanent failure. New entries are files under changelog.d/ (#2113). A new release
 # heading has no tag yet, so release bump PRs are intentionally ignored. #1234
 set -euo pipefail
 
@@ -21,17 +21,11 @@ if [ ! -f "$changelog" ]; then
   exit 1
 fi
 
-# Structure (v0.0.182 notes renamed the header prose's "## [Unreleased]" instead of the heading, #1849): exactly one
-# `## [Unreleased]` heading line, and the header bullet that explains it, when present, is complete.
-unreleased_headings=$(grep -c '^## \[Unreleased\]$' "$changelog" || true)
-if [ "$unreleased_headings" -ne 1 ]; then
-  echo "ERROR: CHANGELOG.md needs exactly one '## [Unreleased]' heading line (found $unreleased_headings). A release renames it to the version and adds a fresh empty one above." >&2
-  exit 1
-fi
-# shellcheck disable=SC2016 # literal backticks: the markdown text itself
-header_bullet='- A `## [Unreleased]` section collects merged changes that have not been cut into'
-if grep -q '^- A `## \[Unreleased\]' "$changelog" && ! grep -qxF -- "$header_bullet" "$changelog"; then
-  echo "ERROR: CHANGELOG.md header bullet about ## [Unreleased] is damaged; restore: $header_bullet" >&2
+# Structure: unreleased entries live in changelog.d/, one file per change (#2113),
+# so CHANGELOG.md holds released sections only. A `## [Unreleased]` heading means
+# a PR wrote an entry the old way (or a rebase brought one back).
+if grep -q '^## \[Unreleased\]' "$changelog"; then
+  echo "ERROR: CHANGELOG.md has a '## [Unreleased]' heading. Unreleased entries are files under changelog.d/ (bun run changelog:convert moves them)." >&2
   exit 1
 fi
 
@@ -129,7 +123,7 @@ while IFS= read -r version; do
 
   if ! cmp -s "$current_section" "$tagged_section"; then
     echo "ERROR: released CHANGELOG section $version differs from tag $version." >&2
-    echo "Move new changelog bullets under ## [Unreleased]; released sections must remain unchanged." >&2
+    echo "Add new entries as files under changelog.d/; released sections must remain unchanged." >&2
     failed=1
   fi
 done < "$versions"
@@ -139,3 +133,8 @@ if [ "$failed" -ne 0 ]; then
 fi
 
 echo "released changelog sections OK ($changed changed, $compared compared)"
+
+# The CI "Changelog guard" job runs only this script, so it also runs the
+# changelog.d/ entry guard: entries are files, and only a release writes
+# CHANGELOG.md (#2113).
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-changelog-entries.sh" "$base" "$repo"

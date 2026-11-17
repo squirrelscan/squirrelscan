@@ -6,7 +6,9 @@
 #
 # Matching: a `## [v]<version>` heading, dots escaped, optional leading `[`/`v`,
 # with a non-digit/EOL boundary so `0.0.5` never matches `0.0.57`. Body is every
-# line up to the next version heading (`## v0...`) or a `## [Unreleased]` heading;
+# line up to the next version heading (`## v0...`) or a `## [Unreleased]` heading
+# (CHANGELOG.md has none since #2113, entries are changelog.d/ files until a
+# release assembles them, but the boundary stays harmless for older snapshots);
 # a stray non-version `## ` sub-heading does NOT terminate the section. A beta
 # `vX.Y.Z-beta.N` matches only its exact heading; a stable `vX.Y.Z` also matches
 # any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`, `-rc.1` — the non-digit

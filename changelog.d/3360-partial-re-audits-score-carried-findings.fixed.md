@@ -1,0 +1,1 @@
+- Partial re-audits score carried findings in the same check units as a full audit, so a re-audit's score no longer drifts from a full audit of the same site (squirrelscan/repo#3360).

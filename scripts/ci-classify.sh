@@ -43,6 +43,8 @@ while IFS= read -r path || [ -n "$path" ]; do
     # root workspace member, so a dependency change there also moves bun.lock
     # (which runs everything), and without that the docs job's frozen install
     # fails.
+    # changelog.d/ entries: the changelog guard job (not path-gated) validates them.
+    changelog.d/* | \
     docs/* | README.md | CONTRIBUTING.md | AGENTS.md | CODE_OF_CONDUCT.md | SECURITY.md | \
       TRADEMARKS.md | .github/DOCS_STYLE.md | .github/ISSUE_TEMPLATE/* | \
       .github/PULL_REQUEST_TEMPLATE*)
@@ -52,12 +54,14 @@ while IFS= read -r path || [ -n "$path" ]; do
     install.sh | install.ps1 | scripts/install-ps-contract.test.ps1 | \
       scripts/install-contract.test.ts)
       code=true installer=true ;;
-    # Release inputs. CHANGELOG.md is on nearly every PR, so it must not fall
-    # through to "everything": only release.ts and release.yml read it, at
-    # release time, and test-changelog-extraction.sh uses its own fixture.
+    # Release inputs. CHANGELOG.md changes only in a release bump PR now (#2113),
+    # and must not fall through to "everything": only release.ts and release.yml
+    # read it, at release time, and the shell tests use their own fixtures.
     CHANGELOG.md | scripts/release.ts | scripts/release-version.test.ts | \
       scripts/extract-changelog.awk | scripts/test-changelog-extraction.sh | \
-      scripts/check-released-changelog.sh | scripts/test-released-changelog.sh)
+      scripts/check-released-changelog.sh | scripts/test-released-changelog.sh | \
+      scripts/changelog.ts | scripts/changelog.test.ts | \
+      scripts/check-changelog-entries.sh | scripts/test-changelog-entries.sh)
       code=true release=true ;;
     # The golden suite lives here, fixtures included: any change runs it.
     packages/audit-engine/*)
