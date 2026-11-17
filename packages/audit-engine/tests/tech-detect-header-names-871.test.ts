@@ -129,8 +129,8 @@ describe("the crawler stores the headers technology detection reads (pub#871)", 
 });
 
 // An incremental crawl that refetches an unchanged page reuses the stored
-// record, curated headers and all. The detection headers come from the
-// response just fetched, and win in the map detection reads.
+// body. Every header comes from the response just fetched (repo#4765), the
+// detection headers included.
 test("an unchanged page refetched by an incremental crawl takes the new detection headers", async () => {
   let extra: Record<string, string> = { "x-powered-by": "Express", "set-cookie": "sid=1" };
   const server = Bun.serve({
@@ -168,9 +168,9 @@ test("an unchanged page refetched by an incremental crawl takes the new detectio
   expect((await crawl())?.headers.techHeaders?.["x-powered-by"]).toBe("Express");
   extra = { "x-powered-by": "Next.js" };
   const page = await crawl();
-  // The record was reused: its curated fields still hold the old values.
-  expect(page?.headers.xPoweredBy).toBe("Express");
-  expect(page?.headers.setCookie).toBe("sid=1");
+  // The body was reused; its headers are the new response's (repo#4765).
+  expect(page?.headers.xPoweredBy).toBe("Next.js");
+  expect(page?.headers.setCookie).toBeNull();
   expect(page?.headers.techHeaders?.["x-powered-by"]).toBe("Next.js");
   const map = page ? buildTechHeadersMap(page) : {};
   expect(map["x-powered-by"]).toBe("Next.js");

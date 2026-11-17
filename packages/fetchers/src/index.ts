@@ -111,6 +111,13 @@ export interface FetchResponse {
    */
   serverHtml?: string;
   /**
+   * Set on a 304 the conditional-render gate made from a 200 whose source was
+   * unchanged (repo#4765). Its headers are that 200's full set, so the crawler
+   * takes them as the page's current headers, where an origin's own 304 only
+   * updates the ones it resends.
+   */
+  synthesizedNotModified?: boolean;
+  /**
    * Browser render cost only (page.goto + content + link extraction), as
    * measured server-side by crawler-worker — set only by the browser-queue
    * fetcher (#826). Absent for every non-rendered fetch.

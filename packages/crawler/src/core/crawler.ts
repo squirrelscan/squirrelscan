@@ -95,7 +95,6 @@ import type {
 
 import { createHostBackoff, type HostBackoffRegistry } from "../host-backoff";
 import {
-  contentTypeCharset,
   crawlErrorToFailureDetail,
   CrawlError,
   fetchPageWithRetry,
@@ -110,6 +109,11 @@ import {
   resolveSeedRedirect,
 } from "../frontier";
 import { isRedirectSourcePage } from "../redirect-row";
+import {
+  pageHeadersFromResponse,
+  revalidatedPage,
+  securityHeadersFromResponse,
+} from "./revalidated-page";
 import {
   buildConditionalHeaders,
   extractChangeDetection,
@@ -1830,7 +1834,15 @@ export function createCrawler(
           // Handle 304 Not Modified — reuse cached page (conditional-GET hit).
           if (isNotModifiedResponse(result.status)) {
             if (cachedPage) {
-              yield* reuseCachedPage(crawlId, entry, cachedPage, "304", {
+              // The body is unchanged; the headers are this response's (repo#4765).
+              const revalidated = revalidatedPage(cachedPage, {
+                result,
+                completeHeaders: result.synthesizedNotModified === true,
+                lastModified: result.headers.lastModified ?? null,
+                requestHeaders: requestContext,
+                now: Date.now(),
+              });
+              yield* reuseCachedPage(crawlId, entry, revalidated, "304", {
                 cacheFresh: false,
               });
             } else {
@@ -1995,16 +2007,20 @@ export function createCrawler(
               // deemed the content unchanged, so the hash represents current
               // content and is safe to trust.
               if (result.sourceHash) cachedPage.sourceHash = result.sourceHash;
-              // The response WAS fetched, so its Content-Type charset is current:
-              // a record stored before pub#674 has none, and the charset can
-              // change while the body does not.
-              cachedPage.headers = {
-                ...cachedPage.headers,
-                contentTypeCharset: contentTypeCharset(result.headers.contentType),
-                // Likewise the headers technology detection reads (pub#871).
-                techHeaders: result.headers.techHeaders ?? null,
-              };
-              yield* reuseCachedPage(crawlId, entry, cachedPage, "hash_match", {
+              // The response WAS fetched, so every header on the page is this
+              // response's, not the stored copy's: a site can drop an
+              // X-Robots-Tag noindex or add HSTS without changing its HTML, and
+              // reusing the stored headers reported the old ones as fresh
+              // (repo#4765). Before it, only the charset (pub#674) and the tech
+              // headers (pub#871) were refreshed.
+              const revalidated = revalidatedPage(cachedPage, {
+                result,
+                completeHeaders: true,
+                lastModified: changeDetection.lastModified,
+                requestHeaders: requestContext,
+                now: Date.now(),
+              });
+              yield* reuseCachedPage(crawlId, entry, revalidated, "hash_match", {
                 cacheFresh: false,
               });
               return;
@@ -2012,46 +2028,8 @@ export function createCrawler(
           }
 
           // Build page record - use headers from result
-          const headers: ResponseHeaders = {
-            contentType: result.contentType,
-            // `contentType` is the media type only; the charset rides beside it
-            // so core/charset sees a header-only declaration (pub#674).
-            contentTypeCharset: contentTypeCharset(result.headers.contentType),
-            contentEncoding: result.headers.contentEncoding ?? null,
-            cacheControl: result.headers.cacheControl ?? null,
-            expires: result.headers.expires ?? null,
-            vary: result.headers.vary ?? null,
-            etag: result.headers.etag ?? null,
-            server: result.headers.server ?? null,
-            lastModified: changeDetection.lastModified,
-            link: result.headers.link ?? null,
-            serverTiming: result.headers.serverTiming ?? null,
-            age: result.headers.age ?? null,
-            xCache: result.headers.xCache ?? null,
-            cfCacheStatus: result.headers.cfCacheStatus ?? null,
-            xVercelCache: result.headers.xVercelCache ?? null,
-            altSvc: result.headers.altSvc ?? null,
-            acceptRanges: result.headers.acceptRanges ?? null,
-            // security/version-disclosure rule (#713).
-            xPoweredBy: result.headers.xPoweredBy ?? null,
-            xAspNetVersion: result.headers.xAspNetVersion ?? null,
-            xAspNetMvcVersion: result.headers.xAspNetMvcVersion ?? null,
-            xGenerator: result.headers.xGenerator ?? null,
-            // security/cookie-flags rule (#748).
-            setCookie: result.headers.setCookie ?? null,
-            // Technology detection in a local audit (pub#871).
-            techHeaders: result.headers.techHeaders ?? null,
-          };
-
-          const securityHeaders: SecurityHeaders = {
-            hsts: result.securityHeaders.hsts ?? null,
-            csp: result.securityHeaders.csp ?? null,
-            xFrameOptions: result.securityHeaders.xFrameOptions ?? null,
-            xContentTypeOptions: result.securityHeaders.xContentTypeOptions ?? null,
-            referrerPolicy: result.securityHeaders.referrerPolicy ?? null,
-            permissionsPolicy: result.securityHeaders.permissionsPolicy ?? null,
-            xRobotsTag: result.securityHeaders.xRobotsTag ?? null,
-          };
+          const headers: ResponseHeaders = pageHeadersFromResponse(result, changeDetection.lastModified);
+          const securityHeaders: SecurityHeaders = securityHeadersFromResponse(result);
 
           // The second detector for a mis-pinned base (#1899). The seed page is
           // the first thing the crawl fetches with its own agent, its own

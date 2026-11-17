@@ -128,10 +128,11 @@ function settleWithin<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 // Turn a 2xx probe into a 304 so the crawler's existing 304 path reuses the
-// stored render. The crawler's 304 branch only reads `status`, but we blank the
-// body to mirror a real Not-Modified response.
+// stored render. The body is blanked to mirror a real Not-Modified response; the
+// headers are the probe's full set, and the marker says so, so the crawler
+// replaces the stored headers with them instead of overlaying them (repo#4765).
 function synthesizeNotModified(probe: FetchResponse): FetchResponse {
-  return { ...probe, status: 304, body: "" };
+  return { ...probe, status: 304, body: "", synthesizedNotModified: true };
 }
 
 export function createConditionalRenderDocumentFetcher(
