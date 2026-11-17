@@ -195,7 +195,7 @@ squirrelscan results are meant to be tailored to each site through rules. Not ev
 - **What it takes.** Exact rule ids (`eeat/about-page`) and category globs (`eeat/*`), the same patterns as `disable` in [`squirrel.toml`](/configuration/rules#disable). It is stored per website and applied to every cloud audit of it, whether started by `run_audit`, a schedule or the dashboard.
 - **It replaces the stored list.** Send the whole list you want; an empty list clears it and every rule runs again. `get_website_settings` returns the list and `disabled_rule_count`, the number of rules it matches.
 - **What it refuses.** `*` (it would switch every rule off), blank entries, entries that match no rule and lists over 500 entries. Entries already stored are kept when you send the list back. Take ids from `list_rules` or from `get_report` with `format: "rule_ids"`, not from memory.
-- **Local runs read `squirrel.toml`, cloud runs read this list.** A cloud audit cannot see your repository, so `run_audit` does not read a `squirrel.toml`. The CLI and the local MCP server do. To get the same rule set in both, set the same ids in both places. `[[ignore]]` waivers and `enable` are `squirrel.toml` settings and do not apply to cloud audits.
+- **Local runs read `squirrel.toml`, cloud runs read this list.** A cloud audit cannot see your repository, so `run_audit` does not read a `squirrel.toml`. The CLI does. To get the same rule set in both, set the same ids in both places. `[[ignore]]` waivers and `enable` are `squirrel.toml` settings and do not apply to cloud audits.
 - **The report says what was switched off.** `get_report` carries `rulesDisabledByConfig` in the `summary` and `rule_ids` formats, and a line such as "3 rules disabled by config" at the top of the `llm` and `markdown` formats, so two scores are compared knowing they ran the same rules. It appears for a cloud run that recorded its rule selection, `0 rules` included.
 
 To build a list, run an audit, call `get_report` with `format: "rule_ids"` for the failing rule ids (each with its `name`, `category`, `status` and `occurrences`), pick the ones that do not apply to the site, and send them to `update_website_settings`. Run the audit again and check the rules are gone from the report.
@@ -248,15 +248,13 @@ Copy-paste starters. Prompts marked **spends credits** run a cloud audit; prompt
 
 ## Local MCP server
 
-The CLI ships a local stdio MCP server too:
+The CLI ships a stdio front end for this server too, for clients that launch local servers:
 
 ```bash
 squirrel mcp
 ```
 
-It runs squirrelscan's deterministic audit engine on your machine: it works offline and needs no account. Reach for it when you are auditing localhost or a private network, or have no network at all. Signed in, its `audit_website` is a billed cloud audit like `squirrel audit`, with the same confirmation step as the hosted `run_audit`. The hosted server is the better default for everything cloud-side: shared org state, the issue tracker, browser rendering, and zero local install.
-
-It also serves the squirrelscan agent skills over MCP (the Skills extension), so a client that supports it gets the matching skills from the server itself: see [Skills](/cli/mcp#skills).
+It forwards this server's tools, resources, prompts and skills over stdio using your `squirrel auth login` session or `SQUIRRELSCAN_API_KEY`, and implements no tools of its own. It needs a login: signed out, the catalog lists and a tool call returns an error that points to `squirrel auth login`. For free audits, and for `localhost`, staging and private networks, use [`squirrel audit`](/cli/audit) (`--format llm`, `json` or `markdown`). `squirrel mcp --channel` also pushes cloud audit events into a Claude Code session: see [the channel](/developers/channel).
 
 Full setup and tool reference: [`squirrel mcp`](/cli/mcp).
 

@@ -204,13 +204,7 @@ You do not need the cloud to put audits in front of an agent. Three local option
 squirrel audit https://nutshop.squirrelscan.com --format llm | claude "prioritize these fixes"
 ```
 
-**Run the local MCP server.** `squirrel mcp` starts a stdio MCP server that runs the audit engine on your machine, so an agent can call audits as tools while working offline:
-
-```bash
-squirrel mcp
-```
-
-Signed-out local MCP audits cost nothing and need no account. Setup and the tool list are in [`squirrel mcp`](/cli/mcp) and the [Hosted MCP server](/developers/mcp#local-mcp-server) guide.
+**MCP is the cloud surface.** `squirrel mcp` is a stdio front end for the [hosted MCP server](/developers/mcp) and needs a login. Local and free audits stay on `squirrel audit`, which an agent with a shell runs directly. Setup is in [`squirrel mcp`](/cli/mcp).
 
 **Install the skill.** `squirrel skills install` teaches your agent the audit workflow so a prompt like "audit this site and fix the issues" just works. See [Coding agent integration](/developers/agents).
 

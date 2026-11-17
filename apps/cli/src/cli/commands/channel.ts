@@ -28,11 +28,27 @@ export function parseCategories(
   return names as ChannelCategory[];
 }
 
+// Seconds between polls: undefined when not given, an error message when out of range.
+export function parseIntervalSeconds(
+  raw: string | undefined
+): number | string | undefined {
+  if (raw === undefined) return undefined;
+  const seconds = Number(raw);
+  if (
+    !Number.isFinite(seconds) ||
+    seconds < MIN_POLL_INTERVAL_SECONDS ||
+    seconds > MAX_INTERVAL_SECONDS
+  ) {
+    return `--interval must be between ${MIN_POLL_INTERVAL_SECONDS} and ${MAX_INTERVAL_SECONDS} seconds.`;
+  }
+  return seconds;
+}
+
 export const channel = defineCommand({
   meta: {
     name: "channel",
     description:
-      "Run the Claude Code channel (stdio) that pushes cloud audit events into a session",
+      "Alias of `squirrel mcp --channel`: the Claude Code channel (stdio) that pushes cloud audit events into a session",
   },
   args: {
     interval: {
@@ -51,19 +67,10 @@ export const channel = defineCommand({
       console.error(categories);
       process.exit(1);
     }
-    let intervalSeconds: number | undefined;
-    if (args.interval !== undefined) {
-      intervalSeconds = Number(args.interval);
-      if (
-        !Number.isFinite(intervalSeconds) ||
-        intervalSeconds < MIN_POLL_INTERVAL_SECONDS ||
-        intervalSeconds > MAX_INTERVAL_SECONDS
-      ) {
-        console.error(
-          `--interval must be between ${MIN_POLL_INTERVAL_SECONDS} and ${MAX_INTERVAL_SECONDS} seconds.`
-        );
-        process.exit(1);
-      }
+    const intervalSeconds = parseIntervalSeconds(args.interval);
+    if (typeof intervalSeconds === "string") {
+      console.error(intervalSeconds);
+      process.exit(1);
     }
     // stdout is the JSON-RPC channel: keep all logs on stderr (logger default).
     const { runChannelServer } = await import("@/channel/server");
