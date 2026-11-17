@@ -113,7 +113,9 @@ const MAX_RUN = 16384;
  *   name     optional quote (repeated after the name), optional `]` (print_r)
  *   sep      `:`, `=`, `=>` or `->`, with spaces or tabs around it
  *   value    a quoted value, when its closing quote is followed by the end of
- *            the line or `,` `}` `]`; escapes (`\"`) do not close it. Else
+ *            the line or `,` `}` `]`; escapes (`\"`) do not close it, and a
+ *            quote followed by a folded continuation line does not close it
+ *            (the unquoted branch takes the folded lines). Else
  *            the rest of the line (capped), plus any folded continuation lines
  *            that start with a space or tab. When the first line is empty
  *            (`Cookie:\nsid=...`), the whole next line is the value, whatever
@@ -124,7 +126,7 @@ const HEADER_LINE = new RegExp(
     `(?<![\\w-])`,
     `((${QUOTE})?(?:${HEADER_LINE_NAME})\\2\\]?[^\\S\\r\\n]*(?:=>|->|[:=])[^\\S\\r\\n]*)`,
     `(?:`,
-    `(${QUOTE})(?:\\\\[^\\r\\n]|(?!\\3)[^\\\\\\r\\n]){0,${MAX_RUN}}\\3(?=[^\\S\\r\\n]*(?:[\\r\\n,}\\]]|$))`,
+    `(${QUOTE})(?:\\\\[^\\r\\n]|(?!\\3)[^\\\\\\r\\n]){0,${MAX_RUN}}\\3(?=[^\\S\\r\\n]*(?:[,}\\]]|\\r?\\n(?![ \\t])|\\r(?!\\n)|$))`,
     `|`,
     `(?:\\r?\\n[^\\r\\n]{0,${MAX_RUN}}|[^\\r\\n]{1,${MAX_RUN}})(?:\\r?\\n[ \\t][^\\r\\n]{0,${MAX_RUN}}){0,16}`,
     `)`,
