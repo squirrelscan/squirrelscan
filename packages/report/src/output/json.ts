@@ -53,7 +53,7 @@ import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import type { WcagCriterion, WcagLevel } from "@squirrelscan/core-contracts/wcag";
-import { lowestWcagLevel } from "@squirrelscan/core-contracts/wcag";
+import { isWcagLevel, lowestWcagLevel } from "@squirrelscan/core-contracts/wcag";
 import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
 import {
   checkRegionScope,
@@ -707,6 +707,8 @@ function buildSlimReport(
               include: report.partialAudit.include,
               exclude: report.partialAudit.exclude,
               includedCategories: report.partialAudit.includedCategories,
+              // repo#3093: the WCAG level the run's accessibility rules were narrowed to.
+              ...(isWcagLevel(report.partialAudit.wcagLevel) ? { wcagLevel: report.partialAudit.wcagLevel } : {}),
             },
           }
         : {}),

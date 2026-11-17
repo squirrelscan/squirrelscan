@@ -260,12 +260,16 @@ _squirrel_completions() {
           COMPREPLY=( $(compgen -W "passive active aggressive" -- "\${cur}") )
           return 0
           ;;
+        --wcag-level)
+          COMPREPLY=( $(compgen -W "A AA AAA" -- "\${cur}") )
+          return 0
+          ;;
         --format|-f)
           COMPREPLY=( $(compgen -W "${formatValues}" -- "\${cur}") )
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --bypass-cache --rule-include --rule-exclude --wcag-level --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --full-report --wcag-level --max-duration --no-ignore" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --bypass-cache --rule-include --rule-exclude --wcag-level --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --full-report --max-duration --no-ignore" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -688,7 +692,7 @@ _squirrel() {
             '*--target-url[Audit exactly this URL and nothing else (repeatable)]:url' \\
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
-            '--wcag-level[Restrict accessibility findings to a WCAG level]:level:(A AA AAA)' \\
+            '--wcag-level[Only run accessibility rules mapped to a WCAG criterion at or below this level]:level:(A AA AAA)' \\
             '--disable-discovery-probes[Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)]' \\
             '*--discovery-probe-path[Only send the discovery probe for this path (repeatable)]:path' \\
             '(-P --probe)'{-P,--probe}'[Probing intensity]:level:(passive active aggressive)' \\
@@ -1021,7 +1025,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l header-host -d "H
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l target-url -r -d "Audit exactly this URL and nothing else (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
-complete -c squirrel -n "__fish_seen_subcommand_from audit" -l wcag-level -x -a "A AA AAA" -d "Restrict accessibility findings to a WCAG level"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l wcag-level -x -a "A AA AAA" -d "Only run accessibility rules mapped to a WCAG criterion at or below this level"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l discovery-probe-path -r -d "Only send the discovery probe for this path (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s P -l probe -a "passive active aggressive" -d "Probing intensity"

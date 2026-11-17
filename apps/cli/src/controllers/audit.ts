@@ -68,9 +68,7 @@ import {
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
 import {
   isRuleEnabled,
-  loadAllRules,
   pluginNamespaces,
-  wcagLevelDisablePatterns,
   type PluginRegistrySnapshot,
   type RuleNamespace,
 } from "@squirrelscan/rules";
@@ -142,7 +140,11 @@ import {
   createProjectRuleCacheStore,
   ruleCacheEnabled,
 } from "@/audit/rule-cache-store";
-import { buildPartialAudit, resolveRulesConfig } from "@/audit/rule-filter";
+import {
+  buildPartialAudit,
+  resolveRulesConfig,
+  wcagRuleDisables,
+} from "@/audit/rule-filter";
 import { RULES_VERSION } from "@/audit/rules-version";
 import {
   runSmartAudits,
@@ -2720,10 +2722,15 @@ export async function runAudit(
         report.scanScope = scanScope;
         // repo#1082: a run narrowed by --rule-include/--rule-exclude says so in
         // every format and in the published payload. Absent when unfiltered.
-        const partialAudit = buildPartialAudit({
-          enable: options.ruleInclude ?? [],
-          disable: options.ruleExclude ?? [],
-        });
+        // repo#3093: a run narrowed by --wcag-level or [rules] wcag_level is partial too, and names the level.
+        const partialAudit = buildPartialAudit(
+          {
+            enable: options.ruleInclude ?? [],
+            disable: options.ruleExclude ?? [],
+          },
+          [],
+          options.wcagLevel ?? config.rules.wcag_level
+        );
         // Persisted with the scope below, so `squirrel report` rebuilds it.
         if (partialAudit) {
           scanScope.partialAudit = partialAudit;
@@ -3328,14 +3335,7 @@ export function mergeOptionsToConfig(
         // --wcag-level / [rules] wcag_level (repo#3093): a11y rules beyond the target level.
         disable: [
           ...(options.ruleExclude ?? []),
-          ...((options.wcagLevel ?? config.rules.wcag_level)
-            ? wcagLevelDisablePatterns(
-                loadAllRules()
-                  .values()
-                  .map((r) => r.meta),
-                (options.wcagLevel ?? config.rules.wcag_level)!
-              )
-            : []),
+          ...wcagRuleDisables(options.wcagLevel ?? config.rules.wcag_level),
         ],
       }),
     },

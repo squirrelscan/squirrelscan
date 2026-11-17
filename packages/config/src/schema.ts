@@ -192,8 +192,9 @@ export const RulesConfigSchema = z.object({
   enable: z.array(z.string()).default(["*"]),
   disable: z.array(z.string()).default([]),
   /**
-   * Restrict accessibility findings to a WCAG conformance target (repo#3093): `A` keeps level A
-   * criteria, `AA` keeps A and AA, `AAA` keeps all. Unset keeps every a11y rule. Other categories are untouched.
+   * Only run the accessibility rules mapped to a WCAG success criterion at or below this level: A, AA or AAA
+   * (AA keeps Level A and AA). These automated checks cover part of WCAG; passing them does not mean a site
+   * conforms (repo#3093). Unset runs every a11y rule. Other categories are untouched.
    */
   wcag_level: z.enum(["A", "AA", "AAA"]).optional(),
   /**

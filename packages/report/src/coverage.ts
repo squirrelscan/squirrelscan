@@ -11,6 +11,7 @@ import {
 
 import { seedVerificationLine } from "@squirrelscan/core-contracts/seed-verification";
 import { redactUrl, type SeedRedirectHop } from "@squirrelscan/core-contracts/seed-redirect";
+import { isWcagLevel } from "@squirrelscan/core-contracts/wcag";
 
 import type { AuditReport, CheckItem } from "./types";
 import type { GroupedCheck } from "./grouping";
@@ -165,8 +166,8 @@ export function robotsHonouredNote(report: Pick<AuditReport, "scanScope">): stri
 }
 
 /**
- * One plain line for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082), or null for
- * an unfiltered run. Shared by every renderer so the marker reads the same everywhere.
+ * One plain line for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082) or a WCAG level
+ * (repo#3093), or null for an unfiltered run. Shared by every renderer so the marker reads the same everywhere.
  */
 export function partialAuditLine(report: Pick<AuditReport, "partialAudit">): string | null {
   const p = report.partialAudit;
@@ -177,10 +178,12 @@ export function partialAuditLine(report: Pick<AuditReport, "partialAudit">): str
   const include = list(p.include).map(shorten);
   const exclude = list(p.exclude).map(shorten);
   const categories = list(p.includedCategories);
-  if (include.length === 0 && exclude.length === 0) return null;
+  const wcagLevel = isWcagLevel(p.wcagLevel) ? p.wcagLevel : undefined;
+  if (include.length === 0 && exclude.length === 0 && !wcagLevel) return null;
   const parts: string[] = [];
   if (include.length > 0) parts.push(`included ${include.join(", ")}`);
   if (exclude.length > 0) parts.push(`excluded ${exclude.join(", ")}`);
+  if (wcagLevel) parts.push(`accessibility rules narrowed to WCAG Level ${wcagLevel}`);
   const scored =
     categories.length > 0
       ? ` Scored on ${categories.join(", ")} only, so this is not the site's full state.`

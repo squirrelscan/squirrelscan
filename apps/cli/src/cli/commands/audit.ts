@@ -85,11 +85,12 @@ import {
 } from "@/audit/report";
 import { formatRetentionNotice } from "@/audit/retention";
 import {
-  filterResolvesToZeroCategories,
   isCategoryExcluded,
   parseRuleFilters,
   resolvePendingRuleFilters,
   resolveRulesConfig,
+  wcagRuleDisables,
+  zeroRulesError,
 } from "@/audit/rule-filter";
 import { preflightRuleOptions } from "@/audit/rule-options-preflight";
 import { stopInterruptedCrawls } from "@/audit/stop-interrupted-crawl";
@@ -1366,7 +1367,7 @@ export const audit = defineCommand({
     "wcag-level": {
       type: "string",
       description:
-        "Restrict accessibility findings to a WCAG conformance target: A, AA or AAA (AA keeps level A and AA criteria). Overrides [rules] wcag_level for this run",
+        "Only run the accessibility rules mapped to a WCAG success criterion at or below this level: A, AA or AAA (AA keeps Level A and AA). These automated checks cover part of WCAG; passing them does not mean a site conforms. Overrides [rules] wcag_level for this run",
     },
     "discovery-probe-path": {
       type: "string",
@@ -1769,11 +1770,16 @@ export const audit = defineCommand({
       if (ruleFilterActive) {
         const resolvedRules = resolveRulesConfig(config.rules, ruleFilter);
         // --rule-include X --rule-exclude X would crawl everything and score
-        // nothing — reject the contradiction before the crawl starts.
-        if (filterResolvesToZeroCategories(ruleFilter.enable, resolvedRules)) {
-          console.error(
-            "--rule-include/--rule-exclude contradict each other: every included category is also excluded, so no rules would run"
-          );
+        // nothing — reject the contradiction before the crawl starts. The
+        // WCAG level's disables count too (repo#3093): `--rule-include
+        // a11y/touch-targets --wcag-level AA` leaves no rule to run.
+        const effectiveWcagLevel = wcagLevel ?? config.rules.wcag_level;
+        const zeroRules = zeroRulesError(ruleFilter.enable, resolvedRules, {
+          level: effectiveWcagLevel,
+          disables: wcagRuleDisables(effectiveWcagLevel),
+        });
+        if (zeroRules) {
+          console.error(zeroRules);
           exitWith({ early: "validation" });
           return;
         }

@@ -1295,7 +1295,7 @@ function Issues({
         const parts = WCAG_LEVELS.filter((l) => byLevel[l]).map((l) => `Level ${l}: ${byLevel[l]}`);
         return parts.length > 0 ? (
           <p className="mb-5 text-sm text-muted-foreground" id="wcag-levels">
-            Accessibility rules by WCAG level. {parts.join(", ")}
+            Accessibility rules with findings, by WCAG level: {parts.join(", ")}
           </p>
         ) : null;
       })()}

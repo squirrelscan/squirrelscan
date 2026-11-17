@@ -695,7 +695,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 
 Schema `1.24` adds optional `meta.discovered`, the distinct URLs the crawl knew of split by sitemap and links.
 
-Schema `1.23` adds `wcag` (the success criteria, each with `sc`, `level` and `version`) and `wcagLevel` (the easiest level among them) to accessibility issues, and a top-level `wcagByLevel` that groups those rule ids by level.
+Schema `1.23` adds `wcag` (the success criteria, each with `sc`, `level` and `version`) and `wcagLevel` (the easiest level among them) to accessibility issues, and a top-level `wcagByLevel` that groups those rule ids by level. It also adds `meta.partialAudit.wcagLevel`: a run narrowed by [`--wcag-level`](/cli/audit) or [`[rules] wcag_level`](/configuration/rules#wcag_level) carries `meta.partialAudit` (even with no `--rule-include` or `--rule-exclude`) with the level it ran, because only the accessibility rules mapped to a criterion at or below that level ran.
 
 Schema `1.22` adds optional `observation` metadata to issue checks. It records the evidence `mode`, whether the check was `applicable`, and any `uncertainty` that qualifies the result. `1.23` added the top-level `reportBody`, present only when a very large crawl got a sampled report body (see [large crawls](/cli/audit#large-crawls)).
 

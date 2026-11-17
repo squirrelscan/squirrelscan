@@ -243,6 +243,20 @@ describe("generateConsoleReport", () => {
         "partial audit: included ax, perf; excluded perf/some-rule"
       );
     });
+
+    test("a run narrowed only by a WCAG level names the level (repo#3093)", () => {
+      const report = createMinimalReport();
+      report.partialAudit = {
+        include: [],
+        exclude: [],
+        includedCategories: ["a11y", "core"],
+        wcagLevel: "AA",
+      };
+      const out = capture(report);
+      expect(out).toContain(
+        "partial audit: accessibility rules narrowed to WCAG Level AA"
+      );
+    });
   });
 
   describe("includePassed", () => {
