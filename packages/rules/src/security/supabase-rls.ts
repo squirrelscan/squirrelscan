@@ -336,6 +336,21 @@ interface ProjectResult {
   errored: number;
 }
 
+/**
+ * The URL a key was read from, without its query string or fragment: a script
+ * served as `index.js?token=...` must not carry the token into the result.
+ */
+export function stripQueryAndFragment(source: string): string {
+  try {
+    const u = new URL(source);
+    u.search = "";
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return source.split(/[?#]/, 1)[0] ?? "";
+  }
+}
+
 /** The rule, with DNS and the clock injectable for tests; {@link supabaseRlsRule} uses the system ones. */
 export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
   const resolveHost = deps.resolve ?? resolveHostAddresses;
@@ -480,7 +495,8 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
 
       for (const r of results) {
         if (r.exposed.length === 0) continue;
-        const { host, keyKind, keySource } = r.project;
+        const { host, keyKind } = r.project;
+        const keySource = stripQueryAndFragment(r.project.keySource);
         const items: CheckItem[] = r.exposed.map(({ table, rows }) => ({
           id: `${host}/rest/v1/${table}`,
           label: `${table} (${rows} row(s) visible to the anon key)`,
