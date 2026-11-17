@@ -75,6 +75,23 @@ describe("a11y/reduced-motion", () => {
     expect(third[0]!.status).toBe("info");
   });
 
+  test("a stylesheet href's query string never reaches the finding", () => {
+    const href = "https://example.com/app.css?token=s3cr3t&email=a%40b.com";
+    const checks = run(page(`<link rel="stylesheet" href="${href}">`), {
+      stylesheetMotion: [sheet({ url: href, hasInfiniteAnimation: true, hasSmoothScroll: true })],
+    });
+    expect(checks.length).toBeGreaterThan(0);
+    for (const c of checks) {
+      const text = JSON.stringify(c);
+      expect(text).not.toContain("token");
+      expect(text).not.toContain("s3cr3t");
+      expect(text).not.toContain("email");
+      expect(text).not.toContain("a%40b.com");
+      expect(c.value).toBe("https://example.com/app.css");
+      expect((c.details as { trigger: string }).trigger).toBe("https://example.com/app.css");
+    }
+  });
+
   test("marquee and autoplay carousel warn", () => {
     expect(run(page("", `<marquee>hi</marquee>`))[0]!.status).toBe("warn");
     const c = run(page("", `<div class="carousel" data-autoplay="true"></div>`));
