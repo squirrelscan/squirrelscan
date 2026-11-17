@@ -371,6 +371,29 @@ describe("security/supabase-rls", () => {
     expectNoValues(logged.join("\n"));
   });
 
+  test("the key's source URL is stored without its query string or fragment", async () => {
+    stubFetch({ [`${HOST}/rest/v1/profiles`]: () => answer(200, "0-0/7") });
+    const result = await rule.run(
+      ctx({
+        scripts: [
+          script(
+            bundle(`sb.from("profiles").select("id")`),
+            "https://example.com/assets/index.js?token=SECRET&email=a@b.c#frag",
+          ),
+        ],
+      }),
+    );
+    const fail = result.checks.find((c) => c.status === "fail")!;
+    expect(fail.items![0]!.meta).toMatchObject({
+      keySource: "https://example.com/assets/index.js",
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("SECRET");
+    expect(serialized).not.toContain("a@b.c");
+    expect(serialized).not.toContain("token=");
+    expect(serialized).not.toContain("#frag");
+  });
+
   test("tables behind RLS (401, 403, a zero total) or missing are not flagged", async () => {
     bodyPulls = 0;
     const sent = stubFetch({
