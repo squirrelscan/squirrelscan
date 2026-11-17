@@ -139,11 +139,12 @@ function splitSelectorList(list: string): string[] {
   return out;
 }
 
-const DYNAMIC_PSEUDO =
-  /::?(hover|focus|focus-within|focus-visible|active|visited|link|any-link|target|before|after|first-line|first-letter|selection|placeholder)\b(\([^)]{0,100}\))?|::[a-z-]{1,40}(\([^)]{0,100}\))?/gi;
+/** Longer names go before their prefixes (`focus-within` before `focus`), and a name ends at `(?![\w-])`, so a hyphenated pseudo is never cut at its first `-`. */
+export const DYNAMIC_PSEUDO =
+  /::?(hover|focus-within|focus-visible|focus|active|visited|any-link|link|target|before|after|first-line|first-letter|selection|placeholder)(?![\w-])(\([^)]{0,100}\))?|::[a-z-]{1,40}(\([^)]{0,100}\))?/gi;
 
 /** Selector with the pseudo-classes and pseudo-elements `querySelector` cannot match statically removed. */
-function staticSelector(sel: string): string {
+export function staticSelector(sel: string): string {
   let out = sel.replace(DYNAMIC_PSEUDO, "").trim();
   if (out === "" || /[>+~]$/.test(out)) out += "*";
   return out;
