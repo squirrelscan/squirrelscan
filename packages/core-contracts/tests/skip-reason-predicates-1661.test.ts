@@ -12,6 +12,7 @@ import {
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+  HEADERS_NOT_RECORDED_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   NOT_CHECKED_SKIP_REASONS,
   PRIVATE_TARGET_SKIP_REASON,
@@ -41,6 +42,8 @@ const TABLE: Array<[string, boolean, boolean, boolean]> = [
   [TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON, false, false, true],
   [EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON, false, false, true],
   [LINK_TARGETS_NOT_FETCHED_SKIP_REASON, false, false, true],
+  // A page record stored without its response headers (repo#4641): a check-scoped gap, listed as not checked.
+  [HEADERS_NOT_RECORDED_SKIP_REASON, false, false, true],
   [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON, false, false, true],
   [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON, false, false, true],
   [CRAWL_CAPPED_SKIP_REASON, false, false, true],
