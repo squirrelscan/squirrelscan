@@ -683,3 +683,128 @@ describe("security/exposed-actuator: at most one heap dump per run", () => {
     expect(nc?.message).toContain(`${origin}/actuator/heapdump (not requested: an earlier heapdump request timed out`);
   }, 30_000);
 });
+
+// A Spring Boot 1.x heap dump: the .hprof file gzipped, sent as an attachment
+// (no Content-Encoding: the gzip is the file, not a transfer coding).
+const GZIP_HPROF = Bun.gzipSync(new TextEncoder().encode(`JAVA PROFILE 1.0.2\0${"x".repeat(4096)}`));
+const gzipBody = (headers: Record<string, string>, status = 200) => () =>
+  new Response(GZIP_HPROF, { status, headers: { "content-type": "application/octet-stream", ...headers } });
+
+describe("security/exposed-actuator: any heapdump answer but 401, 403 or 404 ends heapdump requests", () => {
+  const twoBases = surface([candidate("/manage/actuator/health", { method: "GET" })]);
+  const answers: [string, Route][] = [
+    ["a gzip 2xx without a .hprof attachment name", gzipBody({})],
+    ["a 500", () => json({ error: "boom" }, 500)],
+    ["a 200 HTML page", () => html("<!doctype html><div id=root></div>", 200)],
+    ["a redirect", () => new Response(null, { status: 302, headers: { location: "/login" } })],
+    [
+      "a network error",
+      () => {
+        throw new TypeError("connection reset");
+      },
+    ],
+  ];
+  for (const [label, route] of answers) {
+    test(`${label} on base one: zero /heapdump requests on base two, never closed`, async () => {
+      const { checks, sent } = await run(
+        { [`${BASE}/manage/actuator/heapdump`]: route },
+        { level: "aggressive", surface: twoBases }
+      );
+      expect(sent.filter((r) => r.url.endsWith("/heapdump")).map((r) => r.url)).toEqual([
+        `${BASE}/manage/actuator/heapdump`,
+      ]);
+      // Base two's other endpoints are still asked for.
+      expect(paths(sent)).toContain("GET /actuator/env");
+      expect(clearedBy(checks)).not.toContain("exposed-actuator-heapdump");
+      expect(checks.some((c) => c.name === "exposed-actuator-heapdump")).toBe(false);
+      const nc = checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked");
+      expect(nc).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
+      expect(nc?.message).toContain(`${BASE}/actuator/heapdump (not requested: an earlier heapdump request`);
+    });
+  }
+});
+
+describe("security/exposed-actuator: a gzipped (Spring Boot 1.x) heap dump", () => {
+  test("gzip magic with a .hprof.gz or .hprof attachment name is a confirmed heap dump (hprof-gzip), body not stored", async () => {
+    for (const disposition of [
+      'attachment; filename="heapdump8211.hprof.gz"',
+      "attachment; filename=heapdump.HPROF",
+      "attachment; filename*=UTF-8''heapdump.hprof.gz",
+    ]) {
+      const { checks } = await run(
+        { [`${BASE}/actuator/heapdump`]: gzipBody({ "content-disposition": disposition }) },
+        { level: "aggressive" }
+      );
+      const critical = checks.find((c) => c.name === "exposed-actuator-heapdump");
+      expect(critical?.status).toBe("fail");
+      expect(critical?.details?.severity).toBe("critical");
+      expect(critical?.items?.map((i) => [i.id, i.meta?.evidence])).toEqual([
+        [`${BASE}/actuator/heapdump`, "hprof-gzip"],
+      ]);
+      expect(critical?.items?.[0]?.label).toContain("gzip");
+      restore?.();
+    }
+  });
+
+  test("against a real server: the gzip magic is read from the raw attachment bytes, at most 64 of them", async () => {
+    let chunksSent = 0;
+    using server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const { pathname } = new URL(req.url);
+        if (pathname !== "/actuator/heapdump") return new Response("Not Found", { status: 404 });
+        const filler = new Uint8Array(64 * 1024).fill(7);
+        const stream = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(GZIP_HPROF.subarray(0, 32));
+          },
+          pull(c) {
+            chunksSent++;
+            if (chunksSent > 20_000) return c.close();
+            c.enqueue(filler);
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            "content-type": "application/octet-stream",
+            "content-disposition": 'attachment; filename="heapdump1.hprof.gz"',
+          },
+        });
+      },
+    });
+    const origin = `http://localhost:${server.port}`;
+    const { checks } = await exposedActuatorRule.run(serverCtx(origin, "aggressive"));
+    expect(chunksSent).toBeLessThan(20_000);
+    expect(checks.find((c) => c.name === "exposed-actuator-heapdump")?.items?.[0]?.meta?.evidence).toBe("hprof-gzip");
+  }, 30_000);
+
+  test("gzip magic without a .hprof attachment name is not checked, not a finding", async () => {
+    const variants: Record<string, string>[] = [
+      {},
+      { "content-disposition": 'attachment; filename="report.tar.gz"' },
+      { "content-disposition": "inline" },
+    ];
+    for (const headers of variants) {
+      const { checks } = await run({ [`${BASE}/actuator/heapdump`]: gzipBody(headers) }, { level: "aggressive" });
+      expect(checks.some((c) => c.name === "exposed-actuator-heapdump")).toBe(false);
+      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe("skipped");
+      expect(clearedBy(checks)).not.toContain("exposed-actuator-heapdump");
+      restore?.();
+    }
+  });
+
+  test("an ordinary gzipped HTML 200 (Content-Encoding: gzip, no Content-Disposition) is not a finding", async () => {
+    using server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(Bun.gzipSync(new TextEncoder().encode("<!doctype html><div id=root></div>")), {
+          headers: { "content-type": "text/html; charset=utf-8", "content-encoding": "gzip" },
+        });
+      },
+    });
+    const origin = `http://localhost:${server.port}`;
+    const { checks } = await exposedActuatorRule.run(serverCtx(origin, "aggressive"));
+    expect(checks.some((c) => c.name === "exposed-actuator-heapdump")).toBe(false);
+    expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe("skipped");
+  }, 30_000);
+});
