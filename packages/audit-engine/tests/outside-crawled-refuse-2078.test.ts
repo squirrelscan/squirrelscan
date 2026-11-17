@@ -140,3 +140,49 @@ describe("repo#2078: refuse published checks outside a complete crawled set", ()
     }
   });
 });
+
+// A site-scope rule's check can name a URL that is no crawled page at all:
+// `integrity/known-malicious-url` points `pageUrl` at the flagged outbound link
+// or at the site's base URL. A whole crawled set says nothing about those, so
+// the refusal must leave every site-scope check alone.
+describe("repo#2078: site-scope checks are never refused", () => {
+  const siteMeta = {
+    id: "integrity/known-malicious-url",
+    name: "Known Malicious URL",
+    description: "Site URLs must not be on a threat feed",
+    category: "integrity" as const,
+    scope: "site" as const,
+    severity: "error" as const,
+    weight: 10,
+  };
+  const SITE_URLS = ["https://evil.example/payload", "https://x.test/"];
+  const flagged = (pageUrl: string): CheckResult => ({
+    name: "known-malicious-url",
+    status: "fail",
+    message: "URL is on a threat feed",
+    pageUrl,
+    provenance: "fresh",
+  });
+
+  test("a complete list keeps site-scope checks naming uncrawled URLs", async () => {
+    const store = new MemStore();
+    const r = await runCloudSmartAudits({
+      store,
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults: {
+        "core/meta-title": { meta, checks: [...CRAWLED, ...NEVER].map(warn) },
+        "integrity/known-malicious-url": { meta: siteMeta, checks: SITE_URLS.map(flagged) },
+      },
+      pageStatuses: [],
+      resolutionSignal: signal({ crawledUrlsComplete: true }),
+      now: NOW,
+    });
+    // The page rule's uncrawled checks still go.
+    expect(r.outsideCrawledChecksDropped).toBe(6);
+    expect(r.outsideCrawledPages).toBe(6);
+    // Every site-scope check survives into the union the report and score use.
+    const site = r.unionRuleResults.get("integrity/known-malicious-url");
+    expect(site?.checks.map((c) => c.pageUrl).sort()).toEqual([...SITE_URLS].sort());
+  });
+});

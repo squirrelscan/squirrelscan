@@ -17,6 +17,7 @@ import type {
   FindingState,
   PageFindingRecord,
   ResolutionSignal,
+  RuleScope,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
@@ -513,7 +514,7 @@ export interface CloudSmartAuditsResult {
    */
   replayedUnknownPages: number;
   /**
-   * (repo#2078) Published page-attributed checks refused because the signal says
+   * (repo#2078) Published checks of PAGE-scope rules refused because the signal says
    * its `crawledUrls` is the COMPLETE crawled set and the page they name is not
    * in it, so this run never fetched it whatever the check is labelled. Zero
    * when the signal is absent, clipped or sent no completeness marker. Sampled
@@ -619,8 +620,13 @@ export async function runCloudSmartAudits(
           ...statusByUrl.keys(),
         ])
       : undefined;
-  const namesUncrawledPage = (c: CheckResult): boolean => {
-    if (!wholeCrawledSet) return false;
+  // PAGE-scope rules only. A site-scope rule's check legitimately names a URL
+  // that is not a crawled page: `integrity/known-malicious-url` points `pageUrl`
+  // at the flagged outbound link or the site's base URL, which no crawl lists.
+  // Refusing those would silently drop real site findings, so they pass through
+  // as they did before repo#2078.
+  const namesUncrawledPage = (scope: RuleScope, c: CheckResult): boolean => {
+    if (!wholeCrawledSet || scope !== "page") return false;
     const pages = attributedPages(c);
     return pages.length > 0 && pages.every((u) => !wholeCrawledSet.has(u));
   };
@@ -745,7 +751,7 @@ export async function runCloudSmartAudits(
             for (const u of attributedPages(c)) replayedUrls.add(u);
             continue;
           }
-          if (namesUncrawledPage(c)) {
+          if (namesUncrawledPage(r.meta.scope, c)) {
             outsideCrawledChecksDropped += 1;
             for (const u of attributedPages(c)) outsideCrawledUrls.add(u);
             continue;
@@ -756,7 +762,7 @@ export async function runCloudSmartAudits(
       freshResults.set(ruleId, { meta: r.meta, checks });
       talliedResults?.set(ruleId, {
         meta: r.meta,
-        checks: r.checks.filter((c) => !isReplayedCheck(c) && !namesUncrawledPage(c)),
+        checks: r.checks.filter((c) => !isReplayedCheck(c) && !namesUncrawledPage(r.meta.scope, c)),
       });
       if (r.checks.some((c) => typeof c.details?.checksTruncated === "number")) {
         rulesWithDroppedChecks.add(ruleId);
