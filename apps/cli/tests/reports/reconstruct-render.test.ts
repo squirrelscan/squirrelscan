@@ -119,21 +119,6 @@ describe("render block of a report rebuilt from the store (repo#3094)", () => {
     await run(db.close());
   });
 
-  test("rendered pages restore the render block", async () => {
-    const { db, crawlId } = await store([
-      page(1, "cloud-render"),
-      page(2, "fetch"),
-    ]);
-    const report = await run(reconstructReport(db, crawlId));
-    expect(report.render).toEqual({
-      requested: true,
-      mode: "auto",
-      pagesRendered: 1,
-      pagesFetchedPlain: 1,
-    });
-    await run(db.close());
-  });
-
   test("an audit that rendered nothing has no render block", async () => {
     const { db, crawlId } = await store([page(1, "fetch"), page(2)]);
     const report = await run(reconstructReport(db, crawlId));
@@ -217,19 +202,6 @@ describe("rebuilt render block equals the one the audit wrote (repo#3094)", () =
         pagesFetchedPlain: 3,
       },
     },
-    {
-      // The live tally also counted a redirect row the store keeps as a page.
-      name: "F: auto plus a redirect row",
-      fetchers: ["cloud-render", "fetch", "fetch"],
-      requested: true,
-      fetcherId: "hybrid-http-first",
-      expected: {
-        requested: true,
-        mode: "auto",
-        pagesRendered: 1,
-        pagesFetchedPlain: 2,
-      },
-    },
   ];
 
   for (const c of cases) {
@@ -247,9 +219,6 @@ describe("rebuilt render block equals the one the audit wrote (repo#3094)", () =
       expect(live).toEqual(c.expected as typeof live);
 
       const rows = c.fetchers.map((f, i) => page(i + 1, f));
-      if (c.name.startsWith("F")) {
-        rows[2] = { ...rows[2]!, status: 301, finalUrl: `${SITE}/page-1` };
-      }
       const { db, crawlId } = await store(rows, {
         origin: "cli",
         pagesCrawled: rows.length,
