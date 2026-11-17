@@ -129,6 +129,9 @@ const SHAPES: ReadonlyArray<(m: string) => string> = [
   (m) => `secret-key: ${m}`,
   (m) => `Client-Secret: ${m}`,
   (m) => `Authentication: ${m}`,
+  // 10. A quoted first value followed by a folded continuation line.
+  (m) => `Cookie: "a"\n sid=${m}`,
+  (m) => `Cookie: "a"\r\n\tsid=${m}`,
 ];
 
 /**
