@@ -25,6 +25,10 @@ expect() {
 #      c e i r b
 expect "0 0 0 0 0" "docs only" docs/guides/ci.mdx docs/docs.json
 expect "0 0 0 0 0" "root markdown only" CONTRIBUTING.md
+expect "0 0 0 0 0" "changelog.d entry only (#2113)" changelog.d/2113-changelog-d.changed.md
+expect "1 0 0 1 0" "changelog tooling (#2113)" scripts/changelog.ts scripts/changelog.test.ts \
+  scripts/check-changelog-entries.sh scripts/test-changelog-entries.sh
+expect "1 0 0 1 0" "release bump assembles changelog.d (#2113)" CHANGELOG.md changelog.d/1-a.added.md
 expect "0 0 0 0 0" "docs + root markdown (#1051)" docs/glossary/index.mdx CONTRIBUTING.md
 expect "0 0 0 0 0" "all root docs + templates" README.md AGENTS.md CODE_OF_CONDUCT.md SECURITY.md \
   TRADEMARKS.md .github/DOCS_STYLE.md .github/ISSUE_TEMPLATE/bug.md .github/PULL_REQUEST_TEMPLATE.md

@@ -3,6 +3,7 @@
 import { $ } from "bun";
 import { inc, rcompare, valid, type ReleaseType } from "semver";
 import { createInterface } from "node:readline";
+import { ENTRY_DIR, readEntries, release as assembleChangelog } from "./changelog";
 
 const PACKAGE_JSON = "apps/cli/package.json";
 
@@ -118,25 +119,41 @@ export async function resolveCurrentVersion(fallback: string): Promise<string> {
 // AFTER the bump+tag are already pushed to main. Catch it here, before dispatch.
 // Tooling failures (missing extractor/CHANGELOG, no awk) skip rather than masquerade
 // as a missing section — only a successful-but-empty extraction is a real omission.
-async function checkChangelogSection(version: string): Promise<void> {
+// Returns true when the section is missing and changelog.d/ has entries: the bump
+// PR then assembles them into it (#2113).
+async function checkChangelogSection(version: string): Promise<boolean> {
   const awkFile = "scripts/extract-changelog.awk";
   if (!(await Bun.file(awkFile).exists()) || !(await Bun.file("CHANGELOG.md").exists())) {
     warn("CHANGELOG preflight skipped — extractor or CHANGELOG.md not found.");
-    return;
+    return false;
   }
   if (!Bun.which("awk")) {
     warn("CHANGELOG preflight skipped — awk not found.");
-    return;
+    return false;
   }
+  // Throws on a badly named entry, before anything is pushed.
+  const pending = readEntries(ENTRY_DIR).length;
   // A real awk failure (bad script / unreadable file) throws and surfaces via
   // main()'s catch; only a successful-but-empty extraction is a missing section.
   const notes = await $`awk -v ${`v=${version}`} -f ${awkFile} CHANGELOG.md`.text();
-  if (notes.trim()) return;
+  if (notes.trim()) {
+    if (pending > 0) {
+      warn(
+        `${pending} ${ENTRY_DIR}/ entries are not in the v${version} notes; they wait for the next release.`,
+      );
+    }
+    return false;
+  }
+  if (pending > 0) {
+    info(`The bump PR assembles ${pending} ${ENTRY_DIR}/ entries into a "## v${version}" section.`);
+    return true;
+  }
   warn(`No CHANGELOG.md section for v${version} — the release would ship a minimal body.`);
   const answer = await prompt("Dispatch without release notes? [y/N] ");
   if (answer.toLowerCase() !== "y") {
-    error(`Aborted — add a "## v${version}" section to CHANGELOG.md and re-run.`);
+    error(`Aborted: add entries under ${ENTRY_DIR}/ (see ${ENTRY_DIR}/README.md) and re-run.`);
   }
+  return false;
 }
 
 // Every manifest that carries the release version. server.json is deliberately
@@ -166,8 +183,14 @@ export async function manifestsCarry(version: string, root = "."): Promise<boole
 // covered by a ruleset with an empty bypass list, so CI can neither push to it
 // nor open the PR (Actions PR creation is off for this repo). The bump has to
 // land the way every other change does, before the tag is cut.
-async function ensureVersionLanded(version: string): Promise<void> {
+async function ensureVersionLanded(version: string, assembleNotes: boolean): Promise<void> {
   if (await manifestsCarry(version)) {
+    if (assembleNotes) {
+      error(
+        `main carries v${version} but CHANGELOG.md has no section for it. ` +
+          `Run \`bun run changelog:release ${version}\` in a PR, merge it, then re-run.`,
+      );
+    }
     info(`main already carries v${version}.`);
     return;
   }
@@ -198,7 +221,9 @@ async function ensureVersionLanded(version: string): Promise<void> {
 
   log("Opening the version bump PR:");
   info(`Branch: ${branch}`);
-  info(`Files:  ${SYNCED_MANIFESTS.join(", ")}`);
+  info(
+    `Files:  ${SYNCED_MANIFESTS.join(", ")}${assembleNotes ? `, CHANGELOG.md, ${ENTRY_DIR}/` : ""}`,
+  );
   const answer = await prompt("Create and push it? [y/N] ");
   if (answer.toLowerCase() !== "y") {
     error("Aborted — nothing was pushed.");
@@ -212,11 +237,21 @@ async function ensureVersionLanded(version: string): Promise<void> {
 
   const title = `chore(release): v${version}`;
   await $`git add ${SYNCED_MANIFESTS}`;
+  if (assembleNotes) {
+    // Writes `## v<version> (date)` from changelog.d/ and deletes the entry files.
+    const moved = assembleChangelog(".", version, new Date().toISOString().slice(0, 10));
+    info(`Assembled ${moved} ${ENTRY_DIR}/ entries into CHANGELOG.md.`);
+    await $`git add -A CHANGELOG.md ${ENTRY_DIR}`;
+  }
   await $`git commit -s -m ${title}`;
   await $`git push --set-upstream origin ${branch}`;
   await $`gh pr create --base main --head ${branch} --title ${title} --body ${
     `Stamps the release version into the synced manifests so main matches the tag.\n\n` +
     `server.json is excluded: it tracks its own 1.0.x cadence.\n\n` +
+    (assembleNotes
+      ? `CHANGELOG.md gains the v${version} section, assembled from ${ENTRY_DIR}/ (those files are deleted). ` +
+        `Add the release summary paragraph under its heading before merging.\n\n`
+      : "") +
     `Merge this, then re-run \`make release\` to cut v${version}.`
   }`;
 
@@ -293,10 +328,10 @@ async function main(): Promise<void> {
   info(`Bump: ${bump}`);
   const nextVersion = computeNextVersion(currentVersion, channel, bump);
   info(`Next version: v${nextVersion}`);
-  await checkChangelogSection(nextVersion);
+  const assembleNotes = await checkChangelogSection(nextVersion);
   // Exits after opening the bump PR when main is behind; the release is
   // dispatched on the re-run, once that PR has merged.
-  await ensureVersionLanded(nextVersion);
+  await ensureVersionLanded(nextVersion, assembleNotes);
   console.log();
 
   const confirm = await prompt("Run release workflow? [y/N] ");

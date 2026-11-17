@@ -1,0 +1,1 @@
+- The published entity map now summarizes structurally identical entities into counted groups (`groups`) instead of sampling them, so a large catalogue states the true size of each shape. Rule verdicts still read the full map (#407).

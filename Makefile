@@ -24,7 +24,8 @@ test:
 
 test-release-tooling:
 	@bash scripts/test-changelog-extraction.sh
-	@bun test scripts/release-version.test.ts scripts/build-targets.test.ts
+	@bash scripts/test-changelog-entries.sh
+	@bun test scripts/release-version.test.ts scripts/build-targets.test.ts scripts/changelog.test.ts
 
 check: format-check lint typecheck
 

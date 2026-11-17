@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Fixture tests for check-released-changelog.sh. #1234
+# Unreleased entries are files under changelog.d/ (#2113), so CHANGELOG.md has no
+# `## [Unreleased]` heading; scripts/test-changelog-entries.sh covers those files.
 set -euo pipefail
 
 CHECKER="$(cd "$(dirname "$0")" && pwd)/check-released-changelog.sh"
@@ -12,10 +14,6 @@ git -C "$repo" config user.email "changelog-test@example.com"
 
 cat > "$repo/CHANGELOG.md" <<'MD'
 # Changelog
-
-## [Unreleased]
-
-- planned work
 
 ## v1.0.0 (2026-01-02)
 
@@ -76,8 +74,13 @@ git -C "$repo" tag -f v1.0.0 "$missing_changelog_commit" >/dev/null
 expect_pass "an unchanged section does not read its tag snapshot"
 git -C "$repo" tag -f v1.0.0 "$base" >/dev/null
 
-insert_after "## [Unreleased]" "- another planned change"
-expect_pass "an Unreleased bullet passes"
+printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '- planned work' '' "$(tail -n +3 "$repo/CHANGELOG.md")" > "$repo/CHANGELOG.next"
+mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
+expect_fail "an [Unreleased] heading fails (entries are changelog.d/ files)"
+if ! grep -qF "Unreleased entries are files under changelog.d/" <<<"$output"; then
+  echo "FAIL: [Unreleased] failure points at changelog.d/"
+  fails=1
+fi
 
 restore_fixture
 insert_after "## v1.0.0 (2026-01-02)" "- not actually in v1.0.0"
@@ -86,7 +89,7 @@ if ! grep -qF "released CHANGELOG section v1.0.0" <<<"$output"; then
   echo "FAIL: failure names the changed section"
   fails=1
 fi
-if ! grep -qF "Move new changelog bullets under ## [Unreleased]" <<<"$output"; then
+if ! grep -qF "Add new entries as files under changelog.d/" <<<"$output"; then
   echo "FAIL: failure tells the author where the bullet belongs"
   fails=1
 fi
@@ -114,39 +117,21 @@ fi
 
 restore_fixture
 awk '
-  $0 == "## [Unreleased]" { print "## [Unreleased]"; print ""; print "## v1.1.0 (2026-01-03)"; next }
+  $0 == "## v1.0.0 (2026-01-02)" { print "## v1.1.0 (2026-01-03)"; print ""; print "- assembled from changelog.d"; print "" }
   { print }
 ' "$repo/CHANGELOG.md" > "$repo/CHANGELOG.next"
 mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
-expect_pass "an untagged release bump that keeps a fresh [Unreleased] passes"
+expect_pass "an untagged release bump above the newest release passes"
 
 restore_fixture
-awk '
-  $0 == "## [Unreleased]" { print "## v1.1.0 (2026-01-03)"; next }
-  { print }
-' "$repo/CHANGELOG.md" > "$repo/CHANGELOG.next"
+printf '%s\n' '# Changelog' '' 'Edited header.' '' "$(tail -n +3 "$repo/CHANGELOG.md")" > "$repo/CHANGELOG.next"
 mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
-expect_fail "a release bump that drops the [Unreleased] heading fails"
-if ! grep -qF "exactly one '## [Unreleased]' heading" <<<"$output"; then
-  echo "FAIL: missing-heading failure says what is wrong"
+expect_fail "the CI entrypoint also runs the changelog.d guard (a direct edit outside a release fails, #2113)"
+if ! grep -qF "this PR edits CHANGELOG.md, which only a release writes" <<<"$output"; then
+  echo "FAIL: direct-edit failure comes from check-changelog-entries.sh"
   fails=1
 fi
-
 restore_fixture
-# shellcheck disable=SC2016 # literal backticks: the markdown text itself
-printf '%s\n' '# Changelog' '' '- A `## [Unreleased]' '' "$(tail -n +3 "$repo/CHANGELOG.md")" > "$repo/CHANGELOG.next"
-mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
-expect_fail "a truncated header bullet fails (the v0.0.182 damage)"
-if ! grep -qF "header bullet about ## [Unreleased] is damaged" <<<"$output"; then
-  echo "FAIL: damaged-bullet failure says what is wrong"
-  fails=1
-fi
-
-restore_fixture
-# shellcheck disable=SC2016 # literal backticks: the markdown text itself
-printf '%s\n' '# Changelog' '' '- A `## [Unreleased]` section collects merged changes that have not been cut into' '  a release yet; rename it to the version when the release goes out.' '' "$(tail -n +3 "$repo/CHANGELOG.md")" > "$repo/CHANGELOG.next"
-mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
-expect_pass "the complete header bullet passes"
 
 if [ "$fails" -ne 0 ]; then
   echo "released changelog tests FAILED"
