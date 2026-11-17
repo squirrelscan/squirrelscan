@@ -1581,8 +1581,13 @@ export function createCrawler(
             ) {
               // Stale only because the classifier changed (pub#841): re-read the STORED html with the
               // running classifier (or none) instead of fetching again. Without a body to read
-              // (evicted bodies already miss in the store), fall back to a full fetch.
-              const reparsed = reclassifyCachedPage(reusable, options.classify);
+              // (evicted bodies already miss in the store), fall back to a full fetch. A stored page over
+              // the parse cap (#1332/#1502) is not parsed here either: it goes back to the fetch path, whose
+              // gate stores it unparsed. The size is the decoded body's, as at the fetch gate.
+              const overParseCap =
+                config.maxParseBytes !== undefined &&
+                decodedPageBytes(reusable.sizeBytes, reusable.html ?? "") > config.maxParseBytes;
+              const reparsed = overParseCap ? null : reclassifyCachedPage(reusable, options.classify);
               if (reparsed) {
                 logger.debug("cached page re-classified from stored html", entry.normalizedUrl);
                 reusable = reparsed;
