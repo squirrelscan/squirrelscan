@@ -147,8 +147,11 @@ interface SubresourceCaching {
 }
 
 // Same-site sub-resources whose caching headers were observed on THIS crawl. A record reused from a
-// prior crawl, an errored or non-2xx one, and one fetched without a header read (the CLI content
-// store) cannot show what the server sends now, so none of them is judged.
+// prior crawl without a request, an errored or non-2xx one, and one fetched without a header read
+// (the CLI content store) cannot show what the server sends now, so none of them is judged. A 304
+// revalidation IS a request on this crawl and carries the caching headers (RFC 9110 15.4.5), and it
+// is exactly how an incremental re-audit sees an asset with a validator and no lifetime, so it is
+// judged like a 200.
 function observedSubresources(ctx: RuleContext): SubresourceCaching[] {
   const site = ctx.site;
   if (!site) return [];
@@ -211,7 +214,7 @@ function observedSubresources(ctx: RuleContext): SubresourceCaching[] {
       r.status >= 200 &&
       r.status < 300 &&
       r.error === null &&
-      (r.cacheReason ?? null) === null &&
+      ((r.cacheReason ?? null) === null || r.cacheReason === "304") &&
       sameSite(r.url)
   );
 }
