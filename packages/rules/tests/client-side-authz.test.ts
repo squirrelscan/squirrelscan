@@ -277,6 +277,16 @@ describe("verdicts", () => {
     expect(readExposedData("ok")).toBeNull();
   });
 
+  test("an empty paginated list is not data; a populated one still is", () => {
+    const r = (body: unknown) => classifyAdminResponse({ status: 200, contentType: "application/json", body: JSON.stringify(body), truncated: false });
+    expect(r({ users: [], total: 0, page: 1, per_page: 20 }).kind).toBe("not-data");
+    expect(r({ data: [] }).kind).toBe("not-data");
+    expect(r({ items: [], count: 0, limit: 50, offset: 0, next: null, prev: null, cursor: "abc", has_more: false }).kind).toBe("not-data");
+    const populated = r({ users: [{ id: 1, email: "a@b.c" }], total: 1 });
+    expect(populated.kind).toBe("exposed");
+    expect(populated.kind === "exposed" && populated.data).toMatchObject({ records: 1, fields: ["id", "email"], sensitiveFields: ["email"] });
+  });
+
   test("a JSON answer longer than the cap is flagged at lower confidence", () => {
     const body = `[${'{"id":1},'.repeat(ADMIN_RESPONSE_CAP / 8)}`;
     const v = classifyAdminResponse({ status: 200, contentType: "application/json", body: body.slice(0, ADMIN_RESPONSE_CAP), truncated: true });

@@ -397,6 +397,20 @@ const ENVELOPE_KEYS = new Set([
   "session",
   "csrf",
   "csrftoken",
+  // Pagination metadata around a list.
+  "total",
+  "count",
+  "page",
+  "per_page",
+  "perpage",
+  "pagesize",
+  "limit",
+  "offset",
+  "next",
+  "prev",
+  "cursor",
+  "has_more",
+  "hasmore",
 ]);
 
 // Keys that hold the records of a list response.
@@ -491,8 +505,10 @@ export function readExposedData(json: unknown): ExposedData | null {
   }
   if (!isPlainObject(json)) return null;
   if (saysDenied(json)) return null;
+  let sawCollection = false;
   for (const [key, value] of Object.entries(json)) {
     if (!COLLECTION_KEYS.has(key.toLowerCase())) continue;
+    if (Array.isArray(value) || isPlainObject(value)) sawCollection = true;
     if (Array.isArray(value)) {
       const records = value.filter(isPopulated);
       if (records.length > 0) return summarize(records.length, records[0]);
@@ -502,6 +518,9 @@ export function readExposedData(json: unknown): ExposedData | null {
       if (inner) return inner;
     }
   }
+  // A list envelope whose collection is empty (`{ users: [], total: 0 }`)
+  // carries no data; its pagination fields are not records.
+  if (sawCollection) return null;
   const dataKeys = Object.keys(json).filter(
     (k) => !ENVELOPE_KEYS.has(k.toLowerCase()) && !COLLECTION_KEYS.has(k.toLowerCase()) && isPopulated(json[k])
   );
