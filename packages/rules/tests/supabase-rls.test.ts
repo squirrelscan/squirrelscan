@@ -322,6 +322,26 @@ describe("discovery (sends nothing)", () => {
     expect(classifyTableResponse(500, "*/9").kind).toBe("other");
     expect(classifyTableResponse(301, "*/9").kind).toBe("other");
   });
+
+  test("an HTML 401, 403 or 404 is not a definite answer; JSON or no content type keeps its meaning", () => {
+    const html = new Headers({ "content-type": "text/html" });
+    const htmlUtf8 = new Headers({ "content-type": "Text/HTML; charset=UTF-8" });
+    // A block page (a WAF without cf-mitigated) says nothing about the table.
+    expect(classifyTableResponse(403, null, html).kind).not.toBe("protected");
+    expect(classifyTableResponse(403, null, html).kind).toBe("other");
+    expect(classifyTableResponse(403, null, htmlUtf8).kind).toBe("other");
+    expect(classifyTableResponse(401, null, html).kind).toBe("other");
+    expect(classifyTableResponse(404, null, html).kind).not.toBe("missing");
+    expect(classifyTableResponse(404, null, html).kind).toBe("other");
+    // PostgREST's JSON answers keep their meaning (403 is its 42501 refusal).
+    const json = new Headers({ "content-type": "application/json; charset=utf-8" });
+    expect(classifyTableResponse(403, null, json).kind).toBe("protected");
+    expect(classifyTableResponse(401, null, json).kind).toBe("protected");
+    expect(classifyTableResponse(404, null, json).kind).toBe("missing");
+    // No content type at all is not a block page: unchanged.
+    expect(classifyTableResponse(403, null, new Headers()).kind).toBe("protected");
+    expect(classifyTableResponse(404, null, new Headers()).kind).toBe("missing");
+  });
 });
 
 describe("security/supabase-rls", () => {
@@ -633,6 +653,55 @@ describe("security/supabase-rls", () => {
     });
   });
 
+  for (const status of [403, 404, 401]) {
+    test(`a run where every table answers an HTML ${status} block page is not a pass`, async () => {
+      const block = () => answer(status, undefined, { "content-type": "text/html; charset=UTF-8" });
+      const sent = stubFetch({
+        [`${HOST}/rest/v1/a`]: block,
+        [`${HOST}/rest/v1/b`]: block,
+        [`${HOST}/rest/v1/c`]: block,
+      });
+      const checks = await run(
+        ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select();sb.from("c").select()`))] }),
+      );
+      expect(sent).toHaveLength(3);
+      expect(checks).toHaveLength(1);
+      expect(checks.some((c) => c.status === "pass")).toBe(false);
+      expect(checks[0]!.status).toBe("skipped");
+      expect(checks[0]!.details).toMatchObject({
+        perProject: [{ protected: 0, missing: 0, notChecked: 3 }],
+      });
+    });
+  }
+
+  test("an HTML 403 among JSON answers leaves the run probe-incomplete", async () => {
+    stubFetch({
+      [`${HOST}/rest/v1/a`]: () => answer(403),
+      [`${HOST}/rest/v1/b`]: () => answer(403, undefined, { "content-type": "text/html" }),
+    });
+    const checks = await run(ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select()`))] }));
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+      value: "not-checked",
+      details: { perProject: [{ protected: 1, notChecked: 1 }] },
+    });
+  });
+
+  test("JSON 403 (PostgREST 42501) and JSON 404 answers still pass", async () => {
+    stubFetch({
+      [`${HOST}/rest/v1/a`]: () => answer(403),
+      [`${HOST}/rest/v1/b`]: () => answer(404),
+    });
+    const checks = await run(ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select()`))] }));
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      status: "pass",
+      details: { perProject: [{ protected: 1, missing: 1, notChecked: 0 }] },
+    });
+  });
+
   test("a network error on one table makes the run not checked, not a pass", async () => {
     const sent = stubFetch({
       [`${HOST}/rest/v1/a`]: () => answer(401),
@@ -690,5 +759,8 @@ describe("security/supabase-rls", () => {
     );
     expect(sent).toHaveLength(0);
     expect(checks[0]).toMatchObject({ status: "skipped", skipReason: "probe-budget" });
+    // The cap that stopped it, and how far it got.
+    expect(checks[0]!.message).toContain("shared probe time budget");
+    expect(checks[0]!.message).toContain("0 of 1 table probe(s)");
   });
 });

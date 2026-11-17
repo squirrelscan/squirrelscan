@@ -48,15 +48,16 @@ A `HEAD` request has no response body. With `Prefer: count=exact`, the Supabase 
 
 ### How the answer is judged
 
-Only the status and the row total in `Content-Range` are used:
+Only the status, the `Content-Type` and the row total in `Content-Range` are used:
 
 | Answer | Verdict |
 |---|---|
 | `2xx` with a total above zero | Exposed: the anon key can see that many rows |
 | `429`, a bot challenge (`cf-mitigated: challenge`), or a `403` carrying WAF or challenge markers | Not checked, and no further request is sent this run |
-| `401` or a plain `403` (Supabase answers a `42501` permission error with one of these) | Protected |
+| `401` or a plain `403` that is not an HTML page (Supabase answers a `42501` permission error with one of these) | Protected |
 | `2xx` with a total of `0` (`*/0`) | Not exposed or empty: see below |
-| `404` | The table does not exist |
+| `404` that is not an HTML page | The table does not exist |
+| `401`, `403` or `404` with `Content-Type: text/html` (a block or error page from something in front of the API) | Not checked |
 | Any other status, a `2xx` without a numeric total, a network error or a timeout | Not checked |
 
 What a count can and cannot tell apart:
@@ -70,7 +71,7 @@ The rule emits checks named `supabase-rls`:
 
 - Fail, one check per project, when one or more tables report rows. Message: `1 Supabase table(s) in abcdefghijklmnopqrst.supabase.co report rows to the site's public anon key: profiles. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`. Each exposed table is an item such as `profiles (42 row(s) visible to the anon key)`. No row, value or column name is fetched, so none is stored or reported.
 - Pass only when every table the code names, in every project found, got a definite answer: protected, zero rows or missing. Message: `No Supabase table reported rows to the public anon key (4 table(s) probed in 1 project(s))`.
-- Skipped, reason `probe-incomplete` (not checked), when any table got no definite answer: the project throttled or challenged a probe, a probe failed or had no usable total, the budget ran out partway, or a table or project was left out by the per-audit caps. Those tables may be readable, so the run is never a pass and never clears an earlier finding.
+- Skipped, reason `probe-incomplete` (not checked), when any table got no definite answer: the project throttled or challenged a probe, a probe failed, answered with an HTML error page or had no usable total, the budget ran out partway, or a table or project was left out by the per-audit caps. Those tables may be readable, so the run is never a pass and never clears an earlier finding.
 - Skipped, reason `not-applicable`, when the site's scripts hold no Supabase project with an anon key.
 - Skipped, reason `probing-passive` or `probing-not-aggressive`, when probing is below `aggressive`. Nothing is sent.
 - Skipped, reason `external-requests-off`, on an `--offline` audit or one with external link checking off. Nothing is sent.
