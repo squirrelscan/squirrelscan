@@ -194,7 +194,8 @@ export const RulesConfigSchema = z.object({
   /**
    * Only run the accessibility rules mapped to a WCAG success criterion at or below this level: A, AA or AAA
    * (AA keeps Level A and AA). These automated checks cover part of WCAG; passing them does not mean a site
-   * conforms (repo#3093). Unset runs every a11y rule. Other categories are untouched.
+   * conforms (repo#3093). Rules with no WCAG criterion are not run under it, at any level including AAA.
+   * Unset runs every a11y rule. Other categories are untouched.
    */
   wcag_level: z.enum(["A", "AA", "AAA"]).optional(),
   /**

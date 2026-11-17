@@ -89,7 +89,7 @@ disable = ["content/word-count", "images/modern-format"]
 **Type:** `"A" | "AA" | "AAA"`
 **Default:** unset (every accessibility rule runs)
 
-Only run the accessibility rules mapped to a WCAG success criterion at or below this level: `A`, `AA` or `AAA` (`AA` keeps Level A and AA). A rule that maps to several criteria runs when any one is at or below the level. A rule mapped to no criterion does not run, and its page says why. Other categories are untouched. The report is marked as a partial audit that names the level. The same setting is `squirrel audit --wcag-level AA` for one run. Each accessibility rule page lists its criteria and levels.
+Only run the accessibility rules mapped to a WCAG success criterion at or below this level: `A`, `AA` or `AAA` (`AA` keeps Level A and AA). A rule that maps to several criteria runs when any one is at or below the level. Rules with no WCAG criterion are not run under it, at any level including `AAA`; each one's page says why it has none. Other categories are untouched. The report is marked as a partial audit that names the level, and like a `--rule-include` run it is not auto-published: only an explicit `--publish` sends it. The same setting is `squirrel audit --wcag-level AA` for one run. Each accessibility rule page lists its criteria and levels.
 
 These automated checks cover part of WCAG; passing them does not mean a site conforms.
 
