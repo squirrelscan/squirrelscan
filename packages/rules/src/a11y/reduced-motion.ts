@@ -78,10 +78,13 @@ function resolve(href: string, base: string): string | null {
   }
 }
 
-/** A stylesheet URL safe to show in a finding: the query string (tokens, emails) is dropped. */
+/** A stylesheet URL safe to show in a finding: credentials, query string and fragment are dropped. */
 function shownUrl(abs: string): string {
   const u = new URL(abs);
+  u.username = "";
+  u.password = "";
   u.search = "";
+  u.hash = "";
   return u.href;
 }
 

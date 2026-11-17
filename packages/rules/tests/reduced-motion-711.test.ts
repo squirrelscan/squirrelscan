@@ -92,6 +92,22 @@ describe("a11y/reduced-motion", () => {
     }
   });
 
+  test("a stylesheet href's userinfo and fragment never reach the finding", () => {
+    const href = "https://deploy:ghp_s3cr3t@example.com/app.css?v=1#frag";
+    const checks = run(page(`<link rel="stylesheet" href="${href}">`), {
+      stylesheetMotion: [sheet({ url: "https://deploy:ghp_s3cr3t@example.com/app.css?v=1", hasInfiniteAnimation: true })],
+    });
+    expect(checks.length).toBeGreaterThan(0);
+    for (const c of checks) {
+      const text = JSON.stringify(c);
+      expect(text).not.toContain("deploy");
+      expect(text).not.toContain("ghp_s3cr3t");
+      expect(text).not.toContain("frag");
+      expect(c.value).toBe("https://example.com/app.css");
+      expect((c.details as { trigger: string }).trigger).toBe("https://example.com/app.css");
+    }
+  });
+
   test("marquee and autoplay carousel warn", () => {
     expect(run(page("", `<marquee>hi</marquee>`))[0]!.status).toBe("warn");
     const c = run(page("", `<div class="carousel" data-autoplay="true"></div>`));
