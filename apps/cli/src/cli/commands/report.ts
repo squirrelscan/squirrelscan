@@ -1,5 +1,6 @@
 // squirrelscan report [audit-id] - CLI wrapper
 
+import { scanScopeTargeted } from "@squirrelscan/report";
 import { defineCommand } from "citty";
 
 import type { RuleCategory } from "@/rules/categories";
@@ -55,6 +56,32 @@ import { isUUID, isShortId } from "@/utils";
 
 import { printFooter } from "../banner";
 import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
+import { resolvePublishDecision } from "./audit";
+
+/**
+ * Whether `squirrel report --publish` uploads this report: the same guard the
+ * audit's own publish runs (`resolvePublishDecision`), so the two paths cannot
+ * drift (repo#1082). The flag is always explicit here, and an explicit
+ * `--publish` of a rule-filtered (`partialAudit`) or targeted run publishes on
+ * the audit path too, so a marked report publishes, carrying its
+ * `partialAudit` marker in the payload. A local or private-network host never
+ * does (#1841). Signed-in is assumed: `publishReport` refuses a signed-out run
+ * with its own error.
+ */
+export function reportPublishDecision(
+  report: Pick<AuditReport, "baseUrl" | "partialAudit" | "scanScope">
+): boolean {
+  return resolvePublishDecision({
+    signedIn: true,
+    offline: false,
+    explicitPublish: true,
+    noPublish: false,
+    configPublish: true,
+    ruleFilterActive: report.partialAudit !== undefined,
+    targeted: scanScopeTargeted(report) !== null,
+    nonPublicHost: nonPublicHostLabel(report.baseUrl) !== null,
+  });
+}
 
 /**
  * Filter report by severity
@@ -526,8 +553,9 @@ export const report = defineCommand({
       console.error(LOCAL_HOST_NOT_PUBLISHED_LINE);
     }
 
-    // Handle publish flag - skip report output when publishing
-    if (args.publish && !publishNonPublicHost) {
+    // Handle publish flag - skip report output when publishing. The audit's
+    // publish guard decides, as it does for `squirrel audit --publish` (repo#1082).
+    if (args.publish && reportPublishDecision(reportData)) {
       // Validate visibility if provided
       const validVisibilities: ReportVisibility[] = [
         "public",

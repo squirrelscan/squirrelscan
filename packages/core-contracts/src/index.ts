@@ -1624,6 +1624,12 @@ export interface ScanScope {
   /** The crawl-phase backstop cut (#1639), kept so a rebuilt report is still partial. */
   crawlPhase?: CrawlPhaseCut;
   /**
+   * The `--rule-include` / `--rule-exclude` marker (repo#1082), kept here so a report rebuilt from the
+   * crawl later (`squirrel report`, `squirrel report --publish`) still carries `partialAudit`. The
+   * report's `partialAudit` is read from it. Absent on an unfiltered run.
+   */
+  partialAudit?: PartialAudit;
+  /**
    * The config's `[[ignore]]` list as this audit ran it (#1262): each entry's rule
    * pattern and reason, in order, so a report rebuilt later can name the entries
    * and list the ones that waived nothing. `disabled` is set by `--no-ignore`.

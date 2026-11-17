@@ -1338,6 +1338,10 @@ export function reconstructReport(
       ...(durationCut ? { maxDuration: durationCut } : {}),
       ...(phaseCut ? { crawlPhase: phaseCut } : {}),
       ...(ignored ? { ignored } : {}),
+      // The rule-filter marker (repo#1082), persisted with the scan scope.
+      ...(crawl.scanScope?.partialAudit
+        ? { partialAudit: crawl.scanScope.partialAudit }
+        : {}),
       // The start URL's followed redirect (#1281), persisted with the scan scope.
       ...(crawl.scanScope?.startRedirect
         ? {
