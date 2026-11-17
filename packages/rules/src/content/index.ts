@@ -31,6 +31,7 @@ import { terminologyConsistencyRule } from "./terminology-consistency";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
 import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { unrenderedMarkupRule } from "./unrendered-markup";
+import { crossPageContradictionsRule } from "./cross-page-contradictions";
 import { voiceConsistencyRule } from "./voice-consistency";
 import { wordCountRule } from "./word-count";
 
@@ -66,6 +67,7 @@ export const rules: Rule[] = [
   voiceConsistencyRule,
   terminologyConsistencyRule,
   fontConsistencyRule,
+  crossPageContradictionsRule,
 ];
 
 export {
@@ -97,6 +99,7 @@ export {
   titlePatternOutlierRule,
   unrenderedMarkupRule,
   voiceConsistencyRule,
+  crossPageContradictionsRule,
   wordCountRule,
   fontConsistencyRule,
 };

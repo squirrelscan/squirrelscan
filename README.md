@@ -70,7 +70,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 
 **Total: 300+ rules across 22 categories**
 
-Cloud audits also run ten [third-party rules](https://docs.squirrelscan.com/cloud/third-party) (compromised, proxied and unpinned vendor scripts, session replay and tag managers on sign-in and checkout pages, vendor counts). They are cloud-only and are not counted above.
+Cloud audits also run one opt-in LLM rule, `content/cross-page-contradictions` (not counted above, like the gap rules), and ten [third-party rules](https://docs.squirrelscan.com/cloud/third-party) (compromised, proxied and unpinned vendor scripts, session replay and tag managers on sign-in and checkout pages, vendor counts). They are cloud-only and are not counted above.
 
 See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 

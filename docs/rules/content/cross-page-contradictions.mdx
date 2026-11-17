@@ -1,0 +1,84 @@
+---
+title: "Cross-page contradictions: the site disagrees with itself"
+description: "A price, phone number, opening hours or policy that reads one way on one page and another way on another. squirrel quotes both claims and both URLs. Cloud only, opt-in."
+---
+
+## What cross-page contradictions are
+
+A pricing page says the Pro plan is $29 a month. The FAQ says $39. The footer lists one phone number and the contact page another. A visitor can usually work out which one is stale. An agent reading the site cannot, and will quote one of them to a customer with full confidence.
+
+This rule finds those pairs. It runs only in cloud audits, only when the LLM rules are turned on for the website, and only on a bounded sample of pages.
+
+## How it works
+
+A language model reads the sampled pages and extracts structured claims: prices, plan names, phone numbers, business hours, shipping and returns terms, guarantees, headcount and founding year. That is the model's only job. Whether two claims contradict is decided by plain code, with no model involved, so the same claims always give the same answer.
+
+Two claims contradict only when all of this holds:
+
+- Same claim type, same subject (the plan, the department, the weekday) and same context (currency, billing period, region).
+- Different values after normalising them. `$1,299.00` and `1299` agree, and so do `+1 (555) 010-2000` and `555.010.2000`.
+- Stated on different pages.
+- Both extracted with confidence of at least 0.8, with a subject and a verbatim quote.
+
+A claim that varies for a legitimate reason is left alone: a different plan, currency, billing period, region or department. A page that states both values itself, such as a sale price beside the old price, drops that claim from the check. Precision matters more than recall here, so when in doubt the rule stays quiet.
+
+## What squirrel checks
+
+It emits one check named `cross-page-contradictions`:
+
+- Skipped when you are signed out, out of credits, the service is unavailable, or the LLM rules are off. The skip reason says which.
+- Pass when nothing contradicts. Message: `No contradicting claims across 12 sampled page(s)`.
+- Warn when claims contradict. Message: `2 claims contradict another page of the site. Decide which value is right and make every page agree.` Each item names the claim and gives both URLs with both quotes verbatim, up to 25 items. Severity warning, weight 4.
+
+## How to fix it
+
+Decide which value is right and make every page say it. Better, render it from one place: a shared pricing component, one contact record, one hours entry, so the pages cannot drift apart again.
+
+## Cost
+
+This is an LLM rule, so it is off by default and opt-in per website. It adds 2 credits for each page the LLM rule pack evaluates, on top of the audited page charge, and the sample is bounded, so the extra cost per audit is capped by the sample size. See [credits](/cloud/credits). Local audits do not run it.
+
+| | |
+|---|---|
+| **Rule ID** | `content/cross-page-contradictions` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+| **Tier** | Cloud, opt-in |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/cross-page-contradictions"]
+```
+
+### Enable it
+
+The rule is opt-in, so the default `enable = ["*"]` leaves it out. Name it:
+
+```toml squirrel.toml
+[rules]
+enable = ["*", "content/cross-page-contradictions"]
+```
+
+## Related rules
+
+- [local/nap-consistency](/rules/local/nap-consistency): the deterministic check for name, address and phone across pages.
+- [content/date-agreement](/rules/content/date-agreement): dates that disagree across the sources on one page.
+
+## Check your site
+
+Sign in, turn on the LLM rules for the website, and run `squirrel audit https://example.com`. Each contradiction is listed in the Content section of the report with both pages and both quotes.
+
+<CardGroup cols={2}>
+  <Card title="Cloud rules" icon="list-checks" href="/cloud/rules">
+    Every rule that needs a cloud service, and what it costs.
+  </Card>
+  <Card title="Credits" icon="coins" href="/cloud/credits">
+    What an audit and the opt-in LLM rules cost.
+  </Card>
+</CardGroup>
