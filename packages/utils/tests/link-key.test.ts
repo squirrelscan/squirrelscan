@@ -486,7 +486,9 @@ describe("credential query parameters (#2782)", () => {
       "https://example.com/p?access%5Ftoken=REDACTED&%74oken=REDACTED&page=2",
     );
     expect(canonicalLinkKey(encodedName)?.key).toBe("https://example.com/p?page=2");
-    const encodedJwt = `https://example.com/p?t=${JWT.replace(".", "%2E")}`;
+    // Encode only the FIRST dot so the token mixes encoded and literal separators.
+    const [jwtHead, ...jwtRest] = JWT.split(".");
+    const encodedJwt = `https://example.com/p?t=${jwtHead}%2E${jwtRest.join(".")}`;
     expect(redactCredentialParams(encodedJwt)).toBe("https://example.com/p?t=REDACTED");
     expect(keyCarriesCredential(encodedJwt)).toBe(true);
   });

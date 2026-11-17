@@ -344,7 +344,11 @@ export function applyTrailingSlashPolicy(pathname: string): string {
   }
   if (FILE_EXTENSION.test(lastNamed)) return pathname;
   if (!pathname.endsWith("/")) return pathname;
-  const stripped = pathname.replace(/\/+$/, "");
+  // Trim trailing slashes with a scan rather than `/\/+$/`, which backtracks
+  // polynomially on a long run of slashes that is not at the end.
+  let end = pathname.length;
+  while (end > 0 && pathname.charCodeAt(end - 1) === 47) end--;
+  const stripped = pathname.slice(0, end);
   // "/" and "///" both collapse to "", which is not a path: the origin's root
   // is "/", and returning "" would key it as a bare `https://example.com`.
   return stripped === "" ? "/" : stripped;
