@@ -40,6 +40,7 @@
 // from the status and that total: no row, no value and no column name comes
 // back, so none can be stored or reported.
 
+import { PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import {
   egressGuardedSend,
@@ -51,6 +52,7 @@ import {
 
 import type { ProbeBudget } from "../probe-budget";
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { isThrottledOrChallenged } from "./probe-http";
 
 const CHECK = "supabase-rls";
 
@@ -243,7 +245,13 @@ export function buildTableProbe(
 export type TableVerdict =
   /** 2xx with a Content-Range total above zero: the anon role can see that many rows. */
   | { kind: "exposed"; rows: number }
-  /** 401 or 403: RLS or grants refuse the anon role (PostgREST answers `42501` with one of these). */
+  /**
+   * The project pushed back instead of answering: a 429, a bot challenge
+   * (`cf-mitigated: challenge`) or a 403 carrying WAF or challenge markers. Says
+   * nothing about the table, and ends the run.
+   */
+  | { kind: "throttled"; status: number }
+  /** 401 or a plain 403: RLS or grants refuse the anon role (PostgREST answers `42501` with one of these). */
   | { kind: "protected"; status: number }
   /** 2xx with a total of zero: RLS hides every row, or the table is empty. The two look the same. */
   | { kind: "empty"; status: number }
@@ -258,10 +266,16 @@ export type TableVerdict =
 const CONTENT_RANGE_RE = /^\s*(?:\d+-\d+|\*)\s*\/\s*(\d{1,15}|\*)\s*$/;
 
 /**
- * Judge one answer from its status and `Content-Range` total alone. No body is
- * an input: there is none to a HEAD, and the rule does not read one.
+ * Judge one answer from its status, its headers' pushback markers and its
+ * `Content-Range` total alone. No body is an input: there is none to a HEAD,
+ * and the rule does not read one.
  */
-export function classifyTableResponse(status: number, contentRange: string | null): TableVerdict {
+export function classifyTableResponse(
+  status: number,
+  contentRange: string | null,
+  headers: Headers | null = null,
+): TableVerdict {
+  if (isThrottledOrChallenged({ status, headers, text: "" })) return { kind: "throttled", status };
   if (status === 401 || status === 403) return { kind: "protected", status };
   if (status === 404) return { kind: "missing", status };
   if (status < 200 || status >= 300) return { kind: "other", status };
@@ -292,7 +306,7 @@ async function probeTable(
     // header are read; the body, if a server sends one to a HEAD, is never
     // touched, and aborting `done` below releases the connection.
     const res = await egressGuardedSend((u, i) => fetch(u, i), egress)(url, { ...init, signal });
-    return classifyTableResponse(res.status, res.headers.get("content-range"));
+    return classifyTableResponse(res.status, res.headers.get("content-range"), res.headers);
   } catch {
     // A network error, a timeout, or a refusal by the egress guard (nothing was sent).
     return { kind: "errored" };
@@ -334,20 +348,26 @@ interface ProjectResult {
   missing: number;
   notChecked: number;
   errored: number;
+  throttled: number;
 }
 
 /**
- * The URL a key was read from, without its query string or fragment: a script
- * served as `index.js?token=...` must not carry the token into the result.
+ * The URL a key was read from, without userinfo, query string or fragment: a
+ * script served as `https://user:pass@host/index.js?token=...#x` must not carry
+ * the credentials or the token into the result.
  */
-export function stripQueryAndFragment(source: string): string {
+export function sanitizeKeySource(source: string): string {
   try {
     const u = new URL(source);
+    u.username = "";
+    u.password = "";
     u.search = "";
     u.hash = "";
     return u.toString();
   } catch {
-    return source.split(/[?#]/, 1)[0] ?? "";
+    const bare = source.split(/[?#]/, 1)[0] ?? "";
+    // Drop anything up to an `@` in the authority, as the URL parser would.
+    return bare.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, "$1");
   }
 }
 
@@ -443,6 +463,7 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       let sentTotal = 0;
       let budgetStopped = false;
       let capped = 0;
+      let throttled = false;
       outer: for (const project of discovery.projects) {
         const result: ProjectResult = {
           project,
@@ -453,6 +474,7 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           missing: 0,
           notChecked: 0,
           errored: 0,
+          throttled: 0,
         };
         results.push(result);
         for (const [i, target] of targets.entries()) {
@@ -472,15 +494,26 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           else if (verdict.kind === "empty") result.empty++;
           else if (verdict.kind === "missing") result.missing++;
           else if (verdict.kind === "other") result.notChecked++;
-          else result.errored++;
+          else if (verdict.kind === "throttled") {
+            // The project pushed back: no further request this run, and
+            // every table not yet answered stays unchecked.
+            result.throttled++;
+            throttled = true;
+            break outer;
+          } else result.errored++;
         }
       }
+      // Tables the run never reached: past the per-run cap, after a stop, or
+      // in a project past MAX_PROJECTS. None of them got an answer.
+      const planned = (discovery.projects.length + discovery.projectsSkipped) * targets.length;
+      const unanswered = planned - sentTotal;
 
       const summary = {
         ...discovered,
         tablesProbed: sentTotal,
         tablesCapped: capped,
         budgetStopped,
+        throttled,
         perProject: results.map((r) => ({
           host: r.project.host,
           probed: r.probed,
@@ -490,13 +523,14 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           missing: r.missing,
           notChecked: r.notChecked,
           errored: r.errored,
+          throttled: r.throttled,
         })),
       };
 
       for (const r of results) {
         if (r.exposed.length === 0) continue;
         const { host, keyKind } = r.project;
-        const keySource = stripQueryAndFragment(r.project.keySource);
+        const keySource = sanitizeKeySource(r.project.keySource);
         const items: CheckItem[] = r.exposed.map(({ table, rows }) => ({
           id: `${host}/rest/v1/${table}`,
           label: `${table} (${rows} row(s) visible to the anon key)`,
@@ -529,7 +563,7 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       }
       const errored = results.reduce((n, r) => n + r.errored, 0);
       const notChecked = results.reduce((n, r) => n + r.notChecked, 0);
-      if (errored === sentTotal) {
+      if (errored === sentTotal && !throttled) {
         checks.push({
           name: CHECK,
           status: "skipped",
@@ -539,7 +573,7 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         });
         return { checks };
       }
-      if (errored + notChecked === sentTotal) {
+      if (errored + notChecked === sentTotal && !throttled && unanswered === 0) {
         checks.push({
           name: CHECK,
           status: "skipped",
@@ -549,7 +583,7 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         });
         return { checks };
       }
-      if (budgetStopped) {
+      if (budgetStopped && !throttled && errored + notChecked === 0) {
         checks.push({
           name: CHECK,
           status: "skipped",
@@ -559,10 +593,37 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         });
         return { checks };
       }
+      // A pass clears the rule, so it needs a definite answer (401, plain 403,
+      // a zero total, 404) from every table the site's code names, in every
+      // project. Pushback, an error, an answer without a usable total, or a
+      // table never reached leaves the run not checked (#1883 review).
+      const unverified = unanswered + errored + notChecked + (throttled ? 1 : 0);
+      if (unverified > 0) {
+        const why: string[] = [];
+        if (throttled)
+          why.push(
+            "the Supabase project throttled the probes (HTTP 429) or answered with a bot challenge, so no further request was sent",
+          );
+        if (budgetStopped) why.push("the probe budget ran out");
+        if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
+        if (notChecked > 0)
+          why.push(`${notChecked} answer(s) had no status and row count squirrel can judge`);
+        if (capped + discovery.projectsSkipped * targets.length > 0)
+          why.push(`the per-audit cap of ${MAX_TABLE_PROBES} table probes and ${MAX_PROJECTS} projects was reached`);
+        checks.push({
+          name: CHECK,
+          status: "skipped",
+          skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+          value: "not-checked",
+          message: `Supabase Row Level Security check incomplete: ${why.join("; ")}. ${unverified} of ${planned} table probe(s) got no definite answer, and those tables may be readable with the anon key`,
+          details: { ...summary, unverified },
+        });
+        return { checks };
+      }
       checks.push({
         name: CHECK,
         status: "pass",
-        message: `No Supabase table reported rows to the public anon key (${sentTotal} table(s) probed in ${results.length} project(s)${notChecked + errored > 0 ? `, ${notChecked + errored} not checked` : ""})`,
+        message: `No Supabase table reported rows to the public anon key (${sentTotal} table(s) probed in ${results.length} project(s))`,
         details: summary,
       });
       return { checks };
