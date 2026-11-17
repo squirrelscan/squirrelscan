@@ -47,6 +47,11 @@ function fakeHosted() {
         inputSchema: z.object({
           url: z.string().optional(),
           level: z.string().optional(),
+          max_pages: z.number().optional(),
+          external_links: z.boolean().optional(),
+          internal_links: z.boolean().optional(),
+          follow_redirect: z.boolean().optional(),
+          confirm: z.boolean().optional(),
         }),
       },
       async (args) => ({
@@ -165,6 +170,38 @@ describe("the forwarded tool set", () => {
     });
     expect(offline.isError).toBe(true);
     expect(JSON.stringify(offline.content)).toContain("squirrel audit");
+  }, 30_000);
+
+  test("audit_website's camelCase limits reach run_audit as its snake_case arguments", async () => {
+    const front = await connectFront(fakeHosted(), login);
+    const result = await front.callTool({
+      name: "audit_website",
+      arguments: {
+        url: "https://example.com",
+        maxPages: 1,
+        externalLinks: false,
+        internalLinks: false,
+        followRedirect: true,
+        confirm: true,
+      },
+    });
+    const text = (result.content[0] as { text: string }).text;
+    expect(JSON.parse(text.replace(/^run_audit /, ""))).toEqual({
+      url: "https://example.com",
+      max_pages: 1,
+      external_links: false,
+      internal_links: false,
+      follow_redirect: true,
+      confirm: true,
+    });
+    // A snake_case key the caller already sent is kept over its camelCase twin.
+    const both = await front.callTool({
+      name: "audit_website",
+      arguments: { url: "https://example.com", maxPages: 50, max_pages: 2 },
+    });
+    expect((both.content[0] as { text: string }).text).toBe(
+      'run_audit {"url":"https://example.com","max_pages":2}'
+    );
   }, 30_000);
 });
 

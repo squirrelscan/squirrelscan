@@ -28,7 +28,7 @@ Existing `squirrel mcp` configs keep working unchanged: the command and the tran
 
 `tools/list`, `tools/call`, `resources/*`, `prompts/*` and the `skills/*` methods are forwarded to the hosted server as they are. A tool added to the hosted server shows up here with no CLI release, and a call returns what the hosted server returns for the same credential. See the [hosted tool reference](/developers/mcp) for the tools.
 
-Tools of the old local server that the hosted server names differently keep working for one release: `audit_website` and `quick_check` are forwarded to `run_audit` (with `level: "quick"` for `quick_check`). They always run in the cloud, and `offline: true` returns an error that points to `squirrel audit`.
+Tools of the old local server that the hosted server names differently keep working for one release: `audit_website` and `quick_check` are forwarded to `run_audit` (with `level: "quick"` for `quick_check`). Their camelCase arguments (`maxPages`, `externalLinks`, `internalLinks`, `followRedirect`) are passed to `run_audit` under its snake_case names (`max_pages` and so on). They always run in the cloud, and `offline: true` returns an error that points to `squirrel audit`.
 
 ## Needs a login
 

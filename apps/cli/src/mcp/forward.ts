@@ -36,6 +36,28 @@ const TOOL_ALIASES: Record<string, { name: string; args?: object }> = {
   quick_check: { name: "run_audit", args: { level: "quick" } },
 };
 
+// The old local tools took camelCase arguments; hosted `run_audit` reads snake_case and drops unknown keys,
+// so an unrenamed `maxPages` would lose the agent's page (and so spend) limit without an error.
+const ALIAS_ARG_RENAMES: Record<string, string> = {
+  maxPages: "max_pages",
+  externalLinks: "external_links",
+  internalLinks: "internal_links",
+  followRedirect: "follow_redirect",
+};
+
+function renameAliasArgs(
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const renamed: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    const target = ALIAS_ARG_RENAMES[key];
+    // A snake_case key the caller already sent wins over its camelCase twin.
+    if (target && target in args) continue;
+    renamed[target ?? key] = value;
+  }
+  return renamed;
+}
+
 // The one error a signed-out cloud tool call returns.
 export const SIGNED_OUT_MESSAGE = `Not signed in. squirrelscan's cloud tools need an account: run \`squirrel auth login\` for an interactive session, or set ${API_TOKEN_ENV_VAR} (or its ${LEGACY_API_TOKEN_ENV_VAR} alias) to an API key for headless use. Free local audits, including localhost, staging and private sites, need no account: use \`squirrel audit <url>\` (add \`--format llm\` for agent-readable output).`;
 
@@ -111,7 +133,7 @@ export function registerForwarders(server: Server, deps: ForwardDeps): void {
         );
       }
       const { offline: _offline, ...rest } = args ?? {};
-      toolArgs = { ...rest, ...alias.args };
+      toolArgs = { ...renameAliasArgs(rest), ...alias.args };
     }
     try {
       return await viaUpstream(deps, (c) =>
