@@ -72,7 +72,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 54 -> 56 (#1765): core/meta-title, core/meta-description and links/internal-links report too short and too
       // long as separate checks, so a page inside both limits records two passes where it recorded one. More
       // passes lift the weighted overall past two more rounding boundaries. Failing pages are unchanged.
-      expect(v1.healthScore.overall).toBe(56);
+      // 56 -> 57 (repo#1358): content/typography passes on every page it reads, which lifts the content
+      // category's pass ratio past one more rounding boundary. A deliberate rule addition; without it the number is 56.
+      expect(v1.healthScore.overall).toBe(57);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -229,7 +231,8 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 110240 -> 110740 (repo#1359): i18n/locale-mixing adds one row per page (500 pages run it).
       // 110740 -> 110741 (security/auth-endpoint-disclosure, repo#1968): a site-scoped probing rule; this gate
       // runs passive, so it adds one skipped row and sends nothing. healthScore.overall is unmoved.
-      expect(v1.findings.length).toBe(110741);
+      // 110741 -> 111241 (repo#1358): content/typography adds one row per page (500 pages run it).
+      expect(v1.findings.length).toBe(111241);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -263,9 +266,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 328 -> 329 security/unauthenticated-api, 329 -> 330 security/json-sensitive-fields,
       // 330 -> 331 security/exposed-files (#1932), 331 -> 332 eeat/byline-consistency (squirrelscan/repo#1364),
       // 332 -> 333 content/stale-dated-copy, 333 -> 334 content/terminology-consistency, 334 -> 335 i18n/locale-mixing (repo#1359),
-      // 335 -> 336 security/auth-endpoint-disclosure;
+      // 335 -> 336 security/auth-endpoint-disclosure, 336 -> 337 content/typography (repo#1358);
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(336);
+      expect(v1.perRuleTally.length).toBe(337);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,
