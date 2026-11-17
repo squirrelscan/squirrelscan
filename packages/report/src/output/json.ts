@@ -367,7 +367,7 @@ interface SlimJsonReport {
    * a fully reused audit may be a cache artifact rather than a fix. Informational, never scored.
    */
   cacheStats?: CacheStats;
-  /** Fresh-fetch note (#2032): `no-cache` crawl, pages that still looked cached, fresh-render statement. */
+  /** Fresh-fetch note (#2032, schema 1.26): `no-cache` crawl, pages that still looked cached, fresh-render statement. */
   cacheFreshness?: CacheFreshness;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
