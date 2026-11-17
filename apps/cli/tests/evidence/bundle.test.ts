@@ -328,6 +328,109 @@ describe("shareable export", () => {
     expect(replay.confirmed).toBeGreaterThan(0);
   });
 
+  test("redacts observations, skip and failure reasons, stats, scope and URL-bearing header values", () => {
+    const base = source();
+    const [first, ...rest] = [...base.pages];
+    const leaky: EvidenceSource = {
+      ...base,
+      crawl: {
+        ...base.crawl,
+        stats: {
+          pagesTotal: 3,
+          lastError: "fetch https://example.test/x?session=STATSSESSION failed",
+        },
+        scanScope: {
+          seeds: ["https://example.test/?api_key=SCOPEKEY"],
+          note: "contact scope@example.com",
+        },
+      },
+      pages: [
+        {
+          ...first!,
+          headers: {
+            location: "/callback?code=LOCATIONCODE&next=/home",
+            "content-location": "https://example.test/c?sid=CONTENTLOCSID",
+            link: '<https://cdn.test/a.js?signature=LINKSIG>; rel="preload"',
+            refresh: "0; url=https://example.test/r?access_token=REFRESHTOK",
+            server: "nginx",
+          },
+        },
+        ...rest,
+      ],
+      failures: [
+        {
+          url: "https://example.test/down",
+          status: "failed",
+          reason: "redirected to https://login.test/?ticket=FAILTICKET",
+          depth: 1,
+          source: "discovered",
+          retryCount: 0,
+        },
+      ],
+      findings: [
+        ...base.findings,
+        {
+          ruleId: "core/obs",
+          name: "obs",
+          status: "fail",
+          message: "observed",
+          pageUrl: "https://example.test/rendered",
+          skipReason: "auth wall at https://example.test/l?password=SKIPPASS",
+          observation: {
+            urls: ["https://example.test/o?token=OBSTOKEN"],
+            nested: { secret: "Bearer OBSBEARERTOKEN123456" },
+            count: 3,
+          },
+        },
+      ],
+    };
+    const dir = join(tmp(), "share-deep");
+    const { manifest } = exportEvidenceBundle(leaky, dir, {
+      kind: "shareable",
+    });
+    const everything =
+      manifest.files
+        .map((f) => readFileSync(join(dir, ...f.path.split("/")), "utf-8"))
+        .join("\n") + JSON.stringify(manifest);
+    for (const secret of [
+      "STATSSESSION",
+      "SCOPEKEY",
+      "scope@example.com",
+      "LOCATIONCODE",
+      "CONTENTLOCSID",
+      "LINKSIG",
+      "REFRESHTOK",
+      "FAILTICKET",
+      "SKIPPASS",
+      "OBSTOKEN",
+      "OBSBEARERTOKEN123456",
+    ]) {
+      expect(everything).not.toContain(secret);
+    }
+    // Shape survives: non-secret values and structure are kept.
+    const pages = JSON.parse(readFileSync(join(dir, "pages.json"), "utf-8"));
+    expect(pages[0].responseHeaders.server).toBe("nginx");
+    expect(pages[0].responseHeaders.location).toBe(
+      "/callback?code=[redacted]&next=/home"
+    );
+    const findings = JSON.parse(
+      readFileSync(join(dir, "findings.json"), "utf-8")
+    );
+    const obs = findings.find(
+      (f: { ruleId: string }) => f.ruleId === "core/obs"
+    );
+    expect(obs.observation.count).toBe(3);
+    const audit = JSON.parse(readFileSync(join(dir, "audit.json"), "utf-8"));
+    expect(audit.completion.stats.pagesTotal).toBe(3);
+    expect(verifyEvidenceBundle(dir).ok).toBe(true);
+
+    // The raw bundle keeps every value as observed.
+    const rawDir = join(tmp(), "raw-deep");
+    exportEvidenceBundle(leaky, rawDir, { kind: "raw" });
+    const raw = readFileSync(join(rawDir, "findings.json"), "utf-8");
+    expect(raw).toContain("OBSTOKEN");
+  });
+
   test("redactUrl, redactHeaders and redactText unit behaviour", () => {
     const counts = newRedactionCounts();
     expect(redactUrl("https://u:p@a.test/x?q=1&password=hunter2", counts)).toBe(

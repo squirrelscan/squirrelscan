@@ -36,6 +36,7 @@ import {
   redactHeaders,
   redactText,
   redactUrl,
+  redactValue,
 } from "./redact";
 
 export const EVIDENCE_FORMAT = "squirrelscan-evidence";
@@ -364,6 +365,10 @@ export function exportEvidenceBundle(
     shareable ? redactUrl(value, counts) : value;
   const text = (value: string): string =>
     shareable ? redactText(value, counts) : value;
+  // Free-form fields (rule observations, reasons, stats, scope): every string
+  // inside is redacted, including URLs embedded in it.
+  const deep = <T>(value: T): T =>
+    shareable ? redactValue(value, counts) : value;
   const writer = new BundleWriter(dir, !shareable);
 
   // Pages: write artifacts, keep a per-page buffer for locating findings.
@@ -391,13 +396,13 @@ export function exportEvidenceBundle(
       ruleId: finding.ruleId,
       check: finding.name,
       status: finding.status,
-      message: text(finding.message),
+      message: deep(finding.message),
       pageUrl: finding.pageUrl ? url(finding.pageUrl) : null,
       ...(finding.value !== undefined
         ? {
             value:
               typeof finding.value === "string"
-                ? text(finding.value)
+                ? deep(finding.value)
                 : finding.value,
           }
         : {}),
@@ -405,13 +410,13 @@ export function exportEvidenceBundle(
         ? {
             expected:
               typeof finding.expected === "string"
-                ? text(finding.expected)
+                ? deep(finding.expected)
                 : finding.expected,
           }
         : {}),
-      ...(finding.skipReason ? { skipReason: finding.skipReason } : {}),
+      ...(finding.skipReason ? { skipReason: deep(finding.skipReason) } : {}),
       ...(finding.observation !== undefined
-        ? { observation: finding.observation }
+        ? { observation: deep(finding.observation) }
         : {}),
       evidence,
     });
@@ -437,7 +442,7 @@ export function exportEvidenceBundle(
     let state: EvidenceRef["state"] = "page-only";
     let reason: string | undefined;
     if (item?.selector) {
-      locator.selector = item.selector;
+      locator.selector = text(item.selector);
       state = "located";
     }
     if (item?.snippet) {
@@ -550,7 +555,7 @@ export function exportEvidenceBundle(
       fetch: {
         mode: type === "response-body" ? "http" : "render",
         fetcher: page.fetcherId ?? null,
-        fallbackReason: page.fallbackReason ?? null,
+        fallbackReason: page.fallbackReason ? deep(page.fallbackReason) : null,
       },
       requestHeaders: page.requestHeaders
         ? shareable
@@ -615,7 +620,7 @@ export function exportEvidenceBundle(
         reason: script.evicted
           ? "body evicted from the content store"
           : script.skipReason
-            ? `not fetched: ${script.skipReason}`
+            ? `not fetched: ${deep(script.skipReason)}`
             : "body not stored",
       };
     }
@@ -633,7 +638,7 @@ export function exportEvidenceBundle(
   const failures = [...source.failures].map((f) => ({
     url: url(f.url),
     status: f.status,
-    reason: f.reason ?? null,
+    reason: f.reason ? deep(f.reason) : null,
     depth: f.depth,
     ...(f.parentUrl ? { parentUrl: url(f.parentUrl) } : {}),
     source: f.source,
@@ -657,9 +662,7 @@ export function exportEvidenceBundle(
         : null,
     },
     scanner: source.scanner,
-    configuration: shareable
-      ? JSON.parse(text(JSON.stringify(config)))
-      : config,
+    configuration: deep(config),
     // Completion: why the crawl stopped, and every cap that could have cut it short.
     completion: {
       crawlStatus: source.crawl.status,
@@ -668,8 +671,8 @@ export function exportEvidenceBundle(
         ? new Date(source.crawl.retiredAt).toISOString()
         : null,
       hitPageLimit: pagesCap !== null && pageCount >= pagesCap,
-      stats,
-      scanScope: source.crawl.scanScope ?? null,
+      stats: deep(stats),
+      scanScope: deep(source.crawl.scanScope ?? null),
     },
     limits: {
       maxPages: pagesCap,
