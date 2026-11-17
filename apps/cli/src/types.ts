@@ -743,6 +743,8 @@ export interface AuditReport {
     maxDuration?: MaxDurationCut;
     /** The crawl-phase backstop cut (#1639), so a rebuilt report is still partial. */
     crawlPhase?: CrawlPhaseCut;
+    /** The rule-filter marker (repo#1082), so a rebuilt report still carries `partialAudit`. */
+    partialAudit?: PartialAudit;
     /** The `[[ignore]]` list as this audit ran it (#1262). */
     ignore?: {
       entries: Array<{ rule: string; reason?: string }>;

@@ -2721,7 +2721,11 @@ export async function runAudit(
           enable: options.ruleInclude ?? [],
           disable: options.ruleExclude ?? [],
         });
-        if (partialAudit) report.partialAudit = partialAudit;
+        // Persisted with the scope below, so `squirrel report` rebuilds it.
+        if (partialAudit) {
+          scanScope.partialAudit = partialAudit;
+          report.partialAudit = partialAudit;
+        }
         // #1271: say what the time limit cut. Status `partial` only when it cut
         // something and the run was not already failed, blocked or partial.
         if (durationBudget) {

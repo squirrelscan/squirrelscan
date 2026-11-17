@@ -19,6 +19,7 @@ How it works:
 
 ### Changed
 
+- A run narrowed by `--rule-include` or `--rule-exclude` is marked partial in every format and in its publish payload: `meta.partialAudit` in json (schema 1.25, with the included categories) and the same marker in text, markdown, xml and llm. The marker is saved with the audit, so `squirrel report` and `squirrel report --publish` carry it too, and a Pro rule you excluded is no longer listed as a locked rule. A filtered run is still auto-published only with an explicit `--publish` (squirrelscan/repo#1082).
 - The published entity map now summarizes structurally identical entities into counted groups (`groups`) instead of sampling them, so a large catalogue states the true size of each shape. Rule verdicts still read the full map (#407).
 
 ### Added

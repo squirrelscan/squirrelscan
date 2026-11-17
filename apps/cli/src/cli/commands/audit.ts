@@ -854,10 +854,11 @@ export function resolvePublishDecision(opts: {
   noPublish: boolean; // --no-publish, read from argv (see cli/flags.ts)
   configPublish: boolean; // config.cloud.publish
   // #1066: a --rule-include/--rule-exclude run produces a partial report
-  // (fewer categories, no partial marker on the publish payload yet — #1082
-  // tracks that). Auto-publishing it would silently replace the site's full
-  // report in the dashboard, so treat it like an implicit --no-publish
-  // unless the user explicitly asks with --publish.
+  // (fewer categories). Its publish payload carries `partialAudit` (repo#1082),
+  // but a cloud that does not read it yet would show it as the site's full
+  // report, so auto-publish treats it like an implicit --no-publish unless the
+  // user explicitly asks with --publish. `squirrel report --publish` decides
+  // through this function too (`reportPublishDecision`).
   ruleFilterActive?: boolean;
   // #1777: a --target-url run audits only the listed URLs. Publishing it would replace the site's latest
   // audit with a few pages (and #1776 `squirrel ci` reads the latest audit as its baseline), so it is

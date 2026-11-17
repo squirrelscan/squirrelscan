@@ -588,9 +588,11 @@ either flag is set, the report is **partial**: the health score is recomputed
 from only the included categories and the console output prints a
 `partial audit: ...` notice in its Report detail section at the end.
 The json, text, markdown, xml and llm formats carry the same marker
-(`meta.partialAudit` in json, with the included categories), and the payload of a report you
-publish carries it, so a hosted report can show it as a partial run. An unfiltered
-run carries no marker. A Pro-gated rule you excluded with `--rule-exclude` is
+(`meta.partialAudit` in json, with the included categories). The marker is saved
+with the audit, so `squirrel report` rebuilding it later prints it too, and the
+payload of `squirrel audit --publish` or `squirrel report --publish` carries it. A
+filtered run is still not auto-published: only an explicit `--publish` sends it,
+on either command. An unfiltered run carries no marker. A Pro-gated rule you excluded with `--rule-exclude` is
 not listed as a locked rule. An unknown category
 errors before crawling, listing the valid category codes. `--fail-on score:<category>`
 referencing an excluded category also errors up front, since it could never
