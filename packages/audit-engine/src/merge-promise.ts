@@ -70,6 +70,7 @@ import {
   addChecksToTally,
   buildScoringResultsFromMerged,
   foldRuleResultIntoTallies,
+  isCarriedContinuation,
   type CarriedFinding,
   type CarriedUnionSource,
   type PageUrlSet,
@@ -1408,6 +1409,7 @@ export async function runCloudSmartAudits(
       unionCarried: completeStore ? sampledCarried : unionCarried,
       unionCarriedPages: completeStore ? carriedPageUrls : unionCarriedPages,
       ruleMetaIndex,
+      carriedChecksPerPage,
     });
   }
 
@@ -1495,6 +1497,9 @@ function unionTallies(union: Map<string, RuleRunResult>): {
     foldRuleResultIntoTallies(scoringTallies, ruleId, r);
     const advisory = r.meta.severity === "info";
     for (const c of r.checks) {
+      // (repo#3360) A carried continuation row is no extra check: the tallies
+      // folded above skip it too.
+      if (isCarriedContinuation(c)) continue;
       if (c.status === "pass") reportTotals.passed++;
       else if (c.status === "warn" && !advisory) reportTotals.warnings++;
       else if (c.status === "fail") reportTotals.failed++;

@@ -271,6 +271,17 @@ export function isCarriedContinuation(check: CheckResult): boolean {
   return CARRIED_CONTINUATIONS.has(check);
 }
 
+/**
+ * A copy of a carried check scored as a failure, still a continuation when the
+ * original was: the conversion changes the status a row is counted under, not
+ * how many checks the page's rows are.
+ */
+export function carriedCheckAsFailure(check: CheckResult): CheckResult {
+  const out: CheckResult = { ...check, status: "fail" };
+  if (CARRIED_CONTINUATIONS.has(check)) CARRIED_CONTINUATIONS.add(out);
+  return out;
+}
+
 export function buildScoringResultsFromMerged(
   input: MergedScoringInput
 ): Map<string, RuleRunResult> {

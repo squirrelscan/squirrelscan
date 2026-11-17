@@ -26,7 +26,7 @@
 // crawl, plus the crawled ones it did not evaluate k on), `N` the pages the
 // sampled audit audited, and KL the known re-checked pages above.
 //
-//    fail mass   F = min(c * perPage, max(failed, failUnits) - KLfail)
+//    fail mass   F = min(c, failed - KLfail)
 //    warn range  W in [Wlo, Whi]:  Whi = min(c, warnings - KLwarn),
 //                                  Wlo = min(Whi, warnings - (N - c))
 //    scored:     warnings = Wlo, failed = F + (Whi - Wlo)
@@ -34,6 +34,11 @@
 //    passes:     clean carried pages = carried pages - min(carried pages,
 //                  dirty pages of R - known re-checked dirty pages + pages with
 //                  other carried rows)
+//                (repo#3360) a rule that runs K > 1 checks per page earns K
+//                passes per carried page, less one per check name holding a row
+//                there, so its passes are K * carried pages minus, per check
+//                name, min(carried pages, dirty pages of the name - known
+//                re-checked dirty pages), minus the names of other carried rows
 //
 // Every term is an upper bound on what the full store holds for issues and a
 // lower bound for passes and warnings, and a warning the bounds cannot place is
@@ -54,16 +59,17 @@
 // emits at most one fail or warn check per check name and page (the store keys an
 // item-less row by page, rule and check, so it could not hold two); an item list
 // holds at most ISSUE_PENALTY_ITEM_CAP items. The store replays a carried check
-// with an item list as one check per item, which the tallies cannot see for
-// WARNINGS (`warnUnits` counts pages, not items), so a warn class with item lists
-// is bounded at the audit's granularity, one check per page, as a fresh audit
-// counts it.
+// with an item list as one row per item, and (repo#3360) the union counts those
+// rows as one check per (page, check name, status), with the items as fail units,
+// as a fresh audit and the tallies count them. So the estimate is in checks, and
+// the rows it replaces are subtracted the way the union counted them.
 //
 // Both paths: the single-POST (sampled) merge and the chunked complete-store
 // finalize (repo#4626) hand the estimator the same inputs, so a partial re-audit
 // scores the same whichever way it was published.
 
 import type {
+  CheckResult,
   CheckTallies,
   CheckTally,
   PageFindingRecord,
@@ -74,8 +80,10 @@ import { ISSUE_PENALTY_ITEM_CAP } from "@squirrelscan/utils/constants";
 
 import {
   addChecksToTally,
+  carriedCheckAsFailure,
   carriedFindingToCheck,
   emptyTally,
+  markCarriedContinuations,
   type CarriedFinding,
   type IssueTally,
   type PageUrlSet,
@@ -288,6 +296,11 @@ export class SampledStoreEstimator {
     unionCarried: readonly CarriedFinding[];
     unionCarriedPages: PageUrlSet;
     ruleMetaIndex: Map<string, RuleRunResult["meta"]>;
+    /**
+     * (repo#3360) The checks per page the union credited a carried page with
+     * (`MergedScoringInput.carriedChecksPerPage`). Absent: one.
+     */
+    carriedChecksPerPage?: (ruleId: string) => number;
   }): void {
     const { scoringTallies, reportTotals, unionCarried, unionCarriedPages } = input;
     // Carried pages that earn a clean pass in the union.
@@ -318,6 +331,8 @@ export class SampledStoreEstimator {
       const advisory = entry.meta.severity === "info";
       const byName = this.marker.checkTallies[ruleId] as Record<string, CheckTally>;
       if (!byName || typeof byName !== "object") continue;
+      // As the union read it (buildScoringResultsFromMerged).
+      const perPage = Math.max(1, Math.floor(input.carriedChecksPerPage?.(ruleId) ?? 1));
 
       // ── What the union counted for the rows this replaces ─────────────────
       // The sampled rows still carried for their check (the estimate stands in
@@ -328,30 +343,40 @@ export class SampledStoreEstimator {
       const otherAsFailures = emptyTally();
       let dirtyPassPages = 0;
       let otherDirtyPassPages = 0;
+      // (repo#3360) Check names holding a row on the pass pages, as the union
+      // took them off those pages' passes, and the names of other rows there.
+      let unionPassNames = 0;
+      let otherPassNames = 0;
       for (const [url, rows] of rowsByRule.get(ruleId) ?? []) {
         // Rows on pages the sampled audit did not check are not in its tallies:
         // the union already counts them as the full store would.
         if (!this.priorRunPages.has(url)) continue;
-        if (passPageSet.has(url)) dirtyPassPages += 1;
-        const sampled: CarriedFinding[] = [];
-        const other: CarriedFinding[] = [];
-        for (const f of rows) {
-          if (!this.carriedFor(url, f.ruleId, f.checkName)) continue;
-          (this.sampledRows.has(f) ? sampled : other).push(f);
+        const onPassPage = passPageSet.has(url);
+        if (onPassPage) {
+          dirtyPassPages += 1;
+          unionPassNames += new Set(rows.map((f) => f.checkName)).size;
         }
-        if (sampled.length > 0) {
-          addChecksToTally(replaced, sampled.map((f) => carriedFindingToCheck(f, url)), advisory);
-        }
+        // Replayed and marked over the page's whole row list, as the union did,
+        // so each row counts here exactly as it counted there.
+        const checks = rows.map((f) => carriedFindingToCheck(f, url));
+        markCarriedContinuations(checks);
+        const sampled: CheckResult[] = [];
+        const other: CheckResult[] = [];
+        rows.forEach((f, i) => {
+          if (!this.carriedFor(url, f.ruleId, f.checkName)) return;
+          (this.sampledRows.has(f) ? sampled : other).push(checks[i]!);
+        });
+        if (sampled.length > 0) addChecksToTally(replaced, sampled, advisory);
         if (other.length > 0) {
-          if (passPageSet.has(url)) otherDirtyPassPages += 1;
-          addChecksToTally(otherAsCounted, other.map((f) => carriedFindingToCheck(f, url)), advisory);
+          if (onPassPage) {
+            otherDirtyPassPages += 1;
+            otherPassNames += new Set(other.map((c) => c.name)).size;
+          }
+          addChecksToTally(otherAsCounted, other, advisory);
           addChecksToTally(
             otherAsFailures,
-            other.map((f) => {
-              const check = carriedFindingToCheck(f, url);
-              // An advisory warning scores nothing either way.
-              return advisory ? check : { ...check, status: "fail" as const };
-            }),
+            // An advisory warning scores nothing either way.
+            advisory ? other : other.map(carriedCheckAsFailure),
             advisory,
           );
         }
@@ -361,6 +386,9 @@ export class SampledStoreEstimator {
       const leaving = this.leaving.get(ruleId);
       const estimate = emptyTally();
       let classPages = 0;
+      // (repo#3360) Per check name, its dirty pass pages, summed (K > 1 only).
+      let estimatedPassNames = 0;
+      const passCandidates = passPages.length;
       const names = new Set(Object.keys(byName));
       for (const name of this.rowNames.get(ruleId) ?? []) names.add(name);
       for (const name of names) {
@@ -375,10 +403,21 @@ export class SampledStoreEstimator {
         // advisory rule's warnings are not in its tallies, so its warn pages are
         // bounded by the pages that neither passed, failed nor skipped the check.
         classPages += failed + warnings;
-        if (advisory) {
-          classPages += n === undefined ? Number.POSITIVE_INFINITY : Math.max(0, n - passed - failed - skipped);
-        }
+        const advisoryPages = advisory
+          ? n === undefined
+            ? Number.POSITIVE_INFINITY
+            : Math.max(0, n - passed - failed - skipped)
+          : 0;
+        classPages += advisoryPages;
         if (!t) continue;
+        if (perPage > 1) {
+          const knownSets = leaving?.byName.get(name);
+          const knownPages = knownSets ? new Set([...knownSets.fail, ...knownSets.warn]).size : 0;
+          estimatedPassNames += Math.min(
+            passCandidates,
+            Math.max(0, failed + warnings + advisoryPages - knownPages),
+          );
+        }
 
         let carriedPages = this.carriedPages.size;
         for (const url of this.recheckedPages) {
@@ -391,8 +430,9 @@ export class SampledStoreEstimator {
         // Off the carried pages, each page holds at most one warning of the check.
         const offCarried = n === undefined ? 0 : Math.max(0, n - carriedPages);
 
-        const perPage = failUnits > failed ? ISSUE_PENALTY_ITEM_CAP : 1;
-        const failMass = Math.min(carriedPages * perPage, Math.max(0, Math.max(failed, failUnits) - knownFail));
+        // In checks, one per (page, check name), as the union counts carried rows
+        // (repo#3360); the items go in the fail units below.
+        const failMass = Math.min(carriedPages, Math.max(0, failed - knownFail));
         const warnHi = Math.min(carriedPages, Math.max(0, warnings - knownWarn));
         const warnLo = warnBound ? Math.min(warnHi, Math.max(0, warnings - offCarried)) : 0;
         const failUnitHi = Math.min(carriedPages * ISSUE_PENALTY_ITEM_CAP, Math.max(0, failUnits - knownFail));
@@ -412,12 +452,15 @@ export class SampledStoreEstimator {
           ? Math.floor(rulePages)
           : classPages;
       const knownDirty = leaving?.dirtyPages.size ?? 0;
-      const passCandidates = passPages.length;
       const sampledDirty = Math.min(passCandidates, Math.max(0, dirtyPages - knownDirty));
       const estimatedDirty = Math.min(passCandidates, sampledDirty + otherDirtyPassPages);
       // Passes the union gave that the estimate does not. Never negative: the
-      // estimate only ever takes passes away.
-      const passDelta = Math.max(0, estimatedDirty - dirtyPassPages);
+      // estimate only ever takes passes away. A rule with K > 1 checks per page
+      // (repo#3360) loses one pass per (page, check name) holding a row.
+      const passDelta =
+        perPage > 1
+          ? Math.max(0, estimatedPassNames + otherPassNames - unionPassNames)
+          : Math.max(0, estimatedDirty - dirtyPassPages);
 
       const tally = entry.tally;
       subtractTally(tally, replaced);
