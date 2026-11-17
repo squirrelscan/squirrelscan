@@ -11,7 +11,7 @@
 export const REDACTED = "[redacted]";
 
 /** Headers whose values carry credentials, sessions or account identity. */
-const SENSITIVE_HEADER_NAMES: readonly string[] = [
+export const SENSITIVE_HEADER_NAMES: readonly string[] = [
   "set-cookie",
   "set-cookie2",
   "cookie",
@@ -49,6 +49,27 @@ const CREDENTIAL_WORD =
 function normaliseHeaderName(name: string): string {
   return name.trim().toLowerCase().replace(/_/g, "-");
 }
+
+/**
+ * Header names that contain a credential word but carry no secret, so the
+ * word rule must not blank them. Checked after the exact list and before the
+ * word rule, normalised the same way. Each entry says why it is safe to keep.
+ */
+export const HEADER_KEEP_NAMES: ReadonlyMap<string, string> = new Map([
+  [
+    "access-control-allow-credentials",
+    "CORS flag whose only valid value is `true`; CORS checks read it",
+  ],
+  [
+    "public-key-pins",
+    "HPKP pins are hashes of public keys, published to every visitor",
+  ],
+  [
+    "public-key-pins-report-only",
+    "the report-only form of public-key-pins: public pins",
+  ],
+  [":authority", "HTTP/2 pseudo-header holding the host, not an auth value"],
+]);
 
 /**
  * Header names as they appear in a header line quoted as plain text: any case,
@@ -376,7 +397,8 @@ function isCredentialKey(
 ): "header" | "key" | null {
   const name = normaliseHeaderName(key);
   if (SENSITIVE_HEADER.test(name)) return "header";
-  if (inHeaderMap && CREDENTIAL_WORD.test(name)) return "header";
+  if (inHeaderMap && !HEADER_KEEP_NAMES.has(name) && CREDENTIAL_WORD.test(name))
+    return "header";
   if (SENSITIVE_PARAM.test(key.trim())) return "key";
   return null;
 }
