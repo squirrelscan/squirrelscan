@@ -1859,7 +1859,6 @@ export async function runAudit(
       // batch parses its own: drop them here rather than carrying up to
       // PARSED_PAGE_CACHE_MAX_PAGES documents through the rest of the run.
       parsedPageCache.clear();
-      renderedRequestSink.clear();
       phaseTimer.mark("crawl");
 
       // One batch size for every streamed walk, derived from this site's own
@@ -2510,6 +2509,10 @@ export async function runAudit(
         ruleResults = await Effect.runPromise(limitedRulesEffect);
       }
       ignoreTimedOut = ruleResults.ignoreTimedOut;
+      // The rules pass above is the sink's only reader: endpoint discovery folds
+      // these requests into the surface as `render` candidates (repo#4188). Drop
+      // them only now; clearing with the crawl-time DOMs left the map empty.
+      renderedRequestSink.clear();
 
       // Page results already went to `rule_results` batch by batch through the
       // sink above (#2343); only the site pass is left, and it is bounded by the
