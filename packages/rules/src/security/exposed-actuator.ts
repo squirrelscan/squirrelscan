@@ -27,7 +27,11 @@
 // listed by an open index is reported from that listing alone, as a warning,
 // because the index also lists endpoints that need a login). The heapdump
 // request asks for its first 64 bytes with a Range header and reads at most
-// that many, whatever the server sends. Requests carry no cookies, do not
+// that many, whatever the server sends. The Range header does not stop an open
+// JVM writing a full dump, so a run asks for at most one heap dump: no heapdump
+// is requested after one is confirmed, or after a heapdump request timed out
+// (a large heap can take longer than the timeout to start answering).
+// Requests carry no cookies, do not
 // follow redirects, are bounded by the shared probe budget, a per-request
 // timeout (one timeout ends that base) and the rule's own total time budget,
 // and read a capped body that is decoded no further than the cap (#722). Below
@@ -492,7 +496,10 @@ type UncheckedWhy =
   | "error"
   | "throttled"
   | "server-error"
-  | "no-definite-answer";
+  | "no-definite-answer"
+  | "heapdump-timeout"
+  | "heapdump-already-confirmed"
+  | "heapdump-stopped-after-timeout";
 
 interface UncheckedEndpoint {
   url: string;
@@ -510,6 +517,11 @@ const WHY_LABEL: Record<UncheckedWhy, string> = {
   throttled: "the site rate limited the probes (HTTP 429) or answered with a bot challenge",
   "server-error": "the server answered with an error (5xx)",
   "no-definite-answer": "the answer was neither the endpoint nor a 401, 403 or 404",
+  "heapdump-timeout": "the request timed out; an open endpoint may have started writing a dump",
+  "heapdump-already-confirmed":
+    "not requested: a heap dump was already confirmed under another base, and each request makes the server write one",
+  "heapdump-stopped-after-timeout":
+    "not requested: an earlier heapdump request timed out, so the run asks for no further heap dump",
 };
 
 function item(e: ExposedEndpoint): CheckItem {
@@ -604,12 +616,18 @@ export async function runExposedActuator(
   let timedOutBases = 0;
   let throttled = false;
   let heapdumpClosed = 0;
+  // Every heapdump request makes an open JVM write a full dump, so a run asks
+  // for at most one: none after a confirmed dump, and none after a heapdump
+  // request timed out (a large heap can take longer than the timeout to start
+  // answering, so a timeout may mean a dump is being written).
+  let heapdumpStop: "heapdump-already-confirmed" | "heapdump-stopped-after-timeout" | null = null;
   const exposed: ExposedEndpoint[] = [];
   const unchecked: UncheckedEndpoint[] = [];
 
   // Every path from endpoint `s` of base `b` on (of that base only, when
-  // `thisBaseOnly`) is left unchecked, for `why`. A heapdump below aggressive
-  // keeps its own reason: it was never going to be sent.
+  // `thisBaseOnly`) is left unchecked, for `why`. A heapdump below aggressive,
+  // or after the run stopped asking for heap dumps, keeps its own reason: it
+  // was never going to be sent.
   const leaveRest = (b: number, s: number, listed: string[] | null, why: UncheckedWhy, thisBaseOnly = false) => {
     const last = thisBaseOnly ? b + 1 : bases.length;
     for (let bi = b; bi < last; bi++) {
@@ -618,7 +636,8 @@ export async function runExposedActuator(
         // Left out by this base's open index: answered by the index, not unchecked.
         if (bi === b && listed && spec.id !== "index" && spec.id !== "heapdump" && !listed.includes(spec.id)) continue;
         const url = `${bases[bi]!.url}${spec.path}`;
-        unchecked.push({ url, endpoint: spec.id, why: spec.id === "heapdump" && !aggressive ? "probe-level" : why });
+        const heapWhy = !aggressive ? "probe-level" : (heapdumpStop ?? why);
+        unchecked.push({ url, endpoint: spec.id, why: spec.id === "heapdump" ? heapWhy : why });
       }
     }
   };
@@ -644,6 +663,10 @@ export async function runExposedActuator(
       // out is not requested. The heapdump is the exception: it can pass only
       // on its own definite answer, so an aggressive run always asks.
       if (spec.id !== "index" && spec.id !== "heapdump" && listed && !listed.includes(spec.id)) continue;
+      if (spec.id === "heapdump" && heapdumpStop) {
+        unchecked.push({ url, endpoint: "heapdump", why: heapdumpStop });
+        continue;
+      }
       if (!aggressive && isRobotsTxtDisallowed(url, robotsTxt, "*")) {
         unchecked.push({ url, endpoint: spec.id, why: "robots" });
         continue;
@@ -663,6 +686,19 @@ export async function runExposedActuator(
       probed++;
       if ("error" in outcome) {
         errored++;
+        if (spec.id === "heapdump" && outcome.error === "TimeoutError") {
+          // Never closed, and no further heapdump request this run.
+          heapdumpStop = "heapdump-stopped-after-timeout";
+          unchecked.push({ url, endpoint: "heapdump", why: "heapdump-timeout" });
+          if (Date.now() >= deadline) {
+            timeStopped = true;
+            leaveRest(b, s + 1, listed, "time");
+            break outer;
+          }
+          timedOutBases++;
+          leaveRest(b, s + 1, listed, "timeout", true);
+          continue outer;
+        }
         if (Date.now() >= deadline) {
           timeStopped = true;
           leaveRest(b, s, listed, "time");
@@ -699,6 +735,7 @@ export async function runExposedActuator(
         if (spec.id === "index") listed = readActuatorIndex(response);
         if (EVIDENCE[spec.id].confirm(response)) {
           exposed.push({ url, endpoint: spec.id, severity: spec.severity, evidence: EVIDENCE[spec.id].evidence, base });
+          if (spec.id === "heapdump") heapdumpStop = "heapdump-already-confirmed";
           continue;
         }
       }

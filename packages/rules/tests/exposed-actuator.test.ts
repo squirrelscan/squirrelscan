@@ -634,5 +634,52 @@ describe("security/exposed-actuator: a pass clears only what was checked", () =>
     expect(hd).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
     expect(hd?.message).toContain(`${origin}/a/actuator/heapdump`);
     expect(checks.find((c) => c.name === "exposed-actuator-not-checked")?.message).toContain(`${origin}/a/actuator/env`);
+    }, 30_000);
+});
+
+describe("security/exposed-actuator: at most one heap dump per run", () => {
+  test("two bases that both serve an HPROF header get exactly one /heapdump request", async () => {
+    const { checks, sent } = await run(
+      { [`${BASE}/manage/actuator/heapdump`]: HPROF, [`${BASE}/actuator/heapdump`]: HPROF },
+      { level: "aggressive", surface: surface([candidate("/manage/actuator/health", { method: "GET" })]) }
+    );
+    expect(sent.filter((r) => r.url.endsWith("/heapdump")).map((r) => r.url)).toEqual([
+      `${BASE}/manage/actuator/heapdump`,
+    ]);
+    expect(checks.find((c) => c.name === "exposed-actuator-heapdump")).toMatchObject({ status: "fail" });
+    const nc = checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked");
+    expect(nc).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
+    expect(nc?.message).toContain(`${BASE}/actuator/heapdump (not requested: a heap dump was already confirmed`);
+    expect(clearedBy(checks)).not.toContain("exposed-actuator-heapdump");
+  });
+
+  test("a hanging /heapdump on base one means zero /heapdump requests on base two, and is never closed", async () => {
+    const seen: string[] = [];
+    using server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const { pathname } = new URL(req.url);
+        seen.push(pathname);
+        if (pathname === "/a/actuator/heapdump") return new Promise<Response>(() => {});
+        return new Response("Not Found", { status: 404 });
+      },
+    });
+    const origin = `http://localhost:${server.port}`;
+    const ctx = serverCtx(origin, "aggressive");
+    ctx.endpointSurface = surface([
+      candidate(`${origin}/a/actuator/health`, { method: "GET", sameOrigin: true, probeEligible: true }),
+    ]);
+    const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 300, totalBudgetMs: 10_000 });
+    expect(seen.filter((p) => p.endsWith("/heapdump"))).toEqual(["/a/actuator/heapdump"]);
+    // Base two's other endpoints are still asked for.
+    expect(seen).toContain("/actuator/env");
+    expect(clearedBy(checks)).not.toContain("exposed-actuator-heapdump");
+    expect(checks.some((c) => c.name === "exposed-actuator-heapdump-closed")).toBe(false);
+    const nc = checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked");
+    expect(nc).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
+    expect(nc?.message).toContain(
+      `${origin}/a/actuator/heapdump (the request timed out; an open endpoint may have started writing a dump)`
+    );
+    expect(nc?.message).toContain(`${origin}/actuator/heapdump (not requested: an earlier heapdump request timed out`);
   }, 30_000);
 });
