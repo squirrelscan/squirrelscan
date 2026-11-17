@@ -38,13 +38,13 @@ Only `GET` requests, to these fixed read-only paths under each base:
 | `/actuator/mappings` | `active` | warning |
 | `/actuator/heapdump` | `aggressive` | critical (warning when only listed by an open index) |
 
-When the index answers with its list of exposed endpoints, only the listed ones are requested.
+When the index answers with its list of exposed endpoints, only the listed ones are requested. The `heapdump` is the exception: an `aggressive` run always asks for it, because it can only pass on its own answer.
 
 Asking for a heap dump makes the JVM write one, which is heavy work for the server, so `heapdump` is requested only on an `aggressive` run. That request carries `Range: bytes=0-63` and at most 64 bytes of the answer are read, whatever the server sends. On an `active` run, a heapdump listed by an open actuator index is reported from that listing alone as a lower-confidence warning, and is not requested. The index lists endpoints that Spring Security still protects, so a heapdump is critical only when its HPROF header was read on an `aggressive` run.
 
 Requests carry no cookies and do not follow redirects. At most 1 MB of each JSON answer is read, counted after decompression, and a compressed answer is decompressed no further than that.
 
-Requests go one at a time, each with a 10 second timeout. A request that times out ends its base: the rest of that base's paths are not requested. The whole rule stops after 30 seconds, whatever is left of the shared probe budget, so a site that hangs on every path adds at most 30 seconds to the audit. A `429` answer or a bot or WAF challenge stops the rule: no further request is sent.
+Requests go one at a time, each with a 10 second timeout. A request that times out ends its base: the rest of that base's paths are not requested. The whole rule stops after 30 seconds, whatever is left of the shared probe budget, so a site that hangs on every path adds at most 30 seconds to the audit. A `429` answer or a bot or WAF challenge stops the rule: no further request is sent. A server error (5xx) leaves that path not checked.
 
 ### How an endpoint is confirmed
 
@@ -62,10 +62,16 @@ A JSON answer longer than 1 MB counts when its opening matches the shape, for ex
 
 Findings name the endpoint and the kind of evidence only. squirrel never stores or reports a response body or any value from it.
 
-- `exposed-actuator-critical` (fail) lists the open `env`, `configprops` and `heapdump` endpoints. The check details carry `severity: "critical"`. Each item has `endpoint` and `evidence` (`env-property-sources`, `configprops-beans` or `hprof-header`).
-- `exposed-actuator-endpoints` (warn) lists the open index and `mappings` endpoints, with evidence `actuator-index-links` or `request-mappings`, and a heapdump an open index lists on an `active` run, with evidence `listed-in-index` and `confidence: "lower"`.
-- `exposed-actuator` (pass) when every request was answered and no endpoint answered with an actuator shape.
-- `exposed-actuator-not-checked` (skipped) when probing is passive (reason `probing-passive`), when `robots.txt` disallows every actuator path below `aggressive`, so nothing was sent (reason `robots-disallowed`), when the shared probe budget ran out before or partway through a run with no finding (reason `probe-budget`), when every request failed with a network error or timeout (reason `probe-errors`), or when the run stopped short with no finding: a `429` or bot challenge, a base that timed out, a request that failed, or the 30 second limit (reason `probe-incomplete`). A run that did not check is never reported as a pass, and never clears an earlier finding.
+The rule gives two independent verdicts, each with its own checks: one for the index, `env`, `configprops` and `mappings`, and one for the `heapdump`. A pass clears only what that run requested and got a definite answer for. An `active` run never asks for a heap dump, so its pass for the other endpoints never clears a heap dump an earlier `aggressive` run found.
+
+- `exposed-actuator-critical` (fail) lists the open `env` and `configprops` endpoints. The check details carry `severity: "critical"`. Each item has `endpoint` and `evidence` (`env-property-sources` or `configprops-beans`).
+- `exposed-actuator-endpoints` (warn) lists the open index and `mappings` endpoints, with evidence `actuator-index-links` or `request-mappings`.
+- `exposed-actuator` (pass) when the index, `env`, `configprops` and `mappings` were requested under every base and each got a definite answer (anything but a timeout, a network error, a 5xx, a `429` or a challenge) with no actuator shape. A path that `robots.txt` disallowed, or that the run did not reach, means no pass.
+- `exposed-actuator-not-checked` (skipped) names the index, `env`, `configprops` or `mappings` paths that were not checked and why. The reason is `probing-passive` on a passive run, `robots-disallowed` when `robots.txt` disallowed them below `aggressive`, `probe-budget` when the shared probe budget ran out, `probe-errors` when every request failed, and `probe-incomplete` otherwise: a `429` or bot challenge, a base that timed out, a failed request, a 5xx, the 30 second limit, or more than three bases. It can appear beside a finding.
+- `exposed-actuator-heapdump` (fail) when an `aggressive` run read the HPROF header, with `severity: "critical"` in the details and evidence `hprof-header`. On an `active` run, a heapdump an open index lists is a warning with evidence `listed-in-index` and `confidence: "lower"`.
+- `exposed-actuator-heapdump-closed` (pass) only when an `aggressive` run got a `401`, `403` or `404` for the heapdump under every base. A 2xx without the HPROF header, a redirect or any other answer is not a pass.
+- `exposed-actuator-heapdump-not-checked` (skipped) on every `active` run (reason `probe-level-too-low`), and on an `aggressive` run that did not get a definite answer for every base's heapdump.
+
 
 ### Limits
 
@@ -126,6 +132,9 @@ Each check name this rule can emit, by what it means to a tool comparing two aud
 | `exposed-actuator-endpoints` | Problem |  |
 | `exposed-actuator` | Clean | `exposed-actuator-critical`, `exposed-actuator-endpoints` |
 | `exposed-actuator-not-checked` | Not checked |  |
+| `exposed-actuator-heapdump` | Problem |  |
+| `exposed-actuator-heapdump-closed` | Clean | `exposed-actuator-heapdump` |
+| `exposed-actuator-heapdump-not-checked` | Not checked |  |
 
 {/* rule-checks:end */}
 

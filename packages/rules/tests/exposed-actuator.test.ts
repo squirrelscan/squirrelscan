@@ -104,8 +104,11 @@ describe("security/exposed-actuator", () => {
     const routes = Object.fromEntries(ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, shell]));
     for (const level of ["active", "aggressive"] as const) {
       const { checks, sent } = await run(routes, { level });
-      expect(checks).toHaveLength(1);
-      expect(checks[0]).toMatchObject({ name: "exposed-actuator", status: "pass" });
+      // The heapdump never passes on a 200 without its header: only a 401, 403 or 404 does.
+      expect(checks.map((c) => [c.name, c.status])).toEqual([
+        ["exposed-actuator", "pass"],
+        ["exposed-actuator-heapdump-not-checked", "skipped"],
+      ]);
       expect(sent.length).toBeGreaterThan(0);
       restore?.();
     }
@@ -116,7 +119,7 @@ describe("security/exposed-actuator", () => {
       const route = () => json(body);
       const routes = Object.fromEntries(ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, route]));
       const { checks } = await run(routes, { level: "aggressive" });
-      expect(checks.map((c) => c.status)).toEqual(["pass"]);
+      expect(checks.map((c) => c.status)).toEqual(["pass", "skipped"]);
       restore?.();
     }
   });
@@ -126,7 +129,10 @@ describe("security/exposed-actuator", () => {
       [`${BASE}/actuator`]: () => json({ error: "Unauthorized" }, 401),
       [`${BASE}/actuator/env`]: () => json(ENV, 403),
     });
-    expect(checks.map((c) => c.status)).toEqual(["pass"]);
+    expect(checks.map((c) => [c.name, c.status])).toEqual([
+      ["exposed-actuator", "pass"],
+      ["exposed-actuator-heapdump-not-checked", "skipped"],
+    ]);
   });
 
   test("only GETs, without cookies or redirects, and the active run never asks for a heap dump", async () => {
@@ -148,9 +154,16 @@ describe("security/exposed-actuator", () => {
     // The index lists endpoints even when Spring Security protects them, so the
     // listing alone is not proof a heap dump can be downloaded.
     expect(checks.find((c) => c.name === "exposed-actuator-critical")).toBeUndefined();
-    const warn = checks.find((c) => c.name === "exposed-actuator-endpoints");
+    expect(checks.find((c) => c.name === "exposed-actuator-endpoints")?.items?.map((i) => i.meta?.endpoint)).toEqual([
+      "index",
+    ]);
+    const warn = checks.find((c) => c.name === "exposed-actuator-heapdump");
     expect(warn?.status).toBe("warn");
-    expect(warn?.items?.map((i) => i.meta?.endpoint)).toEqual(["index", "heapdump"]);
+    expect(warn?.items?.map((i) => i.meta?.endpoint)).toEqual(["heapdump"]);
+    // Not requested, so not checked either: a heap dump found by an earlier aggressive run stays open.
+    expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.skipReason).toBe(
+      "probe-level-too-low"
+    );
     expect(warn?.items?.find((i) => i.id === `${BASE}/actuator/heapdump`)?.meta).toMatchObject({
       endpoint: "heapdump",
       evidence: "listed-in-index",
@@ -167,7 +180,8 @@ describe("security/exposed-actuator", () => {
       },
       { level: "aggressive" }
     );
-    expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/env"]);
+    // The heapdump is asked for whatever the index lists: it passes only on its own answer.
+    expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/env", "GET /actuator/heapdump"]);
     expect(checks.find((c) => c.name === "exposed-actuator-critical")?.items?.map((i) => i.meta?.endpoint)).toEqual([
       "env",
     ]);
@@ -254,7 +268,8 @@ describe("security/exposed-actuator", () => {
   test("robots.txt disallowing every actuator path: nothing sent, not checked, and a prior critical finding is not cleared", async () => {
     const { sent, checks } = await run({}, { robotsTxt: robots(["/actuator"]) });
     expect(sent).toHaveLength(0);
-    expect(checks).toHaveLength(1);
+    expect(checks).toHaveLength(2);
+    expect(checks[1]).toMatchObject({ name: "exposed-actuator-heapdump-not-checked", status: "skipped" });
     expect(checks[0]).toMatchObject({
       name: "exposed-actuator-not-checked",
       status: "skipped",
@@ -281,7 +296,8 @@ describe("security/exposed-actuator", () => {
       const routes = Object.fromEntries(ACTUATOR_ENDPOINTS.map((e) => [`${BASE}/actuator${e.path}`, route]));
       const { checks, sent } = await run(routes);
       expect(sent).toHaveLength(1);
-      expect(checks).toHaveLength(1);
+      expect(checks).toHaveLength(2);
+      expect(clearedBy(checks)).toEqual([]);
       expect(checks[0]).toMatchObject({
         name: "exposed-actuator-not-checked",
         status: "skipped",
@@ -398,7 +414,9 @@ describe("security/exposed-actuator against a fixture server", () => {
     expect(Date.now() - started).toBeLessThan(5_000);
     expect(seen.range).toBe("bytes=0-63");
     expect(chunksSent).toBeLessThan(20_000);
-    const critical = checks.find((c) => c.name === "exposed-actuator-critical");
+    const critical = checks.find((c) => c.name === "exposed-actuator-heapdump");
+    expect(critical?.status).toBe("fail");
+    expect(critical?.details?.severity).toBe("critical");
     expect(critical?.items?.map((i) => [i.id, i.meta?.evidence])).toEqual([
       [`${origin}/actuator/heapdump`, "hprof-header"],
     ]);
@@ -419,7 +437,8 @@ describe("security/exposed-actuator against a fixture server", () => {
     const elapsed = Date.now() - started;
     expect(seen).toEqual(["/actuator"]);
     expect(elapsed).toBeLessThan(ACTUATOR_PROBE_TIMEOUT_MS + 3_000);
-    expect(checks).toHaveLength(1);
+    expect(checks).toHaveLength(2);
+    expect(clearedBy(checks)).toEqual([]);
     expect(checks[0]).toMatchObject({
       name: "exposed-actuator-not-checked",
       status: "skipped",
@@ -448,7 +467,8 @@ describe("security/exposed-actuator against a fixture server", () => {
     // /a times out at 400 ms and ends its base; /b is cut at the 600 ms total; /actuator is never reached.
     expect(seen).toEqual(["/a/actuator", "/b/actuator"]);
     expect(elapsed).toBeLessThan(2_000);
-    expect(checks).toHaveLength(1);
+    expect(checks).toHaveLength(2);
+    expect(clearedBy(checks)).toEqual([]);
     expect(checks[0]).toMatchObject({
       name: "exposed-actuator-not-checked",
       status: "skipped",
@@ -474,7 +494,10 @@ describe("security/exposed-actuator against a fixture server", () => {
     ]);
     const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 300, totalBudgetMs: 10_000 });
     expect(seen).toEqual(["/a/actuator", "/actuator", "/actuator/env", "/actuator/configprops", "/actuator/mappings"]);
-    expect(checks.map((c) => [c.name, c.skipReason])).toEqual([["exposed-actuator-not-checked", "probe-incomplete"]]);
+    expect(checks.map((c) => [c.name, c.skipReason])).toEqual([
+      ["exposed-actuator-not-checked", "probe-incomplete"],
+      ["exposed-actuator-heapdump-not-checked", "probe-level-too-low"],
+    ]);
   }, 30_000);
 
   test("an SPA fixture that answers every path with its 200 shell: no finding", async () => {
@@ -483,6 +506,133 @@ describe("security/exposed-actuator against a fixture server", () => {
       fetch: () => new Response("<!doctype html><div id=app></div>", { headers: { "content-type": "text/html" } }),
     });
     const { checks } = await exposedActuatorRule.run(serverCtx(`http://localhost:${server.port}`, "aggressive"));
-    expect(checks.map((c) => [c.name, c.status])).toEqual([["exposed-actuator", "pass"]]);
+    expect(checks.map((c) => [c.name, c.status])).toEqual([
+      ["exposed-actuator", "pass"],
+      ["exposed-actuator-heapdump-not-checked", "skipped"],
+    ]);
   });
+});
+
+// ── pub#1878 round 2: a pass clears only what the run requested and got a definite answer for ──
+
+/** The problem check names this run's clean checks clear (what a comparison marks fixed). */
+function clearedBy(checks: CheckResult[]): string[] {
+  const decls = exposedActuatorRule.meta.checks ?? [];
+  return checks
+    .filter((c) => c.status === "pass")
+    .flatMap((c) => decls.find((d) => d.name === c.name && d.outcome === "clean")?.clears ?? []);
+}
+
+/** The check name an earlier run's heapdump finding was filed under. */
+function heapdumpFindingCheck(checks: CheckResult[]): string {
+  const c = checks.find((x) => x.items?.some((i) => i.meta?.endpoint === "heapdump"));
+  expect(c).toBeDefined();
+  return c!.name;
+}
+
+const HPROF = () =>
+  new Response(new TextEncoder().encode("JAVA PROFILE 1.0.2\0rest"), {
+    status: 206,
+    headers: { "content-type": "application/octet-stream" },
+  });
+
+describe("security/exposed-actuator: a pass clears only what was checked", () => {
+  test("robots.txt disallowing only /actuator/env: no pass, env reported not checked", async () => {
+    const { checks, sent } = await run({}, { robotsTxt: robots(["/actuator/env"]) });
+    expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/configprops", "GET /actuator/mappings"]);
+    expect(checks.some((c) => c.name === "exposed-actuator")).toBe(false);
+    expect(clearedBy(checks)).toEqual([]);
+    const nc = checks.find((c) => c.name === "exposed-actuator-not-checked");
+    expect(nc).toMatchObject({ status: "skipped", skipReason: "robots-disallowed", details: { skippedRobots: 1 } });
+    expect(nc?.message).toContain(`${BASE}/actuator/env`);
+  });
+
+  test("an aggressive run finds a heap dump; a later active run does not clear it", async () => {
+    const first = await run({ [`${BASE}/actuator/heapdump`]: HPROF }, { level: "aggressive" });
+    const findingCheck = heapdumpFindingCheck(first.checks);
+    restore?.();
+    // The site is otherwise closed: every actuator path is a 404.
+    const later = await run({});
+    expect(later.sent.some((r) => r.url.includes("heapdump"))).toBe(false);
+    expect(clearedBy(later.checks)).not.toContain(findingCheck);
+    expect(later.checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")).toMatchObject({
+      status: "skipped",
+      skipReason: "probe-level-too-low",
+    });
+    // The other endpoints were all answered, so their own pass still stands.
+    expect(later.checks.find((c) => c.name === "exposed-actuator")?.status).toBe("pass");
+  });
+
+  test("aggressive: a definite 404, 401 or 403 for heapdump clears it; a 200 without the header or a 5xx does not", async () => {
+    for (const status of [404, 401, 403]) {
+      const { checks, sent } = await run(
+        { [`${BASE}/actuator/heapdump`]: () => json({ error: "x" }, status) },
+        { level: "aggressive" }
+      );
+      expect(sent.some((r) => r.url.endsWith("/actuator/heapdump"))).toBe(true);
+      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-closed")?.status).toBe("pass");
+      expect(clearedBy(checks)).toContain("exposed-actuator-heapdump");
+      restore?.();
+    }
+    for (const route of [() => html("<!doctype html><div id=root></div>", 200), () => json({}, 503)]) {
+      const { checks } = await run({ [`${BASE}/actuator/heapdump`]: route }, { level: "aggressive" });
+      expect(clearedBy(checks)).not.toContain("exposed-actuator-heapdump");
+      expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.status).toBe("skipped");
+      restore?.();
+    }
+  });
+
+  test("aggressive: an open index that does not list heapdump still gets it requested before it can pass", async () => {
+    const { checks, sent } = await run(
+      { [`${BASE}/actuator`]: () => json(INDEX(`${BASE}/actuator`, ["health"])) },
+      { level: "aggressive" }
+    );
+    // INDEX always carries `env-toMatch`, so env is listed and asked for too.
+    expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/env", "GET /actuator/heapdump"]);
+    expect(checks.find((c) => c.name === "exposed-actuator-heapdump-closed")?.status).toBe("pass");
+  });
+
+  test("a server error (503) on one path: that path is not checked and nothing is cleared", async () => {
+    const { checks } = await run({ [`${BASE}/actuator/env`]: () => json({ error: "busy" }, 503) });
+    expect(clearedBy(checks)).toEqual([]);
+    expect(checks.find((c) => c.name === "exposed-actuator-not-checked")).toMatchObject({
+      status: "skipped",
+      skipReason: "probe-incomplete",
+    });
+  });
+
+  test("throttled partway through an aggressive run: neither family is cleared", async () => {
+    const { checks, sent } = await run(
+      { [`${BASE}/actuator/configprops`]: () => json({ error: "Too Many Requests" }, 429) },
+      { level: "aggressive" }
+    );
+    expect(paths(sent)).toEqual(["GET /actuator", "GET /actuator/env", "GET /actuator/configprops"]);
+    expect(clearedBy(checks)).toEqual([]);
+    expect(checks.find((c) => c.name === "exposed-actuator-not-checked")?.skipReason).toBe("probe-incomplete");
+    expect(checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked")?.skipReason).toBe(
+      "probe-incomplete"
+    );
+  });
+
+  test("a base that times out on an aggressive run: its endpoints, heapdump included, are not checked and nothing is cleared", async () => {
+    using server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const { pathname } = new URL(req.url);
+        if (pathname.startsWith("/a/")) return new Promise<Response>(() => {});
+        return new Response("Not Found", { status: 404 });
+      },
+    });
+    const origin = `http://localhost:${server.port}`;
+    const ctx = serverCtx(origin, "aggressive");
+    ctx.endpointSurface = surface([
+      candidate(`${origin}/a/actuator/health`, { method: "GET", sameOrigin: true, probeEligible: true }),
+    ]);
+    const { checks } = await runExposedActuator(ctx, { requestTimeoutMs: 300, totalBudgetMs: 10_000 });
+    expect(clearedBy(checks)).toEqual([]);
+    const hd = checks.find((c) => c.name === "exposed-actuator-heapdump-not-checked");
+    expect(hd).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
+    expect(hd?.message).toContain(`${origin}/a/actuator/heapdump`);
+    expect(checks.find((c) => c.name === "exposed-actuator-not-checked")?.message).toContain(`${origin}/a/actuator/env`);
+  }, 30_000);
 });
