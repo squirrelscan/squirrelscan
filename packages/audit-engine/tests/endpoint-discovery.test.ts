@@ -323,6 +323,25 @@ describe("render-time request capture (repo#4188)", () => {
     ]);
   });
 
+  test("captured query strings and userinfo stay out of findings and the snapshot", () => {
+    // Built at runtime so secret scanners do not flag a fixture token.
+    const token = ["sk", "live", "fixture0000"].join("_");
+    const c = make([
+      { url: `/api/users?access_token=${token}`, method: "GET" },
+      { url: `https://user:${token}@example.com/api/me?x=1#frag` },
+    ]);
+    const snapshot = c.collect(page, parsed);
+    const surface = c.finish({ baseUrl: "https://example.com/", scripts: [] });
+    expect(JSON.stringify(snapshot)).not.toContain(token);
+    expect(JSON.stringify(c.retained())).not.toContain(token);
+    expect(JSON.stringify(surface)).not.toContain(token);
+    const render = surface.candidates.filter((x) => x.source === "render");
+    expect(render.map((x) => x.url).sort()).toEqual([
+      "https://example.com/api/me",
+      "https://example.com/api/users",
+    ]);
+  });
+
   test("no capture leaves the surface static", () => {
     const c = make();
     c.collect(page, parsed);

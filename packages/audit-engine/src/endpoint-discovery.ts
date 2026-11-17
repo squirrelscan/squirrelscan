@@ -108,12 +108,20 @@ function scriptUrls(parsed: ParsedPage, pageUrl: string): { url: string }[] {
   return out;
 }
 
-/** A captured request as a ref, or null when its URL is not an http(s) URL. */
+/**
+ * A captured request as a ref, or null when its URL is not an http(s) URL.
+ * Runtime requests carry live tokens in the query string and userinfo (for example
+ * `?access_token=...`), so both are dropped: the ref ends up in findings and the
+ * persisted rule-cache snapshot, and the endpoint is identified by its path.
+ */
 function renderedRef(req: RenderedRequest, pageUrl: string): PageEndpointRef | null {
   try {
     const u = new URL(req.url, pageUrl);
     if (u.protocol !== "http:" && u.protocol !== "https:") return null;
     u.hash = "";
+    u.search = "";
+    u.username = "";
+    u.password = "";
     const method = req.method?.trim().toUpperCase();
     return { url: u.href, ...(method ? { method } : {}), discoveredVia: RENDER_REQUEST_VIA };
   } catch {
