@@ -580,6 +580,8 @@ export interface StylesheetMotionData {
   infiniteAnimationSelectors: string[];
   /** `scroll-behavior: smooth` outside any `prefers-reduced-motion` block. */
   hasSmoothScroll: boolean;
+  /** Selectors of the rules setting `scroll-behavior: smooth` (capped like `infiniteAnimationSelectors`); counted only when one matches the page. */
+  smoothScrollSelectors: string[];
 }
 
 export interface SiteData {
