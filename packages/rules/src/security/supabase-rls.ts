@@ -251,13 +251,13 @@ export type TableVerdict =
    * nothing about the table, and ends the run.
    */
   | { kind: "throttled"; status: number }
-  /** 401 or a plain 403: RLS or grants refuse the anon role (PostgREST answers `42501` with one of these). */
+  /** 401 or a plain 403, not HTML: RLS or grants refuse the anon role (PostgREST answers `42501` with one of these). */
   | { kind: "protected"; status: number }
   /** 2xx with a total of zero: RLS hides every row, or the table is empty. The two look the same. */
   | { kind: "empty"; status: number }
-  /** 404: no such table in the exposed schema. */
+  /** 404, not HTML: no such table in the exposed schema. */
   | { kind: "missing"; status: number }
-  /** Any other status, or a 2xx without a usable total: not checked. */
+  /** Any other status, an HTML 401, 403 or 404, or a 2xx without a usable total: not checked. */
   | { kind: "other"; status: number }
   | { kind: "errored" }
   | { kind: "not-sent" };
@@ -276,6 +276,12 @@ export function classifyTableResponse(
   headers: Headers | null = null,
 ): TableVerdict {
   if (isThrottledOrChallenged({ status, headers, text: "" })) return { kind: "throttled", status };
+  // An HTML 401, 403 or 404 is a page from something in front of the API (a
+  // WAF block page without cf-mitigated, a proxy's error page), not PostgREST's
+  // answer, and a HEAD has no body to tell which. Not checked. A JSON content
+  // type, or none at all, keeps its meaning (#1883 review).
+  if ((status === 401 || status === 403 || status === 404) && isHtml(headers))
+    return { kind: "other", status };
   if (status === 401 || status === 403) return { kind: "protected", status };
   if (status === 404) return { kind: "missing", status };
   if (status < 200 || status >= 300) return { kind: "other", status };
@@ -283,6 +289,12 @@ export function classifyTableResponse(
   if (!m || m[1] === "*") return { kind: "other", status };
   const rows = Number(m[1]);
   return rows > 0 ? { kind: "exposed", rows } : { kind: "empty", status };
+}
+
+function isHtml(headers: Headers | null): boolean {
+  const type = headers?.get("content-type");
+  if (!type) return false;
+  return type.split(";")[0]!.trim().toLowerCase() === "text/html";
 }
 
 async function probeTable(
@@ -557,12 +569,15 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       }
       if (checks.length > 0) return { checks };
 
+      const budgetSize =
+        budget.budgetMs % 1000 === 0 ? `${budget.budgetMs / 1000} s` : `${budget.budgetMs} ms`;
+      const budgetCap = `the shared probe time budget of ${budgetSize} for all probing rules ran out`;
       if (sentTotal === 0) {
         checks.push({
           name: CHECK,
           status: "skipped",
           skipReason: "probe-budget",
-          message: "The probe budget ran out before any Supabase table was probed",
+          message: `No Supabase table was probed: ${budgetCap} first (0 of ${planned} table probe(s) sent)`,
           details: summary,
         });
         return { checks };
@@ -594,15 +609,16 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           name: CHECK,
           status: "skipped",
           skipReason: "probe-budget",
-          message: `The probe budget ran out after ${sentTotal} Supabase table probe(s). None of those reported rows, but the rest were not checked`,
+          message: `Supabase Row Level Security check stopped: ${budgetCap} after ${sentTotal} of ${planned} table probe(s). None of those reported rows, but the rest were not checked`,
           details: summary,
         });
         return { checks };
       }
-      // A pass clears the rule, so it needs a definite answer (401, plain 403,
-      // a zero total, 404) from every table the site's code names, in every
-      // project. Pushback, an error, an answer without a usable total, or a
-      // table never reached leaves the run not checked (#1883 review).
+      // A pass clears the rule, so it needs a definite answer (a non-HTML 401,
+      // plain 403 or 404, or a zero total) from every table the site's code
+      // names, in every project. Pushback, an error, an HTML error page, an
+      // answer without a usable total, or a table never reached leaves the run
+      // not checked (#1883 review).
       const unverified = unanswered + errored + notChecked + (throttled ? 1 : 0);
       if (unverified > 0) {
         const why: string[] = [];
@@ -610,7 +626,7 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           why.push(
             "the Supabase project throttled the probes (HTTP 429) or answered with a bot challenge, so no further request was sent",
           );
-        if (budgetStopped) why.push("the probe budget ran out");
+        if (budgetStopped) why.push(budgetCap);
         if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
         if (notChecked > 0)
           why.push(`${notChecked} answer(s) had no status and row count squirrel can judge`);
