@@ -400,10 +400,12 @@ export function createCompleteStoreTallyFold(
   // subtotal add to the same figure; the rule's total is clamped once.
   const perPageMemo = new Map<string, number>();
   const checksPerPage = (ruleId: string): number => {
-    if (!freshTallies) return 1;
     let k = perPageMemo.get(ruleId);
     if (k === undefined) {
-      k = checksPerPageFromTallies(freshTallies[ruleId]);
+      k = carriedChecksPerPageFor(
+        { completeStore: true, completeTallies: freshTallies, perPageTallies: {} },
+        ruleId,
+      );
       perPageMemo.set(ruleId, k);
     }
     return k;
@@ -1068,6 +1070,24 @@ export function checksPerPageFromTallies(byName: CheckTallies[string] | undefine
     if (evaluated > busiest) busiest = evaluated;
   }
   return busiest > 0 ? Math.max(1, Math.round(total / busiest)) : 1;
+}
+
+/**
+ * (repo#3360) The ONE checks-per-page rule, for the fold and the sampled-store
+ * estimator alike so they cannot drift. On the chunked complete-store path it is
+ * the complete tallies' figure (1 when there are none); otherwise the per-page
+ * tallies' figure.
+ */
+export function carriedChecksPerPageFor(
+  tallies: {
+    completeStore: boolean;
+    completeTallies: CheckTallies | undefined;
+    perPageTallies: CheckTallies;
+  },
+  ruleId: string,
+): number {
+  if (!tallies.completeStore) return checksPerPageFromTallies(tallies.perPageTallies[ruleId]);
+  return tallies.completeTallies ? checksPerPageFromTallies(tallies.completeTallies[ruleId]) : 1;
 }
 
 /** Split a batch of findings into per-page groups, preserving arrival order. */

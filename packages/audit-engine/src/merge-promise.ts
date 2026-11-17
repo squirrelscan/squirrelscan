@@ -51,7 +51,7 @@ import {
 import {
   createCompleteStoreTallyFold,
   foldCompleteStoreTallies,
-  checksPerPageFromTallies,
+  carriedChecksPerPageFor,
   freshTally,
   untouchedCarriedFinding,
   type FindingPageSource,
@@ -1356,7 +1356,7 @@ export async function runCloudSmartAudits(
   const perPageTallies: CheckTallies =
     checkTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
   const carriedChecksPerPage = (ruleId: string): number =>
-    checksPerPageFromTallies(perPageTallies[ruleId]);
+    carriedChecksPerPageFor({ completeStore: !!completeStore, completeTallies, perPageTallies }, ruleId);
   const unionRuleResults = buildScoringResultsFromMerged({
     freshResults: freshForUnion,
     carriedFindings: unionCarried,
