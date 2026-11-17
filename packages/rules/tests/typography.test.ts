@@ -42,6 +42,24 @@ describe("content/typography", () => {
     expect(kinds(c)).toEqual(["double-space"]);
   });
 
+  test("spaces where two text nodes meet are not a double space", async () => {
+    // A browser collapses whitespace across node boundaries: each renders one space.
+    expect((await run("<p><b>Two </b> spaces here.</p>"))[0]!.status).toBe("pass");
+    expect((await run("<p>Read <a href='/'> the docs</a> first.</p>"))[0]!.status).toBe("pass");
+    expect((await run("<p><span>Hello </span> <span>world</span></p>"))[0]!.status).toBe("pass");
+  });
+
+  test("double spaces are counted inside each text node", async () => {
+    const c = await run("<p>One  here and <em>two  more  here</em>.</p>");
+    expect(kinds(c)).toEqual(["double-space"]);
+    expect(c[0]!.value).toBe(3);
+  });
+
+  test("double spaces inside code never count, even beside prose", async () => {
+    const c = await run("<p>Run <code>a  b</code> now.</p>");
+    expect(c[0]!.status).toBe("pass");
+  });
+
   test("warn: mixed straight and curly quotes", async () => {
     const c = await run('<p>He said "hi" and then “bye”.</p>');
     expect(c[0]!.status).toBe("warn");

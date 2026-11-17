@@ -6,7 +6,10 @@
 // concurrently, raced against them. This reads the same text without touching
 // the DOM, reusing the parser's iterative walk (stack-safe on deep DOMs).
 
-import type { Document, Element } from "linkedom";
+import type { Document, Element, Node } from "linkedom";
+
+const ELEMENT_NODE = 1;
+const TEXT_NODE = 3;
 
 import { collectTextExcluding, tagExcluder } from "@squirrelscan/parser/extractors";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
@@ -136,6 +139,31 @@ export function getRenderedProseText(element: Element): string {
     SKIPPED_SUBTREE_BOUNDARY,
     isBlockElement,
   );
+}
+
+/**
+ * The text nodes `getRenderedProseText` reads, each node's own value, in document
+ * order. A browser collapses whitespace across node boundaries (`<b>Two </b>
+ * spaces` renders one space), so a rule that judges spacing inside a run of copy
+ * reads each node on its own instead of the joined text, where two adjacent
+ * nodes can meet as a double space nobody sees.
+ */
+export function getRenderedProseTextNodes(element: Element): string[] {
+  const out: string[] = [];
+  const stack: Node[] = [];
+  const initial = element.childNodes;
+  for (let i = initial.length - 1; i >= 0; i--) stack.push(initial[i] as Node);
+  while (stack.length > 0) {
+    const node = stack.pop() as Node;
+    if (node.nodeType === TEXT_NODE) {
+      out.push((node as unknown as { data?: string }).data ?? "");
+    } else if (node.nodeType === ELEMENT_NODE) {
+      if (isScriptCodeOrUnrendered(node as unknown as Element)) continue;
+      const children = node.childNodes;
+      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i] as Node);
+    }
+  }
+  return out;
 }
 
 /**

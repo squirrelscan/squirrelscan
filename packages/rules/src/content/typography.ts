@@ -1,6 +1,6 @@
 // content/typography - typographic hygiene in body copy
 
-import { getRenderedProseText } from "./text-content";
+import { getRenderedProseText, getRenderedProseTextNodes } from "./text-content";
 
 import type { Rule, RuleResult, CheckResult } from "../types";
 
@@ -32,13 +32,29 @@ const count = (re: RegExp, text: string): { n: number; first: string } => {
 
 const show = (s: string): string => s.replace(/\u00A0/g, "[nbsp]");
 
-/** Findings for one page's prose text. `checkPunctSpacing` is off for French and friends. */
-export function findTypographyIssues(text: string, checkPunctSpacing: boolean): Finding[] {
+/**
+ * Findings for one page's prose text. `checkPunctSpacing` is off for French and friends.
+ * `textNodes` are the same prose as separate text nodes: double spaces are counted per
+ * node, because whitespace where two nodes meet collapses to one space when rendered.
+ * Without it, `text` is treated as a single node.
+ */
+export function findTypographyIssues(
+  text: string,
+  checkPunctSpacing: boolean,
+  textNodes: readonly string[] = [text],
+): Finding[] {
   const out: Finding[] = [];
 
-  const dbl = count(DOUBLE_SPACE_RE, text);
-  if (dbl.n > 0)
-    out.push({ kind: "double-space", count: dbl.n, sample: show(dbl.first) || "double space" });
+  let dblCount = 0;
+  let dblFirst = "";
+  for (const value of textNodes) {
+    const dbl = count(DOUBLE_SPACE_RE, value);
+    if (dbl.n === 0) continue;
+    if (dblCount === 0) dblFirst = dbl.first;
+    dblCount += dbl.n;
+  }
+  if (dblCount > 0)
+    out.push({ kind: "double-space", count: dblCount, sample: show(dblFirst) || "double space" });
 
   // Straight and curly are only "mixed" when the SAME family uses both. Double quotes and
   // single quotes/apostrophes are separate families: a page can be all-curly doubles.
@@ -116,7 +132,9 @@ export const typographyRule: Rule = {
       .toLowerCase()
       .split(/[-_]/)[0]!;
     const checkPunctSpacing = lang !== "" && !SPACE_BEFORE_PUNCT_LOCALES.has(lang);
-    const found = findTypographyIssues(text, checkPunctSpacing);
+    // Double spaces are judged per text node: where two nodes meet, the browser
+    // collapses the whitespace, so the joined text would report spaces nobody sees.
+    const found = findTypographyIssues(text, checkPunctSpacing, getRenderedProseTextNodes(body));
 
     if (found.length === 0) {
       checks.push({
