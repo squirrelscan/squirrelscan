@@ -137,6 +137,12 @@
    "color-contrast|pass|No obvious contrast issues detected||"
   ]
  },
+ "a11y/color-contrast-rendered": {
+  "digest": "274841711541257",
+  "lines": [
+   "color-contrast-rendered|skipped|Rendered contrast check skipped||"
+  ]
+ },
  "a11y/definition-list": {
   "digest": "281360197831056",
   "lines": [

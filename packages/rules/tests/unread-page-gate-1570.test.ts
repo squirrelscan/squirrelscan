@@ -73,7 +73,9 @@ const readsParsed = (text: string): boolean =>
 const HELPER_CHECKED = new Set<string>();
 // Rules that read only the cloud results, but the cloud payload is built from the parsed page (title, text, headings), so an unread
 // page would be scored as an empty document (and cost credits): skipped, and the payload builders leave the page out.
-const CLOUD_FED = new Set(["ai/llm-parsability", "eeat/authority-signals"]);
+// a11y/color-contrast-rendered reads only the render result, and the render is requested from the same page payloads,
+// so an unread page has no render to measure: the unread-page skip says why, where "not prefetched" would not.
+const CLOUD_FED = new Set(["a11y/color-contrast-rendered", "ai/llm-parsability", "eeat/authority-signals"]);
 const READS_PARSED_BUT_RUNS = new Set(["crawl/html-size", "integrity/kit-signature"]);
 
 describe("every page rule is classified for an unread page (#1570)", () => {
