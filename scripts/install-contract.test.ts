@@ -2216,6 +2216,35 @@ describe.concurrent("release manifest fetch failure message (repo#1595)", () => 
     expect(stderr).toContain("api.github.com: HTTP 200 but no usable release data");
   });
 
+  test("both endpoints answering 200 with a captive-portal page name both outcomes, not 'No stable releases'", async () => {
+    for (const jq of ["false", "true"]) {
+      if (jq === "true" && !Bun.which("jq")) continue;
+      const { code, stderr } = await runWithCurlShim(`USE_JQ=${jq}; get_latest_version stable`, {
+        prelude: fetchShim(
+          "printf '<html>login</html>\\n@@status:200'",
+          "printf '<html>login</html>\\n@@status:200'",
+        ),
+      });
+      expect(code).toBe(1);
+      expect(stderr).toContain(
+        "The release endpoints returned something unusable (install.squirrelscan.com: HTTP 200 but no usable release data; api.github.com: HTTP 200 but no usable release data)",
+      );
+      expect(stderr).not.toContain("No stable releases");
+    }
+  });
+
+  test.skipIf(!Bun.which("jq"))("a real release list with no stable release still returns empty for the caller", async () => {
+    const { code, stdout, stderr } = await runWithCurlShim("USE_JQ=true; get_latest_version stable", {
+      prelude: fetchShim(
+        "return 7",
+        'printf \'[{"tag_name": "v1.0.0-beta.1", "prerelease": true}]\\n@@status:200\'',
+      ),
+    });
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("");
+    expect(stderr).not.toContain("something unusable");
+  });
+
   test("a custom releases endpoint is reported as custom, never by its name", async () => {
     const { stderr } = await runWithCurlShim("USE_JQ=false; get_latest_version stable", {
       prelude: fetchShim("return 6", "return 6"),
