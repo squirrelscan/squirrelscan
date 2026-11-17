@@ -14,7 +14,7 @@ It is one of the most common gaps in apps built quickly on Supabase, including a
 This is a probing rule, and a loud one: it sends requests to your Supabase project host, which is not the audited site. It runs only when [probing intensity](/configuration/security) is `aggressive`, only when the audit may request other hosts (not `--offline`, and external link checking on), and inside the shared probe budget. A cloud audit of a website whose ownership is not verified stays passive, so it never sends one.
 
 <Warning>
-Only run an aggressive audit on a website you own or are authorized to test. This rule asks your database how many rows your public key can see in each table, using your own key. It never reads a row.
+`aggressive` is for sites you run: only use it on a website you own or are authorized to test. This rule sends your site's public anon key to your own Supabase project in `HEAD` requests, asking how many rows that key can see in each table. It never reads a row.
 </Warning>
 
 ### Finding the project and key
@@ -53,10 +53,11 @@ Only the status and the row total in `Content-Range` are used:
 | Answer | Verdict |
 |---|---|
 | `2xx` with a total above zero | Exposed: the anon key can see that many rows |
-| `401` or `403` (Supabase answers a `42501` permission error with one of these) | Protected |
+| `429`, a bot challenge (`cf-mitigated: challenge`), or a `403` carrying WAF or challenge markers | Not checked, and no further request is sent this run |
+| `401` or a plain `403` (Supabase answers a `42501` permission error with one of these) | Protected |
 | `2xx` with a total of `0` (`*/0`) | Not exposed or empty: see below |
 | `404` | The table does not exist |
-| Any other status, or a `2xx` without a numeric total | Not checked |
+| Any other status, a `2xx` without a numeric total, a network error or a timeout | Not checked |
 
 What a count can and cannot tell apart:
 
@@ -68,14 +69,26 @@ What a count can and cannot tell apart:
 The rule emits checks named `supabase-rls`:
 
 - Fail, one check per project, when one or more tables report rows. Message: `1 Supabase table(s) in abcdefghijklmnopqrst.supabase.co report rows to the site's public anon key: profiles. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`. Each exposed table is an item such as `profiles (42 row(s) visible to the anon key)`. No row, value or column name is fetched, so none is stored or reported.
-- Pass when every probed table was protected, reported zero rows or was missing. Message: `No Supabase table reported rows to the public anon key (4 table(s) probed in 1 project(s))`, plus how many were not checked, if any.
+- Pass only when every table the code names, in every project found, got a definite answer: protected, zero rows or missing. Message: `No Supabase table reported rows to the public anon key (4 table(s) probed in 1 project(s))`.
+- Skipped, reason `probe-incomplete` (not checked), when any table got no definite answer: the project throttled or challenged a probe, a probe failed or had no usable total, the budget ran out partway, or a table or project was left out by the per-audit caps. Those tables may be readable, so the run is never a pass and never clears an earlier finding.
 - Skipped, reason `not-applicable`, when the site's scripts hold no Supabase project with an anon key.
 - Skipped, reason `probing-passive` or `probing-not-aggressive`, when probing is below `aggressive`. Nothing is sent.
 - Skipped, reason `external-requests-off`, on an `--offline` audit or one with external link checking off. Nothing is sent.
 - Skipped, reason `no-tables-in-code`, when the site uses Supabase but its scripts name no table. Nothing is sent.
-- Skipped, reason `probe-budget`, when the shared probe budget ran out before the first request, or partway through with no finding. A run cut short is never a pass.
+- Skipped, reason `probe-budget`, when the shared probe budget ran out before the first request, or partway through with every answer before that definite and none exposed. A run cut short is never a pass.
 - Skipped, reason `probe-errors`, when every request failed with a network error, a timeout or a refusal.
-- Skipped, reason `probe-inconclusive`, when no answer had a status and row total the rule can judge.
+- Skipped, reason `probe-inconclusive`, when every table was probed and no answer had a status and row total the rule can judge.
+
+### Tables that are meant to be public
+
+A table you publish on purpose, such as a public `posts` table, still fails, because a count cannot tell an intended read policy from RLS left off. To waive it, add an [`[[ignore]]`](/configuration/ignore) entry that matches its item id (`<ref>.supabase.co/rest/v1/<table>`) by table name, and every other table keeps being checked:
+
+```toml squirrel.toml
+[[ignore]]
+rule   = "security/supabase-rls"
+items  = ["glob:*/rest/v1/posts"]
+reason = "posts is public by design"
+```
 
 ### Limits
 

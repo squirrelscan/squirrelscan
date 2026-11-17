@@ -7,8 +7,9 @@
 
 import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from "bun:test";
 
-import type { ScriptContentData } from "@squirrelscan/core-contracts";
+import { PROBE_INCOMPLETE_SKIP_REASON, type ScriptContentData } from "@squirrelscan/core-contracts";
 
+import { IgnoreTable } from "../src/ignore";
 import { createProbeBudget, type ProbeLevel } from "../src/probe-budget";
 import {
   buildTableProbe,
@@ -93,7 +94,7 @@ const SECRET_BODY = JSON.stringify([
 let bodyPulls = 0;
 
 /** A response whose body is the secret JSON, counted if it is ever read. */
-function answer(status: number, contentRange?: string): Response {
+function answer(status: number, contentRange?: string, extra: Record<string, string> = {}): Response {
   const bytes = new TextEncoder().encode(SECRET_BODY);
   const body = new ReadableStream<Uint8Array>(
     {
@@ -107,6 +108,7 @@ function answer(status: number, contentRange?: string): Response {
   );
   const headers: Record<string, string> = { "content-type": "application/json; charset=utf-8" };
   if (contentRange !== undefined) headers["content-range"] = contentRange;
+  Object.assign(headers, extra);
   return new Response(body, { status, headers });
 }
 
@@ -303,6 +305,14 @@ describe("discovery (sends nothing)", () => {
     expect(classifyTableResponse(401, null).kind).toBe("protected");
     expect(classifyTableResponse(403, "*/0").kind).toBe("protected");
     expect(classifyTableResponse(404, null).kind).toBe("missing");
+    // Pushback says nothing about the table: never protected.
+    expect(classifyTableResponse(429, "*/0").kind).toBe("throttled");
+    expect(classifyTableResponse(403, null, new Headers({ "cf-mitigated": "challenge" })).kind).toBe(
+      "throttled",
+    );
+    expect(classifyTableResponse(200, "*/0", new Headers({ "cf-mitigated": "challenge" })).kind).toBe(
+      "throttled",
+    );
     // A 2xx without a usable total, or any other status, is not checked.
     expect(classifyTableResponse(200, null).kind).toBe("other");
     expect(classifyTableResponse(200, "0-4/*").kind).toBe("other");
@@ -371,27 +381,55 @@ describe("security/supabase-rls", () => {
     expectNoValues(logged.join("\n"));
   });
 
-  test("the key's source URL is stored without its query string or fragment", async () => {
-    stubFetch({ [`${HOST}/rest/v1/profiles`]: () => answer(200, "0-0/7") });
-    const result = await rule.run(
+  test("the key's source URL is stored without userinfo, query string or fragment", async () => {
+    for (const source of [
+      "https://example.com/assets/index.js?token=SECRET&email=a@b.c#frag",
+      "https://user:pass@example.com/assets/index.js?token=SECRET#frag",
+    ]) {
+      stubFetch({ [`${HOST}/rest/v1/profiles`]: () => answer(200, "0-0/7") });
+      const result = await rule.run(
+        ctx({ scripts: [script(bundle(`sb.from("profiles").select("id")`), source)] }),
+      );
+      const fail = result.checks.find((c) => c.status === "fail")!;
+      expect(fail.items![0]!.meta).toMatchObject({
+        keySource: "https://example.com/assets/index.js",
+      });
+      const serialized = JSON.stringify(result);
+      for (const leak of ["SECRET", "a@b.c", "token=", "#frag", "user", "pass", "@example.com"]) {
+        expect(serialized).not.toContain(leak);
+      }
+    }
+  });
+
+  test("[[ignore]] waives a table that is meant to be public by its item id, the rest stay", async () => {
+    stubFetch({
+      [`${HOST}/rest/v1/profiles`]: () => answer(200, "0-0/42"),
+      [`${HOST}/rest/v1/public_posts`]: () => answer(200, "0-0/9"),
+    });
+    const checks = await run(
       ctx({
-        scripts: [
-          script(
-            bundle(`sb.from("profiles").select("id")`),
-            "https://example.com/assets/index.js?token=SECRET&email=a@b.c#frag",
-          ),
-        ],
+        scripts: [script(bundle(`sb.from("profiles").select();sb.from("public_posts").select()`))],
       }),
     );
-    const fail = result.checks.find((c) => c.status === "fail")!;
-    expect(fail.items![0]!.meta).toMatchObject({
-      keySource: "https://example.com/assets/index.js",
-    });
-    const serialized = JSON.stringify(result);
-    expect(serialized).not.toContain("SECRET");
-    expect(serialized).not.toContain("a@b.c");
-    expect(serialized).not.toContain("token=");
-    expect(serialized).not.toContain("#frag");
+    expect(checks[0]!.items!.map((i) => i.id)).toEqual([
+      `${HOST}/rest/v1/profiles`,
+      `${HOST}/rest/v1/public_posts`,
+    ]);
+    // The squirrel.toml entry the rule page documents: match the item id by table name.
+    const waived = new IgnoreTable([
+      { rule: "security/supabase-rls", items: ["glob:*/rest/v1/public_posts"], reason: "public by design" },
+    ]).filterChecks("security/supabase-rls", undefined, checks);
+    expect(waived[0]!.status).toBe("fail");
+    expect(waived[0]!.items!.map((i) => i.id)).toEqual([`${HOST}/rest/v1/profiles`]);
+    // Waiving every exposed table turns the check into a pass that says so.
+    const all = new IgnoreTable([
+      {
+        rule: "security/supabase-rls",
+        items: ["glob:*/rest/v1/public_posts", "glob:*/rest/v1/profiles"],
+      },
+    ]).filterChecks("security/supabase-rls", undefined, checks);
+    expect(all[0]!.status).toBe("pass");
+    expect(all[0]!.message).toStartWith("2 waived by squirrel.toml");
   });
 
   test("tables behind RLS (401, 403, a zero total) or missing are not flagged", async () => {
@@ -483,7 +521,7 @@ describe("security/supabase-rls", () => {
     expect(checks[0]).toMatchObject({ status: "skipped", skipReason: "not-applicable" });
   });
 
-  test("table probes are capped across the run", async () => {
+  test("table probes are capped across the run, and a capped run is not a pass", async () => {
     bodyPulls = 0;
     const sent = stubFetch({});
     const tables = Array.from({ length: 12 }, (_, i) => `sb.from("t${i}").select()`).join(";");
@@ -504,8 +542,104 @@ describe("security/supabase-rls", () => {
     expect(sent.every((r) => r.method === "HEAD")).toBe(true);
     expect(bodyPulls).toBe(0);
     expect(new Set(sent.map((r) => r.host))).toEqual(new Set([HOST, `${second}.supabase.co`]));
-    expect(checks[0]).toMatchObject({ status: "pass" });
+    // Six tables were left out by the cap: they could be open, so the run is
+    // incomplete (not checked), never a pass.
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+      value: "not-checked",
+    });
+    expect(checks.some((c) => c.status === "pass")).toBe(false);
     expect(checks[0]!.details).toMatchObject({ tablesProbed: 10, tablesCapped: 6 });
+  });
+
+  test("a 401 then 429s: the run stops at the first 429 and is not a pass", async () => {
+    const sent = stubFetch({
+      [`${HOST}/rest/v1/a`]: () => answer(401),
+      [`${HOST}/rest/v1/b`]: () => answer(429),
+      [`${HOST}/rest/v1/c`]: () => answer(429),
+      [`${HOST}/rest/v1/d`]: () => answer(429),
+    });
+    const checks = await run(
+      ctx({
+        scripts: [
+          script(bundle(`sb.from("a").select();sb.from("b").select();sb.from("c").select();sb.from("d").select()`)),
+        ],
+      }),
+    );
+    // Pushback ends the run: no request after the first 429.
+    expect(sent.map((r) => new URL(r.url).pathname)).toEqual(["/rest/v1/a", "/rest/v1/b"]);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+      value: "not-checked",
+    });
+    expect(checks[0]!.details).toMatchObject({
+      throttled: true,
+      perProject: [{ protected: 1, throttled: 1 }],
+    });
+  });
+
+  test("a bot challenge 403 (cf-mitigated) is not protected and not a pass", async () => {
+    const challenge = () => answer(403, undefined, { "cf-mitigated": "challenge" });
+    const sent = stubFetch({
+      [`${HOST}/rest/v1/a`]: challenge,
+      [`${HOST}/rest/v1/b`]: challenge,
+      [`${HOST}/rest/v1/c`]: challenge,
+    });
+    const checks = await run(
+      ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select();sb.from("c").select()`))] }),
+    );
+    expect(sent).toHaveLength(1);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+      value: "not-checked",
+    });
+    expect(checks[0]!.details).toMatchObject({
+      throttled: true,
+      perProject: [{ protected: 0, throttled: 1 }],
+    });
+  });
+
+  test("a network error on one table makes the run not checked, not a pass", async () => {
+    const sent = stubFetch({
+      [`${HOST}/rest/v1/a`]: () => answer(401),
+      [`${HOST}/rest/v1/b`]: () => {
+        throw new TypeError("connection reset");
+      },
+    });
+    const checks = await run(
+      ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select()`))] }),
+    );
+    expect(sent).toHaveLength(2);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+      value: "not-checked",
+    });
+  });
+
+  test("a planted sb_secret_ key sends nothing and never appears in the result", async () => {
+    // Assembled at runtime so no secret-shaped literal sits in the source.
+    const secretKey = ["sb", "secret", "Zq8RkL2vNw5TxY7pB3mC9dF4gH6jK1"].join("_");
+    const sent = stubFetch({ [`${HOST}/rest/v1/todos`]: () => answer(200, "*/5") });
+    const result = await rule.run(
+      ctx({
+        scripts: [
+          script(`const sb=createClient("https://${HOST}","${secretKey}");sb.from("todos").select()`),
+        ],
+      }),
+    );
+    expect(sent).toHaveLength(0);
+    expect(result.checks.some((c) => c.status === "pass")).toBe(false);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain(secretKey);
+    expect(serialized).not.toContain("sb_secret_");
   });
 
   test("a project host that resolves to a private address is refused, nothing sent", async () => {

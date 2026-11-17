@@ -314,6 +314,7 @@
   "security/referrer-policy": 1,
   "security/security-txt": 1,
   "security/sri": 500,
+  "security/supabase-rls": 1,
   "security/third-party-cookies": 500,
   "security/tls-certificate": 1,
   "security/token-storage": 500,
