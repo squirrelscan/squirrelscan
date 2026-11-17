@@ -15,16 +15,21 @@ The rule reads the page markup, inline `<style>` blocks, inline scripts, same-si
 
 A page has a motion signal when it has any of:
 
-- a looping CSS animation (`infinite` iteration) or `scroll-behavior: smooth`, in an inline `<style>` or a read stylesheet
-- a `<video autoplay>` that loops or has no `controls`
+- a looping CSS animation (`animation`, `-webkit-animation` or `animation-iteration-count` set to `infinite`) in an inline `style` attribute, or in an inline `<style>` or read stylesheet rule whose selector matches an element on the page (so an unused `.fa-spin` rule from an icon font does not count), or `scroll-behavior: smooth`
+- a `<video>` with both `autoplay` and `loop`
 - `<marquee>`
-- a motion library: AOS (`data-aos`), GSAP ScrollTrigger, Lottie players, animate.css or WOW.js, parallax (`data-parallax`, Rellax, Jarallax), Locomotive Scroll or Lenis
-- a carousel set to auto-advance (`data-autoplay`, or Swiper, Slick, Splide or Flickity `autoplay` options)
+- a motion library: AOS (`data-aos`), GSAP ScrollTrigger, Lottie players, animate.css or WOW.js, parallax (`data-parallax`, Rellax, Jarallax), Locomotive Scroll or Lenis. Library names are matched only in the path of a `<script src>` or a stylesheet, preload or modulepreload link, never in canonical, alternate or icon links, a hostname or a query string
+- a carousel set to auto-advance (`data-autoplay` with a value other than empty, `false`, `0` or `off`, or Swiper, Slick, Splide or Flickity `autoplay` options)
 
-Handling counts when `prefers-reduced-motion` appears in the page markup, in a read stylesheet, or in a read script (`matchMedia("(prefers-reduced-motion: reduce)")`).
+Handling counts only when the page has one of:
+
+- an `@media` rule whose condition contains `prefers-reduced-motion`, in an inline `<style>` or a read stylesheet (a comment, body text or string that mentions it does not count)
+- an inline or read script that calls `matchMedia` and contains `prefers-reduced-motion` (`window.matchMedia("(prefers-reduced-motion: reduce)")`, or GSAP's `gsap.matchMedia()`)
+- a `<link rel="stylesheet">` or `<style>` whose `media` attribute contains `prefers-reduced-motion`; the motion in that sheet is gated, so it is not counted either
 
 - A **warning** means the page has a motion signal and none of the CSS and scripts the audit read handles reduced motion, and everything the page references was read.
 - An **info** result means the same, but a referenced stylesheet (including a third-party one) or a same-site script was not read, so the handling may live there. The message says the check was partial.
+- A **skipped** `reduced-motion-unverified` check means a linked stylesheet was not read (a fetch error, the 20-stylesheet limit, or a file over 1 MB) where the rule would otherwise have passed. The rule never passes when it could not read every stylesheet the page links.
 - Each motion source is one finding across the site, listing the pages it appears on, because motion usually comes from a shared template.
 
 Not reported: hover and focus `transition` rules, a single non-looping entrance animation, animated GIFs (see [animated-content](/rules/perf/animated-content)), and motion that only runs inside `@media (prefers-reduced-motion: no-preference)`.
@@ -97,6 +102,7 @@ Each check name this rule can emit, by what it means to a tool comparing two aud
 | `reduced-motion-autoplay-video` | Problem |  |
 | `reduced-motion-css-infinite-animation` | Problem |  |
 | `reduced-motion-css-smooth-scroll` | Problem |  |
+| `reduced-motion-unverified` | Not checked |  |
 | `reduced-motion` | Clean | `reduced-motion-aos`, `reduced-motion-gsap-scrolltrigger`, `reduced-motion-lottie`, `reduced-motion-animate-wow`, `reduced-motion-parallax`, `reduced-motion-smooth-scroll-lib`, `reduced-motion-carousel-autoplay`, `reduced-motion-marquee`, `reduced-motion-autoplay-video`, `reduced-motion-css-infinite-animation`, `reduced-motion-css-smooth-scroll` |
 
 {/* rule-checks:end */}

@@ -5,6 +5,8 @@
 // (a pause button may exist), so the rule reports missing reduced-motion handling,
 // not a WCAG failure.
 
+import type { Document } from "linkedom";
+
 import { parseDeclarations, parseRules } from "../content/hidden-text";
 import type { CheckResult, Rule, RuleContext, RuleResult, StylesheetMotionData } from "../types";
 
@@ -16,11 +18,33 @@ const MAX_CSS_BYTES = 512 * 1024;
 const MAX_SCRIPT_BYTES = 512 * 1024;
 
 const REDUCED_MOTION = /prefers-reduced-motion/i;
+/** Selectors kept per stylesheet, and the longest one kept. */
+const MAX_MOTION_SELECTORS = 100;
+const MAX_SELECTOR_CHARS = 200;
+/** `querySelector` calls per page when matching stylesheet selectors. */
+const MAX_SELECTOR_QUERIES = 200;
+/** Inline `style` attributes read per page. */
+const MAX_STYLE_ATTRS = 500;
+const MAX_STYLE_ATTR_CHARS = 4096;
 
 export interface CssMotionSummary {
+  /** A real `@media` rule whose condition contains `prefers-reduced-motion` (comments and strings do not count). */
   mentionsReducedMotion: boolean;
   hasInfiniteAnimation: boolean;
   hasSmoothScroll: boolean;
+  /** Selectors of the rules that carry an infinite animation: at most 100, each at most 200 characters. */
+  infiniteAnimationSelectors: string[];
+}
+
+function isInfiniteAnimation(property: string, value: string): boolean {
+  return (
+    (property === "animation" ||
+      property === "-webkit-animation" ||
+      property === "animation-iteration-count" ||
+      property === "-webkit-animation-iteration-count") &&
+    /\binfinite\b/.test(value) &&
+    !/^\s*none\b/.test(value)
+  );
 }
 
 /**
@@ -31,29 +55,84 @@ export interface CssMotionSummary {
 export function stylesheetMotionOf(css: string): CssMotionSummary {
   const text = css.length > MAX_CSS_BYTES ? css.slice(0, MAX_CSS_BYTES) : css;
   const summary: CssMotionSummary = {
-    mentionsReducedMotion: REDUCED_MOTION.test(css),
+    mentionsReducedMotion: false,
     hasInfiniteAnimation: false,
     hasSmoothScroll: false,
+    infiniteAnimationSelectors: [],
   };
-  // Cheap pre-filter: no declaration to parse when neither word appears.
-  if (!/infinite|smooth/i.test(text)) return summary;
+  // Cheap pre-filter: nothing to parse when none of these words appear.
+  if (!/infinite|smooth|prefers-reduced-motion/i.test(text)) return summary;
   for (const rule of parseRules(text, MAX_CSS_RULES)) {
+    if (rule.at?.some((a) => /^\s*@media\b/i.test(a) && REDUCED_MOTION.test(a))) summary.mentionsReducedMotion = true;
     if (rule.at?.some((a) => REDUCED_MOTION.test(a) || /@keyframes|@-webkit-keyframes/i.test(a))) continue;
     if (!/infinite|smooth/i.test(rule.body)) continue;
     for (const [property, raw] of parseDeclarations(rule.body)) {
       const value = raw.toLowerCase();
       if (property === "scroll-behavior" && /\bsmooth\b/.test(value)) summary.hasSmoothScroll = true;
-      if (
-        (property === "animation" || property === "animation-iteration-count") &&
-        /\binfinite\b/.test(value) &&
-        !/^\s*none\b/.test(value)
-      ) {
+      if (isInfiniteAnimation(property, value)) {
         summary.hasInfiniteAnimation = true;
+        if (
+          summary.infiniteAnimationSelectors.length < MAX_MOTION_SELECTORS &&
+          rule.selector.length <= MAX_SELECTOR_CHARS &&
+          !summary.infiniteAnimationSelectors.includes(rule.selector)
+        ) {
+          summary.infiniteAnimationSelectors.push(rule.selector);
+        }
       }
     }
-    if (summary.hasInfiniteAnimation && summary.hasSmoothScroll) break;
   }
   return summary;
+}
+
+/** Split a selector list on commas outside parentheses, brackets and quotes. */
+function splitSelectorList(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let quote = "";
+  let start = 0;
+  for (let i = 0; i < list.length; i++) {
+    const ch = list[i]!;
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = "";
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth = Math.max(0, depth - 1);
+    else if (ch === "," && depth === 0) {
+      out.push(list.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(list.slice(start));
+  return out;
+}
+
+const DYNAMIC_PSEUDO =
+  /::?(hover|focus|focus-within|focus-visible|active|visited|link|any-link|target|before|after|first-line|first-letter|selection|placeholder)\b(\([^)]{0,100}\))?|::[a-z-]{1,40}(\([^)]{0,100}\))?/gi;
+
+/** Selector with the pseudo-classes and pseudo-elements `querySelector` cannot match statically removed. */
+function staticSelector(sel: string): string {
+  let out = sel.replace(DYNAMIC_PSEUDO, "").trim();
+  if (out === "" || /[>+~]$/.test(out)) out += "*";
+  return out;
+}
+
+/** True when any selector in the lists matches an element on the page. Bounded by `budget` querySelector calls. */
+function anySelectorMatches(doc: Document, lists: readonly string[], budget: { left: number }): boolean {
+  for (const list of lists) {
+    for (const part of splitSelectorList(list)) {
+      if (budget.left <= 0) return false;
+      const sel = staticSelector(part);
+      if (!sel) continue;
+      budget.left--;
+      try {
+        if (doc.querySelector(sel)) return true;
+      } catch {
+        // An invalid or unsupported selector counts as no match.
+      }
+    }
+  }
+  return false;
 }
 
 interface Source {
@@ -62,6 +141,11 @@ interface Source {
   /** Triggered by script code or a motion library rather than by CSS. */
   viaScript: boolean;
   trigger: string;
+}
+
+/** A script that reads the media query: a `matchMedia` call and the `prefers-reduced-motion` string. */
+function handlesReducedMotion(script: string): boolean {
+  return /matchMedia/.test(script) && REDUCED_MOTION.test(script);
 }
 
 function attrHas(html: string, re: RegExp): boolean {
@@ -122,6 +206,7 @@ export const reducedMotionRule: Rule = {
       { name: "reduced-motion-autoplay-video", outcome: "problem" },
       { name: "reduced-motion-css-infinite-animation", outcome: "problem" },
       { name: "reduced-motion-css-smooth-scroll", outcome: "problem" },
+      { name: "reduced-motion-unverified", outcome: "skipped" },
       {
         name: "reduced-motion",
         outcome: "clean",
@@ -136,10 +221,18 @@ export const reducedMotionRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    // Inline CSS, capped as a whole.
+    // Handling: only a real reduced-motion @media rule, a matchMedia script, or a media-gated sheet.
+    let handled = false;
+    const gated = (el: Element) => REDUCED_MOTION.test(el.getAttribute("media") ?? "");
+
+    // Inline CSS, capped as a whole. A <style media="...prefers-reduced-motion..."> is handling and its motion is gated.
     let inlineCss = "";
     for (const el of doc.querySelectorAll("style")) {
       if (inlineCss.length >= MAX_CSS_BYTES) break;
+      if (gated(el)) {
+        handled = true;
+        continue;
+      }
       inlineCss += `${el.textContent ?? ""}\n`;
     }
     inlineCss = inlineCss.slice(0, MAX_CSS_BYTES);
@@ -152,28 +245,55 @@ export const reducedMotionRule: Rule = {
       inlineScripts.push(text);
     }
     const scriptText = inlineScripts.join("\n");
+    if (inlineScripts.some(handlesReducedMotion)) handled = true;
 
     const scriptSrcs = Array.from(doc.querySelectorAll("script[src]"))
       .map((el) => el.getAttribute("src") ?? "")
       .filter(Boolean);
-    const linkHrefs = Array.from(doc.querySelectorAll("link[href]"))
-      .map((el) => el.getAttribute("href") ?? "")
-      .filter(Boolean);
-    const assetUrls = [...scriptSrcs, ...linkHrefs].join("\n");
-
-    // Handling: the query anywhere in markup (a <style>, a matchMedia call, a <source media>).
-    let handled = REDUCED_MOTION.test(html);
+    // Library names are matched against URL pathnames of scripts and stylesheet/preload links only.
+    const assetPaths: string[] = [];
+    for (const src of scriptSrcs) {
+      const abs = resolve(src, pageUrl);
+      if (abs) assetPaths.push(new URL(abs).pathname);
+    }
+    for (const el of doc.querySelectorAll("link[href]")) {
+      const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
+      if (!rel.some((r) => r === "stylesheet" || r === "preload" || r === "modulepreload")) continue;
+      const abs = resolve(el.getAttribute("href") ?? "", pageUrl);
+      if (abs) assetPaths.push(new URL(abs).pathname);
+    }
+    const assetUrls = assetPaths.join("\n");
 
     // Stylesheets this page references.
     const motionSheets = new Map<string, StylesheetMotionData>();
     for (const s of ctx.site?.stylesheetMotion ?? []) motionSheets.set(s.url, s);
+    const budget = { left: MAX_SELECTOR_QUERIES };
     let unreadSheets = 0;
-    let cssInfinite = stylesheetMotionOf(inlineCss).hasInfiniteAnimation;
-    let cssSmooth = stylesheetMotionOf(inlineCss).hasSmoothScroll;
+    const inline = stylesheetMotionOf(inlineCss);
+    if (inline.mentionsReducedMotion) handled = true;
+    // Inline style attributes always count: they apply to their own element.
+    let attrInfinite = false;
+    let attrCount = 0;
+    for (const el of doc.querySelectorAll("[style]")) {
+      if (++attrCount > MAX_STYLE_ATTRS) break;
+      const value = (el.getAttribute("style") ?? "").slice(0, MAX_STYLE_ATTR_CHARS);
+      if (!/infinite/i.test(value)) continue;
+      for (const [property, raw] of parseDeclarations(value)) {
+        if (isInfiniteAnimation(property, raw.toLowerCase())) attrInfinite = true;
+      }
+      if (attrInfinite) break;
+    }
+    let cssInfinite =
+      attrInfinite || (inline.hasInfiniteAnimation && anySelectorMatches(doc, inline.infiniteAnimationSelectors, budget));
+    let cssSmooth = inline.hasSmoothScroll;
     let cssSource = cssInfinite || cssSmooth ? "inline <style>" : "";
     for (const el of doc.querySelectorAll("link[href]")) {
       const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
       if (!rel.includes("stylesheet")) continue;
+      if (gated(el)) {
+        handled = true;
+        continue;
+      }
       const media = el.getAttribute("media");
       if (media && /print/i.test(media) && !/screen|all/i.test(media)) continue;
       const abs = resolve(el.getAttribute("href") ?? "", pageUrl);
@@ -184,7 +304,11 @@ export const reducedMotionRule: Rule = {
         continue;
       }
       if (sheet.mentionsReducedMotion) handled = true;
-      if (sheet.hasInfiniteAnimation && !cssInfinite) {
+      if (
+        sheet.hasInfiniteAnimation &&
+        !cssInfinite &&
+        anySelectorMatches(doc, sheet.infiniteAnimationSelectors ?? [], budget)
+      ) {
         cssInfinite = true;
         cssSource ||= shownUrl(abs);
       }
@@ -206,7 +330,7 @@ export const reducedMotionRule: Rule = {
     for (const s of pageScripts) {
       if (s.content === null) continue;
       if (s.sourcePages.includes(ctx.page.url) || s.sourcePages.includes(pageUrl)) {
-        if (REDUCED_MOTION.test(s.content)) handled = true;
+        if (handlesReducedMotion(s.content)) handled = true;
       }
     }
 
@@ -243,7 +367,7 @@ export const reducedMotionRule: Rule = {
     }
     const autoplayAttr = Array.from(doc.querySelectorAll("[data-autoplay]")).some((el) => {
       const v = (el.getAttribute("data-autoplay") ?? "").trim().toLowerCase();
-      return v !== "false" && v !== "0" && v !== "off";
+      return v !== "" && v !== "false" && v !== "0" && v !== "off";
     });
     const dataLib = /\bdata-(slick|splide|swiper|flickity|owl)[a-z-]*\s*=\s*(["'])[^"']*["']?autoplay["']?\s*:\s*(true|\{|\d)/i.test(
       html,
@@ -255,16 +379,26 @@ export const reducedMotionRule: Rule = {
       add("carousel-autoplay", "Auto-advancing carousel", true, "autoplay");
     }
     if (doc.querySelector("marquee")) add("marquee", "<marquee> scrolling text", false, "<marquee>");
-    for (const v of doc.querySelectorAll("video[autoplay]")) {
-      if (v.hasAttribute("loop") || !v.hasAttribute("controls")) {
-        add("autoplay-video", "Autoplaying video", false, "<video autoplay>");
-        break;
-      }
+    if (doc.querySelector("video[autoplay][loop]")) {
+      add("autoplay-video", "Autoplaying video", false, "<video autoplay loop>");
     }
     if (cssInfinite) add("css-infinite-animation", "Looping CSS animation", false, cssSource || "infinite animation");
     if (cssSmooth) add("css-smooth-scroll", "Smooth scrolling (scroll-behavior: smooth)", false, cssSource || "scroll-behavior");
 
     if (sources.length === 0 || handled) {
+      if (unreadSheets > 0) {
+        return {
+          checks: [
+            {
+              name: "reduced-motion-unverified",
+              status: "skipped",
+              message: `${unreadSheets} linked stylesheet${unreadSheets === 1 ? "" : "s"} not read, so motion and reduced-motion handling could not be fully verified`,
+              skipReason: "stylesheet-not-read",
+              details: { unreadSheets, motionSources: sources.map((x) => x.key), handled },
+            },
+          ],
+        };
+      }
       return {
         checks: [
           {

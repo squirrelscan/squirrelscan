@@ -572,10 +572,12 @@ export interface StylesheetMotionData {
   error: string | null;
   /** False when the body was not read (failed, refused, skipped, oversized or non-CSS): the flags below are then meaningless. */
   read: boolean;
-  /** `prefers-reduced-motion` appears anywhere in the stylesheet. */
+  /** A real `@media` rule whose condition contains `prefers-reduced-motion` (comments and strings do not count). */
   mentionsReducedMotion: boolean;
   /** An `infinite` animation outside any `prefers-reduced-motion` block. */
   hasInfiniteAnimation: boolean;
+  /** Selectors of the rules carrying an infinite animation (at most 100, each at most 200 characters); the rule counts the animation only when one matches the page. */
+  infiniteAnimationSelectors: string[];
   /** `scroll-behavior: smooth` outside any `prefers-reduced-motion` block. */
   hasSmoothScroll: boolean;
 }

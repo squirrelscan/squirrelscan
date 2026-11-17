@@ -79,7 +79,7 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
 /**
  * Bumped when the payload shape or the key's ingredients change; old rows then miss.
- * prc-9: `stylesheetMotion` joins the run context (a11y/reduced-motion, #711).
+ * prc-9: `stylesheetMotion` joins the run context (a11y/reduced-motion, #711): url, read, handling, infinite-animation flag, smooth-scroll flag and the infinite-animation selectors.
  * prc-8: `features.terminologyVariants` (content/terminology-consistency). A prc-7 row would replay
  * features without it and the page would have no terminology sample.
  * prc-7: `features.readingLevel` (content/voice-consistency). A prc-6 row would replay features
@@ -201,7 +201,7 @@ export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown>
     siteIndexable: siteData.siteIndexable ?? null,
     // Only what the rule reads of each stylesheet: its url and the background it sets (#1756).
     stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [s.url, s.background, s.selectors ?? null, s.selectorsTruncated === true]),
-    stylesheetMotion: (siteData.stylesheetMotion ?? []).map((s) => [s.url, s.read, s.mentionsReducedMotion, s.hasInfiniteAnimation, s.hasSmoothScroll]),
+    stylesheetMotion: (siteData.stylesheetMotion ?? []).map((s) => [s.url, s.read, s.mentionsReducedMotion, s.hasInfiniteAnimation, s.hasSmoothScroll, s.infiniteAnimationSelectors]),
     scripts: projectEntries(siteData.scripts, PAGE_RULE_SCRIPT_FIELDS),
     preloadedScripts: projectEntries(siteData.preloadedScripts, PAGE_RULE_SCRIPT_FIELDS),
     resourceSizes: resourceSizes
