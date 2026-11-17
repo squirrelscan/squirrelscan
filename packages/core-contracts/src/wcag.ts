@@ -19,7 +19,10 @@ interface WcagEntry {
   version: WcagVersion;
 }
 
-/** Only the criteria some rule cites; add a row when a rule cites a new one. */
+/**
+ * Only the criteria some rule cites, in its `wcag` list or its `wcagNone` reason (2.1.4, 3.3.8); add a row
+ * when a rule cites a new one. No 4.1.1 Parsing: WCAG 2.2 removed it.
+ */
 export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
   "1.1.1": { title: "Non-text Content", level: "A", version: "2.0" },
   "1.2.2": { title: "Captions (Prerecorded)", level: "A", version: "2.0" },
@@ -42,7 +45,6 @@ export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
   "3.1.2": { title: "Language of Parts", level: "AA", version: "2.0" },
   "3.3.2": { title: "Labels or Instructions", level: "A", version: "2.0" },
   "3.3.8": { title: "Accessible Authentication (Minimum)", level: "AA", version: "2.2" },
-  "4.1.1": { title: "Parsing", level: "A", version: "2.0" },
   "4.1.2": { title: "Name, Role, Value", level: "A", version: "2.0" },
 };
 
