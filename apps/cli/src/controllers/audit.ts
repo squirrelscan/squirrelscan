@@ -1994,8 +1994,12 @@ export async function runAudit(
           resourceOverrides: {
             resourceCheckMaxItems: options.resourceCheckMaxItems,
             resourceCheckTimeoutMs: options.resourceCheckTimeoutMs,
-            // repo#1415: a re-audit replays unchanged script bodies from the content store.
-            scriptContentCache: createScriptContentCache(),
+            // repo#1415: a re-audit replays unchanged script bodies from the
+            // content store. Like the sub-resource cache below, it follows the
+            // incremental flag, so --refresh neither reads nor writes it.
+            ...(incrementalEnabled
+              ? { scriptContentCache: createScriptContentCache() }
+              : {}),
             // #1271: the asset checks end inside the margin past the budget.
             ...(durationBudget
               ? { resourceCheckBudgetMs: msUntil(durationBudget.checksDoneAt) }
