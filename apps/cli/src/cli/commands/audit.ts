@@ -1390,7 +1390,7 @@ export const audit = defineCommand({
     "wcag-level": {
       type: "string",
       description:
-        "Only run the accessibility rules mapped to a WCAG success criterion at or below this level: A, AA or AAA (AA keeps Level A and AA). These automated checks cover part of WCAG; passing them does not mean a site conforms. Overrides [rules] wcag_level for this run",
+        "Only run the accessibility rules mapped to a WCAG success criterion at or below this level: A, AA or AAA (AA keeps Level A and AA). These automated checks cover part of WCAG; passing them does not mean a site conforms. Rules with no WCAG criterion are not run under it, at any level including AAA. Overrides [rules] wcag_level for this run",
     },
     "discovery-probe-path": {
       type: "string",

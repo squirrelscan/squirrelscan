@@ -65,7 +65,7 @@ squirrel audit <url> [options]
 | `--target-url` | | Audit exactly this URL and nothing else (repeatable), absolute or a path on the audited site such as `/pricing`. No sitemap, probes or link following. See [Targeted audits](#targeted-audits) | none |
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
 | `--rule-exclude` | | Skip these rule categories or rules, e.g. `images,social` (repeatable / comma-separated). Adds to `[rules] disable` for this run | none |
-| `--wcag-level` | | Only run the accessibility rules mapped to a WCAG success criterion at or below this level: `A`, `AA` or `AAA` (`AA` keeps Level A and AA). These automated checks cover part of WCAG; passing them does not mean a site conforms. The report is marked as a partial audit. Overrides `[rules] wcag_level` for this run | all levels |
+| `--wcag-level` | | Only run the accessibility rules mapped to a WCAG success criterion at or below this level: `A`, `AA` or `AAA` (`AA` keeps Level A and AA). These automated checks cover part of WCAG; passing them does not mean a site conforms. Rules with no WCAG criterion are not run under it, at any level including `AAA`. The report is marked as a partial audit and is not auto-published (only an explicit `--publish` sends it). Overrides `[rules] wcag_level` for this run | all levels |
 | `--disable-discovery-probes` | | Skip the pre-crawl discovery probes (`llms.txt`, `/.well-known/*`, `/swagger.json` and the rest) for this run. Overrides `[crawler] disable_discovery_probes`; `=false` sends them even when the config turns them off, and a space before the value (`--disable-discovery-probes false`) is refused. See [Discovery probes](/configuration/crawler#discovery-probes) | `false` |
 | `--discovery-probe-path` | | Only send the discovery probe for this path (repeatable / comma-separated), e.g. `/llms.txt` or `/AGENTS.md`. A probe for any other path is not sent and reports not checked, and a redirect from it may not change the path. Replaces `[crawler] discovery_probe_paths`. See [`discovery_probe_paths`](/configuration/crawler#discovery_probe_paths) | none |
 | `--probe` | `-P` | Probing intensity: `passive`, `active` or `aggressive`. Overrides `[security] probe`. See [Probing intensity](#probing-intensity) | the level's: `passive` for quick, `active` for surface and full |
@@ -589,12 +589,12 @@ Excluding rules also skips the pre-crawl requests that only those rules read:
 either flag is set, the report is **partial**: the health score is recomputed
 from only the included categories and the console output prints a
 `partial audit: ...` notice in its Report detail section at the end.
-The json, text, markdown, xml and llm formats carry the same marker
+The json, html, text, markdown, xml and llm formats carry the same marker
 (`meta.partialAudit` in json, with the included categories). The marker is saved
 with the audit, so `squirrel report` rebuilding it later prints it too, and the
 payload of `squirrel audit --publish` or `squirrel report --publish` carries it. A
-filtered run is still not auto-published: only an explicit `--publish` sends it,
-on either command. An unfiltered run carries no marker. A Pro-gated rule you excluded with `--rule-exclude` is
+filtered run, or one narrowed by `--wcag-level` or `[rules] wcag_level`, is still
+not auto-published: only an explicit `--publish` sends it, on either command. An unfiltered run carries no marker. A Pro-gated rule you excluded with `--rule-exclude` is
 not listed as a locked rule. An unknown category
 errors before crawling, listing the valid category codes. `--fail-on score:<category>`
 referencing an excluded category also errors up front, since it could never
