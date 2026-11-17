@@ -69,6 +69,18 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
     expect(paste.wcagNone).toContain("squirrelscan/squirrelscan#2106");
   });
 
+  test("every criterion any rule cites, in any category, is in the table (pub#2024 review)", () => {
+    const missing = [...loadAllRules().values()].flatMap((r) =>
+      (r.meta.wcag ?? []).filter((c) => !WCAG_CRITERIA[c.sc]).map((c) => `${r.meta.id} ${c.sc}`),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  test("the table has no 4.1.1, which WCAG 2.2 removed (pub#2024 review)", () => {
+    expect(Object.keys(WCAG_CRITERIA)).not.toContain("4.1.1");
+    expect(() => wcag("4.1.1")).toThrow('Unknown WCAG success criterion "4.1.1"');
+  });
+
   test("duplicate-id-aria cites 4.1.2 Name, Role, Value, not the obsolete 4.1.1", () => {
     const meta = a11y.find((r) => r.meta.id === "a11y/duplicate-id-aria")!.meta;
     expect(meta.wcag).toEqual([wcag("4.1.2")]);
