@@ -53,6 +53,18 @@ describe("buildPartialAudit", () => {
     expect(p?.includedCategories).not.toContain("perf");
     expect(p?.includedCategories).toContain("core");
   });
+
+  test("excluding one rule keeps its category in the scored set", () => {
+    const p = buildPartialAudit({ enable: [], disable: ["core/meta-title"] });
+    expect(p?.exclude).toEqual(["core/meta-title"]);
+    expect(p?.includedCategories).toContain("core");
+    expect(p?.includedCategories).toContain("perf");
+  });
+
+  test("including one rule scores only its category", () => {
+    const p = buildPartialAudit({ enable: ["core/meta-title"], disable: [] });
+    expect(p?.includedCategories).toEqual(["core"]);
+  });
 });
 
 describe("output formats", () => {

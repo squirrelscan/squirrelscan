@@ -4,7 +4,7 @@
 // CLI import path and test is unchanged. What stays here needs the loaded rule
 // set (`isCategoryExcluded`), which the worker-clean core must not import.
 
-import { loadAllRules } from "@squirrelscan/rules";
+import { isRuleEnabled, loadAllRules } from "@squirrelscan/rules";
 import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
 
 import type { PartialAudit } from "@/types";
@@ -96,24 +96,32 @@ export function isCategoryExcluded(
 
 /**
  * The partial-audit marker for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082), or
- * undefined for an unfiltered run. `includedCategories` is every category that could still run under
- * the filter, so the score reads with its basis wherever the report is shown.
+ * undefined for an unfiltered run. `includedCategories` is every category with at least one rule that
+ * still runs under the filter, decided per rule with the engine's own `isRuleEnabled`, so excluding one
+ * rule (`--rule-exclude core/meta-title`) keeps its category while `--rule-exclude core/*` drops it.
  */
 export function buildPartialAudit(
   filter: { enable: string[]; disable: string[] },
-  pluginRules: readonly { id: string; category: string }[] = []
+  pluginRules: readonly { id: string; category: string; optIn?: boolean }[] = []
 ): PartialAudit | undefined {
   if (filter.enable.length === 0 && filter.disable.length === 0) {
     return undefined;
   }
   // No include list means every rule is enabled (the engine's default `*`).
-  const resolved = {
-    enable: filter.enable.length > 0 ? filter.enable : ["*"],
-    disable: filter.disable,
+  const enable = filter.enable.length > 0 ? filter.enable : ["*"];
+  const scored = new Set<string>();
+  const consider = (id: string, category: string, optIn?: boolean) => {
+    if (isRuleEnabled(id, enable, filter.disable, undefined, optIn === true)) {
+      scored.add(normalizeCategoryCode(category));
+    }
   };
-  const includedCategories = RULE_CATEGORY_VALUES.filter(
-    (c) => !isCategoryExcluded(c, resolved, pluginRules)
-  ).map((c) => normalizeCategoryCode(c));
+  for (const rule of loadAllRules().values()) {
+    consider(rule.meta.id, rule.meta.category, rule.meta.optIn);
+  }
+  for (const rule of pluginRules) consider(rule.id, rule.category, rule.optIn);
+  const includedCategories = RULE_CATEGORY_VALUES.map((c) =>
+    normalizeCategoryCode(c)
+  ).filter((c) => scored.has(c));
   return {
     include: [...filter.enable],
     exclude: [...filter.disable],
