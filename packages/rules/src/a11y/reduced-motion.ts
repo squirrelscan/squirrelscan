@@ -78,6 +78,13 @@ function resolve(href: string, base: string): string | null {
   }
 }
 
+/** A stylesheet URL safe to show in a finding: the query string (tokens, emails) is dropped. */
+function shownUrl(abs: string): string {
+  const u = new URL(abs);
+  u.search = "";
+  return u.href;
+}
+
 function sameSite(a: string, b: string): boolean {
   try {
     const x = new URL(a).hostname.replace(/^www\./, "");
@@ -176,11 +183,11 @@ export const reducedMotionRule: Rule = {
       if (sheet.mentionsReducedMotion) handled = true;
       if (sheet.hasInfiniteAnimation && !cssInfinite) {
         cssInfinite = true;
-        cssSource ||= abs;
+        cssSource ||= shownUrl(abs);
       }
       if (sheet.hasSmoothScroll && !cssSmooth) {
         cssSmooth = true;
-        cssSource ||= abs;
+        cssSource ||= shownUrl(abs);
       }
     }
 
