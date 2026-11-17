@@ -83,9 +83,10 @@ log() { echo -e "${GREEN}==>${NC} $1" >&2 || true; }
 warn() { echo -e "${YELLOW}Warning:${NC} $1" >&2 || true; }
 # error <message> [detail]
 # `message` is shown to the user AND carried in the failure report, where it is
-# clamped to ERROR_LINE_MAX. It is the ONLY source of a report's `error_line` (via LAST_ERROR_MSG,
-# the ERROR_MSG_FILE fallback, or the signal traps): log, info and warn lines never reach it. `detail` is remediation text shown to the user
-# only: a long guidance block passed as `message` would push the actual error
+# clamped to ERROR_LINE_MAX. A report's `error_line` comes only from error() (LAST_ERROR_MSG or the
+# ERROR_MSG_FILE fallback), the signal traps, or the curl-exit fallback in report_on_exit ("curl exit
+# <code> reaching <host>" when no message was recorded): log, info and warn lines never reach it.
+# `detail` is remediation text shown to the user only: a long guidance block passed as `message` would push the actual error
 # out of the report's `error_line`.
 error() {
   echo -e "${RED}Error:${NC} $1" >&2
