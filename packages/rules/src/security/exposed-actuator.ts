@@ -24,12 +24,18 @@
 // `mappings` (only the ones an open index lists, when it is open), and
 // `heapdump` on an aggressive run only (asking for a heap dump
 // makes the JVM write one, so it is a loud probe; on an active run a heapdump
-// listed by an open index is reported from that listing alone). The heapdump
+// listed by an open index is reported from that listing alone, as a warning,
+// because the index also lists endpoints that need a login). The heapdump
 // request asks for its first 64 bytes with a Range header and reads at most
 // that many, whatever the server sends. Requests carry no cookies, do not
-// follow redirects, are bounded by the shared probe budget and a per-request
-// timeout, and read a capped body that is decoded no further than the cap
-// (#722). Below aggressive, a robots.txt-disallowed URL is not requested.
+// follow redirects, are bounded by the shared probe budget, a per-request
+// timeout (one timeout ends that base) and the rule's own total time budget,
+// and read a capped body that is decoded no further than the cap (#722). Below
+// aggressive, a robots.txt-disallowed URL is not requested. A 429 or a bot
+// challenge stops the rule.
+//
+// Anything not answered (robots.txt, budget, time, timeout, error, pushback)
+// makes the run not checked, never a pass, so it never clears a finding.
 //
 // What is reported. An endpoint counts only when its 2xx answer has the shape
 // that actuator endpoint has (`_links` naming actuator endpoints,
@@ -39,6 +45,7 @@
 // finding. Findings name the endpoint and the kind of evidence only. A response
 // body, and any value in it, never leaves this file.
 
+import { PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
@@ -47,13 +54,39 @@ import type { ProbeBudget, ProbeKind } from "../probe-budget";
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { isStateChangingPath } from "./graphql-probe";
-import { readCappedBytes } from "./probe-http";
+import { isThrottledOrChallenged, readCappedBytes } from "./probe-http";
 
 /** Base paths one run probes. */
 export const MAX_ACTUATOR_BASES = 3;
 
-/** Per-request timeout, on top of the shared probe budget's deadline. */
+/**
+ * Per-request timeout, on top of the shared probe budget's deadline. The same
+ * 10 s as security/exposed-files. A request that times out ends its base: a
+ * server that hangs on one unknown path hangs on the rest.
+ */
 export const ACTUATOR_PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * Wall-clock cap on the whole rule, whatever the shared probe budget allows.
+ * security/exposed-files has no cap of its own: its only bound at --probe active
+ * is the shared budget's 30 s default (`DEFAULT_PROBE_BUDGET_MS.active` in
+ * @squirrelscan/config). This rule takes the same 30 s for itself, which is
+ * also one request timeout for each of the MAX_ACTUATOR_BASES bases, so a site
+ * that hangs on every path costs at most 30 s. Paths not reached by then are
+ * not checked.
+ */
+export const ACTUATOR_TOTAL_BUDGET_MS = 30_000;
+
+/** The time bounds the rule runs under. Tests pass smaller ones. */
+export interface ActuatorTiming {
+  requestTimeoutMs: number;
+  totalBudgetMs: number;
+}
+
+export const DEFAULT_ACTUATOR_TIMING: ActuatorTiming = {
+  requestTimeoutMs: ACTUATOR_PROBE_TIMEOUT_MS,
+  totalBudgetMs: ACTUATOR_TOTAL_BUDGET_MS,
+};
 
 /** The base path probed on every site, besides the ones the discovery pass found. */
 export const ACTUATOR_CONVENTION_BASE = "/actuator";
@@ -234,6 +267,8 @@ export interface ActuatorResponse {
   /** At most the endpoint's byte cap. Read here, never reported. */
   bytes: Uint8Array;
   truncated: boolean;
+  /** Read for a rate limit or bot challenge (`cf-mitigated`), never reported. */
+  headers: Headers;
 }
 
 export type ActuatorProbeOutcome =
@@ -259,14 +294,15 @@ export function buildActuatorProbe(baseUrl: string, spec: ActuatorEndpointSpec):
 async function sendActuatorProbe(
   probe: ProbeBudget,
   baseUrl: string,
-  spec: ActuatorEndpointSpec
+  spec: ActuatorEndpointSpec,
+  timeoutMs: number
 ): Promise<ActuatorProbeOutcome> {
   if (!probe.allows(spec.kind)) return { sent: false };
   const { url, init } = buildActuatorProbe(baseUrl, spec);
   // Aborted once the read is done, so a capped read does not keep pulling an
   // endless answer (a heap dump that ignores Range) off the wire.
   const done = new AbortController();
-  const signal = AbortSignal.any([probe.signal(), AbortSignal.timeout(ACTUATOR_PROBE_TIMEOUT_MS), done.signal]);
+  const signal = AbortSignal.any([probe.signal(), AbortSignal.timeout(timeoutMs), done.signal]);
   probe.record();
   try {
     const res = await fetchUndecoded(url, { ...init, signal });
@@ -278,6 +314,7 @@ async function sendActuatorProbe(
         contentType: (res.headers.get("content-type") ?? "").toLowerCase(),
         bytes,
         truncated,
+        headers: res.headers,
       },
     };
   } catch (err) {
@@ -410,7 +447,7 @@ const EVIDENCE_LABEL: Record<ActuatorEvidence, string> = {
   "configprops-beans": "configuration property beans",
   "request-mappings": "request mappings",
   "hprof-header": "HPROF heap dump header",
-  "listed-in-index": "listed by the open actuator index, not downloaded",
+  "listed-in-index": "listed by the open actuator index, not downloaded (it may still require authentication)",
 };
 
 // ── the rule ───────────────────────────────────────────────────────
@@ -463,138 +500,205 @@ export const exposedActuatorRule: Rule = {
     ],
   },
 
-  async run(ctx: RuleContext): Promise<RuleResult> {
-    const checks: CheckResult[] = [];
-    const probe = ctx.probe;
-
-    if (!probe || probe.level === "passive") {
-      checks.push({
-        name: CHECK_NOT_CHECKED,
-        status: "skipped",
-        skipReason: "probing-passive",
-        message:
-          "Probing is passive, so no Spring Boot Actuator path was probed. Run with --probe active to check for exposed actuator endpoints.",
-      });
-      return { checks };
-    }
-
-    const selection = selectActuatorBases(ctx);
-    const aggressive = probe.level === "aggressive";
-    const robotsTxt = ctx.site?.robotsTxt ?? null;
-    let probed = 0;
-    let errored = 0;
-    let skippedRobots = 0;
-    let budgetStopped = false;
-    const exposed: ExposedEndpoint[] = [];
-
-    outer: for (const base of selection.bases) {
-      let listed: string[] | null = null;
-      for (const spec of ACTUATOR_ENDPOINTS) {
-        const url = `${base.url}${spec.path}`;
-        // An open index lists every endpoint exposed over HTTP: one it leaves
-        // out is not requested.
-        if (spec.id !== "index" && listed && !listed.includes(spec.id)) continue;
-        if (spec.id === "heapdump") {
-          if (!aggressive) {
-            // Asking for a heap dump makes the JVM write one. On an active run an
-            // open index that lists it is the evidence; nothing is requested.
-            if (listed?.includes("heapdump")) {
-              exposed.push({ url, endpoint: "heapdump", severity: "critical", evidence: "listed-in-index", base });
-            }
-            continue;
-          }
-        }
-        if (!aggressive && isRobotsTxtDisallowed(url, robotsTxt, "*")) {
-          skippedRobots++;
-          continue;
-        }
-        const outcome = await sendActuatorProbe(probe, base.url, spec);
-        if (!outcome.sent) {
-          budgetStopped = true;
-          break outer;
-        }
-        probed++;
-        if ("error" in outcome) {
-          errored++;
-          continue;
-        }
-        const { response } = outcome;
-        if (response.status < 200 || response.status >= 300) continue;
-        if (spec.id === "index") listed = readActuatorIndex(response);
-        if (EVIDENCE[spec.id].confirm(response)) {
-          exposed.push({ url, endpoint: spec.id, severity: spec.severity, evidence: EVIDENCE[spec.id].evidence, base });
-        }
-      }
-    }
-
-    const details = {
-      bases: selection.bases.length,
-      probed,
-      errored,
-      skippedStateChanging: selection.skippedStateChanging,
-      skippedRobots,
-      skippedCap: selection.skippedCap,
-      budgetStopped,
-    };
-
-    const critical = exposed.filter((e) => e.severity === "critical");
-    const other = exposed.filter((e) => e.severity !== "critical");
-    if (critical.length > 0) {
-      checks.push({
-        name: CHECK_CRITICAL,
-        status: "fail",
-        message: `${critical.length} Spring Boot Actuator endpoint(s) that leak secrets or memory are open to anyone: ${critical.map((e) => e.url).join(", ")}`,
-        items: critical.map(item),
-        details: { severity: "critical", ...details },
-      });
-    }
-    if (other.length > 0) {
-      checks.push({
-        name: CHECK_EXPOSED,
-        status: "warn",
-        message: `${other.length} Spring Boot Actuator endpoint(s) are open to anyone: ${other.map((e) => e.url).join(", ")}`,
-        items: other.map(item),
-        details,
-      });
-    }
-    if (exposed.length > 0) return { checks };
-
-    if (probed === 0 && budgetStopped) {
-      checks.push({
-        name: CHECK_NOT_CHECKED,
-        status: "skipped",
-        skipReason: "probe-budget",
-        message: "The probe budget ran out before any Spring Boot Actuator path was probed",
-        details,
-      });
-    } else if (probed > 0 && errored === probed) {
-      checks.push({
-        name: CHECK_NOT_CHECKED,
-        status: "skipped",
-        skipReason: "probe-errors",
-        message: `Every Spring Boot Actuator probe failed with a network error or timeout (${probed} request(s)), so the actuator was not checked`,
-        details,
-      });
-    } else if (budgetStopped) {
-      // The paths the budget never reached could be open.
-      checks.push({
-        name: CHECK_NOT_CHECKED,
-        status: "skipped",
-        skipReason: "probe-budget",
-        message: `The probe budget ran out after ${probed} Spring Boot Actuator request(s). None of those found an open endpoint, but the rest were not checked`,
-        details,
-      });
-    } else {
-      checks.push({
-        name: CHECK_CLEAN,
-        status: "pass",
-        message:
-          probed === 0
-            ? "No Spring Boot Actuator path could be probed"
-            : `No Spring Boot Actuator endpoint answered anyone (${probed} request(s) across ${selection.bases.length} base path(s))`,
-        details,
-      });
-    }
-    return { checks };
+  run(ctx: RuleContext): Promise<RuleResult> {
+    return runExposedActuator(ctx);
   },
 };
+
+/** The rule's run, with its time bounds as a parameter so tests can shrink them. */
+export async function runExposedActuator(
+  ctx: RuleContext,
+  timing: ActuatorTiming = DEFAULT_ACTUATOR_TIMING
+): Promise<RuleResult> {
+  const checks: CheckResult[] = [];
+  const probe = ctx.probe;
+
+  if (!probe || probe.level === "passive") {
+    checks.push({
+      name: CHECK_NOT_CHECKED,
+      status: "skipped",
+      skipReason: "probing-passive",
+      message:
+        "Probing is passive, so no Spring Boot Actuator path was probed. Run with --probe active to check for exposed actuator endpoints.",
+    });
+    return { checks };
+  }
+
+  const selection = selectActuatorBases(ctx);
+  const aggressive = probe.level === "aggressive";
+  const robotsTxt = ctx.site?.robotsTxt ?? null;
+  const deadline = Date.now() + timing.totalBudgetMs;
+  let probed = 0;
+  let errored = 0;
+  let skippedRobots = 0;
+  let budgetStopped = false;
+  let timeStopped = false;
+  let timedOutBases = 0;
+  let throttled = false;
+  const exposed: ExposedEndpoint[] = [];
+
+  outer: for (const base of selection.bases) {
+    let listed: string[] | null = null;
+    for (const spec of ACTUATOR_ENDPOINTS) {
+      const url = `${base.url}${spec.path}`;
+      // An open index lists every endpoint exposed over HTTP: one it leaves
+      // out is not requested.
+      if (spec.id !== "index" && listed && !listed.includes(spec.id)) continue;
+      if (spec.id === "heapdump" && !aggressive) {
+        // Asking for a heap dump makes the JVM write one, so an active run
+        // never asks. An open index that lists it is a warning: the index
+        // lists endpoints Spring Security still protects, so only the HPROF
+        // header read on an aggressive run makes it critical.
+        if (listed?.includes("heapdump")) {
+          exposed.push({ url, endpoint: "heapdump", severity: "warning", evidence: "listed-in-index", base });
+        }
+        continue;
+      }
+      if (!aggressive && isRobotsTxtDisallowed(url, robotsTxt, "*")) {
+        skippedRobots++;
+        continue;
+      }
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        timeStopped = true;
+        break outer;
+      }
+      const outcome = await sendActuatorProbe(
+        probe,
+        base.url,
+        spec,
+        Math.min(timing.requestTimeoutMs, remaining)
+      );
+      if (!outcome.sent) {
+        budgetStopped = true;
+        break outer;
+      }
+      probed++;
+      if ("error" in outcome) {
+        errored++;
+        if (Date.now() >= deadline) {
+          timeStopped = true;
+          break outer;
+        }
+        if (outcome.error === "TimeoutError") {
+          // A server that hangs on one path hangs on the next: leave this base.
+          timedOutBases++;
+          continue outer;
+        }
+        continue;
+      }
+      const { response } = outcome;
+      if (
+        isThrottledOrChallenged({
+          status: response.status,
+          headers: response.headers,
+          text: new TextDecoder().decode(response.bytes),
+        })
+      ) {
+        // The site pushed back: the answer says nothing about the path, and
+        // no further request is sent.
+        throttled = true;
+        break outer;
+      }
+      if (response.status < 200 || response.status >= 300) continue;
+      if (spec.id === "index") listed = readActuatorIndex(response);
+      if (EVIDENCE[spec.id].confirm(response)) {
+        exposed.push({ url, endpoint: spec.id, severity: spec.severity, evidence: EVIDENCE[spec.id].evidence, base });
+      }
+    }
+  }
+
+  const details = {
+    bases: selection.bases.length,
+    probed,
+    errored,
+    skippedStateChanging: selection.skippedStateChanging,
+    skippedRobots,
+    skippedCap: selection.skippedCap,
+    budgetStopped,
+    timeStopped,
+    timedOutBases,
+    throttled,
+  };
+
+  const critical = exposed.filter((e) => e.severity === "critical");
+  const other = exposed.filter((e) => e.severity !== "critical");
+  if (critical.length > 0) {
+    checks.push({
+      name: CHECK_CRITICAL,
+      status: "fail",
+      message: `${critical.length} Spring Boot Actuator endpoint(s) that leak secrets or memory are open to anyone: ${critical.map((e) => e.url).join(", ")}`,
+      items: critical.map(item),
+      details: { severity: "critical", ...details },
+    });
+  }
+  if (other.length > 0) {
+    checks.push({
+      name: CHECK_EXPOSED,
+      status: "warn",
+      message: `${other.length} Spring Boot Actuator endpoint(s) are open to anyone: ${other.map((e) => e.url).join(", ")}`,
+      items: other.map(item),
+      details,
+    });
+  }
+  if (exposed.length > 0) return { checks };
+
+  const answered = probed - errored - (throttled ? 1 : 0);
+  if (probed === 0 && budgetStopped) {
+    checks.push({
+      name: CHECK_NOT_CHECKED,
+      status: "skipped",
+      skipReason: "probe-budget",
+      message: "The probe budget ran out before any Spring Boot Actuator path was probed",
+      details,
+    });
+  } else if (probed === 0 && !timeStopped) {
+    // Nothing sent: every path was disallowed by robots.txt (or there was no
+    // base to probe). Nothing was checked, so this is never a pass, and a
+    // finding from an earlier run is not cleared.
+    checks.push({
+      name: CHECK_NOT_CHECKED,
+      status: "skipped",
+      skipReason: skippedRobots > 0 ? "robots-disallowed" : PROBE_INCOMPLETE_SKIP_REASON,
+      message:
+        skippedRobots > 0
+          ? `robots.txt disallows every Spring Boot Actuator path (${skippedRobots}), so none was probed. Run with --probe aggressive to probe them anyway, on a site you own or may test.`
+          : "No Spring Boot Actuator path could be probed",
+      details,
+    });
+  } else if (probed > 0 && errored === probed && !budgetStopped && !timeStopped) {
+    checks.push({
+      name: CHECK_NOT_CHECKED,
+      status: "skipped",
+      skipReason: "probe-errors",
+      message: `Every Spring Boot Actuator probe failed with a network error or timeout (${probed} request(s)), so the actuator was not checked`,
+      details,
+    });
+  } else if (budgetStopped || timeStopped || throttled || errored > 0) {
+    // The paths not answered could be open.
+    const why: string[] = [];
+    if (throttled) {
+      why.push("the site rate limited the probes (HTTP 429) or answered with a bot challenge, so no further request was sent");
+    }
+    if (budgetStopped) why.push(`the probe budget ran out after ${probed} request(s)`);
+    if (timeStopped) why.push(`the rule's ${Math.round(timing.totalBudgetMs / 1000)} s time limit ran out after ${probed} request(s)`);
+    if (timedOutBases > 0) why.push(`${timedOutBases} base path(s) stopped answering (a request timed out)`);
+    const otherErrors = errored - timedOutBases;
+    if (otherErrors > 0) why.push(`${otherErrors} request(s) failed with a network error or timeout`);
+    checks.push({
+      name: CHECK_NOT_CHECKED,
+      status: "skipped",
+      skipReason: budgetStopped && !timeStopped && !throttled && errored === 0 ? "probe-budget" : PROBE_INCOMPLETE_SKIP_REASON,
+      message: `Spring Boot Actuator check incomplete: ${why.join("; ")}. ${answered} request(s) were answered without an open endpoint, but the rest were not checked`,
+      details,
+    });
+  } else {
+    checks.push({
+      name: CHECK_CLEAN,
+      status: "pass",
+      message: `No Spring Boot Actuator endpoint answered anyone (${probed} request(s) across ${selection.bases.length} base path(s))`,
+      details,
+    });
+  }
+  return { checks };
+}
