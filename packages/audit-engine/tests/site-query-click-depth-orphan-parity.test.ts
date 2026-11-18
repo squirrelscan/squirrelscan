@@ -171,6 +171,7 @@ const FIXTURE: Spec[] = [
 ];
 
 const SITEMAP_WITH_HIDDEN: SitemapDiscovery = {
+  readState: "complete",
   discovered: [{ urls: [{ loc: P("hidden-insm") }, { loc: P("a") }] }],
 } as unknown as SitemapDiscovery;
 
