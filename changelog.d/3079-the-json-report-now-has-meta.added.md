@@ -1,1 +1,0 @@
-- The JSON report now has `meta.discovered`: how many distinct URLs the crawl knew of, fetched or not, as `total`, `sitemap` (queued from the sitemap) and `links` (everything else: followed links, the start URL, or carried from an earlier audit). Read it with `squirrel report --format json` or an audit run with `--format json` (JSON schema version 1.24). (squirrelscan/repo#3079)

@@ -1,1 +1,0 @@
-- A local report of a very large crawl (over 250,000 stored checks) is now a sampled body: exact score and totals, per-rule check lists folded to a cap, no per-page check lists, and a top-level `reportBody` field in the JSON report saying what was left out (JSON schema version 1.23). `--full-report` builds the whole body (repo#2352).
