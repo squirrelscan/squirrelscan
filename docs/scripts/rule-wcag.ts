@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * WCAG success criteria, generated onto the accessibility rule pages (repo#3093).
+ * WCAG success criteria, generated onto the rule pages of every rule that declares them (repo#3093, repo#3094).
  *
  * Every a11y rule declares either `meta.wcag` (criterion number, level, WCAG version) or `meta.wcagNone` (why it
  * maps to no criterion), so each page says which from that metadata and cannot drift from the code. `--write`
@@ -11,10 +11,10 @@
  *     ...generated...
  *     {/* rule-wcag:end *\/}
  *
- * on `rules/a11y/<name>.mdx`, before `## Related rules` (else `## References`, else the end of the page).
+ * on `rules/<category>/<name>.mdx`, before `## Related rules` (else `## References`, else the end of the page).
  * The section's heading and the generated block are rewritten together; any other text is never touched.
- * `--check` (run by `make validate`) exits 1 with `file: message` when an a11y rule has no page or a block is
- * missing or out of date.
+ * `--check` (run by `make validate`) exits 1 with `file: message` when a declaring rule has no page or a block is
+ * missing or out of date. Accessibility rules all declare one; images/alt-text cites 1.1.1 too.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -70,11 +70,15 @@ export function pagePath(ruleId: string): string {
   return join(DOCS, "rules", category!, `${name}.mdx`);
 }
 
+/** The rules whose page carries the block: every rule, in any category, that declares `wcag` or `wcagNone`. */
+export function rulesWithWcagBlock(metas: Iterable<RuleMeta>): RuleMeta[] {
+  return [...metas].filter((meta) => meta.wcag !== undefined || meta.wcagNone !== undefined);
+}
+
 function main(): number {
   const write = process.argv.includes("--write");
   const problems: string[] = [];
-  for (const { meta } of loadAllRules().values()) {
-    if (meta.category !== "a11y" || (!meta.wcag && meta.wcagNone === undefined)) continue;
+  for (const meta of rulesWithWcagBlock([...loadAllRules().values()].map((r) => r.meta))) {
     const file = pagePath(meta.id);
     const rel = `rules/${meta.id}.mdx`;
     let text: string;

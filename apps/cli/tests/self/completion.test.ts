@@ -562,3 +562,20 @@ describe("audit --wcag-level completion (pub#2024 review)", () => {
     );
   });
 });
+
+describe("report --wcag-checklist completion (repo#3094)", () => {
+  test("bash completes markdown csv after it, like zsh and fish", () => {
+    const block = commandBlock("bash", script("bash"), "report");
+    const arm = block.indexOf("--wcag-checklist)");
+    expect(arm).toBeGreaterThan(-1);
+    expect(block.slice(arm).match(/compgen -W "([^"]+)"/)?.[1]).toBe(
+      "markdown csv"
+    );
+    expect(commandBlock("zsh", script("zsh"), "report")).toMatch(
+      /--wcag-checklist\[[^\]]+\]::format:\(markdown csv\)/
+    );
+    expect(commandBlock("fish", script("fish"), "report")).toMatch(
+      /-l wcag-checklist -a "markdown csv"/
+    );
+  });
+});

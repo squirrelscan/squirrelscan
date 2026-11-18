@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { wcag } from "../../packages/core-contracts/src/wcag";
 import type { RuleMeta } from "../../packages/rules/src/types";
-import { renderBlock, withBlock } from "./rule-wcag";
+import { renderBlock, rulesWithWcagBlock, withBlock } from "./rule-wcag";
 
 const meta = (over: Partial<RuleMeta>): RuleMeta =>
   ({ id: "a11y/x", name: "X", description: "", category: "a11y", scope: "page", severity: "warning", weight: 1, ...over }) as RuleMeta;
@@ -53,5 +53,16 @@ describe("rule-wcag generated block (pub#2024 review)", () => {
     const next = withBlock("# X\n\n## Related rules\n\n- y\n", meta({ wcag: [wcag("1.1.1")] }));
     expect(next.indexOf("## WCAG success criteria")).toBeLessThan(next.indexOf("## Related rules"));
     expect(withBlock(next, meta({ wcag: [wcag("1.1.1")] }))).toBe(next);
+  });
+});
+
+describe("rule-wcag pages (repo#3094)", () => {
+  test("a non-a11y rule that declares wcag gets the block; one that declares nothing does not", () => {
+    const ids = rulesWithWcagBlock([
+      meta({ id: "images/alt-text", category: "images", wcag: [wcag("1.1.1")] }),
+      meta({ id: "core/meta-title", category: "core" }),
+      meta({ id: "a11y/x", wcagNone: "It checks something WCAG does not require." }),
+    ]).map((m) => m.id);
+    expect(ids).toEqual(["images/alt-text", "a11y/x"]);
   });
 });

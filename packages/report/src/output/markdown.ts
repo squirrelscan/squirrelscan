@@ -17,6 +17,12 @@ import {
   withSiteResourceCoverage,
 } from "../site-resource-presentation";
 
+import {
+  buildWcagChecklist,
+  hasWcagDeclarations,
+  wcagChecklistMarkdownLines,
+  type WcagChecklistRule,
+} from "../wcag-checklist";
 import { uncoveredItems } from "../component-presentation";
 import { formatSiteWideItem, siteWideContext, siteWideItem } from "../site-wide-items";
 import {
@@ -107,6 +113,13 @@ export interface MarkdownRenderOptions {
   branding?: ReportBranding;
   /** List the rules that passed after the issues (`--include-passed`). */
   includePassed?: boolean;
+  /**
+   * Every rule's id and `meta.wcag` (repo#3094), for the accessibility checklist. A report's own rule metas
+   * carry no `wcag` (the engine does not write it), so the checklist renders only when this is passed and
+   * at least one rule declares a criterion; without it there is no checklist, never one of all "No rule
+   * covers it" rows.
+   */
+  wcagRules?: Iterable<WcagChecklistRule>;
 }
 
 /**
@@ -862,6 +875,14 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       }
       lines.push("");
     }
+  }
+
+  // repo#3094: the accessibility checklist, a manual-review aid, after the findings and before Report
+  // detail (which stays last). A failed or blocked audit ran no rules, so it has nothing to list.
+  // It needs the rules' WCAG declarations, which the report itself does not carry.
+  const wcagRules = options?.wcagRules ? [...options.wcagRules] : [];
+  if (!isAuditFailed(report.status) && hasWcagDeclarations(wcagRules)) {
+    lines.push(...wcagChecklistMarkdownLines(buildWcagChecklist(report, wcagRules)));
   }
 
   // Report detail: the last section, after every finding. What this audit did not check, the

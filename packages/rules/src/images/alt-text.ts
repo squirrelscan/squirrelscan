@@ -1,6 +1,8 @@
 // images/alt-text - Reports images with no alt attribute. alt="" is decorative
 // markup (HTML spec, WCAG H67), not a missing attribute (#143).
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const altTextRule: Rule = {
@@ -16,6 +18,8 @@ export const altTextRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // 1.1.1 Non-text Content: an image with no alt attribute has no text alternative (repo#3094).
+    wcag: [wcag("1.1.1")],
   },
 
   run(ctx: RuleContext): RuleResult {

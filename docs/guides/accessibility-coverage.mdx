@@ -32,7 +32,7 @@ These are things a parser can establish from the markup.
 | Language | [`a11y/html-lang-valid`](/rules/a11y/html-lang-valid), [`a11y/valid-lang`](/rules/a11y/valid-lang) |
 | Zoom and keyboard | [`a11y/zoom-disabled`](/rules/a11y/zoom-disabled), [`a11y/tabindex`](/rules/a11y/tabindex), [`a11y/accesskeys`](/rules/a11y/accesskeys) |
 
-Image alt text lives in the images category, as [`images/alt-text`](/rules/images/alt-text).
+Image alt text lives in the images category, as [`images/alt-text`](/rules/images/alt-text). It cites 1.1.1 Non-text Content, so the accessibility checklist counts it on that row, but `--wcag-level` filters accessibility rules only, so it runs at every level.
 
 ## What squirrel only partly checks
 
@@ -59,6 +59,34 @@ No parser can judge these, so squirrel does not claim to:
 - Whether motion, timing and error handling suit the people using the page.
 
 Test those yourself, ideally with people who use assistive technology.
+
+## Accessibility checklist
+
+<Warning>Automated checks cover only part of WCAG. The checklist is not a conformance claim or an accessibility statement: passing every automated check does not mean a site conforms to WCAG, and every criterion still needs a manual check.</Warning>
+
+Every Markdown report of an audit that ran has a checklist of the 55 WCAG 2.2 Level A and AA success criteria. 4.1.1 Parsing is obsolete in WCAG 2.2 and left out. Each row comes from the criteria the rules declare (shown on each [rule page](/rules/a11y)) and says what those rules found on this audit:
+
+| What the rules found | Meaning |
+|---|---|
+| Rules found an issue | A rule mapped to the criterion reported a warning or failure. A lead to check, not a verdict. |
+| Rules found no issue | The rules mapped to the criterion ran and reported nothing. They cover part of it at most, so it can still fail. |
+| Rules did not run | Rules are mapped to the criterion, but none ran on this audit: excluded with `--rule-exclude`, filtered by `--wcag-level`, timed out or errored. Re-run without the exclusion to check it. A rule that ran and found nothing to check on any page did run. |
+| No rule covers it | No squirrelscan rule is mapped to the criterion. Keyboard access, live captions and error handling are examples. |
+
+Each row also lists the rules that ran, the rules that did not run (so a rule left out of a partly checked criterion still shows), and the rules with findings. Every row has a manual check column, because every criterion still needs one.
+
+To print only the checklist for a review pass, as Markdown or as CSV with empty `manual_result` and `reviewer_notes` columns:
+
+```bash
+squirrel report --wcag-checklist
+squirrel report --wcag-checklist csv -o wcag-checklist.csv
+```
+
+A bare `--wcag-checklist` prints Markdown.
+
+A report read with `--input` does not carry the passing checks, so there a rule that found nothing reads as not run, and squirrel says so on stderr.
+
+A failed or blocked audit ran no rules, so it has no checklist: `--wcag-checklist` on one says so on stderr and exits 1.
 
 ## Using the report well
 
