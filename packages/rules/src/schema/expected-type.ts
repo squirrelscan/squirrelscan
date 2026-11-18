@@ -220,9 +220,10 @@ export const expectedTypeSchemaRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options ?? {});
-    // No classification at all means the classifier did not run (`--no-classifier`,
-    // `classifier.enabled = false`, or a parse stored before it existed). The user
-    // chose that, so it is a not-checked line, never an info finding on every page.
+    // No classification at all means no classifier ran: the CLI with `--no-classifier` or
+    // `classifier.enabled = false`, a host that supplies no classifier hook (the cloud), or a
+    // parse stored before it existed. The message names no CLI flag, since the reader may not
+    // be on the CLI. It is a not-checked line, never an info finding on every page.
     if (!ctx.parsed.classification) {
       return {
         checks: [
@@ -230,7 +231,7 @@ export const expectedTypeSchemaRule: Rule = {
             name: "expected-type",
             status: "skipped",
             skipReason: CLASSIFIER_OFF_SKIP_REASON,
-            message: "Not checked: the page classifier is off (--no-classifier or classifier.enabled = false)",
+            message: "Not checked: no page classifier ran on this page",
           },
         ],
       };
