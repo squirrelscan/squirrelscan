@@ -53,6 +53,7 @@ Actionable asks whether an agent can go beyond reading and transact: call an API
 - [API & OAuth Discovery](/rules/ax/api-discovery): `api-catalog`, OpenAPI, OAuth discovery documents
 - [Pay Per Crawl](/rules/ax/pay-per-crawl): HTTP 402 monetized agent access (Cloudflare Pay Per Crawl, x402)
 - [WebMCP](/rules/ax/webmcp): declarative WebMCP tools on forms, with schema validity checks
+- [Commerce Readiness](/rules/ax/commerce-readiness): whether product pages declare the offer fields a shopping agent needs (shops only)
 - [Archive Indexing](/rules/ax/archive-indexing): presence in the Wayback Machine and Common Crawl, the archives AI training corpora are built from (cloud)
 
 <Note>`llms.txt` has no proven SEO value. Google has said it does not use it for search ranking or indexing. Treat it as a convenience for coding agents and docs consumption, not a ranking lever.</Note>
@@ -72,10 +73,10 @@ squirrel audit https://nutshop.squirrelscan.com --rule-include ax
 These carry the highest severity and weight in the category.
 
 - [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking): A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as a browser, GPTBot and Claude-User, and every AI token on request.
+- [Commerce readiness: can a shopping agent buy from this shop](/rules/ax/commerce-readiness): Checks that product pages declare the offer fields a shopping agent needs: price, currency, availability, shipping, returns and an identifier. Runs only on detected shops.
 - [Page type mismatch: when schema disagrees with the page](/rules/ai/page-type-match): A page that reads as a listing but declares Product schema. squirrel compares the classified type against the declared JSON-LD.
 - [Content-Signal in robots.txt: search, ai-input, ai-train](/rules/ax/content-signals): A Content-Signal line with a typo, or one declaring ai-train=yes while robots.txt blocks the training crawlers. squirrel parses and cross-checks both.
 - [Text to HTML ratio: the token cost of a page for an agent](/rules/ax/token-weight): Visible text under 15% of the HTML, or a page over a 100,000-token budget. squirrel estimates both from the raw response.
-- [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers): robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs.
 
 {/* hub:start-here:end */}
 
@@ -92,6 +93,7 @@ These carry the highest severity and weight in the category.
 | [Answer blocks: can an answer engine quote this page](/rules/ax/answer-blocks) | Question headings with no short, self-contained answer, and data tables or charts with no source. squirrel flags both on content pages and never lowers the score. | info | Per-page |
 | [api-catalog and OpenAPI: how an agent finds your API](/rules/ax/api-discovery) | No OpenAPI spec at a conventional path, or OAuth metadata with no way for an agent to register a client. squirrel probes both. | info | Site-wide |
 | [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking) | A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as a browser, GPTBot and Claude-User, and every AI token on request. | error | Site-wide |
+| [Commerce readiness: can a shopping agent buy from this shop](/rules/ax/commerce-readiness) | Checks that product pages declare the offer fields a shopping agent needs: price, currency, availability, shipping, returns and an identifier. Runs only on detected shops. | warning | Per-page |
 | [Common Crawl and Wayback: is your site in the archives](/rules/ax/archive-indexing) | A site missing from the Common Crawl index or the Wayback Machine, or archived only with a capture over a year old. squirrel checks both. | warning | Site-wide |
 | [Content that needs JavaScript: invisible to raw-HTML agents](/rules/ax/content-without-js) | Most of a page's text arriving only after JavaScript runs. squirrel compares the raw HTML against the rendered DOM and reports the gap. | info | Per-page |
 | [Content-Signal in robots.txt: search, ai-input, ai-train](/rules/ax/content-signals) | A Content-Signal line with a typo, or one declaring ai-train=yes while robots.txt blocks the training crawlers. squirrel parses and cross-checks both. | warning | Site-wide |
