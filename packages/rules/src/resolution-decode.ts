@@ -196,6 +196,7 @@ export async function decodeResolutionSignal(
 
   return {
     crawledUrls: urls,
+    crawledUrlsComplete: payload.complete,
     failing,
     ...(Object.keys(notEvaluated).length > 0 ? { notEvaluated } : {}),
     ...(truncated.length > 0 ? { truncated } : {}),
