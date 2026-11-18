@@ -135,6 +135,16 @@ squirrel config set crawler.concurrency 10 --dry-run
 squirrel config set rules.disable '["ai/*"]'
 ```
 
+### Disable a whole rule group
+
+`rules.enable` and `rules.disable` accept `group:<id>` (`seo`, `performance`, `security`, `ai`). It expands to every member category's `category/*` when the config loads, so `group:performance` disables the `perf` category. An unknown group id is a config error.
+
+```bash
+squirrel config set rules.disable '["group:performance"]'
+```
+
+`--rule-include` and `--rule-exclude` accept `group:<id>` too.
+
 ### Verify config before deploy
 
 ```bash

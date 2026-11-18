@@ -10,9 +10,10 @@ import { OUTPUT_FORMATS } from "@/constants";
 import { ok, err, commandError } from "@/controllers/types";
 import { ENTITY_PROBLEMS } from "@/entities/filters";
 import { TICKET_STATUSES, TICKET_TYPES } from "@/lib/support";
-import { RULE_CATEGORY_VALUES } from "@/rules/categories";
+import { GROUP_CODES, RULE_CATEGORY_VALUES } from "@/rules/categories";
 
 const categoryValues = RULE_CATEGORY_VALUES.join(" ");
+const groupValues = GROUP_CODES.join(" ");
 const entityFormatValues = ENTITY_FORMATS.join(" ");
 const entityProblemValues = ENTITY_PROBLEMS.join(" ");
 const pagesFormatValues = PAGES_FORMATS.join(" ");
@@ -340,6 +341,10 @@ _squirrel_completions() {
           COMPREPLY=( $(compgen -W "${categoryValues}" -- "\${cur}") )
           return 0
           ;;
+        --group)
+          COMPREPLY=( $(compgen -W "${groupValues}" -- "\${cur}") )
+          return 0
+          ;;
         --severity)
           COMPREPLY=( $(compgen -W "error warning all" -- "\${cur}") )
           return 0
@@ -357,7 +362,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help --include-pages --full-report --wcag-checklist" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--list -l --severity --category --group --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help --include-pages --full-report --wcag-checklist" -- "\${cur}") )
       return 0
       ;;
     feedback)
@@ -809,6 +814,7 @@ _squirrel() {
             '(-l --list)'{-l,--list}'[List recent audits]' \\
             '--severity[Filter by severity]:severity:(error warning all)' \\
             '--category[Filter by categories]:category:(${categoryValues})' \\
+            '--group[Filter by rule groups]:group:(${groupValues})' \\
             '(-f --format)'{-f,--format}'[Output format]:format:(${formatValues})' \\
             '--diff[Compare against baseline audit]:audit-id:' \\
             '--regression-since[Compare against baseline and show regressions]:audit-id:' \\
@@ -1117,6 +1123,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from init" -s n -l project-name 
 complete -c squirrel -n "__fish_seen_subcommand_from report" -s l -l list -d "List recent audits"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l severity -a "error warning all" -d "Filter by severity"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l category -a "${categoryValues}" -d "Filter by categories (comma-separated)"
+complete -c squirrel -n "__fish_seen_subcommand_from report" -l group -a "${groupValues}" -d "Filter by rule groups (comma-separated)"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -s f -l format -a "${formatValues}" -d "Output format"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l diff -d "Compare against baseline audit"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l regression-since -d "Compare against baseline and show regressions"

@@ -305,7 +305,7 @@ export function getGroupInfo(group: string): GroupInfo | undefined {
 
 /** Check if a string is a valid group code. */
 export function isValidGroup(code: string): code is RuleGroup {
-  return code in GROUPS;
+  return Object.hasOwn(GROUPS, code);
 }
 
 /**

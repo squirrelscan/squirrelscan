@@ -14,10 +14,42 @@
 import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
 
 import {
+  getCategoriesInGroup,
+  GROUP_CODES,
   isValidCategory,
+  isValidGroup,
   normalizeCategoryCode,
   RULE_CATEGORY_VALUES,
 } from "./categories";
+
+const GROUP_PREFIX = "group:";
+
+/** Expand `group:<id>` patterns to the group's member `category/*` patterns
+ * (#626). Every other pattern passes through untouched, so stored shapes and
+ * the pattern engine are unchanged. Returns an error for an unknown group id
+ * instead of silently matching nothing. */
+export function expandGroupPatterns(patterns: readonly string[]): {
+  patterns: string[];
+  errors: string[];
+} {
+  const out: string[] = [];
+  const errors: string[] = [];
+  for (const pattern of patterns) {
+    if (!pattern.startsWith(GROUP_PREFIX)) {
+      out.push(pattern);
+      continue;
+    }
+    const id = pattern.slice(GROUP_PREFIX.length);
+    if (!isValidGroup(id)) {
+      errors.push(
+        `unknown group "${id}" in "${pattern}". Valid groups: ${GROUP_CODES.join(", ")}`
+      );
+      continue;
+    }
+    for (const category of getCategoriesInGroup(id)) out.push(`${category}/*`);
+  }
+  return { patterns: [...new Set(out)], errors };
+}
 
 /** A token that names no built-in category: valid only if a loaded plugin owns the namespace (#1599). */
 export interface PendingRuleFilterToken {
@@ -67,6 +99,21 @@ function expandToken(
   flag: "--rule-include" | "--rule-exclude",
   options: RuleFilterParseOptions = {}
 ): { pattern: string; pending?: PendingRuleFilterToken } | { error: string } {
+  if (token.startsWith(GROUP_PREFIX)) {
+    const id = token.slice(GROUP_PREFIX.length);
+    if (!isValidGroup(id)) {
+      return {
+        error: `${flag} "${token}": unknown group "${id}". Valid groups: ${GROUP_CODES.join(", ")}`,
+      };
+    }
+    // Several patterns for one token: parseRuleFilters flattens "\n"-joined
+    // expansions below.
+    return {
+      pattern: getCategoriesInGroup(id)
+        .map((c) => `${c}/*`)
+        .join("\n"),
+    };
+  }
   const slash = token.indexOf("/");
   const namespace = slash === -1 ? token : token.slice(0, slash);
   if (!isValidCategory(normalizeCategoryCode(namespace))) {
@@ -120,7 +167,7 @@ export function parseRuleFilters(
     const r = expandToken(token, "--rule-include", options);
     if ("error" in r) errors.push(r.error);
     else {
-      enable.push(r.pattern);
+      enable.push(...r.pattern.split("\n"));
       if (r.pending) pending.push(r.pending);
     }
   }
@@ -128,7 +175,7 @@ export function parseRuleFilters(
     const r = expandToken(token, "--rule-exclude", options);
     if ("error" in r) errors.push(r.error);
     else {
-      disable.push(r.pattern);
+      disable.push(...r.pattern.split("\n"));
       if (r.pending) pending.push(r.pending);
     }
   }

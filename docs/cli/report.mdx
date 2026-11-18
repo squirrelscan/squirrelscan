@@ -32,6 +32,7 @@ squirrel report [id] [options]
 | `--input` | `-i` | Load from JSON file (fallback mode) | - |
 | `--severity` | | Filter by severity: `error`, `warning`, `all` | `all` |
 | `--category` | | Filter by categories (comma-separated) | all |
+| `--group` | | Filter by rule groups: `seo`, `performance`, `security`, `ai` (comma-separated). Combines with `--category`: an issue must match both | all |
 | `--diff` | | Compare current report against baseline (audit ID or domain) | - |
 | `--regression-since` | | Compare against baseline and show regressions | - |
 | `--allow-cross-site` | | Allow diff across different base URLs | `false` |
@@ -177,6 +178,16 @@ Show only warnings:
 ```bash
 squirrel report --severity warning
 ```
+
+### Filter by group
+
+```bash
+squirrel report --group security
+squirrel report --group security,performance
+squirrel report --group seo --category a11y
+```
+
+An unknown group exits with an error that lists the valid groups. `--group` applies before `--wcag-checklist`, so `squirrel report --group performance --wcag-checklist` reads every criterion whose rules sit outside the group as `Rules did not run`. Accessibility rules are in the `seo` group.
 
 ### Filter by category
 

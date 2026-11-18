@@ -3,6 +3,7 @@
 // This file adds CLI-specific TOML loading, file discovery, and process.exit.
 
 import { isUnsafeObjectKey } from "@squirrelscan/core-contracts/untrusted-keys";
+import { expandGroupPatterns } from "@squirrelscan/rules";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -141,6 +142,25 @@ export function findConfigFile(startDir?: string): string | null {
   return null;
 }
 
+/** Expand `group:<id>` in rules.enable/disable to member `category/*`
+ * patterns at config-load time (#626). Throws on an unknown group id. */
+export function expandConfigRuleGroups(config: Config): Config {
+  const enable = expandGroupPatterns(config.rules.enable);
+  const disable = expandGroupPatterns(config.rules.disable);
+  const errors = [...enable.errors, ...disable.errors];
+  if (errors.length > 0) {
+    throw new Error(errors.map((e) => `rules: ${e}`).join("\n"));
+  }
+  return {
+    ...config,
+    rules: {
+      ...config.rules,
+      enable: enable.patterns,
+      disable: disable.patterns,
+    },
+  };
+}
+
 // Load and parse config file
 export async function loadConfig(
   configPath?: string,
@@ -164,7 +184,8 @@ export async function loadConfig(
     const parsed = parseTOML(content);
     const defaults = getDefaultConfig();
     const merged = deepMerge(defaults, parsed as Partial<Config>);
-    return ConfigSchema.parse(merged);
+    const config = ConfigSchema.parse(merged);
+    return expandConfigRuleGroups(config);
   } catch (error) {
     console.error(`Failed to load config file: ${path}`);
 

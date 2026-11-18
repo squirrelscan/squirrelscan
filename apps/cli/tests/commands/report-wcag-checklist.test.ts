@@ -203,3 +203,49 @@ describe("squirrel report --wcag-checklist (repo#3094)", () => {
     expect(wcagChecklistKind(false)).toBeNull();
   });
 });
+
+describe("squirrel report --group with --wcag-checklist (repo#639)", () => {
+  test("the group filter applies first: a11y is in seo, not performance", async () => {
+    const out = join(dir, "checklist.md");
+    expect(
+      await run({
+        input: writeReport(),
+        group: "seo",
+        wcagChecklist: true,
+        output: out,
+      })
+    ).toBe(0);
+    expect(readFileSync(out, "utf8")).toContain(
+      "| 1.4.3 Contrast (Minimum) | AA | Rules found an issue |"
+    );
+
+    expect(
+      await run({
+        input: writeReport(),
+        group: "performance",
+        wcagChecklist: true,
+        output: out,
+      })
+    ).toBe(0);
+    expect(readFileSync(out, "utf8")).toContain(
+      "| 1.4.3 Contrast (Minimum) | AA | Rules did not run |"
+    );
+  });
+
+  test("an unknown group exits 1 before any checklist is written", async () => {
+    const out = join(dir, "checklist.md");
+    expect(
+      await run({
+        input: writeReport(),
+        group: "bogus",
+        wcagChecklist: true,
+        output: out,
+      })
+    ).toBe(1);
+    expect(stderr).toEqual([
+      "Invalid group: bogus",
+      "Valid groups: seo, performance, security, ai",
+    ]);
+    expect(existsSync(out)).toBe(false);
+  });
+});
