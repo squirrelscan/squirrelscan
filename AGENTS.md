@@ -6,7 +6,7 @@ Does your tool read `CLAUDE.md` instead of `AGENTS.md`? Create a local `CLAUDE.m
 
 ## What this is
 
-squirrelscan is **the website QA tool for your coding agent**. It audits websites for SEO, performance, security, accessibility and agent experience (AX) issues, and gives your coding agent exact fixes. This repository is the open source (MIT) part: the `squirrel` CLI, the crawler, the audit engine, 340+ audit rules, the report renderers and the docs at [docs.squirrelscan.com](https://docs.squirrelscan.com). The CLI ships as a Bun standalone executable.
+squirrelscan is **the website QA tool for your coding agent**. It audits websites for SEO, performance, security, accessibility and agent experience (AX) issues, and gives your coding agent exact fixes. This repository is the open source (MIT) part: the `squirrel` CLI, the crawler, the audit engine, 350+ audit rules, the report renderers and the docs at [docs.squirrelscan.com](https://docs.squirrelscan.com). The CLI ships as a Bun standalone executable.
 
 Naming: the product is `squirrelscan`, always lowercase, and the binary is `squirrel`. Say "audit rules", not "SEO rules". The term is "agent experience (AX)", never "agent readiness" or "AI readiness".
 
@@ -133,7 +133,7 @@ Conventions and traps:
    - Add the page to `docs/docs.json` and add a row to `docs/rules/<category>/index.mdx`.
    - Bump the category's "(N rules)" in `docs/rules/index.mdx` and in its score group page (`docs/rules/{seo,performance,security,agents}/index.mdx`).
    - Bump the category's row in the "Rule categories" tables of `README.md` and `docs/index.mdx` as well (the "Rules" count, and the "What it covers" text when the rule adds a new theme). These two are easy to miss.
-   - Rounded totals ("340+", `PUBLIC_RULE_COUNT_FLOOR`) are the live count rounded down to a multiple of 10, and change only when the live count crosses the next one. When it does, bump the constant and every "N+ rules" in the README, `AGENTS.md`, `docs/`, `npm/package.json` and `.claude-plugin/marketplace.json` (`packages/rules/tests/rule-count-docs-2139.test.ts` names any you miss), and tell the private repo, whose website copy states the same floor. Always update the "currently N enabled rules" comment beside the floor in `packages/utils/src/constants.ts`.
+   - Rounded totals ("350+", `PUBLIC_RULE_COUNT_FLOOR`) are the live count rounded down to a multiple of 10, and change only when the live count crosses the next one. When it does, bump the constant and every "N+ rules" in the README, `AGENTS.md`, `docs/`, `npm/package.json` and `.claude-plugin/marketplace.json` (`packages/rules/tests/rule-count-docs-2139.test.ts` names any you miss), and tell the private repo, whose website copy states the same floor. Always update the "currently N enabled rules" comment beside the floor in `packages/utils/src/constants.ts`.
 6. **Move the golden pins.** Run `bun test ./packages/audit-engine/tests/streaming-rules-canonical-golden.test.ts`.
    - The finding messages are pinned too: after a change to a rule's message or fix text, run `UPDATE_GOLDEN=1 bun test packages/audit-engine/tests/golden-finding-messages-229.test.ts` and review the diff of the snapshot.
    - `perRuleTally.length` goes up by one per new rule id.

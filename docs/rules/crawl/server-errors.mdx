@@ -1,0 +1,81 @@
+---
+title: "Server errors: pages that answer 5xx"
+description: "A page that answers 5xx is broken for visitors and drops out of search if it stays that way. squirrel reports each crawled page whose final response is a server error."
+---
+
+## What a server error is
+
+A 5xx status means the server failed to answer a request it should have been able to serve: an unhandled exception, an exhausted database or upstream, a bad deploy. Visitors see an error page, and search engines treat a persistent 5xx as a page that is gone and eventually drop it from the index.
+
+## What squirrel checks
+
+The rule is site-wide and reads every page the crawl fetched.
+
+- Skipped when no pages were crawled. Message: `No pages crawled`.
+- Pass when no crawled page answered 5xx and the crawl reached every page it knew of. Message: `No crawled page answered with a 5xx status`.
+- Not checked when no crawled page answered 5xx but the crawl stopped at its page cap or with URLs still queued: a page it never fetched may still be failing, so the audit does not call the site clean, and an earlier finding stays open. Message: `Not checked: the crawl stopped at its 500-page cap, so a page not crawled may still answer 5xx`.
+- Not checked when no crawled page answered 5xx but the crawl gave up on some pages (a timeout, a refused connection, a body it could not read): one of those may still be failing, so an earlier finding stays open. Message: `Not checked: the crawl could not fetch 3 page(s), and any of them may still answer 5xx`.
+- `server-errors` fails with one item per page, labelled with the URL and its status code. Message: `2 crawled pages answer with a 5xx server error`. Severity error, weight 8.
+
+A redirecting URL is a redirect, not a page, so it is not counted here.
+
+### Retries and intermittent errors
+
+squirrel retries a failing fetch before it gives up. A page that errors once and then answers is stored as the healthy page it became and is not reported, and the rule does not label anything intermittent. Only a page that is still 5xx after those retries is a finding. A throttled response (429, or a 503 that carries `Retry-After`) is the host asking squirrel to slow down, not a broken page, and is never reported here.
+
+## How to fix it
+
+Read the server or application logs for the failing URL, fix the fault behind it, then re-run the audit to confirm the page returns 200. A page that is gone on purpose should answer 404 or 410, not 500.
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/server-errors` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/server-errors"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/server-errors"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `server-errors` | Problem |  |
+| `server-errors` | Clean | `server-errors` |
+| `server-errors` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [links/broken-links](/rules/links/broken-links): internal links whose target answers 4xx or 5xx.
+- [crawl/soft-404](/rules/crawl/soft-404): error content served with a 200 status.
+- [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx): sitemap URLs that return 4xx.

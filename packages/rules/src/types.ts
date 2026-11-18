@@ -814,6 +814,13 @@ export interface SiteData {
    */
   unfetchedPages?: number;
   /**
+   * Pages the crawl tried and gave up on (`CrawlStats.pagesFailed`: a timeout, a refused
+   * connection, an undecodable body, a 5xx after the retries). Absent for callers that do not
+   * thread it. crawl/server-errors reads it: a page that was never fetched may still answer 5xx,
+   * so with any failure and no 5xx page it does not pass (repo#2036).
+   */
+  failedFetches?: number;
+  /**
    * Whether the audited site is itself being indexed (pub#457, see
    * `shared/noindex.ts` `isSiteIndexable`): its homepage, or the audit's entry
    * page when the homepage was not fetched, is indexable. Only `true` lets the

@@ -84,6 +84,9 @@ const HINTS: ReadonlyMap<string, string> = new Map(Object.entries({
   // pub#2035: no verdict on the home page this audit (not fetched, or failed for an unknown reason).
   "entry-not-fetched":
     "This audit has no result for the home page: it was not fetched, or it failed for a reason squirrel could not classify. Run a full audit of the site to check it.",
+  // repo#2036: crawl/server-errors when the crawl failed to fetch some pages.
+  "pages-not-fetched":
+    "The crawl could not fetch some pages (a timeout, a refused connection or a body it could not read), and any of them may still answer 5xx. Run the audit again to check them.",
   "analyze-offline":
     "Run `squirrel audit` to probe the live site.",
   // #1932: a probing rule below its level, or one the site throttled or the budget cut short.
