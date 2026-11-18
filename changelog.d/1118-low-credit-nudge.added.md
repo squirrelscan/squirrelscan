@@ -1,1 +1,0 @@
-- When your balance makes `squirrel audit` run a smaller audit, the CLI prints your balance, what the next audit needs, and a top-up or upgrade link, at most once a day per account (squirrelscan/repo#1118).
