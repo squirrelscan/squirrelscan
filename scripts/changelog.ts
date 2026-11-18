@@ -103,7 +103,7 @@ export function insertRelease(
 ): string {
   const v = version.replace(/^v/, "");
   if (!RELEASE_VERSION.test(v)) {
-    throw new ChangelogError(`"${version}" is not a release version (X.Y.Z or X.Y.Z-pre.N)`);
+    throw new ChangelogError(`"${version}" is not a release version (X.Y.Z or X.Y.Z-<suffix>)`);
   }
   if (entries.length === 0) throw new ChangelogError(`no entries in ${ENTRY_DIR}/ to release`);
   // Exact token match, so a stable X.Y.Z may follow its own X.Y.Z-beta.N heading.
@@ -247,7 +247,7 @@ function fail(message: string): never {
 }
 
 async function convert(root: string, baseRef: string): Promise<void> {
-  const mergeBase = (await $`git -C ${root} merge-base ${baseRef} HEAD`.text()).trim();
+  const mergeBase = (await $`git -C ${root} merge-base --end-of-options ${baseRef} HEAD`.text()).trim();
   const base = await $`git -C ${root} show ${`${mergeBase}:${CHANGELOG}`}`.text();
   const path = join(root, CHANGELOG);
   const head = readFileSync(path, "utf8");

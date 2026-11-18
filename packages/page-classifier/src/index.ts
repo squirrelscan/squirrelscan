@@ -35,7 +35,7 @@ export { FEATURIZER_VERSION } from "./featurize";
  * 2 is the first stamped version. It is part of the version stamped on every parsed page, so each
  * bump makes EVERY user's next crawl fetch every cached page once, unconditionally (pagesUnchanged
  * and bytesCacheSaved read 0 for that run). Bump only for a change that must relabel pages already
- * cached, and say so in the CHANGELOG.
+ * cached, and say so in its changelog.d/ entry.
  */
 export const CLASSIFIER_RULES_VERSION = 2;
 
