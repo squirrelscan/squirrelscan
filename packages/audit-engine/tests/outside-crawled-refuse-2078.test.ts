@@ -16,6 +16,7 @@ import type {
 
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import { buildCheckTallies } from "../src/publish-cap";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
@@ -138,6 +139,43 @@ describe("repo#2078: refuse published checks outside a complete crawled set", ()
       expect(r.outsideCrawledChecksDropped).toBe(0);
       expect(r.outsideCrawledPages).toBe(0);
     }
+  });
+});
+
+// A capped publish carries `checkTallies` counted from every row, refused ones
+// included, and the score is taken from those tallies. The refused checks must
+// leave the score too, not just the rows.
+describe("repo#2078: refused checks leave a capped publish's score", () => {
+  function runTallied(complete: boolean) {
+    const ruleResults = {
+      "core/meta-title": { meta, checks: [...CRAWLED, ...NEVER].map(warn) },
+    };
+    return runCloudSmartAudits({
+      store: new MemStore(),
+      siteKey: "web_1",
+      crawlId: "audit_1",
+      ruleResults,
+      checkTallies: buildCheckTallies(ruleResults),
+      pageStatuses: [],
+      resolutionSignal: signal({ crawledUrlsComplete: complete }),
+      now: NOW,
+    });
+  }
+
+  test("a complete list scores only the crawled pages' checks", async () => {
+    const r = await runTallied(true);
+    expect(r.outsideCrawledChecksDropped).toBe(NEVER.length);
+    const tally = r.scoringTallies?.get("core/meta-title")?.tally;
+    expect(tally?.warnings).toBe(CRAWLED.length);
+    expect(tally?.warnUnits).toBe(CRAWLED.length);
+    expect(r.reportTotals?.warnings).toBe(CRAWLED.length);
+  });
+
+  test("a clipped list scores every published check, as before", async () => {
+    const r = await runTallied(false);
+    expect(r.outsideCrawledChecksDropped).toBe(0);
+    const tally = r.scoringTallies?.get("core/meta-title")?.tally;
+    expect(tally?.warnUnits).toBe(CRAWLED.length + NEVER.length);
   });
 });
 

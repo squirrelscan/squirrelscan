@@ -14,6 +14,7 @@
 import type {
   CheckResult,
   CheckTallies,
+  CheckTally,
   FindingState,
   PageFindingRecord,
   ResolutionSignal,
@@ -613,6 +614,11 @@ export async function runCloudSmartAudits(
    */
   let outsideCrawledChecksDropped = 0;
   const outsideCrawledUrls = new Set<string>();
+  /**
+   * (repo#2078) The refused checks per rule, so the capped path can take them
+   * back out of the producer's `checkTallies`, which counted them.
+   */
+  const outsideCrawledChecks = new Map<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }>();
   const wholeCrawledSet: Set<string> | undefined =
     !completeStore && input.resolutionSignal?.crawledUrlsComplete === true
       ? new Set([
@@ -754,6 +760,9 @@ export async function runCloudSmartAudits(
           if (namesUncrawledPage(r.meta.scope, c)) {
             outsideCrawledChecksDropped += 1;
             for (const u of attributedPages(c)) outsideCrawledUrls.add(u);
+            const refused = outsideCrawledChecks.get(ruleId);
+            if (refused) refused.checks.push(c);
+            else outsideCrawledChecks.set(ruleId, { meta: r.meta, checks: [c] });
             continue;
           }
           checks.push(c);
@@ -1395,8 +1404,14 @@ export async function runCloudSmartAudits(
   // fold derives it, from the tallies.
   // A body with no tallies (uncapped) holds every row, so the tallies of its own
   // checks give the same figure the capped body's tallies do.
+  // (repo#2078) The producer's tallies count the checks refused above; the score
+  // and the per-page figure read them with those taken back out.
+  const scoredTallies =
+    checkTallies && outsideCrawledChecks.size > 0
+      ? subtractCheckTallies(checkTallies, buildCheckTallies(Object.fromEntries(outsideCrawledChecks)))
+      : checkTallies;
   const perPageTallies: CheckTallies =
-    checkTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
+    scoredTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
   const carriedChecksPerPage = (ruleId: string): number =>
     carriedChecksPerPageFor({ completeStore: !!completeStore, completeTallies, perPageTallies }, ruleId);
   const unionRuleResults = buildScoringResultsFromMerged({
@@ -1411,9 +1426,9 @@ export async function runCloudSmartAudits(
 
   let reportTotals: CloudSmartAuditsResult["reportTotals"];
   let shownLastSeen = carriedLastSeen;
-  if (checkTallies && resolution) {
+  if (scoredTallies && resolution) {
     ({ scoringTallies, reportTotals } = scoreFromCheckTallies({
-      checkTallies,
+      checkTallies: scoredTallies,
       freshForUnion,
       carriedFindings: unionCarried,
       carriedPageUrls: unionCarriedPages,
@@ -1906,6 +1921,51 @@ function scoreFromCheckTallies(input: {
     reportTotals.failed += tally.failed;
   }
   return { scoringTallies, reportTotals };
+}
+
+/**
+ * (repo#2078) `tallies` with `minus` taken out, field by field, never below 0:
+ * the inverse of the {@link buildCheckTallies} that counted `minus` into it. A
+ * field, check name or rule that reaches 0 is dropped, as `buildCheckTallies`
+ * omits zero entries. `tallies` is not modified.
+ */
+function subtractCheckTallies(tallies: CheckTallies, minus: CheckTallies): CheckTallies {
+  const left = (a: unknown, b: unknown): number => {
+    const n = typeof a === "number" && Number.isFinite(a) ? a : 0;
+    const m = typeof b === "number" && Number.isFinite(b) ? b : 0;
+    return Math.max(n - m, 0);
+  };
+  const fields = ["passed", "warnings", "failed", "warnUnits", "failUnits", "skipped"] as const;
+  const out: CheckTallies = {};
+  for (const [ruleId, byName] of Object.entries(tallies)) {
+    const sub = minus[ruleId];
+    if (!sub) {
+      out[ruleId] = byName;
+      continue;
+    }
+    let perName: Record<string, CheckTally> | undefined;
+    for (const [name, t] of Object.entries(byName)) {
+      const m = sub[name];
+      if (!m) {
+        (perName ??= {})[name] = t;
+        continue;
+      }
+      const entry: CheckTally = {};
+      for (const f of fields) {
+        const v = left(t?.[f], m[f]);
+        if (v > 0) entry[f] = v;
+      }
+      let gaps: Record<string, number> | undefined;
+      for (const [reason, count] of Object.entries(t?.gaps ?? {})) {
+        const v = left(count, m.gaps?.[reason]);
+        if (v > 0) (gaps ??= {})[reason] = v;
+      }
+      if (gaps) entry.gaps = gaps;
+      if (Object.keys(entry).length > 0) (perName ??= {})[name] = entry;
+    }
+    if (perName) out[ruleId] = perName;
+  }
+  return out;
 }
 
 /**
