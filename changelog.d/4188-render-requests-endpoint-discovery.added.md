@@ -1,0 +1,1 @@
+- On rendered pages, the XHR and fetch requests a page makes now feed endpoint discovery as `render` candidates, under the same same-origin filter and caps. Cross-origin requests are recorded but never probed (squirrelscan/repo#4188).
