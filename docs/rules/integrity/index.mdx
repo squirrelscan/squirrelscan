@@ -39,6 +39,7 @@ These carry the highest severity and weight in the category.
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
 | [Brand impersonation: a sign-in page that is not the brand's](/rules/integrity/brand-impersonation) | A 'Sign in with Google' control pointing at a host that is not Google is a phishing pattern. squirrel checks where credential controls actually go. | warning | Page |
+| [Chrome outlier: pages left on an outdated site template](/rules/integrity/chrome-outlier) | A few pages without the navigation, footer and stylesheets of the rest of the site were usually missed in a redesign. squirrel clusters pages by template and flags the stragglers. | warning | Site-wide |
 | [Cloaking: showing Googlebot a different page](/rules/integrity/cloaking) | An injected payload can hide from you by branching on user-agent or a query token. squirrel re-fetches suspicious paths and compares the responses. | error | Site-wide |
 | [Doorway page: injected affiliate spam on a legitimate site](/rules/integrity/seo-doorway) | An off-topic, keyword-stuffed affiliate post is how a compromise monetises your domain's authority. squirrel checks the title, the density and the body. | warning | Page |
 | [Fake authentication overlay: full-screen login iframes](/rules/integrity/fake-auth-overlay) | A fixed, full-viewport, high z-index iframe with an auth identifier is a credential-harvesting overlay. squirrel measures the geometry and the intent. | warning | Page |

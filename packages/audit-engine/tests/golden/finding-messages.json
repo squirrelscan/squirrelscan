@@ -3208,6 +3208,12 @@
    "brand-impersonation|pass|No brand impersonation found on this page||"
   ]
  },
+ "integrity/chrome-outlier": {
+  "digest": "208323358214522",
+  "lines": [
+   "chrome-outlier|skipped|No dominant site template: the pages use several distinct templates||"
+  ]
+ },
  "integrity/cloaking": {
   "digest": "228774818430987",
   "lines": [
