@@ -215,6 +215,7 @@ import type {
   EntityMap as _EM,
   GroupScore as _GS,
   HealthScore as _HS,
+  JavascriptShipped as _JS,
   RefusedFetch,
   WafBlockedSummary,
   WafSuspectSummary,
@@ -243,6 +244,7 @@ export type EntityMap = _EM;
 export type DomainStats = _DST;
 export type CacheStats = _CST;
 export type CacheFreshness = _CFR;
+export type JavascriptShipped = _JS;
 export type ComponentOccurrence = _CO;
 export type SiteResourceOccurrence = _SRO;
 
@@ -769,6 +771,8 @@ export interface AuditReport {
       carriedStale?: boolean;
     };
   };
+  /** JavaScript shipped (squirrelscan/repo#3397). Mirrors core-contracts `AuditReport`. */
+  javascript?: JavascriptShipped;
   /**
    * Rule-result cache disclosure (#1990): how many pages replayed a previous
    * audit's rule results instead of being evaluated now. The findings are

@@ -47,6 +47,7 @@ import type {
   AuditStatus,
   CheckResult,
   HealthScore,
+  JavascriptShipped,
   MetaData,
   OpenGraphData,
   RedirectChain,
@@ -413,6 +414,20 @@ export interface RuleExecutionResult {
     images: ResourceSizeData[];
   };
   sitemapUrlStatuses: SitemapUrlStatusData[];
+  /**
+   * The JavaScript shipped block (squirrelscan/repo#3397), from the scripts the
+   * resource checks measured. Absent when none was, and on hand-built results.
+   */
+  javascript?: JavascriptShipped;
+}
+
+/** The report's `javascript` field, shared by both builders so v1 and v2 agree. */
+function javascriptBlock(
+  ruleResults: Pick<RuleExecutionResult, "javascript">,
+  crawl: { javascript?: JavascriptShipped } | null | undefined,
+): { javascript?: JavascriptShipped } {
+  const javascript = ruleResults.javascript ?? crawl?.javascript;
+  return javascript ? { javascript } : {};
 }
 
 /** Empty rule results — used to build a report when no rules ran (0-page audit, #586). */
@@ -951,6 +966,8 @@ export function buildV1Report(
         images: ruleResults.resourceSizes.images,
       },
       sitemapUrlStatuses: ruleResults.sitemapUrlStatuses,
+      // From this run's rules phase, else the block stamped on the crawl.
+      ...javascriptBlock(ruleResults, crawl),
     };
 
     // Audit validity (#489): a down/403/all-error crawl must NOT publish "A/100%".
@@ -1276,6 +1293,7 @@ export function buildV2Report(
         images: input.resourceSizes.images,
       },
       sitemapUrlStatuses: input.sitemapUrlStatuses,
+      ...javascriptBlock(input, crawl),
     };
 
     // Audit validity (#489) — same signals as v1's deriveAuditStatusFromPages,

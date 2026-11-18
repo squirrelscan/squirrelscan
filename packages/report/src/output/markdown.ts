@@ -5,6 +5,7 @@ import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheFreshnessLines, cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
+import { javascriptPageSize, javascriptShipped, javascriptShippedSummary } from "../javascript-shipped";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
@@ -560,6 +561,17 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // groups) is visible right in the summary, not just down in category detail.
   for (const g of report.healthScore?.groups ?? []) {
     lines.push(`- **${getGroupName(g.group)}:** ${g.score}/100`);
+  }
+  // repo#3397: the script weight the audit measured. Report-only, not scored.
+  const javascript = javascriptShipped(report);
+  if (javascript) {
+    lines.push(`- **JavaScript shipped:** ${javascriptShippedSummary(javascript, escapeMarkdownText)}`);
+    if (javascript.heaviestPages.length > 0) {
+      const pages = javascript.heaviestPages.map(
+        (page) => `${escapeMarkdownText(page.url)} (${javascriptPageSize(page)})`,
+      );
+      lines.push(`- **Heaviest pages by script:** ${pages.join(", ")}`);
+    }
   }
   lines.push("");
   // Subtle cache metadata note — kept out of the summary counts so it doesn't

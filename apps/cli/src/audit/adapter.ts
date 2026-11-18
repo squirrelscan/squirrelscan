@@ -77,6 +77,7 @@ import type { ParsedPage, RuleRunResult } from "@/rules/types";
 import type {
   AuditReport,
   CheckResult,
+  JavascriptShipped,
   ResourceSizeData,
   SitemapUrlStatusData,
 } from "@/types";
@@ -272,6 +273,8 @@ export interface RuleExecutionResult {
     images: ResourceSizeData[];
   };
   sitemapUrlStatuses: SitemapUrlStatusData[];
+  /** squirrelscan/repo#3397: from the measured scripts; absent when none was. */
+  javascript?: JavascriptShipped;
 }
 
 // The asset phase lives once in @squirrelscan/audit-engine: the same fetchers,

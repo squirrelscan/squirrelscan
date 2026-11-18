@@ -31,6 +31,7 @@ import {
   withSiteResourceCoverage,
   carriedTag,
   coverageLine,
+  javascriptShippedLine,
   scanScopeLine,
   seedRedirectFollowUp,
   seedRedirectLine,
@@ -703,6 +704,9 @@ function printReportDetail(
     report.partialAudit?.wcagLevel
   );
   if (partial) scan.push(fmt.dim(partial));
+  // repo#3397: the script weight the audit measured. Report-only, not scored.
+  const javascript = javascriptShippedLine(report);
+  if (javascript) scan.push(fmt.dim(javascript));
   if (notChecked.length === 0 && !report.structure && scan.length === 0) return;
 
   log("");

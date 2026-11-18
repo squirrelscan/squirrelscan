@@ -5,6 +5,7 @@ import { isAuditFailed } from "@squirrelscan/core-contracts";
 import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheFreshnessLines, cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
+import { javascriptHeaviestPagesLine, javascriptShippedLine } from "../javascript-shipped";
 import { refusedFetchLines, undecodableFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
@@ -450,6 +451,14 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write(`${getGroupName(g.group)}: ${g.score}/100`);
   }
   write("");
+  // repo#3397: the script weight the audit measured. Report-only, not scored.
+  const javascript = javascriptShippedLine(report);
+  if (javascript) {
+    write(javascript);
+    const heaviest = javascriptHeaviestPagesLine(report);
+    if (heaviest) write(heaviest);
+    write("");
+  }
   // Subtle cache metadata line — not given equal weight to the summary counts;
   // only present on incremental re-audits with reuse (informational, not scored).
   if (report.cacheStats) {
