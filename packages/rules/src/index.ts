@@ -29,6 +29,9 @@ export { setRequestAsync, clearRequestAsync, hasRequestTool, setLlmCall } from "
 // The anchor graph `links/anchor-mismatch` judges. audit-engine's SiteQuery builds it with the
 // SAME builder the rule's legacy path uses, so the two paths cannot diverge (#110).
 export { AnchorGraphBuilder } from "./links/anchor-mismatch";
+// Per-page generic/total anchor counts, shared by the site-wide density rule and the streaming SiteQuery (repo#1387).
+export { countGenericAnchors } from "./shared/generic-anchor-phrases";
+export type { GenericAnchorCount } from "./shared/generic-anchor-phrases";
 // Which pages count as noindex, and the homepage exception, shared by the runner
 // gate, the site rules and audit-engine's SiteData assembly (pub#457).
 export {

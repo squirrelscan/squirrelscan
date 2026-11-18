@@ -16,7 +16,7 @@
 
 import { Effect } from "effect";
 
-import { AnchorGraphBuilder } from "@squirrelscan/rules";
+import { AnchorGraphBuilder, countGenericAnchors } from "@squirrelscan/rules";
 import { normalizeUrl } from "@squirrelscan/utils";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
@@ -131,6 +131,7 @@ export function createSiteQuery(
       incomingLinkCounts: () => incoming.all,
       contextualIncomingLinkCounts: () => incoming.contextual,
       inboundSectionCounts: () => incoming.sections,
+      genericAnchorCounts: () => incoming.genericAnchors,
       ...(incoming.anchorGraph ? { anchorGraph: () => incoming.anchorGraph! } : {}),
       homepage: () => homepageRow,
       duplicateGroups: (field) => duplicates[field] ?? [],
@@ -194,6 +195,7 @@ function buildIncomingLinkCounts(
     all: Map<string, number>;
     contextual: Map<string, number>;
     sections: Map<string, LinkSectionCounts>;
+    genericAnchors: Map<string, { generic: number; total: number }>;
     anchorGraph: AnchorGraph | null;
     orderedUrls: string[];
   },
@@ -214,6 +216,8 @@ function buildIncomingLinkCounts(
     const universeSet = universe ? new Set(universe) : null;
     // #110: contextual anchor text per (source, target) pair, plus each page's title and H1s.
     let anchors: AnchorGraphBuilder | null = null;
+    // repo#1387: generic/total content anchors per source page, same universe as the link sources.
+    const genericAnchors = new Map<string, { generic: number; total: number }>();
 
     // Pass A: the audit universe. With `universe` this is v1's site.pages set/order
     // exactly; otherwise the raw crawled-page set (getPages orders by normalized_url
@@ -255,6 +259,7 @@ function buildIncomingLinkCounts(
         status: page.status,
         contentType: page.contentType,
       });
+      genericAnchors.set(page.normalizedUrl, countGenericAnchors(parsed.links));
       for (const link of parsed.links) {
         if (link.isInternal && link.url && !link.isNofollow) {
           try {
@@ -294,6 +299,7 @@ function buildIncomingLinkCounts(
       all,
       contextual,
       sections,
+      genericAnchors,
       anchorGraph: anchorBuilder ? anchorBuilder.build() : null,
       orderedUrls,
     };
