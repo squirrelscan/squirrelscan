@@ -19,6 +19,8 @@ How it works:
 
 ## v0.0.185 (2026-11-18)
 
+Seven new rules this time, with a soft spot for the things that quietly go wrong as a site grows: titles chopped mid-word by a character limit, pages left behind on an old template, a palette that sprawled into a dozen almost identical blues, one anchor text pointing three different ways, a 404 page that answers 200, a home page that does not load at all, and the WebMCP tools a browsing agent can call. Every report now says how much JavaScript a site ships and who sent it, `squirrel report --group` filters by rule group, and script-heavy pages audit faster.
+
 ### Added
 
 - When your balance makes `squirrel audit` run a smaller audit, the CLI prints your balance, what the next audit needs, and a top-up or upgrade link, at most once a day per account (squirrelscan/repo#1118).
