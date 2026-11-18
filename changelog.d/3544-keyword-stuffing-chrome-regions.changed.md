@@ -1,0 +1,1 @@
+- With the page classifier on, `content/keyword-stuffing` leaves words in the header, navigation, footer, sidebar and other site chrome out of its density count, and checks footer link blocks on their own (`keyword-stuffing-footer`). With the classifier off nothing changes (squirrelscan/repo#3544).
