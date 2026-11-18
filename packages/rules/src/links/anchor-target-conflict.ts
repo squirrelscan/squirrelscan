@@ -281,6 +281,11 @@ export const anchorTargetConflictRule: Rule = {
     severity: "warning",
     weight: 3,
     optionsSchema: z.object({}),
+    checks: [
+      { name: CHECK_NAME, outcome: "problem" },
+      { name: CHECK_NAME, outcome: "clean", clears: [CHECK_NAME] },
+      { name: CHECK_NAME, outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
