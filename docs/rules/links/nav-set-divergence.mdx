@@ -1,0 +1,94 @@
+---
+title: "Navigation set divergence: pages missing the site's nav links"
+description: "A page that drops part of the shared header or footer cuts visitors and crawlers off from the pages it left out. squirrel compares each page's navigation links against what the rest of the site carries."
+---
+
+## What navigation set divergence is
+
+A site's header, navigation and footer links come from a template, so almost every page carries the same set. A page that lacks entries the others have is usually built outside the shared layout, still on an older template, or lost part of a header or footer include. Visitors and crawlers lose the route to the missing pages from there, and the gap is invisible when you look at any single page.
+
+## What squirrel checks
+
+The rule is site-wide and needs no account, no model and no credits. For every page it stores the internal links found in the header, navigation and footer (or, for a crawl stored before link sections existed, the links marked as page chrome). Links are normalized without fragment or query, deduplicated and sorted, and the page's own URL is left out, because the active item is often not linked. It emits a single check named `nav-set-divergence`:
+
+- Skipped when there are no pages. Message: `No pages available for analysis`.
+- Skipped below 10 crawled pages. Message: `Only 6 page(s) crawled; 10 needed to establish the site's navigation`.
+- Skipped when fewer than 10 pages carry navigation links to compare. Message: `Only 4 page(s) carry navigation links to compare; 10 needed to establish the site's navigation`.
+- Skipped when the pages do not share a navigation. Message: `No clear navigation norm: the pages' navigation links do not agree on one set`.
+- Pass when every judged page carries the norm. Message: `All 120 judged page(s) carry the site's navigation links`.
+- Warn when pages are missing norm links. Message: `3 of 120 judged page(s) are missing navigation links the rest of the site has`. Each item reads `Missing 2 of 10 navigation links the rest of the site has: <url>, <url>`, with up to 25 pages listed and up to 20 links named per page.
+- Fail when a flagged page is missing at least half of the norm, which means its navigation is largely absent. The message is the same.
+
+The norm is every link carried by at least 70% of the compared pages. It counts as clear only when at least 70% of those pages carry all of it. A page whose own URL is a norm link counts as having it.
+
+## Sections with their own navigation
+
+Pages are compared with their page type when the type has at least five pages. A docs area with its own sidebar is judged against the other docs pages, and the marketing pages are judged against the rest of the site. A type with no shared navigation of its own is not judged at all, and its pages are counted in `details.unjudgedPages`. Pages with no type, or in a type with fewer than five pages, are judged against the whole site, and only when the whole site has a clear norm.
+
+## Localized sections
+
+Pages are first split by locale, taken from the first path segment when it looks like one (`/fr/`, `/de-at/`, `/pt_br/`). A French section is compared with the other French pages, never with the English nav, and each locale is judged on its own. A locale with fewer than five pages is not judged, and its pages are counted in `details.unjudgedPages`. Pages with no locale segment form one group, so a site without localized sections behaves as described above. Items name the group in `meta.comparedWithin`: `site`, `locale:fr`, `pageType:docs` or `locale:fr pageType:docs`. `details.siteNormSize` is the size of the norm for the pages with no locale segment.
+
+## What is left out
+
+- Pages that did not return a 2xx status.
+- Pages with no internal header, navigation or footer links, counted in `details.pagesWithoutNav`.
+- Pages with more than 200 navigation links, counted in `details.oversizedPages`. A mega menu that large is not compared.
+
+## How to fix it
+
+Open each flagged page and compare its header and footer with a page that is fine. Put the page on the shared layout, or restore the missing include. If the page is a deliberate focused landing page, leave it: the finding only says that its navigation differs.
+
+| | |
+|---|---|
+| **Rule ID** | `links/nav-set-divergence` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/nav-set-divergence"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/nav-set-divergence"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [links/no-contextual-inbound](/rules/links/no-contextual-inbound): pages linked only from the nav and footer.
+- [links/orphan-pages](/rules/links/orphan-pages): pages that almost nothing links to.
+- [links/dead-end-pages](/rules/links/dead-end-pages): pages with no outgoing internal links.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Each flagged page is listed with the navigation links it is missing. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>
