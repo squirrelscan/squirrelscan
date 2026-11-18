@@ -1097,6 +1097,63 @@ Both rules return byte-identical results on the fixture. `share-buttons` is most
 its four regular expressions now, which cannot be shortened without changing what
 they match; the saving there is the 1 MB lowercase copy.
 
+### Follow-up: each inline script read once ([squirrelscan/repo#1864](https://github.com/squirrelscan/repo/issues/1864))
+
+The script-heavy work above left one structural waste: a rule that reads every
+inline script AND the whole page reads the scripts twice, because they are inside
+the page. `security/leaked-secrets` scanned each script on its own and then the
+serialised document, scripts included; `perf/js-libraries` tried its signatures on
+each script and then on the raw HTML; `a11y/skip-link` serialised the whole body
+to look at its first two kilobytes; and `links/broken-anchors`' collector
+materialised the body's text and then each script's to subtract them.
+
+- `leaked-secrets` serialises the page with each scanned script's text replaced by
+  spaces (`shared/serialized-prefix.ts`), so nothing outside a script moves, and a
+  body longer than 16,384 characters keeps that many and loses the rest: every
+  look the scanner takes around a position is shorter (the longest is the
+  seed-table walk, 8,000 forward), and offsets are mapped back to the fully
+  blanked page. The one page-level fact a script value was judged by in the
+  document pass, whether the page loads from the Shopify CDN, is handed to the
+  inline pass. The gram index now also gates the vendor-URL host searches.
+- `js-libraries` looks for its HTML markers in the markup with the scanned script
+  bodies cut out (a signature in a script was already found there).
+- `skip-link` builds only the prefix of `body.innerHTML` it reads.
+- `broken-anchors` reads the visible text length from text-node lengths.
+
+`tests/inline-script-single-read-1864.test.ts` counts, per page rule and per
+collector extractor, every read of each inline script's text through the DOM
+(the script itself, an ancestor, or the document) and fails on a second.
+
+Fixture: `harness/script-heavy-page.ts` (seed 1864: 1.15 MB, 59 inline scripts,
+793 KB of inline JavaScript) served 150 times by `harness/script-heavy-site.ts`.
+Command `squirrel audit --coverage full --max-pages 150 --http --offline
+--refresh --trace` with `SQUIRREL_RULE_PROFILE=1`, a fresh HOME and a per-run
+salt, two interleaved rounds per arm on one Linux box, summed with
+`harness/rule-profile.ts`. ms/page, round 1 / round 2:
+
+| | v0.0.90 (the issue's version) | main (129fb98a) | this change |
+|---|---|---|---|
+| `security/leaked-secrets` | 48.0 / 49.5 | 32.8 / 31.8 | 17.3 / 17.5 |
+| `a11y/skip-link` | 52.3 / 52.9 | 8.9 / 7.7 | 2.4 / 3.3 |
+| page rules + collector | 322.6 / 326.7 | 381.6 / 389.2 | 356.2 / 370.7 |
+| rules phase (trace) | n/a | 467.2 / 478.4 | 443.4 / 457.9 |
+
+`leaked-secrets` is 64% below v0.0.90 and 46% below main; a rule-level bench of
+the scan alone on one page goes from 26.7 to 14.7 ms. The page-rules total is not
+halved. v0.0.90 ran about 280 rules and main runs 330, and on main the inline
+scripts account for about 40 ms of a page's rules: a 40-page run of the same audit over the
+fixture with every script body emptied costs 333 ms/page against 372. The rest
+is DOM and text rules that do not read script text (`common-misspellings`,
+`stale-dated-copy`, `brand-impersonation`, `hidden-text`, `keyword-stuffing`,
+`aria-hidden-focus`), outside what reading scripts once can save.
+
+Findings: over the 1,914 pages of the leaked-secrets corpus the rule-level result
+is unchanged but for two Shopify cases whose public token is now reported at
+`inline-script`, where it is, instead of `html`. A value inside a script is no
+longer also recorded as an `html` occurrence, and a page's script findings are
+listed after its markup findings. `js-libraries` and `skip-link` give
+byte-identical results over the same pages.
+
 ## Ten thousand pages
 
 Nobody had run the estate at 10,000 pages, in the CLI or the cloud. Two things

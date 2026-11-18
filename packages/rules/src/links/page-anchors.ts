@@ -35,6 +35,32 @@ const SELF_FRAGMENTS_CAP = 256;
  */
 const CLIENT_SHELL_TEXT_LIMIT = 200;
 
+const NON_VISIBLE_TEXT_TAGS = new Set(["script", "style", "noscript", "template"]);
+
+/**
+ * `body.textContent.length` less `el.textContent.length` for every script, style, noscript and template in it, as the
+ * client-shell test has always measured it (a text node inside two of them, a style in a noscript, is taken off twice),
+ * read from the text nodes' lengths alone. Materialising the body's text and then each script's read every inline script
+ * twice, most of a script-heavy page (#1864); a text node's length costs nothing.
+ */
+export function visibleTextLength(body: Element): number {
+  let total = 0;
+  // `querySelectorAll` does not look inside a <template>, so nothing in one is taken off on its own account.
+  const visit = (parent: Node, hidden: number, inTemplate: boolean): void => {
+    for (const child of Array.from(parent.childNodes)) {
+      if (child.nodeType === 3 || child.nodeType === 4) {
+        total += (child.textContent ?? "").length * (1 - hidden);
+      } else if (child.nodeType === 1) {
+        const name = (child as Element).localName;
+        const counted = !inTemplate && NON_VISIBLE_TEXT_TAGS.has(name);
+        visit(child, hidden + (counted ? 1 : 0), inTemplate || name === "template");
+      }
+    }
+  };
+  visit(body, 0, false);
+  return total;
+}
+
 /**
  * Most characters of inline script text read per unrendered page for the ids a script names. Text
  * past it is not read: a script that names an id only after that point is not seen (#1616).
@@ -226,11 +252,7 @@ export function buildPageAnchorSignal(input: {
   const body = doc.querySelector("body");
   if (!input.rendered && body && doc.querySelectorAll("script").length > 0) {
     // Visible text: the body's text less the text of scripts, styles and templates.
-    let visible = (body.textContent ?? "").length;
-    for (const el of body.querySelectorAll("script, style, noscript, template")) {
-      visible -= (el.textContent ?? "").length;
-    }
-    clientShell = visible < CLIENT_SHELL_TEXT_LIMIT;
+    clientShell = visibleTextLength(body) < CLIENT_SHELL_TEXT_LIMIT;
   }
 
   // Unrendered pages only: a rendered page's DOM already holds what its scripts created.

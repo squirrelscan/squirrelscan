@@ -44,8 +44,8 @@ describe("stored value length cap (#1592)", () => {
   test("a 1 MB generic value is cut to the cap, marked, and still reported", () => {
     const body = run(7, 1_024_011);
     const found = scan(body);
-    // The page pass and the inline-script pass each report it, as before.
-    expect(found.length).toBe(2);
+    // The inline-script pass reports it; the page pass no longer reads the script a second time (#1864).
+    expect(found.map((f) => f.location)).toEqual(["inline-script"]);
     for (const f of found) {
       expect(f.type).toBe("Generic Secret Assignment");
       expect(f.value.length).toBe(STORED_VALUE_MAX_LENGTH);
@@ -65,7 +65,7 @@ describe("stored value length cap (#1592)", () => {
     // on the cap.
     const body = run(8, STORED_VALUE_MAX_LENGTH - 11);
     const found = scan(body);
-    expect(found.length).toBe(2);
+    expect(found.map((f) => f.location)).toEqual(["inline-script"]);
     for (const f of found) {
       expect(f.value.length).toBe(STORED_VALUE_MAX_LENGTH);
       expect(f.truncated).toBeUndefined();
@@ -76,7 +76,7 @@ describe("stored value length cap (#1592)", () => {
   test("an ordinary short value is untouched", () => {
     const body = run(9, 40);
     const found = scan(body);
-    expect(found.length).toBe(2);
+    expect(found.map((f) => f.location)).toEqual(["inline-script"]);
     for (const f of found) {
       expect(f.truncated).toBeUndefined();
       expect(f.value).toContain(body);

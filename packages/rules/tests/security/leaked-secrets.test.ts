@@ -340,15 +340,11 @@ describe("security/leaked-secrets corpus: invariants", () => {
     expect(got.findings[0]?.location).toBe("external-script");
   });
 
-  test("KNOWN DEFECT: an inline script is scanned twice, once inside the serialized HTML and once on its own", () => {
+  test("an inline script is scanned once: the HTML pass blanks the script bodies the inline pass read (#1864)", () => {
     const c = CASES.find((k) => k.id === "github-personal-access-token@inline-config-object")!;
     const raw = rawScan(c);
-    expect(raw).toHaveLength(2);
-    expect(raw.map((f) => f.location)).toEqual(["html", "inline-script"]);
-    expect(raw[0]?.value).toBe(raw[1]?.value);
-  });
-  test.todo("GAP inline scripts are scanned twice (html serialization + script text); the rule's dedup hides it but the cost is paid", () => {
-    throw new Error("known gap");
+    expect(raw).toHaveLength(1);
+    expect(raw.map((f) => f.location)).toEqual(["inline-script"]);
   });
 
   test("masking keeps the head and tail only", async () => {

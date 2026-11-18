@@ -3,6 +3,7 @@
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import { serializedPrefix } from "../shared/serialized-prefix";
 
 // How far into the body a heading still counts as "early" — enough for a nav,
 // not enough for real content.
@@ -75,19 +76,22 @@ export const skipLinkRule: Rule = {
     // Look for h1 within first ~500 chars of body
     const body = doc.querySelector("body");
     if (body) {
-      const headings = body.querySelectorAll("h1, h2");
-      // `body.innerHTML` serialises the whole page, so building it INSIDE the
-      // loop cost one full serialisation per heading — 12 ms on a 1 MB page with
-      // eleven of them (#1864). It does not change between iterations.
-      const html = headings.length > 0 ? body.innerHTML || "" : "";
-      for (const h of headings) {
+      const headings = Array.from(body.querySelectorAll("h1, h2"));
+      const outers = headings.map((h) => (h as Element).outerHTML || "");
+      // Only the first 2000 characters of the body can satisfy the test below,
+      // plus the heading's own length, which keeps a heading that STARTS at
+      // 1999 and ends past 2000. A match starting before 2000 lies entirely
+      // inside that prefix, and any match found only outside it is at or past
+      // 2000 either way, so the answer to `position >= 0 && position < 2000` is
+      // unchanged.
+      //
+      // So only that prefix of `body.innerHTML` is built (#1864): serialising
+      // the whole body read every inline script on the page, most of a
+      // script-heavy page's megabyte, to look at its first two kilobytes.
+      const need = outers.reduce((n, outer) => Math.max(n, EARLY_HEADING_LIMIT + outer.length), 0);
+      const html = headings.length > 0 ? serializedPrefix(body, need) : "";
+      for (const hOuterHTML of outers) {
         // Check if heading appears early in the document
-        const hOuterHTML = (h as Element).outerHTML || "";
-        // Only the first 2000 characters can satisfy the test below, so searching
-        // the whole megabyte for a heading that is not there is wasted. A match
-        // starting before 2000 lies entirely inside this prefix, and any match
-        // found only outside it is at or past 2000 either way, so the answer to
-        // `position >= 0 && position < 2000` is unchanged.
         const position = html
           .slice(0, EARLY_HEADING_LIMIT + hOuterHTML.length)
           .indexOf(hOuterHTML);

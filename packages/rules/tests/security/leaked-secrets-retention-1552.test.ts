@@ -63,7 +63,8 @@ describe("the records are the same, copied", () => {
   test("the same values, locations, offsets and extras as before, and strings that are copies", () => {
     const html = page(1, 200_000);
     const found = scanPageForSecrets(parsePage(html, url(1)).document!, url(1));
-    expect(found.length).toBeGreaterThan(5);
+    // Five distinct values; each script value is read once now, not again inside the page (#1864).
+    expect(found.length).toBeGreaterThanOrEqual(5);
     for (const secret of found) {
       expect(secret.value.length).toBeGreaterThan(0);
       expect(typeof secret.type).toBe("string");

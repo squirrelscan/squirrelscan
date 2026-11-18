@@ -22,8 +22,10 @@ const stripe = (n: number): string => {
 describe("a scan that overruns the time budget keeps what it found (#1556)", () => {
   const URL_ = "https://shop.acme.test/";
 
+  // Each script's text is scanned once now (#1864), not once alone and again inside the page, so the filler that used to
+  // be twice as much work is twice as long: well past the 25 ms budget on a fast machine too.
   test("a critical key before a huge tail of filler is kept, and the page is still listed as not fully scanned", () => {
-    const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(60_000);
+    const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(150_000);
     const html = `<html><body><script>var k = "${stripe(7)}";</script><script>${filler}</script></body></html>`;
     const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_), budgetMs: 25 });
     expect(signal.timedOut?.ruleIds).toContain("security/leaked-secrets");
@@ -31,7 +33,7 @@ describe("a scan that overruns the time budget keeps what it found (#1556)", () 
   });
 
   test("the rule still says the page was not fully scanned, and does not pass", async () => {
-    const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(60_000);
+    const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(150_000);
     const html = `<html><body><script>var k = "${stripe(8)}";</script><script>${filler}</script></body></html>`;
     const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_), budgetMs: 25 });
     const result = await leakedSecretsRule.run({
@@ -47,7 +49,9 @@ describe("a scan that overruns the time budget keeps what it found (#1556)", () 
     const html = `<html><body><p>${stripe(1)}</p><script>var k = "${stripe(2)}";</script><p>${stripe(3)}</p></body></html>`;
     const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_) });
     const values = signal.secrets.map((s) => s.value);
-    expect(values).toEqual([stripe(1), stripe(2), stripe(3)].filter((v) => values.includes(v)));
+    // The document's findings first, then the scripts': the script's value is no longer also read inside the document
+    // (#1864), so it is listed with the scripts, after both of the document's.
+    expect(values).toEqual([stripe(1), stripe(3), stripe(2)]);
     expect(values).toContain(stripe(2));
   });
 });
