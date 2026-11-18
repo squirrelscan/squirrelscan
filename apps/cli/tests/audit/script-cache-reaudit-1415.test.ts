@@ -39,7 +39,11 @@ beforeAll(() => {
       const path = new URL(req.url).pathname;
       if (path.endsWith(".js")) scriptHits.push(path);
       return new Response(path === "/app.js" ? appBody : "window.vendor = 1;", {
-        headers: { "content-type": "application/javascript" },
+        headers: {
+          "content-type": "application/javascript",
+          "cache-control": "public, max-age=600",
+          etag: '"v1"',
+        },
       });
     },
   });
@@ -137,6 +141,25 @@ describe("a CLI re-audit reuses cached script bodies (repo#1415 AC4)", () => {
     expect(second.every((s) => s.content !== null && s.error === null)).toBe(
       true
     );
+    // The rules read the response metadata too: a replay keeps it, so the
+    // caching, compression and render-blocking rules judge run 2 as run 1.
+    const meta = (s: (typeof first)[number]) => [
+      s.url,
+      s.contentType,
+      s.contentEncoding,
+      s.cacheHeaders,
+      s.responseMs,
+    ];
+    expect(second.map(meta)).toEqual(first.map(meta));
+    expect(
+      second.every(
+        (s) =>
+          s.contentEncoding === null &&
+          s.cacheHeaders?.cacheControl === "public, max-age=600" &&
+          s.cacheHeaders?.etag === '"v1"' &&
+          typeof s.responseMs === "number"
+      )
+    ).toBe(true);
   });
 
   test("a changed script is fetched again once its cache entry is gone", async () => {

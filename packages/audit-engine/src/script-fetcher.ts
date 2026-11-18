@@ -55,24 +55,30 @@ export interface ScriptFetchResult {
   /** Never requested: the `maxTotalBytes` or `totalTimeoutMs` bound was reached (#1255). */
   fetchSkipReason?: "memory-cap" | "time-budget";
   /**
-   * Milliseconds this audit's request took to answer, body included (#1751). Set only
-   * for a request that got an HTTP answer; absent for a skip, a refusal, a network
-   * error or timeout, and for a script the CLI content store served without a request.
+   * Milliseconds the request took to answer, body included (#1751). Set only for a
+   * request that got an HTTP answer; absent for a skip, a refusal, a network error or
+   * timeout. A cache hit (`fromCache`) replays the time of the fetch it stored.
    */
   responseMs?: number;
 }
 
 /**
- * An optional body cache the caller injects (the CLI backs it with its content
+ * An optional cache the caller injects (the CLI backs it with its content
  * store), so the engine stays dependency-free. Keyed by the script URL: the
  * implementation hashes it (the CLI uses `hashContent`) and owns freshness, so
  * `get` returns null for a missing OR stale entry. There is no validator: a
  * script at a stable URL is replayed until the implementation's max age lapses,
  * as the CLI's own cache did before repo#1415.
+ *
+ * The value is opaque to the implementation: the fetcher stores a JSON envelope
+ * of the body plus the response metadata the rules read (content type,
+ * content-encoding, caching headers, response time), so a hit judges the script
+ * exactly as the fetch it replays did. A value that is not a valid envelope (a
+ * bare body from an older build, a corrupt row) is a miss and is refetched.
  */
 export interface ScriptContentCache {
   get(url: string): string | null;
-  put(url: string, body: string): void;
+  put(url: string, value: string): void;
 }
 
 export interface ScriptFetcherOptions {
@@ -395,9 +401,68 @@ function scriptOutcome(result: ScriptFetchResult, anyContentType = false): Fetch
   return "ok";
 }
 
-function readCache(cache: ScriptContentCache, url: string): string | null {
+/** Bump when the envelope's shape changes: an entry of another version is a miss. */
+const SCRIPT_CACHE_ENTRY_VERSION = 1;
+
+/** What a cache entry holds (repo#1415): the body and every response field the rules read. */
+interface ScriptCacheEntry {
+  v: typeof SCRIPT_CACHE_ENTRY_VERSION;
+  body: string;
+  contentType: string | null;
+  contentEncoding: string | null;
+  cacheHeaders: ScriptCacheHeaders;
+  responseMs: number;
+}
+
+const CACHE_HEADER_KEYS = ["cacheControl", "expires", "date", "etag", "lastModified"] as const;
+
+function isStringOrNull(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function parseCacheEntry(raw: string): ScriptCacheEntry | null {
+  let parsed: unknown;
   try {
-    return cache.get(url);
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const entry = parsed as Record<string, unknown>;
+  const headers = entry.cacheHeaders as Record<string, unknown> | null | undefined;
+  if (
+    entry.v !== SCRIPT_CACHE_ENTRY_VERSION ||
+    typeof entry.body !== "string" ||
+    !isStringOrNull(entry.contentType) ||
+    !isStringOrNull(entry.contentEncoding) ||
+    typeof entry.responseMs !== "number" ||
+    !Number.isFinite(entry.responseMs) ||
+    typeof headers !== "object" ||
+    headers === null ||
+    !CACHE_HEADER_KEYS.every((key) => isStringOrNull(headers[key]))
+  ) {
+    return null;
+  }
+  return {
+    v: SCRIPT_CACHE_ENTRY_VERSION,
+    body: entry.body,
+    contentType: entry.contentType,
+    contentEncoding: entry.contentEncoding,
+    cacheHeaders: {
+      cacheControl: headers.cacheControl as string | null,
+      expires: headers.expires as string | null,
+      date: headers.date as string | null,
+      etag: headers.etag as string | null,
+      lastModified: headers.lastModified as string | null,
+    },
+    responseMs: entry.responseMs,
+  };
+}
+
+function readCache(cache: ScriptContentCache, url: string): ScriptCacheEntry | null {
+  try {
+    const raw = cache.get(url);
+    return raw === null ? null : parseCacheEntry(raw);
   } catch {
     return null;
   }
@@ -411,21 +476,24 @@ function fetchSingleScript(
   return Effect.promise(async () => {
     // A cache hit never touches the network, so it spends no budget. A body
     // over the size cap (a lowered limit) is a miss and is fetched again.
+    // The stored response metadata is replayed with the body, so the caching,
+    // compression and render-blocking rules judge a hit as they judged the fetch.
     const cached = cache ? readCache(cache, url) : null;
     if (cached !== null) {
-      const sizeBytes = new TextEncoder().encode(cached).length;
+      const sizeBytes = new TextEncoder().encode(cached.body).length;
       if (options.maxSizeBytes == null || sizeBytes <= options.maxSizeBytes) {
-        // contentEncoding is left unset: no response headers were seen, and
-        // null would read as "observed, not compressed" (#9).
         return {
           url,
           status: 200,
           error: null,
-          contentType: "application/javascript",
+          contentType: cached.contentType,
           sizeBytes,
-          content: cached,
+          content: cached.body,
           redirected: false,
           fromCache: true,
+          contentEncoding: cached.contentEncoding,
+          cacheHeaders: cached.cacheHeaders,
+          responseMs: cached.responseMs,
         } satisfies ScriptFetchResult;
       }
     }
@@ -443,18 +511,28 @@ function fetchSingleScript(
         : scriptOutcome(result, options.anyContentType === true);
     const elapsed = Date.now() - startedAt;
     options.budget?.record(url, elapsed, outcome);
-    // Only a body with no response metadata the rules read is cached: a hit
-    // replays the body alone, so a redirect (finalUrl, headersWithheld) or a
-    // SourceMap header would be lost on the next run. Those scripts refetch.
+    // A hit replays the body with its content type, content-encoding, caching
+    // headers and response time, but not a redirect (finalUrl, headersWithheld)
+    // or a SourceMap header: those scripts are never cached and always refetch.
     if (
       cache &&
       result.content !== null &&
       result.error === null &&
       !result.redirected &&
-      result.sourceMapHeader === undefined
+      result.sourceMapHeader === undefined &&
+      result.contentEncoding !== undefined &&
+      result.cacheHeaders !== undefined
     ) {
+      const entry: ScriptCacheEntry = {
+        v: SCRIPT_CACHE_ENTRY_VERSION,
+        body: result.content,
+        contentType: result.contentType,
+        contentEncoding: result.contentEncoding,
+        cacheHeaders: result.cacheHeaders,
+        responseMs: elapsed,
+      };
       try {
-        cache.put(url, result.content);
+        cache.put(url, JSON.stringify(entry));
       } catch {
         // A cache that cannot store costs the next run a fetch, never this one.
       }

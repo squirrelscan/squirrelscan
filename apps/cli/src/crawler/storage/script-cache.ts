@@ -1,6 +1,8 @@
-// The CLI's script body cache for the engine's script fetcher (repo#1415).
-// Keyed by hashContent(url) in the shared content store, replayed for 24 hours:
-// the store is shared by every audit on the machine, so without a ceiling a
+// The CLI's script cache for the engine's script fetcher (repo#1415).
+// Keyed by hashContent(url) in the shared content store, replayed for 24 hours.
+// The value is the engine's opaque JSON envelope (body plus the response
+// metadata the rules read); the row keeps the script content type label. The
+// store is shared by every audit on the machine, so without a ceiling a
 // script at a stable URL (app.js, not app.[hash].js) would never be re-read.
 
 import type { ScriptContentCache } from "@squirrelscan/audit-engine";
@@ -26,8 +28,8 @@ export function createScriptContentCache(
         return null;
       return store.getString(key);
     },
-    put(url, body) {
-      getStore().putForKey(url, body, "application/javascript");
+    put(url, value) {
+      getStore().putForKey(url, value, "application/javascript");
     },
   };
 }
