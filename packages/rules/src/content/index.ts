@@ -32,6 +32,7 @@ import { terminologyConsistencyRule } from "./terminology-consistency";
 import { thinVsSiteNormRule } from "./thin-vs-site-norm";
 import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { truncationArtifactsRule } from "./truncation-artifacts";
+import { typographyRule } from "./typography";
 import { unrenderedMarkupRule } from "./unrendered-markup";
 import { voiceConsistencyRule } from "./voice-consistency";
 import { wordCountRule } from "./word-count";
@@ -70,6 +71,7 @@ export const rules: Rule[] = [
   terminologyConsistencyRule,
   fontConsistencyRule,
   colorSprawlRule,
+  typographyRule,
 ];
 
 export {
@@ -100,6 +102,7 @@ export {
   thinVsSiteNormRule,
   titlePatternOutlierRule,
   truncationArtifactsRule,
+  typographyRule,
   unrenderedMarkupRule,
   voiceConsistencyRule,
   wordCountRule,
