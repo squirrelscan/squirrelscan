@@ -9,10 +9,18 @@
 // timeout and a 5xx. A 4xx, a robots.txt refusal or a bot wall is an answer (often a
 // policy), handled by the blocked and refused paths, so it is not reported here. A
 // failure recorded for a sitemap fetch, not the entry URL, is also left alone.
+//
+// "No failure recorded" is not "the home page loaded": a partial re-audit or stored data
+// without crawl stats never fetched it this time. The rule passes only when a page record
+// for the entry URL (or where it redirected) loaded with a non-error status; with neither a
+// load nor a known outage, or an outage of unknown kind, it skips with `entry-not-fetched`,
+// a gap that never resolves a stored finding.
 
 import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
+import { ENTRY_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { normalizeUrl } from "@squirrelscan/utils";
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 const NOT_APPLICABLE: RuleResult = { checks: [] };
 
@@ -38,42 +46,73 @@ export const homePageUnreachableRule: Rule = {
     checks: [
       { name: "home-page-unreachable", outcome: "problem" },
       { name: "home-page-unreachable", outcome: "clean", clears: ["home-page-unreachable"] },
+      { name: "home-page-unreachable", outcome: "skipped" },
     ],
   },
 
   run(ctx: RuleContext): RuleResult {
-    const failure = ctx.site?.entryFailure;
-    if (!failure) {
-      // The entry URL loaded: clean, so a stored finding from an earlier audit resolves.
-      if (!ctx.site) return NOT_APPLICABLE;
+    const site = ctx.site;
+    if (!site) return NOT_APPLICABLE;
+    const entryUrl = site.entryUrls?.[0] ?? site.baseUrl;
+    const failure = site.entryFailure;
+    if (failure && (failure.source ?? "entry") !== "entry") return NOT_APPLICABLE;
+
+    if (failure && failure.code !== "unknown") {
+      const cause = REPORTED[failure.code];
+      // A 4xx, a robots.txt refusal or a redirect is an answer, handled elsewhere.
+      if (!cause) return NOT_APPLICABLE;
+      const host = failure.host ?? site.baseUrl;
+      const status = failure.code === "http_5xx" && failure.status ? ` (${failure.status})` : "";
       return {
         checks: [
           {
             name: "home-page-unreachable",
-            status: "pass",
-            message: "The home page loaded",
-            pageUrl: ctx.site.entryUrls?.[0] ?? ctx.site.baseUrl,
+            status: "fail",
+            message: `The home page of ${host} failed to load: ${cause}${status}`,
+            pageUrl: entryUrl,
+            details: {
+              reason: failure.code,
+              ...(failure.status ? { status: failure.status } : {}),
+              ...(failure.detail ? { detail: failure.detail } : {}),
+            },
           },
         ],
       };
     }
-    if ((failure.source ?? "entry") !== "entry") return NOT_APPLICABLE;
-    const cause = REPORTED[failure.code];
-    if (!cause) return NOT_APPLICABLE;
 
-    const host = failure.host ?? ctx.site?.baseUrl ?? "the site";
-    const status = failure.code === "http_5xx" && failure.status ? ` (${failure.status})` : "";
-    const check: CheckResult = {
-      name: "home-page-unreachable",
-      status: "fail",
-      message: `The home page of ${host} failed to load: ${cause}${status}`,
-      pageUrl: ctx.site?.entryUrls?.[0] ?? ctx.site?.baseUrl,
-      details: {
-        reason: failure.code,
-        ...(failure.status ? { status: failure.status } : {}),
-        ...(failure.detail ? { detail: failure.detail } : {}),
-      },
+    // Clean only on evidence: this audit holds a page record for the entry URL (the URL it
+    // was given, where that redirected, or the base URL) that loaded with a non-error status.
+    if (!failure && entryPageLoaded(site)) {
+      return {
+        checks: [
+          { name: "home-page-unreachable", status: "pass", message: "The home page loaded", pageUrl: entryUrl },
+        ],
+      };
+    }
+    return {
+      checks: [
+        {
+          name: "home-page-unreachable",
+          status: "skipped",
+          skipReason: ENTRY_NOT_FETCHED_SKIP_REASON,
+          message: failure
+            ? "Not checked: the home page failed to load for a reason squirrel could not classify"
+            : "Not checked: this audit did not fetch the home page",
+          pageUrl: entryUrl,
+        },
+      ],
     };
-    return { checks: [check] };
   },
 };
+
+/** A page record for the entry URL, its redirect target or the base URL, that loaded (2xx or 3xx). */
+function entryPageLoaded(site: NonNullable<RuleContext["site"]>): boolean {
+  const entries = new Set([...(site.entryUrls ?? []), site.baseUrl].map((url) => normalizeUrl(url)));
+  return site.pages.some(
+    (page) =>
+      !page.redirectSource &&
+      page.statusCode >= 200 &&
+      page.statusCode < 400 &&
+      (entries.has(normalizeUrl(page.url)) || (!!page.finalUrl && entries.has(normalizeUrl(page.finalUrl)))),
+  );
+}

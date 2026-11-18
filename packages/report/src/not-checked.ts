@@ -81,6 +81,9 @@ const HINTS: ReadonlyMap<string, string> = new Map(Object.entries({
   // #1269: `squirrel analyze` makes no live request.
   "headers-not-recorded":
     "The stored pages carry no response headers, so a missing header proves nothing. Run the audit again to record them.",
+  // pub#2035: no verdict on the home page this audit (not fetched, or failed for an unknown reason).
+  "entry-not-fetched":
+    "This audit has no result for the home page: it was not fetched, or it failed for a reason squirrel could not classify. Run a full audit of the site to check it.",
   "analyze-offline":
     "Run `squirrel audit` to probe the live site.",
   // #1932: a probing rule below its level, or one the site throttled or the budget cut short.

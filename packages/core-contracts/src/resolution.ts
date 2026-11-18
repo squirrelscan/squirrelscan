@@ -193,6 +193,15 @@ export const SCAN_TRUNCATED_SKIP_REASON = "scan-truncated";
 export const CLASSIFIER_OFF_SKIP_REASON = "classifier-off";
 
 /**
+ * `skipReason` of `crawl/home-page-unreachable` when this audit has no verdict on the entry page (pub#2035):
+ * no page record for the entry URL (or its redirect target) loaded, and no outage was recorded either (a partial
+ * re-audit, stored data without crawl stats, a failure of unknown kind). A gap like
+ * {@link CLASSIFIER_OFF_SKIP_REASON}: the home page was not judged, so a prior finding there carries instead
+ * of resolving.
+ */
+export const ENTRY_NOT_FETCHED_SKIP_REASON = "entry-not-fetched";
+
+/**
  * `skipReason` of a page rule the runner did not run because the page could not be parsed and was read as an empty document
  * (#1570). A rule-wide GAP like {@link RULE_TIMED_OUT_SKIP_REASON}: nothing was looked at, so a prior finding on the page is
  * carried, not resolved. Also the skip's `details.foldKey`.
