@@ -19,6 +19,8 @@ How it works:
 
 ## v0.0.186 (2026-11-18)
 
+Five more rules, landed together in one batch: a page that still answers 5xx is now a finding, typography slips such as mixed quotes and double spaces get flagged, pages whose navigation drifted from the rest of the site stand out, generic "click here" anchors are measured as a share of the whole site, and an advisory check spots question headings that never get to the point. The new server errors rule judges a site only on a complete crawl, so quick and surface audits show it as not checked. That takes squirrelscan to 350+ rules.
+
 ### Added
 
 - New rule `content/typography`: flags typographic inconsistencies in body copy: repeated spaces between words, straight and curly quotes or apostrophes mixed on one page, a space before `, . ; : ! ?`, and `--` used where a dash was meant. Text inside `<pre>`, `<code>`, `<samp>` and `<kbd>` is never read. The space-before-punctuation check is not run for French and related locales, nor for a page with no `lang`. It is an info rule with weight 1 and a warning at most (a fail only at 20 or more occurrences), so it cannot move the score more than any other info-class rule. See [content/typography](https://docs.squirrelscan.com/rules/content/typography). (squirrelscan/repo#1358)
