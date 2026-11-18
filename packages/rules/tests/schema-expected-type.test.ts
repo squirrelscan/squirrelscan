@@ -246,7 +246,10 @@ describe("schema/expected-type", () => {
     const check = await only(ctxFor("<html><body></body></html>", undefined));
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("classifier-off");
-    expect(check.message).toContain("classifier is off");
+    // The message is read on every surface, including hosts with no classifier at all, so it
+    // names no CLI flag.
+    expect(check.message).toBe("Not checked: no page classifier ran on this page");
+    expect(check.message).not.toContain("--no-classifier");
   });
 
   test("classifier on, below the confidence floor: still the info row (repo#3364)", async () => {
