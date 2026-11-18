@@ -226,7 +226,8 @@
                   "rules/crawl/soft-404",
                   "rules/crawl/custom-404",
                   "rules/crawl/single-page-site",
-                  "rules/crawl/rendered-signal-mismatch"
+                  "rules/crawl/rendered-signal-mismatch",
+                  "rules/crawl/server-errors"
                 ]
               },
               {

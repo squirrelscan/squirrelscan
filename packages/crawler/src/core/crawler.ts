@@ -250,6 +250,73 @@ function entryRetryFailure(
   );
 }
 
+interface ErrorPageFacts {
+  status: number;
+  finalUrl: string;
+  redirectChain?: PageRecord["redirectChain"];
+  contentType: string | null;
+  loadTime: number;
+  ttfb?: number;
+  downloadTime?: number;
+  fetcherId?: string;
+  fallbackReason?: string;
+}
+
+/** A minimal page row for a URL that answered 4xx/5xx: no body, no parse, only the status. */
+function buildErrorPageRecord(
+  entry: { rawUrl: string; normalizedUrl: string; depth: number; parentUrl?: string },
+  facts: ErrorPageFacts,
+): PageRecord {
+  return {
+    url: entry.rawUrl,
+    normalizedUrl: entry.normalizedUrl,
+    finalUrl: facts.finalUrl,
+    depth: entry.depth,
+    parentUrl: entry.parentUrl,
+    redirectChain: facts.redirectChain,
+    status: facts.status,
+    contentType: facts.contentType,
+    sizeBytes: 0,
+    loadTimeMs: facts.loadTime,
+    ttfb: facts.ttfb,
+    downloadTime: facts.downloadTime,
+    fetchedAt: Date.now(),
+    etag: null,
+    lastModified: null,
+    contentHash: "",
+    html: null,
+    parsedData: null,
+    headers: {
+      contentType: facts.contentType,
+      contentEncoding: null,
+      cacheControl: null,
+      vary: null,
+      etag: null,
+      server: null,
+      lastModified: null,
+      link: null,
+      serverTiming: null,
+      age: null,
+      xCache: null,
+      cfCacheStatus: null,
+      xVercelCache: null,
+      altSvc: null,
+      acceptRanges: null,
+    },
+    securityHeaders: {
+      hsts: null,
+      csp: null,
+      xFrameOptions: null,
+      xContentTypeOptions: null,
+      referrerPolicy: null,
+      permissionsPolicy: null,
+      xRobotsTag: null,
+    },
+    fetcherId: facts.fetcherId,
+    fallbackReason: facts.fallbackReason,
+  };
+}
+
 /**
  * Host for a failure reason. `urlHostKey` answers the literal string "unknown"
  * for an unparseable URL, which would render as a hostname in the sentence
@@ -1807,6 +1874,28 @@ export function createCrawler(
             // saw. Counted (subset of pagesFailed) so the report can say its
             // coverage was short instead of scoring the rest as complete.
             const undecodableFetch = error.type === "decode";
+            // A 5xx that outlived the fetcher's retries is the page's final answer
+            // (#2036). Stored as an error page so `crawl/server-errors` can report it;
+            // a page that recovered on a retry never reaches here. Not counted in
+            // pagesCommitted: it is not content, and the entry retry keys on that. The seed
+            // is left out: a seed that is down fails the audit with no pages, and storing it
+            // would let absence rules run against a site that was never read.
+            if (
+              error.type === "network" &&
+              error.status !== undefined &&
+              error.status >= 500 &&
+              entry.depth > 0
+            ) {
+              yield* storage.upsertPage(
+                crawlId,
+                buildErrorPageRecord(entry, {
+                  status: error.status,
+                  finalUrl: entry.normalizedUrl,
+                  contentType: null,
+                  loadTime: 0,
+                }),
+              );
+            }
             yield* storage.updateFrontierStatus(
               crawlId,
               entry.normalizedUrl,
@@ -1941,55 +2030,17 @@ export function createCrawler(
           // Handle error status - save page with error status for broken link detection
           if (result.status >= 400) {
             // Save minimal page record so broken-links rule can detect 4xx/5xx pages
-            const errorPageRecord: PageRecord = {
-              url: entry.rawUrl,
-              normalizedUrl: entry.normalizedUrl,
-              finalUrl: result.finalUrl,
-              depth: entry.depth,
-              parentUrl: entry.parentUrl,
-              redirectChain: result.redirectChain,
+            const errorPageRecord = buildErrorPageRecord(entry, {
               status: result.status,
+              finalUrl: result.finalUrl,
+              redirectChain: result.redirectChain,
               contentType: result.contentType,
-              sizeBytes: 0,
-              loadTimeMs: result.loadTime,
+              loadTime: result.loadTime,
               ttfb: result.ttfb,
               downloadTime: result.downloadTime,
-              fetchedAt: Date.now(),
-              etag: null,
-              lastModified: null,
-              contentHash: "",
-              html: null, // Don't store HTML for error pages
-              parsedData: null, // No parsing for error pages
-              headers: {
-                contentType: result.contentType,
-                contentEncoding: null,
-                cacheControl: null,
-                vary: null,
-                etag: null,
-                server: null,
-                lastModified: null,
-                link: null,
-                serverTiming: null,
-                age: null,
-                xCache: null,
-                cfCacheStatus: null,
-                xVercelCache: null,
-                altSvc: null,
-                acceptRanges: null,
-              },
-              securityHeaders: {
-                hsts: null,
-                csp: null,
-                xFrameOptions: null,
-                xContentTypeOptions: null,
-                referrerPolicy: null,
-                permissionsPolicy: null,
-                xRobotsTag: null,
-              },
-              // Which egress/method served this page + any fallback reason (#512).
               fetcherId: result.fetcherId,
               fallbackReason: result.fallbackReason,
-            };
+            });
             yield* storage.upsertPage(crawlId, errorPageRecord);
             pagesCommitted++;
             // A refusal-shaped 4xx from a known provider with no block marker (#1258):

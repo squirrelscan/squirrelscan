@@ -1,0 +1,1 @@
+- **Rule totals say 350+.** With `crawl/server-errors` the live total reaches 350 enabled rules, so the README, the docs and the npm and plugin descriptions now state 350+ (squirrelscan/repo#2036).

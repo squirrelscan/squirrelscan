@@ -2947,6 +2947,12 @@
    "schema-noindex|pass|No schema+noindex conflicts||"
   ]
  },
+ "crawl/server-errors": {
+  "digest": "154105016346856",
+  "lines": [
+   "server-errors|pass|No crawled page answered with a #xx status||"
+  ]
+ },
  "crawl/sitemap-4xx": {
   "digest": "8641590133573",
   "lines": [

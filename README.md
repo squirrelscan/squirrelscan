@@ -27,7 +27,7 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 - **[Built for coding agents](https://docs.squirrelscan.com/developers/agents)** - Skills for Claude Code, Cursor, Codex and any coding agent run the audit, fix and re-audit loop. Connect over the CLI, the hosted or local MCP server, or the API.
 - **[Enriched fixes for you and your coding agent](https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent)** - Every finding says how to fix it, in LLM-optimized output your agent can apply, and every rule has its own docs page. Signed in, the report adds an editor's summary of what to fix first and the technology stack the site runs on.
-- **[340+ rules, 22 categories](https://docs.squirrelscan.com/rules)** - Audit coverage across SEO, accessibility, performance, security, content and more.
+- **[350+ rules, 22 categories](https://docs.squirrelscan.com/rules)** - Audit coverage across SEO, accessibility, performance, security, content and more.
 - **[Agent experience](https://docs.squirrelscan.com/rules/ax)** - Audit how well AI agents can read, discover and act on your site: llms.txt, AGENTS.md, Markdown responses, and what AI crawlers are served.
 - **[Link checking and monitoring](https://docs.squirrelscan.com/guides/link-checking)** - Perch, the cloud link checker, tells a broken link from a blocked one and confirms a failure before reporting it. On Pro and Team, scheduled audits email you when a link breaks.
 - **[Security and site integrity](https://docs.squirrelscan.com/rules/integrity)** - Detect phishing kits, injected pages, leaked credentials and missing security headers.
@@ -45,7 +45,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 
 | Category | Rules | What it covers |
 |----------|-------|----------------|
-| Crawlability | 26 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s, a home page that fails to load |
+| Crawlability | 27 | Whether search engines and agents can reach and index you at all: robots.txt, sitemap validity and coverage, indexability conflicts, redirect and canonical chains, soft 404s, a home page that fails to load, pages that answer 5xx |
 | Core SEO | 14 | The per-page fundamentals: title, meta description, H1, canonical, charset, doctype, robots meta, Open Graph and Twitter cards, plus canonical form drift across the site |
 | Agent Experience | 18 | How ready you are for AI agents to read, discover and act on the site: whether GPTBot and Claude-User get the same content a browser does, AGENTS.md, llms.txt, Markdown responses, API and MCP discovery, licensing and noai signals, WebMCP tools, pay-per-crawl, response token weight |
 | Site Integrity | 10 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs, plus pages left on an outdated site template |
@@ -68,7 +68,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Analytics | 3 | Google Tag Manager presence, consent-mode wiring, and the same GA4 or GTM ID installed twice |
 | Blocking | 3 | Content, links and trackers that ad blockers and privacy filters strip for a large share of your visitors |
 
-**Total: 340+ rules across 22 categories**
+**Total: 350+ rules across 22 categories**
 
 Cloud audits also run ten [third-party rules](https://docs.squirrelscan.com/cloud/third-party) (compromised, proxied and unpinned vendor scripts, session replay and tag managers on sign-in and checkout pages, vendor counts). They are cloud-only and are not counted above.
 
