@@ -703,6 +703,7 @@
               "rules/ax/api-discovery",
               "rules/ax/archive-indexing",
               "rules/ax/pay-per-crawl",
+              "rules/ax/commerce-readiness",
               "rules/ai/llm-parsability",
               "rules/ai/page-type-match",
               "rules/ai/ai-content",

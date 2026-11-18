@@ -264,6 +264,11 @@ export interface RunAuditOptions extends AuditOptions {
   externalLinksEnabled?: boolean;
   /** repo#2729: false switches the internal link probe off for this run. */
   internalLinksEnabled?: boolean;
+  /**
+   * repo#3881: force `ax/commerce-readiness` on or off for this run when site-type detection is
+   * wrong. Absent or "auto" keeps the site-type gate. Sets `[rule_options."ax/commerce-readiness"] applies`.
+   */
+  commerceReadiness?: "auto" | "on" | "off";
   /** #2307: false switches the page classifier off for this run (markup-only link sections). */
   classifierEnabled?: boolean;
   externalLinksConcurrency?: number;
@@ -3368,6 +3373,17 @@ export function mergeOptionsToConfig(
 
   return {
     ...config,
+    ...(options.commerceReadiness !== undefined
+      ? {
+          rule_options: {
+            ...config.rule_options,
+            "ax/commerce-readiness": {
+              ...config.rule_options["ax/commerce-readiness"],
+              applies: options.commerceReadiness,
+            },
+          },
+        }
+      : {}),
     // --store-scripts (#1255) turns the opt-in on for one run, and
     // --no-store-scripts (#1268) turns it off for one run when the config has it on.
     ...(options.storeScripts !== undefined

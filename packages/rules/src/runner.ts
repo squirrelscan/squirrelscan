@@ -299,6 +299,22 @@ function checkApplicability(
   meta: SiteMetadata | undefined
 ): CheckResult | null {
   if (config.rules?.ignore_applicability) return null;
+  // Per-site override (repo#3881): `[rule_options."<id>"] applies = "on" | "off"` forces a rule
+  // that declares `appliesWhen` on or off when site-type detection is wrong. "auto" or absent
+  // keeps the gate.
+  if (rule.meta.appliesWhen) {
+    const forced = config.rule_options?.[rule.meta.id]?.["applies"];
+    if (forced === "on") return null;
+    if (forced === "off") {
+      const reason = 'turned off for this site (applies = "off")';
+      return {
+        name: rule.meta.id,
+        status: "skipped",
+        message: `Not applicable: ${reason}`,
+        skipReason: reason,
+      };
+    }
+  }
   const verdict = ruleApplies(rule.meta.appliesWhen, meta);
   if (verdict.applies) return null;
   return {

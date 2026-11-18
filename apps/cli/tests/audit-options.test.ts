@@ -26,6 +26,18 @@ describe("mergeOptionsToConfig", () => {
     expect(merged.rules.disable).toEqual([]);
   });
 
+  test("commerceReadiness sets the ax/commerce-readiness applies override (repo#3881)", () => {
+    const config = getDefaultConfig();
+    const base = { url: "https://example.com" };
+    expect(
+      mergeOptionsToConfig(config, base).rule_options["ax/commerce-readiness"]
+    ).toBeUndefined();
+    expect(
+      mergeOptionsToConfig(config, { ...base, commerceReadiness: "on" })
+        .rule_options["ax/commerce-readiness"]
+    ).toEqual({ applies: "on" });
+  });
+
   test("merges maxPages option", () => {
     const config = getDefaultConfig();
     const merged = mergeOptionsToConfig(config, {

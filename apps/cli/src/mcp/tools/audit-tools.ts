@@ -176,6 +176,7 @@ async function runWebsiteAudit(input: {
   headers?: Record<string, string>;
   externalLinks?: boolean;
   internalLinks?: boolean;
+  commerce?: "auto" | "on" | "off";
   followRedirect?: boolean;
   maxDuration?: number;
 }): Promise<CallToolResult> {
@@ -228,6 +229,9 @@ async function runWebsiteAudit(input: {
   const extra = {
     url: input.url,
     offline: input.offline,
+    ...(input.commerce !== undefined
+      ? { commerceReadiness: input.commerce }
+      : {}),
     ...(input.maxDuration !== undefined
       ? {
           maxDurationSeconds: input.maxDuration,
@@ -349,6 +353,12 @@ export function registerAuditTools(server: McpServer): void {
           .describe(
             "false skips the status check of internal link targets the crawl did not fetch. It is on at every level unless [internal_links] enabled = false in squirrel.toml, which true does not override"
           ),
+        commerce: z
+          .enum(["auto", "on", "off"])
+          .optional()
+          .describe(
+            'Force the ax/commerce-readiness rule (can a shopping agent buy from this shop) on or off for this site when site-type detection is wrong. auto (the default) runs it only on sites detected as ecommerce or marketplace; on runs it on any site; off skips it. Default: [rule_options."ax/commerce-readiness"] applies in squirrel.toml'
+          ),
         ephemeral: z
           .boolean()
           .optional()
@@ -408,6 +418,7 @@ export function registerAuditTools(server: McpServer): void {
       headers,
       externalLinks,
       internalLinks,
+      commerce,
     }) => {
       if (level !== undefined && coverage !== undefined && level !== coverage) {
         return errorResult(
@@ -435,6 +446,7 @@ export function registerAuditTools(server: McpServer): void {
         headers,
         externalLinks,
         internalLinks,
+        commerce,
       });
     }
   );
