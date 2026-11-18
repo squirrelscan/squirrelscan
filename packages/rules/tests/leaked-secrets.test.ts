@@ -448,7 +448,7 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
   test("every finding made unpadded is still made, unchanged, inside 70 KB of bundle", () => {
     const lost: string[] = [];
     const paddedPrefix = `${PAD}\n;\n`;
-    const withoutOffset = ({ offset: _offset, ...finding }: LeakedSecret) => finding;
+    const withoutOffset = ({ offset: _offset, context: _context, ...finding }: LeakedSecret) => finding;
     for (const fixture of fixtures) {
       const bare = scanContent(fixture, "inline-script");
       expect(bare.length).toBeGreaterThan(0); // a vacuous fixture proves nothing
@@ -1248,5 +1248,247 @@ describe("security/leaked-secrets: vendor public identifiers in URL queries (#57
       html(`<script async src="https://cdn.mida.so/js/optimize.js?key=abc123&auth=${REAL_SECRET}"></script>`)
     ));
     expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
+  });
+});
+
+describe("evidence context (repo#2215)", () => {
+  test("finding carries a redacted context with neighbours masked", async () => {
+    const { scanContent } = await import("../src/security/leaked-secrets");
+    const key = ["sk", "live", "abcdefghijklmnopqrstuvwx12"].join("_"); // assembled so the fixture is not a literal secret
+    const neighbour = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+    const html = `<script>var a="x"; var k="${key}"; var other="${neighbour}";</script>`;
+    const found = scanContent(html, "inline-script", "https://example.com/a.js");
+    const stripe = found.find((f) => f.type === "Stripe Live Key");
+    expect(stripe?.context).toBe(
+      `<script>var a="*"; var k="sk_liv********************wx12"; var other="********************";</script>`
+    );
+    for (const f of found) {
+      expect(f.context).toBeDefined();
+      expect(f.context).not.toContain(key);
+      expect(f.context).not.toContain(neighbour);
+    }
+    expect(stripe?.sourceUrl).toBe("https://example.com/a.js");
+  });
+});
+
+describe("evidence context redacts every nearby secret (repo#2215)", () => {
+  const key = ["sk", "live", "abcdefghijklmnopqrstuvwx12"].join("_"); // assembled so the fixture is not a literal secret
+
+  test("a short quoted password beside the match is masked", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    const pw = ["hunter", "2pw!"].join("");
+    const content = `var k="${key}"; var pw="${pw}"; var n="ab";`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).toBeDefined();
+    expect(ctx).not.toContain(pw);
+    expect(ctx).toContain(`var pw="**********"`);
+    expect(ctx).toContain(`var k="sk_liv`);
+    expect(ctx).toContain(`var n="**"`);
+  });
+
+  test("a quoted literal before the match is masked and the code between literals is kept", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    const pw = ["pass", " word", " 99"].join("");
+    const content = `login('${pw}'); stripe("${key}")`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).not.toContain(pw);
+    expect(ctx?.startsWith(`login('************'); stripe("sk_liv`)).toBe(true);
+  });
+
+  test("a token run cut off at either window edge is dropped, not shown in part", async () => {
+    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } = await import("../src/security/leaked-secrets");
+    const left = "L".repeat(10) + "0123456789abcdefghij"; // 30 token chars, only the tail inside the window
+    const right = "zyxwvutsrqponmlkjihg" + "R".repeat(10);
+    const fill = (n: number) => " ".repeat(n);
+    const content = `${left}${fill(EVIDENCE_CONTEXT_RADIUS - 15)}=${key};${fill(EVIDENCE_CONTEXT_RADIUS - 15)}${right}`;
+    const at = content.indexOf(key);
+    const ctx = evidenceContext(content, at, key.length, key);
+    expect(ctx).toBeDefined();
+    for (const frag of ["fghij", "abcde", "zyxwv", "rqpon"]) expect(ctx).not.toContain(frag);
+    expect(ctx).toBe(` =sk_liv********************wx12; `);
+  });
+
+  test("a literal cut off at the window edge is masked up to that edge", async () => {
+    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } = await import("../src/security/leaked-secrets");
+    const secretTail = "my secret pass!";
+    const content = `x="${"a".repeat(EVIDENCE_CONTEXT_RADIUS)} ${secretTail}"; k="${key}"`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).not.toContain("secret pass");
+    expect(ctx).toContain(`"; k="sk_liv`);
+  });
+
+  test("when the match is not directly quoted, both readings of the nearby quotes are masked", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    const pw = ["hunter", "2pw"].join("");
+    const content = `u("https://a.example/?k=${key}&x=1", pw="${pw}")`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).not.toContain(pw);
+  });
+
+  test("an unquoted password beside a quoted match is masked, punctuation and all", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    for (const pw of [["p@ss", "w0rd!"].join(""), ["a#b$", "c&d!e%f"].join(""), ["s3cr", "et"].join(""), ["p@ss", "w0rd!x".repeat(4)].join("")]) {
+      const content = `STRIPE_KEY="${key}"\nDB_PASSWORD=${pw}\nDEBUG=1`;
+      const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+      expect(ctx).toBeDefined();
+      expect(ctx).not.toContain(pw);
+      expect(ctx).not.toContain(pw.slice(4));
+      expect(ctx).toContain(`STRIPE_KEY="sk_liv`);
+      expect(ctx).toContain("DEBUG=1");
+    }
+  });
+
+  test("an unquoted password before the match and in a query string is masked", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    const pw = ["hun", "ter2!@#"].join("");
+    const content = `password: ${pw} key: "${key}" u=https://a.example/?pw=${pw}&x=1`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).not.toContain(pw);
+    expect(ctx).not.toContain(pw.slice(3));
+    expect(ctx).toContain("password: ");
+    expect(ctx).toContain(`key: "sk_liv`);
+  });
+
+  test("a punctuated run cut off at the window edge is dropped", async () => {
+    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } = await import("../src/security/leaked-secrets");
+    const tail = "!@#$%^&*p@ss";
+    const content = `${"x".repeat(10)}${tail}${" ".repeat(EVIDENCE_CONTEXT_RADIUS - tail.length)}${key}`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).not.toContain("p@ss");
+    expect(ctx).not.toContain("!@#");
+  });
+});
+
+// Batch 2 redaction fix: a nearby value the scanner did not recognize shows none of its characters. The draft masked
+// nearby values like the item id (first six and last four characters kept), so a 13 to 19 character password kept 10 of
+// its characters, and an unquoted 16-character bearer token or a bare `p@ssw0rd!` after a label was shown in full.
+describe("evidence context never shows part of a nearby secret (repo#2215)", () => {
+  const key = ["sk", "live", "abcdefghijklmnopqrstuvwx12"].join("_"); // assembled so the fixture is not a literal secret
+
+  test("a short bearer token after the match is starred out", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    const token = ["abcdEFGH", "1234ijkl"].join("");
+    const content = `const s="${key}"; fetch(u,{headers:{Authorization: Bearer ${token}}})`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).toBeDefined();
+    for (const frag of [token.slice(0, 4), token.slice(-4), token.slice(4, 12)]) expect(ctx).not.toContain(frag);
+  });
+
+  test("a letter-and-digit word after a label is starred out", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    const pw = ["p@ss", "w0rd!"].join("");
+    const content = `const s="${key}"; password ${pw}`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).not.toContain("p@ss");
+    expect(ctx).not.toContain("w0rd");
+  });
+
+  test("a 13-character quoted password keeps none of its characters", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    const pw = ["Tr0ub", "4dor&3x"].join("");
+    const content = `var k="${key}"; var pw="${pw}";`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).toContain(`var pw="${"*".repeat(pw.length)}"`);
+    for (const frag of [pw.slice(0, 4), pw.slice(-4)]) expect(ctx).not.toContain(frag);
+  });
+
+  test("the match itself is masked exactly as its item id", async () => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    const content = `var k="${key}";`;
+    const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+    expect(ctx).toBe(`var k="${key.slice(0, 6)}${"*".repeat(20)}${key.slice(-4)}";`);
+    expect(ctx).not.toContain(key);
+  });
+});
+
+// pub#1959 review fix: a quoted value under 8 characters was never masked while its label was, and a quoted match was read
+// with one quote reading only, so an apostrophe in a comment flipped which quotes open and showed the next literal whole.
+// Every expected string here is the full context, so any character of the secret showing fails the test.
+describe("evidence context masks short quoted values and survives a stray apostrophe (repo#2215)", () => {
+  const key = ["sk", "live", "abcdefghijklmnopqrstuvwx12"].join("_"); // assembled so the fixture is not a literal secret
+  const masked = `sk_liv${"*".repeat(20)}wx12`;
+  const ctxOf = async (content: string) => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    return evidenceContext(content, content.indexOf(key), key.length, key);
+  };
+
+  test("a 7-character JSON password after its label is starred out", async () => {
+    const pw = ["Zx9!", "qT4"].join("");
+    expect(await ctxOf(`{"key":"${key}","password":"${pw}"}`)).toBe(`{"***":"${masked}","********":"*******"}`);
+  });
+
+  test("a 7-character value after => is starred out", async () => {
+    const pw = ["Sum", "mer1"].join("");
+    expect(await ctxOf(`$cfg = ['stripe' => '${key}', 'db_pass' => '${pw}'];`)).toBe(
+      `$cfg = ['******' => '${masked}', '*******' => '*******'];`
+    );
+  });
+
+  test("a 7-character HTML attribute value is starred out", async () => {
+    const pw = ["Pw12", "345"].join("");
+    expect(await ctxOf(`<input name="k" value="${pw}"><script>var k="${key}";</script>`)).toBe(
+      `<input name="*" value="*******"><script>var k="${masked}";</script>`
+    );
+  });
+
+  test("a 4-character assigned literal is starred out", async () => {
+    const pw = ["Pa", "55"].join("");
+    expect(await ctxOf(`const k = "${key}"; const pw = "${pw}";`)).toBe(`const k = "${masked}"; const pw = "****";`);
+  });
+
+  test("an apostrophe in a comment after the match does not unmask the next literal", async () => {
+    const pw = ["Correct", "Horse", "Battery"].join("");
+    expect(await ctxOf(`const k = "${key}"; // don't ship this\nconst pw='${pw}';`)).toBe(
+      `const k = "${masked}"; // don'${"*".repeat(20)}'${"*".repeat(19)}'*`
+    );
+  });
+
+  test("an apostrophe in a comment before the match does not unmask the literal before it", async () => {
+    const pw = ["Correct", "Horse", "Battery"].join("");
+    expect(await ctxOf(`const pw='${pw}'; // don't ship\nconst k = "${key}";`)).toBe(
+      `${"*".repeat(9)}'${"*".repeat(19)}'********'t ship const k = "${masked}";`
+    );
+  });
+
+  test("no 3-character run of a generated secret appears in any quoting style (property)", async () => {
+    // Deterministic generator: the alphabet avoids lowercase letters, quotes, backslashes, whitespace and `*`, so a run of
+    // three secret characters cannot occur in the labels, the match mask or the stars by chance.
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|";
+    let seed = 2215;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+    const styles: Array<(s: string) => string> = [
+      (s) => `{"password":"${s}"}`,
+      (s) => `'db_pass' => '${s}'`,
+      (s) => `<input value="${s}">`,
+      (s) => `const pw = "${s}";`,
+      (s) => `pw='${s}';`,
+      (s) => `pw=\`${s}\`;`,
+      (s) => `login("${s}");`,
+      (s) => `// don't ship\npw='${s}';`,
+      (s) => `// don't ship\nlogin('${s}');`,
+      (s) => `/* it's a list */ ['a', '${s}']`,
+    ];
+    let checked = 0;
+    for (let len = 1; len <= 40; len++) {
+      for (let round = 0; round < 3; round++) {
+        const secret = Array.from({ length: len }, () => alphabet[next() % alphabet.length]).join("");
+        for (const style of styles) {
+          for (const content of [`var k="${key}"; ${style(secret)}`, `${style(secret)} var k="${key}";`]) {
+            const ctx = await ctxOf(content);
+            expect(ctx).toBeDefined();
+            expect(ctx).toContain(masked);
+            for (let i = 0; i + 3 <= len; i++) {
+              const frag = secret.slice(i, i + 3);
+              if (ctx?.includes(frag)) throw new Error(`"${frag}" of ${JSON.stringify(secret)} shows in ${JSON.stringify(ctx)}`);
+            }
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBe(40 * 3 * styles.length * 2);
   });
 });
