@@ -328,6 +328,8 @@ const PRELOAD_CHUNK_FETCH_LIMIT = 20;
 /** The one rule that reads the page background a linked stylesheet sets (#1756). */
 const COLOR_CONTRAST_RULE_ID = "a11y/color-contrast";
 const REDUCED_MOTION_RULE_ID = "a11y/reduced-motion";
+/** Reads stylesheet bodies (`ctx.site.stylesheets`) to tell palette colors from one-page outliers (repo#1377). */
+const COLOR_SPRAWL_RULE_ID = "content/color-sprawl";
 /** Same-site stylesheets read for the page background (#1756): the most widely linked first. */
 const STYLESHEET_BACKGROUND_FETCH_LIMIT = STYLESHEET_FETCH_LIMITS.MAX_STYLESHEETS_TO_FETCH;
 /** A stylesheet over this many decoded bytes is not read (#1756). */
@@ -1135,6 +1137,15 @@ export function fetchAssetsFromOccurrences(
     );
     // One fetch feeds both rules (#711): same egress and budget.
     const probeStylesheetBackgrounds = probeColorContrastSheets || probeStylesheetMotion;
+    // Bodies (ctx.site.stylesheets) go to color-contrast and color-sprawl (repo#1377); the background summary stays color-contrast's.
+    const probeStylesheetContent =
+      probeColorContrastSheets ||
+      isRuleEnabled(
+        COLOR_SPRAWL_RULE_ID,
+        config.rules?.enable ?? [],
+        config.rules?.disable ?? [],
+        (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[COLOR_SPRAWL_RULE_ID],
+      );
     const stylesheetTargets = Array.from(resourceOccurrences.css.entries())
       .sort((a, b) => b[1].size - a[1].size)
       .map(([url]) => url)
@@ -1243,7 +1254,7 @@ export function fetchAssetsFromOccurrences(
           },
         ),
         // Only the html/body background is kept (#1756); same egress and budget as the scripts.
-        stylesheets: probeStylesheetBackgrounds
+        stylesheets: probeStylesheetBackgrounds || probeStylesheetContent
           ? fetchScriptContents(stylesheetTargets, {
               ...nonStoreScriptOptions,
               fetchAll: true,
@@ -1554,9 +1565,9 @@ export function fetchAssetsFromOccurrences(
             }),
           }
         : {}),
+      ...(probeStylesheetContent ? { stylesheets: resourceResults.stylesheets.map(toStylesheetContentData) } : {}),
       ...(probeColorContrastSheets
         ? {
-            stylesheets: resourceResults.stylesheets.map(toStylesheetContentData),
             stylesheetBackgrounds: resourceResults.stylesheets.map((fetch) => {
               const readable = fetch.content !== null && !/html/i.test(fetch.contentType ?? "");
               const other = readable ? stylesheetBackgroundSelectorsOf(fetch.content as string) : null;
@@ -3687,8 +3698,9 @@ export function runStreamingRules(
       // Renamed to -v3 when hreflang joined the record (#1686); earlier: "site-dom-signals" when edgeMarkers joined the record (#605): a cached entry
       // written before it lacks the field, and a replay would read that as "no marker". The new id
       // makes every older entry a miss, so each site's first audit after the upgrade runs fresh once.
+      // v6: colorUsage joined the record (content/color-sprawl, repo#1377), same reason.
       // v5: fontUsage joined the record (content/font-consistency, repo#1376), same reason. v4: contentFingerprint joined the record too (content/duplicate-content, #1690), same reason.
-      id: "site-dom-signals-v5",
+      id: "site-dom-signals-v6",
       collect(page, parsed, shared) {
         const signal = detachFromPage(
           // `shared.fingerprint` is the one the loop already built for

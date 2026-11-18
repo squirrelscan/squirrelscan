@@ -301,6 +301,7 @@
                   "rules/content/thin-vs-site-norm",
                   "rules/content/voice-consistency",
                   "rules/content/font-consistency",
+                  "rules/content/color-sprawl",
                   "rules/content/title-pattern-outlier",
                   "rules/content/truncation-artifacts",
                   "rules/content/date-agreement",
