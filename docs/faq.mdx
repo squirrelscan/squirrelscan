@@ -1,7 +1,7 @@
 ---
 title: "FAQ"
 icon: "circle-help"
-description: "Short answers to the questions people ask first: what is open source, what is sent, what robots.txt does, what it costs, and how it compares"
+description: "Short answers to the questions people ask first: what is open source, what is sent, what robots.txt does, what is stored and for how long, what it costs, who is behind it, and how it compares"
 ---
 
 The questions a skeptical developer asks first, answered briefly. Each answer links to the page it comes from, and those pages win if anything here is out of date.
@@ -69,3 +69,21 @@ The audit rules are deterministic. Local audits run only those rules. The rules 
 Lighthouse audits one URL per run and goes deep on that page's performance. squirrelscan crawls the whole site and checks links, security headers, structured data and agent experience together. For one slow page, Lighthouse is still the right first stop. Details: [Lighthouse alternative](https://squirrelscan.com/learn/lighthouse-alternative).
 
 Screaming Frog is a mature desktop crawler, strong at manual, exploratory work: filtering and segmenting a crawl, and custom extraction with XPath or CSS selectors, which squirrelscan does not have. squirrelscan does not render JavaScript locally either; rendering is a cloud feature. What it offers instead is a CLI that runs the same way in CI or inside a coding agent, with output meant for a model. Many teams use both. Details: [Screaming Frog alternative](https://squirrelscan.com/learn/screaming-frog-alternative).
+
+## What does squirrelscan store, and for how long?
+
+- **Local audits** are stored in a database on your machine and kept until you delete them ([Reports](/reports#delete-old-audits)).
+- **Deleting a website** is a soft delete: its past audits, reports and issues are preserved, and published report links keep working ([Dashboard](/dashboard#deleting-a-website)).
+- **Deleting a report** removes it from your lists and from its link. A copy already cached at the edge can still be shown for at most about 3 minutes ([Dashboard](/dashboard#managing-reports)).
+- **Deleted reports, websites and runs** are hidden from your account but not removed straight away. You can ask support to remove them permanently.
+- **Other retention periods in the privacy policy:** published reports stay public until you unpublish or delete them or close your account. Account and billing records are kept while the account is active and as the law requires. Email subscriptions are kept until you unsubscribe. Telemetry is kept as long as it is relevant for product improvement and support ([Privacy policy](https://squirrelscan.com/privacy)).
+
+To have data erased, the privacy policy lists the right to request deletion.
+
+## Who is behind squirrelscan?
+
+squirrelscan is developed by [Nik Cubrilovic](https://squirrelscan.com/about). The service is operated by Nineprimes Pty Ltd, trading as squirrelscan ([Privacy policy](https://squirrelscan.com/privacy)).
+
+## Is there a roadmap, and where do I report bugs?
+
+There is no public roadmap, and GitHub Discussions is not enabled on the repository. To report a bug or ask for a feature, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) on the public repository. For help with an account or an audit, use the [support page](https://squirrelscan.com/support) or email support@squirrelscan.com.
