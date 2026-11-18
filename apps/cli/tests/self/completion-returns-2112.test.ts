@@ -1,6 +1,7 @@
+import { describe, expect, test } from "bun:test";
 // #2112: catch missing bash case returns that flag-parity tests miss.
 import { spawnSync } from "node:child_process";
-import { describe, expect, test } from "bun:test";
+
 import { generateCompletion } from "@/self/completion";
 
 function bashCompletion(): string {
@@ -10,12 +11,13 @@ function bashCompletion(): string {
 }
 
 function bashArms(script: string): Array<{ name: string; body: string }> {
-  const marker = '  case "${COMP_WORDS[1]}" in';
+  const marker = ["  case ", '"$', "{COMP_WORDS[1]}", '" in'].join("");
   const begin = script.indexOf(marker);
   const end = script.lastIndexOf("\n  esac");
-  if (begin === -1 || end <= begin) throw new Error("Main bash completion case was not found");
+  if (begin === -1 || end <= begin)
+    throw new Error("Main bash completion case was not found");
   const main = script.slice(begin + marker.length, end);
-  const arms = [...main.matchAll(/^    ([a-z][a-z0-9-]*|\*)\)\s*$/gm)];
+  const arms = [...main.matchAll(/^ {4}([a-z][a-z0-9-]*|\*)\)\s*$/gm)];
   if (!arms.length) throw new Error("Main bash completion has no case arms");
   return arms.map((arm, index) => ({
     name: arm[1]!,
@@ -41,9 +43,12 @@ function runBashCompletion(prefix: string): string[] {
     "COMP_WORDS=(squirrel audit " + prefix + ")",
     "COMP_CWORD=2",
     "_squirrel_completions",
-    "printf '%s\\n' \"${COMPREPLY[@]}\"",
+    ["printf '%s\\n' \"$", '{COMPREPLY[@]}"'].join(""),
   ].join("\n");
-  const result = spawnSync("bash", ["-c", command], { encoding: "utf8", timeout: 5_000 });
+  const result = spawnSync("bash", ["-c", command], {
+    encoding: "utf8",
+    timeout: 5_000,
+  });
   expect(result.status, result.stderr).toBe(0);
   return result.stdout.trim().split(/\s+/);
 }
@@ -59,9 +64,12 @@ describe("bash completion returns (#2112)", () => {
     expect(audit).toBeDefined();
     const lastReturn = audit!.body.lastIndexOf("return 0");
     expect(lastReturn).toBeGreaterThan(-1);
-    const brokenArm = audit!.body.slice(0, lastReturn) +
+    const brokenArm =
+      audit!.body.slice(0, lastReturn) +
       audit!.body.slice(lastReturn).replace("return 0", ":");
-    expect(missingReturns(original.replace(audit!.body, brokenArm))).toContain("audit");
+    expect(missingReturns(original.replace(audit!.body, brokenArm))).toContain(
+      "audit"
+    );
   });
 
   test("bash actually offers audit flags after --", () => {
