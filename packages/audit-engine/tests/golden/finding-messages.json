@@ -2865,6 +2865,12 @@
    "custom-#-not-checked|skipped|# handling not checked: probing is passive, and this rule sends one request at active. Run with --probe active to check, on a site you own or may test.|\"not-checked\"|"
   ]
  },
+ "crawl/home-page-unreachable": {
+  "digest": "52926383030583",
+  "lines": [
+   "home-page-unreachable|pass|The home page loaded||"
+  ]
+ },
  "crawl/html-size": {
   "digest": "25127802299572",
   "lines": [

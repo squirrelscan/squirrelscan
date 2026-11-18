@@ -215,6 +215,7 @@
                   "rules/crawl/indexability-conflicts",
                   "rules/crawl/schema-noindex-conflict",
                   "rules/crawl/indexable-search-results",
+                  "rules/crawl/home-page-unreachable",
                   "rules/crawl/sitemap-4xx",
                   "rules/crawl/sitemap-coverage",
                   "rules/crawl/sitemap-domain",

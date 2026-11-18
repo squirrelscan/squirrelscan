@@ -136,6 +136,7 @@
   "crawl/canonical-chain": 500,
   "crawl/conflicting-index-signals": 1,
   "crawl/custom-404": 1,
+  "crawl/home-page-unreachable": 1,
   "crawl/html-size": 500,
   "crawl/indexability": 500,
   "crawl/indexability-conflicts": 1,

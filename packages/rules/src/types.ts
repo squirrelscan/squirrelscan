@@ -39,6 +39,7 @@ import type {
   MetaData,
   OpenGraphData,
   PageClassification,
+  AuditFailureDetail,
   RedirectChain,
   RefusedFetch,
   RobotsTxtData,
@@ -603,6 +604,12 @@ export interface SiteData {
    * redirects to `/en/` or a sign-in page (#788). Absent on older callers.
    */
   entryUrls?: string[];
+  /**
+   * Why the entry URL could not be fetched (the crawler's `CrawlStats.rootFailure`, #2035):
+   * DNS, TLS, connection, timeout or an HTTP status. Absent when the entry loaded, and on
+   * callers that do not record it. Read by `crawl/home-page-unreachable`.
+   */
+  entryFailure?: AuditFailureDetail;
   pages: Array<{
     url: string;
     finalUrl?: string;
