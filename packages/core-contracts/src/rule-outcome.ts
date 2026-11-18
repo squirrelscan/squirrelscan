@@ -59,6 +59,8 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "classifier-off": gap(false),
   // The home page rule with no verdict on the entry page this audit (pub#2035): neither loaded nor a known outage.
   "entry-not-fetched": gap(true),
+  // crawl/server-errors when the crawl failed to fetch some pages (repo#2036): one of them may still answer 5xx.
+  "pages-not-fetched": gap(true),
   "tls-certificate-not-checked": gap(true),
   "external-links-not-checked": gap(true),
   "link-targets-not-fetched": gap(true),

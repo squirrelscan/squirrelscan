@@ -498,6 +498,14 @@ export const EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON = "external-links-out-of-tim
 export const CRAWL_CAPPED_SKIP_REASON = "Crawl capped before the frontier was exhausted";
 
 /**
+ * `skipReason` of `crawl/server-errors` when the crawl gave up on some pages (a timeout, a refused
+ * connection, a body it could not decode: `CrawlStats.pagesFailed`) and none of the pages it did
+ * fetch answered 5xx (repo#2036). A page it failed to fetch may still answer 5xx, so the clean
+ * verdict is not given and a stored finding for that page carries.
+ */
+export const PAGES_NOT_FETCHED_SKIP_REASON = "pages-not-fetched";
+
+/**
  * A cloud-backed check whose service had not answered when the cloud prefetch
  * hit its time budget (repo#2129). The prefetch keeps every result that did
  * return; the rest read this, so the rule is "not checked", never passed and
