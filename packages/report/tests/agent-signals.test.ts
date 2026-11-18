@@ -6,7 +6,9 @@ import { describe, expect, test } from "bun:test";
 import {
   AGENTS_SCORE_MEASURES,
   agentSignalsLine,
+  citabilityLine,
   getAgentSignals,
+  getCitabilitySignals,
 } from "../src/agent-signals";
 import { renderHtml } from "../src/output/html";
 import { renderMarkdown } from "../src/output/markdown";
@@ -117,5 +119,31 @@ describe("renderers", () => {
   test("no line when the ax rules did not run", () => {
     const r = report([], agents);
     expect(renderText(r)).not.toContain("Site-level signals");
+  });
+});
+
+describe("citability cross-link (repo#3882)", () => {
+  const warnRule = (id: string): ReportRuleResult => ({
+    ...rule(id, "c", null),
+    checks: [{ name: "c", status: "warn", message: "m" }],
+  });
+
+  test("links existing rules by status without re-emitting their findings", () => {
+    const r = report(
+      [rule("eeat/content-dates", "c", null), warnRule("eeat/author-byline"), warnRule("ax/answer-blocks")],
+      agents,
+    );
+    const line = citabilityLine(getCitabilitySignals(r));
+    expect(line).toContain("dates ok");
+    expect(line).toContain("author issues (eeat/author-byline)");
+    expect(line).toContain("answer blocks issues (ax/answer-blocks)");
+    expect(line).toContain("citations not checked");
+    expect(renderText(r)).toContain(line);
+    expect(renderMarkdown(r)).toContain(line);
+  });
+
+  test("no citability rule results gives no line", () => {
+    expect(getCitabilitySignals(report(ruleSet, agents))).toEqual([]);
+    expect(renderText(report(ruleSet, agents))).not.toContain("Citability");
   });
 });
