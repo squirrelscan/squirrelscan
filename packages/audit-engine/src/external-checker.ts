@@ -285,9 +285,13 @@ export async function runBulkChecker(
     if (allowance <= 0 || allowance < slowestChunkMs) break;
     try {
       const sentAt = now();
-      const chunk = await waitAtMost(bulkChecker(requested), allowance);
-      if (chunk === NOT_ANSWERED) break;
+      const answered = await waitAtMost(bulkChecker(requested), allowance);
+      if (answered === NOT_ANSWERED) break;
       slowestChunkMs = Math.max(slowestChunkMs, now() - sentAt);
+      // repo#2730: normalised here, once, so the late-bound verdicts `onChunk`
+      // emits and the answers the caller pushes and caches are the same.
+      const chunk = new Map<string, ExternalCheckResult>();
+      for (const [url, result] of answered) chunk.set(url, normalizeBulkWallStatus(result));
       for (const [url, result] of chunk) resolved.set(url, result);
       tell(() => limits.onChunk?.(resolved.size, chunk));
       // pub#753: a service that answered nothing for a whole chunk (overloaded,
@@ -930,6 +934,42 @@ export function filterBrokenLinks(
     if (r.status && r.status >= 400) return true;
     return false;
   });
+}
+
+/** Statuses that mean "this site blocked the check" when the cloud service answers them bare. */
+const BULK_WALL_STATUSES: ReadonlySet<number> = new Set([999, 401, 406]);
+
+/**
+ * Normalises one cloud bulk-checker answer (repo#2730): a bare 999, 401 or 406
+ * means the site blocked the check, so it becomes unverifiable (`wafBlocked`,
+ * `unverifiedReason: "blocked"`), the same shape as the local checker's walls.
+ * The rule trusts the checker's `wafBlocked` (#2747), so without this a bare one
+ * would warn as possibly broken; it is also never cached and never counted by
+ * `filterBrokenLinks`. The service already sends these
+ * as unverifiable today; this covers older servers and legacy cached
+ * `link_checks` answers that still carry the bare status. An answer that is
+ * already unverifiable, rate limited or an error is returned unchanged.
+ *
+ * 403 and 405 are left out on purpose: the service answers a bare 403 or 405
+ * only at its final (browser) tier, after it has seen the page (a 403 with WAF
+ * or challenge evidence arrives unverifiable), so that answer is kept as sent.
+ */
+function normalizeBulkWallStatus(resolved: ExternalCheckResult): ExternalCheckResult {
+  if (
+    resolved.status === null ||
+    !BULK_WALL_STATUSES.has(resolved.status) ||
+    resolved.wafBlocked === true ||
+    resolved.rateLimited === true ||
+    resolved.error
+  ) {
+    return resolved;
+  }
+  return {
+    ...resolved,
+    wafBlocked: true,
+    wafProvider: resolved.wafProvider ?? "unknown",
+    unverifiedReason: "blocked",
+  };
 }
 
 /**
