@@ -55,10 +55,6 @@ Six new rules, including four probing security checks that knock on the doors a 
 - The published entity map now summarizes structurally identical entities into counted groups (`groups`) instead of sampling them, so a large catalogue states the true size of each shape. Rule verdicts still read the full map (#407).
 - `perf/bad-caching` reads response header names in any case (`ETag`, `Cache-Control`, `Last-Modified`), and a page whose stored record has `headers.recorded: false` is no longer counted as missing a header. It shows as not checked with the reason `headers-not-recorded` (squirrelscan/repo#4641).
 
-### Added
-
-- New rule `content/truncation-artifacts` (squirrelscan/repo#1360): flags a `<title>`, meta description or body excerpt that was cut mid-word by a character limit. A text counts as cut when it is the start of a longer text on the page (the H1, `og:title`, `og:description` or the body) and the longer text carries on inside a word, when an ellipsis is glued to a partial word at a round CMS limit (60, 70, 155, 160 and so on), or when a title or description of exactly that length ends on a dangling word such as `the` or `and`. A title or description cut fails; body copy ending in an orphaned ellipsis with no read more link only warns. An ellipsis after a whole word, a quotation and noindex pages are left alone.
-
 ### Fixed
 
 - `core/meta-description` no longer reports a too-short description on a page written mostly in Han, kana, Hangul or Thai. The length floor is calibrated for Latin text, so that check is skipped there, and the skip message says why. Too-long and missing descriptions are still reported (#1866).
