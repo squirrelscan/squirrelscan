@@ -163,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 46;
+export const SCHEMA_VERSION = 47;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -665,6 +665,28 @@ const MIGRATIONS: Record<number, string[]> = {
   // Version 46: a page's main-text simhash (content/near-duplicate). ADDITIVE and nullable: a row
   // written before this reads as not hashed, so the rule does not judge the page.
   46: [`ALTER TABLE page_features ADD COLUMN content_simhash TEXT`],
+  // Version 47: the entity-map facts a reconstruction could not recover
+  // (squirrelscan/repo#2105). `entity_map_runs` has one row per crawl whose map
+  // was WRITTEN, so a completed empty map is distinguishable from a crawl that
+  // never wrote one. `entity_map_pages` keeps the per-page declaration count and
+  // the referenced keys the document carries. ADDITIVE: two new tables, no
+  // existing column touched, so a store written by the previous version opens
+  // unchanged and its crawls read as "no map recorded". Local sqlite only.
+  47: [
+    `CREATE TABLE IF NOT EXISTS entity_map_runs (
+      crawl_id TEXT PRIMARY KEY,
+      written_at INTEGER NOT NULL,
+      FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS entity_map_pages (
+      crawl_id TEXT NOT NULL,
+      normalized_url TEXT NOT NULL,
+      entity_count INTEGER NOT NULL,
+      refs TEXT NOT NULL,
+      PRIMARY KEY (crawl_id, normalized_url),
+      FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+    )`,
+  ],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -1364,6 +1386,28 @@ CREATE TABLE IF NOT EXISTS entity_edges (
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
 CREATE INDEX IF NOT EXISTS idx_entity_edges_target ON entity_edges(crawl_id, target);
+
+-- One row per crawl whose entity map was written (#2105). Zero entity rows is
+-- both "a site that declares no JSON-LD" and "a crawl that never wrote a map";
+-- this row is what tells them apart.
+CREATE TABLE IF NOT EXISTS entity_map_runs (
+  crawl_id TEXT PRIMARY KEY,
+  written_at INTEGER NOT NULL,
+  FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+);
+
+-- Per-page figures the entity tables cannot rebuild (#2105): declarations
+-- BEFORE collapsing, and the keys a page references without declaring. Only
+-- pages with a declaration or a reference have a row; on a crawl in
+-- entity_map_runs a missing row means zero and none.
+CREATE TABLE IF NOT EXISTS entity_map_pages (
+  crawl_id TEXT NOT NULL,
+  normalized_url TEXT NOT NULL,
+  entity_count INTEGER NOT NULL,
+  refs TEXT NOT NULL,           -- JSON array of node keys
+  PRIMARY KEY (crawl_id, normalized_url),
+  FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+);
 
 -- Entity x page. The document caps a node's pages[] for size; this table does
 -- not, so "every page that declares this Organization" is answerable in full.
@@ -4335,6 +4379,12 @@ export class SQLiteStorage implements CrawlStorage {
         morePages: number;
       }>;
       occurrences: ReadonlyArray<{ key: string; normalizedUrl: string }>;
+      /** Per-page figures (#2105). Omitted by a caller that has none. */
+      pages?: ReadonlyArray<{
+        url: string;
+        entityCount: number;
+        references: readonly string[];
+      }>;
     }
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
@@ -4362,6 +4412,8 @@ export class SQLiteStorage implements CrawlStorage {
         `);
 
         const transaction = db.transaction(() => {
+          db.prepare("DELETE FROM entity_map_pages WHERE crawl_id = ?").run(crawlId);
+          db.prepare("DELETE FROM entity_map_runs WHERE crawl_id = ?").run(crawlId);
           db.prepare("DELETE FROM entity_occurrences WHERE crawl_id = ?").run(crawlId);
           db.prepare("DELETE FROM entity_edges WHERE crawl_id = ?").run(crawlId);
           db.prepare("DELETE FROM entities WHERE crawl_id = ?").run(crawlId);
@@ -4396,6 +4448,22 @@ export class SQLiteStorage implements CrawlStorage {
           for (const row of map.occurrences) {
             insertOccurrence.run(crawlId, row.key, row.normalizedUrl);
           }
+          const insertPage = db.prepare(`
+            INSERT OR REPLACE INTO entity_map_pages (crawl_id, normalized_url, entity_count, refs)
+            VALUES (?, ?, ?, ?)
+          `);
+          for (const page of map.pages ?? []) {
+            if (page.entityCount === 0 && page.references.length === 0) continue;
+            insertPage.run(
+              crawlId,
+              page.url,
+              page.entityCount,
+              JSON.stringify(page.references)
+            );
+          }
+          db.prepare(
+            "INSERT OR REPLACE INTO entity_map_runs (crawl_id, written_at) VALUES (?, ?)"
+          ).run(crawlId, Date.now());
         });
         transaction();
       },
@@ -4436,6 +4504,10 @@ export class SQLiteStorage implements CrawlStorage {
         morePages: number;
       }>;
       occurrences: Array<{ key: string; normalizedUrl: string }>;
+      /** True when this crawl's map was written, even if it came out empty (#2105). */
+      written: boolean;
+      /** Per-page figures; empty on a crawl that did not record them. */
+      pages: Array<{ url: string; entityCount: number; references: string[] }>;
     },
     StorageError,
     never
@@ -4482,7 +4554,28 @@ export class SQLiteStorage implements CrawlStorage {
           )
           .all(crawlId) as Array<{ key: string; normalized_url: string }>;
 
+        const written =
+          db
+            .prepare("SELECT 1 AS one FROM entity_map_runs WHERE crawl_id = ?")
+            .get(crawlId) != null;
+        const pageRows = db
+          .prepare(
+            `SELECT normalized_url, entity_count, refs FROM entity_map_pages
+             WHERE crawl_id = ? ORDER BY normalized_url`
+          )
+          .all(crawlId) as Array<{
+          normalized_url: string;
+          entity_count: number;
+          refs: string;
+        }>;
+
         return {
+          written,
+          pages: pageRows.map((row) => ({
+            url: row.normalized_url,
+            entityCount: row.entity_count,
+            references: JSON.parse(row.refs) as string[],
+          })),
           nodes: nodeRows.map((row) => ({
             key: row.key,
             id: row.entity_id,
@@ -5185,6 +5278,8 @@ export class SQLiteStorage implements CrawlStorage {
     "entities",
     "entity_edges",
     "entity_occurrences",
+    "entity_map_runs",
+    "entity_map_pages",
     "sitemap_urls",
     "sitemaps",
     "sitemap_url_statuses",

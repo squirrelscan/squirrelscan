@@ -319,3 +319,80 @@ describe("entity edge pages across a schema upgrade (#492)", () => {
     });
   }
 });
+
+describe("entity map presence and per-page figures (repo#2105)", () => {
+  test("a crawl that never wrote a map is not written; an empty map is", async () => {
+    await withStorage(async (storage, crawlId) => {
+      const before = await run(storage.getEntityMapRows(crawlId));
+      expect(before.written).toBe(false);
+
+      await run(storage.saveEntityMap(crawlId, { nodes: [], edges: [], occurrences: [] }));
+      const after = await run(storage.getEntityMapRows(crawlId));
+      expect(after.nodes).toHaveLength(0);
+      expect(after.written).toBe(true);
+    });
+  }, 30_000);
+
+  test("round-trips per-page counts and references, skipping empty pages", async () => {
+    await withStorage(async (storage, crawlId) => {
+      await run(
+        storage.saveEntityMap(crawlId, {
+          nodes: [ORG],
+          edges: [],
+          occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
+          pages: [
+            { url: "http://x.test/a", entityCount: 2, references: [CRUMB.key] },
+            { url: "http://x.test/empty", entityCount: 0, references: [] },
+          ],
+        })
+      );
+      const rows = await run(storage.getEntityMapRows(crawlId));
+      expect(rows.pages).toEqual([
+        { url: "http://x.test/a", entityCount: 2, references: [CRUMB.key] },
+      ]);
+    });
+  }, 30_000);
+
+  test("a rewrite replaces the pages of the previous write", async () => {
+    await withStorage(async (storage, crawlId) => {
+      const first = {
+        nodes: [ORG],
+        edges: [],
+        occurrences: [],
+        pages: [{ url: "http://x.test/a", entityCount: 1, references: [] }],
+      };
+      await run(storage.saveEntityMap(crawlId, first));
+      await run(storage.saveEntityMap(crawlId, { ...first, pages: [] }));
+      expect((await run(storage.getEntityMapRows(crawlId))).pages).toEqual([]);
+    });
+  }, 30_000);
+
+  test("a store stamped version 41 opens, reads as not written, then records a map", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "squirrelscan-em42-"));
+    const path = join(dir, "store.sqlite");
+    const first = new SQLiteStorage(path);
+    let crawlId = "";
+    try {
+      await run(first.init());
+      crawlId = await run(first.createCrawl(crawlMeta(1_000)));
+      await run(first.close());
+
+      const raw = new Database(path);
+      raw.exec("DROP TABLE entity_map_runs; DROP TABLE entity_map_pages;");
+      raw.exec("UPDATE schema_version SET version = 41");
+      raw.close();
+
+      const storage = new SQLiteStorage(path);
+      await run(storage.init());
+      try {
+        expect((await run(storage.getEntityMapRows(crawlId))).written).toBe(false);
+        await run(storage.saveEntityMap(crawlId, { nodes: [], edges: [], occurrences: [] }));
+        expect((await run(storage.getEntityMapRows(crawlId))).written).toBe(true);
+      } finally {
+        await run(storage.close());
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
