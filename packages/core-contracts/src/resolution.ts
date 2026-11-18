@@ -70,6 +70,14 @@ export interface ResolutionSignal {
    * producers, which marked every key truncated instead.
    */
   crawledComplete?: boolean;
+  /**
+   * (repo#2078) POSITIVE marker: `true` when `crawledUrls` is the WHOLE crawled
+   * set, `false` when the producer clipped it, absent from a producer that sends
+   * no marker. Only `true` lets the cloud merge treat a page's absence from the
+   * list as proof the run never fetched it. Unlike `crawledComplete`, whose
+   * absence means "assume whole", absence here means "do not know".
+   */
+  crawledUrlsComplete?: boolean;
   /** (#2658) Pages crawled, listed or not, when `crawledComplete` is false. */
   crawledCount?: number;
   /**

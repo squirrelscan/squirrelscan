@@ -14,9 +14,11 @@
 import type {
   CheckResult,
   CheckTallies,
+  CheckTally,
   FindingState,
   PageFindingRecord,
   ResolutionSignal,
+  RuleScope,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
@@ -513,6 +515,18 @@ export interface CloudSmartAuditsResult {
    */
   replayedUnknownPages: number;
   /**
+   * (repo#2078) Published checks of PAGE-scope rules refused because the signal says
+   * its `crawledUrls` is the COMPLETE crawled set and the page they name is not
+   * in it, so this run never fetched it whatever the check is labelled. Zero
+   * when the signal is absent, clipped or sent no completeness marker. Sampled
+   * branch only (complete mode takes its crawled set from the store). An
+   * aggregate counts as the per-page checks it stood for, as for
+   * {@link replayedChecksDropped}.
+   */
+  outsideCrawledChecksDropped: number;
+  /** (repo#2078) Distinct pages those refused checks named. */
+  outsideCrawledPages: number;
+  /**
    * (#1023 R-D3) True when scoring ran off the reconstructed complete store
    * (freshResults from findings + `syntheticPassCount` for fresh clean pages, or,
    * repo#3348, the shell's `checkTallies` beside the store's carried side).
@@ -593,6 +607,35 @@ export async function runCloudSmartAudits(
   const sampledCheckPages = new Map<string, Set<string>>();
   /** (#2063) Producer-carried checks refused as this run's evidence. */
   let replayedChecksDropped = 0;
+  /**
+   * (repo#2078) Normalized pages this run provably fetched, ONLY when the signal
+   * marks its crawled list whole (`crawledUrlsComplete === true`); else undefined
+   * and nothing is refused. An absence is evidence only from a whole set.
+   */
+  let outsideCrawledChecksDropped = 0;
+  const outsideCrawledUrls = new Set<string>();
+  /**
+   * (repo#2078) The refused checks per rule, so the capped path can take them
+   * back out of the producer's `checkTallies`, which counted them.
+   */
+  const outsideCrawledChecks = new Map<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }>();
+  const wholeCrawledSet: Set<string> | undefined =
+    !completeStore && input.resolutionSignal?.crawledUrlsComplete === true
+      ? new Set([
+          ...input.resolutionSignal.crawledUrls.map(normalizePageUrl),
+          ...statusByUrl.keys(),
+        ])
+      : undefined;
+  // PAGE-scope rules only. A site-scope rule's check legitimately names a URL
+  // that is not a crawled page: `integrity/known-malicious-url` points `pageUrl`
+  // at the flagged outbound link or the site's base URL, which no crawl lists.
+  // Refusing those would silently drop real site findings, so they pass through
+  // as they did before repo#2078.
+  const namesUncrawledPage = (scope: RuleScope, c: CheckResult): boolean => {
+    if (!wholeCrawledSet || scope !== "page") return false;
+    const pages = attributedPages(c);
+    return pages.length > 0 && pages.every((u) => !wholeCrawledSet.has(u));
+  };
   /**
    * (#2063) The pages those refused checks named. Bounded by PAGES, not checks,
    * and reduced after the merge to the ones this cloud site has never had — see
@@ -714,13 +757,21 @@ export async function runCloudSmartAudits(
             for (const u of attributedPages(c)) replayedUrls.add(u);
             continue;
           }
+          if (namesUncrawledPage(r.meta.scope, c)) {
+            outsideCrawledChecksDropped += 1;
+            for (const u of attributedPages(c)) outsideCrawledUrls.add(u);
+            const refused = outsideCrawledChecks.get(ruleId);
+            if (refused) refused.checks.push(c);
+            else outsideCrawledChecks.set(ruleId, { meta: r.meta, checks: [c] });
+            continue;
+          }
           checks.push(c);
         }
       }
       freshResults.set(ruleId, { meta: r.meta, checks });
       talliedResults?.set(ruleId, {
         meta: r.meta,
-        checks: r.checks.filter((c) => !isReplayedCheck(c)),
+        checks: r.checks.filter((c) => !isReplayedCheck(c) && !namesUncrawledPage(r.meta.scope, c)),
       });
       if (r.checks.some((c) => typeof c.details?.checksTruncated === "number")) {
         rulesWithDroppedChecks.add(ruleId);
@@ -1353,8 +1404,14 @@ export async function runCloudSmartAudits(
   // fold derives it, from the tallies.
   // A body with no tallies (uncapped) holds every row, so the tallies of its own
   // checks give the same figure the capped body's tallies do.
+  // (repo#2078) The producer's tallies count the checks refused above; the score
+  // and the per-page figure read them with those taken back out.
+  const scoredTallies =
+    checkTallies && outsideCrawledChecks.size > 0
+      ? subtractCheckTallies(checkTallies, buildCheckTallies(Object.fromEntries(outsideCrawledChecks)))
+      : checkTallies;
   const perPageTallies: CheckTallies =
-    checkTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
+    scoredTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
   const carriedChecksPerPage = (ruleId: string): number =>
     carriedChecksPerPageFor({ completeStore: !!completeStore, completeTallies, perPageTallies }, ruleId);
   const unionRuleResults = buildScoringResultsFromMerged({
@@ -1369,9 +1426,9 @@ export async function runCloudSmartAudits(
 
   let reportTotals: CloudSmartAuditsResult["reportTotals"];
   let shownLastSeen = carriedLastSeen;
-  if (checkTallies && resolution) {
+  if (scoredTallies && resolution) {
     ({ scoringTallies, reportTotals } = scoreFromCheckTallies({
-      checkTallies,
+      checkTallies: scoredTallies,
       freshForUnion,
       carriedFindings: unionCarried,
       carriedPageUrls: unionCarriedPages,
@@ -1465,6 +1522,8 @@ export async function runCloudSmartAudits(
     removedPages: removedUrls.size,
     replayedChecksDropped,
     replayedUnknownPages,
+    outsideCrawledChecksDropped,
+    outsideCrawledPages: outsideCrawledUrls.size,
     completeStore: !!completeStore,
     ...(sampledEstimator ? { sampledStoreScored: true as const } : {}),
   };
@@ -1862,6 +1921,51 @@ function scoreFromCheckTallies(input: {
     reportTotals.failed += tally.failed;
   }
   return { scoringTallies, reportTotals };
+}
+
+/**
+ * (repo#2078) `tallies` with `minus` taken out, field by field, never below 0:
+ * the inverse of the {@link buildCheckTallies} that counted `minus` into it. A
+ * field, check name or rule that reaches 0 is dropped, as `buildCheckTallies`
+ * omits zero entries. `tallies` is not modified.
+ */
+function subtractCheckTallies(tallies: CheckTallies, minus: CheckTallies): CheckTallies {
+  const left = (a: unknown, b: unknown): number => {
+    const n = typeof a === "number" && Number.isFinite(a) ? a : 0;
+    const m = typeof b === "number" && Number.isFinite(b) ? b : 0;
+    return Math.max(n - m, 0);
+  };
+  const fields = ["passed", "warnings", "failed", "warnUnits", "failUnits", "skipped"] as const;
+  const out: CheckTallies = {};
+  for (const [ruleId, byName] of Object.entries(tallies)) {
+    const sub = minus[ruleId];
+    if (!sub) {
+      out[ruleId] = byName;
+      continue;
+    }
+    let perName: Record<string, CheckTally> | undefined;
+    for (const [name, t] of Object.entries(byName)) {
+      const m = sub[name];
+      if (!m) {
+        (perName ??= {})[name] = t;
+        continue;
+      }
+      const entry: CheckTally = {};
+      for (const f of fields) {
+        const v = left(t?.[f], m[f]);
+        if (v > 0) entry[f] = v;
+      }
+      let gaps: Record<string, number> | undefined;
+      for (const [reason, count] of Object.entries(t?.gaps ?? {})) {
+        const v = left(count, m.gaps?.[reason]);
+        if (v > 0) (gaps ??= {})[reason] = v;
+      }
+      if (gaps) entry.gaps = gaps;
+      if (Object.keys(entry).length > 0) (perName ??= {})[name] = entry;
+    }
+    if (perName) out[ruleId] = perName;
+  }
+  return out;
 }
 
 /**
