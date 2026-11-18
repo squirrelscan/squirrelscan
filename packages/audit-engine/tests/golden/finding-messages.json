@@ -2923,9 +2923,9 @@
   ]
  },
  "crawl/sitemap-coverage": {
-  "digest": "214032313244240",
+  "digest": "196740395364202",
   "lines": [
-   "sitemap-coverage|skipped|Sitemap was not fully read (or its read state is unknown), so pages missing from it were not checked||"
+   "sitemap-coverage|pass|All indexable pages are in sitemap||"
   ]
  },
  "crawl/sitemap-domain": {
