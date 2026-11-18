@@ -264,6 +264,17 @@ describe("brand colour (#3130)", () => {
     expect(xml).toContain('<audit version="0.0.0" brand-color="#1d4ed8">');
   });
 
+  test("a valid brandColor without whiteLabel changes neither html nor xml", () => {
+    const off: ReportBranding = { whiteLabel: false, orgName: "Acme Inc" };
+    const on: ReportBranding = { ...off, brandColor: "#1D4ED8" };
+    const html = renderHtml(baseReport(), { ...opts, branding: on });
+    expect(html).toBe(renderHtml(baseReport(), { ...opts, branding: off }));
+    expect(html).not.toContain("border-top:4px solid #1d4ed8");
+    const xml = renderXml(baseReport(), { branding: on });
+    expect(xml).toBe(renderXml(baseReport(), { branding: off }));
+    expect(xml).not.toContain("brand-color");
+  });
+
   test("markdown and text ignore brandColor", () => {
     const b = { ...WL, brandColor: "#1d4ed8" };
     expect(renderMarkdown(baseReport(), { branding: b })).toBe(renderMarkdown(baseReport(), { branding: WL }));
