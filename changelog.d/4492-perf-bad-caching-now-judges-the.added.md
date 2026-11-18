@@ -1,0 +1,1 @@
+- `perf/bad-caching` now judges the caching headers of same-site CSS, JavaScript, font and image responses as their own `bad-caching-subresources` finding (a sample of up to 50, set by `max_subresources`), separate from the document checks (repo#4492).
