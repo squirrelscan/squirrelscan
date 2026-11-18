@@ -80,6 +80,7 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     readingLevel: null,
     terminologyVariants: null,
     navLinkSet: null,
+    contentSimhash: null,
     ...over,
   };
 }
@@ -772,6 +773,24 @@ describe("page_features store: terminology_variants (v43)", () => {
     expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.terminologyVariants).toEqual(map);
     expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.terminologyVariants).toBeNull();
     expect((await run(store.getPageFeatures(CRAWL, "https://example.com/c")))?.terminologyVariants).toBeNull();
+    await run(store.close());
+  });
+});
+
+describe("page_features store: content_simhash (v42)", () => {
+  test("round-trips the hash, and a row without one reads back as null", async () => {
+    const store = await freshStore();
+    await run(
+      store.upsertPageFeatures(
+        CRAWL,
+        feat({ normalizedUrl: "https://example.com/a", contentSimhash: "0123456789abcdef" }),
+      ),
+    );
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.contentSimhash).toBe(
+      "0123456789abcdef",
+    );
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.contentSimhash).toBeNull();
     await run(store.close());
   });
 });
