@@ -314,6 +314,9 @@ describe("AX store round-trip", () => {
       markdownTokensHeader: "100",
       originalTokensHeader: "400",
       alternateMarkdownUrl: "https://example.com/index.md",
+      negotiatedStatus: 200,
+      strictNegotiatedStatus: 200,
+      strictNegotiatedContentType: "text/markdown",
       fetchedAt: 444,
     };
 
@@ -336,7 +339,35 @@ describe("AX store round-trip", () => {
       markdownTokensHeader: null,
       originalTokensHeader: null,
       alternateMarkdownUrl: null,
+      negotiatedStatus: null,
+      strictNegotiatedStatus: null,
+      strictNegotiatedContentType: null,
       fetchedAt: 555,
+    };
+
+    await run(store.setMarkdownProbe(crawlId, markdown));
+
+    expect(await run(store.getMarkdownProbe(crawlId))).toEqual(markdown);
+  });
+
+  test("markdown-response negotiation status codes (schema v42) persist and read back (repo#1322)", async () => {
+    const { store, crawlId } = await freshStore();
+
+    const markdown: MarkdownProbeRecord = {
+      negotiatedUrl: "https://example.com/",
+      negotiatedContentType: "text/html",
+      servesMarkdown: false,
+      mdVariantUrl: "https://example.com/index.md",
+      mdVariantExists: false,
+      mdVariantContentType: null,
+      negotiatedVary: null,
+      markdownTokensHeader: null,
+      originalTokensHeader: null,
+      alternateMarkdownUrl: null,
+      negotiatedStatus: 200,
+      strictNegotiatedStatus: 500,
+      strictNegotiatedContentType: "application/json",
+      fetchedAt: 666,
     };
 
     await run(store.setMarkdownProbe(crawlId, markdown));

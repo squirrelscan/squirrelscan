@@ -61,6 +61,8 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "entry-not-fetched": gap(true),
   // crawl/server-errors when the crawl failed to fetch some pages (repo#2036): one of them may still answer 5xx.
   "pages-not-fetched": gap(true),
+  // ax/markdown-response when the strict `Accept: text/markdown` request got no answer (repo#1322): it may still 5xx.
+  "strict-probe-unanswered": gap(true),
   "tls-certificate-not-checked": gap(true),
   "external-links-not-checked": gap(true),
   "link-targets-not-fetched": gap(true),

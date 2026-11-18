@@ -2,7 +2,9 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { STRICT_PROBE_UNANSWERED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import type { CheckResult, MarkdownProbeData } from "@squirrelscan/core-contracts";
+import { classifyRuleOutcome, skipReasonClass } from "@squirrelscan/core-contracts/rule-outcome";
 
 import { markdownResponseRule } from "../src/ax/markdown-response";
 import type { ParsedPage, RuleContext } from "../src/types";
@@ -83,7 +85,7 @@ describe("ax/markdown-response", () => {
     expect(c[0]?.message).toContain(".md variant");
   });
 
-  test("no check ever fails; markdown present → all info", async () => {
+  test("absent markdown never fails; markdown present → all info", async () => {
     expect((await run(probe())).every((c) => c.status !== "fail")).toBe(true);
     expect((await run(probe({ servesMarkdown: true, negotiatedContentType: "text/markdown" }))).every((c) => c.status === "info")).toBe(
       true,
@@ -136,5 +138,135 @@ describe("ax/markdown-response", () => {
       }),
     ));
     expect(c.find((r) => r.name === "markdown-response-headers")?.status).toBe("info");
+  });
+
+  describe("strict negotiation 5xx vs absent markdown (repo#1322)", () => {
+    test("5xx on strict Accept: text/markdown → distinct fail check, not the absent recommendation", async () => {
+      const c = await run(
+        probe({
+          negotiatedStatus: 200,
+          strictNegotiatedStatus: 500,
+          strictNegotiatedContentType: "application/json",
+        }),
+      );
+      const error = c.find((r) => r.name === "markdown-negotiation-error");
+      expect(error).toBeDefined();
+      // fail, not warn: a warn in this info-severity rule is score-neutral.
+      expect(error?.status).toBe("fail");
+      expect(error?.value).toBe(500);
+      expect(error?.message).toContain("HTTP 500");
+      expect(error?.message).not.toContain("No Markdown response");
+      expect(error?.details?.strictNegotiatedContentType).toBe("application/json");
+      // The primary check is still first and still reports markdown as absent.
+      expect(c[0]?.name).toBe("markdown-response");
+      expect(c[0]?.value).toBe("absent");
+    });
+
+    test("absent markdown (strict answered 200 HTML or 406) → only the advisory check, no error", async () => {
+      for (const strictNegotiatedStatus of [200, 404, 406, null, undefined]) {
+        const c = await run(probe({ negotiatedStatus: 200, strictNegotiatedStatus }));
+        expect(c.find((r) => r.name === "markdown-negotiation-error")).toBeUndefined();
+        expect(c.every((r) => r.status !== "fail")).toBe(true);
+        expect(c[0]?.name).toBe("markdown-response");
+        expect(c[0]?.status).toBe("warn");
+        expect(c[0]?.value).toBe("absent");
+        expect(c[0]?.message).toContain("No Markdown response");
+      }
+    });
+
+    test("every 5xx status is flagged; 4xx is not", async () => {
+      for (const status of [500, 502, 503, 504]) {
+        const c = await run(probe({ strictNegotiatedStatus: status }));
+        expect(c.find((r) => r.name === "markdown-negotiation-error")?.status).toBe("fail");
+      }
+      const notAcceptable = await run(probe({ strictNegotiatedStatus: 406 }));
+      expect(notAcceptable.find((r) => r.name === "markdown-negotiation-error")).toBeUndefined();
+    });
+
+    test("5xx on strict while a .md variant exists → still flagged alongside available", async () => {
+      const c = await run(
+        probe({ strictNegotiatedStatus: 503, mdVariantExists: true, mdVariantContentType: "text/markdown" }),
+      );
+      expect(c[0]?.value).toBe("available");
+      expect(c.find((r) => r.name === "markdown-negotiation-error")?.status).toBe("fail");
+    });
+
+    test("strict-only Markdown names the strict content type, not the lenient HTML", async () => {
+      const c = await run(
+        probe({
+          servesMarkdown: true,
+          negotiatedContentType: "text/html",
+          strictNegotiatedStatus: 200,
+          strictNegotiatedContentType: "text/markdown; charset=utf-8",
+        }),
+      );
+      expect(c[0]?.value).toBe("available");
+      expect(c[0]?.message).toContain("content negotiation (text/markdown; charset=utf-8)");
+    });
+  });
+
+  // planning's finding on pub#1932: no answer to the strict request (429, 403, a
+  // timeout, the probe budget) was read as clean, so audit 2 closed the finding
+  // audit 1 opened. It is its own state now: a coded gap, never a verdict.
+  describe("strict probe unanswered vs answered (repo#1322)", () => {
+    const negotiation = (c: CheckResult[]) => c.find((r) => r.name === "markdown-negotiation-error");
+
+    test("strict unanswered (429, 403, timeout) → skipped with the coded strict-probe-unanswered reason", async () => {
+      const c = await run(
+        probe({ negotiatedStatus: 200, strictNegotiatedStatus: null, strictNegotiationAnswered: false }),
+      );
+      const check = negotiation(c);
+      expect(check?.status).toBe("skipped");
+      expect(check?.skipReason).toBe(STRICT_PROBE_UNANSWERED_SKIP_REASON);
+      // A coverage gap a report lists as not checked, so it never resolves a finding.
+      expect(classifyRuleOutcome(check!)).toBe("coverage_gap");
+      expect(skipReasonClass(check?.skipReason)?.notChecked).toBe(true);
+      // Not a fail and not the absent recommendation's job to say.
+      expect(c.every((r) => r.status !== "fail")).toBe(true);
+    });
+
+    test("strict 500 → the error finding, unchanged", async () => {
+      const c = await run(
+        probe({ negotiatedStatus: 200, strictNegotiatedStatus: 500, strictNegotiationAnswered: true }),
+      );
+      expect(negotiation(c)?.status).toBe("fail");
+      expect(negotiation(c)?.value).toBe(500);
+    });
+
+    test("strict answered healthy (200 HTML, 406) → a verdict, neither error nor gap", async () => {
+      for (const status of [200, 406]) {
+        const c = await run(
+          probe({ negotiatedStatus: 200, strictNegotiatedStatus: status, strictNegotiationAnswered: true }),
+        );
+        const check = negotiation(c);
+        expect(check).toBeDefined();
+        // info, not pass: a pass would score this advisory rule for every healthy site.
+        expect(check?.status).toBe("info");
+        expect(check?.value).toBe(status);
+        expect(classifyRuleOutcome(check!)).toBe("ran");
+      }
+    });
+
+    test("strict 5xx with /index.md unanswered → no absent warning for a file that never answered", async () => {
+      const c = await run(
+        probe({
+          negotiatedStatus: 200,
+          strictNegotiatedStatus: 502,
+          strictNegotiationAnswered: true,
+          mdVariantAnswered: false,
+        }),
+      );
+      expect(negotiation(c)?.status).toBe("fail");
+      const primary = c.find((r) => r.name === "markdown-response");
+      expect(primary?.value).not.toBe("absent");
+      expect(primary?.status).toBe("skipped");
+      expect(c.some((r) => /No Markdown response/.test(r.message))).toBe(false);
+    });
+
+    test("a row stored before the answered flags reads as before: no verdict, no gap", async () => {
+      const c = await run(probe({ negotiatedStatus: 200, strictNegotiatedStatus: null }));
+      expect(negotiation(c)).toBeUndefined();
+      expect(c[0]?.value).toBe("absent");
+    });
   });
 });

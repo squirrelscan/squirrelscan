@@ -506,6 +506,15 @@ export const CRAWL_CAPPED_SKIP_REASON = "Crawl capped before the frontier was ex
 export const PAGES_NOT_FETCHED_SKIP_REASON = "pages-not-fetched";
 
 /**
+ * `skipReason` of `ax/markdown-response`'s `markdown-negotiation-error` check when the strict
+ * `Accept: text/markdown` request of the homepage got no answer the rule can judge (repo#1322): it
+ * was refused or throttled (401/403/429, a bot wall), timed out, cut by the probe budget, or got a
+ * 5xx while the lenient request got no answer either. A 5xx there is the defect the check looks for,
+ * so no answer is not a clean verdict: a stored finding of the check stays open.
+ */
+export const STRICT_PROBE_UNANSWERED_SKIP_REASON = "strict-probe-unanswered";
+
+/**
  * A cloud-backed check whose service had not answered when the cloud prefetch
  * hit its time budget (repo#2129). The prefetch keeps every result that did
  * return; the rest read this, so the rule is "not checked", never passed and
@@ -2570,6 +2579,25 @@ export interface MarkdownProbeData {
   // Absolute URL from a `Link: <...>; rel="alternate"; type="text/markdown"`
   // response header on the negotiated fetch, or null if none was sent.
   alternateMarkdownUrl?: string | null;
+  // HTTP status of the lenient negotiation fetch (`Accept: text/markdown,
+  // text/x-markdown, */*`), or null when it got no answer (repo#1322).
+  // Optional: undefined for storage rows persisted before these fields existed.
+  negotiatedStatus?: number | null;
+  // HTTP status and Content-Type of the strict fetch (`Accept: text/markdown`,
+  // what a Markdown-only agent sends). A 5xx here, while the lenient fetch was
+  // answered, means the site breaks agents that negotiate Markdown (repo#1322).
+  // null when the strict fetch got no answer; undefined on older rows.
+  strictNegotiatedStatus?: number | null;
+  strictNegotiatedContentType?: string | null;
+  // false when the strict fetch gave no answer the rule can judge: refused or
+  // throttled (401/403/429, a bot wall), timed out, cut by the probe budget, or a
+  // 5xx while the lenient fetch got no answer either (a site that is down). The
+  // rule then reports `markdown-negotiation-error` as not checked instead of clean,
+  // so a stored finding stays open. undefined on rows persisted before it existed.
+  strictNegotiationAnswered?: boolean;
+  // false when `/index.md` gave no answer (refused, a timeout, the budget, a 5xx):
+  // no answer is never reported as an absent `.md` variant. undefined on older rows.
+  mdVariantAnswered?: boolean;
 }
 
 // One differential cloaking probe of a suspicious path (integrity Phase 3, #118).

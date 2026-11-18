@@ -110,7 +110,7 @@ describe("migration 44: stored JavaScript shipped block", () => {
     expect(crawl?.id).toBe(id);
     expect(crawl?.javascript).toBeUndefined();
     await run(store.close());
-    expect(SCHEMA_VERSION).toBe(47);
+    expect(SCHEMA_VERSION).toBe(48);
   });
 
   test("the block round-trips through updateCrawl, with the status beside it", async () => {

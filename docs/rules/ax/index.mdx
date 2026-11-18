@@ -86,7 +86,7 @@ These carry the highest severity and weight in the category.
 
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
-| [Accept: text/markdown: serving Markdown to AI agents](/rules/ax/markdown-response) | No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header. squirrel probes all three. | info | Site-wide |
+| [Accept: text/markdown: serving Markdown to AI agents](/rules/ax/markdown-response) | No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header, and server errors on Accept: text/markdown. squirrel probes all of them. | info | Site-wide |
 | [AGENTS.md: the paths squirrel probes and what counts](/rules/ax/agents-md) | No AGENTS.md at the repository root or any conventional path, or an SPA fallback served in its place. squirrel probes four paths and sniffs the body. | info | Site-wide |
 | [AI content detection: why this rule is retired](/rules/ai/ai-content) | The AI-generated content check no longer runs. squirrel emits a skip on every page and never calls a model. | info | Per-page |
 | [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning | Site-wide |

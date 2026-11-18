@@ -17,6 +17,7 @@ import {
   NOT_CHECKED_SKIP_REASONS,
   PAGES_NOT_FETCHED_SKIP_REASON,
   PRIVATE_TARGET_SKIP_REASON,
+  STRICT_PROBE_UNANSWERED_SKIP_REASON,
   TARGETED_RUN_SKIP_REASON,
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
 } from "../src/index";
@@ -55,6 +56,8 @@ const TABLE: Array<[string, boolean, boolean, boolean]> = [
   [CRAWL_CAPPED_SKIP_REASON, false, false, true],
   // crawl/server-errors with pages the crawl failed to fetch (repo#2036): a check-scoped gap, listed as not checked.
   [PAGES_NOT_FETCHED_SKIP_REASON, false, false, true],
+  // ax/markdown-response with a strict Accept: text/markdown request that got no answer (repo#1322).
+  [STRICT_PROBE_UNANSWERED_SKIP_REASON, false, false, true],
   // A cloud service the prefetch had not got back when its budget ran out (repo#2129).
   [CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON, false, false, true],
   // A targeted run (#1777): a whole-site rule has nothing to judge, so the rule-wide gap is also not checked.
