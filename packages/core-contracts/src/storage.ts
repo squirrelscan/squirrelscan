@@ -995,6 +995,18 @@ export interface HreflangAlternate {
 }
 
 /**
+ * A page's navigation link set (links/nav-set-divergence): the internal links it carries in
+ * header, navigation and footer chrome, normalized and sorted, minus its own URL. `hrefs` is
+ * the full set when `count` is at most 200 and empty above that (an oversized page is not
+ * compared). `hash` identifies the full set either way.
+ */
+export interface NavLinkSet {
+  hash: string;
+  count: number;
+  hrefs: string[];
+}
+
+/**
  * One accumulated page-features row (keyed by crawlId + normalizedUrl in the
  * table; `crawlId` is a method parameter, mirroring {@link PageRecord}). Hashes
  * are the same content hashes the crawler already computes, so duplicate scans
@@ -1111,6 +1123,12 @@ export interface PageFeatureRow {
    * existed, which reads as null (the rule then has no sample for the page).
    */
   terminologyVariants?: Record<string, number> | null;
+  /**
+   * The page's navigation link set (see {@link NavLinkSet}); null when it has no internal
+   * chrome links. Optional: absent on a row stored before it existed, which reads as null
+   * (links/nav-set-divergence then does not compare that page).
+   */
+  navLinkSet?: NavLinkSet | null;
   /**
    * Report-only per-page scalars (#2343). Null on a row written before schema
    * v30, which is what makes the report's fallback parse reachable rather than

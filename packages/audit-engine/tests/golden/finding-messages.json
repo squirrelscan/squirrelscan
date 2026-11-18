@@ -3377,6 +3377,12 @@
    "invalid-links|pass|No invalid link formats found||"
   ]
  },
+ "links/nav-set-divergence": {
+  "digest": "162100231845027",
+  "lines": [
+   "nav-set-divergence|pass|All # judged page(s) carry the site's navigation links|#|"
+  ]
+ },
  "links/no-contextual-inbound": {
   "digest": "246465635521740",
   "lines": [

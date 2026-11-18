@@ -16,6 +16,7 @@ import { genericAnchorDensityRule } from "./generic-anchor-density";
 import { httpsDowngradeRule } from "./https-downgrade";
 import { internalLinksRule } from "./internal-links";
 import { invalidLinksRule } from "./invalid-links";
+import { navSetDivergenceRule } from "./nav-set-divergence";
 import { noContextualInboundRule } from "./no-contextual-inbound";
 import { nofollowInternalRule } from "./nofollow-internal";
 import { orphanPagesRule } from "./orphan-pages";
@@ -46,6 +47,7 @@ export const rules: Rule[] = [
   genericAnchorDensityRule,
   httpsDowngradeRule,
   telMailtoRule,
+  navSetDivergenceRule,
 ];
 
 export {
@@ -63,6 +65,7 @@ export {
   httpsDowngradeRule,
   internalLinksRule,
   invalidLinksRule,
+  navSetDivergenceRule,
   noContextualInboundRule,
   nofollowInternalRule,
   orphanPagesRule,

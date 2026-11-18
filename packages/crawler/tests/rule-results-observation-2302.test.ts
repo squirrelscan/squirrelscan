@@ -93,7 +93,7 @@ describe("rule_results observation column (repo#2302)", () => {
       await run(reopened.close?.() ?? Effect.void);
 
       const raw2 = new Database(file);
-      expect(SCHEMA_VERSION).toBe(44);
+      expect(SCHEMA_VERSION).toBe(45);
       expect(
         (raw2.prepare("SELECT version FROM schema_version").get() as { version: number }).version,
       ).toBe(SCHEMA_VERSION);

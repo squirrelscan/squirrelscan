@@ -20,7 +20,13 @@ import { extractPageStructure } from "@squirrelscan/report/structure";
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 import { extractNapSignal, getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
 
-import { extractSiteChromeSignal, fingerprintPage, pageReadingLevel, pageTerminologyVariants } from "@squirrelscan/rules";
+import {
+  extractSiteChromeSignal,
+  fingerprintPage,
+  pageNavLinkSet,
+  pageReadingLevel,
+  pageTerminologyVariants,
+} from "@squirrelscan/rules";
 
 import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
 import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
@@ -174,6 +180,8 @@ export function extractPageFeatures(
     readingLevel: pageReadingLevel(parsed),
     // Same computation content/terminology-consistency's legacy path runs.
     terminologyVariants: pageTerminologyVariants(parsed),
+    // Same extractor links/nav-set-divergence's legacy path calls, keyed on the same page URL.
+    navLinkSet: pageNavLinkSet(parsed, page.normalizedUrl),
     // #2343: the report's own per-page scalars, taken here because this is the
     // one pass that holds the DOM. Recovering them later meant re-parsing every
     // stored page a second time.

@@ -269,6 +269,7 @@
                   "rules/links/anchor-target-conflict",
                   "rules/links/generic-anchor-density",
                   "rules/links/https-downgrade",
+                  "rules/links/nav-set-divergence",
                   "rules/links/tel-mailto"
                 ]
               },

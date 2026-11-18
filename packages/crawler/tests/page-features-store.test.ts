@@ -79,6 +79,7 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     hreflangAlternates: null,
     readingLevel: null,
     terminologyVariants: null,
+    navLinkSet: null,
     ...over,
   };
 }
@@ -732,6 +733,18 @@ describe("page_features migration (v17 → current)", () => {
     };
     expect(version.version).toBe(SCHEMA_VERSION);
     check.close();
+  });
+});
+
+describe("page_features store: nav_link_set (v44)", () => {
+  test("round-trips the set, and a row without one reads back as null", async () => {
+    const store = await freshStore();
+    const navLinkSet = { hash: "0123456789abcdef", count: 2, hrefs: ["https://example.com/a", "https://example.com/b"] };
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/a", navLinkSet })));
+    await run(store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" })));
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.navLinkSet).toEqual(navLinkSet);
+    expect((await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.navLinkSet).toBeNull();
+    await run(store.close());
   });
 });
 
