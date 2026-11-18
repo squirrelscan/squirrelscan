@@ -443,7 +443,16 @@ function fetchSingleScript(
         : scriptOutcome(result, options.anyContentType === true);
     const elapsed = Date.now() - startedAt;
     options.budget?.record(url, elapsed, outcome);
-    if (cache && result.content !== null && result.error === null) {
+    // Only a body with no response metadata the rules read is cached: a hit
+    // replays the body alone, so a redirect (finalUrl, headersWithheld) or a
+    // SourceMap header would be lost on the next run. Those scripts refetch.
+    if (
+      cache &&
+      result.content !== null &&
+      result.error === null &&
+      !result.redirected &&
+      result.sourceMapHeader === undefined
+    ) {
       try {
         cache.put(url, result.content);
       } catch {
