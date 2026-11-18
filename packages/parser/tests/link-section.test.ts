@@ -101,6 +101,32 @@ describe("link section", () => {
     });
   });
 
+  test("a breadcrumb class on the page or a landmark wrapper names no trail", () => {
+    const html =
+      `<!DOCTYPE html><html class="breadcrumb-theme"><head><title>t</title></head>` +
+      `<body class="has-breadcrumbs" id="page-breadcrumb">` +
+      `<header><a href="/h">h</a></header><nav><a href="/n">n</a></nav>` +
+      `<main class="breadcrumbs"><article class="breadcrumb"><a href="/c">c</a></article></main>` +
+      `<div class="breadcrumbs-layout"><footer><a href="/f">f</a></footer><a href="/w">w</a></div>` +
+      `<div class="layout breadcrumb-wrap"><div role="contentinfo"><a href="/r">r</a></div></div>` +
+      `</body></html>`;
+    const out: Record<string, string | undefined> = {};
+    for (const l of parsePage(html, URL).links) out[l.text] = l.section;
+    expect(out).toEqual({ h: "header", n: "navigation", c: "content", f: "footer", w: "unknown", r: "footer" });
+  });
+
+  test("a page-state class such as no-breadcrumb or has-breadcrumbs is not a trail", () => {
+    expect(
+      sections(
+        `<main><div class="no-breadcrumb"><a href="/a">a</a></div>` +
+          `<div class="hide_breadcrumbs"><a href="/b">b</a></div>` +
+          `<div id="without-breadcrumb"><a href="/c">c</a></div>` +
+          `<div class="page has-breadcrumbs"><a href="/d">d</a></div>` +
+          `<div class="has-breadcrumbs breadcrumbs"><a href="/e">e</a></div></main>`,
+      ),
+    ).toEqual({ a: "content", b: "content", c: "content", d: "content", e: "breadcrumbs" });
+  });
+
   test("a breadcrumb trail inside the site header stays header", () => {
     expect(sections(`<header><nav aria-label="breadcrumb"><a href="/a">a</a></nav></header>`)).toEqual({
       a: "header",

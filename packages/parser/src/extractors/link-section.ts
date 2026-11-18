@@ -37,14 +37,37 @@ const COMMENTS_PATTERN =
 
 // A breadcrumb trail named in the markup: `<nav aria-label="Breadcrumb">`, `class="breadcrumbs"`,
 // `id="breadcrumb"`. Checked before the landmark tags, so such a `nav` reads "the breadcrumbs".
+//
+// The aria-label is human text, so any "breadcrumb" in it counts. A class or id counts per token,
+// and not when the word is a page-state flag: `<body class="has-breadcrumbs">` or `no-breadcrumb`
+// says whether a trail exists, it is not the trail.
 const BREADCRUMB_PATTERN = /breadcrumb/i;
+const BREADCRUMB_STATE_TOKEN =
+  /^(?:has|no|not|hide|hidden|show|with|without|disable|disabled|enable|enabled|is)[-_]+breadcrumbs?$/i;
 
-function isBreadcrumb(element: Element): boolean {
-  for (const name of ["aria-label", "class", "id"]) {
-    const value = element.getAttribute?.(name);
-    if (value && BREADCRUMB_PATTERN.test(value)) return true;
+// A page-level container or a wrapper around the page's landmarks is never the trail itself, so a
+// stray breadcrumb class on it must not turn the site header and footer into "breadcrumbs".
+const NEVER_TRAIL_TAGS: ReadonlySet<string> = new Set(["html", "body", "main", "article"]);
+const WRAPS_LANDMARK =
+  'header, footer, main, article, [role="banner"], [role="contentinfo"], [role="main"]';
+
+function namesBreadcrumb(value: string): boolean {
+  for (const token of value.split(/\s+/)) {
+    if (token && BREADCRUMB_PATTERN.test(token) && !BREADCRUMB_STATE_TOKEN.test(token)) return true;
   }
   return false;
+}
+
+function isBreadcrumb(element: Element): boolean {
+  const label = element.getAttribute?.("aria-label");
+  const named =
+    (label != null && BREADCRUMB_PATTERN.test(label)) ||
+    namesBreadcrumb(element.getAttribute?.("class") ?? "") ||
+    namesBreadcrumb(element.getAttribute?.("id") ?? "");
+  if (!named) return false;
+  const tag = element.tagName?.toLowerCase() ?? "";
+  if (NEVER_TRAIL_TAGS.has(tag)) return false;
+  return !element.querySelector?.(WRAPS_LANDMARK);
 }
 
 function ownSection(element: Element): LinkSection | null {
