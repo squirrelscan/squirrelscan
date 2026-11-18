@@ -1,0 +1,1 @@
+- **Rule totals say 340+.** The README, the docs and the npm and plugin descriptions state the rule count rounded down to the nearest 10 (342 enabled rules today) instead of 300+. (squirrelscan/repo#4856)
