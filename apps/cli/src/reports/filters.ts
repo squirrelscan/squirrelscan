@@ -2,7 +2,14 @@
 
 import type { AuditReport, CheckResult } from "@/types";
 
-import { normalizeCategoryCode, type RuleCategory } from "@/rules/categories";
+import {
+  getCategoriesInGroup,
+  GROUP_CODES,
+  isValidGroup,
+  normalizeCategoryCode,
+  type RuleCategory,
+  type RuleGroup,
+} from "@/rules/categories";
 
 export type SeverityLevel = "error" | "warning" | "all";
 
@@ -30,6 +37,34 @@ export function filterByCategory(
     ...report,
     ruleResults: filteredRuleResults,
   };
+}
+
+/** Parse a comma-separated `--group` value; unknown ids come back in `invalid`. */
+export function parseGroupArg(value: string): {
+  groups: RuleGroup[];
+  invalid: string[];
+} {
+  const ids = value
+    .split(",")
+    .map((g) => g.trim().toLowerCase())
+    .filter((g) => g.length > 0);
+  return {
+    groups: ids.filter(isValidGroup),
+    invalid: ids.filter((g) => !isValidGroup(g)),
+  };
+}
+
+export const VALID_GROUPS_TEXT = GROUP_CODES.join(", ");
+
+/** Keep only issues from categories in the given rule groups (#626). */
+export function filterByGroup(
+  report: AuditReport,
+  groups: RuleGroup[]
+): AuditReport {
+  return filterByCategory(
+    report,
+    groups.flatMap((g) => getCategoriesInGroup(g))
+  );
 }
 
 // Filter report by severity level

@@ -50,7 +50,12 @@ import {
   generateDiffMarkdown,
   generateDiffText,
 } from "@/reports/diff/output";
-import { filterByCategory } from "@/reports/filters";
+import {
+  filterByCategory,
+  filterByGroup,
+  parseGroupArg,
+  VALID_GROUPS_TEXT,
+} from "@/reports/filters";
 import { wcagChecklistRules } from "@/reports/output/markdown";
 import { writeReportFile } from "@/reports/utils";
 import {
@@ -244,6 +249,11 @@ export const report = defineCommand({
       type: "string",
       description:
         "Filter by categories: core,content,links,... (comma-separated)",
+    },
+    group: {
+      type: "string",
+      description:
+        "Filter by rule groups: seo,performance,security,ai (comma-separated; combines with --category)",
     },
     format: {
       type: "string",
@@ -502,6 +512,17 @@ export const report = defineCommand({
         );
       }
 
+      if (args.group) {
+        const { groups, invalid } = parseGroupArg(args.group);
+        if (invalid.length > 0 || groups.length === 0) {
+          console.error(`Invalid group: ${invalid.join(", ") || args.group}`);
+          console.error(`Valid groups: ${VALID_GROUPS_TEXT}`);
+          return safeExit(1);
+        }
+        currentReport = filterByGroup(currentReport, groups);
+        baselineReport = filterByGroup(baselineReport, groups);
+      }
+
       if (args.severity) {
         const severity = args.severity as "error" | "warning" | "all";
         if (!["error", "warning", "all"].includes(severity)) {
@@ -569,6 +590,16 @@ export const report = defineCommand({
         return safeExit(1);
       }
       reportData = filterByCategory(reportData, categories as RuleCategory[]);
+    }
+
+    if (args.group) {
+      const { groups, invalid } = parseGroupArg(args.group);
+      if (invalid.length > 0 || groups.length === 0) {
+        console.error(`Invalid group: ${invalid.join(", ") || args.group}`);
+        console.error(`Valid groups: ${VALID_GROUPS_TEXT}`);
+        return safeExit(1);
+      }
+      reportData = filterByGroup(reportData, groups);
     }
 
     // #1841: a report of a local or private-network target is never published.

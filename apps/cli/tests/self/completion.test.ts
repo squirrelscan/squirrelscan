@@ -579,3 +579,26 @@ describe("report --wcag-checklist completion (repo#3094)", () => {
     );
   });
 });
+
+describe("report --group completion (repo#639)", () => {
+  test("bash offers --group next to --wcag-checklist and completes the group ids", () => {
+    const block = commandBlock("bash", script("bash"), "report");
+    const flagList = block.slice(block.indexOf("esac"));
+    expect(flagList.match(/--group(?![a-z0-9-])/g)).toHaveLength(1);
+    expect(flagList.match(/--wcag-checklist(?![a-z0-9-])/g)).toHaveLength(1);
+    const arm = block.indexOf("--group)");
+    expect(arm).toBeGreaterThan(-1);
+    expect(block.slice(arm).match(/compgen -W "([^"]+)"/)?.[1]).toBe(
+      "seo performance security ai"
+    );
+  });
+
+  test("zsh and fish complete the group ids", () => {
+    expect(commandBlock("zsh", script("zsh"), "report")).toContain(
+      "'--group[Filter by rule groups]:group:(seo performance security ai)'"
+    );
+    expect(commandBlock("fish", script("fish"), "report")).toContain(
+      '-l group -a "seo performance security ai"'
+    );
+  });
+});
