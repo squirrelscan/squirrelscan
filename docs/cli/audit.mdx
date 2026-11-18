@@ -870,7 +870,7 @@ squirrelscan caches page content locally. On subsequent audits:
 
 Use `--refresh` to bypass the cache entirely.
 
-The bodies of the scripts an audit fetches are cached for 24 hours, so a re-audit within a day reads them from the cache instead of requesting them again. `--refresh` (or `--no-incremental`) turns this cache off for the run: every script is requested and nothing is cached.
+The bodies of the scripts an audit fetches are cached for 24 hours, so a re-audit within a day reads them from the cache instead of requesting them again. `--refresh` (or `--no-incremental`) turns this cache off for the run: every script is requested and nothing is cached. A script that redirects or sends a `SourceMap` header is never cached, so its redirect and source map findings stay accurate on every run.
 
 ### Rule results
 

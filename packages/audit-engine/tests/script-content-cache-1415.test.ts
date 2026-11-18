@@ -135,6 +135,77 @@ describe("script content cache (repo#1415)", () => {
     expect(results.every((r) => r.error === null && r.content === "var a=1;")).toBe(true);
   });
 
+  test("a script that redirects and sends SourceMap is not cached, so a second run keeps both", async () => {
+    const meta = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const path = new URL(request.url).pathname;
+        hits.push(path);
+        if (path === "/old.js") return Response.redirect(new URL("/new.js", request.url).href, 301);
+        return new Response("var m=1;", {
+          headers: { "content-type": "application/javascript", SourceMap: "/new.js.map" },
+        });
+      },
+    });
+    try {
+      const contentCache = memoryCache();
+      const url = `http://127.0.0.1:${meta.port}/old.js`;
+      const once = () => Effect.runPromise(fetchScriptContents([url], { contentCache }));
+      const first = await once();
+      const second = await once();
+      expect(contentCache.map.size).toBe(0);
+      expect(hits).toEqual(["/old.js", "/new.js", "/old.js", "/new.js"]);
+      for (const r of [first[0], second[0]]) {
+        expect(r?.fromCache).toBeFalsy();
+        expect(r?.redirected).toBe(true);
+        expect(r?.finalUrl).toBe(`http://127.0.0.1:${meta.port}/new.js`);
+        expect(r?.sourceMapHeader).toBe("/new.js.map");
+      }
+    } finally {
+      meta.stop(true);
+    }
+  });
+
+  test("a SourceMap header alone keeps the script out of the cache", async () => {
+    const sm = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response("var s=1;", {
+          headers: { "content-type": "application/javascript", "X-SourceMap": "/s.js.map" },
+        }),
+    });
+    try {
+      const contentCache = memoryCache();
+      const url = `http://127.0.0.1:${sm.port}/s.js`;
+      await Effect.runPromise(fetchScriptContents([url], { contentCache }));
+      const second = await Effect.runPromise(fetchScriptContents([url], { contentCache }));
+      expect(contentCache.map.size).toBe(0);
+      expect(second[0]?.sourceMapHeader).toBe("/s.js.map");
+    } finally {
+      sm.stop(true);
+    }
+  });
+
+  test("a redirect alone keeps the script out of the cache", async () => {
+    const rd = Bun.serve({
+      port: 0,
+      fetch(request) {
+        if (new URL(request.url).pathname === "/old.js") return Response.redirect(new URL("/new.js", request.url).href, 302);
+        return new Response("var r=1;", { headers: { "content-type": "application/javascript" } });
+      },
+    });
+    try {
+      const contentCache = memoryCache();
+      const url = `http://127.0.0.1:${rd.port}/old.js`;
+      await Effect.runPromise(fetchScriptContents([url], { contentCache }));
+      const second = await Effect.runPromise(fetchScriptContents([url], { contentCache }));
+      expect(contentCache.map.size).toBe(0);
+      expect(second[0]?.finalUrl).toBe(`http://127.0.0.1:${rd.port}/new.js`);
+    } finally {
+      rd.stop(true);
+    }
+  });
+
   test("anyContentType passes (manifests, stylesheets) bypass the cache", async () => {
     const contentCache = memoryCache();
     contentCache.put(`${base}/a.js`, "stale");
