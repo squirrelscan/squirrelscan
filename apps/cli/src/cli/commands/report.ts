@@ -1,6 +1,12 @@
 // squirrelscan report [audit-id] - CLI wrapper
 
-import { scanScopeTargeted } from "@squirrelscan/report";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
+import {
+  buildWcagChecklist,
+  scanScopeTargeted,
+  wcagChecklistCsv,
+  wcagChecklistMarkdown,
+} from "@squirrelscan/report";
 import { defineCommand } from "citty";
 
 import type { RuleCategory } from "@/rules/categories";
@@ -45,6 +51,8 @@ import {
   generateDiffText,
 } from "@/reports/diff/output";
 import { filterByCategory } from "@/reports/filters";
+import { wcagChecklistRules } from "@/reports/output/markdown";
+import { writeReportFile } from "@/reports/utils";
 import {
   isValidCategory,
   normalizeCategoryCode,
@@ -189,6 +197,28 @@ function defaultProjectDbPath(baseUrl: string): string | undefined {
   }
 }
 
+/**
+ * Said on stderr when the accessibility checklist (repo#3094) is built from a report read with --input,
+ * by `--wcag-checklist` or inside a markdown report.
+ */
+export const WCAG_CHECKLIST_INPUT_NOTE =
+  "Accessibility checklist with --input: passing checks are not read back from a JSON file, so a rule with no finding reads as not run";
+
+/** repo#3094: a failed or blocked audit ran no rules, so it gets no checklist. */
+export const WCAG_CHECKLIST_FAILED_AUDIT =
+  "No accessibility checklist for a failed or blocked audit: no rules ran";
+
+/**
+ * The `--wcag-checklist` output kind: a bare flag (citty passes `true`, or an empty string) means
+ * markdown. Null for anything but markdown or csv.
+ */
+export function wcagChecklistKind(value: unknown): "markdown" | "csv" | null {
+  if (value === true || value === "") return "markdown";
+  if (typeof value !== "string") return null;
+  const kind = value.toLowerCase();
+  return kind === "markdown" || kind === "csv" ? kind : null;
+}
+
 export const report = defineCommand({
   meta: {
     name: "report",
@@ -263,6 +293,11 @@ export const report = defineCommand({
       type: "boolean",
       description:
         "Also list the rules that passed, with how many pages each passed on",
+    },
+    wcagChecklist: {
+      type: "string",
+      description:
+        "Print only the accessibility checklist (what the rules found per WCAG 2.2 A/AA criterion) instead of the report: markdown (the default for a bare flag) or csv. Not a conformance claim",
     },
     includeInfo: {
       type: "boolean",
@@ -617,6 +652,34 @@ export const report = defineCommand({
       return;
     }
 
+    // repo#3094: the accessibility checklist on its own, for a manual review pass.
+    if (args.wcagChecklist !== undefined) {
+      const kind = wcagChecklistKind(args.wcagChecklist);
+      if (!kind) {
+        console.error(
+          `--wcag-checklist takes markdown or csv, got "${String(args.wcagChecklist)}"`
+        );
+        return safeExit(1);
+      }
+      // A failed or blocked audit ran no rules, so every criterion would read
+      // as not run. The markdown report prints no checklist for it either.
+      if (isAuditFailed(reportData.status)) {
+        console.error(WCAG_CHECKLIST_FAILED_AUDIT);
+        return safeExit(1);
+      }
+      if (args.input) console.error(WCAG_CHECKLIST_INPUT_NOTE);
+      const rows = buildWcagChecklist(reportData, wcagChecklistRules());
+      const text =
+        kind === "csv" ? wcagChecklistCsv(rows) : wcagChecklistMarkdown(rows);
+      if (args.output) {
+        writeReportFile(args.output, text);
+        console.log(`Accessibility checklist saved to: ${args.output}`);
+      } else {
+        process.stdout.write(text);
+      }
+      return;
+    }
+
     // Validate and generate output
     const format = args.format ?? "console";
     const formatResult = validateFormat(format);
@@ -669,6 +732,10 @@ export const report = defineCommand({
       // stdout by default, file if -o provided
       generateJsonReport(reportData, args.output, includePassed, includePages);
     } else if (formatResult.data === "markdown") {
+      // repo#3094: the markdown report's accessibility checklist reads passing checks a JSON file lacks.
+      if (args.input && !isAuditFailed(reportData.status)) {
+        console.error(WCAG_CHECKLIST_INPUT_NOTE);
+      }
       // stdout by default, file if -o provided
       generateMarkdownReport(reportData, args.output, undefined, includePassed);
     } else if (formatResult.data === "xml") {

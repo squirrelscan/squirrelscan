@@ -545,3 +545,17 @@ export type { ReportTopLineCounts, SectionScoreRow } from "./top-line";
 // Why the overall can sit below every section score, from healthScore.debug
 export { scoreAdjustment, scoreAdjustmentNote, scoreAdjustmentNoteFor } from "./score-adjustment";
 export type { ScoreAdjustment } from "./score-adjustment";
+
+// Accessibility checklist: what the rules found per WCAG 2.2 A/AA criterion (repo#3094)
+export {
+  WCAG_CHECKLIST_DISCLAIMER,
+  WCAG_CHECKLIST_NOTES,
+  WCAG_CHECKLIST_STATUS_LABELS,
+  buildWcagChecklist,
+  hasWcagDeclarations,
+  wcagChecklistCounts,
+  wcagChecklistCsv,
+  wcagChecklistMarkdown,
+  wcagChecklistMarkdownLines,
+} from "./wcag-checklist";
+export type { WcagChecklistRow, WcagChecklistRule, WcagChecklistStatus } from "./wcag-checklist";

@@ -352,8 +352,12 @@ _squirrel_completions() {
           COMPREPLY=( $(compgen -W "public unlisted private" -- "\${cur}") )
           return 0
           ;;
+        --wcag-checklist)
+          COMPREPLY=( $(compgen -W "markdown csv" -- "\${cur}") )
+          return 0
+          ;;
       esac
-      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help --include-pages --full-report" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--list -l --severity --category --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help --include-pages --full-report --wcag-checklist" -- "\${cur}") )
       return 0
       ;;
     feedback)
@@ -815,6 +819,7 @@ _squirrel() {
             '--visibility[Visibility when publishing]:visibility:(public unlisted private)' \\
             '--summary[Print score, category breakdown, and issue counts only]' \\
             '--include-passed[Also list the rules that passed]' \\
+            '--wcag-checklist[Print only the accessibility checklist]::format:(markdown csv)' \\
             '--include-info[Also list info checks in the llm format]' \\
             '--full-report[Build the whole report body for a very large crawl]' \\
             '--include-pages[JSON only: list every crawled page with its status and rule count]'
@@ -1122,6 +1127,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from report" -s p -l publish -d 
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l visibility -a "public unlisted private" -d "Visibility when publishing"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l summary -d "Print score, category breakdown, and issue counts only"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-passed -d "Also list the rules that passed"
+complete -c squirrel -n "__fish_seen_subcommand_from report" -l wcag-checklist -a "markdown csv" -d "Print only the accessibility checklist"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-info -d "Also list info checks in the llm format"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l full-report -d "Build the whole report body for a very large crawl"
 complete -c squirrel -n "__fish_seen_subcommand_from report" -l include-pages -d "JSON only: list every crawled page with its status and rule count"

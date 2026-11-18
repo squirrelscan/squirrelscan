@@ -67,6 +67,18 @@ enable = ["images/alt-text"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## WCAG success criteria
+
+{/* rule-wcag:start */}
+
+The WCAG success criteria this rule's findings map to. These automated checks cover part of WCAG; passing them does not mean a site conforms. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules mapped to a criterion at Level A or AA.
+
+| Criterion | Level | Introduced in |
+| --- | --- | --- |
+| 1.1.1 Non-text Content | A | WCAG 2.0 |
+
+{/* rule-wcag:end */}
+
 ## Related rules
 
 - [a11y/image-redundant-alt](/rules/a11y/image-redundant-alt): alt text that repeats the adjacent link or caption.
