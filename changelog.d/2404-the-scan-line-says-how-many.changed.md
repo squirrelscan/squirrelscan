@@ -1,0 +1,1 @@
+- The scan line says how many crawled pages returned errors: `Scan: 4 pages crawled (2 returned errors) ...`. The LLM and XML `<scan-scope>` gain an `error-pages` attribute (squirrelscan/repo#2404).
