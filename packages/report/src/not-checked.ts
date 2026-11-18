@@ -21,6 +21,7 @@ import {
   isLockedRuleReason,
   NOT_CHECKED_SKIP_REASONS,
   RULE_TIMED_OUT_SKIP_REASON,
+  STRICT_PROBE_UNANSWERED_SKIP_REASON,
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 
@@ -87,6 +88,9 @@ const HINTS: ReadonlyMap<string, string> = new Map(Object.entries({
   // repo#2036: crawl/server-errors when the crawl failed to fetch some pages.
   "pages-not-fetched":
     "The crawl could not fetch some pages (a timeout, a refused connection or a body it could not read), and any of them may still answer 5xx. Run the audit again to check them.",
+  // repo#1322: ax/markdown-response's strict Accept: text/markdown request got no answer.
+  [STRICT_PROBE_UNANSWERED_SKIP_REASON]:
+    "The homepage did not answer the strict Accept: text/markdown request (refused, throttled, timed out or out of probe budget), so it may still return a server error to agents that ask for Markdown. Run the audit again later, or allow the audit through the site's bot protection.",
   "analyze-offline":
     "Run `squirrel audit` to probe the live site.",
   // #1932: a probing rule below its level, or one the site throttled or the budget cut short.
@@ -316,9 +320,12 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
         c.status === "skipped" &&
         c.skipReason !== undefined &&
         NOT_CHECKED_SKIP_REASONS.has(c.skipReason) &&
-        // An info rule restates what another rule reports, except a discovery probe rule (#1794): its own
-        // finding is the one a consumer would resolve by absence.
-        (!info || isDiscoveryProbeSkipReason(c.skipReason)),
+        // An info rule restates what another rule reports, except a discovery probe rule (#1794) and
+        // ax/markdown-response's unanswered strict probe (repo#1322): its own finding is the one a
+        // consumer would resolve by absence.
+        (!info ||
+          isDiscoveryProbeSkipReason(c.skipReason) ||
+          c.skipReason === STRICT_PROBE_UNANSWERED_SKIP_REASON),
     );
     if (!check || check.skipReason === undefined) continue;
     const timedOut =

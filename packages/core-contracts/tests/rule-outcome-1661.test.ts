@@ -65,6 +65,7 @@ describe("classifyRuleOutcome", () => {
     ["a targeted run", skipped("targeted-run"), "coverage_gap"],
     ["the home page not fetched", skipped("entry-not-fetched"), "coverage_gap"],
     ["pages the crawl failed to fetch", skipped("pages-not-fetched"), "coverage_gap"],
+    ["a strict Markdown request with no answer", skipped("strict-probe-unanswered"), "coverage_gap"],
     ["a capped crawl", skipped("Crawl capped before the frontier was exhausted"), "coverage_gap"],
     ["a waived page", skipped("ignored"), "disabled"],
     ["a private target", skipped("private-target"), "disabled"],

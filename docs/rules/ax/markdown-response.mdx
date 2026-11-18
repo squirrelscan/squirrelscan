@@ -1,6 +1,6 @@
 ---
 title: "Accept: text/markdown: serving Markdown to AI agents"
-description: "No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header. squirrel probes all three."
+description: "No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header, and server errors on Accept: text/markdown. squirrel probes all of them."
 ---
 
 ## What a Markdown response is
@@ -13,14 +13,17 @@ Markdown responses are one lever in generative engine optimization, and the [GEO
 
 ## What squirrel checks
 
-The rule runs once per crawl against the homepage and emits one or two checks:
+The probe requests the homepage twice. The lenient request sends `Accept: text/markdown, text/x-markdown, */*`, which a server may answer with HTML. The strict request sends only `Accept: text/markdown`, which is what an agent that reads nothing but Markdown sends. A site can answer the first with a clean `200 text/html` and the second with a `500`, so only the strict request exposes that failure. Markdown on either request counts as content negotiation. The probe also requests `/index.md`.
+
+The rule runs once per crawl against the homepage and emits up to three checks:
 
 - `markdown-response`: reports at info status with the message `Markdown response not checked: the discovery probe was not sent or got no answer` and the value `not-checked` when the probe did not run, or a request got no answer and the other found no Markdown. When the site refused the request (a 401, 403 or 429, or a bot challenge) the message is `Markdown response not checked: the site refused the request (HTTP 403 (Cloudflare))` and the value is `refused`. The rule is skipped when the crawl fetched no page and a root request was refused or failed. Otherwise it reports at info status with `Serves Markdown for agents via <signals>`, joining whichever it found with ` and `. The three are `content negotiation (<content type>)`, `.md variant (<url>)` and `link rel=alternate (<url>)`. With none of them it warns with `No Markdown response — consider honoring Accept: text/markdown or publishing a .md variant so agents get clean content`.
+- `markdown-negotiation-error`: fails with `Homepage returns HTTP <status> to Accept: text/markdown, so agents that negotiate Markdown get a server error instead of content`, with the status code as its value, when the strict request got a 5xx answer while the lenient request was answered. Any other answer to the strict request (a 200, a 404 or a `406 Not Acceptable`) reports at info status with `Homepage answers Accept: text/markdown with HTTP <status>, not a server error`. When the strict request got no answer (the site refused or throttled it, it timed out, or the probe budget ran out), the check is skipped as not checked with the reason `strict-probe-unanswered`: the request may still fail, so an earlier `markdown-negotiation-error` finding stays open instead of resolving. A homepage that answers 5xx to both requests is a site that is down, not a negotiation defect, so it is not checked the same way.
 - `markdown-response-headers`: emitted only when a supplementary signal is present, at info status, with the message `Additional Markdown-negotiation signals:` followed by the signals joined with `; `. Two are recognised. A `Vary` header on the negotiated response that mentions `Accept` is reported as `Vary: <header value>`. Cloudflare's markdown-transform fingerprint needs both token headers and is reported as `Cloudflare markdown-transform fingerprint (x-markdown-tokens: <n>, x-original-tokens: <n>)`, gaining a `, ~N% of original` suffix only when both parse as finite numbers and the original count is above zero.
 
-The rule's severity is info, so the warning surfaces as a recommendation and does not move the score. The `link rel=alternate` signal is counted in the first check and deliberately not repeated in the second.
+The rule's severity is info, so the `No Markdown response` warning surfaces as a recommendation and does not move the score. The `markdown-negotiation-error` failure does move it: not serving Markdown degrades gracefully, but a server error breaks every agent that asks for Markdown. The `link rel=alternate` signal is counted in the first check and deliberately not repeated in the second.
 
-A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. A probe that went out and got no answer, a refused connection, a timeout or a 5xx answer, counts the same. Only a 404 or 410 says there is no Markdown at that URL. None of those says anything about the site, so the result is `not-checked`, never absent.
+A probe goes unsent when [discovery probes](/configuration/crawler#discovery-probes) are turned off, when no rule that reads it was enabled for the crawl, or when the crawl's preamble time budget ran out first. A probe that went out and got no answer, a refused connection, a timeout or a 5xx answer, counts the same, except for a 5xx on the strict request described above. Only a 404 or 410 says there is no Markdown at that URL. None of those says anything about the site, so the result is `not-checked`, never absent. That holds when the strict request did fail: if `/index.md` got no answer, `markdown-response` is `not-checked` rather than the `No Markdown response` warning.
 
 ## How to fix it
 
@@ -33,9 +36,11 @@ Vary: Accept
 Link: <https://example.com/index.md>; rel="alternate"; type="text/markdown"
 ```
 
+If you do not serve Markdown, answer `Accept: text/markdown` with your HTML or with `406 Not Acceptable`, never a 5xx. A framework that throws when it cannot match the `Accept` header is the usual cause.
+
 Serving the `.md` twin alone is enough to satisfy the check, and it is the least invasive of the three. Set `Vary: Accept` whenever the same URL returns different bodies for different `Accept` headers, or a cache will hand the HTML to an agent that asked for Markdown.
 
-There is no common false positive. Absence is a recommendation and never a defect.
+There is no common false positive. Absence is a recommendation and never a defect. A server error on strict negotiation is a defect.
 
 | | |
 |---|---|

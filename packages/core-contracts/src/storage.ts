@@ -1413,6 +1413,13 @@ export interface MarkdownProbeRecord {
   markdownTokensHeader?: string | null;
   originalTokensHeader?: string | null;
   alternateMarkdownUrl?: string | null;
+  /** Negotiation status codes (repo#1322); undefined on rows persisted before schema v48. */
+  negotiatedStatus?: number | null;
+  strictNegotiatedStatus?: number | null;
+  strictNegotiatedContentType?: string | null;
+  /** Whether the strict and `/index.md` fetches got an answer (repo#1322); undefined on older rows. */
+  strictNegotiationAnswered?: boolean;
+  mdVariantAnswered?: boolean;
   fetchedAt: number;
 }
 

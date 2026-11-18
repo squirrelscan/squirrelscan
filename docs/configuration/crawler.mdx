@@ -1122,7 +1122,7 @@ whether AI crawlers get the same homepage a browser does.
 | Probe | Requests | Read by |
 |---|---|---|
 | llms.txt | `/llms.txt`, `/llms-full.txt` | `ax/llms-txt`, `ax/agents-md` |
-| Markdown | `/` with `Accept: text/markdown`, `/index.md` | `ax/markdown-response` |
+| Markdown | `/` with a lenient and a strict `Accept: text/markdown`, `/index.md` | `ax/markdown-response` |
 | Agent access | `/` fetched as a browser, as GPTBot and as Claude-User | `ax/agent-blocking`, `ax/pay-per-crawl` |
 | Agent manifests | `/.well-known/mcp/server-card.json`, `/.well-known/mcp.json`, `/.well-known/mcp`, `/.well-known/mcp-server`, `/.well-known/agent-card.json`, `/.well-known/agent-skills/index.json`, `/ai-plugin.json`, `/.well-known/ai-plugin.json` | `ax/well-known-agent` |
 | API and OAuth discovery | `/.well-known/api-catalog`, `/openapi.json`, `/swagger.json`, `/api/openapi.json`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource` | `ax/api-discovery` |

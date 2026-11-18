@@ -163,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 47;
+export const SCHEMA_VERSION = 48;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -687,6 +687,17 @@ const MIGRATIONS: Record<number, string[]> = {
       FOREIGN KEY (crawl_id) REFERENCES crawls(id)
     )`,
   ],
+  // Version 48: ax/markdown-response negotiation status codes, including the strict
+  // `Accept: text/markdown` probe, and whether the strict and `/index.md` probes got an
+  // answer (repo#1322). ADDITIVE, nullable (a row written before reads as unknown);
+  // also listed in MARKDOWN_RESPONSE_ALTER_COLUMNS. Local sqlite only: NOT a prod migration.
+  48: [
+    "ALTER TABLE markdown_response ADD COLUMN negotiated_status INTEGER",
+    "ALTER TABLE markdown_response ADD COLUMN strict_negotiated_status INTEGER",
+    "ALTER TABLE markdown_response ADD COLUMN strict_negotiated_content_type TEXT",
+    "ALTER TABLE markdown_response ADD COLUMN strict_negotiation_answered INTEGER",
+    "ALTER TABLE markdown_response ADD COLUMN md_variant_answered INTEGER",
+  ],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -852,6 +863,28 @@ const RULE_RESULTS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> 
   { name: "site_resource_evidence", type: "TEXT" },
   { name: "observation", type: "TEXT" },
 ];
+
+// Same guard for `markdown_response`. Every setMarkdownProbe INSERT names the
+// columns migrations 17 and 48 added (repo#1322), so a DB stamped past either by a
+// build numbering its own migration would fail the markdown probe write.
+const MARKDOWN_RESPONSE_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "negotiated_vary", type: "TEXT" },
+  { name: "markdown_tokens_header", type: "TEXT" },
+  { name: "original_tokens_header", type: "TEXT" },
+  { name: "alternate_markdown_url", type: "TEXT" },
+  { name: "negotiated_status", type: "INTEGER" },
+  { name: "strict_negotiated_status", type: "INTEGER" },
+  { name: "strict_negotiated_content_type", type: "TEXT" },
+  { name: "strict_negotiation_answered", type: "INTEGER" },
+  { name: "md_variant_answered", type: "INTEGER" },
+];
+
+// A nullable 0/1 column read back as an optional boolean: NULL (a row written
+// before the column existed) stays absent, so it reads as unknown, not false.
+function answeredFlag<K extends string>(key: K, value: unknown): Partial<Record<K, boolean>> {
+  if (value === null || value === undefined) return {};
+  return { [key]: value === 1 || value === true } as Partial<Record<K, boolean>>;
+}
 
 const SCHEMA = `
 -- Crawl sessions
@@ -1070,6 +1103,11 @@ CREATE TABLE IF NOT EXISTS markdown_response (
   markdown_tokens_header TEXT,
   original_tokens_header TEXT,
   alternate_markdown_url TEXT,
+  negotiated_status INTEGER,
+  strict_negotiated_status INTEGER,
+  strict_negotiated_content_type TEXT,
+  strict_negotiation_answered INTEGER,
+  md_variant_answered INTEGER,
   fetched_at INTEGER NOT NULL,
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -1668,6 +1706,7 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("resource_sizes", RESOURCE_SIZES_ALTER_COLUMNS);
     this.reconcileColumns("page_features", PAGE_FEATURES_ALTER_COLUMNS);
     this.reconcileColumns("rule_results", RULE_RESULTS_ALTER_COLUMNS);
+    this.reconcileColumns("markdown_response", MARKDOWN_RESPONSE_ALTER_COLUMNS);
     this.indexesAfterMigrations();
   }
 
@@ -1721,7 +1760,8 @@ export class SQLiteStorage implements CrawlStorage {
       | "entity_edges"
       | "resource_sizes"
       | "page_features"
-      | "rule_results",
+      | "rule_results"
+      | "markdown_response",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -3702,8 +3742,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT OR REPLACE INTO markdown_response (crawl_id, negotiated_url, negotiated_content_type, serves_markdown, md_variant_url, md_variant_exists, md_variant_content_type, negotiated_vary, markdown_tokens_header, original_tokens_header, alternate_markdown_url, fetched_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO markdown_response (crawl_id, negotiated_url, negotiated_content_type, serves_markdown, md_variant_url, md_variant_exists, md_variant_content_type, negotiated_vary, markdown_tokens_header, original_tokens_header, alternate_markdown_url, negotiated_status, strict_negotiated_status, strict_negotiated_content_type, strict_negotiation_answered, md_variant_answered, fetched_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -3717,6 +3757,11 @@ export class SQLiteStorage implements CrawlStorage {
           probe.markdownTokensHeader ?? null,
           probe.originalTokensHeader ?? null,
           probe.alternateMarkdownUrl ?? null,
+          probe.negotiatedStatus ?? null,
+          probe.strictNegotiatedStatus ?? null,
+          probe.strictNegotiatedContentType ?? null,
+          probe.strictNegotiationAnswered === undefined ? null : probe.strictNegotiationAnswered ? 1 : 0,
+          probe.mdVariantAnswered === undefined ? null : probe.mdVariantAnswered ? 1 : 0,
           probe.fetchedAt
         );
       },
@@ -3747,6 +3792,12 @@ export class SQLiteStorage implements CrawlStorage {
           markdownTokensHeader: (row.markdown_tokens_header as string | null | undefined) ?? null,
           originalTokensHeader: (row.original_tokens_header as string | null | undefined) ?? null,
           alternateMarkdownUrl: (row.alternate_markdown_url as string | null | undefined) ?? null,
+          negotiatedStatus: (row.negotiated_status as number | null | undefined) ?? null,
+          strictNegotiatedStatus: (row.strict_negotiated_status as number | null | undefined) ?? null,
+          strictNegotiatedContentType:
+            (row.strict_negotiated_content_type as string | null | undefined) ?? null,
+          ...answeredFlag("strictNegotiationAnswered", row.strict_negotiation_answered),
+          ...answeredFlag("mdVariantAnswered", row.md_variant_answered),
           fetchedAt: row.fetched_at as number,
         };
       },

@@ -249,6 +249,14 @@ function buildMarkdownProbeData(probe: MarkdownProbeRecord | null): MarkdownProb
     markdownTokensHeader: probe.markdownTokensHeader ?? null,
     originalTokensHeader: probe.originalTokensHeader ?? null,
     alternateMarkdownUrl: probe.alternateMarkdownUrl ?? null,
+    negotiatedStatus: probe.negotiatedStatus ?? null,
+    strictNegotiatedStatus: probe.strictNegotiatedStatus ?? null,
+    strictNegotiatedContentType: probe.strictNegotiatedContentType ?? null,
+    // Absent on rows stored before the flags existed: unknown, never "unanswered".
+    ...(probe.strictNegotiationAnswered !== undefined
+      ? { strictNegotiationAnswered: probe.strictNegotiationAnswered }
+      : {}),
+    ...(probe.mdVariantAnswered !== undefined ? { mdVariantAnswered: probe.mdVariantAnswered } : {}),
   };
 }
 

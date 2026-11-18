@@ -165,7 +165,8 @@ const API_PATHS = [
 const probesSent = () => {
   const paths = requested.map((r) => r.path);
   const byPath = PROBE_PATHS.filter((p) => paths.includes(p));
-  // The homepage probes: markdown negotiation and the AI-crawler user agents.
+  // The homepage probes: markdown negotiation (the lenient Accept and the strict
+  // `Accept: text/markdown`, repo#1322) and the AI-crawler user agents.
   const homepage = requested.filter(
     (r) =>
       r.path === "/" &&
@@ -181,7 +182,7 @@ describe("squirrel audit discovery probes (#409)", () => {
   // cannot pass because the stub or the audit never sends anything.
   test("a default audit sends every probe", async () => {
     await runAudit([]);
-    expect(probesSent()).toHaveLength(PROBE_PATHS.length + 3);
+    expect(probesSent()).toHaveLength(PROBE_PATHS.length + 4);
     expect(count("/swagger.json")).toBe(1);
   });
 
@@ -214,7 +215,7 @@ describe("squirrel audit discovery probes (#409)", () => {
       ["--disable-discovery-probes=false"],
       "[crawler]\ndisable_discovery_probes = true\n"
     );
-    expect(probesSent()).toHaveLength(PROBE_PATHS.length + 3);
+    expect(probesSent()).toHaveLength(PROBE_PATHS.length + 4);
   });
 
   // security/security-txt (#713) reads the two security.txt paths, so excluding
