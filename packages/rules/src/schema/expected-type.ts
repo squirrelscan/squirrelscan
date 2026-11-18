@@ -18,6 +18,7 @@
 // model reads as a post, but which declares Blog or CollectionPage, is a listing
 // and must not be asked for Article markup.
 
+import { CLASSIFIER_OFF_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { LOCAL_BUSINESS_TYPES } from "@squirrelscan/utils/constants";
 import { z } from "zod";
 
@@ -25,8 +26,6 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { UNREADABLE_MESSAGE, bareTypeName, jsonLdTypes, microdataAndRdfaTypes } from "./markup-types";
 
-/** `skipReason` of the check emitted when the page classifier did not run. */
-export const CLASSIFIER_OFF_SKIP_REASON = "classifier-off";
 
 export const optionsSchema = z.object({
   min_confidence: z

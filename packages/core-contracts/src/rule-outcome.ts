@@ -55,6 +55,8 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "unread-page": gap(false, "rule"),
   // A rule that stopped at a work cap before it had seen the whole page.
   "scan-truncated": gap(false),
+  // A check that needs the page classifier when it did not run (repo#3364): the page was not judged.
+  "classifier-off": gap(false),
   "tls-certificate-not-checked": gap(true),
   "external-links-not-checked": gap(true),
   "link-targets-not-fetched": gap(true),
