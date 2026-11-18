@@ -1,6 +1,6 @@
 // The batch orchestrator (#1231), driven with a fake child so no audit runs. Synthetic URLs only.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { parseArgs } from "citty";
 import {
   mkdtempSync,
@@ -20,12 +20,10 @@ import {
   type SpawnChild,
   cleanError,
   executeBatch,
-  BATCH_EXIT,
   passthroughArgs,
   runBatch,
   statusFromExit,
 } from "../../src/batch/run";
-import { API_TOKEN_ENV_VAR } from "../../src/self/credentials";
 
 let dir: string;
 beforeEach(() => {
@@ -415,58 +413,86 @@ describe("executeBatch", () => {
   });
 });
 
-describe("runBatch signed-in guard", () => {
-  // A private-host URL is rejected without spawning, so a guard regression ends in exit 6 with
-  // results written instead of a real audit (which would render in the cloud and spend credits).
-  const argDef = {
+describe("runBatch offline guard (signed in)", () => {
+  // citty reads `--offline=false` and `--offline false` as offline: false, so a child given them renders in the cloud.
+  const argsDef = {
+    url: { type: "positional", required: false },
     offline: { type: "boolean" },
     "urls-file": { type: "string" },
     "out-dir": { type: "string" },
   } as const;
-  const signedIn = async (offlineArgs: string[]) => {
+
+  const signedInBatch = async (offlineArgs: string[]) => {
     const rawArgs = [
       "--urls-file",
-      urlsFile(["http://127.0.0.1:3000"]),
+      urlsFile(["https://a.com/"]),
       "--out-dir",
       out(),
       ...offlineArgs,
     ];
-    const prevToken = process.env[API_TOKEN_ENV_VAR];
-    const prevExit = process.exitCode;
-    const errors: string[] = [];
-    const origError = console.error;
-    console.error = (...a: unknown[]) => errors.push(a.join(" "));
-    process.env[API_TOKEN_ENV_VAR] = "test-token-not-real";
+    const childArgs: string[][] = [];
+    const { spawn } = fakeSpawn(() => ({ status: "completed" }));
+    const spy = spyOn(console, "error").mockImplementation(() => {});
+    const savedKey = process.env.SQUIRRELSCAN_API_KEY;
+    const savedExit = process.exitCode;
+    process.env.SQUIRRELSCAN_API_KEY = "sq_test_not_a_real_key";
+    process.exitCode = 0;
     try {
-      await runBatch({ args: parseArgs(rawArgs, argDef), rawArgs });
-      return { exit: process.exitCode, errors };
+      await runBatch({
+        args: parseArgs(rawArgs, argsDef),
+        rawArgs,
+        spawn: (spec) => {
+          childArgs.push(spec.args);
+          return spawn(spec);
+        },
+      });
+      return {
+        exitCode: process.exitCode,
+        errors: spy.mock.calls.map((c) => String(c[0])),
+        childArgs,
+      };
     } finally {
-      console.error = origError;
-      process.exitCode = prevExit;
-      if (prevToken === undefined) delete process.env[API_TOKEN_ENV_VAR];
-      else process.env[API_TOKEN_ENV_VAR] = prevToken;
+      spy.mockRestore();
+      process.exitCode = savedExit;
+      if (savedKey === undefined) delete process.env.SQUIRRELSCAN_API_KEY;
+      else process.env.SQUIRRELSCAN_API_KEY = savedKey;
     }
   };
 
+  // A repeated flag parses as an array ([false, true]), never as true: refused too.
   for (const offlineArgs of [
-    [],
     ["--offline=false"],
     ["--offline", "false"],
+    ["--offline=false", "--offline"],
+    ["--offline", "--offline=false"],
     ["--no-offline"],
+    [],
   ]) {
-    test(`signed in with ${JSON.stringify(offlineArgs)} is refused before anything runs`, async () => {
-      const { exit, errors } = await signedIn(offlineArgs);
-      expect(exit).toBe(BATCH_EXIT.cannotRun);
-      expect(errors.join("\n")).toContain("add --offline");
-      expect(existsSync(out())).toBe(false);
+    test(`${JSON.stringify(offlineArgs)} is refused before any child runs`, async () => {
+      const r = await signedInBatch(offlineArgs);
+      expect(r.exitCode).toBe(1);
+      expect(r.childArgs).toEqual([]);
+      expect(r.errors).toEqual([
+        "Error: batch audits are local only for now and you are signed in: add --offline (signed-in batches with a credit estimate and --max-credits are not available yet)",
+      ]);
     });
   }
 
-  test("signed in with --offline passes the guard", async () => {
-    const { exit, errors } = await signedIn(["--offline"]);
-    expect(errors.join("\n")).not.toContain("add --offline");
-    expect(exit).toBe(BATCH_EXIT.urlFailed);
-  });
+  for (const offlineArgs of [["--offline"], ["--offline=true"]]) {
+    test(`${JSON.stringify(offlineArgs)} runs and each child gets exactly --offline`, async () => {
+      const r = await signedInBatch(offlineArgs);
+      expect(r.exitCode).toBe(0);
+      expect(r.childArgs.length).toBe(1);
+      const args = r.childArgs[0]!;
+      expect(args.slice(0, 3)).toEqual([
+        "audit",
+        "https://a.com/",
+        "--offline",
+      ]);
+      expect(args.filter((a) => a.includes("offline"))).toEqual(["--offline"]);
+      expect(args).not.toContain("false");
+    });
+  }
 });
 
 describe("helpers", () => {
@@ -488,7 +514,23 @@ describe("helpers", () => {
         "quick",
         "--allow-private-hosts",
       ])
-    ).toEqual(["--max-pages", "10", "--offline", "-C", "quick"]);
+    ).toEqual(["--max-pages", "10", "-C", "quick"]);
+  });
+
+  test("passthroughArgs drops every raw offline form (the orchestrator adds the resolved one)", () => {
+    expect(
+      passthroughArgs([
+        "--offline=false",
+        "--max-pages",
+        "10",
+        "--offline",
+        "false",
+        "--no-offline",
+        "--offline=true",
+        "-C",
+        "quick",
+      ])
+    ).toEqual(["--max-pages", "10", "-C", "quick"]);
   });
 
   test("statusFromExit follows the audit exit codes", () => {

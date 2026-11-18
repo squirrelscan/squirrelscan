@@ -65,6 +65,10 @@ const BATCH_FLAGS: Record<string, boolean> = {
   restart: false,
   "allow-private-hosts": false,
   "batch-record": true,
+  // The orchestrator passes the offline value it resolved, never the raw flag: `--offline=false` or `--offline false`
+  // would flip a child to cloud rendering (the bare `false` is dropped as a positional).
+  offline: false,
+  "no-offline": false,
   // Per-URL outputs the orchestrator decides.
   format: true,
   f: true,
@@ -732,6 +736,8 @@ export async function executeBatch(opts: BatchOptions): Promise<number> {
 export async function runBatch(input: {
   args: Record<string, unknown>;
   rawArgs: readonly string[];
+  /** Tests only: run a fake child instead of this binary. */
+  spawn?: SpawnChild;
 }): Promise<void> {
   const { args, rawArgs } = input;
   const fail = (message: string): void => {
@@ -783,7 +789,9 @@ export async function runBatch(input: {
     if (Number.isFinite(md) && md > 0) urlTimeout = Math.ceil(md * 1.5 + 60);
   }
   const format = String(args.format ?? "json");
-  if (args.offline !== true) {
+  // The parsed value, not the flag's presence: citty reads `--offline=false` and `--offline false` as false.
+  const offline = args.offline === true;
+  if (!offline) {
     const { createCloudClientWithSource } = await import("@/tools/cloud");
     if (
       createCloudClientWithSource({ timeoutMs: 1000, maxAttempts: 1 })?.client
@@ -841,9 +849,13 @@ export async function runBatch(input: {
       ...(maxUrls !== undefined ? { maxUrls } : {}),
       allowPrivateHosts: args["allow-private-hosts"] === true,
       format,
-      passthrough: passthroughArgs(rawArgs),
+      passthrough: [
+        ...(offline ? ["--offline"] : []),
+        ...passthroughArgs(rawArgs),
+      ],
       stopSignal: controller.signal,
       killSignal: killer.signal,
+      ...(input.spawn ? { spawn: input.spawn } : {}),
     });
   } finally {
     emitter.off("SIGINT", onSignal);
