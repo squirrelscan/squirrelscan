@@ -3,6 +3,7 @@ name: DCO
 on:
   pull_request:
     branches: [main]
+  merge_group:
 
 permissions:
   contents: read
@@ -12,10 +13,18 @@ jobs:
     name: Verify commit sign-offs
     runs-on: ubuntu-latest
     steps:
+      # A merge queue entry only holds pull requests whose own sign-off check
+      # already passed (it is a required check), and the queue's squash commit
+      # is written by GitHub, so there is nothing new to verify here.
+      - name: Sign-offs verified on the pull request
+        if: ${{ github.event_name == 'merge_group' }}
+        run: echo "Merge queue entry; each pull request passed this check before it was queued."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ github.event_name == 'pull_request' }}
         with:
           fetch-depth: 0
       - name: Check DCO sign-offs
+        if: ${{ github.event_name == 'pull_request' }}
         env:
           # The PR's author, NOT github.actor. github.actor is whoever
           # triggered *this run*, so it flips to a human the moment anyone
