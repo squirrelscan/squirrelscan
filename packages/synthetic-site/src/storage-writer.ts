@@ -230,6 +230,9 @@ async function writeCrawlBody(
         imagesTotal: 0,
         bytesTotal: 0,
         avgLoadTimeMs: 0,
+        // Real crawls record the sitemap read state (crawler.ts); a synthetic
+        // crawl reads its one sitemap in full.
+        sitemapReadState: "complete",
       },
     }),
   );
