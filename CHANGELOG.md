@@ -55,10 +55,6 @@ Six new rules, including four probing security checks that knock on the doors a 
 - The published entity map now summarizes structurally identical entities into counted groups (`groups`) instead of sampling them, so a large catalogue states the true size of each shape. Rule verdicts still read the full map (#407).
 - `perf/bad-caching` reads response header names in any case (`ETag`, `Cache-Control`, `Last-Modified`), and a page whose stored record has `headers.recorded: false` is no longer counted as missing a header. It shows as not checked with the reason `headers-not-recorded` (squirrelscan/repo#4641).
 
-### Added
-
-- New probing rule `crawl/custom-404` (squirrelscan/repo#1386): on an `active` or `aggressive` run it sends one `GET` to a random path that cannot exist and judges the answer. A 2xx is a soft 404 (fail), a redirect is a warning, and a real 404 or 410 is checked for a stock server page, a route back into the site and `noindex`. Below `active`, offline, or when no 404 response was observed it reports skipped, never pass. It extends `crawl/soft-404`, which still judges the pages the crawl fetched.
-
 ### Fixed
 
 - `core/meta-description` no longer reports a too-short description on a page written mostly in Han, kana, Hangul or Thai. The length floor is calibrated for Latin text, so that check is skipped there, and the skip message says why. Too-long and missing descriptions are still reported (#1866).
