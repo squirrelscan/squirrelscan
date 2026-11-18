@@ -1,0 +1,1 @@
+- `crawl/sitemap-coverage` and `integrity/orphan-page` treat a sitemap whose read state was not recorded as unknown, not complete. Coverage skips its missing-page check and says why, and orphan-page no longer escalates a page to likely injected on that sitemap's word (#1869).
