@@ -3730,9 +3730,9 @@
   ]
  },
  "schema/expected-type": {
-  "digest": "148560408533416",
+  "digest": "37096859135308",
   "lines": [
-   "expected-type|skipped|Not checked: the page classifier is off (--no-classifier or classifier.enabled = false)||"
+   "expected-type|skipped|Not checked: no page classifier ran on this page||"
   ]
  },
  "schema/faq": {
@@ -3823,8 +3823,8 @@
   "digest": "111694927425978",
   "lines": [
    "exposed-actuator-not-checked|skipped|Probing is passive, so no Spring Boot Actuator path was probed. Run with --probe active to check for exposed actuator endpoints.||"
-   ]
-  },
+  ]
+ },
  "security/exposed-files": {
   "digest": "88417882991078",
   "lines": [
