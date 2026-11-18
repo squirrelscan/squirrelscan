@@ -1,0 +1,1 @@
+- `core/meta-description` no longer reports a too-short description on a page written mostly in Han, kana, Hangul or Thai. The length floor is calibrated for Latin text, so that check is skipped there, and the skip message says why. Too-long and missing descriptions are still reported (#1866).
