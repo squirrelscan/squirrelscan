@@ -13,6 +13,20 @@ let base: string;
 let hits: string[] = [];
 let body = "var a=1;";
 
+/** A valid cache entry, written out by hand so a change to the stored shape shows here. */
+function entry(body: string): string {
+  return JSON.stringify({
+    v: 1,
+    body,
+    contentType: "application/javascript",
+    contentEncoding: null,
+    cacheHeaders: { cacheControl: null, expires: null, date: null, etag: null, lastModified: null },
+    responseMs: 5,
+  });
+}
+
+const storedBody = (raw: string | undefined) => (raw === undefined ? undefined : (JSON.parse(raw) as { body: string }).body);
+
 function memoryCache(): ScriptContentCache & { map: Map<string, string> } {
   const map = new Map<string, string>();
   return { map, get: (url) => map.get(url) ?? null, put: (url, b) => void map.set(url, b) };
@@ -53,7 +67,61 @@ describe("script content cache (repo#1415)", () => {
     const second = await run({ contentCache });
     expect(hits).toHaveLength(2);
     expect(second.map((r) => r.content)).toEqual(["var a=1;", "var a=1;"]);
-    expect(second.every((r) => r.fromCache === true && r.contentEncoding === undefined)).toBe(true);
+    expect(second.every((r) => r.fromCache === true)).toBe(true);
+  });
+
+  test("a hit replays the content type, content-encoding, caching headers and response time", async () => {
+    const headers = {
+      "content-type": "text/javascript; charset=utf-8",
+      "content-encoding": "gzip",
+      "cache-control": "public, max-age=600",
+      expires: "Wed, 18 Nov 2026 10:10:00 GMT",
+      date: "Wed, 18 Nov 2026 10:00:00 GMT",
+      etag: '"v1"',
+      "last-modified": "Tue, 17 Nov 2026 10:00:00 GMT",
+    };
+    const gz = Bun.serve({
+      port: 0,
+      async fetch() {
+        hits.push("gz");
+        await Bun.sleep(15);
+        return new Response(Bun.gzipSync(new TextEncoder().encode("var g=1;")), { headers });
+      },
+    });
+    try {
+      const contentCache = memoryCache();
+      const url = `http://127.0.0.1:${gz.port}/g.js`;
+      const once = async () => (await Effect.runPromise(fetchScriptContents([url], { contentCache })))[0]!;
+      const first = await once();
+      const second = await once();
+      expect(hits).toEqual(["gz"]);
+      expect(second.fromCache).toBe(true);
+      expect(second.content).toBe("var g=1;");
+      expect(second.contentType).toBe("text/javascript; charset=utf-8");
+      expect(second.contentEncoding).toBe("gzip");
+      expect(second.cacheHeaders).toEqual({
+        cacheControl: "public, max-age=600",
+        expires: "Wed, 18 Nov 2026 10:10:00 GMT",
+        date: "Wed, 18 Nov 2026 10:00:00 GMT",
+        etag: '"v1"',
+        lastModified: "Tue, 17 Nov 2026 10:00:00 GMT",
+      });
+      expect(first.responseMs).toBeGreaterThanOrEqual(15);
+      expect(second.responseMs).toBe(first.responseMs);
+    } finally {
+      gz.stop(true);
+    }
+  });
+
+  test("an entry that is not a valid envelope (a bare body, a corrupt row) is a miss and is rewritten", async () => {
+    const contentCache = memoryCache();
+    contentCache.map.set(`${base}/a.js`, "var old=1;");
+    contentCache.map.set(`${base}/b.js`, JSON.stringify({ v: 1, body: "var old=1;" }));
+    const results = await run({ contentCache });
+    expect(hits).toEqual(["/a.js", "/b.js"]);
+    expect(results.every((r) => !r.fromCache && r.content === "var a=1;")).toBe(true);
+    expect(storedBody(contentCache.map.get(`${base}/a.js`))).toBe("var a=1;");
+    expect(storedBody(contentCache.map.get(`${base}/b.js`))).toBe("var a=1;");
   });
 
   test("a stale entry (cache returns null) is refetched and refreshed", async () => {
@@ -64,7 +132,7 @@ describe("script content cache (repo#1415)", () => {
     const second = await run({ contentCache });
     expect(hits).toHaveLength(4);
     expect(second[0]?.content).toBe("var a=2;");
-    expect(contentCache.map.get(`${base}/a.js`)).toBe("var a=2;");
+    expect(storedBody(contentCache.map.get(`${base}/a.js`))).toBe("var a=2;");
   });
 
   test("failed fetches are not cached", async () => {
@@ -108,7 +176,7 @@ describe("script content cache (repo#1415)", () => {
       const slowBase = `http://127.0.0.1:${slow.port}`;
       const list = Array.from({ length: 10 }, (_, i) => `${slowBase}/t${i}.js`);
       const contentCache = memoryCache();
-      contentCache.put(list[9]!, "var cached=1;");
+      contentCache.put(list[9]!, entry("var cached=1;"));
       const budget = createFetchBudget({ tarpitLatencyMs: 10, tarpitStrikes: 2 });
       const results = await Effect.runPromise(
         fetchScriptContents(list, { concurrency: 1, fetchAll: true, maxScripts: 10, budget, contentCache }),
@@ -208,10 +276,10 @@ describe("script content cache (repo#1415)", () => {
 
   test("anyContentType passes (manifests, stylesheets) bypass the cache", async () => {
     const contentCache = memoryCache();
-    contentCache.put(`${base}/a.js`, "stale");
+    contentCache.put(`${base}/a.js`, entry("stale"));
     const results = await run({ contentCache, anyContentType: true });
     expect(hits).toHaveLength(2);
     expect(results[0]?.content).toBe("var a=1;");
-    expect(contentCache.map.get(`${base}/a.js`)).toBe("stale");
+    expect(contentCache.map.get(`${base}/a.js`)).toBe(entry("stale"));
   });
 });
