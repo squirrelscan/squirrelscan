@@ -686,6 +686,7 @@
               "rules/ax/well-known-agent",
               "rules/ax/content-signals",
               "rules/ax/noai-signals",
+              "rules/ax/webmcp",
               "rules/ax/rsl-license",
               "rules/ax/api-discovery",
               "rules/ax/archive-indexing",

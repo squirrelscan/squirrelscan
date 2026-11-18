@@ -1,0 +1,144 @@
+---
+title: "WebMCP declarations: tools a browsing agent can call"
+description: "Which forms declare WebMCP tools with toolname and tooldescription, and which declarations are invalid. squirrel reports, and never penalises."
+---
+
+## What WebMCP is
+
+WebMCP is an early browser preview that lets a page offer actions to an agent that browses on behalf of a person. It is a draft from the [Web Machine Learning community group](https://github.com/webmachinelearning/webmcp), and its details can still change. A page can expose a tool two ways.
+
+- Declaratively, a `<form>` becomes a tool. `toolname` gives it a name and `tooldescription` says in plain language what it does. The input schema is derived from the form's named controls, and a control can add `toolparamtitle` and `toolparamdescription`. A `required` control is a required parameter. The optional boolean `toolautosubmit` lets the agent submit the form without a person clicking.
+- Imperatively, script calls `navigator.modelContext.registerTool(...)` or `navigator.modelContext.provideContext({ tools: [...] })`.
+
+Chrome's [Lighthouse agentic browsing scoring](https://developer.chrome.com/docs/lighthouse/agentic-browsing/scoring) looks at the same area. Its accessibility checks overlap rules squirrel already has, so this rule links to them in [Related rules](#related-rules) instead of repeating them.
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads the raw HTML. It emits up to five checks, and none of them ever fails.
+
+- `webmcp-declarative-tools`: at info status, `Found N declarative WebMCP tool(s) in the page HTML` when at least one `<form>` has a `toolname` attribute, with one item per tool and, in the details, each tool's name, description, parameter names and whether it autosubmits. Otherwise `No declarative WebMCP tools`, also at info status. When the page has no parsed document the check is skipped.
+- `webmcp-tool-schema`: only when a tool or a stray `toolname` exists. It passes when every declaration is valid, and warns otherwise with one item per problem. See [Validity rules](#validity-rules).
+- `webmcp-forms-without-tools`: at info status, lists forms on the page that are not tools and that have at least one control other than a hidden input or a button. It suggests adding `toolname` and `tooldescription` to the forms that represent a task an agent should be able to do. Search and login forms are listed too: you decide which ones are tasks.
+- `webmcp-imperative`: at info status, only when an inline `<script>` (no `src`, not a JSON type) mentions `navigator.modelContext` together with `registerTool` or `provideContext`. It says the registration was detected but not validated. External scripts and anything registered at runtime are not checked from raw HTML.
+- `webmcp-tool-form-challenge`: at info status, when a tool form contains a visible challenge widget. See [CAPTCHA on a tool form](#captcha-on-a-tool-form).
+
+## Why it is informational
+
+The rule has info severity and weight 1. A page with no WebMCP loses nothing, because the feature is a preview that most sites do not use yet. A `warn` from `webmcp-tool-schema` is advisory and does not change the score either. The rule never emits `fail`.
+
+## Validity rules
+
+`webmcp-tool-schema` warns when any of these is true. Only the `toolname` format is a squirrelscan choice: it mirrors the tool-name conventions of MCP clients, and the WebMCP draft does not fix a character set.
+
+- `toolname` is empty or only whitespace.
+- `toolname` is not 1 to 64 characters of letters, digits, `_`, `.` or `-`. This is squirrelscan's validity check.
+- `tooldescription` is missing or empty.
+- Two forms on the page use the same `toolname`.
+- `toolname` is set on an element that is not a `<form>`.
+- A `required` control, or one with `toolparamtitle` or `toolparamdescription`, has no `name`, so it cannot appear in the schema.
+- Two controls in one tool share a `name` but have different types. A group of radio buttons or checkboxes sharing a name is fine.
+
+Parameters are the named `input`, `select` and `textarea` controls inside the form. Hidden inputs, submit and reset buttons, button inputs and image inputs are not counted.
+
+## CAPTCHA on a tool form
+
+[security/form-captcha](/rules/security/form-captcha) recommends a CAPTCHA on public forms, and that advice stands: keep the abuse protection. The catch is that a visible challenge on a form an agent is meant to use blocks the agent that is acting for a person. So squirrel notes a visible widget inside a tool form and suggests an invisible or agent-tolerant check there instead, such as a risk score, a rate limit, or a challenge that only appears when something looks wrong.
+
+A widget counts as visible when it is a `g-recaptcha`, `h-captcha`, `frc-captcha` or `cf-turnstile` element. It does not count when it has `data-size="invisible"`, when a Turnstile widget has `data-appearance="interaction-only"`, or when the class sits on the submit `<button>` or `<input>`, which is how invisible reCAPTCHA binds. A challenge that a script adds later is not seen in raw HTML.
+
+## How to fix it
+
+Declare a task as a tool:
+
+```html
+<form toolname="search_flights" tooldescription="Search flights between two airports">
+  <input name="origin" required toolparamdescription="IATA airport code" />
+  <input name="destination" required />
+  <button type="submit">Search</button>
+</form>
+```
+
+Give every control that belongs in the schema a `name`, keep tool names unique on the page, and describe each tool as if the agent had never seen your site.
+
+| | |
+|---|---|
+| **Rule ID** | `ax/webmcp` |
+| **Category** | [Agent Experience](/rules/ax) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/webmcp"]
+```
+
+### Disable all Agent Experience rules
+
+```toml squirrel.toml
+[rules]
+disable = ["ax/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["ax/webmcp"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `webmcp-declarative-tools` | Clean | `webmcp-forms-without-tools`, `webmcp-imperative`, `webmcp-tool-form-challenge` |
+| `webmcp-declarative-tools` | Not checked |  |
+| `webmcp-tool-schema` | Problem |  |
+| `webmcp-tool-schema` | Clean | `webmcp-tool-schema` |
+| `webmcp-forms-without-tools` | Problem |  |
+| `webmcp-imperative` | Problem |  |
+| `webmcp-tool-form-challenge` | Problem |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+An agent that drives a page reads its accessibility tree, so these rules cover what a WebMCP page also needs. This rule does not repeat their findings.
+
+- [a11y/button-name](/rules/a11y/button-name): a programmatic name on every button.
+- [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name): a name on every ARIA input field.
+- [a11y/aria-required-children](/rules/a11y/aria-required-children): roles that need particular children.
+- [a11y/aria-required-parent](/rules/a11y/aria-required-parent): roles that need a particular parent.
+- [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): focusable content hidden from the accessibility tree.
+- [a11y/aria-roles](/rules/a11y/aria-roles): valid role values.
+- [a11y/form-labels](/rules/a11y/form-labels): a label on every form control.
+- [perf/cls-hints](/rules/perf/cls-hints): layout shift that moves a control as an agent clicks it.
+- [security/form-captcha](/rules/security/form-captcha): the abuse protection on public forms.
+
+## References
+
+- [WebMCP draft, Web Machine Learning community group](https://github.com/webmachinelearning/webmcp)
+- [Agentic browsing scoring, Lighthouse](https://developer.chrome.com/docs/lighthouse/agentic-browsing/scoring)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Agent Experience section of the report. Each tool is listed with its name and description. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Agent Experience section looks like on a real site.
+  </Card>
+</CardGroup>
