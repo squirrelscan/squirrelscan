@@ -7,8 +7,8 @@
 // The private repo's apps/api/tests/routes/rule-count-consistency.test.ts reads the same files at the
 // gitlink bump. This guard fails in the public PR itself instead, and the two must never disagree: the
 // same counting source (`loadAllRules()` by `meta.category`), the same card and prose parsing for the
-// rules pages, and the same floor rule (`PUBLIC_RULE_COUNT_FLOOR` is the live total rounded DOWN to the
-// nearest 50, so the live total is in [floor, floor + 50)).
+// rules pages, and the same floor rule (the advertised total is the live total rounded DOWN to the
+// nearest 10, so the live total is in [floor, floor + 10), and `PUBLIC_RULE_COUNT_FLOOR` must equal it).
 
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
@@ -28,6 +28,10 @@ for (const rule of loadAllRules().values()) {
   registry.set(rule.meta.category, (registry.get(rule.meta.category) ?? 0) + 1);
 }
 const total = [...registry.values()].reduce((sum, n) => sum + n, 0);
+
+/** The advertised total: derived from the registry, never read from the constant under test. */
+const FLOOR_STEP = 10;
+const advertisedFloor = Math.floor(total / FLOOR_STEP) * FLOOR_STEP;
 
 /** category display name -> code, for the categories the registry has rules in. */
 const codeByName = new Map(
@@ -99,7 +103,7 @@ describe("rule counts in README.md and docs/index.mdx", () => {
     expect(text).toContain(`**${codeByName.size} categories**`);
     const stated = [...text.matchAll(/\*\*(?:Total: )?(\d+)\+ rules\b/g)].map((m) => Number(m[1]));
     expect(stated.length).toBeGreaterThan(0);
-    for (const floor of stated) expect(floor).toBe(PUBLIC_RULE_COUNT_FLOOR);
+    for (const floor of stated) expect(floor).toBe(advertisedFloor);
   });
 
   test("README.md states the same floor and category count, in both places it says them", () => {
@@ -108,15 +112,16 @@ describe("rule counts in README.md and docs/index.mdx", () => {
     const totalLine = /\*\*Total: (\d+)\+ rules across (\d+) categories\*\*/.exec(readme);
     for (const found of [feature, totalLine]) {
       expect(found).not.toBeNull();
-      expect(Number(found?.[1])).toBe(PUBLIC_RULE_COUNT_FLOOR);
+      expect(Number(found?.[1])).toBe(advertisedFloor);
       expect(Number(found?.[2])).toBe(codeByName.size);
     }
   });
 
   // The same two checks the private guard makes of the constant itself.
-  test("PUBLIC_RULE_COUNT_FLOOR is the live total rounded down to the nearest 50", () => {
-    expect(PUBLIC_RULE_COUNT_FLOOR).toBeLessThanOrEqual(total);
-    expect(total).toBeLessThan(PUBLIC_RULE_COUNT_FLOOR + 50);
+  test("PUBLIC_RULE_COUNT_FLOOR is the live total rounded down to the nearest 10", () => {
+    expect(PUBLIC_RULE_COUNT_FLOOR).toBe(advertisedFloor);
+    expect(total).toBeGreaterThanOrEqual(PUBLIC_RULE_COUNT_FLOOR);
+    expect(total).toBeLessThan(PUBLIC_RULE_COUNT_FLOOR + FLOOR_STEP);
   });
 
   test("PUBLIC_CATEGORY_COUNT matches the live category count", () => {
@@ -210,13 +215,13 @@ describe("rule counts stated in prose", () => {
   const read = (file: string) => readFileSync(join(ROOT, file), "utf8");
 
   // `against` is the category code the number describes, or "total" for the whole catalog, which
-  // pages state as the advertised floor ("300+"), not the exact total.
+  // pages state as the advertised floor ("340+"), not the exact total.
   const PROSE_COUNTS: Array<{ file: string; against: string; re: RegExp }> = [
     { file: `${RULES_DOCS_DIR}/index.mdx`, against: "total", re: /All (\d+)\+ audit rules/ },
     {
       file: `${RULES_DOCS_DIR}/index.mdx`,
       against: "total",
-      // The paired bold counts ("**300+ rules** across **22 categories**") make this a whole-catalog claim.
+      // The paired bold counts ("**340+ rules** across **22 categories**") make this a whole-catalog claim.
       re: /\*\*(\d+)\+ rules\*\*\s+\S+\s+\*\*\d+ categories\*\*/,
     },
     {
@@ -229,7 +234,7 @@ describe("rule counts stated in prose", () => {
   ];
 
   const expected = (against: string): number | undefined =>
-    against === "total" ? PUBLIC_RULE_COUNT_FLOOR : registry.get(against);
+    against === "total" ? advertisedFloor : registry.get(against);
 
   for (const { file, against, re } of PROSE_COUNTS) {
     test(`${file}: the prose count for "${against}" matches`, () => {
@@ -273,7 +278,7 @@ describe("rule counts stated in prose", () => {
   }
 
   // The README and docs/index.mdx state the floor and the category count in running text; every one of
-  // those sentences must agree with the constants, not only the two the tests above name.
+  // those sentences must agree with the registry, not only the two the tests above name.
   for (const file of ["README.md", "docs/index.mdx"]) {
     test(`${file}: every "N+ rules" is the advertised floor and every "N categories" the live count`, () => {
       const text = read(file).replace(FENCE_RE, "");
@@ -281,7 +286,7 @@ describe("rule counts stated in prose", () => {
       const categories = [...text.matchAll(/(\d+)\s+categories\b/g)].map((m) => Number(m[1]));
       expect(floors.length).toBeGreaterThan(0);
       expect(categories.length).toBeGreaterThan(0);
-      for (const n of floors) expect(n).toBe(PUBLIC_RULE_COUNT_FLOOR);
+      for (const n of floors) expect(n).toBe(advertisedFloor);
       for (const n of categories) expect(n).toBe(PUBLIC_CATEGORY_COUNT);
     });
   }

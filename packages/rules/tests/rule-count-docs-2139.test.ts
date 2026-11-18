@@ -12,8 +12,11 @@ import { loadAllRules } from "../src/index";
 // stale counts and nothing failed until the submodule pointer moved. This test
 // runs in the public repo so the mistake is caught in the PR that makes it.
 //
-// Totals are advertised as a floor ("300+", PUBLIC_RULE_COUNT_FLOOR); category
-// counts and per-category card counts are exact.
+// Totals are advertised as a floor: the live total rounded DOWN to the nearest
+// 10 ("340+" for 342 rules). The floor is derived here from the registry, never
+// read from the constant under test, so a stale PUBLIC_RULE_COUNT_FLOOR fails
+// too, and the guard trips the moment the live total reaches the next multiple
+// of 10. Category counts and per-category card counts are exact.
 
 const REPO_ROOT = join(import.meta.dir, "../../..");
 const FIX =
@@ -29,6 +32,10 @@ for (const rule of rules) {
 }
 const liveCategories = liveByCategory.size;
 
+/** The rounding step of the advertised total. Pinned here: changing it is a copy policy change. */
+const FLOOR_STEP = 10;
+const advertisedFloor = Math.floor(liveTotal / FLOOR_STEP) * FLOOR_STEP;
+
 type Surface = { file: string; re: RegExp };
 
 const TOTAL_SURFACES: Surface[] = [
@@ -37,6 +44,7 @@ const TOTAL_SURFACES: Surface[] = [
   { file: "docs/index.mdx", re: /\*\*(\d+)\+ rules\*\*/g },
   { file: "docs/index.mdx", re: /\*\*Total: (\d+)\+ rules across \d+ categories\b/g },
   { file: "docs/agent-setup/index.mdx", re: /(\d+)\+ rules across SEO/g },
+  { file: "docs/configuration/rules.mdx", re: /\*\*(\d+)\+ rules\*\*/g },
   { file: "README.md", re: /\*\*\[(\d+)\+ rules, \d+ categories\]/g },
   { file: "README.md", re: /\*\*Total: (\d+)\+ rules across \d+ categories\*\*/g },
 ];
@@ -54,9 +62,10 @@ const numbersIn = (s: Surface): number[] =>
   [...read(s.file).matchAll(s.re)].map((m) => Number(m[1]));
 
 describe("public rule counts match the registry (repo#2139)", () => {
-  test("PUBLIC_RULE_COUNT_FLOOR is at most the live total and within 50 of it", () => {
-    expect(PUBLIC_RULE_COUNT_FLOOR).toBeLessThanOrEqual(liveTotal);
-    expect(liveTotal - PUBLIC_RULE_COUNT_FLOOR).toBeLessThan(50);
+  test("PUBLIC_RULE_COUNT_FLOOR is the live total rounded down to the nearest 10", () => {
+    expect(`floor ${PUBLIC_RULE_COUNT_FLOOR} (live total ${liveTotal})`).toBe(
+      `floor ${advertisedFloor} (live total ${liveTotal})`,
+    );
   });
 
   test("PUBLIC_CATEGORY_COUNT equals the live category count", () => {
@@ -69,9 +78,9 @@ describe("public rule counts match the registry (repo#2139)", () => {
       if (found.length === 0)
         throw new Error(`${s.re} not found in ${s.file}: the copy moved; update this test.`);
       for (const n of found) {
-        if (n !== PUBLIC_RULE_COUNT_FLOOR) {
+        if (n !== advertisedFloor) {
           throw new Error(
-            `${s.file} says ${n}+ rules, expected ${PUBLIC_RULE_COUNT_FLOOR}+ (live total ${liveTotal}). ${FIX}`,
+            `${s.file} says ${n}+ rules, expected ${advertisedFloor}+ (live total ${liveTotal}). ${FIX}`,
           );
         }
       }
@@ -90,6 +99,41 @@ describe("public rule counts match the registry (repo#2139)", () => {
       }
     });
   }
+});
+
+// Every "N+ rules" (or "N+ audit rules", "N+ rule catalog") in the public copy states the floor, not
+// only the sentences listed above: a new page that says "300+ rules" fails here the day it lands.
+describe("every rounded rule total in the public copy is the floor", () => {
+  const FENCE_RE = /```[\s\S]*?```/g;
+  const TOTAL_RE = /\b(\d[\d,]*)\+\s+(?:audit\s+)?rules?\b/g;
+  const files = [
+    "README.md",
+    "AGENTS.md",
+    "npm/package.json",
+    ".claude-plugin/marketplace.json",
+    ...[...new Bun.Glob("docs/**/*.mdx").scanSync({ cwd: REPO_ROOT })].filter(
+      (file) => !file.includes("node_modules"),
+    ),
+  ].sort();
+
+  test("the sweep reads the docs", () => {
+    expect(files.length).toBeGreaterThan(100);
+  });
+
+  test("no file states a different rounded total", () => {
+    const wrong: string[] = [];
+    let seen = 0;
+    for (const file of files) {
+      const text = read(file).replace(FENCE_RE, "");
+      for (const m of text.matchAll(TOTAL_RE)) {
+        seen += 1;
+        const n = Number((m[1] as string).replace(/,/g, ""));
+        if (n !== advertisedFloor) wrong.push(`${file}: "${m[0]}", expected ${advertisedFloor}+`);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+    expect(wrong).toEqual([]);
+  });
 });
 
 describe("docs category cards match the registry (repo#2139)", () => {
