@@ -1,0 +1,74 @@
+---
+title: "Generic anchor density: click here and read more across the site"
+description: "One read more is fine. squirrel measures the share of internal anchors that are generic across the whole crawl and lists the pages that carry the most."
+---
+
+## What generic anchor density is
+
+A generic anchor is link text that names no destination: "click here", "read more", "learn more", "here", "this page". One of them on a page is normal. A site where a large share of its internal anchors read that way has a link graph that says nothing about its pages, to readers scanning links, to search engines and to coding agents that follow them.
+
+[links/anchor-text](/rules/links/anchor-text) looks at one page at a time and only notes generic anchors. This rule measures the corpus: generic anchors divided by internal content anchors across every crawled page.
+
+## What squirrel checks
+
+The rule is site-wide and emits a single check named `generic-anchor-density`. It counts internal, dofollow anchors that have text and sit outside a `nav`, `header`, `footer` or `aside` landmark. Sitewide chrome repeats on every page and would swamp the editorial ratio, and empty anchors are reported by `links/anchor-text`. A conventional label such as "sign in" or "privacy" is never generic.
+
+- Skipped when fewer than `minAnchors` (default 30) internal content anchors were crawled. Message: `Only 12 internal content anchor(s) crawled, fewer than the 30 needed to judge generic anchor density`.
+- Pass when the share is below `warnRatio` (default 20%). Message: `4.2% of internal anchors are generic (5 of 119), below the 20% threshold`.
+- Warn from `warnRatio` up to `failRatio` (default 40%), fail at or above it. Message: `46.7% of internal anchors are generic (140 of 300), across 41 page(s)`. The value is the ratio and the items list up to ten pages with the most generic anchors, each as `https://example.com/blog: 12 of 15 anchors are generic`. Severity warning, weight 3.
+
+The phrase list is shared with `links/anchor-text` and `a11y/link-text`: `click here`, `here`, `read more`, `learn more`, `more`, `link`, `this`, `this link`, `this page`, `go` and `continue`. The accessibility rule adds action words such as `download` and `view` on top, so the three never disagree about what counts as generic. The match is on the whole text, ignoring case and edge punctuation. This rule matches English phrases only.
+
+| | |
+|---|---|
+| **Rule ID** | `links/generic-anchor-density` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Options
+
+```toml
+[rule_options."links/generic-anchor-density"]
+minAnchors = 30
+warnRatio = 0.2
+failRatio = 0.4
+```
+
+## How to fix it
+
+Replace generic anchors with the name of the destination: "see the pricing plans" instead of "click here", "read the migration guide" instead of "read more". Start with the pages listed, which carry the most generic anchors. Cards that repeat a "Read more" link under a headline link are the usual source: make the headline the descriptive link and drop the extra anchor or give it an `aria-label`.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `generic-anchor-density` | Problem |  |
+| `generic-anchor-density` | Clean | `generic-anchor-density` |
+| `generic-anchor-density` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [links/anchor-text](/rules/links/anchor-text): the per-page view of empty and generic anchors.
+- [a11y/link-text](/rules/a11y/link-text): link names for screen reader users.
+- [links/anchor-mismatch](/rules/links/anchor-mismatch): anchors that contradict the page they point to.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real site.
+  </Card>
+</CardGroup>

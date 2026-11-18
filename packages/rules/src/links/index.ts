@@ -12,6 +12,7 @@ import { clickDepthRule } from "./click-depth";
 import { deadEndPages } from "./dead-end-pages";
 import { deadLinksRule } from "./dead-links";
 import { externalLinksRule } from "./external-links";
+import { genericAnchorDensityRule } from "./generic-anchor-density";
 import { httpsDowngradeRule } from "./https-downgrade";
 import { internalLinksRule } from "./internal-links";
 import { invalidLinksRule } from "./invalid-links";
@@ -42,6 +43,7 @@ export const rules: Rule[] = [
   anchorTextRule,
   anchorMismatchRule,
   anchorTargetConflictRule,
+  genericAnchorDensityRule,
   httpsDowngradeRule,
   telMailtoRule,
 ];
@@ -57,6 +59,7 @@ export {
   deadEndPages,
   deadLinksRule,
   externalLinksRule,
+  genericAnchorDensityRule,
   httpsDowngradeRule,
   internalLinksRule,
   invalidLinksRule,

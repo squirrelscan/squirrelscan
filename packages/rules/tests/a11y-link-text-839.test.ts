@@ -122,7 +122,7 @@ describe("the conventional label set", () => {
     }
     expect(GENERIC_LINK_TEXT).toContain("subscribe");
     expect(GENERIC_LINK_TEXT).toContain("join");
-    expect(GENERIC_LINK_TEXT).toHaveLength(48);
+    expect(GENERIC_LINK_TEXT).toHaveLength(50);
   });
 
   // One row per language. `account` and `legal` list labels that must be exempt, written the way

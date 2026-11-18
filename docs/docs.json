@@ -267,6 +267,7 @@
                   "rules/links/anchor-text",
                   "rules/links/anchor-mismatch",
                   "rules/links/anchor-target-conflict",
+                  "rules/links/generic-anchor-density",
                   "rules/links/https-downgrade",
                   "rules/links/tel-mailto"
                 ]
