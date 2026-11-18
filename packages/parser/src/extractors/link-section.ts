@@ -2,12 +2,14 @@
 //
 // `position` (./links.ts) is a descriptive label that falls back to class/id substrings; `isChrome`
 // (./chrome.ts) is a landmark-only yes/no. This is the label a FINDING quotes ("broken link in the
-// footer"): landmark tags and ARIA roles, plus one markup-only rule for comment threads, because a
-// link there is worth far less than one in the article body and is where spam lands.
+// footer"): landmark tags and ARIA roles, plus two markup-only rules. Comment threads, because a
+// link there is worth far less than one in the article body and is where spam lands. Breadcrumb
+// trails, because a page that shows one is held to describing it (schema/breadcrumb).
 //
 // Strict on purpose: a wrong section names the wrong part of the page in a fix, a missed one only
-// leaves the link as "unknown". Class/id substrings drive only the comments rule, and only on
-// names that mean a comment thread (never a bare `comment` that could be a comment *form* label).
+// leaves the link as "unknown". Class/id substrings drive only the comments and breadcrumbs rules,
+// and the comments rule only on names that mean a comment thread (never a bare `comment` that
+// could be a comment *form* label).
 //
 // The walk is memoised per element: a footer with 300 links reads the footer's attributes once.
 
@@ -33,7 +35,20 @@ const ROLE_SECTION: Record<string, LinkSection> = {
 const COMMENTS_PATTERN =
   /(?:^|[\s_-])(?:comments|comment-?list|comment-?thread|comment-?section|comments-?area|disqus_thread|fb-comments|commento)(?:$|[\s_-])/;
 
+// A breadcrumb trail named in the markup: `<nav aria-label="Breadcrumb">`, `class="breadcrumbs"`,
+// `id="breadcrumb"`. Checked before the landmark tags, so such a `nav` reads "the breadcrumbs".
+const BREADCRUMB_PATTERN = /breadcrumb/i;
+
+function isBreadcrumb(element: Element): boolean {
+  for (const name of ["aria-label", "class", "id"]) {
+    const value = element.getAttribute?.(name);
+    if (value && BREADCRUMB_PATTERN.test(value)) return true;
+  }
+  return false;
+}
+
 function ownSection(element: Element): LinkSection | null {
+  if (isBreadcrumb(element)) return "breadcrumbs";
   const tag = element.tagName?.toLowerCase();
   if (tag === "nav") return "navigation";
   if (tag === "aside") return "sidebar";
@@ -162,8 +177,16 @@ const REGION_SECTION: Readonly<Record<string, LinkSection>> = {
   article_chrome: "content",
 };
 
-/** Sections the markup names for certain: the site's header and footer, and comment threads. */
-const MARKUP_FINAL: ReadonlySet<LinkSection> = new Set(["header", "footer", "comments"]);
+/**
+ * Sections the markup names for certain: the site's header and footer, comment threads, and a
+ * trail the markup labels as breadcrumbs.
+ */
+const MARKUP_FINAL: ReadonlySet<LinkSection> = new Set([
+  "header",
+  "footer",
+  "comments",
+  "breadcrumbs",
+]);
 
 /**
  * Landmarks a model section purpose may refine: a `nav` that is the pagination or the breadcrumbs
@@ -176,8 +199,8 @@ const MARKUP_REFINABLE: ReadonlySet<LinkSection> = new Set(["navigation", "sideb
 /**
  * Combine the markup's answer with the classifier's, for one anchor.
  *
- * Precedence: the site's header or footer and comment threads in the markup win outright (the
- * placer is not asked). A section purpose (pagination, breadcrumbs, related content, ...) refines a
+ * Precedence: the site's header or footer, comment threads and a breadcrumb trail in the markup
+ * win outright (the placer is not asked). A section purpose (pagination, breadcrumbs, related content, ...) refines a
  * navigation or sidebar landmark and beats the markup's weak `content` (inside `<main>` or
  * `<article>`, where those blocks usually sit); a region fills a markup `unknown`. The answer's `source` is carried through to be displayed; the only place it
  * decides anything is the comments exception above.

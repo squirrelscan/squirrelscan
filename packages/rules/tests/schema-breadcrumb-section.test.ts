@@ -48,6 +48,49 @@ async function run(body: string, sections: (LinkSection | undefined)[], url = "h
   return (await breadcrumbSchemaRule.run(ctx)).checks as CheckResult[];
 }
 
+/** Run the rule on the links parsePage itself extracts, as a real audit does. */
+async function runParsed(body: string, url = "https://example.com/parts/x"): Promise<CheckResult[]> {
+  const parsed = parsePage(body, url) as ParsedPage;
+  const ctx: RuleContext = {
+    page: { url, html: body, statusCode: 200, loadTime: 0, headers: {} },
+    parsed,
+    options: {},
+  };
+  return (await breadcrumbSchemaRule.run(ctx)).checks as CheckResult[];
+}
+
+function trailPage(crumbs: number, schema?: unknown): string {
+  const script = schema ? `<script type="application/ld+json">${JSON.stringify(schema)}</script>` : "";
+  const items = ["/", "/parts", "/parts/brakes"]
+    .slice(0, crumbs)
+    .map((href, i) => `<li><a href="${href}">crumb ${i}</a></li>`)
+    .join("");
+  return (
+    `<html><head><title>Parts</title>${script}</head><body>` +
+    `<nav aria-label="Main"><a href="/about">About</a><a href="/blog">Blog</a></nav>` +
+    `<nav aria-label="breadcrumb"><ol>${items}<li>Brake pads</li></ol></nav>` +
+    `<main><p>content</p></main></body></html>`
+  );
+}
+
+describe("schema/breadcrumb on a markup breadcrumb trail (parsePage links)", () => {
+  test("a two-link nav aria-label=breadcrumb trail with no BreadcrumbList is a fail", async () => {
+    const checks = await runParsed(trailPage(2));
+    expect(checks.map((c) => c.status)).toEqual(["fail"]);
+    expect(checks[0]!.details).toEqual({ trailLinks: 2 });
+  });
+
+  test("the same trail with a BreadcrumbList passes", async () => {
+    const checks = await runParsed(trailPage(2, BREADCRUMB_LD));
+    expect(checks.map((c) => [c.name, c.status])).toEqual([["breadcrumb-valid", "pass"]]);
+  });
+
+  test("a one-link trail is below the minimum: info", async () => {
+    const checks = await runParsed(trailPage(1));
+    expect(checks.map((c) => c.status)).toEqual(["info"]);
+  });
+});
+
 describe("schema/breadcrumb with the breadcrumbs section", () => {
   test("two markup breadcrumb-section links and no BreadcrumbList is a fail", async () => {
     const checks = (await run(html(), ["breadcrumbs", "breadcrumbs", "navigation", "footer"]));

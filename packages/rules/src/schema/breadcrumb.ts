@@ -7,7 +7,8 @@ import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrels
 import { UNREADABLE_MESSAGE, jsonLdTypes, microdataAndRdfaTypes, typeNames } from "./markup-types";
 
 /**
- * Markup-derived anchors in the breadcrumbs section before a missing schema is a
+ * Markup-derived anchors in the breadcrumbs section (an ancestor whose aria-label,
+ * class or id says breadcrumb) before a missing schema is a
  * finding. Two, not one: a single link is what one mislabelled anchor looks like,
  * and a real trail (`Home / Docs / Security`) has at least a root link and a parent.
  * Anchors the page classifier's model placed in the section (`sectionSource` of
@@ -75,10 +76,9 @@ export const breadcrumbSchemaRule: Rule = {
     }
 
     if (!breadcrumbSchema) {
-      // Anchors the classifier's rules placed in the breadcrumbs section show a trail
-      // that no structured data describes (#2307). A model-only placement is not
-      // counted (repo#3365), and with the classifier off no link carries a section,
-      // so both stay the info check.
+      // Anchors in the breadcrumbs section show a trail that no structured data
+      // describes (#2307). The markup names it (an ancestor whose aria-label, class
+      // or id says breadcrumb); a model-only placement is not counted (repo#3365).
       const trailLinks = (ctx.parsed.links ?? []).filter(
         (link) => link.section === "breadcrumbs" && link.sectionSource !== "model",
       ).length;
