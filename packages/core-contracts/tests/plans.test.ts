@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { PlanDefinition, PlanId } from "../src/index";
 
+import { CREDIT_PACKS } from "../src/credits";
 import {
   clampScheduleFrequency,
   getPlan,
@@ -282,5 +283,39 @@ describe("scheduled audit entitlements", () => {
     expect(scheduledWebsiteCapReached("free", 2)).toBe(true);
     expect(scheduledWebsiteCapReached("starter", 500)).toBe(false);
     expect(scheduledWebsiteCapReached("enterprise", 500)).toBe(false);
+  });
+});
+
+// squirrelscan/squirrelscan#2117: every expected value below is a literal, never the imported
+// constant, so changing a price, grant or pack in plans.ts or credits.ts fails here. The top-up
+// rate (CREDIT_TOPUP.creditsPerUsd = 100) is already pinned by a literal in credits.test.ts
+// ("the curve numbers live in one object"), so it is not pinned a second time.
+describe("plan prices and monthly credits are pinned", () => {
+  test("monthly price (USD)", () => {
+    expect(PLANS.free.priceMonthUsd).toBeUndefined();
+    expect(PLANS.starter.priceMonthUsd).toBe(19);
+    expect(PLANS.team.priceMonthUsd).toBeUndefined();
+    expect(PLANS.team.perSeat?.priceMonthUsd).toBe(29);
+    expect(PLANS.enterprise.priceMonthUsd).toBeUndefined();
+  });
+
+  test("yearly price (USD)", () => {
+    expect(PLANS.starter.priceYearUsd).toBe(190);
+    expect(PLANS.team.perSeat?.priceYearUsd).toBe(290);
+  });
+
+  test("monthly credits", () => {
+    expect(PLANS.free.monthlyCredits).toBe(500);
+    expect(PLANS.starter.monthlyCredits).toBe(3000);
+    expect(PLANS.team.monthlyCredits).toBe(0);
+    expect(PLANS.team.perSeat?.includedCreditsPerSeat).toBe(3000);
+    expect(PLANS.enterprise.monthlyCredits).toBe(0);
+  });
+
+  test("credit packs: credits and price (USD)", () => {
+    expect(CREDIT_PACKS).toEqual({
+      pack_1000: { credits: 1000, priceUsd: 9 },
+      pack_5000: { credits: 5000, priceUsd: 39 },
+    });
   });
 });
