@@ -1,1 +1,0 @@
-- `links/broken-links` `details.notFetched` now counts action and token links (`action`) apart from targets outside the crawl scope or disallowed by robots.txt (`excluded`), replacing the single `skipped` count (squirrelscan/repo#3017). The counts still add up to `unfetchedTargets`, and the Not checked hint says an action-only gap is out of reach of any audit.
