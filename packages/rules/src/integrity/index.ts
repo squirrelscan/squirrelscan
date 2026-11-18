@@ -16,6 +16,7 @@
 import type { Rule } from "../types";
 
 import { brandImpersonationRule } from "./brand-impersonation";
+import { chromeOutlierRule } from "./chrome-outlier";
 import { cloakingRule } from "./cloaking";
 import { fakeAuthOverlayRule } from "./fake-auth-overlay";
 import { kitSignatureRule } from "./kit-signature";
@@ -28,6 +29,7 @@ import { templateDiscontinuityRule } from "./template-discontinuity";
 export const rules: Rule[] = [
   templateDiscontinuityRule,
   orphanPageRule,
+  chromeOutlierRule,
   brandImpersonationRule,
   obfuscatedScriptRule,
   fakeAuthOverlayRule,
@@ -42,6 +44,7 @@ export const rules: Rule[] = [
 
 export {
   brandImpersonationRule,
+  chromeOutlierRule,
   cloakingRule,
   fakeAuthOverlayRule,
   kitSignatureRule,

@@ -1,0 +1,117 @@
+---
+title: "Chrome outlier: pages left on an outdated site template"
+description: "A few pages without the navigation, footer and stylesheets of the rest of the site were usually missed in a redesign. squirrel clusters pages by template and flags the stragglers."
+---
+
+## What a chrome outlier is
+
+Chrome is the shell around a page: stylesheets, CSS and script hosts, body classes, CSS variables, the navigation and the footer. After a redesign or a theme change, a handful of pages often stay behind on the old shell, or lose their navigation, footer or stylesheets in a bad migration. Visitors land on them from search and see a different site.
+
+This is a design consistency check. It asks whether a page was left behind, not whether it was planted, which is the question [template discontinuity](/rules/integrity/template-discontinuity) answers.
+
+## What squirrel checks
+
+The rule is site-wide. It groups every successful (2xx) page by its template fingerprint, the same key stored for each page during the crawl. The largest group is the site's template. When that group covers at least `minAgreement` of the pages, a page in a small group (`maxClusterPages` pages or fewer, singletons included) is a straggler when it lacks part of the site template:
+
+- its navigation,
+- its footer,
+- all of its stylesheets, or
+- all of its CSS and script hosts.
+
+Only what is missing counts, and a stylesheet or host only counts when the page keeps none of the template's. The site template often carries assets that are not chrome, such as a post stylesheet, an image CDN every post embeds from or a preconnect hint, so an about or contact page that keeps the site stylesheet is not reported for lacking them. Image hosts and resource hints are not compared at all. A page that keeps the full template and adds to it, such as a route-level CSS chunk, an extra body class or its own CSS variables, has its own styling rather than an old template, and is not reported. Each listed page says what it lacks, for example `Missing navigation, footer`.
+
+Pages that `integrity/template-discontinuity` reports as off-template are left out, so one page is never described twice.
+
+- Skipped when the crawl has fewer pages than `minPages`. Message: `Need >=10 pages to establish a site template`.
+- Skipped when no template covers `minAgreement` of the pages, such as a site of landing pages, docs and a blog that each have their own template. Message: `No dominant site template: the pages use several distinct templates`.
+- Pass when no straggler remains. Message: `All pages share the site's dominant template or a sizeable template of their own`.
+- Warn when stragglers are fewer than `failShare` of the pages or fewer than three. Message: `N page(s) look left on an outdated or broken site template`, with up to five paths listed.
+- Fail when at least three stragglers make up `failShare` or more of the pages.
+
+Severity is warning, weight 4.
+
+## How to fix it
+
+Open each listed page next to a page that looks right. If it is a deliberate one-off, such as a campaign page or a standalone tool, leave it. Otherwise move it onto the current template or republish it from the current theme.
+
+| | |
+|---|---|
+| **Rule ID** | `integrity/chrome-outlier` |
+| **Category** | [Site Integrity](/rules/integrity) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `minPages` | integer, 3 or more | `10` | Minimum pages before a site template norm is established |
+| `minAgreement` | number, 0.5 to 1 | `0.7` | Share of pages the dominant template must cover |
+| `maxClusterPages` | integer, 1 or more | `3` | A non-dominant template used by at most this many pages counts as stragglers |
+| `failShare` | number, 0 to 1 | `0.1` | Straggler share of all pages at which the rule fails instead of warning |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."integrity/chrome-outlier"]
+minAgreement = 0.8
+```
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/chrome-outlier"]
+```
+
+### Disable all Site Integrity rules
+
+```toml squirrel.toml
+[rules]
+disable = ["integrity/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["integrity/chrome-outlier"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `chrome-outlier` | Problem |  |
+| `chrome-outlier` | Clean | `chrome-outlier` |
+| `chrome-outlier` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [integrity/template-discontinuity](/rules/integrity/template-discontinuity): the compromise-minded version, scoring pages against the site baseline.
+- [social/asset-divergence](/rules/social/asset-divergence): site-chrome assets that disagree across pages.
+- [integrity/orphan-page](/rules/integrity/orphan-page): pages linked from nowhere.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Site Integrity section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Site Integrity section looks like on a real site.
+  </Card>
+</CardGroup>

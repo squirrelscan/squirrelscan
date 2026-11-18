@@ -193,6 +193,7 @@
   "images/srcset": 500,
   "images/svg-inline": 500,
   "integrity/brand-impersonation": 500,
+  "integrity/chrome-outlier": 1,
   "integrity/cloaking": 1,
   "integrity/fake-auth-overlay": 500,
   "integrity/kit-signature": 0,

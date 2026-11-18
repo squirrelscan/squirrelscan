@@ -604,6 +604,7 @@
                   "rules/integrity/index",
                   "rules/integrity/template-discontinuity",
                   "rules/integrity/orphan-page",
+                  "rules/integrity/chrome-outlier",
                   "rules/integrity/brand-impersonation",
                   "rules/integrity/obfuscated-script",
                   "rules/integrity/fake-auth-overlay",
