@@ -442,6 +442,14 @@
    "search-engine-access|info|Search-engine bots for http://synthetic.example.com: Googlebot allowed; Bingbot allowed; Applebot allowed|\"#/# allowed\"|"
   ]
  },
+ "ax/answer-blocks": {
+  "digest": "213118854664454",
+  "lines": [
+   "answer-blocks|skipped|No question headings, data tables or charts on this page||",
+   "answer-blocks|skipped|Not a content page, answer blocks not assessed||",
+   "ax/answer-blocks|skipped|Skipped: page is set to noindex via robots meta tag||"
+  ]
+ },
  "ax/api-discovery": {
   "digest": "189302838238827",
   "lines": [
