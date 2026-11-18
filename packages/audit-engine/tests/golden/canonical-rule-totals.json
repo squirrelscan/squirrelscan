@@ -89,6 +89,7 @@
   "content/article-links": 600,
   "content/author-info": 500,
   "content/broken-html": 500,
+  "content/color-sprawl": 1,
   "content/common-misspellings": 1,
   "content/date-agreement": 500,
   "content/dev-leakage": 500,

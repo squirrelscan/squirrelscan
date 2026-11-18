@@ -22,6 +22,7 @@ import type { ParsedPage } from "./types";
 import type { HreflangPageSignal } from "./i18n/hreflang-signal";
 import { buildHreflangSignal } from "./i18n/hreflang-signal";
 import { extractFontUsage, type FontUsageSignal } from "./content/font-consistency";
+import { extractColorUsage, type ColorUsageSignal } from "./content/color-sprawl";
 import { fingerprintForPage, type ContentFingerprint } from "./content/duplicate-content";
 
 import { logger, profileRules } from "./logger";
@@ -129,6 +130,11 @@ export interface CollectedPageSignal {
    */
   fontUsage?: FontUsageSignal;
   /**
+   * content/color-sprawl: the color literals the page's inline styles use, with token definitions
+   * counted apart. Absent on a record cached before the field existed, which reads as none declared.
+   */
+  colorUsage?: ColorUsageSignal;
+  /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
@@ -176,6 +182,16 @@ export function detachFontUsage(f: FontUsageSignal): FontUsageSignal {
     referenced: detachedList(f.referenced),
     faces: f.faces.map((x) => ({ family: detached(x.family), weight: detached(x.weight), style: detached(x.style) })),
     linkedStylesheets: f.linkedStylesheets,
+  };
+}
+
+/** The color signal with every string copied out of the page. */
+export function detachColorUsage(c: ColorUsageSignal): ColorUsageSignal {
+  return {
+    colors: detachedList(c.colors),
+    tokenColors: c.tokenColors,
+    varRefs: c.varRefs,
+    linkedStylesheets: c.linkedStylesheets,
   };
 }
 
@@ -242,6 +258,7 @@ export function buildCollectedPageSignal(input: {
       hreflang: buildHreflangSignal(parsed, input.headers, url),
       contentFingerprint: null,
       fontUsage: { families: [], referenced: [], faces: [], linkedStylesheets: false },
+      colorUsage: { colors: [], tokenColors: 0, varRefs: 0, linkedStylesheets: false },
     };
   }
 
@@ -351,6 +368,9 @@ export function buildCollectedPageSignal(input: {
     ),
     fontUsage: detachFontUsage(
       timed("content/font-consistency", extractFontUsage(null), () => extractFontUsage(doc))
+    ),
+    colorUsage: detachColorUsage(
+      timed("content/color-sprawl", extractColorUsage(null), () => extractColorUsage(doc))
     ),
   };
   // The one record serves both rules: a timeout is reported against both.

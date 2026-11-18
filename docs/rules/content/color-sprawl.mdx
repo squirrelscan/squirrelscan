@@ -1,0 +1,108 @@
+---
+title: "Color sprawl: near-duplicate colors and palette outliers"
+description: "Fifty grays, a dozen of them indistinguishable, means the palette drifted. squirrel clusters the colors in your inline styles by perceptual distance and reports near-duplicates and one-page outliers."
+---
+
+## What color sprawl is
+
+A palette drifts when `#333`, `#343434` and `rgb(51 51 51 / 90%)` all end up in the CSS for the same dark gray. Nobody chose three grays; three people pasted three values. This rule measures that drift and points at the clusters.
+
+## What squirrel checks
+
+The rule is site-wide and needs no account, no model and no credits. It reads every color literal in `color`, `background`, `border`, `outline`, `fill`, `stroke`, shadow and text-decoration declarations, in any syntax: hex, `rgb()`, `hsl()`, `oklch()`, `oklab()` and named colors. Each is converted to OKLab and clustered by perceptual distance (under 0.02, about one just-noticeable difference). The same color written as `#f00`, `rgb(255 0 0)` and `oklch(0.628 0.2577 29.23)` is one color. Alpha is ignored and fully transparent values are skipped.
+
+Checks, by name:
+
+- `color-sprawl` is skipped below 10 crawled pages (`Only 6 page(s) crawled; 10 needed to judge color consistency`), and skipped when no page declares a color in an inline style.
+- `color-sprawl` warns when more colors are visually indistinguishable from another than `max_redundant` (default 6), and fails at three times the limit. Message: `47 distinct colors in use, 12 visually indistinguishable from another (31 gray(s), 9 visually indistinguishable; limit 6)`.
+- `palette-outlier` warns for a clearly chromatic color that exactly one page uses inline and no linked stylesheet the audit read uses or defines. It only runs when at least 5 pages declare colors, so there is a palette to depart from.
+- `color-sprawl` passes when none of the above applies.
+
+## Custom properties are not punished
+
+A literal on the right-hand side of `--gray-500: #6b7280` is the design system defining its scale, not using it. Token definitions are never counted as use, and `var(--gray-500)` references are not read as the named color gray. A site that defines a full scale in `:root` and references it with `var()` throughout stays clean. The result details report `tokenColorsDefined` and `varReferences` so you can see what was attributed.
+
+## Coverage: inline styles, with linked stylesheets as the palette
+
+Near-duplicates are counted from `<style>` blocks and `style=` attributes in each page's HTML.
+
+Linked stylesheets define the palette. squirrel reads up to 20 same-site linked stylesheets (the most widely linked first, up to 1 MB each), and every color they use or define as a custom property counts as a palette color. A brand color your stylesheet applies on every page is therefore never reported as an outlier because only one page also writes it inline. Results then say `inline styles counted; 3 linked stylesheet(s) read for the palette` (with `, 1 not read` when some could not be read) and carry `details.coverage = "inline-plus-stylesheet-palette"`, `stylesheetsRead`, `stylesheetsNotRead` and `stylesheetPaletteColors`.
+
+When no stylesheet body was read (none linked, all cross-origin, over the cap or failed), every result says `inline styles only; linked stylesheets are not read` and carries `details.coverage = "inline-only"`. A site that declares no colors inline is skipped, never reported as clean.
+
+## How to fix it
+
+Collapse each cluster to one value, define it once as a custom property such as `--gray-700`, and reference it with `var()`. For an outlier, switch the color to a palette token or delete the pasted snippet that added it.
+
+## Options
+
+```toml squirrel.toml
+[rule_options."content/color-sprawl"]
+max_redundant = 10
+```
+
+| | |
+|---|---|
+| **Rule ID** | `content/color-sprawl` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/color-sprawl"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/color-sprawl"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `color-sprawl` | Problem |  |
+| `palette-outlier` | Problem |  |
+| `color-sprawl` | Clean | `color-sprawl`, `palette-outlier` |
+| `color-sprawl` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [content/voice-consistency](/rules/content/voice-consistency): the same site-relative approach applied to reading level.
+- [a11y/color-contrast](/rules/a11y/color-contrast): contrast between text and background, a different question from palette drift.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

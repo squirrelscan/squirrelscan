@@ -106,9 +106,18 @@ describe("ctx.site.stylesheets (repo#1374)", () => {
   });
 
   test("not fetched when no rule reads stylesheets", async () => {
-    const off = { rules: { enable: [], disable: ["a11y/color-contrast"] } } as unknown as Config;
+    const off = {
+      rules: { enable: [], disable: ["a11y/color-contrast", "content/color-sprawl"] },
+    } as unknown as Config;
     const assets = await assetsFor(["/a.css"], off);
     expect(assets.stylesheets).toBeUndefined();
+  });
+
+  test("content/color-sprawl alone fetches the bodies, not color-contrast's background summary (repo#1377)", async () => {
+    const sprawlOnly = { rules: { enable: ["*"], disable: ["a11y/color-contrast"] } } as unknown as Config;
+    const assets = await assetsFor(["/a.css"], sprawlOnly);
+    expect(assets.stylesheets?.[0]?.content).toBe(SECRET_BODY);
+    expect(assets.stylesheetBackgrounds).toBeUndefined();
   });
 
   test("cross-origin: a host outside the site is refused, no content, no throw", async () => {

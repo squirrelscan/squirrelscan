@@ -535,6 +535,12 @@
    "broken-html|pass|HTML structure appears valid||"
   ]
  },
+ "content/color-sprawl": {
+  "digest": "183425131200754",
+  "lines": [
+   "color-sprawl|skipped|No color declarations found in inline styles on # page(s), so this is not a clean pass (inline styles only; linked stylesheets are not read)||"
+  ]
+ },
  "content/common-misspellings": {
   "digest": "272023290953156",
   "lines": [
