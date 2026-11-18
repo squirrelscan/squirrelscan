@@ -1,1 +1,0 @@
-- The CLI's bot protection warning now appears only when the crawl was actually refused, and it says how many URLs were refused. A site whose protection let the crawl through no longer gets the warning (squirrelscan/repo#2237).
