@@ -3,10 +3,10 @@
 // where the rule should report it.
 //
 // `location` is the rule-level location, i.e. AFTER the rule's dedup-by-value.
-// scanPageForSecrets scans the serialized document as `html` and then each
-// inline script again as `inline-script`, so a value inside a script is found
-// twice; the rule keeps the last record, which is the `inline-script` one. The
-// double scan itself is pinned in the test file as a known defect.
+// scanPageForSecrets scans each inline script as `inline-script` and then the
+// serialized document as `html` with those script bodies blanked (#1864), so a
+// value inside a script is found once, as `inline-script`. The single scan is
+// pinned in the test file.
 
 import type { ReportedLocation } from "../../../src/security/leaked-secrets";
 import type { Generated, Tier } from "./generators";

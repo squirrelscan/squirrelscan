@@ -198,9 +198,9 @@ export const ROUND_3: Case[] = [
     [inl("inline-script", "Shopify Storefront Access Token (key)", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
   rw("access-token-on-a-cdn-shopify-page", (r) =>
     page(`<link rel="preload" href="https://cdn.shopify.com/s/files/1/0001/theme.css" as="style">`, `<script>window.__cfg={theme:"dawn",locale:"en",currency:"USD",country:"US",access_token:"${runOf(r, HEX, 32)}"};</script>`),
-    // `html` for the same reason: cdn.shopify.com is in the head, not in
-    // the script text.
-    [inl("html", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
+    // cdn.shopify.com is in the head, not in the script text: the inline pass
+    // is handed the page's answer (#1864), so the token is public where it is.
+    [inl("inline-script", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
 
   // 3. A brand as the parent key or the tag name.
   rw("raygun-parent-object", (r) =>
@@ -268,7 +268,7 @@ export const ROUND_3: Case[] = [
     [inl("inline-script", "Generic Token Assignment")]),
   rw("protocol-relative-cdn-shopify-url-counts", (r) =>
     page(`<script src="//cdn.shopify.com/s/javascripts/x.js"></script>`, `<script>window.__cfg={access_token:"${runOf(r, HEX, 32)}"};</script>`),
-    [inl("html", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
+    [inl("inline-script", "Shopify Storefront Access Token", "public")], undefined, { mustNotFire: ["Generic Token Assignment"] }),
   rw("sentry-dsn-host-lookalike", (r) =>
     // `sentryXio` for `sentry.io`: the DSN pattern's dots are escaped.
     page("", `<script>Sentry.init({dsn:"https://${runOf(r, HEX, 32)}@o${runOf(r, DIGIT, 6)}.ingest.sentryXio/${runOf(r, DIGIT, 7)}"});</script>`),

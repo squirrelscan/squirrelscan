@@ -12,6 +12,7 @@ import {
   type GramIndex,
   type MandatoryLiterals,
 } from "../shared/literal-prefilter";
+import { blankAndCutSpans, scriptBodySpans } from "../shared/inline-script-text";
 
 // Known library detection patterns
 interface LibraryPattern {
@@ -359,6 +360,10 @@ export const jsLibrariesRule: Rule = {
     // Collect all script sources and inline scripts
     const scriptSources: string[] = [];
     const inlineScripts: string[] = [];
+    // The page's own inline script bodies, in document order: the HTML-marker
+    // pass below blanks them, since every signature has already been tried on
+    // each of them (#1864).
+    const pageInlineScripts: string[] = [];
 
     const scripts = querySelectorAllOutsideNoscript(doc, "script");
     for (const script of scripts) {
@@ -369,6 +374,7 @@ export const jsLibrariesRule: Rule = {
       const content = script.textContent;
       if (content && content.length > 50) {
         inlineScripts.push(content);
+        pageInlineScripts.push(content);
       }
     }
 
@@ -387,11 +393,18 @@ export const jsLibrariesRule: Rule = {
     // Check HTML for runtime markers (framework signatures in DOM). <noscript>
     // content never runs, so its scripts are not markers either (#434).
     const htmlContent = stripNoscriptMarkup(html);
+    // The markers are looked for in the markup only. A signature inside one of
+    // the inline scripts above has already been found there (the inline pass
+    // runs first, over the same text), so reading those script bodies again
+    // inside the HTML found nothing new and doubled the rule's cost on a
+    // script-heavy page (#1864). Each body is cut to a single space; one that
+    // cannot be placed exactly is left in.
+    const markup = blankAndCutSpans(htmlContent, scriptBodySpans(htmlContent, pageInlineScripts), 1).text;
 
     // One pass per distinct body of text, reused by every library below. Short
     // scripts index to null and are simply scanned, as before.
     const inlineIndexes: Array<GramIndex | null> = inlineScripts.map((c) => buildGramIndex(c));
-    const htmlIndex = buildGramIndex(htmlContent);
+    const htmlIndex = buildGramIndex(markup);
 
     // Check for libraries
     for (const lib of PREFILTERED_LIBRARIES) {
@@ -448,10 +461,11 @@ export const jsLibrariesRule: Rule = {
       if (!detected && lib.inlinePatterns.length > 0) {
         for (const { pattern, literals } of lib.inlinePatterns) {
           if (!mayMatch(htmlIndex, literals)) continue;
-          if (pattern.test(htmlContent)) {
+          if (pattern.test(markup)) {
             detected = true;
             detectionSource = "HTML markers";
-            // Try to extract version from HTML
+            // Try to extract version from HTML: the whole of it, scripts
+            // included, as before. Only runs on a detection.
             for (const vp of lib.versionPatterns) {
               const match = htmlContent.match(vp);
               if (match?.[1]) {

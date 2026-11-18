@@ -88,12 +88,9 @@ describe("JavaScript string escapes", () => {
     const escaped = [...STRIPE].map((c, i) => (i % 2 ? `\\x${c.charCodeAt(0).toString(16)}` : `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`)).join("");
     const html = `<!DOCTYPE html><html><head><title>x</title></head><body><script>window.k="${escaped}";</script></body></html>`;
     const found = scanPageForSecrets(parsePage(html, "https://a.test/").document!, "https://a.test/");
-    // Both the serialized document and the script itself are decoded, so the
-    // same value is found in both; the rule keeps the script's record.
-    expect(found.map((f) => [f.type, f.location])).toEqual([
-      ["Stripe Live Key", "html"],
-      ["Stripe Live Key", "inline-script"],
-    ]);
+    // The script is decoded and scanned once, as itself; the serialized
+    // document's pass reads the page with the script's text blanked (#1864).
+    expect(found.map((f) => [f.type, f.location])).toEqual([["Stripe Live Key", "inline-script"]]);
     expect(scanContent(`var k="${escaped}";`, "external-script", "https://a.test/app.js").map((f) => f.location)).toEqual(["external-script"]);
   });
 });

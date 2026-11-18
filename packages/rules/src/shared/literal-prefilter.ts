@@ -127,7 +127,17 @@ export function buildGramIndex(text: string): GramIndex | null {
   const bits = new Uint8Array(bytes);
   let h = 0;
   let lowercaseAddsAscii = false;
-  for (let i = 0; i < text.length; i++) {
+  const n = text.length;
+  // The first GRAM - 1 characters only fill the window; every later one
+  // completes a gram. Split so the hot loop carries no "is the window full"
+  // test (#1864): this loop is a pass over every byte the rule scans.
+  for (let i = 0; i < GRAM - 1; i++) {
+    let c = text.charCodeAt(i);
+    if (c >= 65 && c <= 90) c += 32;
+    else if (c > 0x7f && (c === LOWERCASE_ADDS_ASCII_I || c === LOWERCASE_ADDS_ASCII_K)) lowercaseAddsAscii = true;
+    h = ((h << SHIFT) ^ c) & WINDOW_MASK;
+  }
+  for (let i = GRAM - 1; i < n; i++) {
     let c = text.charCodeAt(i);
     if (c >= 65 && c <= 90) {
       c += 32; // fold ASCII case
@@ -138,10 +148,8 @@ export function buildGramIndex(text: string): GramIndex | null {
     // character back falls off the top. WINDOW_MASK, not `mask`, is what makes
     // it fall off: see the note on WINDOW_MASK.
     h = ((h << SHIFT) ^ c) & WINDOW_MASK;
-    if (i >= GRAM - 1) {
-      const slot = h & mask;
-      bits[slot >> 3]! |= 1 << (slot & 7);
-    }
+    const slot = h & mask;
+    bits[slot >> 3]! |= 1 << (slot & 7);
   }
   return { bits, mask, lowercaseAddsAscii };
 }

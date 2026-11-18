@@ -22,9 +22,11 @@ import {
   type GramIndex,
 } from "../shared/literal-prefilter";
 import { jwtMatchIsSuspect, refineFinding, type Confidence, type FindingExtra } from "./secrets/confidence";
-import { decodeForLocation, scanBase64Blobs, type ReportedLocation } from "./secrets/decode";
+import { decodeForLocation, decodeHtmlEntities, scanBase64Blobs, type ReportedLocation } from "./secrets/decode";
 
 import { sharedRegex } from "../shared-regex";
+import { blankedOffsets } from "../shared/inline-script-text";
+import { serializeChildren } from "../shared/serialized-prefix";
 export type { ReportedLocation, SecretLocation } from "./secrets/decode";
 
 // Secret detection patterns with service names
@@ -2544,6 +2546,8 @@ const AWS_PAIR_REACH = 300;
 // Any 40-character base64-alphabet token near the id may be its secret key, keyed or not
 // (`["AKIA...", "<40>"]`, `{id, secret}`).
 const AWS_SECRET_NEAR_RE = /(?<![A-Za-z0-9/+_-])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=_-])/;
+// The access key id's shape, unanchored: whether a body holds one at all (the page HTML pass, #1864).
+const AWS_KEY_ID_SHAPE_RE = /(?:A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/;
 
 // Browser SDKs whose init call takes a project key that is public by design
 // (Bugsnag's notifier API key, Amplitude's API key). The key counts only when
@@ -3061,9 +3065,11 @@ const URL_TOKEN_END_RE = /[\s"'<>\\)]/;
  * one, so the same value elsewhere on the page, or a longer secret that
  * merely contains it, is still read on its own terms.
  */
-export function publicUrlIdentifierSpans(content: string): Array<[start: number, end: number]> {
+export function publicUrlIdentifierSpans(content: string, index: GramIndex | null = null): Array<[start: number, end: number]> {
   const spans: Array<[number, number]> = [];
   for (const [host, entry] of PUBLIC_URL_HOSTS) {
+    // Each host is a search of the whole content; the content's gram index can prove it is not there (#1864).
+    if (index && !mayContain(index, host)) continue;
     let from = 0;
     let seen = 0;
     let at: number;
@@ -3637,13 +3643,38 @@ export function createSiteFindingBudget(cap: number = SITE_FINDINGS_CAP): SiteFi
  */
 const FORWARD_REACH = 1024;
 
+/** Where a body of text came from, for the offsets and the context a scan reports with. */
+interface ScanSource {
+  /** Added to every reported offset; a finding that lands before 0 belongs to someone else and is dropped. */
+  offsetBase?: number;
+  scriptIndex?: number;
+  /**
+   * Whether the PAGE the body sits on loads from the Shopify CDN, when the body is not the whole page: an inline
+   * script, or the page's HTML with its scanned scripts blanked (#1864). Read instead of the body's own answer for
+   * the page's HTML, and in addition to it for a script, so a token in a script is judged by the page around it.
+   */
+  pageLoadsShopify?: { read: () => boolean; replacesOwn: boolean };
+  /**
+   * The body is the page's HTML with its long blanked script bodies shortened to {@link BLANK_KEEP} spaces: how much
+   * each one lost, in page order, so offsets are reported as they are in the fully blanked page.
+   */
+  blankCut?: readonly number[];
+}
+
+/**
+ * How many spaces a blanked script body keeps in the page's HTML pass. Every look the scan takes around a position is
+ * shorter than this (the longest is the seed-table walk, 8,000 characters forward), so a body of spaces longer than it
+ * reads exactly like one this long: the rest is cut, and the pass reads ~360 KB of a 1.1 MB page instead of all of it.
+ */
+const BLANK_KEEP = 16_384;
+
 /** The findings of one body: at most {@link PAGE_FINDINGS_CAP} distinct values, and how many more there were. */
 export function scanContentBounded(
   content: string,
   location: ReportedLocation,
   sourceUrl?: string,
   depth = 0,
-  source: { offsetBase?: number; scriptIndex?: number } = {}
+  source: ScanSource = {}
 ): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean } {
   const sink = createFindingSink();
   scanInto(sink, content, location, sourceUrl, depth, source);
@@ -3656,7 +3687,7 @@ export function scanContent(
   location: ReportedLocation,
   sourceUrl?: string,
   depth = 0,
-  source: { offsetBase?: number; scriptIndex?: number } = {}
+  source: ScanSource = {}
 ): LeakedSecret[] {
   const sink = createListSink();
   scanInto(sink, content, location, sourceUrl, depth, source);
@@ -3682,12 +3713,15 @@ function scanInto(
   location: ReportedLocation,
   sourceUrl: string | undefined,
   depth: number,
-  source: { offsetBase?: number; scriptIndex?: number }
+  source: ScanSource
 ): void {
 
   // Entities in HTML, `\u`/`\x` escapes in script text (#360): every pattern
   // below reads the decoded form, once. See secrets/decode.ts.
   content = decodeForLocation(content, location);
+  // Offsets into the shortened page read as offsets into the fully blanked one (#1864).
+  const toBlanked = source.blankCut ? blankedOffsets(content, source.blankCut, BLANK_KEEP) : null;
+  const offsetIn = (at: number): number => (toBlanked ? toBlanked(at) : at) + (source.offsetBase ?? 0);
 
   // What the value's own structure says (#361): a checksum that fails drops
   // the finding, a decoded claim moves it between tiers, and whatever else
@@ -3705,7 +3739,7 @@ function scanInto(
   ): LeakedSecret | null => {
     const refined = refineFinding(name, value, Date.now(), { before, after });
     if (refined?.drop) return null;
-    const adjustedOffset = offset + (source.offsetBase ?? 0);
+    const adjustedOffset = offsetIn(offset);
     // The inline pass prepends a synthetic opening tag to preserve provider
     // context. Findings inside that tag belong to the HTML pass, not to the
     // script text whose offset this record describes.
@@ -3733,17 +3767,18 @@ function scanInto(
   // finding. Specific patterns run first, so first classification wins.
   const seenValues = createSeenValues(content.length);
 
-  // Vendor identifiers in a script or link URL (#574): a match lying wholly
-  // inside one is the vendor's public client identifier and is skipped.
-  const publicSpans = publicUrlIdentifierSpans(content);
-  const insidePublicIdentifier = (start: number, length: number): boolean =>
-    publicSpans.some(([from, to]) => start >= from && start + length <= to);
-
   // One pass over the content that lets both passes below skip every pattern
   // whose mandatory literals it does not contain (#1864). Null on short content,
   // where the index would cost more than the scans it saves, and then nothing is
   // skipped and behaviour is exactly as it was.
   const gramIndex = buildGramIndex(content);
+
+  // Vendor identifiers in a script or link URL (#574): a match lying wholly
+  // inside one is the vendor's public client identifier and is skipped. A host
+  // the index proves absent is not searched for (#1864).
+  const publicSpans = publicUrlIdentifierSpans(content, gramIndex);
+  const insidePublicIdentifier = (start: number, length: number): boolean =>
+    publicSpans.some(([from, to]) => start >= from && start + length <= to);
 
   // The lowercase copy locates the context tier's brand words, and the
   // public-tier check the generic assignments make. Built on first use.
@@ -3845,7 +3880,9 @@ function scanInto(
   const seedBudget = { left: SEED_SCAN_BUDGET };
 
   let shopifyPage: boolean | null = null;
-  const isShopifyPage = () => (shopifyPage ??= pageLoadsFrom(content, SHOPIFY_CDN_HOST));
+  const page = source.pageLoadsShopify;
+  const isShopifyPage = () =>
+    (shopifyPage ??= page?.replacesOwn ? page.read() : pageLoadsFrom(content, SHOPIFY_CDN_HOST) || (page?.read() ?? false));
 
   // Pass 1: FAST patterns, gated twice — by the literals proven from each
   // regex (#1864) and by the keywords each pattern declares (#357). Both
@@ -4352,7 +4389,7 @@ function scanInto(
     return inner.result();
   };
   for (const finding of scanBase64Blobs(content, location, sourceUrl, depth, scanBlob)) {
-    const adjustedOffset = finding.offset + (source.offsetBase ?? 0);
+    const adjustedOffset = offsetIn(finding.offset);
     if (adjustedOffset < 0) continue;
     found.add({
       ...finding,
@@ -4423,27 +4460,79 @@ function scanPageInto(sink: FindingSink, doc: NonNullable<ParsedPage["document"]
   // Inline scripts first: the findings the most serious tier is made of (a server-only key shipped to the browser) are read
   // from a script, so a scan stopped at the time budget (#1556) has read them before the page's whole text. The sink keeps
   // the canonical order: the document's findings (phase 0) come before the scripts' (phase 1) in the result and in the dedupe.
-  sink.phase(1);
+  //
+  // Each script's text is read ONCE (#1864). It is also inside the page's HTML, and on a script-heavy page it is most of
+  // it: the whole-document pass used to scan every script a second time, and found nothing the inline pass had not, since
+  // a value both passes saw is reported from the inline record (the later of equals) unless the HTML record was public.
+  // So the HTML pass reads the page serialised with each scanned script's text replaced by spaces (nothing outside a
+  // script moves, or comes any nearer anything else), and the one page-level fact a script value was judged by in the
+  // HTML pass, whether the page loads from the Shopify CDN, is handed to the inline pass. The page is serialised up
+  // front but still scanned last, so a scan stopped at the budget has read the scripts first, as before.
+  const inline: Array<{ script: Element; text: string; scriptIndex: number }> = [];
   for (const [scriptIndex, script] of Array.from(doc.querySelectorAll("script")).entries()) {
     if (script.hasAttribute("src")) continue;
-    const scriptContent = script.textContent || "";
-    if (scriptContent.trim()) {
-      // The script's own open tag goes in front of its text, so the inline
-      // pass classifies `<script id="shopify-features">{"accessToken":…}`
-      // exactly as the whole-document pass does: the naming attribute is
-      // the look-behind, and the value is public rather than a generic leak
-      // that the rule's dedup then has to reconcile. Attributes carry no
-      // findings of their own that the document pass has not already made.
-      const openTag = openTagOf(script);
-      scanInto(sink, `${openTag}${scriptContent}`, "inline-script", pageUrl, 0, {
-        offsetBase: -openTag.length,
-        scriptIndex,
-      });
+    const text = script.textContent || "";
+    if (text.trim()) inline.push({ script, text, scriptIndex });
+  }
+
+  // A long body keeps BLANK_KEEP spaces and loses the rest (see BLANK_KEEP); `cut` records what each lost, in page order.
+  const keep = " ".repeat(BLANK_KEEP);
+  const serializeBlanked = (keepsText: (text: string) => boolean) => {
+    const cut: number[] = [];
+    const blanks = new Map<Element, string>();
+    for (const { script, text } of inline) {
+      // The inline pass decodes JS and percent escapes only; the HTML pass also decodes HTML entities. A script whose
+      // text an entity decode would change keeps its text in the HTML pass, so a value visible only after that decode is
+      // found.
+      if (decodeHtmlEntities(text) !== text || keepsText(text)) continue;
+      if (text.length <= BLANK_KEEP) blanks.set(script, " ".repeat(text.length));
+      else {
+        blanks.set(script, keep);
+        cut.push(text.length - BLANK_KEEP);
+      }
     }
+    return { html: serializeChildren(doc, { replaceText: blanks }), cut };
+  };
+  // An AWS access key id is judged by whether a 40-character secret sits within AWS_PAIR_REACH of it, and the pair can
+  // straddle a script's edge: the id in one script and the secret in the next, or in the markup beside it. Only the
+  // HTML pass sees both sides, so on a page that holds an id anywhere, a script holding an id or a secret-shaped value
+  // keeps its text there, and the id keeps the confidence the whole page gives it.
+  const pairSide = (text: string) => AWS_KEY_ID_SHAPE_RE.test(text) || AWS_SECRET_NEAR_RE.test(text);
+  const scriptHasKeyId = inline.some(({ text }) => AWS_KEY_ID_SHAPE_RE.test(text));
+  let { html, cut } = serializeBlanked(scriptHasKeyId ? pairSide : () => false);
+  if (!scriptHasKeyId && AWS_KEY_ID_SHAPE_RE.test(html)) ({ html, cut } = serializeBlanked(pairSide));
+
+  // Whether the page loads from the Shopify CDN, as the whole-document pass always judged it: on the page's HTML,
+  // scripts included. The markup is asked first, which on a Shopify page carries the CDN's stylesheets and script
+  // sources, so the scripts are read again only on a page whose markup does not (and then exactly as before).
+  let pageShopify: boolean | null = null;
+  const readPageShopify = () =>
+    (pageShopify ??=
+      pageLoadsFrom(decodeForLocation(html, "html"), SHOPIFY_CDN_HOST) ||
+      (inline.length > 0 && pageLoadsFrom(decodeForLocation(doc.toString(), "html"), SHOPIFY_CDN_HOST)));
+
+  sink.phase(1);
+  for (const { script, text, scriptIndex } of inline) {
+    // The script's own open tag goes in front of its text, so the inline
+    // pass classifies `<script id="shopify-features">{"accessToken":…}`
+    // exactly as the whole-document pass does: the naming attribute is
+    // the look-behind, and the value is public rather than a generic leak
+    // that the rule's dedup then has to reconcile. Attributes carry no
+    // findings of their own that the document pass has not already made.
+    const openTag = openTagOf(script);
+    scanInto(sink, `${openTag}${text}`, "inline-script", pageUrl, 0, {
+      offsetBase: -openTag.length,
+      scriptIndex,
+      pageLoadsShopify: { read: readPageShopify, replacesOwn: false },
+    });
   }
   sink.phase(0);
-  const html = doc.toString();
-  if (html) scanInto(sink, html, "html", pageUrl, 0, {});
+  if (html) {
+    scanInto(sink, html, "html", pageUrl, 0, {
+      pageLoadsShopify: { read: readPageShopify, replacesOwn: true },
+      ...(cut.length > 0 ? { blankCut: cut } : {}),
+    });
+  }
 }
 
 /** Every finding of a page, in scan order: no cap, no dedupe. The site rule and the collector read {@link scanPageBounded}. */
