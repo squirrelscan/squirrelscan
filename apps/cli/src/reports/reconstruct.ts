@@ -1391,6 +1391,8 @@ export function reconstructReport(
               .map(([page, canonical]) => ({ page, canonical })),
           }
         : {}),
+      // Stamped on the crawl by the rules phase (repo#3397); absent before it.
+      ...(crawl.javascript ? { javascript: crawl.javascript } : {}),
       ...(cacheStats ? { cacheStats } : {}),
       // What the sampled body left out, stated rather than silently absent.
       ...(sampled

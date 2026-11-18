@@ -162,7 +162,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 43;
+export const SCHEMA_VERSION = 44;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -654,6 +654,10 @@ const MIGRATIONS: Record<number, string[]> = {
   // Version 43: a page's bounded variant-count map (content/terminology-consistency), JSON text.
   // ADDITIVE and nullable: a row written before this reads as no sample for the rule.
   43: [`ALTER TABLE page_features ADD COLUMN terminology_variants TEXT`],
+  // Version 44: the report's JavaScript shipped block (squirrelscan/repo#3397).
+  // ADDITIVE and nullable: NULL means the crawl predates it, so a reconstructed
+  // report omits the line. Local sqlite only.
+  44: [`ALTER TABLE crawls ADD COLUMN javascript_shipped TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -772,6 +776,8 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "scan_scope", type: "TEXT" },
   // Migration 40 (#288): when the `building` sentinel was stamped.
   { name: "building_at", type: "INTEGER" },
+  // Migration 44 (squirrelscan/repo#3397): the same, for the JavaScript block.
+  { name: "javascript_shipped", type: "TEXT" },
 ];
 
 // Same guard for `entity_edges` (#492). Migration 31 added both columns, and
@@ -844,7 +850,10 @@ CREATE TABLE IF NOT EXISTS crawls (
   building_at INTEGER,
   -- Exact report coverage for a later database reconstruction (#1050). NULL
   -- on crawls stored before schema 36, which means "scope not recorded".
-  scan_scope TEXT
+  scan_scope TEXT,
+  -- The report's JavaScript shipped block (squirrelscan/repo#3397). NULL on
+  -- crawls stored before schema 44, or with no script measured.
+  javascript_shipped TEXT
 );
 -- NO index on retired_at here. SCHEMA is exec'd BEFORE runMigrations(), and on a
 -- database written before migration 25 the crawls table exists WITHOUT the
@@ -1792,13 +1801,17 @@ export class SQLiteStorage implements CrawlStorage {
           sets.push("scan_scope = ?");
           values.push(JSON.stringify(updates.scanScope));
         }
+        if (updates.javascript !== undefined) {
+          sets.push("javascript_shipped = ?");
+          values.push(JSON.stringify(updates.javascript));
+        }
 
         if (sets.length > 0) {
           values.push(id);
           // Cached, and safe to cache even though the SQL is built here. The
-          // cache is keyed by TEXT and `sets` is drawn from nine fixed
-          // optional columns in a fixed order, so there are at most 511 distinct
-          // texts however a caller mixes them.
+          // cache is keyed by TEXT and `sets` is drawn from ten fixed
+          // optional columns in a fixed order, so there are at most 1,023
+          // distinct texts however a caller mixes them.
           //
           // The hazard is not an unbounded cache. On Bun 1.3.14 the cache holds
           // the first 20 texts PER DATABASE and NEVER EVICTS, so a statement
@@ -1943,6 +1956,13 @@ export class SQLiteStorage implements CrawlStorage {
           ? this.safeJsonParse(
               row.scan_scope,
               undefined as CrawlMetadata["scanScope"]
+            )
+          : undefined,
+      javascript:
+        typeof row.javascript_shipped === "string"
+          ? this.safeJsonParse(
+              row.javascript_shipped,
+              undefined as CrawlMetadata["javascript"]
             )
           : undefined,
     };

@@ -65,6 +65,7 @@ import {
 import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../page-type-scope";
 import type { ReportHost } from "@squirrelscan/core-contracts";
 import { isLocalOnlyTech, techIconUrl } from "../technologies";
+import { javascriptShipped } from "../javascript-shipped";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
@@ -611,6 +612,9 @@ interface SlimJsonReport {
   // Report-only — never part of the score. The entity-map document (#2091),
   // emitted verbatim so it still validates against the core-contracts schema.
   entities?: EntityMap;
+  // Report-only, never part of the score (repo#3397). The script weight the
+  // audit measured; absent when it measured none.
+  javascript?: NonNullable<AuditReport["javascript"]>;
   // Report-only — never part of the score (#2307). Where the audited pages' links sit and the
   // page types the classifier gave them. Absent when no audited page carries either, which is
   // every crawl stored before the page classifier existed.
@@ -1072,6 +1076,7 @@ function buildSlimReport(
           })),
         }
       : {}),
+    ...(javascriptShipped(report) ? { javascript: javascriptShipped(report) } : {}),
     ...(report.host ? { host: report.host } : {}),
     ...(report.technologies &&
     (report.technologies.items.length > 0 || report.technologies.truncated)
