@@ -21,6 +21,7 @@ import { robotsTxtRule } from "./robots-txt";
 import { schemaNoindexConflict } from "./schema-noindex-conflict";
 import { sitemap4xxRule } from "./sitemap-4xx";
 import { sitemapCoverageRule } from "./sitemap-coverage";
+import { homePageUnreachableRule } from "./home-page-unreachable";
 import { sitemapDomainRule } from "./sitemap-domain";
 import { sitemapExistsRule } from "./sitemap-exists";
 import { sitemapLastmodChurnRule } from "./sitemap-lastmod-churn";
@@ -30,6 +31,7 @@ import { singlePageSiteRule } from "./single-page-site";
 import { soft404Rule } from "./soft-404";
 
 export const rules: Rule[] = [
+  homePageUnreachableRule,
   robotsTxtRule,
   sitemapExistsRule,
   sitemapValidRule,
@@ -61,6 +63,7 @@ export {
   allNoindexPages,
   canonicalChainRule,
   conflictingIndexSignalsRule,
+  homePageUnreachableRule,
   htmlSizeRule,
   indexabilityCheck,
   indexabilityConflicts,

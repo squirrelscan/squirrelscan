@@ -2159,6 +2159,7 @@ export function runRulesOnStorage(
         crawl?.originalUrl,
       ]),
       entryUrls: crawlEntryUrls(crawl),
+      entryFailure: crawl?.stats?.rootFailure,
       robotsTxt: robotsData,
       // What the site refused, so a rule says "refused" not "absent".
       refusedFetches: crawl?.stats?.refusedFetches,
@@ -3116,6 +3117,7 @@ function buildStreamingSiteData(
         crawl?.originalUrl,
       ]),
       entryUrls: crawlEntryUrls(crawl),
+      entryFailure: crawl?.stats?.rootFailure,
       robotsTxt: robotsData,
       // What the site refused, so a rule says "refused" not "absent".
       refusedFetches: crawl?.stats?.refusedFetches,

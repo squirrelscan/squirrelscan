@@ -1,0 +1,98 @@
+---
+title: "Home page fails to load: DNS, TLS, connection, timeout and 5xx"
+description: "When the URL you audit does not load at all, squirrel reports it as a finding with the cause instead of only failing the run."
+---
+
+## What this rule is for
+
+If the home page does not load, nothing else about the site matters yet: visitors, search engines and AI agents all fail at the same point. Before this rule, an audit that could not fetch the site ended as a failed run with a reason, and nothing appeared in the findings. Anything that works from findings, such as alerts, diffs and the issue list, never saw "the site is down". This rule turns the crawler's record of why the entry URL failed into one finding.
+
+## What squirrel checks
+
+The rule is site-wide. It fires when the crawl recorded a failure fetching the audited URL (the seed) and the failure is one of:
+
+- **DNS**: the domain name did not resolve.
+- **TLS**: the TLS connection failed, for example an expired or mismatched certificate.
+- **Connection**: the connection was refused or dropped.
+- **Timeout**: the server did not answer in time, even on the second, longer attempt.
+- **5xx**: the server answered with a server error.
+
+It does not fire when the home page loaded, and it does not report a 4xx answer, a robots.txt refusal, a redirect problem or a bot wall: those are answers, often a policy, and the report covers them separately. A failure fetching only a sitemap is not the home page and is ignored. The check is `home-page-unreachable` with status fail, and its message names the host and the cause.
+
+## How to fix it
+
+Check the cause named in the finding, then run the audit again.
+
+- **DNS**: confirm the domain's records and nameservers.
+- **TLS**: check the certificate's expiry, chain and hostname.
+- **Connection or timeout**: check the server, firewall and CDN origin.
+- **5xx**: read the origin's error logs.
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/home-page-unreachable` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 10/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/home-page-unreachable"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/home-page-unreachable"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `home-page-unreachable` | Problem |  |
+| `home-page-unreachable` | Clean | `home-page-unreachable` |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [crawl/robots-txt](/rules/crawl/robots-txt): whether robots.txt exists and what it allows.
+- [crawl/sitemap-exists](/rules/crawl/sitemap-exists): whether the site has a sitemap at all.
+- [crawl/redirect-chain](/rules/crawl/redirect-chain): redirects that take too many hops.
+
+## References
+
+- [HTTP status codes, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/http-network-errors)
+
+## Check your site
+
+Run `squirrel audit https://example.com`. When the home page fails to load, the Crawlability section names the cause. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>
