@@ -873,14 +873,15 @@ describe("perf/bad-caching header case and not-recorded headers (repo#4641)", ()
 
   test("some pages unrecorded: they are left out of the shares and listed as not checked", async () => {
     const pages = [
-      ...mixedCase(3),
+      ...mixedCase(1),
       { url: "https://example.com/x", headers: {}, headersRecorded: false },
+      { url: "https://example.com/y", headers: {}, headersRecorded: false },
     ];
     const checks = await run(badCachingRule, siteCtx(pages));
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
     const note = check(checks, "bad-caching-headers-not-recorded");
     expect(note?.status).toBe("skipped");
     expect(note?.skipReason).toBe("headers-not-recorded");
-    expect(note?.pages).toEqual(["https://example.com/x"]);
+    expect(note?.pages).toEqual(["https://example.com/x", "https://example.com/y"]);
   });
 });
