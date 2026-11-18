@@ -57,7 +57,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   const rootTag = options?.branding?.whiteLabel ? "audit" : "squirrelscan-audit";
 
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-  const brand = validateBrandColor(options?.branding?.brandColor);
+  const brand = validateBrandColor(
+    options?.branding?.whiteLabel ? options.branding.brandColor : undefined,
+  );
   const brandAttr = brand.ok ? ` brand-color="${brand.color}"` : "";
   lines.push(`<${rootTag} version="${escapeXml(version)}"${brandAttr}>`);
 
