@@ -1,6 +1,7 @@
 // The batch orchestrator (#1231), driven with a fake child so no audit runs. Synthetic URLs only.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { parseArgs } from "citty";
 import {
   mkdtempSync,
   readFileSync,
@@ -19,9 +20,12 @@ import {
   type SpawnChild,
   cleanError,
   executeBatch,
+  BATCH_EXIT,
   passthroughArgs,
+  runBatch,
   statusFromExit,
 } from "../../src/batch/run";
+import { API_TOKEN_ENV_VAR } from "../../src/self/credentials";
 
 let dir: string;
 beforeEach(() => {
@@ -408,6 +412,60 @@ describe("executeBatch", () => {
     });
     expect(code).toBe(0);
     expect(stats.starts).toHaveLength(1);
+  });
+});
+
+describe("runBatch signed-in guard", () => {
+  // A private-host URL is rejected without spawning, so a guard regression ends in exit 6 with
+  // results written instead of a real audit (which would render in the cloud and spend credits).
+  const argDef = {
+    offline: { type: "boolean" },
+    "urls-file": { type: "string" },
+    "out-dir": { type: "string" },
+  } as const;
+  const signedIn = async (offlineArgs: string[]) => {
+    const rawArgs = [
+      "--urls-file",
+      urlsFile(["http://127.0.0.1:3000"]),
+      "--out-dir",
+      out(),
+      ...offlineArgs,
+    ];
+    const prevToken = process.env[API_TOKEN_ENV_VAR];
+    const prevExit = process.exitCode;
+    const errors: string[] = [];
+    const origError = console.error;
+    console.error = (...a: unknown[]) => errors.push(a.join(" "));
+    process.env[API_TOKEN_ENV_VAR] = "test-token-not-real";
+    try {
+      await runBatch({ args: parseArgs(rawArgs, argDef), rawArgs });
+      return { exit: process.exitCode, errors };
+    } finally {
+      console.error = origError;
+      process.exitCode = prevExit;
+      if (prevToken === undefined) delete process.env[API_TOKEN_ENV_VAR];
+      else process.env[API_TOKEN_ENV_VAR] = prevToken;
+    }
+  };
+
+  for (const offlineArgs of [
+    [],
+    ["--offline=false"],
+    ["--offline", "false"],
+    ["--no-offline"],
+  ]) {
+    test(`signed in with ${JSON.stringify(offlineArgs)} is refused before anything runs`, async () => {
+      const { exit, errors } = await signedIn(offlineArgs);
+      expect(exit).toBe(BATCH_EXIT.cannotRun);
+      expect(errors.join("\n")).toContain("add --offline");
+      expect(existsSync(out())).toBe(false);
+    });
+  }
+
+  test("signed in with --offline passes the guard", async () => {
+    const { exit, errors } = await signedIn(["--offline"]);
+    expect(errors.join("\n")).not.toContain("add --offline");
+    expect(exit).toBe(BATCH_EXIT.urlFailed);
   });
 });
 

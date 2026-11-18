@@ -111,9 +111,6 @@ function flagValue(
   return undefined;
 }
 
-const hasFlag = (rawArgs: readonly string[], name: string): boolean =>
-  rawArgs.some((a) => a === `--${name}` || a.startsWith(`--${name}=`));
-
 const FORMAT_EXT: Record<string, string> = {
   json: "json",
   html: "html",
@@ -786,7 +783,7 @@ export async function runBatch(input: {
     if (Number.isFinite(md) && md > 0) urlTimeout = Math.ceil(md * 1.5 + 60);
   }
   const format = String(args.format ?? "json");
-  if (!hasFlag(rawArgs, "offline")) {
+  if (args.offline !== true) {
     const { createCloudClientWithSource } = await import("@/tools/cloud");
     if (
       createCloudClientWithSource({ timeoutMs: 1000, maxAttempts: 1 })?.client
