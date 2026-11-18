@@ -1557,6 +1557,12 @@ export interface LeakedSecret {
   sourceUrl?: string; // URL of the script file or page
   /** What the value's own structure decoded to (#361): account id, role… */
   extra?: FindingExtra;
+  /**
+   * Redacted text around the match (up to EVIDENCE_CONTEXT_RADIUS characters each side) so a reader can find it in the
+   * source: the value is masked as in the item id, and every quoted literal, assigned value and token-shaped run nearby is
+   * starred out. Absent when the match could not be located in the scanned text.
+   */
+  context?: string;
 }
 
 /**
@@ -2584,6 +2590,174 @@ function sdkInitBrandOf(content: string, keyAt: number): string | undefined {
 // identifier.
 const REVENUECAT_CONTEXT_RE = /purchases|revenuecat/i;
 const REVENUECAT_CONTEXT_REACH = 200;
+
+/** Characters of source text kept on each side of a match in a finding's `context`. */
+export const EVIDENCE_CONTEXT_RADIUS = 120;
+
+// A long token-shaped run, the credentials of a URL or an unquoted assigned value: whatever else sits near a match could
+// itself be a secret. A token run is any run of characters a password can hold (`@ ! # $ & %` included), stopped only by
+// whitespace, quotes and code punctuation.
+const NEARBY_TOKEN_RE = /[^\s"'`<>(){}[\];,]{20,}/g;
+const NEARBY_TOKEN_CHAR_RE = /[^\s"'`<>(){}[\];,]/;
+const URL_CREDENTIALS_RE = /(:\/\/)[^\s/@"'<>]+@/g;
+// The unquoted value after `=` or `:` (`DB_PASSWORD=p@ssw0rd!`), but not the `//` of a URL scheme or the rest of `==`.
+const NEARBY_ASSIGNED_RE = /([=:]\s*)(?!\/\/)([^\s"'`<>(){}[\];,=:][^\s"'`<>(){}[\];,]*)/g;
+// An unquoted value this long is masked.
+const NEARBY_ASSIGNED_MIN = 4;
+// Code punctuation: a span between two quotes that holds any of it is read as code between two literals, not as a literal.
+const CODE_PUNCT_RE = /[;,(){}[\]=:+<>&|]/;
+// When the match is not quoted, a reading that starts inside a quote and never closes it in the window claims the whole
+// side is one literal: that is starred out when it is this long, an operand or holds no code punctuation.
+const NEARBY_OPEN_LITERAL_MIN = 8;
+// A literal whose opening quote follows `=`, `:`, `=>`, `(`, `,`, `[`, `{`, `?`, `+` or `return` is an operand: an assigned
+// value (`pw = "Pa55"`, `"password":"x"`), an argument or a list item.
+const OPERAND_BEFORE_RE = /(?:=>|[=:(,[{?+]|\breturn)\s*$/;
+// A shorter unquoted run that mixes letters and digits reads as a password or token too (`p@ssw0rd!`, a 16-character
+// bearer token), and so does whatever follows an HTTP auth scheme word.
+const NEARBY_SHORT_TOKEN_RE = /[^\s"'`<>(){}[\];,]{8,}/g;
+const NEARBY_AUTH_SCHEME_RE = /\b(Bearer|Basic|Token|Digest)(\s+)([^\s"'`<>(){}[\];,]{4,})/gi;
+const QUOTE_CHARS = ["\"", "'", "`"] as const;
+
+/**
+ * A value near the match, masked: every character is starred out (at most 20 stars), so no part of a secret the
+ * scanner did not itself recognize is shown. Only the match keeps the item id's prefix and suffix.
+ */
+function maskNearby(value: string): string {
+  return "*".repeat(Math.min(value.length, 20));
+}
+
+function redactNearby(text: string): string {
+  return text
+    .replace(URL_CREDENTIALS_RE, "$1****@")
+    .replace(NEARBY_AUTH_SCHEME_RE, (_whole, scheme: string, gap: string, val: string) => scheme + gap + maskNearby(val))
+    .replace(NEARBY_ASSIGNED_RE, (whole, op: string, val: string) => {
+      if (val.length < NEARBY_ASSIGNED_MIN) return whole;
+      return op + maskNearby(val);
+    })
+    .replace(NEARBY_TOKEN_RE, (run) => maskNearby(run))
+    .replace(NEARBY_SHORT_TOKEN_RE, (run) => (/[A-Za-z]/.test(run) && /[0-9]/.test(run) ? maskNearby(run) : run));
+}
+
+/** A string literal read in `text`: its [start, end) content span, whether its closing quote is in the window, and whether
+ * it is the literal the reading started inside (rather than one opened by a quote in the window). */
+interface LiteralSpan {
+  start: number;
+  end: number;
+  closed: boolean;
+  initial: boolean;
+}
+
+/**
+ * The string literals in `text`, read outward from the match: forward for the text after it, backward for the text before
+ * it. `openAt` is the quote the reading starts inside, if any. A literal left open at the far edge of the window runs to
+ * that edge.
+ */
+function literalSpans(text: string, backward: boolean, openAt: string | undefined): LiteralSpan[] {
+  const spans: LiteralSpan[] = [];
+  const n = text.length;
+  const at = (k: number) => (backward ? n - 1 - k : k);
+  const escaped = (k: number) => {
+    const i = at(k);
+    let slashes = 0;
+    for (let j = i - 1; j >= 0 && text[j] === "\\"; j--) slashes++;
+    return slashes % 2 === 1;
+  };
+  let open = openAt;
+  let from = 0;
+  let initial = openAt !== undefined;
+  const push = (from: number, to: number, closed: boolean) =>
+    spans.push(backward ? { start: n - to, end: n - from, closed, initial } : { start: from, end: to, closed, initial });
+  for (let k = 0; k < n; k++) {
+    const ch = text[at(k)];
+    if (!QUOTE_CHARS.includes(ch as (typeof QUOTE_CHARS)[number]) || escaped(k)) continue;
+    if (open === undefined) {
+      open = ch;
+      from = k + 1;
+    } else if (ch === open) {
+      push(from, k, true);
+      open = undefined;
+      initial = false;
+    }
+  }
+  if (open !== undefined) push(from, n, false);
+  return spans;
+}
+
+/**
+ * `text` with every quoted literal starred out, whatever its length, and the URL credentials, assigned values and token
+ * runs between the literals starred out too.
+ *
+ * Which quotes open and which close is not known from the window alone: a stray apostrophe (`// don't`) flips every later
+ * quote. Each quote character swaps "outside" with "inside that quote", so the four readings (outside, inside `"`, `'` or
+ * `` ` ``) between them hold the true state at every point, and the literal that holds a secret is a literal in at least
+ * one of them. When the match is not directly quoted, every reading is a main one; when it is, the reading that starts
+ * inside the match's quote is. Every literal of a main reading is starred out, one the window cuts off included (see
+ * NEARBY_OPEN_LITERAL_MIN for the one it starts inside); the other three
+ * readings add each literal that is an operand or holds no code punctuation (their other "literals" are the code
+ * between two real literals). The literal a reading starts inside and never closes in the window is not added: it would
+ * star the whole side whenever a quote kind is absent, and the literals nested in it are the main reading's literals.
+ */
+function redactSide(text: string, backward: boolean, openQuote: string | undefined): string {
+  const operandOrPlain = (l: LiteralSpan) => {
+    const body = text.slice(l.start, l.end);
+    const operand = l.start > 0 && OPERAND_BEFORE_RE.test(text.slice(0, l.start - 1));
+    return operand || (/\S/.test(body) && !CODE_PUNCT_RE.test(body));
+  };
+  const spans: Array<[number, number]> = [];
+  const main = openQuote === undefined ? [undefined, ...QUOTE_CHARS] : [openQuote];
+  for (const l of main.flatMap((q) => literalSpans(text, backward, q))) {
+    if (l.closed || !l.initial || l.end - l.start >= NEARBY_OPEN_LITERAL_MIN || operandOrPlain(l)) spans.push([l.start, l.end]);
+  }
+  if (openQuote !== undefined) {
+    for (const q of [undefined, ...QUOTE_CHARS.filter((c) => c !== openQuote)]) {
+      for (const l of literalSpans(text, backward, q)) {
+        if (!(l.initial && !l.closed) && operandOrPlain(l)) spans.push([l.start, l.end]);
+      }
+    }
+  }
+  const merged: Array<[number, number]> = [];
+  for (const [s, e] of spans.filter(([s, e]) => e > s).sort((x, y) => x[0] - y[0])) {
+    const last = merged[merged.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else merged.push([s, e]);
+  }
+  let out = "";
+  let pos = 0;
+  for (const [s, e] of merged) {
+    out += redactNearby(text.slice(pos, s)) + maskNearby(text.slice(s, e));
+    pos = e;
+  }
+  return out + redactNearby(text.slice(pos));
+}
+
+/**
+ * The redacted evidence context of a match at `offset` in `content`: the text either side with other quoted literals and
+ * token-shaped runs masked, and the match itself masked exactly as its item id is. A token run the window cuts off at either
+ * edge is dropped, so no fragment of it shows unmasked. Undefined when the match is not at that offset.
+ */
+export function evidenceContext(content: string, offset: number, length: number, value: string): string | undefined {
+  if (offset < 0 || length <= 0 || content.slice(offset, offset + Math.min(length, value.length)) !== value.slice(0, length)) {
+    return undefined;
+  }
+  const isToken = (i: number) => i >= 0 && i < content.length && NEARBY_TOKEN_CHAR_RE.test(content[i] ?? "");
+  const start = Math.max(0, offset - EVIDENCE_CONTEXT_RADIUS);
+  const end = Math.min(content.length, offset + length + EVIDENCE_CONTEXT_RADIUS);
+  let before = content.slice(start, offset);
+  let after = content.slice(offset + length, end);
+  if (isToken(start - 1) && isToken(start)) {
+    const cut = [...before].findIndex((ch) => !NEARBY_TOKEN_CHAR_RE.test(ch));
+    before = cut < 0 ? "" : before.slice(cut + 1);
+  }
+  if (isToken(end) && isToken(end - 1)) {
+    let cut = after.length - 1;
+    while (cut >= 0 && NEARBY_TOKEN_CHAR_RE.test(after[cut] ?? "")) cut--;
+    after = cut < 0 ? "" : after.slice(0, cut);
+  }
+  const prev = content[offset - 1];
+  const openQuote = QUOTE_CHARS.find((q) => q === prev);
+  const flat = (t: string) => t.replace(/\s+/g, " ");
+  return `${redactSide(flat(before), true, openQuote)}${maskSecret(value)}${redactSide(flat(after), false, openQuote)}`;
+}
 
 function maskSecret(value: string): string {
   if (value.length <= 12) {
@@ -3746,6 +3920,7 @@ function scanInto(
     if (adjustedOffset < 0) return null;
     const extra = known || refined?.extra ? { ...known, ...refined?.extra } : undefined;
     const truncated = value.length > STORED_VALUE_MAX_LENGTH;
+    const context = evidenceContext(content, offset, length, value);
     return {
       type: refined?.type ?? name,
       value: truncated ? clampItemString(value, STORED_VALUE_MAX_LENGTH) : value,
@@ -3757,6 +3932,7 @@ function scanInto(
       offset: adjustedOffset,
       ...(source.scriptIndex !== undefined ? { scriptIndex: source.scriptIndex } : {}),
       sourceUrl,
+      ...(context !== undefined ? { context } : {}),
       ...(extra ? { extra } : {}),
     };
   };
@@ -4418,6 +4594,8 @@ function openTagOf(el: Element): string {
 /** `secret` with every string it carries copied out of the scanned text (see {@link detached}); the record is otherwise unchanged. */
 function detachSecret(secret: LeakedSecret): LeakedSecret {
   const out: LeakedSecret = { ...secret, value: detached(secret.value) };
+  // The evidence context is sliced from the page too (repo#2215): copy it out like the value.
+  if (secret.context !== undefined) out.context = detached(secret.context);
   if (secret.extra) {
     const extra: Record<string, unknown> = { ...secret.extra };
     for (const [key, value] of Object.entries(extra)) if (typeof value === "string") extra[key] = detached(value);
@@ -4793,6 +4971,7 @@ export const leakedSecretsRule: Rule = {
         ...occurrencesMeta(origins.get(s.value)),
         length: s.length,
         offset: s.offset,
+        ...(s.context !== undefined ? { context: s.context } : {}),
         ...(s.scriptIndex !== undefined ? { scriptIndex: s.scriptIndex } : {}),
         ...(s.truncated ? { truncated: true } : {}),
       },
