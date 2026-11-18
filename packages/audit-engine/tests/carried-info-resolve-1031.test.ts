@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { FindingState, PageFindingRecord, SitePageRecord } from "@squirrelscan/core-contracts";
 
+import { CLASSIFIER_OFF_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 
 import { findingKey } from "../src/merge-core";
@@ -190,6 +191,32 @@ describe("every crawled page inconclusive for a check still carries (#1031)", ()
       const open = (await store.getFindings("web_1", ["open"])).filter((f) => f.checkName === "form-labels");
       expect(open.length).toBe(6);
       expect(r.coverage.carriedFindings).toBe(6);
+    });
+  }
+});
+
+// repo#3364: `schema/expected-type` skips with `classifier-off` when the page classifier did not run. With
+// the classifier off on every page no page judged the check, so the old findings carry, not resolve.
+describe("a classifier-off skip on every crawled page carries the old findings (repo#3364)", () => {
+  for (const signal of [false, true]) {
+    test(`classifier off on both pages${signal ? " (signal)" : ""}`, async () => {
+      const store = new MemStore();
+      const crawled = [P, Q].map((url) => ({ url, status: 200 }));
+      const first = run([
+        { name: "form-labels", status: "fail", message: "bad", pageUrl: P, items: items(3) },
+        { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
+      ]);
+      await runCloudSmartAudits({ store, siteKey: "web_1", crawlId: "audit_1", ruleResults: first, pageStatuses: crawled, ...(signal ? { resolutionSignal: buildResolutionSignal(first, [P, Q]) } : {}) });
+      const second = run(
+        [P, Q].map((pageUrl) => ({ name: "form-labels", status: "skipped", message: "Not checked: the page classifier is off", skipReason: CLASSIFIER_OFF_SKIP_REASON, pageUrl })),
+      );
+      const r = await runCloudSmartAudits({ store, siteKey: "web_1", crawlId: "audit_2", ruleResults: second, pageStatuses: crawled, ...(signal ? { resolutionSignal: buildResolutionSignal(second, [P, Q]) } : {}) });
+      const open = (await store.getFindings("web_1", ["open"])).filter((f) => f.checkName === "form-labels");
+      expect(open.length).toBe(3);
+      expect(r.coverage.carriedFindings).toBe(3);
+      // The signal itself lists both pages as not evaluated (pins the signal fix, not the local merge's
+      // skipped-row collector, which carries on its own).
+      if (signal) expect(buildResolutionSignal(second, [P, Q])!.notEvaluated?.[`${RULE}|form-labels`]).toHaveLength(2);
     });
   }
 });

@@ -185,6 +185,14 @@ export function encodeIndexGaps(sortedIndexes: readonly number[]): number[] {
 export const SCAN_TRUNCATED_SKIP_REASON = "scan-truncated";
 
 /**
+ * `skipReason` of a page check that needs the page classifier when the classifier did not run
+ * (`--no-classifier`, `classifier.enabled = false`, or a parse stored before it existed):
+ * `schema/expected-type` (repo#3364). A gap like {@link SCAN_TRUNCATED_SKIP_REASON}: the page was not
+ * judged, so a prior finding of the check on it carries instead of resolving.
+ */
+export const CLASSIFIER_OFF_SKIP_REASON = "classifier-off";
+
+/**
  * `skipReason` of a page rule the runner did not run because the page could not be parsed and was read as an empty document
  * (#1570). A rule-wide GAP like {@link RULE_TIMED_OUT_SKIP_REASON}: nothing was looked at, so a prior finding on the page is
  * carried, not resolved. Also the skip's `details.foldKey`.

@@ -24,6 +24,7 @@ import {
   type SupersededOutcome,
   isRuleNotApplicableReason,
   SCAN_TRUNCATED_SKIP_REASON,
+  CLASSIFIER_OFF_SKIP_REASON,
   isRuleWideGapSkipReason,
   resolutionRuleKey,
   resolutionUrlHash,
@@ -329,7 +330,12 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
         entry = { pages: new Set(), clipped: false, gap: false };
         skips.set(checkKey, entry);
       }
-      if (check.skipReason === SCAN_TRUNCATED_SKIP_REASON || inconclusive) entry.gap = true;
+      if (
+        check.skipReason === SCAN_TRUNCATED_SKIP_REASON ||
+        check.skipReason === CLASSIFIER_OFF_SKIP_REASON ||
+        inconclusive
+      )
+        entry.gap = true;
       if (own) {
         entry.pages.add(normalize(own));
         return;
