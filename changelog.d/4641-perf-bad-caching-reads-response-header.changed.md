@@ -1,0 +1,1 @@
+- `perf/bad-caching` reads response header names in any case (`ETag`, `Cache-Control`, `Last-Modified`), and a page whose stored record has `headers.recorded: false` is no longer counted as missing a header. It shows as not checked with the reason `headers-not-recorded` (squirrelscan/repo#4641).
