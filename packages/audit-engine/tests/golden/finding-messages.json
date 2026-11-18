@@ -671,6 +671,12 @@
    "encoding-corruption|pass|No encoding corruption in visible text||"
   ]
  },
+ "content/near-duplicate": {
+  "digest": "237187430664483",
+  "lines": [
+   "near-duplicate|pass|No pages have nearly identical main text||"
+  ]
+ },
  "content/placeholder-contact": {
   "digest": "216641992854744",
   "lines": [

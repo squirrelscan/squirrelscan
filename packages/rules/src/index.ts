@@ -57,6 +57,9 @@ export { pageTerminologyVariants } from "./content/terminology-consistency";
 // Page-time navigation link set: audit-engine stores it on page_features and
 // links/nav-set-divergence's legacy path derives it with the SAME function.
 export { pageNavLinkSet } from "./links/nav-set-divergence";
+// Page-time main-text simhash: audit-engine stores it on page_features and content/near-duplicate's
+// legacy path derives it with the SAME function, so both paths agree by construction.
+export { pageContentSimhash } from "./content/near-duplicate";
 // Per-page chrome fingerprint. `template-discontinuity` consumes it by fuzzy
 // similarity; audit-engine reduces the SAME object to page_features' equality
 // cluster key (#1949) and hands it to `buildCollectedPageSignal`, so one DOM

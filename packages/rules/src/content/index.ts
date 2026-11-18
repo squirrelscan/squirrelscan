@@ -34,6 +34,7 @@ import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { truncationArtifactsRule } from "./truncation-artifacts";
 import { typographyRule } from "./typography";
 import { unrenderedMarkupRule } from "./unrendered-markup";
+import { nearDuplicateRule } from "./near-duplicate";
 import { voiceConsistencyRule } from "./voice-consistency";
 import { wordCountRule } from "./word-count";
 
@@ -72,6 +73,7 @@ export const rules: Rule[] = [
   fontConsistencyRule,
   colorSprawlRule,
   typographyRule,
+  nearDuplicateRule,
 ];
 
 export {
@@ -104,6 +106,7 @@ export {
   truncationArtifactsRule,
   typographyRule,
   unrenderedMarkupRule,
+  nearDuplicateRule,
   voiceConsistencyRule,
   wordCountRule,
   fontConsistencyRule,

@@ -24,6 +24,7 @@ import {
   extractSiteChromeSignal,
   fingerprintPage,
   pageNavLinkSet,
+  pageContentSimhash,
   pageReadingLevel,
   pageTerminologyVariants,
 } from "@squirrelscan/rules";
@@ -182,6 +183,8 @@ export function extractPageFeatures(
     terminologyVariants: pageTerminologyVariants(parsed),
     // Same extractor links/nav-set-divergence's legacy path calls, keyed on the same page URL.
     navLinkSet: pageNavLinkSet(parsed, page.normalizedUrl),
+    // Same function content/near-duplicate's legacy path calls on the live document.
+    contentSimhash: pageContentSimhash(parsed.document, page.normalizedUrl, page.finalUrl),
     // #2343: the report's own per-page scalars, taken here because this is the
     // one pass that holds the DOM. Recovering them later meant re-parsing every
     // stored page a second time.

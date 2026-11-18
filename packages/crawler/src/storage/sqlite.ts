@@ -163,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 45;
+export const SCHEMA_VERSION = 46;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -662,6 +662,9 @@ const MIGRATIONS: Record<number, string[]> = {
   // Version 45: a page's navigation link set as JSON (links/nav-set-divergence). ADDITIVE and
   // nullable: a row written before this reads as no set, so the page is not compared.
   45: [`ALTER TABLE page_features ADD COLUMN nav_link_set TEXT`],
+  // Version 46: a page's main-text simhash (content/near-duplicate). ADDITIVE and nullable: a row
+  // written before this reads as not hashed, so the rule does not judge the page.
+  46: [`ALTER TABLE page_features ADD COLUMN content_simhash TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -810,6 +813,7 @@ const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }>
   { name: "reading_level", type: "INTEGER" },
   { name: "terminology_variants", type: "TEXT" },
   { name: "nav_link_set", type: "TEXT" },
+  { name: "content_simhash", type: "TEXT" },
 ];
 
 // Same guard for `rule_results`. Migrations 37 and 38 added the component-evidence
@@ -1284,6 +1288,7 @@ CREATE TABLE IF NOT EXISTS page_features (
   reading_level INTEGER,
   terminology_variants TEXT,
   nav_link_set TEXT,
+  content_simhash TEXT,
   PRIMARY KEY (crawl_id, normalized_url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -6518,8 +6523,9 @@ export class SQLiteStorage implements CrawlStorage {
       meta_noindex, indexable_reasons, rich_result_types,
       nap_name, nap_phones, nap_phone_formats, nap_address, nap_address_format,
       nap_tel_link, nap_mailto_link,
-      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates, reading_level, terminology_variants, nav_link_set
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates, reading_level, terminology_variants, nav_link_set,
+      content_simhash
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   private pageFeatureParams(
@@ -6569,6 +6575,7 @@ export class SQLiteStorage implements CrawlStorage {
         ? JSON.stringify(row.terminologyVariants)
         : null,
       row.navLinkSet ? JSON.stringify(row.navLinkSet) : null,
+      row.contentSimhash ?? null,
     ];
   }
 
@@ -6943,6 +6950,7 @@ export class SQLiteStorage implements CrawlStorage {
       navLinkSet: row.nav_link_set
         ? this.safeJsonParse(row.nav_link_set as string, null as NavLinkSet | null)
         : null,
+      contentSimhash: (row.content_simhash as string | null) ?? null,
     };
   }
 }

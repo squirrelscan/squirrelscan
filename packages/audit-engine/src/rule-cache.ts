@@ -79,6 +79,8 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
 /**
  * Bumped when the payload shape or the key's ingredients change; old rows then miss.
+ * prc-11: `features.contentSimhash` (content/near-duplicate). A prc-10 row would replay features
+ * without it and the page would not be hashed, so near-duplicates would go unseen.
  * prc-10: `features.navLinkSet` (links/nav-set-divergence). A prc-9 row would replay features
  * without it and the page would not be compared.
  * prc-9: `stylesheetMotion` joins the run context (a11y/reduced-motion, #711): url, read, handling, infinite-animation flag, smooth-scroll flag and the infinite-animation selectors.
@@ -95,7 +97,7 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
  * without it, which the store reads as "no alternates" and exempts nothing, so
  * the bump is about getting the new field filled, not about safety.
  */
-export const RULE_CACHE_FORMAT = "prc-10";
+export const RULE_CACHE_FORMAT = "prc-11";
 
 /**
  * The `SiteData` keys page-scope rules read, and therefore the only ones the run
