@@ -15,6 +15,7 @@ import { noaiSignalsRule } from "./noai-signals";
 import { payPerCrawlRule } from "./pay-per-crawl";
 import { rslLicenseRule } from "./rsl-license";
 import { tokenWeightRule } from "./token-weight";
+import { webmcpRule } from "./webmcp";
 import { wellKnownAgentRule } from "./well-known-agent";
 
 export const rules: Rule[] = [
@@ -32,6 +33,7 @@ export const rules: Rule[] = [
   archiveIndexingRule,
   rslLicenseRule,
   payPerCrawlRule,
+  webmcpRule,
 ];
 
 export {
@@ -48,5 +50,6 @@ export {
   payPerCrawlRule,
   rslLicenseRule,
   tokenWeightRule,
+  webmcpRule,
   wellKnownAgentRule,
 };

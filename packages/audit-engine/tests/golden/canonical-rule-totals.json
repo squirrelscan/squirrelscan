@@ -84,6 +84,7 @@
   "ax/pay-per-crawl": 1,
   "ax/rsl-license": 1,
   "ax/token-weight": 1000,
+  "ax/webmcp": 500,
   "ax/well-known-agent": 1,
   "content/article-links": 600,
   "content/author-info": 500,

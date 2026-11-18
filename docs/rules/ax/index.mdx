@@ -51,6 +51,7 @@ Actionable asks whether an agent can go beyond reading and transact: call an API
 
 - [API & OAuth Discovery](/rules/ax/api-discovery): `api-catalog`, OpenAPI, OAuth discovery documents
 - [Pay Per Crawl](/rules/ax/pay-per-crawl): HTTP 402 monetized agent access (Cloudflare Pay Per Crawl, x402)
+- [WebMCP](/rules/ax/webmcp): declarative WebMCP tools on forms, with schema validity checks
 - [Archive Indexing](/rules/ax/archive-indexing): presence in the Wayback Machine and Common Crawl, the archives AI training corpora are built from (cloud)
 
 <Note>`llms.txt` has no proven SEO value. Google has said it does not use it for search ranking or indexing. Treat it as a convenience for coding agents and docs consumption, not a ranking lever.</Note>
@@ -101,6 +102,7 @@ These carry the highest severity and weight in the category.
 | [robots.txt License: directive and RSL document validation](/rules/ax/rsl-license) | A License: reference in robots.txt pointing at a document that does not resolve as valid RSL. squirrel fetches it and checks. | warning | Site-wide |
 | [Site profile: the per-domain classification rules read](/rules/ai/site-metadata) | The resolved site type, business category, country and audience for a domain. squirrel reports it, and other rules use it to decide what applies. | info | Site-wide |
 | [Text to HTML ratio: the token cost of a page for an agent](/rules/ax/token-weight) | Visible text under 15% of the HTML, or a page over a 100,000-token budget. squirrel estimates both from the raw response. | warning | Per-page |
+| [WebMCP declarations: tools a browsing agent can call](/rules/ax/webmcp) | Which forms declare WebMCP tools with toolname and tooldescription, and which declarations are invalid. squirrel reports, and never penalises. | info | Per-page |
 
 {/* hub:rules:end */}
 
@@ -142,7 +144,7 @@ These carry the highest severity and weight in the category.
 
 ## Roadmap
 
-More AX checks are planned: WebMCP / agent-accessibility parity with [Lighthouse agentic browsing](https://developer.chrome.com/docs/lighthouse/agentic-browsing/scoring).
+[WebMCP](/rules/ax/webmcp) covers declarative tools and links the accessibility rules that [Lighthouse agentic browsing](https://developer.chrome.com/docs/lighthouse/agentic-browsing/scoring) also scores. More AX checks may follow as the standard settles.
 
 ## Disable all Agent Experience rules
 
