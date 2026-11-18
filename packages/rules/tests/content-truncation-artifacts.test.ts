@@ -105,9 +105,12 @@ describe("content/truncation-artifacts", () => {
   });
 
   test("pass: the no-false-positive page: quotation, stylistic and whole-word ellipses", () => {
+    // A 100 character mid-word cut: it warns outside the quotation (see the blockquote/q test below).
+    const quoted = `${"We were going to ship it in the spring but the company and the board kept moving the dates ".repeat(2)}`.slice(0, 100);
+    expect(quoted.length).toBe(100);
     const c = run(
       `<h1>Why we stopped waiting</h1>
-       <blockquote><p>We were going to ship it in the spring but the compan...</p></blockquote>
+       <blockquote><p>${quoted}...</p></blockquote>
        <p>And then, after all the planning and the waiting for the perfect moment, we just did it...</p>
        <p>Then the whole thing went quiet for a while, and nobody said a word …</p>
        <p>${LONG_BODY}</p>`,
@@ -117,6 +120,15 @@ describe("content/truncation-artifacts", () => {
       },
     );
     expect(c.status).toBe("pass");
+  });
+
+  test("pass: a round-limit mid-word cut inside a <blockquote> or <q> is a quotation, not a truncation", () => {
+    // The same text warns unquoted (see the round-limit body test above): only the quotation exclusion clears it.
+    const text = `${"Notes about the release process and how our team ships fixes ".repeat(2)}to productio`.slice(0, 100);
+    expect(text.length).toBe(100);
+    expect(run(`<p>${text}...</p>`).status).toBe("warn");
+    expect(run(`<blockquote><p>${text}...</p></blockquote>`).status).toBe("pass");
+    expect(run(`<q><p>${text}...</p></q>`).status).toBe("pass");
   });
 
   test("pass: a title that is a complete prefix of the H1 at a word boundary", () => {
