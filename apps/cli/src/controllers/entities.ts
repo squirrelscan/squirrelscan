@@ -87,25 +87,18 @@ function compareStrings(a: string, b: string): number {
  *
  * The store is relational on purpose (#2091) so a query can ask "which pages
  * declare this entity" without parsing a blob, which means the document has to
- * be reassembled here. Two fields are approximations, and a caller that needs
- * them exactly should read the audit's own `-f json` report rather than this:
- *
- * - A page's `references` are not stored, because nothing queries them. They
- *   come back EMPTY rather than invented. (An edge's `pages` ARE stored since
- *   #492, as the document's capped list; an edge written before that comes
- *   back empty for the same reason.)
- * - A page's `entityCount` counts DECLARATIONS in the original document, and
- *   what survives the store is the set of distinct keys. The two differ only
- *   when one page declares the same entity twice, so this is a lower bound that
- *   is exact for every page that does not. `pagesWithoutEntities` is unaffected:
- *   zero declarations and zero distinct keys are the same page.
+ * be reassembled here. A page's `references` and `entityCount` and an edge's
+ * `pages` are stored (#2105, #492), so a map written by this version comes back
+ * equal to the document. Only a crawl written BEFORE #2105 (no `entity_map_runs`
+ * row) falls back: its `references` are empty and its `entityCount` is the count
+ * of distinct declared keys, and an edge written before #492 has no pages.
  *
  * `pages` comes from the crawl's own page table, NOT from `entity_occurrences`.
  * A page the crawl visited that declares nothing has no occurrence row, and
  * omitting it would make `pagesWithoutEntities` zero on every reconstructed map
  * and break the diff's not-crawled test.
  */
-function reassembleMap(
+export function reassembleMap(
   crawl: CrawlMetadata,
   rows: {
     nodes: Array<{
@@ -130,6 +123,8 @@ function reassembleMap(
       morePages: number;
     }>;
     occurrences: Array<{ key: string; normalizedUrl: string }>;
+    written?: boolean;
+    pages?: Array<{ url: string; entityCount: number; references: string[] }>;
   },
   pageUrls: string[]
 ): EntityMap {
@@ -190,15 +185,24 @@ function reassembleMap(
     morePages: row.morePages,
   }));
 
+  const storedPages = new Map(
+    (rows.pages ?? []).map((page) => [page.url, page])
+  );
   const pages: EntityMapPage[] = pageUrls.sort(compareStrings).map((url) => {
     const declares = (declaresByPage.get(url) ?? []).sort(compareStrings);
+    const stored = storedPages.get(url);
     return {
       url,
       declares,
-      // Not stored: nothing queries them.
-      references: [],
-      // Distinct entities, not declarations: see the note above.
-      entityCount: declares.length,
+      // A crawl that recorded its map and has no row for a page means none
+      // (rows exist only for pages with a declaration or reference). A crawl
+      // from before #2105 recorded nothing, so it falls back (see above).
+      references: [...(stored?.references ?? [])].sort(compareStrings),
+      entityCount: stored
+        ? stored.entityCount
+        : rows.written
+          ? 0
+          : declares.length,
     };
   });
 
@@ -290,13 +294,17 @@ export async function listEntityMaps(
         // A listing is a survey, so one unreadable crawl is skipped rather than
         // failing the table. `loadEntityMap` does the opposite, deliberately.
         const stored = await Effect.runPromise(
-          storage
-            .getEntityMapRows(crawl.id)
-            .pipe(
-              Effect.catchAll(() =>
-                Effect.succeed({ nodes: [], edges: [], occurrences: [] })
-              )
+          storage.getEntityMapRows(crawl.id).pipe(
+            Effect.catchAll(() =>
+              Effect.succeed({
+                nodes: [],
+                edges: [],
+                occurrences: [],
+                written: false,
+                pages: [],
+              })
             )
+          )
         );
         const withId = stored.nodes.filter((node) => node.id !== null).length;
         out.push({
@@ -337,11 +345,11 @@ export async function listEntityMaps(
  * silently reporting zero entities for it would read as a site with no
  * structured data.
  *
- * That rule has a cost, and `skipped` is the receipt for it. Zero entity rows
- * is ALSO what a site declaring no JSON-LD at all looks like, and the store does
- * not record which of the two happened. So the newest audit is passed over on a
- * guess, and the caller is told which one, rather than quietly showing older
- * data as though it were current.
+ * That rule has a cost, and `skipped` is the receipt for it. A crawl from before
+ * #2105 has zero entity rows whether or not its site declared JSON-LD, and
+ * records no map either way, so it is passed over and the caller is told which
+ * one, rather than quietly showing older data as though it were current. A crawl
+ * that wrote a map is never passed over, even an empty one.
  */
 export async function loadEntityMap(
   crawlId?: string
@@ -370,7 +378,9 @@ export async function loadEntityMap(
           const rows = await Effect.runPromise(
             storage.getEntityMapRows(crawl.id)
           );
-          if (rows.nodes.length === 0 && !crawlId) {
+          // A map that was written and came out empty is a real, current answer
+          // (#2105). Only a crawl that never wrote one is passed over.
+          if (rows.nodes.length === 0 && !rows.written && !crawlId) {
             out.push({
               kind: "skip",
               crawlId: crawl.id,
