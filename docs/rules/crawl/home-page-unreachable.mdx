@@ -19,6 +19,8 @@ The rule is site-wide. It fires when the crawl recorded a failure fetching the a
 
 It does not fire when the home page loaded, and it does not report a 4xx answer, a robots.txt refusal, a redirect problem or a bot wall: those are answers, often a policy, and the report covers them separately. A failure fetching only a sitemap is not the home page and is ignored. The check is `home-page-unreachable` with status fail, and its message names the host and the cause.
 
+The check passes only when this audit fetched the home page (the audited URL, or where it redirected) and it loaded. When the audit has no result for the home page either way, the check is skipped as not checked, with the reason `entry-not-fetched`, and a finding from an earlier audit stays open. That happens when the home page was not among the pages fetched (a partial re-audit, or `squirrel analyze` on stored data without the crawl's record of failures), when it answered with an error status but no failure was recorded, and when the failure was of a kind squirrel could not classify.
+
 ## How to fix it
 
 Check the cause named in the finding, then run the audit again.
@@ -71,6 +73,7 @@ Each check name this rule can emit, by what it means to a tool comparing two aud
 | --- | --- | --- |
 | `home-page-unreachable` | Problem |  |
 | `home-page-unreachable` | Clean | `home-page-unreachable` |
+| `home-page-unreachable` | Not checked |  |
 
 {/* rule-checks:end */}
 

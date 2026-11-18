@@ -23,6 +23,7 @@ import { IGNORED_SKIP_REASON } from "../src/ignore";
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
   CLASSIFIER_OFF_SKIP_REASON,
+  ENTRY_NOT_FETCHED_SKIP_REASON,
   isRuleNotApplicableReason,
   isRuleWideGapSkipReason,
   NOT_APPLICABLE_SKIP_REASON,
@@ -41,6 +42,8 @@ const TABLE: Array<[string, boolean, boolean, boolean]> = [
   [UNREAD_PAGE_SKIP_REASON, false, true, false],
   [SCAN_TRUNCATED_SKIP_REASON, false, false, false],
   [CLASSIFIER_OFF_SKIP_REASON, false, false, false],
+  // The home page rule with no verdict on the entry page (pub#2035): a check-scoped gap, listed as not checked.
+  [ENTRY_NOT_FETCHED_SKIP_REASON, false, false, true],
   [TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON, false, false, true],
   [EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON, false, false, true],
   [LINK_TARGETS_NOT_FETCHED_SKIP_REASON, false, false, true],

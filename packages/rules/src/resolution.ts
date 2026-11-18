@@ -34,6 +34,7 @@ import {
   resolutionUrlHash,
   SCAN_TRUNCATED_SKIP_REASON,
   CLASSIFIER_OFF_SKIP_REASON,
+  ENTRY_NOT_FETCHED_SKIP_REASON,
   isRuleWideGapSkipReason,
   UNCONFIRMED_CHECK_SUFFIX,
 } from "@squirrelscan/core-contracts/resolution";
@@ -256,7 +257,9 @@ function collectResolutionEvidence(
       }
       if (
         check.status === "skipped" &&
-        (check.skipReason === SCAN_TRUNCATED_SKIP_REASON || check.skipReason === CLASSIFIER_OFF_SKIP_REASON)
+        (check.skipReason === SCAN_TRUNCATED_SKIP_REASON ||
+          check.skipReason === CLASSIFIER_OFF_SKIP_REASON ||
+          check.skipReason === ENTRY_NOT_FETCHED_SKIP_REASON)
       ) {
         // (pub#501) The opposite kind of skip: a GAP. The rule stopped at a work
         // cap with nothing found so far, so the page is not evaluated. That needs
@@ -269,7 +272,8 @@ function collectResolutionEvidence(
           evaluated.set(key, new Set<string>());
           keyRule.set(key, ruleId);
         }
-        // (repo#3364) A `classifier-off` skip is the same gap: the rule never judged the page.
+        // (repo#3364) A `classifier-off` skip is the same gap: the rule never judged the page, and so is
+        // (pub#2035) an `entry-not-fetched` skip of the home page rule.
         // (#1031) Also an explicit skip of the check on its pages: a rule-level verdict elsewhere on
         // the page must not make this truncated check read as evaluated.
         noteExplicitSkip(key, check);

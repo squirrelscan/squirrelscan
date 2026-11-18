@@ -63,6 +63,7 @@ describe("classifyRuleOutcome", () => {
     ["external links off", skipped("external-links-not-checked"), "coverage_gap"],
     ["external links over the cap", skipped("external-links-over-cap"), "coverage_gap"],
     ["a targeted run", skipped("targeted-run"), "coverage_gap"],
+    ["the home page not fetched", skipped("entry-not-fetched"), "coverage_gap"],
     ["a capped crawl", skipped("Crawl capped before the frontier was exhausted"), "coverage_gap"],
     ["a waived page", skipped("ignored"), "disabled"],
     ["a private target", skipped("private-target"), "disabled"],

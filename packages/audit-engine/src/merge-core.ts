@@ -25,6 +25,7 @@ import {
   isRuleNotApplicableReason,
   SCAN_TRUNCATED_SKIP_REASON,
   CLASSIFIER_OFF_SKIP_REASON,
+  ENTRY_NOT_FETCHED_SKIP_REASON,
   isRuleWideGapSkipReason,
   resolutionRuleKey,
   resolutionUrlHash,
@@ -333,6 +334,7 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
       if (
         check.skipReason === SCAN_TRUNCATED_SKIP_REASON ||
         check.skipReason === CLASSIFIER_OFF_SKIP_REASON ||
+        check.skipReason === ENTRY_NOT_FETCHED_SKIP_REASON ||
         inconclusive
       )
         entry.gap = true;

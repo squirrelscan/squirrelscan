@@ -57,6 +57,8 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "scan-truncated": gap(false),
   // A check that needs the page classifier when it did not run (repo#3364): the page was not judged.
   "classifier-off": gap(false),
+  // The home page rule with no verdict on the entry page this audit (pub#2035): neither loaded nor a known outage.
+  "entry-not-fetched": gap(true),
   "tls-certificate-not-checked": gap(true),
   "external-links-not-checked": gap(true),
   "link-targets-not-fetched": gap(true),
