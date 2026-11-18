@@ -78,6 +78,16 @@ describe("link section from the classifier", () => {
     expect(calls).toEqual([]);
   });
 
+  test("a markup breadcrumb trail is never asked or overridden", () => {
+    const calls: string[] = [];
+    const out = links(
+      `<nav aria-label="breadcrumb"><a href="/a">a</a></nav>`,
+      hookFor({ a: { section: model("pagination") } }, calls),
+    );
+    expect(out.map((l) => [l.text, l.section, l.sectionSource])).toEqual([["a", "breadcrumbs", undefined]]);
+    expect(calls).toEqual([]);
+  });
+
   test("a section purpose refines a navigation or sidebar landmark; nothing else does", () => {
     const out = links(
       `<nav><a href="/p">p</a></nav><nav><a href="/b">b</a></nav><aside><a href="/r">r</a></aside>` +

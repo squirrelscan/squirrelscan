@@ -83,6 +83,30 @@ describe("link section", () => {
     });
   });
 
+  test("a trail labelled breadcrumb by aria-label, class or id is breadcrumbs, not navigation", () => {
+    expect(
+      sections(
+        `<nav aria-label="Breadcrumb"><ol><li><a href="/">a</a></li><li><a href="/p">b</a></li></ol></nav>` +
+          `<main><div class="site-breadcrumbs"><a href="/c">c</a></div>` +
+          `<ul id="breadcrumb"><li><a href="/d">d</a></li></ul><a href="/e">e</a></main>` +
+          `<nav aria-label="Main"><a href="/n">n</a></nav>`,
+      ),
+    ).toEqual({
+      a: "breadcrumbs",
+      b: "breadcrumbs",
+      c: "breadcrumbs",
+      d: "breadcrumbs",
+      e: "content",
+      n: "navigation",
+    });
+  });
+
+  test("a breadcrumb trail inside the site header stays header", () => {
+    expect(sections(`<header><nav aria-label="breadcrumb"><a href="/a">a</a></nav></header>`)).toEqual({
+      a: "header",
+    });
+  });
+
   test("extractLinks agrees with parsePage", () => {
     const html = page(
       `<nav><a href="/n">n</a></nav><main><a href="/c">c</a><div id="comments"><a href="/m">m</a></div></main>`,
