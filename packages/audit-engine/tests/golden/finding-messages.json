@@ -503,6 +503,12 @@
    "token-weight-ratio|pass|~#% of this page's HTML is visible text, above the #% floor|#|"
   ]
  },
+ "ax/webmcp": {
+  "digest": "9862646524663",
+  "lines": [
+   "webmcp-declarative-tools|info|No declarative WebMCP tools|\"#\"|"
+  ]
+ },
  "ax/well-known-agent": {
   "digest": "140085014444147",
   "lines": [
