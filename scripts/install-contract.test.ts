@@ -2245,6 +2245,22 @@ describe.concurrent("release manifest fetch failure message (repo#1595)", () => 
     expect(stderr).not.toContain("something unusable");
   });
 
+  // GitHub's list is large and spread over many lines. A `printf | grep -q` check under pipefail
+  // dies of SIGPIPE (141) once grep exits at its first match, which would call a real list
+  // "unusable"; the list here is well past a 64 KB pipe buffer with tag_name on the first line.
+  test.skipIf(!Bun.which("jq"))("a large multi-line release list with no stable release is not called unusable", async () => {
+    const pad = "x".repeat(200);
+    const { code, stdout, stderr } = await runWithCurlShim("USE_JQ=true; get_latest_version stable", {
+      prelude: fetchShim(
+        "return 7",
+        `printf '[\\n{"tag_name": "v1.0.0-beta.0", "prerelease": true}'; for i in $(seq 1 1000); do printf ',\\n{"tag_name": "v1.0.0-beta.%s", "prerelease": true, "body": "${pad}"}' "$i"; done; printf '\\n]\\n@@status:200'`,
+      ),
+    });
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("");
+    expect(stderr).not.toContain("something unusable");
+  });
+
   test("a custom releases endpoint is reported as custom, never by its name", async () => {
     const { stderr } = await runWithCurlShim("USE_JQ=false; get_latest_version stable", {
       prelude: fetchShim("return 6", "return 6"),

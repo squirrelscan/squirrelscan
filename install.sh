@@ -1523,10 +1523,17 @@ get_latest_version() {
   # A 200 whose body holds no release at all (a captive-portal or proxy page) is not "no stable
   # releases": report both endpoints' outcomes here, or the caller's message names neither. A real
   # release list that only lacks a stable release still returns empty for the caller to explain.
-  if [ -z "$version" ] && ! printf '%s' "$response" | grep -q '"tag_name"'; then
-    fallback_outcome=$(describe_fetch_outcome "api.github.com" 0 "$RESP_STATUS")
-    error "$(fetch_failure_message "$primary_outcome" "$fallback_outcome" no)" \
-      "$(fetch_failure_guidance no)"
+  # A pattern match, not `printf | grep -q`: under pipefail grep's early exit SIGPIPEs printf on a
+  # large list (exit 141), which would call a real release list unusable.
+  if [ -z "$version" ]; then
+    case "$response" in
+      *'"tag_name"'*) ;;
+      *)
+        fallback_outcome=$(describe_fetch_outcome "api.github.com" 0 "$RESP_STATUS")
+        error "$(fetch_failure_message "$primary_outcome" "$fallback_outcome" no)" \
+          "$(fetch_failure_guidance no)"
+        ;;
+    esac
   fi
 
   echo "$version"
