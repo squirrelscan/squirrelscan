@@ -19,6 +19,8 @@ How it works:
 
 ## v0.0.184 (2026-11-18)
 
+Six new rules, including four probing security checks that knock on the doors a vibe-coded app forgets to lock: open redirects, Supabase tables readable with the public anon key, exposed Spring Boot Actuator endpoints, and admin APIs that trust the frontend to hide them. Batch audits from a URL list, `squirrel support` in the terminal, accessibility rules that name the WCAG criteria they test, and findings ranked by how common they are across sites.
+
 ### Added
 
 - `squirrel support` (squirrelscan/repo#1090): open and follow threaded support tickets from the terminal. `new`, `list`, `view <ref>` and `reply <ref>`, each with `--json`; `new` takes `--type`, `--subject`, `--message`, `--run-id`, `--rule-id`, `--report-id` and `--attach-doctor` (the `squirrel self doctor` output rides in metadata, never the message, and is asked about first at a terminal). It needs `squirrel auth login`. When support has replied, `audit`, `crawl` and `analyze` print `Support replied on <REF>: squirrel support view <REF>` on stderr, read from a value cached in settings and refreshed in the background at most hourly. The local MCP server gains `create_support_ticket`, `list_support_tickets`, `get_support_ticket` and `reply_to_support_ticket`. See [squirrel support](https://docs.squirrelscan.com/cli/support).
