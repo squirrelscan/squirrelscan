@@ -561,6 +561,13 @@
    "common-misspellings|pass|No known misspellings or doubled words on English pages||"
   ]
  },
+ "content/conversion-path": {
+  "digest": "150628210706818",
+  "lines": [
+   "conversion-path|pass|No prominent call-to-action links to judge||",
+   "conversion-path|skipped|Not a pricing, service or product page||"
+  ]
+ },
  "content/date-agreement": {
   "digest": "179024305377535",
   "lines": [
