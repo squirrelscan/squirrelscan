@@ -68,8 +68,17 @@ export interface FeedbackSubmission {
 }
 
 export type SubmitFeedbackResult =
-  | { ok: true }
+  | { ok: true; receipt: string }
   | { ok: false; status: number; rateLimited: boolean };
+
+/**
+ * A receipt the sender can quote: made here, stored with the feedback in its
+ * metadata (`receipt_id`) so the team can find the entry, and handed back only
+ * after the API accepted the submission (#4951).
+ */
+export function newFeedbackReceipt(): string {
+  return `fb_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+}
 
 /**
  * POST the feedback, unauthenticated. The API has no run or website columns
@@ -86,6 +95,8 @@ export async function submitFeedback(
   if (submission.runId) metadata.run_id = submission.runId;
   if (submission.websiteId) metadata.website_id = submission.websiteId;
   if (submission.via) metadata.via = submission.via;
+  const receipt = newFeedbackReceipt();
+  metadata.receipt_id = receipt;
 
   const payload: Record<string, unknown> = {
     email: submission.email,
@@ -103,5 +114,7 @@ export async function submitFeedback(
     auth: "none",
     body: payload,
   });
-  return ok ? { ok: true } : { ok: false, status, rateLimited: status === 429 };
+  return ok
+    ? { ok: true, receipt }
+    : { ok: false, status, rateLimited: status === 429 };
 }

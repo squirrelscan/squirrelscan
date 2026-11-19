@@ -1,0 +1,1 @@
+- The agent setup prompt now runs the first audit with `--offline --level quick` whatever the sign-in state, checks `squirrel auth status` first, asks for consent before credit spend, publishing or recurring audits, never passes `--yes`, preserves an existing setup, and ends with a sanitized failure report and the exact next step (#4949, #4950, #4951).

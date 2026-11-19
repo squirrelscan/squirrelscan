@@ -114,10 +114,16 @@ describe("squirrel feedback, headless (#370)", () => {
     ]);
 
     expect(r.code).toBe(0);
-    expect(JSON.parse(r.out)).toEqual({
+    const out = JSON.parse(r.out) as Record<string, unknown>;
+    expect(out).toEqual({
       ok: true,
       category: "bug_report",
       truncated: false,
+      receipt: expect.stringMatching(/^fb_[0-9a-f]{12}$/),
+    });
+    // The quoted receipt is the one the API stored in the metadata.
+    expect(received[0]!.body.metadata).toMatchObject({
+      receipt_id: out.receipt,
     });
     expect(r.out).not.toContain("Email:");
     expect(received).toHaveLength(1);

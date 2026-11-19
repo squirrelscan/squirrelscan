@@ -72,7 +72,13 @@ interface Failure {
 }
 
 type Outcome =
-  | { ok: true; category: FeedbackCategory | null; truncated: boolean }
+  | {
+      ok: true;
+      category: FeedbackCategory | null;
+      truncated: boolean;
+      /** Quote this: the API accepted the feedback and stored it under this id. */
+      receipt: string;
+    }
   | Failure;
 
 function fail(
@@ -157,7 +163,12 @@ async function submit(
 ): Promise<Outcome> {
   const result = await submitFeedback(submission);
   if (result.ok) {
-    return { ok: true, category: submission.category ?? null, truncated };
+    return {
+      ok: true,
+      category: submission.category ?? null,
+      truncated,
+      receipt: result.receipt,
+    };
   }
   if (result.rateLimited) {
     return fail(
@@ -417,7 +428,9 @@ function printOutcome(outcome: Outcome, json: boolean): void {
       );
     }
     const t = createTheme(process.stdout);
-    console.log(`${t.ok(t.sym.ok)} Thank you for your feedback!`);
+    console.log(
+      `${t.ok(t.sym.ok)} Thank you for your feedback! Receipt: ${outcome.receipt}`
+    );
     return;
   }
   const e = createTheme(process.stderr);
