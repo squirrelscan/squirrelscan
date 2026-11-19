@@ -659,8 +659,9 @@ export interface RenderFailedRequest {
 }
 
 /**
- * What the browser saw while the page ran, kept listening after `load` (#704, renderer side #425).
- * Absent from renderers that do not record it; the rule then reports "not measured", never "clean".
+ * What the browser saw while the page ran, kept listening after `load` (#704; the renderer side is tracked privately).
+ * Absent from renderers that do not record it; reliability/js-errors then reports the coded gap
+ * `runtime-not-recorded` for that page, never "clean".
  */
 export interface RenderRuntimeDiagnostics {
   pageErrors?: RenderRuntimeError[];

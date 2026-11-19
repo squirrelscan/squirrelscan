@@ -448,6 +448,13 @@ export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
 export const HEADERS_NOT_RECORDED_SKIP_REASON = "headers-not-recorded";
 
 /**
+ * `skipReason` of `reliability/js-errors` when the cloud render recorded no runtime data (page errors,
+ * console errors, failed requests) for some or all of the pages it should have judged (#704). Nothing
+ * was seen on those pages, so no error there is not a clean result: an evaluation gap, not a pass.
+ */
+export const RUNTIME_NOT_RECORDED_SKIP_REASON = "runtime-not-recorded";
+
+/**
  * `details` keys `links/broken-links` sets on every row it emits (pub#794): how
  * many distinct internal link targets the pages link, how many nothing fetched,
  * how many the internal link check answered, how many answered a refusal

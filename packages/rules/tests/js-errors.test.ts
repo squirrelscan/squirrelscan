@@ -1,8 +1,9 @@
 // reliability/js-errors - JavaScript errors and failed runtime requests on rendered pages (#704).
-// Render results are hand-built: the renderer side (#425) records them in the cloud.
+// Render results are hand-built: the cloud renderer does not record runtime data yet (tracked privately).
 
 import { describe, expect, test } from "bun:test";
 
+import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import type {
   CheckResult,
   RenderResultItem,
@@ -235,7 +236,7 @@ describe("reliability/js-errors", () => {
     expect(checks[0]?.status).toBe("pass");
   });
 
-  test("a page detected as a WAF challenge is left out", async () => {
+  test("a page detected as a WAF challenge is left out, and is no gap: the other pages still pass", async () => {
     const checks = await run({
       [`${SITE}/a`]: render(
         { pageErrors: [{ message: "TypeError: c" }] },
@@ -244,12 +245,58 @@ describe("reliability/js-errors", () => {
       [`${SITE}/b`]: render({}),
     });
     expect(named(checks, "js-errors")?.status).toBe("pass");
-    expect(named(checks, "unchecked-pages")?.status).toBe("info");
+    const note = named(checks, "unchecked-pages");
+    expect(note?.status).toBe("info");
+    expect(note?.skipReason).toBeUndefined();
   });
 
-  test("no runtime data from the renderer is skipped, never a pass", async () => {
+  test("no runtime data from the renderer is a coded gap, never a pass", async () => {
     const checks = await run({ [`${SITE}/`]: render(undefined) });
+    expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("skipped");
+    expect(checks[0]?.skipReason).toBe(RUNTIME_NOT_RECORDED_SKIP_REASON);
+  });
+
+  // #704: a pass covers the whole site, so a stored finding would resolve on it. With any page the rule had to
+  // judge lacking runtime data, the error may be on that page: a coded gap, not a pass plus an info.
+  test("a partial run (some pages without runtime data) is a coded gap, not a pass", async () => {
+    const checks = await run({
+      [`${SITE}/a`]: render({}),
+      [`${SITE}/b`]: render(undefined),
+    });
+    expect(checks.find((c) => c.status === "pass")).toBeUndefined();
+    const gap = named(checks, "unchecked-pages");
+    expect(gap?.status).toBe("skipped");
+    expect(gap?.skipReason).toBe(RUNTIME_NOT_RECORDED_SKIP_REASON);
+    expect(gap?.details).toMatchObject({ unmeasured: 1, unrendered: 0 });
+  });
+
+  test("a page with no render result beside measured pages is a coded gap too", async () => {
+    const checks = await run({
+      [`${SITE}/a`]: render({}),
+      [`${SITE}/b`]: { status: "skipped", skipReason: "render-failed" },
+    });
+    expect(checks.find((c) => c.status === "pass")).toBeUndefined();
+    const gap = named(checks, "unchecked-pages");
+    expect(gap?.skipReason).toBe(RUNTIME_NOT_RECORDED_SKIP_REASON);
+    expect(gap?.details).toMatchObject({ unmeasured: 0, unrendered: 1 });
+  });
+
+  test("a partial run still reports the errors it saw, beside the gap", async () => {
+    const checks = await run({
+      [`${SITE}/a`]: render({
+        pageErrors: [{ message: "TypeError: x is undefined", sourceUrl: `${SITE}/app.js`, line: 3 }],
+      }),
+      [`${SITE}/b`]: render(undefined),
+      [`${SITE}/c`]: render({}, { status: 403 }),
+    });
+    expect(named(checks, "js-errors")?.status).toBe("fail");
+    const gap = named(checks, "unchecked-pages");
+    expect(gap?.status).toBe("skipped");
+    expect(gap?.skipReason).toBe(RUNTIME_NOT_RECORDED_SKIP_REASON);
+    expect(gap?.message).toBe(
+      "Partial check: 1 page(s) had no runtime data from the renderer; 1 page(s) were a WAF or bot challenge and were left out"
+    );
   });
 
   test("no render results (local or --http audit) is skipped with a reason", async () => {
