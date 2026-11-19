@@ -70,8 +70,8 @@ If your platform verifies crawlers by signature (Shopify, Cloudflare verified bo
 | | What to allow |
 |---|---|
 | **Cloud** | There is no dedicated squirrelscan address. Cloud audits leave from Cloudflare's shared egress addresses, so allow [Cloudflare's published ranges](https://www.cloudflare.com/ips/) and pair the rule with a secret header, as on [Firewall and WAF exceptions](/cloud/firewall#option-3-ip-allowlisting) |
-| **CLI** | Your own address. The CLI fetches your site from your machine or CI runner, so allow that machine's public IP. No `squirrel.toml` setting is involved |
-| **MCP** | Hosted: the cloud ranges. CLI-driven: your own address |
+| **CLI** | Plain fetches come from your machine or CI runner, so allow that public IP. A signed-in audit that renders pages in the cloud browser sends those renders from squirrelscan's network, so allow those addresses too, as for [cloud audits](/cloud/firewall#option-3-ip-allowlisting), or run with `--http` to keep every request on your machine |
+| **MCP** | Hosted: the cloud ranges. CLI-driven: as the CLI row |
 
 Datacenter and CI addresses are challenged more often than a laptop, so a CI audit may need its runner's address allowed even when a local run works.
 
