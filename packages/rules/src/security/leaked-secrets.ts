@@ -2608,8 +2608,16 @@ const NEARBY_ASSIGNED_RE = /((?:=>|=|:(?!\/\/))\s*)([^\s"'`=:>][^\s"'`]*)/g;
 // A run of 12 or more characters after a secret's label with no `=` or `:` between (`X-Api-Key abcdEFGHijklMNOP`,
 // `// password qwertyuiopasdfghjk`). A letters-only run escapes the letter-and-digit rule, so the label marks it; a
 // shorter word after a label (`the password field`) is prose and kept.
+// `pin` must be the whole word: `spinner` and `pinned` are not labels.
 const NEARBY_LABELLED_RE =
-  /\b((?:x-)?api[-_]?key|access[-_]?key|secret[-_]?key|private[-_]?key|client[-_]?secret|secret|password|passwd|passphrase|pwd|pass|token|credentials?)(\s+)([^\s"'`]{12,})/gi;
+  /\b((?:x-)?api[-_ ]?key|access[-_]?key|secret[-_]?key|private[-_]?key|client[-_]?secret|secret|password|passwd|passphrase|passcode|pwd|pass|token|credentials?|pin\b)(\s+)([^\s"'`]{12,})/gi;
+// A key before `=`, `:` or `=>` whose name holds a secret's label as a whole segment (`DB_PASSWORD`, `x-api-key`, `apiKey`,
+// `pin`, but not `passport`, `spinner` or `stripeKey`): its unquoted value is starred to the end of the line, so a
+// passphrase with spaces (`password: correct horse battery staple`) shows none of its words. Read on the raw text, before
+// whitespace is collapsed, since a collapsed snippet has no line ends.
+const LABELLED_KEY_LINE_RE = sharedRegex(/(^|[^\w$.-])([A-Za-z_$][\w$.-]*)([ \t]*(?:=>|=|:)[ \t]*)(?=[^\s"'`])/gm);
+const LABEL_SEGMENT_RE =
+  /(?:^|[_.$-])(?:api[-_]?key|access[-_]?key|secret[-_]?key|private[-_]?key|client[-_]?secret|secret|password|passwd|passphrase|passcode|pwd|pw|pass|token|credentials?|pin)(?=$|[_.$-])/;
 // Code punctuation: a span between two quotes that holds any of it is read as code between two literals, not as a literal.
 const CODE_PUNCT_RE = /[;,(){}[\]=:+<>&|]/;
 // When the match is not quoted, a reading that starts inside a quote and never closes it in the window claims the whole
@@ -2632,13 +2640,44 @@ function maskNearby(value: string): string {
   return "*".repeat(Math.min(value.length, 20));
 }
 
+/** Whether `key` (`DB_PASSWORD`, `apiKey`, `x-api-key`) names a secret: a label is one of its segments. */
+function isLabelledKey(key: string): boolean {
+  const segmented = key.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+  return LABEL_SEGMENT_RE.test(segmented.toLowerCase());
+}
+
+/**
+ * `text` with the unquoted value after every labelled key starred to the end of its line (see LABELLED_KEY_LINE_RE). A key
+ * that is not a label is left to redactNearby, which stars its value to the next whitespace or quote.
+ */
+function redactLabelledLines(text: string): string {
+  let out = "";
+  let pos = 0;
+  LABELLED_KEY_LINE_RE.lastIndex = 0;
+  for (let m = LABELLED_KEY_LINE_RE.exec(text); m !== null; m = LABELLED_KEY_LINE_RE.exec(text)) {
+    if (!isLabelledKey(m[2] ?? "")) continue;
+    const valueAt = m.index + m[0].length;
+    const eol = text.slice(valueAt).search(/[\r\n]/);
+    const valueEnd = eol < 0 ? text.length : valueAt + eol;
+    out += text.slice(pos, valueAt) + maskNearby(text.slice(valueAt, valueEnd));
+    pos = valueEnd;
+    LABELLED_KEY_LINE_RE.lastIndex = valueEnd;
+  }
+  return out + text.slice(pos);
+}
+
 function redactNearby(text: string): string {
   return text
     .replace(URL_CREDENTIALS_RE, "$1****@")
     .replace(NEARBY_AUTH_SCHEME_RE, (_whole, scheme: string, gap: string, val: string) => scheme + gap + maskNearby(val))
     .replace(NEARBY_ASSIGNED_RE, (_whole, op: string, val: string) => op + maskNearby(val))
     .replace(NEARBY_LABELLED_RE, (_whole, label: string, gap: string, val: string) => label + gap + maskNearby(val))
-    .replace(NEARBY_TOKEN_RE, (run) => maskNearby(run))
+    .replace(NEARBY_TOKEN_RE, (run) => {
+      // `DB_PASSWORD=` before its starred value is a key, not part of a token: keep it readable. A key that mixes letters
+      // and digits is still starred by the short-token rule below.
+      const keyed = /^([A-Za-z_$][\w$.-]{0,18}(?:=>|=|:))\*+$/.exec(run);
+      return keyed ? keyed[1] + maskNearby(run.slice(keyed[1].length)) : maskNearby(run);
+    })
     .replace(NEARBY_SHORT_TOKEN_RE, (run) => (/[A-Za-z]/.test(run) && /[0-9]/.test(run) ? maskNearby(run) : run));
 }
 
@@ -2759,6 +2798,11 @@ export function evidenceContext(content: string, offset: number, length: number,
     while (cut >= 0 && NEARBY_TOKEN_CHAR_RE.test(after[cut] ?? "")) cut--;
     after = cut < 0 ? "" : after.slice(0, cut);
   }
+  // Labelled values run to the end of their line, so star them before the line ends are collapsed. Before the match, the
+  // line the match sits on is left out: its value there is the match itself.
+  const lastLineAt = Math.max(before.lastIndexOf("\n"), before.lastIndexOf("\r")) + 1;
+  before = redactLabelledLines(before.slice(0, lastLineAt)) + before.slice(lastLineAt);
+  after = redactLabelledLines(after);
   const prev = content[offset - 1];
   const openQuote = QUOTE_CHARS.find((q) => q === prev);
   const flat = (t: string) => t.replace(/\s+/g, " ");
