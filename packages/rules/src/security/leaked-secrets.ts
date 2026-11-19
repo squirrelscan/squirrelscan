@@ -2600,18 +2600,24 @@ export const EVIDENCE_CONTEXT_RADIUS = 120;
 const NEARBY_TOKEN_RE = /[^\s"'`<>(){}[\];,]{20,}/g;
 const NEARBY_TOKEN_CHAR_RE = /[^\s"'`<>(){}[\];,]/;
 const URL_CREDENTIALS_RE = /(:\/\/)[^\s/@"'<>]+@/g;
-// The unquoted value after `=` or `:` (`DB_PASSWORD=p@ssw0rd!`), but not the `//` of a URL scheme or the rest of `==`.
-const NEARBY_ASSIGNED_RE = /([=:]\s*)(?!\/\/)([^\s"'`<>(){}[\];,=:][^\s"'`<>(){}[\];,]*)/g;
-// An unquoted value this long is masked.
-const NEARBY_ASSIGNED_MIN = 4;
+// The unquoted value after `=`, `:` or `=>` (`DB_PASSWORD=p@ssw0rd!`), but not the `//` right after a URL scheme's `:`
+// or the rest of `==` or `::`. The value runs to the next whitespace or quote, so punctuation inside a password
+// (`Tr0ub;4dor&x`, `;6`) does not cut it short, and a value of any length is masked (`pin=482`). Code after an `=` or `:`
+// (`"db": {`) is starred too: the snippet cannot tell it from a password.
+const NEARBY_ASSIGNED_RE = /((?:=>|=|:(?!\/\/))\s*)([^\s"'`=:>][^\s"'`]*)/g;
+// A run of 12 or more characters after a secret's label with no `=` or `:` between (`X-Api-Key abcdEFGHijklMNOP`,
+// `// password qwertyuiopasdfghjk`). A letters-only run escapes the letter-and-digit rule, so the label marks it; a
+// shorter word after a label (`the password field`) is prose and kept.
+const NEARBY_LABELLED_RE =
+  /\b((?:x-)?api[-_]?key|access[-_]?key|secret[-_]?key|private[-_]?key|client[-_]?secret|secret|password|passwd|passphrase|pwd|pass|token|credentials?)(\s+)([^\s"'`]{12,})/gi;
 // Code punctuation: a span between two quotes that holds any of it is read as code between two literals, not as a literal.
 const CODE_PUNCT_RE = /[;,(){}[\]=:+<>&|]/;
 // When the match is not quoted, a reading that starts inside a quote and never closes it in the window claims the whole
 // side is one literal: that is starred out when it is this long, an operand or holds no code punctuation.
 const NEARBY_OPEN_LITERAL_MIN = 8;
-// A literal whose opening quote follows `=`, `:`, `=>`, `(`, `,`, `[`, `{`, `?`, `+` or `return` is an operand: an assigned
-// value (`pw = "Pa55"`, `"password":"x"`), an argument or a list item.
-const OPERAND_BEFORE_RE = /(?:=>|[=:(,[{?+]|\breturn)\s*$/;
+// A literal whose opening quote follows `=`, `:`, `=>`, `(`, `,`, `[`, `{`, `?`, `+`, `||`, `&&` or `return` is an
+// operand: an assigned value (`pw = "Pa55"`, `"password":"x"`), an argument, a list item or a fallback (`env.PW || 'x'`).
+const OPERAND_BEFORE_RE = /(?:=>|\|\||&&|[=:(,[{?+]|\breturn)\s*$/;
 // A shorter unquoted run that mixes letters and digits reads as a password or token too (`p@ssw0rd!`, a 16-character
 // bearer token), and so does whatever follows an HTTP auth scheme word.
 const NEARBY_SHORT_TOKEN_RE = /[^\s"'`<>(){}[\];,]{8,}/g;
@@ -2630,10 +2636,8 @@ function redactNearby(text: string): string {
   return text
     .replace(URL_CREDENTIALS_RE, "$1****@")
     .replace(NEARBY_AUTH_SCHEME_RE, (_whole, scheme: string, gap: string, val: string) => scheme + gap + maskNearby(val))
-    .replace(NEARBY_ASSIGNED_RE, (whole, op: string, val: string) => {
-      if (val.length < NEARBY_ASSIGNED_MIN) return whole;
-      return op + maskNearby(val);
-    })
+    .replace(NEARBY_ASSIGNED_RE, (_whole, op: string, val: string) => op + maskNearby(val))
+    .replace(NEARBY_LABELLED_RE, (_whole, label: string, gap: string, val: string) => label + gap + maskNearby(val))
     .replace(NEARBY_TOKEN_RE, (run) => maskNearby(run))
     .replace(NEARBY_SHORT_TOKEN_RE, (run) => (/[A-Za-z]/.test(run) && /[0-9]/.test(run) ? maskNearby(run) : run));
 }
@@ -2693,8 +2697,9 @@ function literalSpans(text: string, backward: boolean, openAt: string | undefine
  * one of them. When the match is not directly quoted, every reading is a main one; when it is, the reading that starts
  * inside the match's quote is. Every literal of a main reading is starred out, one the window cuts off included (see
  * NEARBY_OPEN_LITERAL_MIN for the one it starts inside); the other three
- * readings add each literal that is an operand or holds no code punctuation (their other "literals" are the code
- * between two real literals). The literal a reading starts inside and never closes in the window is not added: it would
+ * readings add each literal that is an operand, holds no code punctuation or holds no whitespace (their other "literals"
+ * are the code between two real literals, so prose there survives and a token such as `-p'S3cr;tPw'` or `echo 'a;b'` does
+ * not). The literal a reading starts inside and never closes in the window is not added: it would
  * star the whole side whenever a quote kind is absent, and the literals nested in it are the main reading's literals.
  */
 function redactSide(text: string, backward: boolean, openQuote: string | undefined): string {
@@ -2711,7 +2716,8 @@ function redactSide(text: string, backward: boolean, openQuote: string | undefin
   if (openQuote !== undefined) {
     for (const q of [undefined, ...QUOTE_CHARS.filter((c) => c !== openQuote)]) {
       for (const l of literalSpans(text, backward, q)) {
-        if (!(l.initial && !l.closed) && operandOrPlain(l)) spans.push([l.start, l.end]);
+        if (l.initial && !l.closed) continue;
+        if (operandOrPlain(l) || (l.closed && !/\s/.test(text.slice(l.start, l.end)))) spans.push([l.start, l.end]);
       }
     }
   }
