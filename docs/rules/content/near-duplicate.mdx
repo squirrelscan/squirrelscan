@@ -95,6 +95,20 @@ enable = ["content/near-duplicate"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `near-duplicate` | Problem |  |
+| `near-duplicate` | Clean | `near-duplicate` |
+| `near-duplicate` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [content/duplicate-content](/rules/content/duplicate-content): pages whose body text is identical.

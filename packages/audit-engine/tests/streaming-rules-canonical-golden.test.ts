@@ -75,7 +75,13 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 56 -> 57 (#711): a11y/reduced-motion adds a pass row on each of the 500 pages with a document (the
       // fixture has no looping animation or smooth scrolling), which lifts the weighted overall past one more
       // rounding boundary. Without the rule the number is 56.
-      expect(v1.healthScore.overall).toBe(57);
+      // 57 -> 58 (release batch 2): needs BOTH content/conversion-path (a pass row on each of the 100
+      // synthetic /product/ pages, money pages by path with no prominent call to action, and a not-applicable
+      // skip on the other 400) AND content/near-duplicate (one site pass). Together they lift the weighted
+      // overall past one more rounding boundary; without either one (or both) the number is 57.
+      // ax/commerce-readiness adds an info row on each of the 500 pages (the harness has no site type, and no
+      // page carries Product markup) and does not move it.
+      expect(v1.healthScore.overall).toBe(58);
       // Per-rule finding totals live in golden/canonical-rule-totals.json, one
       // sorted line per rule, so two new-rule PRs touch different lines and
       // rebase cleanly (#2055). There is no grand total or rule count to edit:
