@@ -1372,6 +1372,11 @@ export interface AuditReport {
    * Absent when nothing was recovered.
    */
   fetchFallbacks?: { recovered: number };
+  /**
+   * The crawl ran with the honest `SquirrelScan/...` User-Agent because the site reset
+   * browser-like clients (pub#2140). Informational, REPORT-ONLY. Absent otherwise.
+   */
+  userAgentFallback?: { userAgent: string };
 }
 
 /**

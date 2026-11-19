@@ -615,6 +615,8 @@ interface SlimJsonReport {
   // Report-only, never part of the score (repo#3397). The script weight the
   // audit measured; absent when it measured none.
   javascript?: NonNullable<AuditReport["javascript"]>;
+  /** The crawl ran with the honest User-Agent because the site reset browser-like clients (schema 1.29, pub#2140). */
+  userAgentFallback?: NonNullable<AuditReport["userAgentFallback"]>;
   // Report-only — never part of the score (#2307). Where the audited pages' links sit and the
   // page types the classifier gave them. Absent when no audited page carries either, which is
   // every crawl stored before the page classifier existed.
@@ -1077,6 +1079,7 @@ function buildSlimReport(
         }
       : {}),
     ...(javascriptShipped(report) ? { javascript: javascriptShipped(report) } : {}),
+    ...(report.userAgentFallback ? { userAgentFallback: report.userAgentFallback } : {}),
     ...(report.host ? { host: report.host } : {}),
     ...(report.technologies &&
     (report.technologies.items.length > 0 || report.technologies.truncated)

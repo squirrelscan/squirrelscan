@@ -779,6 +779,18 @@ user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit
 
 **Recommendation:** Leave empty (default) for best results with bot protection.
 
+**Sites that reset browser-like clients:**
+
+Some servers drop any connection whose request claims to be Chrome but whose TLS handshake is not Chrome's. The audit then fails before crawling with a connection reset. With `user_agent` empty, squirrelscan handles this itself: when the reachability probe is reset, it tries once as the honest `SquirrelScan/2.0 (+https://squirrelscan.com)` agent. If the site answers, the whole crawl runs as that agent, the CLI prints one line saying so, and the report notes it (`userAgentFallback` in the JSON report). The honest agent is not pinned, so the next run probes with a browser user agent again.
+
+If the site resets every client, the error reads `connection reset by the site: it may block browser-like clients`. Set `user_agent` to a value the site accepts, for example the honest agent:
+```toml
+[crawler]
+user_agent = "SquirrelScan/2.0 (+https://squirrelscan.com)"
+```
+
+An explicit `user_agent` is sent by the reachability probe, the crawl and the rules' own requests, and is never replaced by the fallback. A `User-Agent` set in [`headers`](#headers) counts the same way.
+
 With [`respect_robots`](#respect_robots) on, robots.txt groups are matched on [`robots_user_agent`](#robots_user_agent), not on this value. If you set `user_agent` to your own bot and want robots.txt read as that bot, set `robots_user_agent` to its token too, or to `""` to match on `user_agent`.
 
 ---
