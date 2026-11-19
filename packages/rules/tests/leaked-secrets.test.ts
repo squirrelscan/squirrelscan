@@ -1508,8 +1508,8 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
   const stars = (n: number) => "*".repeat(n);
 
   test.each([
-    ["a bundle regex with quotes, then || 'fallback'", `var k=${Q};var r=/['"]/g;var pw=e.PW||'Hunt&er;x';`, `var k="${masked}";var r=**'${stars(18)}'${stars(9)}'*`],
-    ["a stray apostrophe, then || 'fallback'", `var k=${Q}; ${D}var pw = env.PW || 'Hunt&er;x';`, `var k="${masked}"; // don'${stars(20)}'${stars(9)}'*`],
+    ["a bundle regex with quotes, then || 'fallback'", `var k=${Q};var r=/['"]/g;var v=e.PW||'Hunt&er;x';`, `var k="${masked}";var r=**'${stars(17)}'${stars(9)}'*`],
+    ["a stray apostrophe, then || 'fallback'", `var k=${Q}; ${D}var v = env.PW || 'Hunt&er;x';`, `var k="${masked}"; // don'${stars(20)}'${stars(9)}'*`],
     ["a stray apostrophe, then && 'x'", `var k=${Q}; ${D}ok && 'Hunt&er;x';`, `var k="${masked}"; // don'${stars(17)}'${stars(9)}'*`],
     ["a stray apostrophe, then echo 'x'", `var k=${Q}; ${D}echo 'Hunt;er2pass'`, `var k="${masked}"; // don'${stars(16)}'${stars(12)}'`],
     ["a stray apostrophe, then mysql -p'x'", `var k=${Q}; ${D}cmd = mysql -u root -p'S3cr;tPw' db;`, `var k="${masked}"; // don'${stars(20)}'${stars(8)}'****`],
@@ -1522,7 +1522,7 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
   });
 
   test.each([
-    ["DB_PASS=Tr0ub;4dor&x", `STRIPE=${Q}\nDB_PASS=Tr0ub;4dor&x`, `STRIPE="${masked}" ${stars(20)}`],
+    ["DB_PASS=Tr0ub;4dor&x", `STRIPE=${Q}\nDB_PASS=Tr0ub;4dor&x`, `STRIPE="${masked}" DB_PASS=${stars(12)}`],
     ["PASS=Xy;kq,Lm2", `var k=${Q};\nPASS=Xy;kq,Lm2`, `var k="${masked}"; PASS=${stars(9)}`],
     ["password: Xy;kq,Lmzz", `stripe: ${Q}\npassword: Xy;kq,Lmzz`, `stripe: "${masked}" password: ${stars(10)}`],
   ])("an unquoted value is starred to the next whitespace, punctuation and all: %s", async (_name, content, expected) => {
@@ -1530,7 +1530,8 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
   });
 
   test("an unquoted value of 1 to 3 characters is starred out", async () => {
-    expect(await ctxOf(`var k=${Q}; pin=482; cvv=91; pw:Ab9`)).toBe(`var k="${masked}"; pin=**** cvv=*** pw:***`);
+    // Keys that are not secret labels, so the value is starred to the next whitespace (a label stars the whole line).
+    expect(await ctxOf(`var k=${Q}; n=482; cvv=91; x:Ab9`)).toBe(`var k="${masked}"; n=**** cvv=*** x:***`);
   });
 
   test.each([
@@ -1598,20 +1599,23 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
   // before side. A secret of 3 or more characters must show no 3-character run; a 1 or 2 character secret is checked
   // exactly: the context must equal the one where the secret's characters are stars.
   test("no part of a generated secret shows in a non-operand place, after or between a stray apostrophe (property)", async () => {
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|";
+    // Lowercase letters and spaces are in (round 3: an alphabet without them hid the multi-word leak after a label).
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|    ";
     let seed = 1959;
     const next = () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
       return seed;
     };
-    const placements: Array<(s: string) => string> = [
-      (s) => `x = env.PW || '${s}';`,
-      (s) => `ok && '${s}';`,
-      (s) => `echo '${s}'`,
-      (s) => `mysql -u root -p'${s}' db`,
-      (s) => `sshpass -p '${s}' ssh host`,
-      (s) => `PASS=${s}\n`,
-      (s) => `password: ${s}\n`,
+    // The second field is false for the placements whose literal is not an operand: a secret there with both whitespace
+    // and code punctuation is the documented Known limit (a), so its spaces become `_`.
+    const placements: Array<[(s: string) => string, boolean]> = [
+      [(s) => `x = env.PW || '${s}';`, true],
+      [(s) => `ok && '${s}';`, true],
+      [(s) => `echo '${s}'`, false],
+      [(s) => `mysql -u root -p'${s}' db`, false],
+      [(s) => `sshpass -p '${s}' ssh host`, false],
+      [(s) => `PASS=${s}\n`, true],
+      [(s) => `password: ${s}\n`, true],
     ];
     let checked = 0;
     for (let len = 1; len <= 30; len++) {
@@ -1620,8 +1624,12 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
         const punct = ";,()&|"[next() % 6] as string;
         const chars = Array.from({ length: len }, () => alphabet[next() % alphabet.length] as string);
         chars[next() % len] = punct;
-        const secret = chars.join("");
-        for (const place of placements) {
+        // Starts and ends visible, so an unquoted value is not trimmed by the operator's own whitespace.
+        if (chars[0] === " ") chars[0] = "a";
+        if (chars[len - 1] === " ") chars[len - 1] = "z";
+        const spaced = chars.join("");
+        for (const [place, spacesAllowed] of placements) {
+          const secret = spacesAllowed ? spaced : spaced.replaceAll(" ", "_");
           const variants = (s: string) => [
             `var k="${key}"; ${place(s)}`,
             `var k="${key}"; // don't ship\n${place(s)}`,
@@ -1633,12 +1641,18 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
           for (let v = 0; v < real.length; v++) {
             const ctx = await ctxOf(real[v] as string);
             expect(ctx).toContain(masked);
+            const starredCtx = await ctxOf(starred[v] as string);
             if (len <= 2) {
-              expect(ctx).toBe(await ctxOf(starred[v] as string));
+              // Every character shown is one the all-stars context shows too; code punctuation next to the literal may be
+              // starred on top (the stated "punctuation between two literals" behaviour), nothing more.
+              expect(ctx?.length).toBe(starredCtx?.length);
+              const extra = [...(ctx ?? "")].filter((ch, i) => ch !== "*" && ch !== starredCtx?.[i]);
+              expect(extra).toEqual([]);
             } else {
               for (let i = 0; i + 3 <= len; i++) {
                 const frag = secret.slice(i, i + 3);
-                if (ctx?.includes(frag)) throw new Error(`"${frag}" of ${JSON.stringify(secret)} shows in ${JSON.stringify(ctx)}`);
+                // A run the surrounding code also holds (`var`, ` sh`) shows whatever the secret is: not a leak.
+                if (ctx?.includes(frag) && !starredCtx?.includes(frag)) throw new Error(`"${frag}" of ${JSON.stringify(secret)} shows in ${JSON.stringify(ctx)}`);
               }
             }
             checked++;
@@ -1647,5 +1661,217 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
       }
     }
     expect(checked).toBe(30 * 3 * 7 * 4);
+  });
+});
+
+// pub#1959 review round 3: an unquoted value with spaces after a labelled key showed every word after its first
+// (`password: correct horse battery staple`), and `passcode`, `API key`, `apikey` and `pin` were not labels. A labelled key's
+// unquoted value is now starred to the end of its line, read before the line ends are collapsed. Full-context expectations.
+describe("evidence context round 3: labelled values to the end of the line and more labels (repo#2215)", () => {
+  const key = ["sk", "live", "abcdefghijklmnopqrstuvwx12"].join("_"); // assembled so the fixture is not a literal secret
+  const masked = `sk_liv${"*".repeat(20)}wx12`;
+  const Q = `"${key}"`;
+  const stars = (n: number) => "*".repeat(n);
+  const ctxOf = async (content: string) => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    return evidenceContext(content, content.indexOf(key), key.length, key);
+  };
+
+  test.each([
+    ["yaml password: with spaces", `stripe: ${Q}\npassword: correct horse battery staple`, `stripe: "${masked}" password: ${stars(20)}`],
+    ["dotenv DB_PASSWORD= with spaces", `STRIPE_KEY=${Q}\nDB_PASSWORD=correct horse battery staple`, `STRIPE_KEY="${masked}" DB_PASSWORD=${stars(20)}`],
+    ["ini password = with ; and spaces", `stripe = ${Q}\npassword = Hunt;er ab;cd`, `stripe = "${masked}" password = ${stars(13)}`],
+    ["camelCase key", `var k=${Q};\nconfig.dbPassword = correct horse`, `var k="${masked}"; config.dbPassword = ${stars(13)}`],
+    ["acronym then camelCase key", `var k=${Q};\nDBPassword: correct horse`, `var k="${masked}"; DBPassword: ${stars(13)}`],
+    ["header-style key", `var k=${Q};\nX-Api-Key: abcd efgh ijkl`, `var k="${masked}"; X-Api-Key: ${stars(14)}`],
+  ])("a labelled key's unquoted value is starred to the end of its line: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test.each([
+    ["passcode", `var k=${Q}; passcode qwertyuiopasdfgh`, `var k="${masked}"; passcode ${stars(16)}`],
+    ["API key", `var k=${Q}; API key qwertyuiopasdfgh`, `var k="${masked}"; API key ${stars(16)}`],
+    ["apikey", `var k=${Q}; apikey qwertyuiopasdfgh`, `var k="${masked}"; apikey ${stars(16)}`],
+    ["pin", `var k=${Q}; pin qwertyuiopasdfgh`, `var k="${masked}"; pin ${stars(16)}`],
+  ])("a 12+ character run after the new label is starred out: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test("pin is a whole-word label: spinner, pinned and pinterest keep their words", async () => {
+    const content = `var k=${Q}; // spinner pinned pinterest qwertyuiopasdfgh\n`;
+    expect(await ctxOf(content)).toBe(`var k="${masked}"; // spinner pinned pinterest qwertyuiopasdfgh `);
+  });
+
+  test.each([
+    ["yaml, label line after the match", `stripe: ${Q}\npassword: correct horse battery staple\nport: 5432`, `stripe: "${masked}" password: ${stars(20)} port: ****`],
+    ["yaml, label line before the match", `password: correct horse battery staple\nport: 5432\nstripe: ${Q}`, `password: ${stars(20)} port: **** stripe: "${masked}"`],
+    ["dotenv, label line after the match", `STRIPE_KEY=${Q}\nDB_PASSWORD=correct horse battery staple\nDEBUG=true\n`, `STRIPE_KEY="${masked}" DB_PASSWORD=${stars(20)} DEBUG=**** `],
+    ["dotenv, label line before the match", `DB_PASSWORD=correct horse battery staple\r\nDEBUG=true\r\nSTRIPE_KEY=${Q}`, `DB_PASSWORD=${stars(20)} DEBUG=**** STRIPE_KEY="${masked}"`],
+  ])("multi-line config: the label line is starred to its end and the next key stays: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test("a key that is not a label keeps today's behaviour: its value is starred to the next whitespace only", async () => {
+    expect(await ctxOf(`stripe: ${Q}\ntitle: The Nut Shop\nport: 5432`)).toBe(`stripe: "${masked}" title: *** Nut Shop port: ****`);
+  });
+
+  // Unquoted values after a labelled key, with lowercase letters and spaces in the secret (the round 2 alphabet had neither,
+  // which hid the multi-word leak). The context must equal the one where the secret's characters are stars, so no
+  // character of it, in any length, shows.
+  test("no character of a generated multi-word value after a labelled key shows (property)", async () => {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|      ";
+    let seed = 3215;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+    const placements: Array<(s: string) => string> = [
+      (s) => `password: ${s}\nport: 5432\n`,
+      (s) => `DB_PASSWORD=${s}\nDEBUG=true\n`,
+      (s) => `password = ${s}\n`,
+      (s) => `api_key: ${s}\n`,
+      (s) => `pin=${s}\r\n`,
+    ];
+    let checked = 0;
+    for (let len = 1; len <= 30; len++) {
+      for (let round = 0; round < 3; round++) {
+        const chars = Array.from({ length: len }, () => alphabet[next() % alphabet.length] as string);
+        // A value starts and ends with a visible character, and holds a space whenever it has room for one. It does not start
+        // with `>`, which `KEY=>` reads as the `=>` operator.
+        if (chars[0] === " " || chars[0] === ">") chars[0] = "a";
+        if (chars[len - 1] === " ") chars[len - 1] = "z";
+        if (len >= 3) chars[1 + (next() % (len - 2))] = " ";
+        const secret = chars.join("");
+        for (const place of placements) {
+          const variants = (s: string) => [
+            `var k="${key}";\n${place(s)}`,
+            `var k="${key}"; // don't ship\n${place(s)}`,
+            `${place(s)}var k="${key}";`,
+            `${place(s)}// don't ship\nvar k="${key}";`,
+          ];
+          const real = variants(secret);
+          const starred = variants(stars(len));
+          for (let v = 0; v < real.length; v++) {
+            const ctx = await ctxOf(real[v] as string);
+            expect(ctx).toContain(masked);
+            expect(ctx).toBe(await ctxOf(starred[v] as string));
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBe(30 * 3 * 5 * 4);
+  });
+
+  // The reviewer's round 3 probes against pub#1959 at 96b78dfc (redact6.ts, context-quality.ts, timing.ts), ported.
+  const PK = ["sk", "live", "Zq8vT3mP9wX2kL7nR4bY6cJ1"].join("_");
+  const PQ = `"${PK}"`;
+  const PM = `${PK.slice(0, 6)}${stars(20)}${PK.slice(-4)}`;
+  const D = "// don't log this\n";
+  const findingOf = async (content: string, loc: "inline-script" | "html" = "inline-script") => {
+    const { scanContent } = await import("../src/security/leaked-secrets");
+    const found = scanContent(content, loc, "https://example.com/a.js");
+    return found.find((x) => /Stripe/.test(x.type)) ?? found[0];
+  };
+  test.each([
+    ["sshpass -p after a stray apostrophe", `var k=${PQ}; ${D}run("sshpass -p 'my pass;word' ssh host")`, ["pass;word", "my pass"]],
+    ['|| "pass phrase!" desync', `var k=${PQ}; ${D}var pw = env.PW || "pass phrase!";`, ["pass phrase", "phrase!"]],
+    ["|| 'correct horse;battery' desync", `var k=${PQ}; ${D}var pw = env.PW || 'correct horse;battery';`, ["horse;battery", "correct horse"]],
+    ["&& passphrase desync", `var k=${PQ}; ${D}ok && 'correct horse;battery'`, ["horse;battery"]],
+    ["?? passphrase desync", `var k=${PQ}; ${D}pw = a ?? 'correct horse;battery'`, ["horse;battery"]],
+    ["regex desync then || passphrase", `var k=${PQ};var r=/['"]/g;var p=e.PW||'correct horse;battery';`, ["horse;battery"]],
+    ["backward || passphrase desync", `var p = e.PW || 'correct horse;battery'; // don't\nvar k=${PQ};`, ["horse;battery"]],
+    ["label not listed: passcode", `var k=${PQ}; passcode qwertyuiopasdfgh`, ["qwertyuiopasdfgh"]],
+    ["label with space: API key", `var k=${PQ}; API key qwertyuiopasdfgh`, ["qwertyuiopasdfgh"]],
+    ["label 'pin'", `var k=${PQ}; pin qwertyuiopasdfgh`, ["qwertyuiopasdfgh"]],
+    ["yaml passphrase", `stripe: ${PQ}\npassword: correct horse battery staple`, ["horse battery staple", "battery staple"]],
+    ["env passphrase", `STRIPE_KEY=${PQ}\nDB_PASSWORD=correct horse battery staple`, ["horse battery", "battery staple"]],
+    ["ini spaced =", `stripe = ${PQ}\npassword = Hunt;er ab;cd`, ["ab;cd"]],
+    ["unquoted with quote inside", `var k=${PQ};\nDB_PASS=ab"cd;ef gh`, ["cd;ef"]],
+    ["=> unquoted", `$c=[k=>${PQ}, pass=>Tr0ub;4dor&x];`, ["Tr0ub", "4dor"]],
+    ["url guard pw://", `var k=${PQ}; pw://Hunt;er2`, ["Hunt;er2", "er2"]],
+    ["host:port no guard needed", `var k=${PQ}; db=pg.example.com:5432 user=admin`, []],
+  ])("reviewer probe round 3: %s", async (_name, content, secrets) => {
+    const f = await findingOf(content);
+    expect(f?.context).toContain(PM);
+    expect(secrets.filter((s) => f?.context?.includes(s))).toEqual([]);
+  });
+
+  // The Known limits the changelog states, pinned so the stated limits keep matching real output: (a) after a stray quote, a
+  // literal with whitespace and code punctuation that is not an operand; (b) a letters-only word under 12 characters after a
+  // label with no `=` or `:`. If one of these starts starring its value, update the changelog and docs with it.
+  test.each([
+    ["limit a: echo 'a b;c'", `var k=${PQ}; ${D}echo 'correct horse;battery'`, "horse;battery"],
+    ["limit a: mysql -p'a b;c'", `var k=${PQ}; ${D}cmd = mysql -p'correct horse;battery' db;`, "horse;battery"],
+    ["limit b: password hunterabc", `var k=${PQ}; password hunterabc`, "hunterabc"],
+    ["limit b: secret Qwertyuiopa", `var k=${PQ}; secret Qwertyuiopa`, "Qwertyuiopa"],
+  ])("documented known limit still holds as stated: %s", async (_name, content, shown) => {
+    const f = await findingOf(content);
+    expect(f?.context).toContain(PM);
+    expect(f?.context).toContain(shown);
+  });
+
+  test.each([
+    [
+      "stripe init",
+      `import Stripe from "stripe";\nconst stripe = new Stripe("${PK}", { apiVersion: "2023-10-16" });\nexport default stripe;`,
+      "inline-script",
+      `${stars(19)}"******"; const stripe = *** Stripe("${PM}", { apiVersion: "**********" }); export default stripe;`,
+    ],
+    [
+      "config object",
+      `window.__CONFIG__ = { env: "production", stripeSecret: "${PK}", sentryDsn: null, debug: false };`,
+      "inline-script",
+      `window.__CONFIG__ = * env: "**********", stripeSecret: "${PM}", sentryDsn: ***** debug: ***** };`,
+    ],
+    [
+      "html attr",
+      `<div id="checkout" data-stripe-key="${PK}" class="btn primary">Pay now</div>`,
+      "html",
+      `<div id="********" data-stripe-key="${PM}" class="***********">Pay now</div>`,
+    ],
+  ] as const)("reviewer context-quality sample stays readable: %s", async (_name, content, loc, expected) => {
+    expect((await findingOf(content, loc))?.context).toBe(expected);
+  });
+
+  // Two samples the open-literal rule (NEARBY_OPEN_LITERAL_MIN) stars on the before side, since the match is not quoted:
+  // the key is masked and nothing of the code around it is shown (unchanged from 96b78dfc).
+  test.each([
+    [
+      "minified",
+      `function n(e){return fetch("/api/pay",{method:"POST",headers:{Authorization:"Bearer ${PK}","Content-Type":"application/json"},body:JSON.stringify(e)})}`,
+      `${stars(20)}${PM}${stars(20)}`,
+    ],
+    ["unquoted env", `NODE_ENV=production\nSTRIPE_SECRET_KEY=${PK}\nPORT=3000`, `${stars(20)}${PM}${stars(10)}`],
+  ])("reviewer context-quality sample, starred around the match: %s", async (_name, content, expected) => {
+    expect((await findingOf(content))?.context).toBe(expected);
+  });
+
+  test("a 1 MB quote-dense line with 40 keys scans with context well within budget (timing probe)", async () => {
+    const { scanContent } = await import("../src/security/leaked-secrets");
+    const alnum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let seed = 7;
+    const rnd = (n: number) => {
+      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+      return seed % n;
+    };
+    const mk = () => ["sk", "live", Array.from({ length: 24 }, () => alnum[rnd(62)]).join("")].join("_");
+    const chunk = `a="x'y\\"z";b='p"q\\'r';c=\`t'u"v\`;d=/['"]/g;e=f||'g;h';`;
+    let s = "";
+    let keys = 0;
+    while (s.length < 1_000_000) {
+      s += chunk.repeat(40);
+      if (keys < 40) {
+        s += `k${keys}="${mk()}";`;
+        keys++;
+      }
+    }
+    const t0 = performance.now();
+    const found = scanContent(s, "external-script", "https://example.com/bundle.js");
+    const ms = performance.now() - t0;
+    expect(found.length).toBe(40);
+    expect(found.filter((f) => f.context).length).toBe(40);
+    // Measured at about 14 ms; the bound leaves room for a slow CI runner.
+    expect(ms).toBeLessThan(1000);
   });
 });
