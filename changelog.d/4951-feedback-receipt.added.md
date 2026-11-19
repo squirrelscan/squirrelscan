@@ -1,1 +1,0 @@
-- `squirrel feedback --json` (and the MCP `send_feedback` tool) now returns a `receipt` id once the API accepts the feedback, and stores it with the entry so the team can find it. The agent setup prompt also gets a failure-report step (#4951).

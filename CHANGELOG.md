@@ -17,6 +17,23 @@ How it works:
   `bun run changelog` prints them as the next release's section, and the release bump PR
   assembles them into a new `## vX.Y.Z` section and deletes them.
 
+## v0.0.189 (2026-11-19)
+
+A new rule, `reliability/js-errors`, reports JavaScript errors and failed runtime requests on rendered pages, and says plainly when a page has no runtime data instead of counting it as a pass. The CLI now checks a site with the same user agent its crawl uses, and when a site resets connections from browser-like clients it falls back to squirrelscan's own user agent and tells you. `squirrel feedback --json` returns a receipt, and the agent setup prompt keeps the first audit free and asks before anything that spends credits or publishes.
+
+### Added
+
+- `squirrel feedback --json` (and the MCP `send_feedback` tool) now returns a `receipt` id once the API accepts the feedback, and stores it with the entry so the team can find it. The agent setup prompt also gets a failure-report step (#4951).
+- New cloud-only rule `reliability/js-errors`: reports uncaught JavaScript exceptions, framework hydration mismatches, first-party `console.error` messages and runtime requests that fail after load (5xx or 404), as seen by the cloud render. Findings are grouped across the site by message and source file with the page count. 401 and 403 from the site's own API, requests the renderer blocks or aborts, `ResizeObserver loop` messages, CSP violations and WAF challenge pages are not reported. A local or `--http` audit lists it among the cloud checks that did not run. It reads a new optional `runtime` block on a render result, which the cloud renderer does not record yet. A page with no runtime data is a coded gap, `runtime-not-recorded`, listed under Not checked: until the renderer records it the rule is skipped, and once it does, a pass needs runtime data from every page judged. (#704)
+
+### Fixed
+
+- The audit no longer dies on sites that reset browser-like clients. The reachability probe now sends `[crawler] user_agent` (and drops Chrome client hints for non-Chrome agents), and when a connection reset hits the default browser agent it retries once as the honest `SquirrelScan/...` agent and crawls as that agent, saying so in one line and in the report (`userAgentFallback`, JSON schema 1.29). A site that resets every client now reports "connection reset by the site: it may block browser-like clients" with the fix. (#2140)
+
+### Docs
+
+- The agent setup prompt now runs the first audit with `--offline --level quick` whatever the sign-in state, checks `squirrel auth status` first, asks for consent before credit spend, publishing or recurring audits, never passes `--yes`, preserves an existing setup, and ends with a sanitized failure report and the exact next step (#4949, #4950, #4951).
+
 ## v0.0.188 (2026-11-19)
 
 Leaked secret findings now show where the key sits: a redacted snippet of the code around it, with nearby passwords, tokens and quoted values starred out, so you can find it in your source without the report repeating anything sensitive. `ax/markdown-response` now catches a site that errors on a strict `Accept: text/markdown` request, and reports an unanswered probe as not checked instead of fixed. Every rule declares whether its findings are about a page or something shared, and the agent skills served over MCP cover report groups and rule-group filters.
