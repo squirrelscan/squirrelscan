@@ -68,6 +68,8 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   "link-targets-not-fetched": gap(true),
   // The page record carries no response headers: a missing header proves nothing (repo#4641).
   "headers-not-recorded": gap(true),
+  // A cloud render with no runtime data for a page reliability/js-errors had to judge (#704): nothing was seen there.
+  "runtime-not-recorded": gap(true),
   "external-links-over-cap": gap(true),
   "external-links-out-of-time": gap(true),
   // A targeted run (#1777) fetched only the URLs it was given: a whole-site rule has nothing to judge.

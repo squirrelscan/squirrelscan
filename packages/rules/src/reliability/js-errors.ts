@@ -6,6 +6,7 @@
 // message and source file. A local or --http audit has no render, so the rule is
 // declared cloud and lands on the "cloud checks that didn't run" list there.
 
+import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import type {
   CheckItem,
   CheckResult,
@@ -209,7 +210,10 @@ export const jsErrorsRule: Rule = {
     };
 
     let measured = 0;
+    // Pages the rule had to judge but has no runtime data for: rendered without a `runtime` block, or
+    // with no render result at all. Either way nothing was seen there, so a pass would be a guess.
     let unmeasured = 0;
+    let unrendered = 0;
     let challenged = 0;
     let firstSkip: CloudSkipReason | string | undefined;
 
@@ -221,6 +225,7 @@ export const jsErrorsRule: Rule = {
       );
       if (!envelope || envelope.status === "skipped" || !envelope.data) {
         firstSkip ??= envelope?.skipReason ?? "not-prefetched";
+        unrendered++;
         continue;
       }
       const data = envelope.data;
@@ -296,10 +301,11 @@ export const jsErrorsRule: Rule = {
     }
 
     if (measured === 0) {
+      // A coded gap (#704): listed under Not checked, and a stored finding is never resolved by it.
       if (unmeasured > 0) {
         return skip(
-          "JavaScript errors were not checked",
-          "The renderer did not record runtime errors for these pages"
+          "JavaScript errors were not checked: the renderer did not record runtime errors for these pages",
+          RUNTIME_NOT_RECORDED_SKIP_REASON
         );
       }
       if (challenged > 0 && !firstSkip) {
@@ -376,23 +382,32 @@ export const jsErrorsRule: Rule = {
       (n) => `${n} third-party JavaScript error(s) or failed request(s)`
     );
 
-    const notes: string[] = [];
-    if (unmeasured > 0)
-      notes.push(`${unmeasured} page(s) had no runtime data from the renderer`);
-    if (challenged > 0)
-      notes.push(
-        `${challenged} page(s) were a WAF or bot challenge and were left out`
-      );
-    if (notes.length > 0) {
+    // A page with no runtime data is a coded gap, never covered by a pass: the error may be on it (#704).
+    // A WAF or bot challenge page is left out on purpose (its errors are the challenge's), so it is
+    // only noted.
+    const unchecked = unmeasured + unrendered;
+    const challengeNote = `${challenged} page(s) were a WAF or bot challenge and were left out`;
+    if (unchecked > 0) {
+      const notes = [`${unchecked} page(s) had no runtime data from the renderer`];
+      if (challenged > 0) notes.push(challengeNote);
+      checks.push({
+        name: "unchecked-pages",
+        status: "skipped",
+        message: `Partial check: ${notes.join("; ")}`,
+        skipReason: RUNTIME_NOT_RECORDED_SKIP_REASON,
+        details: { unmeasured, unrendered, challenged },
+      });
+    } else if (challenged > 0) {
       checks.push({
         name: "unchecked-pages",
         status: "info",
-        message: `Partial check: ${notes.join("; ")}`,
-        details: { unmeasured, challenged },
+        message: `Partial check: ${challengeNote}`,
+        details: { unmeasured, unrendered, challenged },
       });
     }
 
-    if (groups.size === 0) {
+    // A pass only when every page the rule had to judge carried runtime data.
+    if (groups.size === 0 && unchecked === 0) {
       checks.push({
         name: "js-errors",
         status: "pass",

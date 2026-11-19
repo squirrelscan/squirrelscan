@@ -11,7 +11,7 @@ description: "A page can answer 200 with clean HTML and still throw an uncaught 
 
 Clean HTML says nothing about what the browser does next. An uncaught `TypeError` can stop the menu, the form or the checkout from working. A framework hydration mismatch makes React or Vue discard the server HTML and render again. `ChunkLoadError: Loading chunk 123 failed` appears after a deploy removes a code-split chunk. A `fetch('/api/data')` made after load answers 500 and a section stays empty.
 
-This rule reads what the browser reported while the page ran: uncaught exceptions, `console.error` messages and requests that failed at runtime, from the optional `runtime` block of each render result. The cloud renderer does not record that block yet. Until it does, the rule is skipped on every audit with the reason `The renderer did not record runtime errors for these pages`, and it never passes.
+This rule reads what the browser reported while the page ran: uncaught exceptions, `console.error` messages and requests that failed at runtime, from the optional `runtime` block of each render result. The cloud renderer does not record that block yet; that work is tracked privately. Until it does, the rule is skipped on every audit and listed under **Not checked** with the reason `runtime-not-recorded`. It never passes.
 
 It needs a rendered page, so it is a cloud check. A local or `--http` audit does not run it and lists it among the cloud checks that did not run, with the prompt to run a cloud audit.
 
@@ -25,7 +25,7 @@ The rule is site-wide. It groups findings across pages by normalised message and
 - **Warning, console:** a `console.error` from first-party code. Check name `console-errors`.
 - **Warning, third party:** any exception, console error or failed request from another registrable domain. Check name `third-party-js-errors`.
 - **Not reported:** 401 and 403 from the site's own API (normal for a signed-out visitor), requests the renderer blocked or aborted, `net::ERR_ABORTED` on beacons and navigation, `ResizeObserver loop` messages, Chrome's `Failed to load resource` echo of a request that is already reported, CSP violations (owned by the CSP violations rule), and pages that answered with a WAF or bot challenge.
-- **Not checked:** when the renderer returned no runtime data for a page, the page is counted in an information note named `unchecked-pages`. If no page has runtime data, the rule is skipped, never passed.
+- **Not checked:** a page the rule has to judge with no runtime data (the render recorded none, or there is no render result for it) is a gap, skip reason `runtime-not-recorded`. If no page has runtime data, the `js-errors` check is skipped with that reason. If only some pages do, the rule still reports what it saw on them and adds a skipped check named `unchecked-pages` with that reason instead of a pass, so a finding from an earlier audit is not marked fixed while part of the site went unseen. A pass needs runtime data from every page the rule judged. A WAF or bot challenge page is left out and only noted, as an information `unchecked-pages` check.
 
 ## How to fix it
 

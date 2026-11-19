@@ -17,6 +17,7 @@ import {
   NOT_CHECKED_SKIP_REASONS,
   PAGES_NOT_FETCHED_SKIP_REASON,
   PRIVATE_TARGET_SKIP_REASON,
+  RUNTIME_NOT_RECORDED_SKIP_REASON,
   STRICT_PROBE_UNANSWERED_SKIP_REASON,
   TARGETED_RUN_SKIP_REASON,
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
@@ -51,6 +52,8 @@ const TABLE: Array<[string, boolean, boolean, boolean]> = [
   [LINK_TARGETS_NOT_FETCHED_SKIP_REASON, false, false, true],
   // A page record stored without its response headers (repo#4641): a check-scoped gap, listed as not checked.
   [HEADERS_NOT_RECORDED_SKIP_REASON, false, false, true],
+  // reliability/js-errors with pages the cloud render recorded no runtime data for (#704): a check-scoped gap, listed as not checked.
+  [RUNTIME_NOT_RECORDED_SKIP_REASON, false, false, true],
   [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON, false, false, true],
   [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON, false, false, true],
   [CRAWL_CAPPED_SKIP_REASON, false, false, true],

@@ -21,6 +21,7 @@ import {
   isLockedRuleReason,
   NOT_CHECKED_SKIP_REASONS,
   RULE_TIMED_OUT_SKIP_REASON,
+  RUNTIME_NOT_RECORDED_SKIP_REASON,
   STRICT_PROBE_UNANSWERED_SKIP_REASON,
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
@@ -82,6 +83,9 @@ const HINTS: ReadonlyMap<string, string> = new Map(Object.entries({
   // #1269: `squirrel analyze` makes no live request.
   "headers-not-recorded":
     "The stored pages carry no response headers, so a missing header proves nothing. Run the audit again to record them.",
+  // #704: reliability/js-errors on pages the cloud render recorded no runtime data for.
+  [RUNTIME_NOT_RECORDED_SKIP_REASON]:
+    "The cloud render recorded no runtime data (page errors, console errors or failed requests) for these pages, so a JavaScript error there would not be found. The check covers them once the renderer records it; run the audit again then.",
   // pub#2035: no verdict on the home page this audit (not fetched, or failed for an unknown reason).
   "entry-not-fetched":
     "This audit has no result for the home page: it was not fetched, or it failed for a reason squirrel could not classify. Run a full audit of the site to check it.",
