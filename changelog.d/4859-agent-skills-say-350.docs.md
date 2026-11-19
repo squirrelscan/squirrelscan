@@ -1,0 +1,1 @@
+- The agent skills served over MCP (the `io.modelcontextprotocol/skills` extension of `squirrel mcp` and the hosted server) now state 350+ rules, matching the rule registry, and carry the new skill versions: squirrelscan 2.1, audit-website 3.1 (squirrelscan/repo#4859).
