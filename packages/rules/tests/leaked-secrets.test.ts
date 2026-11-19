@@ -1345,8 +1345,9 @@ describe("evidence context redacts every nearby secret (repo#2215)", () => {
     const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
     expect(ctx).not.toContain(pw);
     expect(ctx).not.toContain(pw.slice(3));
+    // The labelled value on the match's own line is starred up to the match (pub#1959 round 4), `key:` with it.
     expect(ctx).toContain("password: ");
-    expect(ctx).toContain(`key: "sk_liv`);
+    expect(ctx).toContain(`"sk_liv`);
   });
 
   test("a punctuated run cut off at the window edge is dropped", async () => {
@@ -1873,5 +1874,186 @@ describe("evidence context round 3: labelled values to the end of the line and m
     expect(found.filter((f) => f.context).length).toBe(40);
     // Measured at about 14 ms; the bound leaves room for a slow CI runner.
     expect(ms).toBeLessThan(1000);
+  });
+});
+
+// pub#1959 review round 4: a labelled value on the match's own line, before the match, showed its later words
+// (`password: correct horse battery; key="…"`), and YAML block, folded and continued values, XML element text, `PASSWORD2=`,
+// `db_pass_1:` and quoted keys (`"password":`) were missed. Labelled values are now read on both sides of the match, from a
+// little before the window, onto deeper-indented lines and inside elements named by a label. Full-context expectations.
+describe("evidence context round 4: same-line labels, YAML blocks, XML text and key variants (repo#2215)", () => {
+  const key = ["sk", "live", "abcdefghijklmnopqrstuvwx12"].join("_"); // assembled so the fixture is not a literal secret
+  const masked = `sk_liv${"*".repeat(20)}wx12`;
+  const Q = `"${key}"`;
+  const stars = (n: number) => "*".repeat(n);
+  const ctxOf = async (content: string) => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    return evidenceContext(content, content.indexOf(key), key.length, key);
+  };
+
+  test.each([
+    ["yaml, `;` after the value", `password: correct horse battery; key=${Q}`, `password: ${stars(20)}"${masked}"`],
+    ["dotenv, one line", `PASSWORD=correct horse battery STRIPE=${Q}`, `PASSWORD=${stars(20)}"${masked}"`],
+    [
+      "minified HTML",
+      `<p>Password: correct horse battery</p><code data-k=${Q}></code>`,
+      `<p>Password: ${stars(20)}"${masked}"${stars(8)}`,
+    ],
+  ])("a labelled value on the match's own line, before the match, is starred up to it: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test.each([
+    [
+      "block scalar |",
+      `stripe: ${Q}\npassword: |\n  correct horse battery\n  staple\nport: 5432`,
+      `stripe: "${masked}" password: * ${stars(20)} ${stars(6)} port: ****`,
+    ],
+    [
+      "folded scalar > with a blank line",
+      `stripe: ${Q}\npassword: >\n  correct horse\n\n  battery staple\nport: 5432`,
+      `stripe: "${masked}" password: * ${stars(13)} ${stars(14)} port: ****`,
+    ],
+    [
+      "continued plain scalar, before the match",
+      `password: correct horse\n  battery staple\nstripe: ${Q}`,
+      `password: ${stars(13)} ${stars(14)} stripe: "${masked}"`,
+    ],
+    [
+      "nested key, value spans lines",
+      `db:\n  password: correct horse\n    battery staple\n  key: ${Q}`,
+      `db: ${stars(9)} ${stars(13)} ${stars(14)} key: "${masked}"`,
+    ],
+  ])("YAML: lines indented deeper than a labelled key are starred, the next key keeps its name: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test("a labelled key above the window still stars its value inside it", async () => {
+    const ctx = await ctxOf(`password: ${"word ".repeat(30)}correct horse battery\nstripe: ${Q}`);
+    expect(ctx).toBe(`${stars(20)} stripe: "${masked}"`);
+    const block = await ctxOf(`db:\n  password: |\n${"    line of text\n".repeat(12)}    correct horse battery\n  key: ${Q}`);
+    expect(block).not.toContain("horse");
+    expect(block).not.toContain("line of");
+    expect(block).toContain(`key: "${masked}"`);
+  });
+
+  test.each([
+    ["12+ letters", `var k=${Q};\n<password>correcthorsebattery</password>`, `var k="${masked}"; <password>${stars(19)}</password>`],
+    ["under 12 letters", `var k=${Q};\n<password>hunterabc</password>`, `var k="${masked}"; <password>${stars(9)}</password>`],
+    ["passphrase", `var k=${Q};\n<password>correct horse battery</password>`, `var k="${masked}"; <password>${stars(20)}</password>`],
+    ["an element that is not a label keeps its text", `var k=${Q};\n<title>The Nut Shop</title>`, `var k="${masked}"; <title>The Nut Shop</title>`],
+  ])("XML: the text of an element named by a label is starred: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test.each([
+    ["digit suffix PASSWORD2", `STRIPE=${Q}\nPASSWORD2=correct horse battery staple`, `STRIPE="${masked}" ${stars(20)}`],
+    ["digit segment db_pass_1", `STRIPE=${Q}\ndb_pass_1: correct horse battery`, `STRIPE="${masked}" ${stars(10)} ${stars(20)}`],
+    ["quoted yaml key", `stripe: ${Q}\n"password": correct horse battery staple`, `stripe: "${masked}" "********": ${stars(20)}`],
+    ["passwordless holds password: starred", `STRIPE=${Q}\npasswordless: correct horse battery\n`, `STRIPE="${masked}" passwordless: ${stars(20)} `],
+  ])("key variants are labels: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test.each([
+    ["password_hint", `STRIPE=${Q}\npassword_hint: name of my first pet\n`, `STRIPE="${masked}" password_hint: **** of my first pet `],
+    ["spinner", `var k=${Q};\nspinner: very slow wheel`, `var k="${masked}"; spinner: **** slow wheel`],
+    ["token_url", `var k=${Q};\ntoken_url: see the docs page`, `var k="${masked}"; token_url: *** the docs page`],
+  ])("a key that names something about a secret keeps its later words: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test("a single-quoted key is a label", async () => {
+    const ctx = await ctxOf(`STRIPE=${Q}\n'api_key' = correct horse battery`);
+    expect(ctx).toContain(masked);
+    expect(ctx).not.toContain("horse");
+    expect(ctx).not.toContain("battery");
+  });
+
+  // The round 3 property put the labelled value on its own line; this one puts it on the match's line, before the match, and
+  // on a deeper-indented line under a block key. The context must equal the one where the secret's characters are stars.
+  test("no character of a generated value on the match's line or in a YAML block shows (property)", async () => {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}|      ";
+    let seed = 4219;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+    const placements: Array<(s: string) => string> = [
+      (s) => `password: ${s}; key="${key}";\nport: 5432\n`,
+      (s) => `DB_PASSWORD=${s} STRIPE="${key}"\n`,
+      (s) => `<p>Password: ${s}</p><code data-k="${key}"></code>`,
+      (s) => `api_key = ${s}, k = "${key}"`,
+      (s) => `password: |\n  ${s}\nstripe: "${key}"\n`,
+      (s) => `stripe: "${key}"\ndb:\n  password: >\n    ${s}\n  port: 5432\n`,
+    ];
+    let checked = 0;
+    for (let len = 1; len <= 30; len++) {
+      for (let round = 0; round < 3; round++) {
+        const chars = Array.from({ length: len }, () => alphabet[next() % alphabet.length] as string);
+        if (chars[0] === " " || chars[0] === ">" || chars[0] === "=") chars[0] = "a";
+        if (chars[len - 1] === " ") chars[len - 1] = "z";
+        if (len >= 3) chars[1 + (next() % (len - 2))] = " ";
+        const secret = chars.join("");
+        for (const place of placements) {
+          const variants = (s: string) => [place(s), `// don't ship\n${place(s)}`, `${place(s)}\n// don't ship`];
+          const real = variants(secret);
+          const starred = variants(stars(len));
+          for (let v = 0; v < real.length; v++) {
+            const ctx = await ctxOf(real[v] as string);
+            expect(ctx).toContain(masked);
+            expect(ctx).toBe(await ctxOf(starred[v] as string));
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBe(30 * 3 * 6 * 3);
+  });
+
+  // The reviewer's round 4 probes against pub#1959 at a8341e92 (redact7.ts, redact8.ts), ported: no case leaks.
+  const PK = ["sk", "live", "Zq8vT3mP9wX2kL7nR4bY6cJ1"].join("_");
+  const PQ = `"${PK}"`;
+  const PM = `${PK.slice(0, 6)}${stars(20)}${PK.slice(-4)}`;
+  const findingOf = async (content: string, loc: "inline-script" | "html" = "inline-script") => {
+    const { scanContent } = await import("../src/security/leaked-secrets");
+    const found = scanContent(content, loc, "https://example.com/a.js");
+    return found.find((x) => /Stripe/.test(x.type)) ?? found[0];
+  };
+  test.each([
+    ["yaml block |", `stripe: ${PQ}\npassword: |\n  correct horse battery\n  staple\nport: 5432`, ["horse battery", "correct horse", "staple"]],
+    ["yaml folded >", `stripe: ${PQ}\npassword: >\n  correct horse\n  battery staple\n`, ["correct horse", "battery staple"]],
+    ["yaml plain multi-line", `password: correct horse\n  battery staple\nstripe: ${PQ}`, ["battery staple", "correct horse"]],
+    ["label above match, value spans lines", `db:\n  password: correct horse\n    battery staple\n  key: ${PQ}`, ["battery staple", "horse"]],
+    ["quoted then unquoted", `stripe: ${PQ}\npassword: "abc def" ghi jkl`, ["ghi jkl"]],
+    ["PASSWORD quoted with spaces + unquoted", `STRIPE=${PQ}\nPASSWORD = "quoted with spaces"\nSECRET = correct horse battery`, ["quoted with", "horse battery"]],
+    ["CRLF", `STRIPE=${PQ}\r\nDB_PASSWORD=correct horse battery staple\r\nPORT=5432`, ["horse battery", "battery staple"]],
+    ["CR only", `STRIPE=${PQ}\rDB_PASSWORD=correct horse battery staple\rPORT=5432`, ["horse battery"]],
+    ["password_hint (over-star?)", `STRIPE=${PQ}\npassword_hint: name of my first pet\n`, []],
+    ["passwordless", `STRIPE=${PQ}\npasswordless: correct horse battery\n`, ["horse battery"]],
+    ["PIN=1234", `var k=${PQ};\nPIN=1234`, ["1234"]],
+    ["user.pin = 9876", `var k=${PQ};\nuser.pin = 9876 ok`, ["9876"]],
+    ["spinner key not label", `var k=${PQ};\nspinner: very slow wheel`, []],
+    ["password2 key", `STRIPE=${PQ}\nPASSWORD2=correct horse battery staple`, ["horse battery"]],
+    ["db_pass_1 key", `STRIPE=${PQ}\ndb_pass_1: correct horse battery`, ["horse battery"]],
+    ["quoted key yaml", `stripe: ${PQ}\n"password": correct horse battery staple`, ["horse battery"]],
+    ["same line before match", `password: correct horse battery; key=${PQ}`, ["horse battery"]],
+    ["same line before match html", `<p>Password: correct horse battery</p><code data-k=${PQ}></code>`, ["horse battery"], "html"],
+    ["xml element 12+ letters", `<key>${PK}</key><password>correcthorsebattery</password>`, ["correcthorsebattery"]],
+    ["xml element passphrase", `<key>${PK}</key>\n<password>correct horse battery</password>`, ["horse battery"]],
+    ["minified a.token=e trade-off", `var k=${PQ};a.token=e,b.c=function(){return n.user.name},d=1;`, []],
+    ["redact8: xml 12+ letters, quoted match", `var k=${PQ};\n<password>correcthorsebattery</password>`, ["correcthorsebattery"]],
+    ["redact8: xml under 12, quoted match", `var k=${PQ};\n<password>hunterabc</password>`, ["hunterabc"]],
+    ["redact8: one-line before match, labelled =", `PASSWORD=correct horse battery STRIPE=${PQ}`, ["horse battery"]],
+  ] as Array<[string, string, string[], ("inline-script" | "html")?]>)("reviewer probe round 4: %s", async (_name, content, secrets, loc) => {
+    // test.each passes a callback after the row's values when a row has no location, so read it only when it is a string.
+    const f = await findingOf(content, typeof loc === "string" ? loc : "inline-script");
+    expect(f?.context).toContain(PM);
+    expect(secrets.filter((s) => f?.context?.includes(s))).toEqual([]);
+  });
+
+  test("controls stay readable: password_hint and spinner keep their later words", async () => {
+    expect((await findingOf(`STRIPE=${PQ}\npassword_hint: name of my first pet\n`))?.context).toContain("of my first pet");
+    expect((await findingOf(`var k=${PQ};\nspinner: very slow wheel`))?.context).toContain("slow wheel");
   });
 });
