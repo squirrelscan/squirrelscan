@@ -3,6 +3,7 @@
 // Detects WAF/bot protection on target site
 
 import { redactUrl, redactUrlsInText } from "@squirrelscan/core-contracts";
+import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
 import {
   EGRESS_OFF_SITE_REFUSAL,
@@ -18,7 +19,11 @@ import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { Effect, Duration } from "effect";
 
 import { pinOwnHosts } from "@/crawl/pin-own-hosts";
-import { requestOnceScoped, RequestError } from "@/tools/request";
+import {
+  getRequestConfig,
+  requestOnceScoped,
+  RequestError,
+} from "@/tools/request";
 import { logger } from "@/utils/logger";
 import {
   TEST_REACHABILITY_TIMEOUT_MS_ENV,
@@ -68,6 +73,28 @@ export function isTransientReachabilityError(
   );
 }
 
+/**
+ * A reset or an HTTP/2 protocol error is how a bot filter drops a client whose
+ * User-Agent claims to be a browser it does not handshake like (pub#2140).
+ */
+export function isClientBlockError(error: string | undefined): boolean {
+  if (!error) return false;
+  const message = error.toLowerCase();
+  return (
+    message.includes("econnreset") ||
+    message.includes("socket connection was closed") ||
+    message.includes("connection reset") ||
+    message.includes("protocol_error") ||
+    message.includes("protocol error") ||
+    message.includes("http/2") ||
+    message.includes("http2")
+  );
+}
+
+/** What the probe says when the site reset the connection under every User-Agent it tried. */
+export const CLIENT_BLOCK_MESSAGE =
+  "connection reset by the site: it may block browser-like clients. Set `[crawler] user_agent` in squirrel.toml (see https://docs.squirrelscan.com/configuration/crawler)";
+
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -79,6 +106,11 @@ export interface ReachabilityResult {
   wafDetected?: boolean;
   /** Detected WAF provider if wafDetected is true */
   wafProvider?: WafProvider;
+  /**
+   * Set when the site reset the browser-like probe and answered the honest
+   * `SquirrelScan/...` User-Agent: the crawl must run with it (pub#2140).
+   */
+  userAgentFallback?: string;
 }
 
 async function readBodySample(
@@ -172,6 +204,13 @@ export interface ReachabilityScope {
   ownSiteOnly?: boolean;
   /** `[project] domains`, named as the site's own. */
   domains?: readonly string[];
+  /** The User-Agent the probe sends: `[crawler] user_agent` when set, else the request tool's. */
+  userAgent?: string;
+  /**
+   * The User-Agent is the tool's own default, not the user's choice: a reset may
+   * be answered by one retry as the honest `SquirrelScan/...` agent.
+   */
+  fallbackOnReset?: boolean;
 }
 
 /** The status reported for a start URL that redirects off the site in an offline audit (not followed). */
@@ -269,12 +308,38 @@ export async function checkReachability(
   );
   const attemptTimeout = (): number =>
     Math.max(1, Math.min(attemptLimitMs, deadline - Date.now()));
+  const userAgent = scope?.userAgent ?? getRequestConfig().userAgent;
   let result = await attemptReachability(
     url,
     scope,
     requestScoped,
-    attemptTimeout()
+    attemptTimeout(),
+    userAgent
   );
+
+  // One reset already shows the pattern (a bot filter dropping a client that
+  // claims to be a browser), so the same headers are not tried again: the honest
+  // UA gets one attempt now. If it answers, the crawl continues as that agent.
+  if (
+    !result.reachable &&
+    scope?.fallbackOnReset === true &&
+    userAgent !== SQUIRRELSCAN_USER_AGENT &&
+    isClientBlockError(result.error)
+  ) {
+    logger.debug("reachability user-agent fallback", redactUrl(url));
+    const honest = await attemptReachability(
+      url,
+      scope,
+      requestScoped,
+      attemptTimeout(),
+      SQUIRRELSCAN_USER_AGENT
+    );
+    if (honest.reachable) {
+      return { ...honest, userAgentFallback: SQUIRRELSCAN_USER_AGENT };
+    }
+    // The site resets this client under either agent: not a transient blip.
+    return withClientBlockMessage(honest.error ? honest : result);
+  }
 
   for (let attempt = 2; attempt <= REACHABILITY_MAX_ATTEMPTS; attempt++) {
     if (result.reachable || !isTransientReachabilityError(result.error)) break;
@@ -291,18 +356,28 @@ export async function checkReachability(
       url,
       scope,
       requestScoped,
-      attemptTimeout()
+      attemptTimeout(),
+      userAgent
     );
   }
 
-  return result;
+  return withClientBlockMessage(result);
+}
+
+/** A reset names its likely cause and the fix instead of the bare socket error. */
+function withClientBlockMessage(
+  result: ReachabilityResult
+): ReachabilityResult {
+  if (result.reachable || !isClientBlockError(result.error)) return result;
+  return { ...result, error: CLIENT_BLOCK_MESSAGE };
 }
 
 async function attemptReachability(
   url: string,
   scope: ReachabilityScope | undefined,
   requestScoped: typeof requestOnceScoped,
-  timeoutMs: number = REACHABILITY_TIMEOUT_MS
+  timeoutMs: number = REACHABILITY_TIMEOUT_MS,
+  userAgent: string = getRequestConfig().userAgent
 ): Promise<ReachabilityResult> {
   // Fast path for localhost/loopback using native fetch (no WAF detection needed)
   let isLocalhost = false;
@@ -329,11 +404,13 @@ async function attemptReachability(
       const response = send
         ? await send(url, {
             method: "GET",
+            headers: { "User-Agent": userAgent },
             redirect: "manual",
             signal: controller.signal,
           })
         : await fetchUndecoded(url, {
             method: "GET",
+            headers: { "User-Agent": userAgent },
             redirect: "follow",
             signal: controller.signal,
           });
@@ -374,7 +451,7 @@ async function attemptReachability(
     const outcome = await Effect.runPromise(
       requestScoped(
         url,
-        { method: "GET" },
+        { method: "GET", headers: { "User-Agent": userAgent } },
         async (res) => {
           // Server responded - site is reachable
           // We accept any status code here since even 404/500 means the server is up

@@ -700,6 +700,8 @@ Schema `1.27` adds `wcag` (the success criteria, each with `sc`, `level` and `ve
 
 Schema `1.28` adds the top-level `javascript`, the [JavaScript shipped](/reports#javascript-shipped) block. It is absent when the audit measured no script.
 
+Schema `1.29` adds the top-level `userAgentFallback` (`{ userAgent }`). It is present only when the site reset the browser-like reachability probe and the crawl ran as the honest `SquirrelScan/...` user agent instead; see [`user_agent`](/configuration/crawler#user_agent).
+
 Schema `1.22` adds optional `observation` metadata to issue checks. It records the evidence `mode`, whether the check was `applicable`, and any `uncertainty` that qualifies the result. `1.23` added the top-level `reportBody`, present only when a very large crawl got a sampled report body (see [large crawls](/cli/audit#large-crawls)).
 
 **Skipped checks:** `skippedChecks` lists checks a rule could not finish evaluating, so an absence of issues on those pages does not mean they are clean. It appears only when at least one check was skipped. Skipped checks are never part of `issues`, and do not count toward `passed`, `warnings`, `failed` or the score.

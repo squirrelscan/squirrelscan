@@ -1190,9 +1190,18 @@ export async function runAudit(
       );
     }
 
+    // The User-Agent the user chose, if any: the probe and the rules' own requests
+    // send it, as the crawl does. A custom `User-Agent` header counts (#1152).
+    // Unset, the crawl pins its own browser UA once storage opens (#875), and the
+    // probe sends the request tool's default browser UA (pub#2140).
+    const configuredUserAgent =
+      mergedConfig.crawler.user_agent ||
+      customUserAgent(mergedConfig.crawler.headers);
+
     // Initialize request tool with config
     initRequestTool({
       timeout: mergedConfig.crawler.timeout_ms,
+      ...(configuredUserAgent ? { userAgent: configuredUserAgent } : {}),
     });
     // Rules that probe the site themselves (security/http-to-https, #1269) call
     // this client; without it they throw and report nothing.
@@ -1216,9 +1225,15 @@ export async function runAudit(
     // --offline: the start URL's redirects stay on the audited site (#819).
     const reachability = await checkReachability(
       reachabilityUrl,
-      options.offline
-        ? { ownSiteOnly: true, domains: mergedConfig.project?.domains }
-        : undefined,
+      {
+        ...(options.offline
+          ? { ownSiteOnly: true, domains: mergedConfig.project?.domains }
+          : {}),
+        ...(configuredUserAgent ? { userAgent: configuredUserAgent } : {}),
+        // Only the tool's own browser UA falls back to the honest one: a UA the
+        // user chose is theirs to change (pub#2140).
+        fallbackOnReset: !configuredUserAgent,
+      },
       undefined,
       // #1271: the probe is inside the budget, and cut to what is left of it.
       durationBudget?.crawlStopAt
@@ -1271,6 +1286,19 @@ export async function runAudit(
           `Cannot reach ${redactUrl(url)}: ${reason}`,
           { url: redactUrl(url), reason, tlsFinding }
         )
+      );
+    }
+
+    // pub#2140: the site reset the browser-like probe and answered the honest
+    // agent, so the whole crawl (and the rules' own requests) runs as that agent.
+    const userAgentFallback = reachability.userAgentFallback;
+    if (userAgentFallback) {
+      initRequestTool({
+        timeout: mergedConfig.crawler.timeout_ms,
+        userAgent: userAgentFallback,
+      });
+      process.stderr.write(
+        `The site resets browser-like clients: crawling as ${userAgentFallback}. Set [crawler] user_agent in squirrel.toml to choose another.\n`
       );
     }
 
@@ -1334,14 +1362,16 @@ export async function runAudit(
       // A custom `User-Agent` header is the crawl's agent on every request that
       // carries it, so it is also the agent of the probes that send no custom
       // headers (#1152).
-      const configuredUserAgent =
-        mergedConfig.crawler.user_agent ||
-        customUserAgent(mergedConfig.crawler.headers);
-      const { userAgent, source: uaSource } = await Effect.runPromise(
+      const resolvedUserAgent = await Effect.runPromise(
         resolveStickyUserAgent(configuredUserAgent, storage, {
           freshUa: options.freshUa,
         })
       );
+      // The honest agent is not pinned: the next run probes with a browser UA again.
+      const userAgent = userAgentFallback ?? resolvedUserAgent.userAgent;
+      const uaSource = userAgentFallback
+        ? "fallback"
+        : resolvedUserAgent.source;
       logger.debug(`using ${uaSource} user-agent`, userAgent);
 
       // Resolve the crawl's coverage mode: caller > config > default (surface)
@@ -3082,6 +3112,8 @@ export async function runAudit(
           : []),
         ...(cloudResult?.spend ?? []),
       ];
+      if (userAgentFallback)
+        report.userAgentFallback = { userAgent: userAgentFallback };
       // #1664: what cloud rendering did, so a render that fell back is visible in the report.
       {
         const { rendered, plain } = renderTally.counts();

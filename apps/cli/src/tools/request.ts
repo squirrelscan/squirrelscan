@@ -106,6 +106,14 @@ export function isImpersonationAvailable(): boolean {
 // BROWSER HEADERS
 // ============================================
 
+/** True for a Chrome User-Agent: the only one whose client hints are honest to send. */
+export function isChromeUserAgent(userAgent: string): boolean {
+  return (
+    /\bChrome\/\d/.test(userAgent) &&
+    !/\b(?:Edg|OPR|SquirrelScan)\//.test(userAgent)
+  );
+}
+
 /**
  * Apply browser-like headers to a Headers object
  * Helps with WAF compatibility even without TLS impersonation
@@ -126,15 +134,19 @@ function applyBrowserHeaders(headers: Headers, userAgent: string): void {
   if (!headers.has("Upgrade-Insecure-Requests")) {
     headers.set("Upgrade-Insecure-Requests", "1");
   }
-  // Chrome client hints - helps with WAF detection
-  if (!headers.has("sec-ch-ua")) {
-    headers.set("sec-ch-ua", CHROME_SEC_CH_UA);
-  }
-  if (!headers.has("sec-ch-ua-mobile")) {
-    headers.set("sec-ch-ua-mobile", "?0");
-  }
-  if (!headers.has("sec-ch-ua-platform")) {
-    headers.set("sec-ch-ua-platform", '"macOS"');
+  // Chrome client hints - helps with WAF detection. Only for a Chrome UA: a
+  // Firefox, Safari or honest `SquirrelScan/...` agent that sent them would
+  // contradict its own User-Agent (pub#2140).
+  if (isChromeUserAgent(headers.get("User-Agent") ?? userAgent)) {
+    if (!headers.has("sec-ch-ua")) {
+      headers.set("sec-ch-ua", CHROME_SEC_CH_UA);
+    }
+    if (!headers.has("sec-ch-ua-mobile")) {
+      headers.set("sec-ch-ua-mobile", "?0");
+    }
+    if (!headers.has("sec-ch-ua-platform")) {
+      headers.set("sec-ch-ua-platform", '"macOS"');
+    }
   }
   // Fetch metadata headers - modern browsers send these
   if (!headers.has("sec-fetch-dest")) {

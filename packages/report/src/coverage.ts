@@ -488,6 +488,16 @@ export function fetchFallbacksLine(report: AuditReport): string | null {
   return `${recovered} page${recovered === 1 ? "" : "s"} recovered via direct fetch after a render block.`;
 }
 
+/**
+ * One-line note that the crawl used the honest User-Agent because the site reset browser-like
+ * clients (pub#2140). Null when the crawl used its own User-Agent.
+ */
+export function userAgentFallbackLine(report: AuditReport): string | null {
+  const fallback = report.userAgentFallback;
+  if (!fallback) return null;
+  return `The site reset browser-like clients, so this audit crawled as ${fallback.userAgent}. Set [crawler] user_agent in squirrel.toml to choose another.`;
+}
+
 export interface SeedRedirect {
   /**
    * Where the refused redirect pointed, canonicalized — or `null` when the

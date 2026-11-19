@@ -65,6 +65,7 @@ import {
   carriedTag,
   coverageLine,
   fetchFallbacksLine,
+  userAgentFallbackLine,
   fullScanHint,
   scanScopeLine,
   publishedReportNote,
@@ -208,6 +209,8 @@ function scanDetailLines(report: AuditReport): string[] {
   if (hint) out.push(hint);
   const fallbacks = fetchFallbacksLine(report);
   if (fallbacks) out.push(fallbacks);
+  const uaFallback = userAgentFallbackLine(report);
+  if (uaFallback) out.push(uaFallback);
   return out;
 }
 
