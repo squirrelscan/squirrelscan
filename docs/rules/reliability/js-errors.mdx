@@ -3,11 +3,15 @@ title: "JavaScript errors and failed requests: what breaks after load"
 description: "A page can answer 200 with clean HTML and still throw an uncaught exception, fail to hydrate or leave a section empty after an API call answers 500. squirrel reads the errors the cloud render recorded and groups them across the site."
 ---
 
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `render` cloud service (per page; 2 credits per page). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
+
 ## What this rule detects
 
 Clean HTML says nothing about what the browser does next. An uncaught `TypeError` can stop the menu, the form or the checkout from working. A framework hydration mismatch makes React or Vue discard the server HTML and render again. `ChunkLoadError: Loading chunk 123 failed` appears after a deploy removes a code-split chunk. A `fetch('/api/data')` made after load answers 500 and a section stays empty.
 
-This rule reads what the browser reported while the page ran: uncaught exceptions, `console.error` messages and requests that failed at runtime. The renderer keeps listening for a few seconds after `load`, so a script that throws on a timer is caught too.
+This rule reads what the browser reported while the page ran: uncaught exceptions, `console.error` messages and requests that failed at runtime, from the optional `runtime` block of each render result. The cloud renderer does not record that block yet. Until it does, the rule is skipped on every audit with the reason `The renderer did not record runtime errors for these pages`, and it never passes.
 
 It needs a rendered page, so it is a cloud check. A local or `--http` audit does not run it and lists it among the cloud checks that did not run, with the prompt to run a cloud audit.
 
@@ -67,6 +71,25 @@ enable = ["reliability/js-errors"]
 ```
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `js-errors` | Problem |  |
+| `hydration-errors` | Problem |  |
+| `failed-runtime-requests` | Problem |  |
+| `console-errors` | Problem |  |
+| `third-party-js-errors` | Problem |  |
+| `js-errors` | Clean | `js-errors`, `hydration-errors`, `failed-runtime-requests`, `console-errors`, `third-party-js-errors` |
+| `js-errors` | Not checked |  |
+| `unchecked-pages` | Not checked |  |
+
+{/* rule-checks:end */}
 
 ## Related rules
 
