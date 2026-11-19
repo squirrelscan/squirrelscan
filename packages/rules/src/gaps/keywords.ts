@@ -37,6 +37,7 @@ export const keywordGapsRule: Rule = {
       "option to sharpen the analysis.",
     category: "gaps",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
     optionsSchema,

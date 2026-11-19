@@ -28,6 +28,7 @@ export const wordCountRule: Rule = {
       "Pages with thin content (under 300 words) often struggle to rank well and are actively deindexed by Google since the June 2025 core update. Add more valuable, relevant content to thin pages—aim for at least 500 words for standard pages and 1000+ for in-depth articles. If a page can't be fleshed out, voluntarily noindex it or consolidate it into a more comprehensive resource. Trimming thin pages from your index is better than leaving low-value content for Google to penalize.",
     category: "content",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     // A page kept out of the search index is out of scope for a thin-content finding (pub#841).
     skipOnNoindex: true,

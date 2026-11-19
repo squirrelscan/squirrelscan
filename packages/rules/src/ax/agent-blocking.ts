@@ -79,6 +79,7 @@ export const agentBlockingRule: Rule = {
       "A site can allow an AI user-agent in robots.txt and still block it at the edge via a WAF / bot-management 'block AI bots' toggle. Check that toggle is scoped to the crawler classes you actually mean to block. Blocking a training crawler like GPTBot is often intentional; blocking Claude-User (a live fetch a real person triggered inside an assistant) breaks a request someone is waiting on, so allow-list ChatGPT-User, Claude-User, and Perplexity-User in your edge rules if you want assistant users to reach your site. These are UA probes: the request carries the bot's User-Agent but not its source IP or signature, so a WAF that verifies real bots may answer the real one differently. Set `[crawler] agent_access_all_tokens = true` to probe every AI token and record each one's status and X-Robots-Tag. Re-run this probe after any WAF / CDN / bot-management change.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     // "error" so a blocked user-action fetcher (fail check) badges as an
     // error; blocking only training crawlers emits warn checks, which the
     // report's effective severity automatically downgrades to a warning.

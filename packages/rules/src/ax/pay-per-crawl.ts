@@ -28,6 +28,7 @@ export const payPerCrawlRule: Rule = {
       "Monetizing crawler access is a legitimate business decision, reported informationally by default. Scope the 402 to the crawler classes you intend to charge (typically training/bulk crawlers) and keep it off user-action fetchers (ChatGPT-User, Claude-User, Perplexity-User) so a real person's live request through an AI assistant isn't the thing that gets billed.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     // warning so 402-on-a-user-action-fetcher carries a warning badge; plain
     // monetization detection emits only info checks and never becomes an issue.
     severity: "warning",

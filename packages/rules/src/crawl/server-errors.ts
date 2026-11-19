@@ -26,6 +26,7 @@ export const serverErrorsRule: Rule = {
       "A page that answers 5xx is broken for visitors and for search engines, which drop it from the index if the error persists. Check the server or application logs for the failing URL, fix the underlying fault (an unhandled exception, an exhausted database or upstream, a bad deploy), then re-run the audit to confirm the page returns 200.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
     checks: [

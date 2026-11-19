@@ -37,6 +37,7 @@ export const ariaTreeitemNameRule: Rule = {
     category: "a11y",
     wcag: [wcag("4.1.2")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 7,

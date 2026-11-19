@@ -234,6 +234,7 @@ export const htmlLangValidRule: Rule = {
     category: "a11y",
     wcag: [wcag("3.1.1")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 7,

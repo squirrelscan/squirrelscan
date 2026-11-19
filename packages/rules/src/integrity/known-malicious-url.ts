@@ -50,6 +50,7 @@ export const knownMaliciousUrlRule: Rule = {
       "A site URL flagged by a threat feed means the page is serving (or is hosting an injected) phishing/malware payload — likely a compromise. Remove the offending content, rotate credentials, and request a review from the listing provider once clean. A flagged OUTBOUND link points your visitors at a malicious host: remove or replace the link, and check whether it was injected (a compromise signal in its own right).",
     category: "integrity",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 9,
     // Check names by outcome class (#1741).

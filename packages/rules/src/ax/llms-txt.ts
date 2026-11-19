@@ -63,6 +63,7 @@ export const llmsTxtRule: Rule = {
       "llms.txt (llmstxt.org) is a Markdown file at your domain root that points AI agents and answer engines at your most useful, clean content. Add a /llms.txt with an H1 title, a short summary, and sections of Markdown links to key pages; optionally add /llms-full.txt with that content inlined. This is a recommendation only — it never affects your score.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
     discoveryProbes: ["llms-txt", ...LLMS_TXT_ALT_PATHS],

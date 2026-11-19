@@ -13,6 +13,7 @@ export const authorExpertiseRule: Rule = {
       "Author expertise is key for E-E-A-T, especially for YMYL content. Include: professional credentials (MD, JD, CPA), work experience, education, relevant certifications, and author bio pages. Link authors to LinkedIn or professional profiles. For health content, show medical reviewer credentials.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 4,
     // Author credentials matter for editorial / YMYL content sites; irrelevant to

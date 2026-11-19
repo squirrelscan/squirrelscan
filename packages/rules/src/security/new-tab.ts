@@ -12,6 +12,7 @@ export const newTabRule: Rule = {
       'Modern browsers treat target="_blank" as rel="noopener" unless rel="opener" is set, and noreferrer implies noopener. Remove rel="opener" or add rel="noopener" so the opened page cannot reach window.opener. Add rel="noreferrer" as well if you do not want to send the referrer URL to the destination site (a privacy choice, not a security flaw).',
     category: "security",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

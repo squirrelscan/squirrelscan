@@ -395,6 +395,7 @@ export const napConsistencyRule: Rule = {
       "NAP consistency is critical for local SEO. Your business name, address, and phone number should be identical everywhere - on your site and across all listings. Use schema.org LocalBusiness markup. Avoid abbreviations inconsistencies (St. vs Street). Include NAP in footer for site-wide visibility.",
     category: "local",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 6,
     // NAP consistency only matters for real-world local businesses. Skip with a

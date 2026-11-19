@@ -98,6 +98,7 @@ export const schemaNoindexConflict: Rule = {
       "Pages with rich result schemas (Article, Product, Recipe, Event, etc.) should be indexed so search engines can display rich results. Having schema markup on noindexed pages wastes effort and prevents rich results from appearing. Remove noindex directive or remove schema markup if page shouldn't be indexed.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
   },

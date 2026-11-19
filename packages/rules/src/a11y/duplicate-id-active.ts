@@ -23,6 +23,7 @@ export const duplicateIdActiveRule: Rule = {
     wcagNone:
       "It flags duplicate ids on focusable elements, and the criterion that covered duplicate ids, 4.1.1 Parsing, is obsolete in WCAG 2.2 and always satisfied for HTML in WCAG 2.1.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 7,

@@ -37,6 +37,7 @@ export const jsFileSizeRule: Rule = {
       "Large JavaScript files block the main thread and delay interactivity. Code-split bundles into smaller chunks, tree-shake unused exports, lazy-load non-critical scripts, and defer or async load third-party scripts. Use dynamic imports for route-based splitting.",
     category: "perf",
     scope: "site",
+    findingScope: "resource",
     severity: "error",
     weight: 7,
     optionsSchema,

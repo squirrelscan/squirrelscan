@@ -305,6 +305,7 @@ export const h1TitleAlignmentRule: Rule = {
       "The <title> and the H1 should be about the same topic: they are the two strongest signals of what the page is for. When they share no meaningful word, search engines see two different subjects, and a visitor who clicked a result for the title's phrase lands under a heading about something else. Reword the H1 to include the phrase the title targets (it can be longer and more natural than the title), or change the title to name what the H1 promises. A deliberately creative headline, common on a homepage or a landing page, is fine: this rule only informs.",
     category: "content",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     // Search-result presentation only: skipped on noindex pages (pub#457).
     skipOnNoindex: true,

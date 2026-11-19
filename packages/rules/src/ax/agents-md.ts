@@ -30,6 +30,7 @@ export const agentsMdRule: Rule = {
       "If the site has an associated codebase, publish an AGENTS.md at the repository root covering setup, testing, and conventions a coding agent needs to be productive. This is a recommendation only — it never affects your score.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
     // llms-txt: publishing llms.txt is what earns a missing AGENTS.md a warning.

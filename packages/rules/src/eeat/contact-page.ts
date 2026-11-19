@@ -32,6 +32,7 @@ export const contactPageRule: Rule = {
       "A contact page with multiple contact methods builds trust. Include: email address or contact form, phone number (if applicable), physical address, and social media links. Make contact information easy to find from any page. For local businesses, include business hours. Response time expectations are also helpful. A Contact page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing, and its contact methods are not checked. On a single-page site, a Contact section (an element whose id is contact, contact-us or a localised slug, linked from the page as #contact) counts as the Contact page when it has an email or phone link or a form.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
     optionsSchema,

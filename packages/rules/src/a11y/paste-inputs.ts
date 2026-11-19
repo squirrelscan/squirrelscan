@@ -13,6 +13,7 @@ export const pasteInputsRule: Rule = {
     wcagNone:
       "It flags paste, copy or cut blocking on any text field, not only the authentication fields 3.3.8 Accessible Authentication (Minimum) covers, so the rule as a whole maps to no criterion (narrowing it is squirrelscan/squirrelscan#2106).",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

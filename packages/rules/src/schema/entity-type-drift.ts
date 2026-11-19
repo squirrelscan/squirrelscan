@@ -44,6 +44,7 @@ export const entityTypeDriftRule: Rule = {
     solution: `The same @id is an Organization on one page and an Organization plus LocalBusiness on another. A search engine merges the declarations by id and is then left deciding which type set is authoritative, which affects which rich results the entity is eligible for. Pick one type set and emit it identically everywhere: if the entity is a LocalBusiness, say so on every page that declares it, not only on the contact page. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 3,
   },

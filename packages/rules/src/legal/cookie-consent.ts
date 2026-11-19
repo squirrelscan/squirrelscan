@@ -266,6 +266,7 @@ export const cookieConsentRule: Rule = {
       "Cookie consent is required under GDPR and ePrivacy regulations for EU users. Implement a consent banner that: allows users to accept/reject non-essential cookies, doesn't pre-check optional cookies, stores consent preferences, and blocks tracking cookies until consent. Use tools like CookieYes, OneTrust, or Cookiebot.",
     category: "legal",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 4,

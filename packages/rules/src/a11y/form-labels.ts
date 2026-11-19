@@ -17,6 +17,7 @@ export const formLabelsRule: Rule = {
     category: "a11y",
     wcag: [wcag("1.3.1"), wcag("3.3.2")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 6,

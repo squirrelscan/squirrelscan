@@ -597,6 +597,7 @@ export const titlePatternOutlierRule: Rule = {
       "Most of your pages title themselves the same way - a page name, a separator, and your brand - and these pages do not. Inconsistent titles cost you brand recall in the search results and make templated pages look hand-edited or broken. Fix the template at its source (the layout or CMS field that builds the title) rather than page by page, keeping the brand on the same side with the same separator everywhere. A page that deliberately differs, like the homepage or a campaign landing page, is fine: the point is that a handful of pages should not be the exception.",
     category: "content",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     // Deliberately light: one site-wide check, capped items, so a single rule
     // cannot dominate the content category score.

@@ -30,6 +30,7 @@ export const citationsRule: Rule = {
       "Citing authoritative sources builds credibility and supports E-E-A-T. Link to: government sites (.gov), educational institutions (.edu), peer-reviewed research, industry authorities. For health: cite NIH, CDC, WHO, medical journals. Include a sources/references section. Don't cite low-quality or unverified sources.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
     // Authoritative citations are an E-E-A-T signal for editorial / informational

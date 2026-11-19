@@ -86,6 +86,7 @@ export const assetCompressionRule: Rule = {
       "Enable gzip or Brotli for static text assets, not just HTML. Server config often compresses text/html but omits text/css and application/javascript: add those MIME types to your compression list (nginx 'gzip_types', Apache 'AddOutputFilterByType'). On a CDN, check that compression is on for static file extensions. Brotli beats gzip on text and every current browser accepts it.",
     category: "perf",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 6,
     // A dev server or private-network host is not the delivery edge (pub#629).

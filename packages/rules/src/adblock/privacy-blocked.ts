@@ -30,6 +30,7 @@ export const privacyBlockedRule: Rule = {
     category: "blocking",
     subcategory: "privacy",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 2,
     optionsSchema,

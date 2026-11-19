@@ -107,6 +107,7 @@ export const titleUniqueRule: Rule = {
       "Each page should have a unique title that accurately describes its content. Duplicate titles confuse search engines and users about which page to display. Use a pattern like 'Page Topic | Brand Name' to ensure uniqueness. CMS often generate duplicate titles - audit and customize them.",
     category: "core",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 5,
   },

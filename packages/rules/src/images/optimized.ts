@@ -45,6 +45,7 @@ export const optimizedRule: Rule = {
       "Optimize images to reduce file sizes without visible quality loss. Use tools like Squoosh, ImageOptim, or TinyPNG. Consider using an image CDN (Cloudinary, Imgix, Cloudflare Images) for automatic optimization and responsive delivery. Modern formats (WebP, AVIF) offer 25-50% better compression.",
     category: "images",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 4,

@@ -18,6 +18,7 @@ export const markdownResponseRule: Rule = {
       "Agents and answer engines parse Markdown more reliably than rendered HTML. Serve a Markdown representation of your key pages: honor `Accept: text/markdown` via content negotiation, and/or publish a `.md` variant (e.g. /index.md). Not serving Markdown is a recommendation only and never affects your score. A 5xx in answer to `Accept: text/markdown` does affect it: that breaks every agent that asks for Markdown. Return Markdown, fall back to HTML, or answer 406 Not Acceptable instead of erroring.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
     discoveryProbes: ["markdown"],

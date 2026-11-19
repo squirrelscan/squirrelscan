@@ -50,6 +50,7 @@ export const graphqlGetMutationsRule: Rule = {
       "Reject every operation other than a query when the request is a GET, with a 405 Method Not Allowed, as the GraphQL-over-HTTP spec requires. Accept mutations only over POST, and require a non-simple Content-Type such as `application/json` (which a cross-site form or image cannot send without a CORS preflight) or a CSRF token. Apollo Server, graphql-http and express-graphql already refuse a mutation over GET, so a finding usually points at a custom HTTP handler that passes GET query strings straight to the executor: check the operation type before you execute it.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 7,
   },

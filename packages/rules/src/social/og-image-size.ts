@@ -76,6 +76,7 @@ export const ogImageSizeRule: Rule = {
       "Use a PNG or JPEG social image at least 1200x630 pixels for reliable display on Facebook and LinkedIn. SVG may not render, while smaller images may appear cropped or low quality. Use a 1.91:1 aspect ratio, keep the file under 8MB, and test with Facebook Sharing Debugger. Consider creating dedicated social images for key pages.",
     category: "social",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

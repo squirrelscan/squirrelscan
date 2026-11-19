@@ -13,6 +13,7 @@ export const trustSignalsRule: Rule = {
       "Trust signals help visitors feel confident. Include: security badges (Norton, McAfee), payment badges (Visa, PayPal), certifications (BBB, industry-specific), customer reviews/testimonials, and social proof (customer count, awards). Place trust signals prominently on homepage, checkout, and contact pages.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
   },

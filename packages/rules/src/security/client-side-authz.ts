@@ -609,6 +609,7 @@ export const clientSideAuthzRule: Rule = {
       "Enforce authorization on the server, in every admin route or in middleware in front of all of them: read the session or token, look up the caller's role server-side, and answer 401 when nobody is signed in and 403 when the caller lacks the role. Hiding a link or a screen in the frontend is not access control, because anyone can read the bundle and call the API directly. In Next.js, check the session inside each route handler or server action (middleware alone can be bypassed); in Express or Fastify, mount an auth guard on the whole `/api/admin` router; with Supabase or Firebase, enforce it in row-level security or security rules, not in the client. Then re-run with `--probe active` to confirm each endpoint answers 401 or 403.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
     checks: [

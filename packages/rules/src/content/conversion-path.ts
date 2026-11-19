@@ -133,6 +133,7 @@ export const conversionPathRule: Rule = {
       "Give the page a way to convert on your own site: a contact or enquiry form, a mailto: or tel: link, or a link to a contact, booking or checkout page. Calls to action that open a personal social profile send the lead off-site, and your analytics and attribution lose them. An embedded or linked booking tool such as Calendly or Stripe Checkout is fine; keep it, and consider also offering a form or an email address.",
     category: "content",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

@@ -15,6 +15,7 @@ export const accesskeysRule: Rule = {
     wcagNone:
       "It flags two elements that share an accesskey value, which no WCAG success criterion forbids; 2.1.4 Character Key Shortcuts covers single-key shortcuts with no modifier, and an access key always has one.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

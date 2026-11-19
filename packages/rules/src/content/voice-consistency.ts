@@ -217,6 +217,7 @@ export const voiceConsistencyRule: Rule = {
       "These pages read at a very different level from the rest of your site: a page written by a different author, text pasted in from another source, or bulk-generated copy usually shows up this way. Check each one. If it is meant to sound like the rest of the site, rewrite it in the site's voice (sentence length and word choice drive the score). If it is deliberately different (a technical reference, a children's section), that is fine. Legal pages are not judged, because their register is different on purpose.",
     category: "content",
     scope: "site",
+    findingScope: "resource",
     severity: "info",
     weight: 2,
   },

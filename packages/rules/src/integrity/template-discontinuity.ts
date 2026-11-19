@@ -75,6 +75,7 @@ export const templateDiscontinuityRule: Rule = {
       "This page shares almost none of your site's theme: no stylesheets, asset hosts, nav or footer, or CSS variables in common with the rest of the crawl. That is usually deliberate: a campaign landing page, a signed-out or empty state, a checkout step, a status page. It is worth a glance only because an injected standalone page looks the same from the outside. Start by confirming the page is one you published. If it is not, and only then, treat the site as compromised: remove the page, audit recently modified files, and check server access logs.",
     category: "integrity",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 6,
     // Compromise detection: an ignore could hide a compromised site (#1262).

@@ -499,6 +499,7 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
         "A field without a name is never submitted, so its value is lost even though the visitor sees it filled in. Give every input, select and textarea a name that the handler reads. A form action that answers 404 or 410 loses every submission: point it at the endpoint that exists, or remove the form. Staging, preview, development and localhost hosts shipped to production lose submissions for every visitor: replace them with the production URL. A mailto: action only opens the visitor's mail client, so most submissions are lost: use a handler that stores or sends them.",
       category: "reliability",
       scope: "site",
+      findingScope: "resource",
       severity: "error",
       weight: 6,
     },

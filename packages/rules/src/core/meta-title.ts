@@ -33,6 +33,7 @@ export const metaTitleRule: Rule = {
       "Every page needs a unique, descriptive title tag between 30-75 characters. Titles appear in browser tabs, search results, and social shares. Write titles that accurately describe the page content while including your primary keyword near the beginning. If your title is too short, add more descriptive context. If too long, prioritize the most important information first and trim secondary details. Avoid keyword stuffing or duplicate titles across pages.",
     category: "core",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     // Search-result presentation only: skipped on noindex pages (pub#457).
     skipOnNoindex: true,

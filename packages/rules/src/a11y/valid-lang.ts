@@ -218,6 +218,7 @@ export const validLangRule: Rule = {
     category: "a11y",
     wcag: [wcag("3.1.2")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

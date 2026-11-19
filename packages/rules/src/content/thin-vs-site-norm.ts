@@ -320,6 +320,7 @@ export const thinVsSiteNormRule: Rule = {
       "These pages are much shorter than the other pages of the same type on your own site, which is a stronger thin-content signal than any absolute word count: your articles set the expectation for what an article on this site looks like. Either expand each page to the depth its siblings have, consolidate it into a fuller page, or noindex it if it exists only for navigation. If a page is deliberately short (a stub, a redirect landing page), that is fine - the point is that it does not match what the rest of its page type promises.",
     category: "content",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     // Deliberately light: one site-wide check, capped items, so a single rule
     // cannot dominate the content category score.

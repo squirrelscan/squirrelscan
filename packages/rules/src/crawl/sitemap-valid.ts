@@ -47,6 +47,7 @@ export const sitemapValidRule: Rule = {
       "Sitemaps must follow the sitemap protocol: use UTF-8 encoding, proper XML structure, and valid URLs. Each sitemap file can contain max 50,000 URLs and be max 50MB uncompressed. For larger sites, use a sitemap index file. All URLs should return 200 status codes. Use lastmod dates to indicate content freshness. Compress with gzip for faster loading.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
   },

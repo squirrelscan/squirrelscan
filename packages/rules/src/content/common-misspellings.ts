@@ -420,6 +420,7 @@ export const commonMisspellingsRule: Rule = {
       "Each finding names a misspelled word, its correction, the number of pages it appears on and an example with its context. Fix the copy where it was written, and check the template or CMS field if it appears on many pages. Misspellings in the title, description or a heading are visible in search results or at the top of the page, so they are reported as warnings.",
     category: "content",
     scope: "site",
+    findingScope: "page",
     // A misspelt title, description or heading warns, and the report shows a
     // warn check at the rule's severity. Body-text and doubled-word findings stay info.
     severity: "warning",

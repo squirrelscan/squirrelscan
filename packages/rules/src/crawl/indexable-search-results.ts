@@ -247,6 +247,7 @@ export const indexableSearchResults: Rule = {
       "Keep internal search results out of the index. Add noindex (a robots meta tag or an X-Robots-Tag header) to the search results template, or add a Disallow rule for the search path in robots.txt. Anyone can link to a search URL with their own text, so indexable results waste crawl budget and invite spam.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
   },

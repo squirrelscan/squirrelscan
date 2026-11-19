@@ -62,6 +62,7 @@ export const ymylDetectionRule: Rule = {
       "YMYL content (health, finance, legal, safety) is held to higher E-E-A-T standards by Google. If detected: ensure expert authors with credentials, add disclaimers ('not medical advice'), cite authoritative sources, show content review dates, and include professional credentials. YMYL errors can significantly impact rankings.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 5,
   },

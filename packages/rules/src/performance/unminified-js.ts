@@ -159,6 +159,7 @@ export const unminifiedJsRule: Rule = {
       "Minify JavaScript to reduce file size and improve load times. Use build tools like Terser, esbuild, or UglifyJS. Most bundlers (Webpack, Vite, Rollup) minify automatically in production. Minification shortens variable names, removes whitespace, and dead code.",
     category: "perf",
     scope: "page",
+    findingScope: "page",
     verdictScope: "template",
     severity: "warning",
     weight: 5,

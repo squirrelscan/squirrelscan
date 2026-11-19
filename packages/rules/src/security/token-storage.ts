@@ -468,6 +468,7 @@ export const tokenStorageRule: Rule = {
       "Anything in localStorage or sessionStorage can be read by any script on the page, so one XSS bug or one compromised third-party script steals the session. Keep the credential in an httpOnly, Secure, SameSite cookie that the server sets, and send it automatically with requests. If a token must live in script memory, keep it in a closure for the life of the page rather than persisting it, use short lifetimes and rotate refresh tokens. Pair this with a strict Content-Security-Policy to limit what can run.",
     category: "security",
     scope: "page",
+    findingScope: "resource",
     verdictScope: "page",
     severity: "warning",
     weight: 6,

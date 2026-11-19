@@ -14,6 +14,7 @@ export const videoCaptionsRule: Rule = {
     category: "a11y",
     wcag: [wcag("1.2.2")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

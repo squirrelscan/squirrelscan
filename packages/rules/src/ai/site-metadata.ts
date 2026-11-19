@@ -23,6 +23,7 @@ export const siteMetadataRule: Rule = {
       "Informational: the resolved profile anchors which cloud features and audit rules apply to this site. If the classification looks wrong, the site's purpose/identity may not be coming through — sharpen the homepage value proposition, Organization/LocalBusiness JSON-LD, og/twitter meta, and contact details.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 0, // report-only / non-scoring
     cloud: { service: "site-metadata", unit: "site", creditFeature: "site_metadata" },

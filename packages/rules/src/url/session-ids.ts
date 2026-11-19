@@ -138,6 +138,7 @@ export const sessionIdsRule: Rule = {
       "A session ID in the URL gives every visitor, and every crawler visit, a different URL for the same page, so search engines see unlimited duplicates, and a shared link can hand one visitor's session to another. Keep the session in a cookie. For PHP set session.use_only_cookies=1 and session.use_trans_sid=0; for Java servlet containers disable URL rewriting (tracking-mode COOKIE); for ASP.NET use cookieless=\"false\". Redirect the old URLs to the clean ones and add a canonical tag.",
     category: "url",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

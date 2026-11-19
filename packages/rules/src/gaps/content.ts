@@ -36,6 +36,7 @@ export const contentGapsRule: Rule = {
       "adjacent to what you already rank for, so new pages benefit from existing topical authority.",
     category: "gaps",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
     optionsSchema,

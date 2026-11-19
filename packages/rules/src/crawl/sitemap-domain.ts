@@ -15,6 +15,7 @@ export const sitemapDomainRule: Rule = {
       "All URLs in your sitemap should point to pages on your own domain. Cross-domain URLs in sitemaps are a configuration error - search engines will ignore URLs that don't match the sitemap's domain. Remove external URLs from your sitemap or fix the domain in URLs if they're incorrectly formatted.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
   },

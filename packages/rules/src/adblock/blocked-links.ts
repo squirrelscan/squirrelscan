@@ -288,6 +288,7 @@ export const blockedLinksRule: Rule = {
     category: "blocking",
     subcategory: "ad",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 2,
     optionsSchema,

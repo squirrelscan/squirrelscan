@@ -13,6 +13,7 @@ export const affiliateDisclosureRule: Rule = {
       "FTC requires clear disclosure of affiliate relationships and sponsored content. Disclose at the top of pages with affiliate links, not just in footer. Use clear language: 'We earn commissions from purchases' or 'This post is sponsored.' Create a dedicated disclosure page and link to it. Failure to disclose can result in penalties.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 4,
     // Affiliate / sponsored-content disclosure (FTC) applies to monetised content

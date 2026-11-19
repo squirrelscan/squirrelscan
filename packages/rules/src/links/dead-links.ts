@@ -21,6 +21,7 @@ export const deadLinksRule: Rule = {
       "Enable cloud features (`squirrel auth login`) to verify external links against the shared global cache instead of fetching each link locally. Cached results make repeat audits faster and avoid hammering third-party sites. Broken links found here are detailed by links/broken-external-links.",
     category: "links",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
     cloud: { service: "dead-links", unit: "link", creditFeature: "dead_links" },

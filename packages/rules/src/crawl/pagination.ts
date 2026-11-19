@@ -14,6 +14,7 @@ export const paginationRule: Rule = {
       "Paginated pages should NOT all canonicalize to page 1. Each page should have a self-referencing canonical. Use rel='next' and rel='prev' links to indicate pagination sequence (though Google no longer uses these for indexing, they help users). Consider view-all pages or infinite scroll as alternatives. Ensure each paginated page has unique, valuable content.",
     category: "crawl",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 4,

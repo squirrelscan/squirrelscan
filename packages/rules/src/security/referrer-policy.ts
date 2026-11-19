@@ -18,6 +18,7 @@ export const referrerPolicyRule: Rule = {
       "Referrer-Policy controls what referrer information is sent with requests. Recommended: 'strict-origin-when-cross-origin' (default in modern browsers) sends origin only cross-site. 'no-referrer' for maximum privacy, 'same-origin' to only send referrer to same origin. Avoid 'unsafe-url' which leaks full URLs including paths.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
   },

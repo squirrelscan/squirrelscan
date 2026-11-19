@@ -28,6 +28,7 @@ export const entityIdentityRule: Rule = {
     solution: `Your site declares the same thing on page after page without an @id, so nothing says they are one thing. A search engine reading 60 pages sees 60 separate organizations, and none of them accumulates the authority of the others. Give the entity one absolute @id, something like https://yoursite.com/#organization, declare it in full once per page, and reference it by { "@id": "…" } everywhere else. The fragment is arbitrary; what matters is that it is absolute and identical on every page. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 6,
   },

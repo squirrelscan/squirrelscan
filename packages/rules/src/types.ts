@@ -180,6 +180,15 @@ export type RuleSeverity = "error" | "warning" | "info";
 export type VerdictScope = "template" | "page";
 
 /**
+ * What a finding is ABOUT (repo#1885), which decides whether a consumer may collapse it across pages.
+ * - `page`: the finding is a fact about one page (its title, its token weight, an image on it). Two pages
+ *   can carry an identical message and locator and still be two defects, so it is never collapsed.
+ * - `resource`: the finding names something shared across pages (a script, a stylesheet, a link target,
+ *   a template component). One fix repairs every page, so consumers collapse on the locator.
+ */
+export type FindingScope = "page" | "resource";
+
+/**
  * Run-time applicability declaration. A rule with `appliesWhen` is GATED by the
  * Stage-0 site-metadata profile: when the resolved metadata does not match, the
  * runner emits ONE visible `skipped` check and skips `run()` (see
@@ -353,6 +362,17 @@ export interface RuleMeta {
    * unclassified rule keeps running per page.
    */
   verdictScope?: VerdictScope;
+  /**
+   * What the rule's findings are about: see {@link FindingScope}. Declared on EVERY rule, enforced by
+   * `rule-finding-scope.test.ts`. Read it only through {@link mayCollapseAcrossPages}, which answers false
+   * unless the rule explicitly declares `resource`: silence must never collapse a finding.
+   */
+  findingScope?: FindingScope;
+}
+
+/** Whether findings of this rule may be collapsed across pages on their locator (repo#1885). */
+export function mayCollapseAcrossPages(meta: Pick<RuleMeta, "findingScope">): boolean {
+  return meta.findingScope === "resource";
 }
 
 /**

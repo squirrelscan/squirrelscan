@@ -67,6 +67,7 @@ export const singlePageSiteRule: Rule = {
       "Search engines index URLs, not fragments, so a section such as #services cannot rank, show up in results or be linked to from a search result on its own. The whole site also shares one title, one meta description and one topic signal, and AI agents and answer engines cite URLs, so there is one thing to cite. If any section is something you want found in search or cited by agents, give it its own page with its own title and description. If the single page is deliberate, nothing needs to change: this note never affects your score.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     // Advisory and weightless: see the header. Score-neutral by construction.
     severity: "info",
     weight: 1,

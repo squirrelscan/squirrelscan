@@ -453,6 +453,7 @@ export const duplicateContentRule: Rule = {
       "Pages with identical body content compete with each other in search. Point every copy at one canonical URL with a rel=canonical tag, redirect the extra URLs to it, or rewrite the pages so each says something different. If the copies differ only by tracking parameters, a trailing slash or letter case, canonicalise or redirect to one URL form.",
     category: "content",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 5,
   },

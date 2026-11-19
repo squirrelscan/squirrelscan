@@ -664,6 +664,7 @@ export const assetDivergenceRule: Rule = {
       "Your favicon, theme-color and fallback share image come from one layout, so every page should carry the same three. Pages that carry different ones are usually running an older template: a section that missed a redesign, a cached shell, or a second layout nobody remembers owning. The visible cost is inconsistent link previews and a tab icon that changes as visitors move around the site. Fix it where the assets are declared (the shared head partial or theme config) rather than page by page. Per-page share images on articles and products are correct and are not reported here: what this rule compares is the fallback the rest of the site shares.",
     category: "social",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     // Deliberately light: one site-wide check, capped items, so a single rule
     // cannot dominate the social category score.

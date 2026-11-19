@@ -41,6 +41,7 @@ export const homePageUnreachableRule: Rule = {
       "Visitors, search engines and AI agents all fail at the same point: the home page does not load. Check the cause named in the finding. For DNS, confirm the domain's records and nameservers. For TLS, check the certificate (expiry, chain, hostname). For a connection or timeout failure, check the server, firewall and CDN origin. For a 5xx, read the origin's error logs. Then run the audit again.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 10,
     checks: [

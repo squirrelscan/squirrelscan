@@ -41,6 +41,8 @@ export type { CategoryInfo, GroupInfo, RuleGroup } from "./categories";
 export { collectSkippedChecks, parseSkippedChecks, restoreSkippedChecks } from "./skipped";
 export type { SkippedCheck } from "./skipped";
 export { checkOccurrences } from "./occurrences";
+export { pageShare, PAGE_SHARE_SITE_WIDE, PAGE_SHARE_TEMPLATE } from "./page-share";
+export type { PageShare, PageShareLabel } from "./page-share";
 
 // Cross-site prevalence (#2491)
 export {

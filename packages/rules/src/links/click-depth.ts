@@ -95,6 +95,7 @@ export const clickDepthRule: Rule = {
       "Pages many clicks from the homepage are crawled less often and receive little internal link weight. Link important deep pages from the homepage, a hub or category page, or the main navigation. Add paginated or archive shortcuts, related-content links and breadcrumbs so the shortest path gets shorter. Pages that are deep on purpose can be left alone, or raise the threshold with the maxDepth rule option.",
     category: "links",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     // Advisory: a deep page is a structure hint, not a defect, so it costs a
     // site the smallest share of the links score.

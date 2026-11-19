@@ -196,6 +196,7 @@ export const httpToHttpsRule: Rule = {
       "Ensure all HTTP URLs redirect to their HTTPS equivalents using permanent (301) redirects. This consolidates link equity and avoids mixed indexing. Configure your server to enforce HTTPS globally and verify that both the homepage and key internal URLs redirect correctly. WARNING: This rule makes external HTTP requests to probe redirect behavior.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 3,
     // A dev server or private-network host is not the delivery edge (pub#629).

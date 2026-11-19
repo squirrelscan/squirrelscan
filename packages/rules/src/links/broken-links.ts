@@ -35,6 +35,7 @@ export const brokenLinksRule: Rule = {
     // Performance; the id keeps its `links/` prefix so configs keep working.
     category: "reliability",
     scope: "site",
+    findingScope: "resource",
     severity: "error",
     weight: 7,
     // A link moves between the content check and the site-wide check as the pages that carry it change (#1772).

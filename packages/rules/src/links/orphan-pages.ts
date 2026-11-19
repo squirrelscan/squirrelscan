@@ -114,6 +114,7 @@ export const orphanPagesRule: Rule = {
       "Orphan pages have no internal links and are hard for search engines to discover. They may not get indexed or rank well. Add internal links from relevant pages. Include in navigation or sidebar. Add to sitemap. Create contextual links from related content. If intentionally orphaned (e.g., landing pages), ensure they're accessible via sitemap.",
     category: "links",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
     optionsSchema: z.object({

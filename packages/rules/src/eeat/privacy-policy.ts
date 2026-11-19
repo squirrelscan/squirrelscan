@@ -24,6 +24,7 @@ export const privacyPolicyRule: Rule = {
       "A privacy policy is required by law in many jurisdictions (GDPR, CCPA) and signals trustworthiness. Link it from your footer on every page. Cover: what data you collect, how you use it, third-party sharing, user rights, and contact for privacy concerns. Keep it updated when practices change. A concrete path in `paths` that the crawl did not reach is requested once after the crawl (robots.txt and the per-host limits apply), so a policy nothing links to is found; the finding says which paths were probed. A policy your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing; crawl it to have it checked.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     discoveryProbes: ["configured-pages"],
     severity: "warning",
     weight: 5,

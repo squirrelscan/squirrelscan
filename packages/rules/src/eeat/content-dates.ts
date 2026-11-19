@@ -15,6 +15,7 @@ export const contentDatesRule: Rule = {
       "Visible dates show content freshness and help users assess relevance. Include datePublished and dateModified in Article schema. Show human-readable dates on pages. Update dateModified when making significant changes. Fresh content signals ongoing maintenance and expertise. Stale dates may hurt rankings for time-sensitive topics.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
     // Published / modified dates matter for time-sensitive editorial content;

@@ -30,6 +30,7 @@ export default {
         category: "content",
         scope: "page",
         verdictScope: "page",
+        findingScope: "page",
         severity: "warning",
         weight: 3,
       },
@@ -62,6 +63,8 @@ A rule id is `<namespace>/<name>`: lowercase letters, digits and hyphens. Pick a
 ### Page rules and site rules
 
 Set `scope` to `"page"` or `"site"`. Always set `verdictScope: "page"` on a page rule. That keeps the engine from copying one page's verdict to other pages that share a template.
+
+Set `findingScope` to say what a finding is about. Pick `"page"` when the finding is a fact about one page: its title, its word count, an image on it. Two pages with the same message and locator are still two defects, so a `"page"` rule is never collapsed across pages. Pick `"resource"` when the finding names something shared across pages, such as a script, a stylesheet, a link target or a template component: one fix repairs every page, so reports collapse it on the locator and label how much of the crawl it touches (site-wide at 90% of pages or more, template at 50 to 89%, some pages below that, single page at one). When unsure, pick `"page"`: an undeclared rule is treated as `"page"`, and the cost of being wrong is a longer report, not a hidden defect. The label never changes the health score.
 
 If a rule renames a check or splits one into several, list the old name in `meta.supersededChecks` with its replacements: `supersededChecks: { "meta-title": ["meta-title-too-short", "meta-title-too-long"] }`. Findings recorded under the old name are then judged by the new checks on the same page when a later audit or `squirrel report --diff` compares them: resolved when every replacement passed, still failing when one failed, not checked when one was not checked. A replacement that clears a page must emit a pass for it.
 

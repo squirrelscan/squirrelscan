@@ -11,6 +11,7 @@ export const brokenImagesRule: Rule = {
       "Broken images hurt user experience and can indicate neglected content. Fix 404 images by: updating the src URL, restoring the missing file, or removing the img element. Use automated monitoring to detect broken images. Consider implementing fallback images with onerror handlers.",
     category: "images",
     scope: "site",
+    findingScope: "resource",
     severity: "error",
     weight: 6,
   },

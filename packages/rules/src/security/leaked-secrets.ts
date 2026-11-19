@@ -996,8 +996,6 @@ const FALSE_POSITIVE_PATTERNS = [
   // Google tag IDs (GTM containers, GA4/UA measurement IDs, Ads/DC tags)
   // are public identifiers — never secrets, whatever pattern caught them
   /^(GTM|G|UA|AW|DC)-[A-Z0-9-]+$/i,
-  // A host, so anywhere: a connection string to example.com is a placeholder
-  /example\.com/i,
   new RegExp(`^[^A-Za-z0-9]{0,2}[A-Za-z0-9]{0,12}[_.-]?(?:${PLACEHOLDER_WORDS})`, "i"),
   new RegExp(`(?:${PLACEHOLDER_WORDS})[_.-]?[A-Za-z0-9]{0,4}$`, "i"),
   // `example-password`, `example_secret`: the whole value is the word, a
@@ -1625,8 +1623,25 @@ export function isShippedServerSecret(s: LeakedSecret): boolean {
   return !s.publicByDesign && SERVER_ONLY_TYPES.has(s.type) && isBrowserServed(s.location) && !isTutorialValue(s);
 }
 
+/**
+ * A host, so anywhere: a connection string to example.com (or a subdomain of
+ * it) is a placeholder. The value is split into host-shaped tokens and each is
+ * compared exactly or by its `.example.com` suffix, so `example.com.evil.net`
+ * and `notexample.com` do not count as the placeholder host.
+ */
+function mentionsExampleHost(value: string): boolean {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9.-]+/)
+    .some((token) => token === "example.com" || token.endsWith(".example.com"));
+}
+
 function isLikelyFalsePositive(value: string): boolean {
-  return endsInRepeatedChar(value) || FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(value));
+  return (
+    endsInRepeatedChar(value) ||
+    mentionsExampleHost(value) ||
+    FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(value))
+  );
 }
 
 // ── What a generic assignment's value cannot be (#2218) ─────────────────────
@@ -4929,6 +4944,7 @@ export const leakedSecretsRule: Rule = {
       "in your CI/CD pipeline to prevent future leaks.",
     category: "security",
     scope: "site",
+    findingScope: "resource",
     severity: "error",
     weight: 10,
     // Check names by outcome class (#1741).

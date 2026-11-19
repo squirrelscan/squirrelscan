@@ -110,6 +110,7 @@ export const subprocessorDisclosureRule: Rule = {
       "Under GDPR Art. 28, processors must disclose the sub-processors they engage and offer a Data Processing Agreement (DPA). Publish a /subprocessors page listing each third party that handles customer personal data (purpose, location), keep it current, and link a DPA from your legal/trust pages. B2B SaaS and fintech buyers expect this during security review.",
     category: "legal",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
     // Art. 28 sub-processor duty applies to commercial data-processors. Gate on

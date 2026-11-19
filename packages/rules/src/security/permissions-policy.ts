@@ -11,6 +11,7 @@ export const permissionsPolicyRule: Rule = {
       "Permissions-Policy controls which browser features your site can use (camera, microphone, geolocation, etc.). This limits what embedded iframes can access. Example: Permissions-Policy: camera=(), microphone=(), geolocation=(). Empty parentheses disable the feature entirely. This is especially important if you embed third-party content.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 2,
   },

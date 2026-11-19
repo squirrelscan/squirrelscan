@@ -361,6 +361,7 @@ export const schemaCoverageOutlierRule: Rule = {
       "These pages break your own site's pattern: most pages of the same type emit this schema @type and these do not. That is almost always a template or CMS gap rather than a deliberate choice - a product without its Product markup, an article without its Article markup - and it costs those pages the rich results their siblings are eligible for. Find where the working pages get their JSON-LD and make sure the listed pages run through the same path. If a page genuinely should not carry the markup (a discontinued product stub, a landing page filed under the same type), leave it: the point is that it is currently the exception.",
     category: "schema",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     // Deliberately light, and one site-wide check with capped items rather than a
     // per-page finding, so this rule cannot dominate the schema category score.

@@ -100,6 +100,7 @@ export const duplicateTagsRule: Rule = {
       "Load each analytics tag once per page. A tag added in the site template and again through a tag manager or a plugin counts every pageview and event twice. Remove one of the installs: keep the one your team controls and delete the other from the template, the plugin settings or the tag manager container.",
     category: "analytics",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

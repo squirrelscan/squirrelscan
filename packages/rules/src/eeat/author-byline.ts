@@ -15,6 +15,7 @@ export const authorBylineRule: Rule = {
       "Author bylines demonstrate experience and accountability. Show author names prominently on articles, blog posts, and expert content. Include author credentials where relevant. Link author names to bio pages. For YMYL content (health, finance), author transparency is especially important for Google's E-E-A-T assessment.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
     // Author bylines are an E-E-A-T signal for editorial / content sites. They're

@@ -204,6 +204,7 @@ export const conflictingIndexSignalsRule: Rule = {
       'These pages say "index me" (the sitemap) and "do not index me" (noindex, a canonical to another URL, a robots.txt block) at the same time, so the fixes the individual rules suggest pull in different directions. First decide whether each page should be in search. If not: remove it from the sitemap, keep noindex and drop any canonical to another URL. If yes: remove noindex and the robots.txt block, point the canonical at the page itself, keep it in the sitemap and add the structured data its siblings carry. A page with only one of these mismatches is left to crawl/noindex-in-sitemap or core/canonical.',
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
     // Check names by outcome class (#1741).

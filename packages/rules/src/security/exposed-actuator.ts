@@ -586,6 +586,7 @@ export const exposedActuatorRule: Rule = {
       "Expose only `health` (and `info` if you need it) over HTTP: set `management.endpoints.web.exposure.include=health,info` and never use `*` in production. Put the rest behind authentication with Spring Security, or move them to a separate management port that is not reachable from the internet (`management.server.port`). If `env`, `configprops` or `heapdump` was reachable, treat every secret the application holds as leaked and rotate it: database passwords, API keys, signing keys and cloud credentials.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 9,
     checks: [

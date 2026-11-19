@@ -28,6 +28,7 @@ export const sitemapLastmodChurnRule: Rule = {
       "If every URL in your sitemap carries the same (or nearly the same) lastmod date, the field is being stamped at build/deploy time rather than reflecting real content changes. This makes lastmod useless as a freshness signal - search engines may learn to ignore it entirely. Update lastmod only when a page's content actually changes, driven by your CMS or version control history, not by the deploy pipeline. Google News sitemaps are excluded from this check: they hold only about 48 hours of articles by design, so their lastmod values are supposed to cluster.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
   },

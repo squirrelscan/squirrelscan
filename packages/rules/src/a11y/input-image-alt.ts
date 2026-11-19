@@ -14,6 +14,7 @@ export const inputImageAltRule: Rule = {
     category: "a11y",
     wcag: [wcag("1.1.1"), wcag("4.1.2")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 8,

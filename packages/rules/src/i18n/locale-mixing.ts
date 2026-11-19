@@ -87,6 +87,7 @@ export const localeMixingRule: Rule = {
       'Pick one locale per page and make the copy follow it. Match the spelling to the page\'s lang (en-US or en-GB), write dates unambiguously (for example "3 April 2026" or 2026-04-03) so neither a reader nor an agent has to guess between MM/DD and DD/MM, and qualify prices once (USD 20 or US$20, never a bare $ next to CAD or AUD amounts). A multilingual site is not affected: pages that declare a non-English lang are skipped.',
     category: "i18n",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 3,

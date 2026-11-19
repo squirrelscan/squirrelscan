@@ -16,6 +16,7 @@ export const frameTitleRule: Rule = {
     category: "a11y",
     wcag: [wcag("4.1.2"), wcag("2.4.1")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 7,

@@ -1,0 +1,1 @@
+- Plugin rules can declare `findingScope` ("page" or "resource") to say whether a finding is about one page or something shared across pages, and every built-in rule now declares it. Nothing in audit output, scores or the JSON report changes. (squirrelscan/repo#1885)

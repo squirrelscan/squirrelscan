@@ -54,6 +54,7 @@ export const tableDuplicateNameRule: Rule = {
     wcagNone:
       "It flags data tables on one page that share an accessible name, and no WCAG success criterion requires table names to differ.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 3,

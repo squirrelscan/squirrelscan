@@ -294,6 +294,7 @@ export const hotlinkedRule: Rule = {
       "A hotlinked image is loaded straight from a server you do not control. It breaks when that site moves it, renames it, rate-limits it or blocks foreign referrers, it costs an extra connection to a host nothing else on the page uses, and it uses someone else's bandwidth and often their copyrighted picture. If it is a picture you are licensed to use, download it and serve it from your own domain or image CDN. If it is a badge, widget or seal that the other site updates (a launch-directory badge, a review score), embedding it from their server is how it is meant to work: leave it, or add the host to the rule's allowed_hosts option. The same goes for your own CDN or a partner you are sure of.",
     category: "images",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 4,

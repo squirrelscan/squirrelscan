@@ -31,6 +31,7 @@ export const orphanPageRule: Rule = {
       "A reachable page that is in no sitemap and linked from nowhere on your site is invisible to you but live to anyone with the URL — exactly how injected phishing/spam pages hide. Confirm you created the page; if not, treat the site as compromised: remove it, audit recently modified files, and review server logs. Legitimate hidden pages (e.g. unlisted landing pages) should at least be in your sitemap if you want them found.",
     category: "integrity",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 6,
     // Compromise detection: an ignore could hide a compromised site (#1262).

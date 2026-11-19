@@ -764,6 +764,7 @@ export const jsonSensitiveFieldsRule: Rule = {
       "Return only the fields the client needs. Serialize API responses through an explicit allowlist (a DTO, a `select` in the query, a serializer with named fields) instead of returning whole database rows, so a new column such as `password_hash` never reaches the wire by default. Never send password hashes, salts, reset or session tokens, API keys or full card numbers to a browser at all. Require authentication on endpoints that list users or customers, scope each response to the caller, and paginate. Rotate any secret or token that has been served. This check sees only what an anonymous request gets back: it cannot prove that one signed-in user can read another's records, so test authorization with two accounts as well.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
     checks: [

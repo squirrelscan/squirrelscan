@@ -56,6 +56,7 @@ export const entityWebsiteMissingRule: Rule = {
     solution: `A WebSite node is what says "these pages are one site" and what carries the site name a search engine shows above a result. Declare it once with an @id, a url, a name and a publisher, then have every WebPage and Article reference it with isPartOf: { "@id": "…" }. Without the isPartOf links the WebSite exists but nothing is attached to it, which is most of the way to not having one. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "resource",
     severity: "info",
     weight: 2,
   },

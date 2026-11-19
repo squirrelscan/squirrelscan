@@ -13,6 +13,7 @@ export const jsRedirectsRule: Rule = {
       "JavaScript files that redirect add unnecessary latency and increase page load time. Update script src attributes to point directly to the final URL. Common causes: CDN URL changes, versioned script paths, or domain migrations. Check if third-party scripts have updated their recommended URLs.",
     category: "perf",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 4,
   },

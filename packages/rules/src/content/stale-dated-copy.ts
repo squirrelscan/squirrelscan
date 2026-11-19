@@ -285,6 +285,7 @@ export const staleDatedCopyRule: Rule = {
       "Copy that promises something for a date that has passed tells a visitor, and an agent reading the page, that nobody maintains it. Rewrite the line in the past tense ('launched in March 2024'), update the date, or take the page down. For an event page, keep the page as a record: change the framing from 'register now' to 'watch the recording', or move it under an archive path or mark it noindex so it is read as history. Remove or retarget countdown widgets whose end time has passed, and drive sale and offer end dates from the same source that ends the sale. This rule reads what the copy says; content/freshness reads the date metadata.",
     category: "content",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 3,

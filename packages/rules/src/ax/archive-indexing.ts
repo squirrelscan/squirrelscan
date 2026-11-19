@@ -31,6 +31,7 @@ export const archiveIndexingRule: Rule = {
       "Make sure robots.txt does not block CCBot (Common Crawl) or ia_archiver (Internet Archive), then request a Wayback snapshot at web.archive.org/save. Common Crawl inclusion follows from being crawlable and linked; there is no manual submission, so fix crawlability and wait for the next monthly crawl.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 1,
     cloud: { service: "archive-indexing", unit: "site", creditFeature: "archive_indexing" },

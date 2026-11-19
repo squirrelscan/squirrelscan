@@ -209,6 +209,7 @@ export const expectedTypeSchemaRule: Rule = {
       "Add JSON-LD that matches what the page is. Product pages need Product (name, image, offers) for product rich results. Articles and blog posts need Article or BlogPosting (headline, author, datePublished) for article rich results. Listing and collection pages should declare CollectionPage or ItemList, and BreadcrumbList helps too. Documentation pages can use TechArticle, HowTo or FAQPage. Contact and about pages should declare ContactPage or AboutPage, and an Organization or LocalBusiness with name, url and contact details, so search engines and agents can tie the page to the business behind it. If the classifier misread the page, raise min_confidence or disable the rule for that section.",
     category: "schema",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     // A soft-404 page is an error template, so what it looks like says nothing about
     // what the site meant it to be.

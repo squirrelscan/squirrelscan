@@ -32,6 +32,7 @@ export const entityLocalBusinessPerPageRule: Rule = {
     solution: `Repeating the whole LocalBusiness block on every page is the default of most page builders and most WordPress themes, and it is the reason so many local sites disagree with themselves about their own phone number: every copy is a chance to drift. Declare the business in full once, on the home page or the contact page, with an absolute @id. On every other page emit only { "@id": "…" } where the business is referenced. The markup gets smaller and the site can no longer contradict itself. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
   },

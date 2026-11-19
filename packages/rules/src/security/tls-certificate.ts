@@ -182,6 +182,7 @@ export const tlsCertificateRule: Rule = {
       "A certificate that has expired, does not cover the hostname, is self-signed, is missing its intermediate or uses a short RSA key makes browsers show a full-page warning. Renew the certificate before it expires (automate renewal and alert on failure), issue it for every hostname the site answers on, including www, and serve the full chain with the leaf certificate. Use an RSA key of at least 2048 bits or an ECDSA key. Never deploy a staging or self-signed certificate to production.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 6,
     // A dev server or private-network host is not the delivery edge (pub#629).

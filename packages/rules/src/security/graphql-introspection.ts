@@ -123,6 +123,7 @@ export const graphqlIntrospectionRule: Rule = {
       "Turn introspection off in production. Most servers have one setting for it: `introspection: false` in Apollo Server, `NoSchemaIntrospectionCustomRule` in graphql-js validation rules, `HASURA_GRAPHQL_ENABLE_INTROSPECTION=false` or per-role introspection limits in Hasura, and `spring.graphql.schema.introspection.enabled=false` in Spring for GraphQL. Keep it on only in development or behind authentication. Turning it off hides the map, not the API: every resolver still needs its own authorization checks.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
   },

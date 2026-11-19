@@ -354,6 +354,7 @@ export const brokenExternalLinksRule: Rule = {
     // Performance; the id keeps its `links/` prefix so configs keep working.
     category: "reliability",
     scope: "site",
+    findingScope: "resource",
     // #1739: a link confirmed broken (404, 410, a host that does not resolve) fails, like an internal one;
     // links that may be broken warn, and links that cannot be verified inform.
     severity: "error",

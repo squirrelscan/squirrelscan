@@ -86,6 +86,7 @@ export const genericAnchorDensityRule: Rule = {
       "Anchor text is how readers, search engines and coding agents learn what a link leads to. When most internal anchors read 'click here' or 'read more', the site's link graph says nothing about its pages. Replace generic anchors with the name of the destination ('see the pricing plans', 'read the migration guide'), starting with the pages listed. A few generic anchors are fine; this rule only reports when the share crosses the threshold.",
     category: "links",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 3,
     // Check names by outcome class (#1741).

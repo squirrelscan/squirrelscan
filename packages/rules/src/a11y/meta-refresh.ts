@@ -95,6 +95,7 @@ export const metaRefreshRule: Rule = {
     category: "a11y",
     wcag: [wcag("2.2.1")],
     scope: "page",
+    findingScope: "page",
     // The Refresh header is a response header, which the template cluster key
     // does not constrain, so the verdict is per page.
     verdictScope: "page",

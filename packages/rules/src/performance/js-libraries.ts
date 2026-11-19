@@ -337,6 +337,7 @@ export const jsLibrariesRule: Rule = {
       "Keep JavaScript libraries updated to their latest versions. Outdated libraries may contain security vulnerabilities that attackers can exploit. Consider replacing large libraries like jQuery with modern vanilla JavaScript or smaller alternatives. Use npm audit or Snyk to monitor dependencies for vulnerabilities.",
     category: "perf",
     scope: "page",
+    findingScope: "page",
     verdictScope: "template",
     severity: "warning",
     weight: 5,

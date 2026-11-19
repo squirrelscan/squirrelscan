@@ -411,6 +411,7 @@ export const terminologyConsistencyRule: Rule = {
       "A site that says 'Sign in' on one page, 'Log in' on another and 'Login' in the footer makes it harder for visitors, and for an agent asked to 'log in', to find the control. Pick one spelling for each concept, usually the one the site already uses most, and change the minority uses to match: button labels, links, headings and body copy. The same applies to 'email' against 'e-mail', 'sign up' against 'register' or 'create account', 'FAQ' against 'FAQs' or 'Faq', and the casing of your product name. 'Login' is also a noun ('the login page'), so a deliberate noun use is fine; the rule only reports when one spelling clearly dominates.",
     category: "content",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 2,
   },

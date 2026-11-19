@@ -50,6 +50,7 @@ export const cloakingRule: Rule = {
       "A page that shows search engines (or tokened links) different content than it shows you is cloaking — almost always an injected payload or a deceptive doorway, and a likely compromise. Fetch the URL yourself with a Googlebot user-agent (e.g. `curl -A 'Googlebot' <url>`) to see the hidden content, then audit recently modified files/plugins and server-side rules that branch on user-agent or query string. Legitimate UA/geo personalization should never change the core indexable content.",
     category: "integrity",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 7,
     // Check names by outcome class (#1741).

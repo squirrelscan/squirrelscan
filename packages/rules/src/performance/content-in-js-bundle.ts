@@ -85,6 +85,7 @@ export const contentInJsBundleRule: Rule = {
       "Render static content on the server and keep it out of the client bundle. For MDX: compile and render bodies in a server function or loader, import only frontmatter on the client, and use lazy (not eager) globs for bodies. For frameworks with server components, keep content in server components. For CMS JSON, fetch it on the server rather than importing it at build time into client code.",
     category: "perf",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 6,
     optionsSchema,
