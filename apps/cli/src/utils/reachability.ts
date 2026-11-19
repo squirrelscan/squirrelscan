@@ -317,30 +317,6 @@ export async function checkReachability(
     userAgent
   );
 
-  // One reset already shows the pattern (a bot filter dropping a client that
-  // claims to be a browser), so the same headers are not tried again: the honest
-  // UA gets one attempt now. If it answers, the crawl continues as that agent.
-  if (
-    !result.reachable &&
-    scope?.fallbackOnReset === true &&
-    userAgent !== SQUIRRELSCAN_USER_AGENT &&
-    isClientBlockError(result.error)
-  ) {
-    logger.debug("reachability user-agent fallback", redactUrl(url));
-    const honest = await attemptReachability(
-      url,
-      scope,
-      requestScoped,
-      attemptTimeout(),
-      SQUIRRELSCAN_USER_AGENT
-    );
-    if (honest.reachable) {
-      return { ...honest, userAgentFallback: SQUIRRELSCAN_USER_AGENT };
-    }
-    // The site resets this client under either agent: not a transient blip.
-    return withClientBlockMessage(honest.error ? honest : result);
-  }
-
   for (let attempt = 2; attempt <= REACHABILITY_MAX_ATTEMPTS; attempt++) {
     if (result.reachable || !isTransientReachabilityError(result.error)) break;
     const delay = REACHABILITY_RETRY_BASE_DELAY_MS * 2 ** (attempt - 2);
@@ -359,6 +335,32 @@ export async function checkReachability(
       attemptTimeout(),
       userAgent
     );
+  }
+
+  // Only after the browser-UA attempts (with their transient retries) have all
+  // ended in a reset or protocol error is it a bot filter dropping a client that
+  // claims to be a browser, not a blip (pub#2140 review): a single transient
+  // reset that a retry clears never changes the crawl's agent. The honest UA
+  // then gets one attempt; if it answers, the crawl continues as that agent.
+  if (
+    !result.reachable &&
+    scope?.fallbackOnReset === true &&
+    userAgent !== SQUIRRELSCAN_USER_AGENT &&
+    isClientBlockError(result.error)
+  ) {
+    logger.debug("reachability user-agent fallback", redactUrl(url));
+    const honest = await attemptReachability(
+      url,
+      scope,
+      requestScoped,
+      attemptTimeout(),
+      SQUIRRELSCAN_USER_AGENT
+    );
+    if (honest.reachable) {
+      return { ...honest, userAgentFallback: SQUIRRELSCAN_USER_AGENT };
+    }
+    // The site resets this client under either agent: report the cause and the fix.
+    return withClientBlockMessage(honest.error ? honest : result);
   }
 
   return withClientBlockMessage(result);
