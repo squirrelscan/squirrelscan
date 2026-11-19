@@ -19,6 +19,8 @@ How it works:
 
 ## v0.0.189 (2026-11-19)
 
+A new rule, `reliability/js-errors`, reports JavaScript errors and failed runtime requests on rendered pages, and says plainly when a page has no runtime data instead of counting it as a pass. The CLI now checks a site with the same user agent its crawl uses, and when a site resets connections from browser-like clients it falls back to squirrelscan's own user agent and tells you. `squirrel feedback --json` returns a receipt, and the agent setup prompt keeps the first audit free and asks before anything that spends credits or publishes.
+
 ### Added
 
 - `squirrel feedback --json` (and the MCP `send_feedback` tool) now returns a `receipt` id once the API accepts the feedback, and stores it with the entry so the team can find it. The agent setup prompt also gets a failure-report step (#4951).
