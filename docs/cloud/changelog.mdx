@@ -18,17 +18,45 @@ Changes to squirrelscan cloud: the dashboard, cloud audits, the API and the host
 - You can switch rules on for a website or for a single run through the API and MCP, including rules its site type would normally skip.
 - A sampled audit says what it did not check, and offers the audit that would.
 - The dashboard shows the cloud version, which links to this changelog.
+- Each organization's reports have their own address on squirrel.report.
+- Technologies on the overview and the Technologies page are one list. When the audit ran a third-party scan, each vendor appears once with its icon, what it is, its homepage and where it loads, and scripts your pages load from another company are marked "Third-party script". Hosting, CDNs and font services are listed but never marked.
+- The audit page lists its findings and links each one to the issue that covers it.
+- An audit that a firewall or bot manager blocked says so on the audit.
+- A deploy hook can name a readiness URL on your site: the audit waits until it answers, and a timeout is noted on the run.
+- You can switch plans from billing settings on your existing subscription.
+- Buying credits shows the exact credits you get before checkout.
+- Every notification email has a plain-text version.
+- `list_pages` filters to pages missing a title, description, H1 or schema, pages with a duplicate title or description, and pages with text that is too long.
+- `list_issues` filters and sorts.
+- `update_issue` can change an issue's title, plan, type and labels. Each change is recorded on the issue's thread and locks that field against the next triage run, and a field someone already set is refused with `FIELD_LOCKED`.
+- `list_credit_transactions` names the website and audit each entry belongs to.
+- When you are at your website limit, `run_audit` offers a one-off audit instead.
+- A white-label report's preview card shows your organization's logo and name.
+- Option+Enter submits every form and dialog.
 
 ### Changed
 
+- The audit-complete email leads with what changed since the last audit (the score change, new, reopened and fixed issues, and your open critical and high issues), keeps that content when it was held back, and is no longer sent for a scheduled audit that changed nothing.
 - A website added from a start URL that redirects keeps the original host as an alias, and restoring an archived website checks its aliases again.
 - The editor summary takes the site's profile and detected technologies into account.
 - The editor summary no longer recommends something the site already has.
 - A `robots.txt` that blocks the whole site leads the summary.
 - A check the cloud cannot run yet is stated once as our limit, never ranked as a problem with your site.
+- Notification emails share one layout: your site's header, a headline with its highlight, the details, and every URL in a monospace font. Critical is the only solid priority badge.
+- A critical alert email states its count once, and an issue that comes back is called reopened.
+- A link behind a bot wall or a challenge page is reported as unverifiable, never as broken.
+- An audit that fails for a reason on our side is retried automatically.
+- A cloud audit checks the links an open broken-external-link issue names before the rest of its external links, so a capped audit still rechecks them.
+- Only owners and admins can change a website's audit and crawl settings, or delete or restore a configured website.
+- A webhook endpoint whose host stops resolving to a public address is paused.
+- The plan-limit notice names the next plan and links to the upgrade.
+- After checkout, a plan change shows as activating until it is ready.
+- `get_audit_status` keeps its crawl counts while an audit publishes, and says when it is publishing.
 
 ### Fixed
 
+- When a crawl stops at its page limit, the editor summary says that pages it did not reach were not checked for server errors, instead of describing it as an inbound link limit.
+- The credit balance in the sidebar updates on its own: within 30 seconds of any change, about every 10 seconds while an audit runs, once more when it ends, and as soon as you come back to the tab.
 - A cancelled plan shows as cancelling until it ends, and as ended after that.
 - Comparing two audits marks findings as resolved correctly, including site-wide checks and findings the newer audit no longer reports.
 - The sidebar Issues badge counts the same open issues the Issues list shows.
@@ -36,3 +64,14 @@ Changes to squirrelscan cloud: the dashboard, cloud audits, the API and the host
 - The summary no longer claims a TLS certificate problem when no connection could be made to check it.
 - The entity map's missing-id problem lists only entities that appear on more than one page, and says when part of the graph could not be built.
 - A refund in your credit history is linked to the audit it belongs to.
+- Pause links appear only in emails, and no longer in API or MCP responses.
+- A critical alert for one website no longer waits behind another website's alert.
+- One website's audit-complete and digest emails no longer wait behind another website's.
+- Audit failure notifications no longer show internal error text.
+- Billing no longer shows a credit reset date that has passed or will not come.
+- A payment failure email is sent only while the payment is still failing, not after it recovered.
+- A broken-link issue stays open while some of its links could not be checked.
+- A scheduled audit that would go over the monthly credit grant says so, and how to fix it.
+- A start URL on a local or private network explains why it cannot be audited.
+- An audit that ran without rendering and stopped at its time limit no longer suggests upgrading for rendering.
+- The Run audit dialog and crawl settings fit on a phone screen.
