@@ -1,1 +1,0 @@
-- The agent skills served over MCP (the `io.modelcontextprotocol/skills` extension of `squirrel mcp` and the hosted server) now cover `report --group`, `group:<id>` in rule filters, the 24 hour script cache and the `ISSUE_REPLACED` error with duplicate issue handling, and carry the new skill versions: squirrelscan 2.2, audit-website 3.2 (squirrelscan/repo#4912).
