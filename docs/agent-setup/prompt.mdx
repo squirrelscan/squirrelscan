@@ -24,10 +24,15 @@ step 7.
   step: tell them to run `squirrel auth login` themselves.
 - Never pass `--yes` (`-y`). It skips squirrelscan's confirmation prompts and
   lets a cloud audit spend credits up to the account's per-audit limit.
-- Get the person's explicit OK before anything that spends credits or leaves
-  their machine: a signed-in cloud audit, publishing a report, or turning on
-  recurring audits. Before a cloud audit, show them the credit estimate the CLI
-  prints and the balance from `squirrel credits`, then wait for a yes.
+- Get the person's explicit yes before you run anything that spends credits or
+  leaves their machine: a signed-in audit without `--offline`, publishing a
+  report, or turning on recurring audits. When an agent runs it, the CLI does
+  not pause to ask: a signed-in audit starts spending credits and publishes as
+  soon as it runs. So before a cloud audit, tell the person the most it can cost
+  (the base charge, the per-page charge for every page up to the page cap of the
+  level you will use, and the external link checks if they are on, from
+  [Credits](https://docs.squirrelscan.com/cloud/credits)) and their balance from
+  `squirrel credits`, then wait for a yes.
 - Keep what is already set up. Do not overwrite an existing `squirrel.toml`,
   and do not reinstall a CLI that works: update it.
 - Audit sites the person owns or is allowed to test. Probing security checks
@@ -62,11 +67,12 @@ curl -fsSL --connect-timeout 10 --max-time 120 "https://install.squirrelscan.com
 ```
 
 If you would rather read the script before running it, download it from the
-same URL, read it, then run it. Use no other source:
+same URL, read it (with `cat` or your file tool, not an interactive pager), then
+run it. Use no other source:
 
 ```bash
 curl -fsSL --connect-timeout 10 --max-time 120 "https://install.squirrelscan.com/install.sh?source=agent" -o install.sh
-less install.sh
+cat install.sh
 bash install.sh
 ```
 
