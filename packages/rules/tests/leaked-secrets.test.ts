@@ -1334,7 +1334,7 @@ describe("evidence context redacts every nearby secret (repo#2215)", () => {
       expect(ctx).not.toContain(pw);
       expect(ctx).not.toContain(pw.slice(4));
       expect(ctx).toContain(`STRIPE_KEY="sk_liv`);
-      expect(ctx).toContain("DEBUG=1");
+      expect(ctx).toContain("DEBUG=*");
     }
   });
 
@@ -1414,13 +1414,13 @@ describe("evidence context masks short quoted values and survives a stray apostr
 
   test("a 7-character JSON password after its label is starred out", async () => {
     const pw = ["Zx9!", "qT4"].join("");
-    expect(await ctxOf(`{"key":"${key}","password":"${pw}"}`)).toBe(`{"***":"${masked}","********":"*******"}`);
+    expect(await ctxOf(`{"key":"${key}","password":"${pw}"}`)).toBe(`{"***"*"${masked}"*"********"*"*******"}`);
   });
 
   test("a 7-character value after => is starred out", async () => {
     const pw = ["Sum", "mer1"].join("");
     expect(await ctxOf(`$cfg = ['stripe' => '${key}', 'db_pass' => '${pw}'];`)).toBe(
-      `$cfg = ['******' => '${masked}', '*******' => '*******'];`
+      `$cfg = *'******' => '${masked}', '*******' => '*******'];`
     );
   });
 
@@ -1490,5 +1490,162 @@ describe("evidence context masks short quoted values and survives a stray apostr
       }
     }
     expect(checked).toBe(40 * 3 * styles.length * 2);
+  });
+});
+
+// pub#1959 review round 2: a literal that is not an operand and holds code punctuation showed in full after a stray quote
+// (`|| 'fallback'`, `echo '...'`, `-p'...'`), an unquoted value was cut at the first `;` or `,`, a 1 to 3 character value
+// was kept, and a letters-only run after a label with no `=` or `:` was kept. Every expectation is the full context.
+describe("evidence context round 2: punctuation literals, unquoted values, short values and bare labels (repo#2215)", () => {
+  const key = ["sk", "live", "abcdefghijklmnopqrstuvwx12"].join("_"); // assembled so the fixture is not a literal secret
+  const masked = `sk_liv${"*".repeat(20)}wx12`;
+  const Q = `"${key}"`;
+  const D = "// don't log this\n";
+  const ctxOf = async (content: string) => {
+    const { evidenceContext } = await import("../src/security/leaked-secrets");
+    return evidenceContext(content, content.indexOf(key), key.length, key);
+  };
+  const stars = (n: number) => "*".repeat(n);
+
+  test.each([
+    ["a bundle regex with quotes, then || 'fallback'", `var k=${Q};var r=/['"]/g;var pw=e.PW||'Hunt&er;x';`, `var k="${masked}";var r=**'${stars(18)}'${stars(9)}'*`],
+    ["a stray apostrophe, then || 'fallback'", `var k=${Q}; ${D}var pw = env.PW || 'Hunt&er;x';`, `var k="${masked}"; // don'${stars(20)}'${stars(9)}'*`],
+    ["a stray apostrophe, then && 'x'", `var k=${Q}; ${D}ok && 'Hunt&er;x';`, `var k="${masked}"; // don'${stars(17)}'${stars(9)}'*`],
+    ["a stray apostrophe, then echo 'x'", `var k=${Q}; ${D}echo 'Hunt;er2pass'`, `var k="${masked}"; // don'${stars(16)}'${stars(12)}'`],
+    ["a stray apostrophe, then mysql -p'x'", `var k=${Q}; ${D}cmd = mysql -u root -p'S3cr;tPw' db;`, `var k="${masked}"; // don'${stars(20)}'${stars(8)}'****`],
+    ["an apostrophe in HTML text, then login 'x'", `<a data-k=${Q}>it's</a><code>login 'Pw;9xQ!'</code>`, `<a data-k="${masked}****'${stars(17)}'${stars(7)}'*******`],
+    ["|| 'fallback', then a stray apostrophe before the match", `x = cond || 'Hunt&er;x'; // don't\nvar k=${Q};`, `${stars(12)}'${stars(9)}'********'t var k="${masked}";`],
+  ])("a punctuation literal in a non-operand place is starred out: %s", async (_name, content, expected) => {
+    const ctx = await ctxOf(content);
+    expect(ctx).toBe(expected);
+    for (const secret of ["Hunt&er;x", "Hunt;er2pass", "S3cr;tPw", "Pw;9xQ!"]) expect(ctx).not.toContain(secret.slice(-4));
+  });
+
+  test.each([
+    ["DB_PASS=Tr0ub;4dor&x", `STRIPE=${Q}\nDB_PASS=Tr0ub;4dor&x`, `STRIPE="${masked}" ${stars(20)}`],
+    ["PASS=Xy;kq,Lm2", `var k=${Q};\nPASS=Xy;kq,Lm2`, `var k="${masked}"; PASS=${stars(9)}`],
+    ["password: Xy;kq,Lmzz", `stripe: ${Q}\npassword: Xy;kq,Lmzz`, `stripe: "${masked}" password: ${stars(10)}`],
+  ])("an unquoted value is starred to the next whitespace, punctuation and all: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test("an unquoted value of 1 to 3 characters is starred out", async () => {
+    expect(await ctxOf(`var k=${Q}; pin=482; cvv=91; pw:Ab9`)).toBe(`var k="${masked}"; pin=**** cvv=*** pw:***`);
+  });
+
+  test.each([
+    ["X-Api-Key abcdEFGHijklMNOP", `var k=${Q}; X-Api-Key abcdEFGHijklMNOP`, `var k="${masked}"; X-Api-Key ${stars(16)}`],
+    ["// password qwertyuiopasdfghjk", `var k=${Q}; // password qwertyuiopasdfghjk\n`, `var k="${masked}"; // password ${stars(18)} `],
+  ])("a 12+ character run after a secret's label with no = or : is starred out: %s", async (_name, content, expected) => {
+    expect(await ctxOf(content)).toBe(expected);
+  });
+
+  test("prose after a label keeps its words", async () => {
+    const content = `var k=${Q}; // the password field is required\n`;
+    expect(await ctxOf(content)).toBe(`var k="${masked}"; // the password field is required `);
+  });
+
+  // The reviewer's probes (redact4.ts, redact5.ts) against pub#1959 at 94ca8926 and at this fix, ported case for case:
+  // none of the listed fragments may show in the finding's context.
+  const PK = ["sk", "live", "Zq8vT3mP9wX2kL7nR4bY6cJ1"].join("_");
+  const PQ = `"${PK}"`;
+  const probes: Array<[string, string, string[], "inline-script" | "html"]> = [
+    ["label: 'p;ss!w0rd'", `var k=${PQ};\nvar o={password: 'p;ss!w0rd'};`, ["p;ss!w0rd", "ss!w0rd"], "inline-script"],
+    ['"pwd":"a,b;c"', `{"k":${PQ},"pwd":"a,b;c"}`, ["a,b;c"], "inline-script"],
+    ['pass => "x(y)z"', `$c=['k'=>${PQ}, 'pass' => "x(y)z"];`, ["x(y)z"], "inline-script"],
+    ["desync label: 'p;ss!w0rd'", `var k=${PQ}; ${D}var o={password: 'p;ss!w0rd'};`, ["p;ss!w0rd", "ss!w0rd"], "inline-script"],
+    ['desync pass => "x(y)z"', `$c=['k'=>${PQ}]; ${D}$d=['pass' => "x(y)z"];`, ["x(y)z"], "inline-script"],
+    ["desync sshpass -p 'Pa;ss'", `var k=${PQ}; ${D}run("sshpass -p 'Pa;ssw'");`, ["Pa;ssw"], "inline-script"],
+    ["desync mysql -p'S3cr;t'", `var k=${PQ}; ${D}cmd = mysql -u root -p'S3cr;tPw' db;`, ["S3cr;tPw", "S3cr"], "inline-script"],
+    ["desync || 'a&b;c'", `var k=${PQ}; ${D}var pw = env.PW || 'Hunt&er;x';`, ["Hunt&er;x"], "inline-script"],
+    ["desync && 'x'", `var k=${PQ}; ${D}ok && 'Hunt&er;x';`, ["Hunt&er;x"], "inline-script"],
+    ["desync echo 'a;b'", `var k=${PQ}; ${D}echo 'Hunt;er2pass'`, ["Hunt;er2pass", "er2pass"], "inline-script"],
+    ["desync html text", `<a data-k=${PQ}>it's</a><code>login 'Pw;9xQ!'</code>`, ["Pw;9xQ!"], "html"],
+    ["template with apostrophe", "var k=`" + PK + "`; var m=`Don't share ${user}: p;ss!w0rd`;", ["p;ss!w0rd"], "inline-script"],
+    ["template nested quote", "var k=" + PQ + "; var m=`pw=${'Zx9;q'}`;", ["Zx9;q"], "inline-script"],
+    ["backtick after desync", `var k=${PQ}; ${D}x = run \`Hu;nter\`;`, ["Hu;nter"], "inline-script"],
+    ["multiline json", `{\n  "stripe": ${PQ},\n  "db": {\n    "user": "admin",\n    "pass": "a;b,c"\n  }\n}`, ["a;b,c"], "inline-script"],
+    ["multiline json apostrophe value", `{\n  "stripe": ${PQ},\n  "note": "it's",\n  "pass": "Hu;nt,er"\n}`, ["Hu;nt,er"], "inline-script"],
+    ["escaped quote in secret", `var k=${PQ}; var pw="ab\\"c;d";`, ["c;d", 'ab\\"c'], "inline-script"],
+    ["escaped apostrophe in secret", `var k=${PQ}; var pw='it\\'s;pw';`, ["s;pw"], "inline-script"],
+    ["json in string", `var k=${PQ}; var cfg="{\\"pass\\":\\"Zx;9q\\"}";`, ["Zx;9q"], "inline-script"],
+    ["url with apostrophe then pw", `var k=${PQ}; var u="https://ex.com/o'brien"; login('Hu;nt');`, ["Hu;nt"], "inline-script"],
+    ["far side of url, label", `var k=${PQ}; fetch("https://api.example.com/v1/it's"); pw = 'a;b';`, ["a;b"], "inline-script"],
+    ["comment then unquoted", `var k=${PQ}; // don't\n PASS = Xy7;kq,Lm2`, ["Xy7;kq,Lm2", "kq,Lm2", "Lm2"], "inline-script"],
+    ["unquoted yaml-ish", `stripe: ${PK}\npassword: Xy;kq,Lmzz`, ["Xy;kq,Lmzz", "kq,Lmzz", "Lmzz"], "inline-script"],
+    ["unquoted env ;", `STRIPE=${PK}\nDB_PASS=Tr0ub;4dor&x`, ["4dor&x", "Tr0ub;4dor"], "inline-script"],
+    ["unquoted after =>", `$c = [k => ${PK}, pass => hunterpass];`, ["hunterpass"], "inline-script"],
+    ["label space no digit", `var k=${PQ}; X-Api-Key abcdEFGHijklMNOP`, ["abcdEFGHijklMNOP"], "inline-script"],
+    ["quoted match, unquoted ; value", `var k=${PQ};\nPASS=Xy7;kq,Lm2`, ["Xy7;kq,Lm2", "kq,Lm2", "Lm2", "Xy7"], "inline-script"],
+    ["quoted match, yaml ; value", `stripe: ${PQ}\npassword: Xy;kq,Lmzz`, ["kq,Lmzz", "Lmzz"], "inline-script"],
+    ["quoted match, env ; value 5+", `STRIPE="${PK}"\nDB_PASS=Tr0ub;4dor&x`, ["4dor&x"], "inline-script"],
+    ["in sync || fallback", `var k=${PQ}; var pw = env.PW || 'Hunt&er;x';`, ["Hunt&er;x"], "inline-script"],
+    ["bundle regex quote then ||", `var k=${PQ};var r=/['"]/g;var pw=e.PW||'Hunt&er;x';`, ["Hunt&er;x"], "inline-script"],
+    ["1-3 char unquoted", `var k=${PQ}; pin=482; pw:Ab9`, ["482", "Ab9"], "inline-script"],
+    ["4 char unquoted", `var k=${PQ}; pin=4821`, ["4821"], "inline-script"],
+    ["backward desync", `x = cond || 'Hunt&er;x'; // don't\nvar k=${PQ};`, ["Hunt&er;x"], "inline-script"],
+  ];
+  test.each(probes)("reviewer probe: %s", async (_name, content, secrets, loc) => {
+    const { scanContent } = await import("../src/security/leaked-secrets");
+    const found = scanContent(content, loc, "https://example.com/a.js");
+    const f = found.find((x) => /Stripe/.test(x.type));
+    expect(f?.context).toBeDefined();
+    expect(f?.context).toContain(`${PK.slice(0, 6)}${stars(20)}${PK.slice(-4)}`);
+    expect(secrets.filter((s) => f?.context?.includes(s))).toEqual([]);
+  });
+
+  // Non-operand placements, punctuation-bearing secrets, and a stray apostrophe between the secret and the match on the
+  // before side. A secret of 3 or more characters must show no 3-character run; a 1 or 2 character secret is checked
+  // exactly: the context must equal the one where the secret's characters are stars.
+  test("no part of a generated secret shows in a non-operand place, after or between a stray apostrophe (property)", async () => {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|";
+    let seed = 1959;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+    const placements: Array<(s: string) => string> = [
+      (s) => `x = env.PW || '${s}';`,
+      (s) => `ok && '${s}';`,
+      (s) => `echo '${s}'`,
+      (s) => `mysql -u root -p'${s}' db`,
+      (s) => `sshpass -p '${s}' ssh host`,
+      (s) => `PASS=${s}\n`,
+      (s) => `password: ${s}\n`,
+    ];
+    let checked = 0;
+    for (let len = 1; len <= 30; len++) {
+      for (let round = 0; round < 3; round++) {
+        // Every secret carries one of `; , ( ) & |`, so the code-punctuation path is always taken.
+        const punct = ";,()&|"[next() % 6] as string;
+        const chars = Array.from({ length: len }, () => alphabet[next() % alphabet.length] as string);
+        chars[next() % len] = punct;
+        const secret = chars.join("");
+        for (const place of placements) {
+          const variants = (s: string) => [
+            `var k="${key}"; ${place(s)}`,
+            `var k="${key}"; // don't ship\n${place(s)}`,
+            `${place(s)} var k="${key}";`,
+            `${place(s)} // don't ship\nvar k="${key}";`,
+          ];
+          const real = variants(secret);
+          const starred = variants(stars(len));
+          for (let v = 0; v < real.length; v++) {
+            const ctx = await ctxOf(real[v] as string);
+            expect(ctx).toContain(masked);
+            if (len <= 2) {
+              expect(ctx).toBe(await ctxOf(starred[v] as string));
+            } else {
+              for (let i = 0; i + 3 <= len; i++) {
+                const frag = secret.slice(i, i + 3);
+                if (ctx?.includes(frag)) throw new Error(`"${frag}" of ${JSON.stringify(secret)} shows in ${JSON.stringify(ctx)}`);
+              }
+            }
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBe(30 * 3 * 7 * 4);
   });
 });
