@@ -12,7 +12,7 @@ Every failed audit names its cause. The cause appears as a short sentence in the
 
 ## Blocked is not failed
 
-If your site actively refused the crawler on the audited address, with a `401`, a `403`, a rate limit (`429`, `430`, or a `503` carrying `Retry-After`) or a bot protection challenge served as a `503`, and no page could be audited, the audit is marked **blocked**, not failed. That is a separate state with its own guidance: let the squirrelscan crawler through your WAF or bot protection without switching the protection off (see [bot protection or WAF challenge](#waf-challenge) and [Firewall and WAF exceptions](/cloud/firewall)), get it past a login (see [sign-in page or access gateway](#access-gateway)), or run the CLI from a trusted network. A blocked audit is refunded the same way as a failed one.
+If your site actively refused the crawler on the audited address, with a `401`, a `403`, a rate limit (`429`, `430`, or a `503` carrying `Retry-After`) or a bot protection challenge served as a `503`, and no page could be audited, the audit is marked **blocked**, not failed. That is a separate state with its own guidance: let the squirrelscan crawler through your WAF or bot protection without switching the protection off (see [bot protection or WAF challenge](#waf-challenge), [Firewall and WAF exceptions](/cloud/firewall) and, for the CLI and MCP too, [Firewalls, bot protection and custom headers](/guides/firewall-and-bot-protection)), get it past a login (see [sign-in page or access gateway](#access-gateway)), or run the CLI from a trusted network. A blocked audit is refunded the same way as a failed one.
 
 The audit is also **blocked** when the audited page itself was answered with a challenge or block page from a WAF or bot manager, even if other pages were fetched. Pages fetched past a refused front door describe the provider's rules, not your site, so no score is published. See [blocked by a WAF or bot manager](#blocked-by-waf).
 
@@ -244,6 +244,8 @@ A valid certificate prints `ok` and `Verify return code: 0 (ok)`. A failure prin
 ### Connection refused or reset \{#connection\}
 
 **What the crawler observed.** No HTTP response: the connection was refused (`ECONNREFUSED`), reset (`ECONNRESET`), closed before a response arrived, or the network had no route to the host (`EHOSTUNREACH`, `ENETUNREACH`). With Rendering Off the request is retried, up to 3 attempts. A server that is down does this, and so does a firewall that drops requests from networks it does not recognise.
+
+**A CLI audit that fails with `ECONNRESET` or an HTTP/2 protocol error** may be a site that resets browser-like clients. The CLI retries once with its honest user agent, and [a site that resets browser-like clients](/guides/firewall-and-bot-protection#resets-browser-like-clients) has the manual fix.
 
 **How it is classified.** `connection`. When the hostname resolves to an address outside the public internet, the cause is [private address](#private-address) instead. When the follow-up DNS lookup finds the name does not exist, it is [DNS](#dns).
 

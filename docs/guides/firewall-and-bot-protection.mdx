@@ -1,0 +1,172 @@
+---
+title: "Firewalls, bot protection and custom headers"
+sidebarTitle: "Firewalls, bot protection and custom headers"
+description: "Get cloud, CLI and MCP audits past a WAF, bot protection, an IP allowlist or an access gateway, and fix sites that reset browser-like clients"
+icon: "shield-check"
+---
+
+A WAF, bot protection, an IP allowlist or an access gateway can turn an audit into a wall of `403`s, challenge pages, redirects to a sign-in page or dropped connections. The fix is the same few exceptions whichever way you audit. What changes is where you set them.
+
+## Where you set it \{#where-you-set-it\}
+
+| How you audit | Where requests come from | Where to set the exception |
+|---|---|---|
+| Cloud audit from the dashboard, the API or a schedule | squirrelscan's cloud | The website's **Settings → Crawl → Custom request headers** in the [dashboard](/dashboard/crawl-settings#custom-request-headers) |
+| Hosted MCP audit | squirrelscan's cloud | The same website settings. A hosted MCP audit runs in the cloud and uses the website's custom request headers, as dashboard and scheduled audits do |
+| `squirrel audit` in a terminal, in CI, or driven by a coding agent over the CLI | Your machine or CI runner | `squirrel.toml` under `[crawler]`, or the `-H` and `--header-host` flags |
+
+The cloud side of this is set out in full on [Firewall and WAF exceptions](/cloud/firewall), which stays the cloud reference. This guide puts the cloud setting and the CLI setting next to each other.
+
+<Note>
+  The CLI flag for a header is `-H 'Name: Value'` (repeatable), and the TOML form is `[crawler] headers = { "Name" = "value" }`. A flag with the same name as a TOML entry wins. Values are treated as secrets: the audit preamble shows header names only. See [`headers`](/configuration/crawler#headers).
+</Note>
+
+## Which exception fits \{#which-exception-fits\}
+
+| In front of the site | Exception |
+|---|---|
+| A WAF rule, bot protection or rate limit | [A secret request header](#secret-header) and a rule that skips the protection for it |
+| A platform that verifies signed crawlers | [Web Bot Auth](#web-bot-auth) |
+| A firewall that only matches IP addresses | [IP allowlisting](#ip-allowlisting) |
+| Cloudflare Access | [A service token](#cloudflare-access) |
+| Vercel Authentication or Password Protection | [The protection bypass header](#vercel-protection-bypass) |
+| HTTP basic auth | [An `Authorization` header](#http-basic-auth) |
+| Okta, Entra ID, Google IAP and other sign-in gateways | [No header route](#other-zero-trust-gateways) |
+| The connection is reset before any response | [A site that resets browser-like clients](#resets-browser-like-clients) |
+
+## A secret request header and a WAF skip rule \{#secret-header\}
+
+The most precise exception: a header whose value only you know, and a firewall rule that skips the protection when it sees that exact value.
+
+| | Setting |
+|---|---|
+| **Cloud** | **Settings → Crawl → Custom request headers**: add `X-Squirrelscan-Auth` with a long random value and select **Save headers** |
+| **CLI** | `[crawler]` in `squirrel.toml`, or `-H` for a CI secret (below) |
+| **MCP** | Hosted MCP audits use the website's cloud setting. A CLI-driven agent uses `squirrel.toml` or `-H` |
+
+```toml
+[crawler]
+headers = { "X-Squirrelscan-Auth" = "your-long-random-value" }
+```
+
+```bash
+squirrel audit https://example.com -H "X-Squirrelscan-Auth: $SQUIRREL_AUTH"
+```
+
+The firewall rule is the same for every kind of audit. The Cloudflare, nginx and other-WAF rules are on [Firewall and WAF exceptions](/cloud/firewall#option-1-a-secret-request-header-recommended). Prefer `-H` with a CI secret over committing the value to a shared `squirrel.toml`.
+
+## Web Bot Auth \{#web-bot-auth\}
+
+If your platform verifies crawlers by signature (Shopify, Cloudflare verified bots), the three signed headers go in the same place as a secret header. See [Web Bot Auth](/guides/web-bot-auth) for what each header contains.
+
+| | Setting |
+|---|---|
+| **Cloud** | Add the signed headers under **Settings → Crawl → Custom request headers** |
+| **CLI** | `headers = { "Signature-Agent" = "...", "Signature-Input" = "...", "Signature" = "..." }`, or three `-H` flags |
+| **MCP** | Hosted: the website's cloud setting. CLI-driven: `squirrel.toml` or `-H` |
+
+## IP allowlisting \{#ip-allowlisting\}
+
+| | What to allow |
+|---|---|
+| **Cloud** | There is no dedicated squirrelscan address. Cloud audits leave from Cloudflare's shared egress addresses, so allow [Cloudflare's published ranges](https://www.cloudflare.com/ips/) and pair the rule with a secret header, as on [Firewall and WAF exceptions](/cloud/firewall#option-3-ip-allowlisting) |
+| **CLI** | Your own address. The CLI fetches your site from your machine or CI runner, so allow that machine's public IP. No `squirrel.toml` setting is involved |
+| **MCP** | Hosted: the cloud ranges. CLI-driven: your own address |
+
+Datacenter and CI addresses are challenged more often than a laptop, so a CI audit may need its runner's address allowed even when a local run works.
+
+## Cloudflare Access \{#cloudflare-access\}
+
+Access redirects a request with no valid session to `<team-name>.cloudflareaccess.com`. Create a service token and a **Service Auth** policy in Cloudflare (the steps are on [Firewall and WAF exceptions](/cloud/firewall#cloudflare-access)), then send the token as two headers:
+
+| | Setting |
+|---|---|
+| **Cloud** | Add `CF-Access-Client-Id` and `CF-Access-Client-Secret` under **Settings → Crawl → Custom request headers** |
+| **CLI** | `squirrel.toml` (below), or two `-H` flags |
+| **MCP** | Hosted: the cloud setting. CLI-driven: `squirrel.toml` or `-H` |
+
+```toml
+[crawler]
+headers = { "CF-Access-Client-Id" = "<client-id>", "CF-Access-Client-Secret" = "<client-secret>" }
+```
+
+Audit the exact `https://` origin Access protects. A redirect to another origin (including `http://` to `https://`, or the apex to `www`) removes the headers before Access sees them. If Access also protects an assets host, name it in [`header_hosts`](#header-scoping).
+
+## Vercel protection bypass \{#vercel-protection-bypass\}
+
+Create a secret under **Protection Bypass for Automation** in the Vercel project (see [Firewall and WAF exceptions](/cloud/firewall#vercel-deployment-protection)), then send it as `x-vercel-protection-bypass`. Leave out `x-vercel-set-bypass-cookie`.
+
+| | Setting |
+|---|---|
+| **Cloud** | Add `x-vercel-protection-bypass` under **Settings → Crawl → Custom request headers** |
+| **CLI** | `headers = { "x-vercel-protection-bypass" = "<secret>" }` under `[crawler]`, or `-H "x-vercel-protection-bypass: <secret>"` |
+| **MCP** | Hosted: the cloud setting. CLI-driven: `squirrel.toml` or `-H` |
+
+## HTTP basic auth \{#http-basic-auth\}
+
+The value is `Basic ` followed by the Base64 of `username:password`. Encode it with `printf '%s' 'username:password' | base64`, so no newline is included, and use an account that exists only for the audit.
+
+| | Setting |
+|---|---|
+| **Cloud** | Add `Authorization` with the value `Basic <base64-value>` under **Settings → Crawl → Custom request headers** |
+| **CLI** | `headers = { "Authorization" = "Basic <base64-value>" }` under `[crawler]`, or `-H "Authorization: Basic <base64-value>"` |
+| **MCP** | Hosted: the cloud setting. CLI-driven: `squirrel.toml` or `-H` |
+
+## Other zero-trust gateways \{#other-zero-trust-gateways\}
+
+A gateway that only offers an interactive sign-in (Okta, Auth0, Microsoft Entra ID, Amazon Cognito, OneLogin, Clerk) or short-lived tokens (Google Identity-Aware Proxy) has no header you can save, in the cloud or in `squirrel.toml`.
+
+| | What to do |
+|---|---|
+| **Cloud** | Add an exception in your own application or proxy that lets a secret header through, then send that header as in [the secret header section](#secret-header). Otherwise a cloud audit cannot pass the gateway |
+| **CLI** | Run `squirrel audit` from a network the gateway already admits (an office network or VPN), or audit a local build of the site: `squirrel audit http://localhost:3000`. See [local audits](/guides/local-audits-cli) |
+| **MCP** | Hosted: as for cloud. CLI-driven: as for the CLI |
+
+A signed-in CLI audit sends page renders to the cloud browser, which comes from squirrelscan's network. Add `--http` so every page is fetched from yours.
+
+## A site that resets or refuses browser-like clients \{#resets-browser-like-clients\}
+
+Some servers drop any connection whose request claims to be a browser but whose TLS handshake is not a browser's. There is no HTTP status to read: the audit fails before it crawls anything.
+
+**The symptom.** A CLI audit stops with an error such as `Cannot reach https://example.com: ECONNRESET`, a socket closed message, or an HTTP/2 protocol error.
+
+**What the CLI does.** With no `user_agent` configured, the CLI treats a reset or protocol error as a possible bot filter only after its browser-agent attempts, with their transient retries, have all failed. It then makes one attempt as `SquirrelScan/2.0 (+https://squirrelscan.com)`. If the site answers that, the whole crawl runs as that agent, the CLI prints one line saying so, and the report says so too (`userAgentFallback` in the JSON report). The honest agent is not pinned: the next run probes with a browser agent again. If the site resets the honest agent as well, the error reads `connection reset by the site: it may block browser-like clients`.
+
+**A configured agent is never replaced.** A `user_agent` in `[crawler]`, or a `User-Agent` in `[crawler] headers` or `-H`, is used as set and the fallback never runs.
+
+**The manual fix.** Set the agent yourself to one the site accepts:
+
+```toml
+[crawler]
+user_agent = "SquirrelScan/2.0 (+https://squirrelscan.com)"
+```
+
+If a firewall rule matches on the agent, allow `SquirrelScan` there, or use a [secret header](#secret-header) instead. The fallback is a CLI behaviour. Cloud audits have no custom user-agent setting: see [what squirrelscan cloud looks like in your logs](/cloud/firewall#what-squirrelscan-cloud-looks-like-in-your-logs). The full reference is [`user_agent`](/configuration/crawler#user_agent).
+
+## Header scoping \{#header-scoping\}
+
+Custom headers are credentials, so both the cloud and the CLI send them to as few places as they can.
+
+**CLI (`squirrel audit`)**
+
+- Headers go to the audited origin only: the scheme, host and port of the start URL after its redirects. `http://` when you audit `https://`, another port, or another host is requested without them.
+- A subdomain such as `cdn.example.com` gets them only when you name it in `header_hosts` (or pass `--header-host`). A name matches over `https:`. Prefix `http://` to allow plain http.
+- Status checks of scripts, stylesheets and fonts on other hosts never carry them.
+- On a redirect to another origin, every header is dropped except the generic client headers `User-Agent`, `Accept`, `Accept-Language`, `Accept-Encoding` and `Upgrade-Insecure-Requests`. Never put a secret in one of those.
+- A signed-in CLI audit renders pages in the cloud browser, and those renders never carry `-H` or `[crawler] headers`: the CLI sends the render service the URLs, a timeout and a run id. Use `--http` when the site is only reachable with a header.
+
+```toml
+[crawler]
+headers = { "X-Api-Key" = "..." }
+header_hosts = ["assets.example.com"]
+```
+
+**Cloud audits** (cloud behaviour, per the existing [Firewall and WAF exceptions](/cloud/firewall#how-custom-request-headers-are-sent))
+
+- A website's headers are used only when the audit crawls that website's own host, with or without `www.`. A subdomain is its own website with its own headers.
+- Plain HTTP requests carry them. The cloud browser carries them to the rendered page's own origin only. See [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers) for the request-by-request table.
+- Status checks of resources on other hosts, and external link checks, never carry them.
+
+## Check that it worked \{#check-that-it-worked\}
+
+Request the audited address with the same headers using `curl -sS -o /dev/null -D - -H 'Name: value' <url>`. It should answer `200` with no `location` on a sign-in host. Then run the audit and check that the start page has your page's title, not a sign-in or challenge page. For a failed cloud audit, the [verification checklist](/cloud/firewall#verification-checklist) and [failed audits](/guides/failed-audits) say what each outcome means.

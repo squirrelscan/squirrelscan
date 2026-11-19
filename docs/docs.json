@@ -104,7 +104,8 @@
               "guides/badges",
               "guides/browser-rendering",
               "guides/rate-limited-hosts", "guides/shopify-and-storyblok",
-              "guides/web-bot-auth"
+              "guides/web-bot-auth",
+              "guides/firewall-and-bot-protection"
             ]
           }
         ]
