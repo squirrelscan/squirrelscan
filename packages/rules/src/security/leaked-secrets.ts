@@ -2611,13 +2611,26 @@ const NEARBY_ASSIGNED_RE = /((?:=>|=|:(?!\/\/))\s*)([^\s"'`=:>][^\s"'`]*)/g;
 // `pin` must be the whole word: `spinner` and `pinned` are not labels.
 const NEARBY_LABELLED_RE =
   /\b((?:x-)?api[-_ ]?key|access[-_]?key|secret[-_]?key|private[-_]?key|client[-_]?secret|secret|password|passwd|passphrase|passcode|pwd|pass|token|credentials?|pin\b)(\s+)([^\s"'`]{12,})/gi;
-// A key before `=`, `:` or `=>` whose name holds a secret's label as a whole segment (`DB_PASSWORD`, `x-api-key`, `apiKey`,
-// `pin`, but not `passport`, `spinner` or `stripeKey`): its unquoted value is starred to the end of the line, so a
-// passphrase with spaces (`password: correct horse battery staple`) shows none of its words. Read on the raw text, before
-// whitespace is collapsed, since a collapsed snippet has no line ends.
-const LABELLED_KEY_LINE_RE = sharedRegex(/(^|[^\w$.-])([A-Za-z_$][\w$.-]*)([ \t]*(?:=>|=|:)[ \t]*)(?=[^\s"'`])/gm);
+// A key before `=`, `:` or `=>` whose name holds a secret's label (`DB_PASSWORD`, `x-api-key`, `apiKey`, `PASSWORD2`,
+// `db_pass_1`, `"password"`, `pin`, but not `passport`, `spinner` or `stripeKey`): its unquoted value is starred to the end of
+// the line, so a passphrase with spaces (`password: correct horse battery staple`) shows none of its words, and so is every
+// following line indented deeper than the key's, which holds a YAML block (`password: |`), folded (`>`) or continued plain
+// value. Read on the raw text, before whitespace is collapsed, since a collapsed snippet has no line ends.
+const LABELLED_KEY_LINE_RE = sharedRegex(
+  /(^|[^\w$.-])(["']?)([A-Za-z_$][\w$.-]*)\2([ \t]*(?:=>|=(?![>=])|:)[ \t]*)(?=[^\s"'`]|[\r\n]|$)/gm,
+);
+// A secret's label as a whole segment of a key, with an optional number after it (`PASSWORD2`, `db_pass_1`). The long labels
+// count anywhere in the key (`passwordless`, `userpassword`).
 const LABEL_SEGMENT_RE =
-  /(?:^|[_.$-])(?:api[-_]?key|access[-_]?key|secret[-_]?key|private[-_]?key|client[-_]?secret|secret|password|passwd|passphrase|passcode|pwd|pw|pass|token|credentials?|pin)(?=$|[_.$-])/;
+  /(?:^|[_.$-])(?:api[-_]?key|access[-_]?key|secret[-_]?key|private[-_]?key|client[-_]?secret|secret|pwd|pw|pass|token|credentials?|pin)\d*(?=$|[_.$-])|password|passwd|passphrase|passcode/;
+// A last segment that names something about a secret, not the secret itself (`password_hint`, `token_url`, `pin_length`).
+const NOT_A_SECRET_SEGMENT_RE =
+  /[_.$-](?:hint|label|placeholder|prompt|title|field|policy|length|min|max|required|enabled|visible|type|url|path|file|name|id|expiry|expires|ttl)$/;
+// An XML element: its text is starred when its tag name is a secret's label (`<password>correcthorsebattery</password>`).
+const LABELLED_ELEMENT_RE = sharedRegex(/<([A-Za-z_][\w.:-]*)(?:\s[^<>]*)?>([^<]+)/g);
+// How far before the window a labelled key is read, so a key above the window still stars its value inside it.
+const LABELLED_LOOKBACK = 1024;
+const LINE_BREAK_RE = sharedRegex(/\r\n?|\n/g);
 // Code punctuation: a span between two quotes that holds any of it is read as code between two literals, not as a literal.
 const CODE_PUNCT_RE = /[;,(){}[\]=:+<>&|]/;
 // When the match is not quoted, a reading that starts inside a quote and never closes it in the window claims the whole
@@ -2642,28 +2655,80 @@ function maskNearby(value: string): string {
 
 /** Whether `key` (`DB_PASSWORD`, `apiKey`, `x-api-key`) names a secret: a label is one of its segments. */
 function isLabelledKey(key: string): boolean {
-  const segmented = key.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z0-9])([A-Z])/g, "$1_$2");
-  return LABEL_SEGMENT_RE.test(segmented.toLowerCase());
+  const segmented = key
+    .replace(/^.*:/, "")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+  return LABEL_SEGMENT_RE.test(segmented) && !NOT_A_SECRET_SEGMENT_RE.test(segmented);
+}
+
+/** The end of the line `at` sits on (the index of its line break, or `to`), and where the next line starts. */
+function lineEndFrom(text: string, at: number, to: number): { end: number; next: number } {
+  LINE_BREAK_RE.lastIndex = at;
+  const m = LINE_BREAK_RE.exec(text);
+  if (!m || m.index >= to) return { end: to, next: to };
+  return { end: m.index, next: Math.min(to, m.index + m[0].length) };
 }
 
 /**
- * `text` with the unquoted value after every labelled key starred to the end of its line (see LABELLED_KEY_LINE_RE). A key
- * that is not a label is left to redactNearby, which stars its value to the next whitespace or quote.
+ * The ranges of `content` between `from` and `to` that hold a labelled value: the unquoted value after a labelled key to the
+ * end of its line, every following line indented deeper than the key's (blank lines between them included), and the text
+ * of an element whose tag name is a label (see LABELLED_KEY_LINE_RE, LABELLED_ELEMENT_RE).
  */
-function redactLabelledLines(text: string): string {
-  let out = "";
-  let pos = 0;
+function labelledValueRanges(content: string, from: number, to: number): Array<[number, number]> {
+  const text = content.slice(from, to);
+  const ranges: Array<[number, number]> = [];
+  const indentAt = (lineStart: number) => /^[ \t]*/.exec(text.slice(lineStart, lineStart + 256))?.[0].length ?? 0;
   LABELLED_KEY_LINE_RE.lastIndex = 0;
   for (let m = LABELLED_KEY_LINE_RE.exec(text); m !== null; m = LABELLED_KEY_LINE_RE.exec(text)) {
-    if (!isLabelledKey(m[2] ?? "")) continue;
+    if (!isLabelledKey(m[3] ?? "")) continue;
+    const keyAt = m.index + (m[1] ?? "").length;
+    const keyLineStart = Math.max(text.lastIndexOf("\n", keyAt - 1), text.lastIndexOf("\r", keyAt - 1)) + 1;
+    const indent = indentAt(keyLineStart);
     const valueAt = m.index + m[0].length;
-    const eol = text.slice(valueAt).search(/[\r\n]/);
-    const valueEnd = eol < 0 ? text.length : valueAt + eol;
-    out += text.slice(pos, valueAt) + maskNearby(text.slice(valueAt, valueEnd));
-    pos = valueEnd;
-    LABELLED_KEY_LINE_RE.lastIndex = valueEnd;
+    const valueLine = lineEndFrom(text, valueAt, text.length);
+    ranges.push([from + valueAt, from + valueLine.end]);
+    let scanned = valueLine.end;
+    let next = valueLine.next;
+    while (next < text.length) {
+      const line = lineEndFrom(text, next, text.length);
+      const body = text.slice(next, line.end);
+      if (/\S/.test(body)) {
+        const lineIndent = indentAt(next);
+        if (lineIndent <= indent) break;
+        ranges.push([from + next + lineIndent, from + line.end]);
+      }
+      scanned = line.end;
+      if (line.next === line.end) break;
+      next = line.next;
+    }
+    LABELLED_KEY_LINE_RE.lastIndex = Math.max(scanned, valueAt + 1);
   }
-  return out + text.slice(pos);
+  LABELLED_ELEMENT_RE.lastIndex = 0;
+  for (let m = LABELLED_ELEMENT_RE.exec(text); m !== null; m = LABELLED_ELEMENT_RE.exec(text)) {
+    if (!isLabelledKey(m[1] ?? "")) continue;
+    const textAt = m.index + m[0].length - (m[2] ?? "").length;
+    ranges.push([from + textAt, from + m.index + m[0].length]);
+  }
+  return ranges;
+}
+
+/** `content` from `s` to `e` with the parts inside `ranges` starred, its quotes and line breaks kept. */
+function maskRanges(content: string, s: number, e: number, ranges: Array<[number, number]>): string {
+  const clipped = ranges
+    .map(([a, b]): [number, number] => [Math.max(a, s), Math.min(b, e)])
+    .filter(([a, b]) => b > a)
+    .sort((x, y) => x[0] - y[0]);
+  let out = "";
+  let pos = s;
+  for (const [a, b] of clipped) {
+    if (b <= pos) continue;
+    const from = Math.max(a, pos);
+    out += content.slice(pos, from) + content.slice(from, b).replace(/[^"'`\r\n]+/g, maskNearby);
+    pos = b;
+  }
+  return out + content.slice(pos, e);
 }
 
 function redactNearby(text: string): string {
@@ -2787,22 +2852,24 @@ export function evidenceContext(content: string, offset: number, length: number,
   const isToken = (i: number) => i >= 0 && i < content.length && NEARBY_TOKEN_CHAR_RE.test(content[i] ?? "");
   const start = Math.max(0, offset - EVIDENCE_CONTEXT_RADIUS);
   const end = Math.min(content.length, offset + length + EVIDENCE_CONTEXT_RADIUS);
-  let before = content.slice(start, offset);
-  let after = content.slice(offset + length, end);
+  let beforeAt = start;
+  let afterEnd = end;
   if (isToken(start - 1) && isToken(start)) {
-    const cut = [...before].findIndex((ch) => !NEARBY_TOKEN_CHAR_RE.test(ch));
-    before = cut < 0 ? "" : before.slice(cut + 1);
+    const cut = [...content.slice(start, offset)].findIndex((ch) => !NEARBY_TOKEN_CHAR_RE.test(ch));
+    beforeAt = cut < 0 ? offset : start + cut + 1;
   }
   if (isToken(end) && isToken(end - 1)) {
-    let cut = after.length - 1;
-    while (cut >= 0 && NEARBY_TOKEN_CHAR_RE.test(after[cut] ?? "")) cut--;
-    after = cut < 0 ? "" : after.slice(0, cut);
+    let cut = end - 1;
+    while (cut >= offset + length && NEARBY_TOKEN_CHAR_RE.test(content[cut] ?? "")) cut--;
+    afterEnd = Math.max(cut, offset + length);
   }
-  // Labelled values run to the end of their line, so star them before the line ends are collapsed. Before the match, the
-  // line the match sits on is left out: its value there is the match itself.
-  const lastLineAt = Math.max(before.lastIndexOf("\n"), before.lastIndexOf("\r")) + 1;
-  before = redactLabelledLines(before.slice(0, lastLineAt)) + before.slice(lastLineAt);
-  after = redactLabelledLines(after);
+  // Labelled values run to the end of their line and onto deeper-indented lines, so star them before the line ends are
+  // collapsed. They are read from a little before the window, so a key above it still stars its value, and on both sides
+  // of the match, so a labelled value on the match's own line, before it, is starred up to the match. The match itself is
+  // never starred here: it is masked as in the item id.
+  const ranges = labelledValueRanges(content, Math.max(0, beforeAt - LABELLED_LOOKBACK), afterEnd);
+  const before = maskRanges(content, beforeAt, offset, ranges);
+  const after = maskRanges(content, offset + length, afterEnd, ranges);
   const prev = content[offset - 1];
   const openQuote = QUOTE_CHARS.find((q) => q === prev);
   const flat = (t: string) => t.replace(/\s+/g, " ");
