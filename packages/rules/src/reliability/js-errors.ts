@@ -7,6 +7,7 @@
 // declared cloud and lands on the "cloud checks that didn't run" list there.
 
 import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import type {
   CheckItem,
   CheckResult,
@@ -308,10 +309,13 @@ export const jsErrorsRule: Rule = {
           RUNTIME_NOT_RECORDED_SKIP_REASON
         );
       }
+      // Every rendered page was a WAF or bot challenge: the rule could read none of them. A coded
+      // rule-wide gap, so a stored finding is not resolved; the audit carries its own blocked notice,
+      // so it adds no Not checked line (#704).
       if (challenged > 0 && !firstSkip) {
         return skip(
-          "JavaScript errors were not checked",
-          "Every rendered page was a WAF or bot challenge, so its errors say nothing about the site"
+          "JavaScript errors were not checked: every rendered page was a WAF or bot challenge, so its errors say nothing about the site",
+          UNREAD_PAGE_SKIP_REASON
         );
       }
       return skip(
