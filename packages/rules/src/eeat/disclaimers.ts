@@ -13,6 +13,7 @@ export const disclaimersRule: Rule = {
       "Disclaimers protect you legally and build trust. Health content: 'This is not medical advice. Consult a healthcare professional.' Finance: 'Not financial advice. Consult a financial advisor.' Legal: 'Not legal advice. Consult an attorney.' Affiliate: 'We may earn commissions.' Make disclaimers visible, not hidden in fine print.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 4,
     // Medical / financial / legal disclaimers only matter for YMYL sites. Gate to

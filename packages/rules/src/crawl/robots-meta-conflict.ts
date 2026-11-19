@@ -74,6 +74,7 @@ export const robotsMetaConflictRule: Rule = {
       "If robots.txt blocks a URL, search engines never fetch it, so they never see its noindex, from a meta tag or an X-Robots-Tag header. To keep a page out of search results, allow it in robots.txt and add noindex; that is the supported way. To only save crawl budget, the Disallow alone is enough and the noindex does nothing.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
   },

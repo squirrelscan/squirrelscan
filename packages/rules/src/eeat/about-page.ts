@@ -32,6 +32,7 @@ export const aboutPageRule: Rule = {
       "An About page establishes credibility and trust. Include company history, mission, team overview, and credentials. Link from main navigation or footer. For E-E-A-T, explain your expertise and why visitors should trust you. Include contact information and physical location if applicable. A concrete path in `paths` that the crawl did not reach is requested once after the crawl (robots.txt and the per-host limits apply), so an About page nothing links to is found; the finding says which paths were probed. An About page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing. On a single-page site, an About section (an element whose id is about, about-us or a localised slug, linked from the page as #about) counts as the About page; add enough content to it (200 words or more).",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     discoveryProbes: ["configured-pages"],
     severity: "warning",
     weight: 5,

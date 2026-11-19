@@ -77,6 +77,7 @@ export const hreflangTargetsRule: Rule = {
       "Search engines ignore an hreflang link whose target redirects, returns an error, is noindex, declares another canonical, or does not link back to the page that named it. Point each hreflang link at the final, canonical, indexable URL of that language version, and make every version list every other version including itself. Generate the set from one source so the pairs cannot drift apart.",
     category: "i18n",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 5,
   },

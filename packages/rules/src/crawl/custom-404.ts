@@ -242,6 +242,7 @@ export const custom404Rule: Rule = {
       "Serve missing URLs with a real 404 (or 410 for removed pages), never a 200 or a redirect to the homepage: search engines treat those as soft 404s, spend crawl budget on them and can index them as thin duplicates. Replace the server's stock error page with one in your site template: the header and navigation, a search box, and links to the homepage and the main sections, so a visitor or an agent that lands on a dead URL has somewhere to go. Add `<meta name=\"robots\" content=\"noindex\">` (or an `X-Robots-Tag: noindex` header) to the 404 template so it can never be indexed if a misconfiguration serves it with a 200. Check it with `curl -I https://your-site/some-missing-page`.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
     checks: [

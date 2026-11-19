@@ -11,6 +11,7 @@ export const hstsRule: Rule = {
       "HSTS forces browsers to only connect via HTTPS, preventing downgrade attacks. Add the header: Strict-Transport-Security: max-age=31536000; includeSubDomains. Start with a short max-age (1 day) to test, then increase to 1 year. The includeSubDomains directive protects all subdomains. Consider preloading via hstspreload.org for maximum protection.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 6,
     // Check names by outcome class (#1741).

@@ -164,6 +164,7 @@ export const securityTxtRule: Rule = {
       "Publish a security.txt at /.well-known/security.txt with at least a Contact and an Expires field, served as plain text. Keep Expires in the future (renew it yearly). Sign the file with PGP if you can, and do not serve an HTML page at that path.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 3,
     discoveryProbes: [CANONICAL_PATH, LEGACY_PATH],

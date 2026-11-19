@@ -215,6 +215,7 @@ export const brokenResourcesRule: Rule = {
       "A page whose script or stylesheet returns 404 or 500 still answers 200 with its title and meta, but renders unstyled or its interactive parts never run. The usual cause is a deploy: cached HTML still points at hashed bundles the new release deleted. Redeploy the missing file, or update the reference so pages point at the bundle that exists. Keep old hashed assets for as long as cached HTML may reference them. Third-party failures are reported as warnings: check the provider's status, or remove the reference if the service is gone.",
     category: "reliability",
     scope: "site",
+    findingScope: "resource",
     severity: "error",
     weight: 7,
   },

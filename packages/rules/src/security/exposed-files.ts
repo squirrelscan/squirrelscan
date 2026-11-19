@@ -231,6 +231,7 @@ export const exposedFilesRule: Rule = {
       "Remove each listed file from the web root, or block it at the server: deny dotfiles and dot-directories (`location ~ /\\. { deny all; }` in nginx, `<FilesMatch \"^\\.\">Require all denied</FilesMatch>` in Apache), and keep backups, dumps and configuration copies outside the document root. Deploy from a build output, not a working copy, so `.git` never ships. Turn off `server-status`, `server-info` and `phpinfo()` pages in production, or restrict them to internal addresses. Then treat anything the file exposed as leaked: rotate every credential and key it held, and assume the source and history are public.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
     // Check names by outcome class (#1741).

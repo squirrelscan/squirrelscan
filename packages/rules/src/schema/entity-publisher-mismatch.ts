@@ -27,6 +27,7 @@ export const entityPublisherMismatchRule: Rule = {
     solution: `Your pages do not agree on who publishes this site. A search engine attributes each article to whichever publisher that page named, so the authority that should accumulate against one organization is divided between several. Decide which organization is the publisher, give it an @id, and have every Article, BlogPosting and WebSite reference that one id as its publisher rather than repeating an inline organization block. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
   },

@@ -14,6 +14,7 @@ export const landmarkOneMainRule: Rule = {
     wcagNone:
       "It checks that a page has exactly one main landmark, a best practice no WCAG success criterion requires; 2.4.1 Bypass Blocks can be met without landmarks.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "template",
     severity: "warning",
     weight: 5,

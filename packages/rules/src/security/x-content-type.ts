@@ -11,6 +11,7 @@ export const xContentTypeRule: Rule = {
       "X-Content-Type-Options: nosniff prevents browsers from MIME-sniffing responses, which could lead to security vulnerabilities. This is especially important for sites that allow file uploads or serve user-generated content. Simply add the header: X-Content-Type-Options: nosniff. This has no downside and improves security.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
   },

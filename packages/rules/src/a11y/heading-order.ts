@@ -13,6 +13,7 @@ export const headingOrderRule: Rule = {
     wcagNone:
       "It flags a heading that skips a level (an H3 after an H1), which no WCAG success criterion forbids; 1.3.1 Info and Relationships asks that headings be marked up as headings, not that their levels run in sequence.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

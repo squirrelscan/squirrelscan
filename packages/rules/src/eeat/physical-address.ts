@@ -11,6 +11,7 @@ export const physicalAddressRule: Rule = {
       "A physical address builds trust and is essential for local businesses. Include in: footer, contact page, about page. Use PostalAddress schema markup. For local SEO, ensure NAP (Name, Address, Phone) consistency across the site and external listings. Virtual businesses can use registered office addresses.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
     // A visible physical address is a trust signal for real-world local

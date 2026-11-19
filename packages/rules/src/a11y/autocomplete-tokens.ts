@@ -62,6 +62,7 @@ export const autocompleteTokensRule: Rule = {
     category: "a11y",
     wcag: [wcag("1.3.5")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

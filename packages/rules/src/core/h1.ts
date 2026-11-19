@@ -68,6 +68,7 @@ export const h1Rule: Rule = {
       "Each page should have exactly one H1 tag that clearly describes the main topic. The H1 is the primary heading users and search engines see, and it should align with the page title while being more detailed. If missing, add an H1 at the top of your main content. If you have multiple H1s, demote extras to H2 or lower. Ensure the H1 is descriptive and contains relevant keywords naturally. When a page has several H1s and only one is shown (the others carry the hidden attribute or display:none), it still warns, because crawlers that do not render the page read every H1, and the message gives the shown count beside the count in the HTML.",
     category: "core",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     // Search-result presentation only: skipped on noindex pages (pub#457).
     skipOnNoindex: true,

@@ -14,6 +14,7 @@ export const termsOfServiceRule: Rule = {
       "Terms of Service (ToS) define the rules for using your site/service. Essential for: e-commerce, SaaS, membership sites. Include: user responsibilities, intellectual property, disclaimers, dispute resolution. Link from footer. Keep updated when practices change. For simple content sites, may be optional but still recommended.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
   },

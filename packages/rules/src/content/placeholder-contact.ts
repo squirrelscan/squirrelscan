@@ -183,6 +183,7 @@ export const placeholderContactRule: Rule = {
       "Replace every template-default contact detail with a real one, or remove the block. A fake phone number or an address at example.com on a contact or checkout page means customers cannot reach the business, and it reads as an abandoned site to visitors and search engines. Check the footer, the contact page, schema.org markup and any mailto: or tel: links, since themes repeat the same default in all of them. If the page is documentation that shows these values as samples, keep them in a code block.",
     category: "content",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

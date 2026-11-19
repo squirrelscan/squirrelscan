@@ -278,6 +278,7 @@ export const anchorTargetConflictRule: Rule = {
       "When 'Pricing' goes to /pricing from most pages and to /plans from a few, readers, search engines and agents cannot tell which page the label means, and the ranking signal the link carries is split. Point every link with the same text at one page, or change the text so it names the page it really goes to. A page linked with many unrelated anchor texts has no clear topic to rank for: pick the label that describes it and use it consistently. Generic text such as 'read more' is ignored here, and so are navigation, header, footer and sidebar links.",
     category: "links",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 3,
     optionsSchema: z.object({}),

@@ -99,6 +99,7 @@ export const apiDiscoveryRule: Rule = {
       "If you expose a public API, publish an OpenAPI spec at a conventional path and, if practical, an api-catalog pointing to it. If the API requires OAuth, publish the discovery documents, and add registration_endpoint (Dynamic Client Registration) or client_id_metadata_document_supported (CIMD) to your authorization server metadata so an agent can self-onboard instead of waiting on a human to register a client. This is a recommendation only — it never affects your score; not every site has (or needs) a public API.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
     discoveryProbes: [...API_DOC_PATHS, ...OAUTH_PATHS],

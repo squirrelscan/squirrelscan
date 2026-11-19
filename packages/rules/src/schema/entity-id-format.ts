@@ -27,6 +27,7 @@ export const entityIdFormatRule: Rule = {
     solution: `A bare fragment like "#organization" is resolved against the page it appears on, so "#organization" on your homepage and "#organization" on your about page are two different identifiers, not one shared one. The markup looks correct and validates, and the entity still fails to accumulate across the site. Write @id as an absolute URL, https://yoursite.com/#organization, identical on every page. Relative and protocol-relative forms have the same problem. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
   },

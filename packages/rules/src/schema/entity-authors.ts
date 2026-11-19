@@ -29,6 +29,7 @@ export const entityAuthorsRule: Rule = {
     solution: `An author who exists only as a name string is not an entity: there is nothing for a search engine to connect to the same person elsewhere, which is most of what E-E-A-T signals are built on. Declare each author as a Person with an @id, a name, a url pointing at their author page, and sameAs links to the profiles that prove who they are. Then reference that Person as the author of every article by { "@id": "…" } rather than repeating the name. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
   },

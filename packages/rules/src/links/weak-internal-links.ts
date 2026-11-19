@@ -95,6 +95,7 @@ export const weakInternalLinksRule: Rule = {
       "Pages with only a single internal link have weak internal linking support and may struggle to rank. Search engines use internal links to understand page importance and distribute link equity. Add contextual links from related content, include in navigation or sidebar, or link from category/hub pages to strengthen internal link profiles.",
     category: "links",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 3,
     optionsSchema: z.object({

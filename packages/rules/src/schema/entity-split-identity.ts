@@ -28,6 +28,7 @@ export const entitySplitIdentityRule: Rule = {
     solution: `Two plugins, or a plugin and a hand-written block, are each declaring the same thing under their own @id. The classic pair is Yoast's https://yoursite.com/#organization alongside WordLift's data.wordlift.io identifier. A search engine has no way to know they are one entity, so your reviews, sameAs profiles and article authorship split between them and neither is complete. Pick one @id as canonical, and either delete the second declaration or reduce it to a sameAs on the first. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 6,
   },

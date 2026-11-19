@@ -347,6 +347,7 @@ export const navSetDivergenceRule: Rule = {
       "These pages leave out navigation links that most of your site carries, so visitors and crawlers lose the route to those pages from here. Check the page's template: a landing page built outside the shared layout, an older template, or a header or footer include that failed to render are the usual causes. Add the missing links back, or move the page onto the shared layout. If the page is meant to be a focused landing page, this is intended and can stay. Sections with their own navigation (a docs area, a store) are compared with their own page type, not the whole site.",
     category: "links",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 3,
     // Check names by outcome class (#1741).

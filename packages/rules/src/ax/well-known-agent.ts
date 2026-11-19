@@ -47,6 +47,7 @@ export const wellKnownAgentRule: Rule = {
       "If the site backs an MCP server, an A2A-compatible agent, or a packaged skill set, publish the corresponding manifest at its .well-known path. This is detect-and-inform only: adoption is still under 0.01% of sites, so absence is never penalized. Remove any leftover /.well-known/ai-plugin.json from the ChatGPT-plugins era — it's stale and more likely to confuse a modern agent than help it.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
     discoveryProbes: [...MANIFEST_PATHS, ...DEPRECATED_PATHS],

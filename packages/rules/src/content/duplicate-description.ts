@@ -99,6 +99,7 @@ export const duplicateDescriptionRule: Rule = {
       "Each page should have a unique meta description that summarizes its specific content. Duplicate descriptions reduce click-through rates and provide poor user experience in search results. Write unique, compelling descriptions for each page. For pages without unique content (like paginated results), consider using no description rather than a duplicate.",
     category: "content",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 5,
   },

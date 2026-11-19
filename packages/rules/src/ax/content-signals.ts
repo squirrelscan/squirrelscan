@@ -195,6 +195,7 @@ export const contentSignalsRule: Rule = {
       "Content-Signal (contentsignals.org) lets robots.txt declare AI policy per purpose — `search`, `ai-input`, `ai-train`, each `yes` or `no` — instead of allow/disallow-ing named bots one at a time. Add a line like `Content-Signal: search=yes, ai-input=yes, ai-train=no` under `User-agent: *`. Keep it consistent with your crawler blocks: don't declare `ai-train=yes` while Disallow-ing GPTBot/ClaudeBot, or `search=yes` while blocking the AI-search indexers — a crawler then has to guess which directive wins. Declaring a signal is optional and never penalizes; only a contradiction warns.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     // warning so a fired contradiction/syntax check carries a warning badge;
     // with only info checks the rule never enters the issues list at all.
     severity: "warning",

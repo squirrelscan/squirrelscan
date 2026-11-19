@@ -162,6 +162,7 @@ export const sitemapLastmodDriftRule: Rule = {
       "A sitemap lastmod that disagrees with the page's own dateModified points at the sitemap generator, not the content. Lastmod OLDER than the page's dateModified tells crawlers not to bother with a page that has in fact changed - usually a stale cached sitemap, or a generator resolving `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` (a precedence inversion; both fields are present, so presence checks pass). Lastmod NEWER than the page's dateModified usually means lastmod is stamped at build/deploy time. Drive both values from the same content-modification timestamp.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
     optionsSchema,

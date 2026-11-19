@@ -79,6 +79,7 @@ export const totalByteWeightRule: Rule = {
       "Reduce total page weight for faster loads on slow connections. Optimize images (use modern formats, compress, serve appropriate sizes). Minify and compress CSS/JS. Remove unused code via tree-shaking. Lazy-load non-critical resources. Target under 1.6MB for mobile users.",
     category: "perf",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 6,
     optionsSchema,

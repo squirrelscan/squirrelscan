@@ -17,6 +17,7 @@ export const redirectChainRule: Rule = {
       "Each redirect hop adds latency and consumes crawl budget. Search engines may stop following after 5+ hops. Consolidate redirect chains to a single hop by updating the source URL to point directly to the final destination. Common causes: HTTP→HTTPS→www→trailing slash combinations, or legacy domain migrations.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
     optionsSchema: z.object({

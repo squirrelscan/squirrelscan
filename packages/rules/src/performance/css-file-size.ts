@@ -36,6 +36,7 @@ export const cssFileSizeRule: Rule = {
       "Large CSS files slow down rendering and increase bandwidth. Split large stylesheets into smaller chunks, remove unused selectors, and minify CSS. Consider critical CSS inlining for above-the-fold styles and lazy-loading non-critical CSS.",
     category: "perf",
     scope: "site",
+    findingScope: "resource",
     severity: "error",
     weight: 6,
     optionsSchema,

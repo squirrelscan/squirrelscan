@@ -322,6 +322,7 @@ export const openRedirectRule: Rule = {
       "Never redirect to a URL taken from the request as it is. Accept only a relative path that starts with a single `/` (reject `//`, `/\\` and anything with a scheme), or map a short key to a fixed list of destinations, or check the parsed host against an allowlist of your own hosts. Resolve the value with a URL parser before you check it: string prefix checks such as `startsWith(\"/\")` let `//evil.example` through. Fall back to a safe default page when the value fails the check.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
     checks: [

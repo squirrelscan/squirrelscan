@@ -846,6 +846,7 @@ export const anchorMismatchRule: Rule = {
       "Anchor text tells search engines and readers what the target page is about. When every link to a page says something unrelated (for example 'how I work' or 'our services' on a page about wholesale orders), the page earns no topical signal from its inbound links. Rewrite the anchor to name the destination using the words its title or heading uses. Links in the navigation, header, footer and sidebar are ignored, and so are privacy, terms and contact pages.",
     category: "links",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 3,
     optionsSchema: z.object({}),

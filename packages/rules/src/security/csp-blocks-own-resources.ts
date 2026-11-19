@@ -245,6 +245,7 @@ export const cspBlocksOwnResourcesRule: Rule = {
       "A directive that leaves out a host the page loads makes the browser block it silently: a booking widget disappears, analytics hits never arrive, a payment frame stays empty. Add each reported host to the directive named in the finding (scripts to script-src, beacons and API calls to connect-src, embeds to frame-src), then confirm in the browser console that no CSP violation remains. Wildcards are literal: *.example.com matches cdn.example.com but not example.com.",
     category: "security",
     scope: "page",
+    findingScope: "resource",
     // Reads the response header, which differs per route inside one template.
     verdictScope: "page",
     severity: "warning",

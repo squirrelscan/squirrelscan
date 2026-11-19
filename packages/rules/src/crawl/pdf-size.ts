@@ -27,6 +27,7 @@ export const pdfSizeRule: Rule = {
       "Google reads a PDF only up to 64MB, so content beyond that limit is ignored during indexing. squirrel warns at 30MB and fails at 60MB to leave room under it. Split large documents into smaller parts, compress images within PDFs, or add a noindex X-Robots-Tag header if the PDF doesn't need to appear in search results.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 4,
     optionsSchema,

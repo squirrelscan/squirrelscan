@@ -913,6 +913,7 @@ export const unauthenticatedApiRule: Rule = {
       "Check authorization on the server for every API route that returns user or business data, and answer 401 or 403 when the request carries no valid session or token. Hiding a button or a page in the frontend does not protect the API behind it. Return only the fields the caller needs: never password hashes, tokens, emails or roles in a list response. If the endpoint is meant to be public (a product catalog, a blog feed), make sure it returns only public fields. This probe is anonymous: it cannot tell whether one signed-in user can read another user's records, so test that separately with two accounts.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 7,
     checks: [

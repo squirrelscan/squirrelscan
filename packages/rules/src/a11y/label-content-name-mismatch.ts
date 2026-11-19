@@ -68,6 +68,7 @@ export const labelContentNameMismatchRule: Rule = {
     category: "a11y",
     wcag: [wcag("2.5.3")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 7,

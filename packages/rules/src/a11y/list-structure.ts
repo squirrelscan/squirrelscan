@@ -14,6 +14,7 @@ export const listStructureRule: Rule = {
     category: "a11y",
     wcag: [wcag("1.3.1")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 7,

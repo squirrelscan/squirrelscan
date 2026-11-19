@@ -100,6 +100,7 @@ export const duplicateTitleRule: Rule = {
       "Each page should have a unique title tag that accurately describes its content. Duplicate titles confuse search engines about which page to rank and make your pages less distinguishable in search results. Use unique, descriptive titles that include relevant keywords. For similar pages (e.g., pagination), add differentiating elements like page numbers or category names.",
     category: "content",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 6,
   },

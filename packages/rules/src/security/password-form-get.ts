@@ -139,6 +139,7 @@ export const passwordFormGetRule: Rule = {
       'A form with a password field and method="get", or no method (GET is the default), puts the password in the URL when it is submitted. From there it lands in browser history, server and proxy logs, analytics and the Referer header sent to other sites. Set method="post" on the form, and check formmethod on every submit button, because one GET button is enough to expose the password. A form with no method and no action, which is how a script-driven login form (React, Vue, Svelte) looks in the DOM, is a warning: it falls back to GET if its script has not loaded or fails, and method="post" removes that risk. A form whose submit is handled by an inline handler and has no action is reported as not determined, not as a failure.',
     category: "security",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 8,

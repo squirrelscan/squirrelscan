@@ -99,6 +99,7 @@ export const brokenAnchorsRule: Rule = {
     // Performance; the id keeps its `links/` prefix so configs keep working.
     category: "reliability",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 4,
   },

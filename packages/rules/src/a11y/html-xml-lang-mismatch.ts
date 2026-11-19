@@ -14,6 +14,7 @@ export const htmlXmlLangMismatchRule: Rule = {
     category: "a11y",
     wcag: [wcag("3.1.1")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "template",
     severity: "error",
     weight: 6,

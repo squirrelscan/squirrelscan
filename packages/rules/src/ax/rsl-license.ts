@@ -16,6 +16,7 @@ export const rslLicenseRule: Rule = {
       "Publish an RSL (rslstandard.org) document describing your usage terms — including AI-training permissions and any pay-per-crawl pricing — and reference it with a `License:` directive in robots.txt. This is a recommendation only — it never affects your score, except when a declared License: reference is broken (unfetchable or not valid RSL), which is flagged so you can fix the reference.",
     category: "ax",
     scope: "site",
+    findingScope: "page",
     // warning so a broken License: reference carries a warning badge; absence
     // produces only info checks, which never enter the issues list.
     severity: "warning",

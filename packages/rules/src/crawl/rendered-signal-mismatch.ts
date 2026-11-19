@@ -108,6 +108,7 @@ export const renderedSignalMismatchRule: Rule = {
       "Crawlers and agents that do not run JavaScript read your raw HTML, and some index from it. If a script rewrites the canonical URL or adds or removes a robots noindex after load, the raw page and the rendered page tell them different things, and a wrong canonical or a stray noindex can drop the page from the index. Put the canonical and the robots meta in the server's HTML and make the client leave them alone. Keep the title and first H1 in the server HTML too, so what a crawler reads is what a visitor sees.",
     category: "crawl",
     scope: "page",
+    findingScope: "page",
     // Reads the page's own raw and rendered head: nothing template-wide.
     verdictScope: "page",
     severity: "error",

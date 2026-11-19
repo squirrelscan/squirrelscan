@@ -34,6 +34,7 @@ export const metaDescriptionRule: Rule = {
       "Meta descriptions should be 120-160 characters and provide a compelling summary of the page. While not a direct ranking factor, good descriptions improve click-through rates from search results. Write unique descriptions for each page that accurately preview the content. Include a call-to-action when appropriate. If missing, search engines will auto-generate snippets which may not represent your page optimally.",
     category: "core",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     // Search-result presentation only: skipped on noindex pages (pub#457).
     skipOnNoindex: true,

@@ -96,6 +96,7 @@ export const typographyRule: Rule = {
       "Pick one convention and apply it across the page. Collapse repeated spaces to one (use CSS for layout spacing, not extra spaces). Use either straight or curly quotes and apostrophes consistently, ideally by letting your editor or CMS smart-quote the copy. Remove the space before `, . ; : ! ?` in English copy (French and similar locales keep it, so set `lang` correctly). Replace `--` with a real em dash or a comma, colon or full stop.",
     category: "content",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 1,

@@ -36,6 +36,7 @@ export const skipLinkRule: Rule = {
     category: "a11y",
     wcag: [wcag("2.4.1")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

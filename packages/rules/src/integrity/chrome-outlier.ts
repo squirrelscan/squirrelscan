@@ -268,6 +268,7 @@ export const chromeOutlierRule: Rule = {
       "These pages do not share the template the rest of your site uses. After a redesign that usually means pages still on the old layout, or pages that lost their navigation, footer or stylesheets. Open each page and compare it with a page that looks right. If it is a deliberate one-off (a campaign page, a standalone tool), leave it. Otherwise move it onto the current template or republish it from the current theme.",
     category: "integrity",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
     // Every integrity rule is locked against [[ignore]] (#1262), as the docs and

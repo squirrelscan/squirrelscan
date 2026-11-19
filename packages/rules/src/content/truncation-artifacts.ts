@@ -201,6 +201,7 @@ export const truncationArtifactsRule: Rule = {
       "A title, meta description or excerpt that stops inside a word was cut by a character limit instead of written to length, and a search result shows the stump. Write the title (about 50 to 60 characters) and description (about 150 to 160) to length in the CMS field, or trim on a word boundary and end on a whole word. If a theme builds the description from the body, change its excerpt function to cut at the last space before the limit and to append the ellipsis only after a whole word. Body excerpts that end in an ellipsis need a read more link beside them. A deliberate ellipsis after a whole word, and an ellipsis inside a quotation, are not flagged.",
     category: "content",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

@@ -288,6 +288,7 @@ export const webmcpRule: Rule = {
       "WebMCP lets a page offer actions to a browsing agent. Declaratively, a <form> becomes a tool with toolname and tooldescription attributes, and its named controls become the input schema (toolparamtitle and toolparamdescription refine them). Imperatively, script calls navigator.modelContext.registerTool or provideContext. Give every tool form a toolname of 1 to 64 letters, digits, _, . or - (squirrelscan's validity check), a plain-language tooldescription, and a name on every control that belongs in the schema. Agents also need the page to work for them as an accessibility tree: see a11y/button-name, a11y/aria-input-field-name, a11y/aria-required-children, a11y/aria-required-parent, a11y/aria-hidden-focus, a11y/aria-roles and a11y/form-labels, which report those findings, and perf/cls-hints for layout shift. This rule does not repeat them. Keep the abuse protection security/form-captcha asks for, but on a tool form use an invisible or agent-tolerant check: an agent acting for a person cannot solve a visible challenge.",
     category: "ax",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 1,

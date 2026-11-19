@@ -18,6 +18,7 @@ export const zoomDisabledRule: Rule = {
     category: "a11y",
     wcag: [wcag("1.4.4")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "template",
     severity: "error",
     weight: 7,

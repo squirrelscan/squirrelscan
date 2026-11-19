@@ -157,6 +157,7 @@ export const answerBlocksRule: Rule = {
       "Put the answer directly under the question heading. Make the first one or two sentences stand alone: name the subject instead of opening with a pronoun like 'it' or 'this', and keep the opening sentence short. Put the detail after it. Give each data table and chart a caption or a nearby line that names its source, ideally with a link. This check is advisory and never changes the score.",
     category: "ax",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     // info is advisory: it is excluded from the score (#1386).
     severity: "info",

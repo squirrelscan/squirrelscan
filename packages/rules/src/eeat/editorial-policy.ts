@@ -14,6 +14,7 @@ export const editorialPolicyRule: Rule = {
       "Editorial policies demonstrate content quality standards and professionalism. Include: how content is created/reviewed, fact-checking process, correction policy, and editorial independence. For news sites, this is essential. For content sites, it builds trust and supports E-E-A-T. Link from footer or about page.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
     // Editorial / fact-checking policies are an authority signal for news and

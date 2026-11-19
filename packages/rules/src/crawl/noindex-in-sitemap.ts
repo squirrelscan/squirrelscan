@@ -91,6 +91,7 @@ export const noindexInSitemapRule: Rule = {
       "Pages with noindex meta tags should not be in your sitemap. Sitemaps tell search engines which pages to index, while noindex tells them not to. Having both sends mixed signals. Remove noindexed pages from your sitemap, or remove the noindex directive if you want them indexed. Use a sitemap generator that respects robots directives.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
   },

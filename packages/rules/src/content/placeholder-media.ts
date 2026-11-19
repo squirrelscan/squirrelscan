@@ -182,6 +182,7 @@ export const placeholderMediaRule: Rule = {
       "A placeholder image means the page was published before its real media was. Replace the image source with the real asset, and add the image field to whatever check gates publishing. A 1x1 inline image used as content is a stand-in that was never swapped: replace it, or if it is only a lazy-load stub, put the real URL in data-src. A camera-default alt such as DSC_0001 or IMG_1234 means the file was uploaded without being described: write alt text that says what the image shows, or use alt=\"\" when it is purely decorative. A deliberate 1x1 spacer or tracking pixel is exempt when it carries role=\"presentation\", aria-hidden=\"true\", or a width or height of 1 or less. Plain junk alt like \"image\" or \"photo\" and alt text that repeats the filename are reported by a11y/image-redundant-alt.",
     category: "content",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

@@ -425,6 +425,7 @@ export const webAppManifestRule: Rule = {
       "The web app manifest (usually site.webmanifest) sets the name, icons, splash colours and start page used when someone adds the site to their home screen. Serve it as application/manifest+json, give it a name, a start_url and a display mode, and declare 192x192 and 512x512 PNG icons. Add a maskable icon so Android can crop it to the launcher shape without clipping. Keep the manifest's theme_color equal to the theme-color meta on your pages. A site that links no manifest gets advice only, and that does not affect the score.",
     category: "mobile",
     scope: "site",
+    findingScope: "resource",
     // A manifest that 404s or is not JSON fails; the report reads a failed check
     // at the rule's severity, so that is an error. Warn-only results stay warnings.
     severity: "error",

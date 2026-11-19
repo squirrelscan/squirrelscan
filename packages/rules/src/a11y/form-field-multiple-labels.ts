@@ -17,6 +17,7 @@ export const formFieldMultipleLabelsRule: Rule = {
     category: "a11y",
     wcag: [wcag("3.3.2")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

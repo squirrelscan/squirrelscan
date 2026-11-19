@@ -124,6 +124,7 @@ export const robotsMetaRule: Rule = {
       'The robots meta tag and the X-Robots-Tag response header control how search engines index and follow links on a page. Common directives include noindex, nofollow, noarchive, and nosnippet. If your page has noindex, it won\'t appear in search results. Review whether this is intentional; the report names the source, and a header set by a CDN, proxy or server config does not appear in the page source. For pages that should be indexed, remove the noindex directive or change it to "index, follow". Be careful with nofollow as it prevents link equity from flowing to linked pages.',
     category: "core",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

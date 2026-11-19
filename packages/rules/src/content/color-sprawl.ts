@@ -567,6 +567,7 @@ export const colorSprawlRule: Rule = {
       "Near-identical colors (a gray at #333 on one page and #343434 on another) are almost always drift, not design. Collapse each cluster to one value and define it once as a custom property such as --gray-700, then reference it with var(). A color that only one page uses usually came from a pasted snippet or a one-off template: switch it to a palette color. Token definitions in :root are not counted, so a design system that defines a full scale and references it through var() stays clean. Near-duplicates are counted from inline styles only. Linked same-site stylesheets the audit read define the palette, so a color one of them uses is never called an outlier; check any stylesheet the result reports as not read by hand before deleting anything. Alpha is ignored.",
     category: "content",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 2,
     optionsSchema,

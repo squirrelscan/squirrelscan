@@ -103,6 +103,7 @@ export const inputTypesRule: Rule = {
     wcagNone:
       "It checks that fields use the input type and enterkeyhint that match their data and that forms keep native validation, which are usability practices; 1.3.5 Identify Input Purpose is about autocomplete tokens, which a11y/autocomplete-tokens checks.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

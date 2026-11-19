@@ -230,6 +230,7 @@ export const reducedMotionRule: Rule = {
     category: "a11y",
     wcag: [wcag("2.3.3")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 3,

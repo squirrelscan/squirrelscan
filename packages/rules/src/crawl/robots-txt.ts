@@ -80,6 +80,7 @@ export const robotsTxtRule: Rule = {
       "robots.txt tells search engines which pages to crawl. Place it at the root of your domain (example.com/robots.txt). Include your sitemap URL. Avoid blocking important resources (CSS, JS, images) that search engines need to render pages. Never use 'Disallow: /' unless you want to block all crawling. Use Google Search Console to test your robots.txt.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
     checks: [

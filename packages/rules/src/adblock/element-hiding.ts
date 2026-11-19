@@ -29,6 +29,7 @@ export const elementHidingRule: Rule = {
     category: "blocking",
     subcategory: "ad",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 3,
     optionsSchema,

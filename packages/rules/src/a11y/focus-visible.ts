@@ -13,6 +13,7 @@ export const focusVisibleRule: Rule = {
     category: "a11y",
     wcag: [wcag("2.4.7")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "template",
     severity: "warning",
     weight: 5,

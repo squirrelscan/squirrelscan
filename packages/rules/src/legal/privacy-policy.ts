@@ -19,6 +19,7 @@ export const privacyPolicyRule: Rule = {
       "A privacy policy is legally required in many jurisdictions (GDPR, CCPA). Link to your privacy policy from every page, typically in the footer. The policy should explain what data you collect, how it's used, and user rights. Consider using schema.org markup to identify the policy page.",
     category: "legal",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
   },

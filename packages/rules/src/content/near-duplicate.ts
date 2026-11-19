@@ -473,6 +473,7 @@ export const nearDuplicateRule: Rule = {
       "Pages whose main text differs only by a place name, a date or a paragraph compete with each other in search and, in numbers, look like doorway pages. Give each page content specific to its own topic, or merge the pages and redirect the extra URLs to one, or point the copies at a single canonical URL with a rel=canonical tag.",
     category: "content",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
     // Check names by outcome class (#1741).

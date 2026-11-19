@@ -13,6 +13,7 @@ export const landmarkRegionsRule: Rule = {
     wcagNone:
       "It reports pages with no main, navigation or footer landmark, and pages with several main landmarks, best practices no WCAG success criterion requires.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 3,

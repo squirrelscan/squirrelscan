@@ -173,6 +173,7 @@ export const entityConflictsRule: Rule = {
     solution: `The same entity is declared on several pages with different values for the same property, so there is no single answer to "what is this organization's logo". A search engine picks one, and which one is not yours to choose. Converge on the canonical value. The durable fix is to stop repeating the declaration at all: declare the entity once with an @id and reference it by { "@id": "…" } from the other pages, which makes disagreement impossible rather than merely absent. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 4,
   },

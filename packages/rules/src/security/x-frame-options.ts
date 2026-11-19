@@ -33,6 +33,7 @@ export const xFrameOptionsRule: Rule = {
       "X-Frame-Options prevents your site from being embedded in iframes, protecting against clickjacking attacks. Set: X-Frame-Options: DENY (no framing) or SAMEORIGIN (same origin only). For modern browsers, CSP frame-ancestors is preferred: Content-Security-Policy: frame-ancestors 'self'. Use both for maximum compatibility.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
     // Check names by outcome class (#1741).

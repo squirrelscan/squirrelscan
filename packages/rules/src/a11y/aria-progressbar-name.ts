@@ -41,6 +41,7 @@ export const ariaProgressbarNameRule: Rule = {
     category: "a11y",
     wcag: [wcag("1.1.1")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 7,

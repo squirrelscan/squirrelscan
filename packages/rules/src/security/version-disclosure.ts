@@ -48,6 +48,7 @@ export const versionDisclosureRule: Rule = {
       'Remove the version from these headers. Nginx: server_tokens off; Apache: ServerTokens Prod and ServerSignature Off; PHP: expose_php = Off in php.ini; ASP.NET: drop X-AspNet-Version and X-AspNetMvc-Version (httpRuntime enableVersionHeader="false", MvcHandler.DisableMvcResponseHeader = true); remove X-Powered-By and X-Generator at the framework or proxy. Product names without a version are harmless.',
     category: "security",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 3,
   },

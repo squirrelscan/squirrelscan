@@ -376,6 +376,7 @@ export const bylineConsistencyRule: Rule = {
       "Most of your pages of this type show a visible author byline or date, and these pages do not. A site that bylines its articles and then publishes a few anonymously looks careless at best, and readers and quality raters notice the gap more than they would on a site that never bylines anything. The cause is usually one template, a missing CMS field, or posts imported from elsewhere: fix it at the source so the byline and date render on every page of the type. A page that deliberately has no author, like a press release or a policy page, is fine if it is classified as a different type.",
     category: "eeat",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     // Deliberately light: one site-wide check with at most four items, weighted
     // under eeat/author-byline (5) and eeat/content-dates (4), so its worst case

@@ -292,6 +292,7 @@ export const badCachingRule: Rule = {
       "Set Cache-Control with an appropriate max-age on every response (short for HTML, long + immutable for hashed static assets), expose an ETag or Last-Modified for cheap revalidation, and enable gzip/Brotli for text responses. Consistent caching across the whole site cuts repeat-visit load times and origin/CDN cost.",
     category: "perf",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 5,
     // A dev server or private-network host is not the delivery edge (pub#629).

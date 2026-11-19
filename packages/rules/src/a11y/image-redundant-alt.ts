@@ -76,6 +76,7 @@ export const imageRedundantAltRule: Rule = {
     wcagNone:
       "It flags alt text that names the image type (\"image of\", \"photo\"), repeats the filename or repeats nearby text, which are wording practices; such an image still has a text alternative, so 1.1.1 Non-text Content is not what it tests.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

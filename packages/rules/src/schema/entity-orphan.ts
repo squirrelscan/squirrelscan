@@ -27,6 +27,7 @@ export const entityOrphanRule: Rule = {
     solution: `This entity was given an @id, which is the expensive part, and then nothing was connected to it. An @id exists so other nodes can point at it; one that nothing points at and that appears on a single page is doing no more than an inline block would. Either reference it from the nodes it belongs to, using about, mainEntity, author or publisher as appropriate, or drop the @id and inline it. Neither is worse than the current state, and both are clearer. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 1,
   },

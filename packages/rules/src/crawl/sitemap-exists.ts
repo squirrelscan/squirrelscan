@@ -15,6 +15,7 @@ export const sitemapExistsRule: Rule = {
       "XML sitemaps help search engines discover and index your pages. Create a sitemap.xml at your domain root listing all important pages. Reference it in robots.txt with 'Sitemap: https://yoursite.com/sitemap.xml'. Submit it to Google Search Console and Bing Webmaster Tools. Keep it under 50MB and 50,000 URLs per file; use a sitemap index for larger sites.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 10,
   },

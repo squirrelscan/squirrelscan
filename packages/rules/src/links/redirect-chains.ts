@@ -22,6 +22,7 @@ export const redirectChainsRule: Rule = {
       "Redirects add latency and waste crawl budget, especially when chained. Make sure every internal link hits the final destination directly, not the intermediate redirect, and consult the chain context emitted by this rule to trace multi-hop paths. Consolidate redirect rules, prefer 301s for permanent moves, and audit redirects regularly to remove legacy hops.",
     category: "links",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     weight: 4,
     // Check names by outcome class (#1741).

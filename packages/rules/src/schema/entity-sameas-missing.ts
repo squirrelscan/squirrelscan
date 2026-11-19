@@ -25,6 +25,7 @@ export const entitySameAsMissingRule: Rule = {
     solution: `sameAs is how you tell a search engine that the organization on this site is the same one as the LinkedIn company page, the Wikipedia article, the Crunchbase entry and the X account. Without it the entity on your site is unconnected to everything that corroborates it, which is the evidence a knowledge panel is assembled from. Add a sameAs array to the organization listing every profile you control, using the canonical URL of each rather than a redirect. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "resource",
     severity: "info",
     weight: 2,
   },

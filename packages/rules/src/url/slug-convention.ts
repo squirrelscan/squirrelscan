@@ -482,6 +482,7 @@ export const slugConventionRule: Rule = {
       "Your site uses more than one URL convention: some paths follow one form and a minority follow another. Mixed conventions are how duplicate-content and canonical bugs start, because /My_Page, /my-page and /my-page/ are three different URLs to a crawler even when they serve the same thing. Pick the dominant form already used by most of your site, migrate the minority onto it, and 301-redirect the old paths so links and rankings follow. If a section deliberately differs (a dated archive, a deeper product tree), that is fine: the point is that a handful of pages should not be the exception.",
     category: "url",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     // Deliberately light: one site-wide check, capped items, so a single rule
     // cannot dominate the url category score.

@@ -24,6 +24,7 @@ export const entityOrganizationMissingRule: Rule = {
     solution: `This site has the pages a business has, an about page or a contact page, and no Organization or LocalBusiness entity for a search engine to attach any of it to. Declare the organization once, with an @id, a name, a url, a logo and a sameAs entry for every profile you control. It is the node everything else on the site hangs off: the publisher of your articles, the owner of your WebSite, the subject of your reviews. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 2,
   },

@@ -84,6 +84,7 @@ export const charsetRule: Rule = {
     // `security/cookie-flags` and `perf/compression`; the counterexample is pinned
     // in packages/rules/tests/template-verdict-page-independence.test.ts (#1951).
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

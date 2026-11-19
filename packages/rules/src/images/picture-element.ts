@@ -26,6 +26,7 @@ The <img> provides fallback for:
 - Failed srcset loading`,
     category: "images",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "error",
     weight: 6,

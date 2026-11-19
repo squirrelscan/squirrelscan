@@ -131,6 +131,7 @@ export const allNoindexPages: Rule = {
       "Review this list to ensure all non-indexed pages are intentionally blocked. Common unintentional blocks: staging directives left in production, overly broad robots.txt rules, CMS defaults. Remove noindex from pages that should be indexed.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 2,
     optionsSchema: z.object({

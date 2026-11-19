@@ -362,6 +362,7 @@ export const fontConsistencyRule: Rule = {
       "Too many font families make a site look unfinished and cost bytes. Pick one family for text, optionally one for headings and one for code, and remove the rest. A family used on a single page usually came from a pasted snippet or a one-off template: switch it to a site font. An @font-face family that no font-family names can be deleted along with its files. This rule reads inline styles only, so check linked stylesheets by hand before removing anything. Icon fonts are not counted.",
     category: "content",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 2,
     optionsSchema,

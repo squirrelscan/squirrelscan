@@ -145,6 +145,7 @@ export const responsiveSizeRule: Rule = {
       "Serve images at the size they are displayed. A thumbnail shown at 64x64 needs at most a 128x128 file for high-density screens; a file much heavier than that wastes bandwidth and slows the page. Generate a thumbnail-sized variant and reference it, or list 1x and 2x candidates in srcset so the browser picks the smallest sharp one. Image CDNs can resize on the fly.",
     category: "images",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

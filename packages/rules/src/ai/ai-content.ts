@@ -17,6 +17,7 @@ export const aiContentRule: Rule = {
       "AI content detection is currently unavailable. When re-enabled it will run as an opt-in, metered cloud check.",
     category: "ax",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 2,

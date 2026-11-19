@@ -68,6 +68,7 @@ export const colorContrastRule: Rule = {
     category: "a11y",
     wcag: [wcag("1.4.3")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 5,

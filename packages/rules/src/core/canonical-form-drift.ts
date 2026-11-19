@@ -435,6 +435,7 @@ export const canonicalFormDriftRule: Rule = {
       "Each of these canonicals is valid on its own, but the site does not agree with itself: some pages canonicalise to one URL form and some to another. Search engines treat the two forms as different URLs, so links, crawl budget and ranking signals split between them. Pick one form - the one your redirects already send traffic to - and emit it everywhere: one scheme (https), one host (www or apex, not both), one trailing-slash convention, and never any tracking parameters in the canonical. Canonicals are usually generated in one template or middleware, so this is normally a single fix in the place that builds the URL rather than a per-page edit.",
     category: "core",
     scope: "site",
+    findingScope: "resource",
     severity: "warning",
     // Deliberately light, and one site-wide check with capped items rather than a
     // per-page finding, so this rule cannot dominate the core category score.

@@ -71,6 +71,7 @@ export const imageFileSizeRule: Rule = {
       "Large images slow down page loads and impact Core Web Vitals. Compress oversized images, use modern formats (WebP/AVIF), and resize images to the display dimensions. Consider responsive images with srcset to serve smaller files on mobile.",
     category: "images",
     scope: "site",
+    findingScope: "resource",
     severity: "error",
     weight: 7,
     optionsSchema,

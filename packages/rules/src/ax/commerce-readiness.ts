@@ -150,6 +150,7 @@ export const commerceReadinessRule: Rule = {
       "Add the missing fields to the page's Product structured data: an Offer with price, priceCurrency and availability, shippingDetails (OfferShippingDetails), hasMerchantReturnPolicy (MerchantReturnPolicy) and a gtin, mpn or sku. Feed and checkout manifest findings are informational only: publish one if you want agents to buy without scraping, and keep it consistent with the pages.",
     category: "ax",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 3,

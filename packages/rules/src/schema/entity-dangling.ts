@@ -38,6 +38,7 @@ export const entityDanglingRule: Rule = {
     solution: `A node references another by { "@id": "…" } and no page in the crawl declares that id, so the reference resolves to nothing. The usual cause is a publisher or author declared in full on the homepage only while every article points at it: the article pages carry the pointer without the thing it points to, and a search engine reading one article in isolation cannot follow it. Declare the target in the @graph of every page that references it, which costs a few hundred bytes and is what Yoast and Rank Math already do. See ${ENTITY_FIX_DOCS}.`,
     category: "schema",
     scope: "site",
+    findingScope: "resource",
     severity: "error",
     weight: 5,
   },

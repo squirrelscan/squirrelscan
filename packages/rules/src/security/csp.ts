@@ -45,6 +45,7 @@ export const cspRule: Rule = {
       "CSP prevents XSS attacks by restricting which resources can load. Start with a report-only policy to identify issues. Key directives: default-src 'self', script-src (avoid 'unsafe-inline'), img-src, style-src, frame-ancestors. Use nonces or hashes instead of 'unsafe-inline' for scripts. Test thoroughly as strict CSP can break functionality.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 6,
     // Check names by outcome class (#1741).

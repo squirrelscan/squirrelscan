@@ -65,6 +65,7 @@ export const indexabilityConflicts: Rule = {
       "Allowing a page in robots.txt and marking it noindex is the correct way to keep it out of search results, and is not reported. A page blocked in robots.txt without noindex is never fetched, so the URL can still be listed from links elsewhere. To remove it from results, allow the crawl and add noindex; to only save crawl budget, the Disallow alone is fine.",
     category: "crawl",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
   },

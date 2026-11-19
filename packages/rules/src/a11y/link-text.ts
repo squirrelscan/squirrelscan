@@ -246,6 +246,7 @@ export const linkTextRule: Rule = {
     category: "a11y",
     wcag: [wcag("2.4.4")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

@@ -77,6 +77,7 @@ export const ariaTextRule: Rule = {
     wcagNone:
       "It flags focusable elements inside role=\"text\", a role that is not part of WAI-ARIA, so no WCAG success criterion covers it.",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

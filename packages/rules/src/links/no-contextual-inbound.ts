@@ -346,6 +346,7 @@ export const noContextualInboundRule: Rule = {
       "These pages look well-linked but receive no editorial support: every link pointing at them is repeated on every page of the site, so it carries no signal about what the page is about or how important it is. Add links from the body copy of related articles, hub pages, or category descriptions using descriptive anchor text. Sitewide navigation links help discovery, but contextual links are what pass topical relevance and internal link equity.",
     category: "links",
     scope: "site",
+    findingScope: "page",
     severity: "warning",
     weight: 4,
     optionsSchema: z.object({

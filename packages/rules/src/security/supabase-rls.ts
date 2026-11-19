@@ -397,6 +397,7 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         'Turn on Row Level Security for every table in the exposed schema: `alter table public.<table> enable row level security;`, then add policies that grant only what each role needs, for example `create policy "own rows" on public.profiles for select using (auth.uid() = id);`. With RLS on and no policy, the anon key reads nothing. If a table is meant to be public, keep a policy that allows only the rows and columns you mean to publish. Check the Supabase dashboard\'s Security Advisor for other tables without RLS, and treat the exposed rows as already read: rotate anything sensitive they held.',
       category: "security",
       scope: "site",
+      findingScope: "page",
       severity: "error",
       weight: 8,
       checks: [

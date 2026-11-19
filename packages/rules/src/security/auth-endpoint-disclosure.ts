@@ -596,6 +596,7 @@ export const authEndpointDisclosureRule: Rule = {
       "Never serialize the user row as it is stored. Return an explicit allowlist of fields the client needs (id, name, email, avatar) from a dedicated serializer or DTO, and keep password hashes, reset, confirmation and remember tokens, OTP secrets, recovery codes, sign-in counters and IPs out of every API response. Most frameworks have one place for it: `hidden` on a Laravel model, `select` in Prisma or Drizzle, `only:` or a serializer in Rails, a `toJSON` override or a response schema in Express and Fastify, `exclude` in a Django REST serializer. An endpoint that answers a request with no session cookie should return 401 or an empty session, not a user. Then rotate whatever leaked: force a password reset for exposed hashes and revoke exposed tokens and secrets.",
     category: "security",
     scope: "site",
+    findingScope: "page",
     severity: "error",
     weight: 8,
     // Check names by outcome class (#1741).

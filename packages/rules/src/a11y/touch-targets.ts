@@ -13,6 +13,7 @@ export const touchTargetsRule: Rule = {
     category: "a11y",
     wcag: [wcag("2.5.5")],
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "warning",
     weight: 4,

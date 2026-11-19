@@ -13,6 +13,7 @@ export const serviceAreaRule: Rule = {
       "Service area pages help rank for '[service] in [location]' searches. Create pages for each major city/area you serve. Include location-specific content, testimonials, and case studies. Use unique content - don't just swap city names. Add LocalBusiness schema with areaServed property.",
     category: "local",
     scope: "site",
+    findingScope: "page",
     severity: "info",
     weight: 3,
     // Service-area pages only matter for real-world local businesses. Skip with a

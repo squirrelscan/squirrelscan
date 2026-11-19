@@ -47,6 +47,7 @@ export const frameworkDataPayloadRule: Rule = {
       "A hydrating framework serialises the data its components were rendered from into the HTML so the browser can re-render them. On a page with no interactive parts that data is the page's content shipped a second time, as markup and as JSON. Render the page without hydrating it: in Next.js keep it a server component and avoid passing large props to client components; in Astro leave out the client: directive; in Nuxt use server-only components or routeRules prerendering without payload extraction; in SvelteKit set export const csr = false on the route. Where the data has to stay, trim what is passed to the client to the fields the interactive part reads.",
     category: "perf",
     scope: "page",
+    findingScope: "page",
     verdictScope: "page",
     severity: "info",
     weight: 2,
