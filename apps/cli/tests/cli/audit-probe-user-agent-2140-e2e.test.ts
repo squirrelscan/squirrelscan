@@ -18,7 +18,11 @@ import { join } from "node:path";
 
 import { CHROME_USER_AGENT, SQUIRRELSCAN_USER_AGENT } from "@/constants";
 import { isChromeUserAgent } from "@/tools/request";
-import { CLIENT_BLOCK_MESSAGE, checkReachability } from "@/utils/reachability";
+import {
+  CLIENT_BLOCK_MESSAGE,
+  REACHABILITY_MAX_ATTEMPTS,
+  checkReachability,
+} from "@/utils/reachability";
 
 const entry = join(import.meta.dir, "../../src/cli.ts");
 const scratch = mkdtempSync(join(tmpdir(), "squirrel-probe-ua-"));
@@ -33,12 +37,18 @@ interface Seen {
 }
 const seen: Seen[] = [];
 
-/** `resetAll` resets every connection, whatever it sends. */
+/**
+ * "chrome" resets a request that claims Chrome; "all" resets every connection, whatever it sends;
+ * "first" resets only its very first connection (a transient blip) and answers the rest.
+ */
 function startServer(
-  resetAll: boolean
+  mode: "chrome" | "all" | "first"
 ): Promise<{ server: Server; port: number }> {
   return new Promise((resolve) => {
+    let connections = 0;
     const server = createServer((socket) => {
+      connections += 1;
+      const connection = connections;
       socket.on("error", () => {});
       let head = "";
       socket.on("data", (chunk) => {
@@ -47,7 +57,10 @@ function startServer(
         const path = head.split(" ")[1] ?? "/";
         const userAgent =
           /^user-agent:\s*(.*)$/im.exec(head)?.[1]?.trim() ?? "";
-        const reset = resetAll || /Chrome\/\d/.test(userAgent);
+        const reset =
+          mode === "all" ||
+          (mode === "chrome" && /Chrome\/\d/.test(userAgent)) ||
+          (mode === "first" && connection === 1);
         seen.push({ path, userAgent, reset });
         head = "";
         if (reset) {
@@ -81,12 +94,14 @@ function startServer(
 /** The AI-crawler access checks send the named crawler's own agent, whatever the crawl's. */
 const isAgentCheck = (s: Seen) => /GPTBot|Claude-User/.test(s.userAgent);
 
-const browserFiltering = await startServer(false);
-const alwaysResetting = await startServer(true);
+const browserFiltering = await startServer("chrome");
+const alwaysResetting = await startServer("all");
+const blipOnce = await startServer("first");
 
 afterAll(() => {
   browserFiltering.server.close();
   alwaysResetting.server.close();
+  blipOnce.server.close();
   rmSync(scratch, { recursive: true, force: true });
 });
 
@@ -108,7 +123,7 @@ describe("client hints", () => {
 });
 
 describe("the probe", () => {
-  test("falls back once to the honest UA after a reset, and reports it", async () => {
+  test("falls back to the honest UA only after every browser attempt is reset, and reports it", async () => {
     const result = await checkReachability(
       `http://127.0.0.1:${browserFiltering.port}/`,
       {
@@ -117,13 +132,31 @@ describe("the probe", () => {
     );
     expect(result.reachable).toBe(true);
     expect(result.userAgentFallback).toBe(SQUIRRELSCAN_USER_AGENT);
-    // One browser attempt reset, then exactly one honest attempt: the same failing
-    // headers were not retried.
+    // The browser UA keeps its transient retries (a reset can be a blip), and only when all of
+    // them were reset does the honest UA get its one attempt.
+    expect(
+      seen.map((s) => [s.reset, s.userAgent === SQUIRRELSCAN_USER_AGENT])
+    ).toEqual([
+      ...Array.from({ length: REACHABILITY_MAX_ATTEMPTS }, () => [true, false]),
+      [false, true],
+    ]);
+  }, 30_000);
+
+  // pub#2140 review: one transient reset that a retry clears never changes the crawl's agent.
+  test("a single transient reset that a retry clears does not fall back", async () => {
+    const result = await checkReachability(
+      `http://127.0.0.1:${blipOnce.port}/`,
+      {
+        fallbackOnReset: true,
+      }
+    );
+    expect(result.reachable).toBe(true);
+    expect(result.userAgentFallback).toBeUndefined();
     expect(
       seen.map((s) => [s.reset, s.userAgent === SQUIRRELSCAN_USER_AGENT])
     ).toEqual([
       [true, false],
-      [false, true],
+      [false, false],
     ]);
   }, 30_000);
 
@@ -141,6 +174,7 @@ describe("the probe", () => {
   }, 30_000);
 
   test("names the cause and the fix when the site is still unreachable", async () => {
+    const started = Date.now();
     const result = await checkReachability(
       `http://127.0.0.1:${alwaysResetting.port}/`,
       {
@@ -152,8 +186,10 @@ describe("the probe", () => {
     expect(result.error).toContain("[crawler] user_agent");
     expect(result.error).not.toContain("—");
     expect(result.error?.toLowerCase()).not.toContain("econnreset");
-    // browser attempt, honest attempt, then it stops.
-    expect(seen).toHaveLength(2);
+    // every browser attempt, then the one honest attempt, then it stops.
+    expect(seen).toHaveLength(REACHABILITY_MAX_ATTEMPTS + 1);
+    // The retries' backoff plus the honest attempt stays well inside the 20 s probe budget.
+    expect(Date.now() - started).toBeLessThan(20_000);
   }, 30_000);
 });
 
