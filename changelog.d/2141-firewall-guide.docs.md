@@ -1,0 +1,1 @@
+- A new guide, Firewalls, bot protection and custom headers, shows each firewall, WAF, access gateway and bot protection exception for cloud, CLI and MCP audits side by side, with header scoping and the fix for sites that reset browser-like clients (#2141).

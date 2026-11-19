@@ -363,6 +363,8 @@ Set a custom `user_agent` if you need to:
 - Identify squirrelscan requests in your server logs
 </Tip>
 
+If the site resets the connection for browser-like clients, the CLI retries once as the honest `SquirrelScan/2.0` agent when no `user_agent` is set. See [a site that resets browser-like clients](/guides/firewall-and-bot-protection#resets-browser-like-clients), and [Firewalls, bot protection and custom headers](/guides/firewall-and-bot-protection) for letting the crawler through a WAF.
+
 ## Rate limiting
 
 SquirrelScan is polite by default:
