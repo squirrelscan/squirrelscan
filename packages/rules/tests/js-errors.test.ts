@@ -4,6 +4,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { classifyRuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
 import type {
   CheckResult,
   RenderResultItem,
@@ -255,6 +257,17 @@ describe("reliability/js-errors", () => {
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.skipReason).toBe(RUNTIME_NOT_RECORDED_SKIP_REASON);
+  });
+
+  test("a run where every rendered page was a WAF or bot challenge is a coded gap (unread-page), not a does-not-apply skip", async () => {
+    const checks = await run({
+      [`${SITE}/a`]: render({ pageErrors: [{ message: "TypeError: c" }] }, { status: 403 }),
+      [`${SITE}/b`]: render({}, { headers: { "cf-mitigated": "challenge" } }),
+    });
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.status).toBe("skipped");
+    expect(checks[0]?.skipReason).toBe(UNREAD_PAGE_SKIP_REASON);
+    expect(classifyRuleOutcome(checks[0]!)).toBe("coverage_gap");
   });
 
   // #704: a pass covers the whole site, so a stored finding would resolve on it. With any page the rule had to
