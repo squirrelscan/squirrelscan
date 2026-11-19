@@ -145,8 +145,32 @@ export const jsErrorsRule: Rule = {
       "A page can answer 200 with clean HTML and still be broken in the browser: an uncaught exception stops a menu or checkout, a hydration mismatch makes the framework discard the server HTML, a lazy chunk deleted by a deploy never loads, or an API call made after load answers 500 and leaves a section empty. Fix the error at the reported source file and line. For a hydration mismatch, make the server and client render the same markup (no Date.now(), random values, or browser-only checks during render). For ChunkLoadError after a deploy, keep the previous release's hashed chunks online for a while. For a failing API call, fix the endpoint or handle the failure in the UI. Third-party failures are warnings: check the provider or remove the tag.",
     category: "reliability",
     scope: "site",
+    // A finding names one error (message and source file) or one failing request URL shared across pages.
+    findingScope: "resource",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741). The `js-errors` pass clears every problem check; the
+    // `unchecked-pages` note says part of the site had no runtime data.
+    checks: [
+      { name: "js-errors", outcome: "problem" },
+      { name: "hydration-errors", outcome: "problem" },
+      { name: "failed-runtime-requests", outcome: "problem" },
+      { name: "console-errors", outcome: "problem" },
+      { name: "third-party-js-errors", outcome: "problem" },
+      {
+        name: "js-errors",
+        outcome: "clean",
+        clears: [
+          "js-errors",
+          "hydration-errors",
+          "failed-runtime-requests",
+          "console-errors",
+          "third-party-js-errors",
+        ],
+      },
+      { name: "js-errors", outcome: "skipped" },
+      { name: "unchecked-pages", outcome: "skipped" },
+    ],
     // The render runs inside the audit and is billed as the page's own audit charge (#2290).
     cloud: { service: "render", unit: "page", creditFeature: "audit_page" },
   },
