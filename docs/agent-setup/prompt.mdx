@@ -14,7 +14,7 @@ are an agent, the rest of this page is your task.
 Set up squirrelscan for this project so you can audit the website and fix what
 you find. Work through the steps in order. The setup is not done until the
 first audit has run: do not stop at "installed". Finish with the report in
-step 6.
+step 7.
 
 ## Ground rules
 
@@ -22,6 +22,14 @@ step 6.
   invent another installer, package name or download URL.
 - Never ask for, paste or store an API key or token. Signing in is the person's
   step: tell them to run `squirrel auth login` themselves.
+- Never pass `--yes` (`-y`). It skips squirrelscan's confirmation prompts and
+  lets a cloud audit spend credits up to the account's per-audit limit.
+- Get the person's explicit OK before anything that spends credits or leaves
+  their machine: a signed-in cloud audit, publishing a report, or turning on
+  recurring audits. Before a cloud audit, show them the credit estimate the CLI
+  prints and the balance from `squirrel credits`, then wait for a yes.
+- Keep what is already set up. Do not overwrite an existing `squirrel.toml`,
+  and do not reinstall a CLI that works: update it.
 - Audit sites the person owns or is allowed to test. Probing security checks
   (`--probe active` or `aggressive`) send requests a site's firewall may treat as
   an attack: only use them on the person's own site, and only if they ask.
@@ -35,12 +43,31 @@ squirrel self version
 If it prints a version, run `squirrel self update` and go to step 3. If the
 command is not found, install it in step 2.
 
+Check the sign-in state now, because it decides whether an audit is free:
+
+```bash
+squirrel auth status --json
+```
+
+`"authenticated":false` means signed out. Anything else means signed in: a
+plain `squirrel audit` then runs in the cloud, spends credits, adds the site to
+the person's dashboard and publishes a report. Step 4 avoids that.
+
 ## 2. Install the CLI
 
 squirrelscan ships as a single binary with no runtime dependency.
 
 ```bash
 curl -fsSL --connect-timeout 10 --max-time 120 "https://install.squirrelscan.com/install.sh?source=agent" | bash
+```
+
+If you would rather read the script before running it, download it from the
+same URL, read it, then run it. Use no other source:
+
+```bash
+curl -fsSL --connect-timeout 10 --max-time 120 "https://install.squirrelscan.com/install.sh?source=agent" -o install.sh
+less install.sh
+bash install.sh
 ```
 
 On Windows, use PowerShell:
@@ -65,7 +92,9 @@ adds it when run as root; otherwise `apk add libstdc++` first.
 ## 3. Add the squirrelscan skill
 
 The skill teaches you the audit and fix loop: which flags to use, how to read a
-report and how to work through issues. Install it for the agent you are:
+report and how to work through issues. Run `squirrel skills status` first. If the skill is already installed and
+current, skip the install. If it is installed but behind, run
+`squirrel skills update`. Otherwise install it for the agent you are:
 
 ```bash
 squirrel skills install
@@ -85,12 +114,17 @@ Check the result with `squirrel skills status`.
 
 ## 4. Run the first audit
 
-Signed out, local audits need no account and cost no credits. Run one now against
-the project's site so there is something concrete to work from:
+The first audit is always a local one, whether or not the person is signed in.
+`--offline` keeps it on this machine: free, nothing published, nothing sent to
+the cloud. `--level quick` keeps it to 25 pages. Run it now against the
+project's site so there is something concrete to work from:
 
 ```bash
-squirrel audit <url> --format json
+squirrel audit <url> --offline --level quick --format json
 ```
+
+Without `--offline`, a signed-in audit is a billed cloud audit that publishes a
+report. Do not run one until the person has said yes (see the ground rules).
 
 Use the site's production URL if you can find one in the project (check
 `package.json`, a sitemap, `README`, or the deploy config). Otherwise ask the
@@ -113,7 +147,9 @@ let the audit through without weakening the site.
 
 MCP gives you the audit tools directly, so you can run audits and read issues
 without shelling out. Skip this if you installed the Claude Code plugin in step
-3. Otherwise pick the line matching the agent you are:
+3. Check your MCP config first so the server is not added twice (in Claude
+Code, run `claude mcp list`). If a `squirrelscan` server is already there,
+leave it. Otherwise pick the line matching the agent you are:
 
 - **Claude Code**: `claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp`
 - **Codex**: `codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp`
@@ -127,7 +163,29 @@ reports) need an account: tell the person to run `squirrel auth login`.
 
 Full per-client instructions: https://docs.squirrelscan.com/developers/mcp-clients
 
-## 6. Report, then fix what you found
+## 6. If setup fails
+
+If a step fails and you cannot fix it, the docs here were wrong, or something
+was needlessly hard, send the team ONE report. Do not send one per error.
+
+```bash
+squirrel feedback --json --category bug_report --email <person's address> -m "<area>: expected <x>, saw <y>. Repro: <steps>"
+```
+
+`--email` is where the team can reply. Ask the person for it unless they are
+signed in, because a signed-in account supplies one. Use `--category confusing`
+for unclear docs and `--category tool_ergonomics` for friction. If you are
+connected over MCP, the `send_feedback` tool does the same job.
+
+Write it with the area, what you expected, what you saw and the shortest steps
+to repeat it. Never include credentials, API keys, code, page content, personal
+details or private file paths: describe them instead.
+
+A sent report prints JSON with `"ok":true` and a `receipt` such as
+`fb_3f9a1c0b7d2e`. Quote the receipt to the person. If there is no receipt, the
+report was not sent: say so, and do not claim it was.
+
+## 7. Report, then fix what you found
 
 Report this to the person, one line each:
 
@@ -135,6 +193,11 @@ Report this to the person, one line each:
 - skill installed, and for which agents (`squirrel skills status`)
 - MCP connected, or why not
 - first audit: the URL, the score and the top three issues
+- feedback receipt, if you sent a report in step 6
+
+End the report with the exact next step for the person: one concrete action,
+such as fixing the top issue, or running `squirrel auth login` themselves to
+get cloud features.
 
 Then work the issues in severity order, highest first. For each one:
 
@@ -150,8 +213,8 @@ positive for this project, say so and explain why rather than silencing it.
 
 ## Notes
 
-- Audits run without an account never cost credits. Signed-in cloud audits use
-  credits: see [Credits](https://docs.squirrelscan.com/cloud/credits) for the
+- Audits run without an account, and any audit with `--offline`, never cost
+  credits. Signed-in cloud audits use credits: see [Credits](https://docs.squirrelscan.com/cloud/credits) for the
   current prices. Free accounts get monthly credits.
 - `squirrel audit --help` lists the audit levels, output formats, and crawl limits.
 - squirrelscan does not follow `robots.txt` by default, so a site that blocks

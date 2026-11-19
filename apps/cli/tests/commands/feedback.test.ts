@@ -631,7 +631,12 @@ describe("squirrel feedback — --message", () => {
 
     expect(exit).toBeNull();
     expect((lastFetch!.body!.feedback as string).length).toBe(5000);
-    expect(jsonOutput()).toEqual({ ok: true, category: null, truncated: true });
+    expect(jsonOutput()).toEqual({
+      ok: true,
+      category: null,
+      truncated: true,
+      receipt: expect.stringMatching(/^fb_[0-9a-f]{12}$/),
+    });
   });
 });
 
@@ -704,6 +709,7 @@ describe("squirrel feedback — --json", () => {
       ok: true,
       category: "tool_ergonomics",
       truncated: false,
+      receipt: expect.stringMatching(/^fb_[0-9a-f]{12}$/),
     });
     expect(stderrText()).toBe("");
   });
@@ -818,6 +824,7 @@ describe("squirrel feedback — run and website ids", () => {
       arch: process.arch,
       run_id: "run_abc123",
       website_id: "web_xyz789",
+      receipt_id: expect.stringMatching(/^fb_[0-9a-f]{12}$/),
     });
   });
 

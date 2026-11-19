@@ -97,6 +97,7 @@ describe("send_feedback (local MCP)", () => {
       received: true,
       category: "missing_data",
       truncated: false,
+      receipt: expect.stringMatching(/^fb_[0-9a-f]{12}$/),
     });
     expect(lastBody).toMatchObject({
       email: "agent@example.com",

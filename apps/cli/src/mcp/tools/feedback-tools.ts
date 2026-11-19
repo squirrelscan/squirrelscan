@@ -95,6 +95,7 @@ export function registerFeedbackTools(server: McpServer): void {
       }
       return jsonResult({
         received: true,
+        receipt: result.receipt,
         category,
         truncated: text.truncated,
         message: "Thanks, this was recorded for the team.",
