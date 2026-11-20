@@ -300,13 +300,19 @@ describe("nested markup costs a walk, not a walk per element (#3355)", () => {
     expect(await ruleMs(tableHeadersRule, html)).toBeLessThan(1_000);
   }, { timeout: 60_000 });
 
-  test("link-in-text-block: 5,000 nested blocks in under 1 s", async () => {
+  test("link-in-text-block: 5,000 nested blocks run far faster than the per-block reference", async () => {
     const html = nested(
       5_000,
       () => '<blockquote><a href="/x" style="text-decoration:none">l</a>',
       "</blockquote>",
     );
-    expect(await ruleMs(linkInTextBlockRule, html)).toBeLessThan(1_000);
+    // A ratio on the same input, not an absolute limit: CI load slows both
+    // runs alike. The reference re-walks a subtree per block (quadratic) and
+    // measures ~10x slower here; a regression to that shape closes the gap.
+    await ruleMs(linkInTextBlockRule, html); // warm up
+    const fast = Math.min(await ruleMs(linkInTextBlockRule, html), await ruleMs(linkInTextBlockRule, html));
+    const reference = await ruleMs(referenceLinkInTextBlockRule, html);
+    expect(reference / Math.max(fast, 0.5)).toBeGreaterThan(3);
   }, { timeout: 60_000 });
 
   test("none of the four queries a subtree per table or block", async () => {

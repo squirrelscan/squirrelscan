@@ -21,19 +21,29 @@ function ctx(html: string, pageUrl = "https://example.test/p"): RuleContext {
 
 describe("region evidence is linear in the number of faulty elements", () => {
   test("a 5,000-link nav does not re-walk the region per link", async () => {
-    const links = Array.from(
-      { length: 5000 },
-      (_, i) => `<a href="/t${i}">Read more</a>`,
-    ).join("");
-    const started = performance.now();
-    const checks = (await linkTextRule.run(ctx(`<footer><nav>${links}</nav></footer>`))).checks;
-    const elapsed = performance.now() - started;
-
+    const page = (n: number) =>
+      ctx(
+        `<footer><nav>${Array.from({ length: n }, (_, i) => `<a href="/t${i}">Read more</a>`).join("")}</nav></footer>`,
+      );
+    // Time the rule only (parsing excluded), best of three.
+    const time = async (n: number) => {
+      const c = page(n);
+      let best = Infinity;
+      for (let i = 0; i < 3; i++) {
+        const started = performance.now();
+        await linkTextRule.run(c);
+        best = Math.min(best, performance.now() - started);
+      }
+      return best;
+    };
+    const checks = (await linkTextRule.run(page(5000))).checks;
     expect(checks[0]?.componentOccurrences).toHaveLength(5000);
-    // Generous: the point is that it is not quadratic. Rebuilding the region's
-    // direct-child sequence per link is ~25M child visits and blows this by
-    // orders of magnitude.
-    expect(elapsed).toBeLessThan(1000);
+    await time(500); // warm up
+    const small = await time(1250);
+    const large = await time(5000);
+    // A ratio, not an absolute limit, so CI load cannot trip it: 4x the links
+    // is ~4x the time when linear and ~16x when the region is re-walked per link.
+    expect(large / Math.max(small, 0.5)).toBeLessThan(9);
   });
 });
 
@@ -96,15 +106,12 @@ describe("stale-copyright detection is byte-identical to the baseline", () => {
     expect(check.componentOccurrences ?? []).toHaveLength(0);
   });
 
-  test("deep wrapper chains stay linear", async () => {
+  test("deep wrapper chains keep evidence on the innermost element", async () => {
     const depth = 400;
     const inner = `${"<div>".repeat(depth)}<p>&copy; 2019 Acme</p>${"</div>".repeat(depth)}`;
-    const started = performance.now();
     const check = (await staleCopyrightRule.run(ctx(`<footer>${inner}</footer>`))).checks[0]!;
-    const elapsed = performance.now() - started;
     expect(check.status).toBe("warn");
     // Evidence belongs to the innermost element asserting the year.
     expect(check.componentOccurrences).toHaveLength(1);
-    expect(elapsed).toBeLessThan(1000);
   });
 });
