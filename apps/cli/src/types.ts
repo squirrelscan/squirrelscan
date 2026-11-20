@@ -865,6 +865,8 @@ export interface AuditOptions {
    * site. No sitemap, discovery probes or link following; site-wide rules skip with `targeted-run`.
    */
   targetUrls?: string[];
+  /** Comparison set of a targeted run (`--compare-url`, #2096): fetched once next to `targetUrls`. */
+  compareUrls?: string[];
   /** Wall-clock budget for the whole audit, seconds (#1271); unset = no limit. */
   maxDurationSeconds?: number;
   /** Epoch ms the budget counts from (the command's start); unset = when the audit starts. */

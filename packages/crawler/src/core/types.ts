@@ -218,6 +218,13 @@ export interface CrawlerConfig {
    */
   targetUrls?: string[];
   /**
+   * Comparison set of a targeted run (#2096): extra URLs fetched, each once, next to `targetUrls` so a
+   * site-scope rule that declares `comparisonSet: "listed-pages"` can judge the targets against them. Same
+   * scope, robots and length checks as a target, and counted against `maxPages` with them. Ignored unless
+   * `targetUrls` is set.
+   */
+  compareUrls?: string[];
+  /**
    * Recently-removed (404/410) page URLs (#1146). De-prioritized in the frontier
    * so dead URLs stop eating budget slots ahead of live pages. Empty/unset = no
    * de-prioritization.

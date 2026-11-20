@@ -620,7 +620,8 @@ export class RuleRunner {
     if (
       rule.meta.scope === "site" &&
       ctx.site?.targetedRun === true &&
-      !SITE_RULES_ON_TARGETED_RUN.has(rule.meta.id)
+      !SITE_RULES_ON_TARGETED_RUN.has(rule.meta.id) &&
+      !(rule.meta.comparisonSet === "listed-pages" && ctx.site.comparisonRun === true)
     ) {
       return {
         meta: rule.meta,
@@ -628,7 +629,10 @@ export class RuleRunner {
           {
             name: rule.meta.id,
             status: "skipped",
-            message: "Skipped: this run audited only the URLs it was given, not the whole site",
+            message:
+              rule.meta.comparisonSet === "listed-pages"
+                ? "Not checked: this run audited only the URLs it was given and no comparison set (add --compare-url)"
+                : "Not checked: this rule judges the whole site, and this run audited only the URLs it was given",
             skipReason: TARGETED_RUN_SKIP_REASON,
             details: { foldKey: TARGETED_RUN_SKIP_REASON },
           },

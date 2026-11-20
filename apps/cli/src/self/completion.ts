@@ -81,6 +81,7 @@ const auditBashFlags = [
   "--rule-exclude",
   "--wcag-level",
   "--target-url",
+  "--compare-url",
   "--disable-discovery-probes",
   "--discovery-probe-path",
   "--crawl-timeout",
@@ -835,6 +836,7 @@ _squirrel() {
             '--bypass-cache[Send Cache-Control: no-cache on page fetches]' \\
             '*--header-host[Host that also gets the custom headers on page and asset requests (repeatable)]:host' \\
             '*--target-url[Audit exactly this URL and nothing else (repeatable)]:url' \\
+            '*--compare-url[With --target-url, also fetch this URL as the comparison set (repeatable)]:url' \\
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
             '--wcag-level[Only run accessibility rules mapped to a WCAG criterion at or below this level]:level:(A AA AAA)' \\
@@ -1178,6 +1180,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "C
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l bypass-cache -d "Send Cache-Control: no-cache on page fetches"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l header-host -d "Host that also gets the custom headers on page and asset requests (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l target-url -r -d "Audit exactly this URL and nothing else (repeatable)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l compare-url -r -d "With --target-url, also fetch this URL as the comparison set (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l wcag-level -x -a "A AA AAA" -d "Only run accessibility rules mapped to a WCAG criterion at or below this level"
