@@ -176,15 +176,12 @@ export async function loadConfig(
 ): Promise<Config> {
   const path = configPath ?? findConfigFile();
 
-  if (!path || !existsSync(path)) {
-    if (!options?.silent) {
-      console.log("Config: (none, using defaults)");
-    }
-    return getDefaultConfig();
+  if (!options?.silent) {
+    console.log(configSourceLine(path ?? undefined));
   }
 
-  if (!options?.silent) {
-    console.log(`Config: ${path}`);
+  if (!path || !existsSync(path)) {
+    return getDefaultConfig();
   }
 
   try {

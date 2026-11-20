@@ -2,8 +2,8 @@
 // pre-aggregated request digest the cloud editor-summary service consumes, and
 // the presentation note rendered above the summary in every output format.
 //
-// The digest is intentionally slim: category scores + a ranked, capped set of
-// the highest-impact issues: so the request stays small and the model gets a
+// The digest is intentionally slim (category scores + a ranked, capped set of
+// the highest-impact issues), so the request stays small and the model gets a
 // focused view of THIS audit (never the full report). Mirrors how the CLI builds
 // other cloud-service payloads.
 
