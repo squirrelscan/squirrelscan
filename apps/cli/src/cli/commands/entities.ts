@@ -156,10 +156,20 @@ function printSummary(map: EntityMap, crawlLabel: string): void {
   console.log(entitySummaryLine(map));
   console.log("");
 
-  for (const node of primaryEntities(map).slice(0, 10)) {
+  // The "declared on several pages with no @id" problem below counts every such
+  // entity, page-local or not, so the list must show each of them too.
+  const listed = primaryEntities(map).slice(0, 10);
+  for (const node of map.nodes) {
+    if (!node.id && entityPageTotal(node) > 1 && !listed.includes(node)) {
+      listed.push(node);
+    }
+  }
+  for (const node of listed) {
     const id = node.id ? fmt.dim(` ${node.id}`) : fmt.yellow(" no @id");
+    // An unnamed entity's label already carries its type: print it once.
+    const types = node.name ? ` ${fmt.dim(`(${node.types.join(", ")})`)}` : "";
     console.log(
-      `${fmt.bold(entityLabel(node))} ${fmt.dim(`(${node.types.join(", ")})`)} ` +
+      `${fmt.bold(entityLabel(node))}${types} ` +
         fmt.dim(`${node.occurrences}x on ${entityPageTotal(node)} page(s)`) +
         id
     );
@@ -219,7 +229,7 @@ function renderEntity(map: EntityMap, query: string): string {
   line(fmt.dim(node.types.join(", ")));
   line();
   line(
-    `${"@id".padEnd(14)}${node.id ?? fmt.yellow("none — synthetic identity")}`
+    `${"@id".padEnd(14)}${node.id ?? fmt.yellow("none, synthetic identity")}`
   );
   line(`${"key".padEnd(14)}${fmt.dim(node.key)}`);
   line(

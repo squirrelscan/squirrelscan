@@ -213,7 +213,8 @@ describe("security/exposed-files", () => {
         skipReason: "probe-level-too-low",
         value: "not-checked",
       });
-      expect(checks[0]!.message).toContain("--probe aggressive");
+      // The hint lives in the skip reason table, so the report prints it once.
+      expect(checks[0]!.message).not.toContain("--probe");
     }
     expect(site.seen).toEqual([]);
   });

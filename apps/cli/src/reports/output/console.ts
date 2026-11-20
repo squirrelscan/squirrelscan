@@ -512,7 +512,7 @@ export function generateConsoleReport(
   // footer agrees with the "Total:" line below it (repo#2395).
   const warningTotal = report.healthScore?.warningCount ?? report.warnings;
   log(
-    `${fmt.green(`${report.passed} passed`)} • ${fmt.yellow(`${warningTotal} warnings`)} • ${fmt.red(`${report.failed} failed`)}`
+    `${fmt.green(`${report.passed} passed`)} • ${fmt.yellow(`${warningTotal} ${warningTotal === 1 ? "warning" : "warnings"}`)} • ${fmt.red(`${report.failed} failed`)}`
   );
   log(divider());
   log("");
@@ -625,7 +625,7 @@ function printTechnologies(tech: ReportTechnologies): void {
   const delta = [added, removed].filter(Boolean).join(" ");
   log(
     fmt.dim(
-      `Detected stack — not part of the score.${summary ? ` ${summary}.` : ""}`
+      `Detected stack: not part of the score.${summary ? ` ${summary}.` : ""}`
     ) + (delta ? ` ${delta}` : "")
   );
   log("");
@@ -782,7 +782,7 @@ function printEntities(map: EntityMap): void {
     flags.push(fmt.yellow(`${s.nodesWithoutIdCount} without @id`));
   }
   log(
-    fmt.dim("The site's own JSON-LD — not part of the score. ") +
+    fmt.dim("The site's own JSON-LD: not part of the score. ") +
       `${s.nodeCount} entities · ${s.edgeCount} references · ${stableIdPercent(map)}% with a stable @id` +
       (flags.length > 0 ? ` · ${flags.join(fmt.dim(" · "))}` : "")
   );
@@ -886,6 +886,6 @@ function printCategoryBreakdown(score: HealthScore, report: AuditReport): void {
 
   log("");
   log(
-    `Total: ${fmt.green(`${score.passedCount} passed`)}, ${fmt.yellow(`${score.warningCount} warnings`)}, ${fmt.red(`${score.errorCount} errors`)}`
+    `Total: ${fmt.green(`${score.passedCount} passed`)}, ${fmt.yellow(`${score.warningCount} ${score.warningCount === 1 ? "warning" : "warnings"}`)}, ${fmt.red(`${score.errorCount} ${score.errorCount === 1 ? "error" : "errors"}`)}`
   );
 }

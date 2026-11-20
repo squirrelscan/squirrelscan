@@ -55,6 +55,8 @@ export interface AnalyzeOptions {
   /** Called when the post-analyze retention pass retired something (#955). */
   onRetention?: (outcome: RetentionOutcome) => void;
   configPath?: string;
+  /** Skip the "Config: ..." log line (the caller prints it, e.g. above a spinner). */
+  silentConfig?: boolean;
   onProgress?: AnalyzeProgressCallback;
 }
 
@@ -212,7 +214,9 @@ export async function runAnalyze(
   options: AnalyzeOptions
 ): Promise<Result<AnalyzeResult>> {
   // Load config
-  const config = await loadConfig(options.configPath);
+  const config = await loadConfig(options.configPath, {
+    silent: options.silentConfig,
+  });
   const onProgress = options.onProgress ?? (() => {});
 
   let storage: CrawlStorage | null = null;

@@ -161,6 +161,14 @@ export function expandConfigRuleGroups(config: Config): Config {
   };
 }
 
+/** The "Config: ..." line `loadConfig` prints, for callers that print it themselves. */
+export function configSourceLine(configPath?: string): string {
+  const path = configPath ?? findConfigFile();
+  return !path || !existsSync(path)
+    ? "Config: (none, using defaults)"
+    : `Config: ${path}`;
+}
+
 // Load and parse config file
 export async function loadConfig(
   configPath?: string,

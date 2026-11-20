@@ -722,7 +722,7 @@ const SCRIPT = String.raw`
 
     var dl = document.createElement("dl");
     dl.appendChild(text("dt", "@id"));
-    dl.appendChild(text("dd", node.id || "none — synthetic identity"));
+    dl.appendChild(text("dd", node.id || "none, synthetic identity"));
     dl.appendChild(text("dt", "Occurrences"));
     dl.appendChild(text("dd", node.occurrences + " on " + (node.pages.length + node.morePages) + " page(s)"));
 

@@ -1,5 +1,5 @@
 // Shared presentation helpers for the report-only "Cache" stats section (#108),
-// rendered across all output formats. Cache stats are informational — they
+// rendered across all output formats. Cache stats are informational: they
 // NEVER affect the score (mirrors site-metadata.ts / technologies.ts).
 
 import type { CacheFreshness, CacheHitReason, CacheStats } from "./types";
@@ -27,7 +27,7 @@ const REASON_ORDER: CacheHitReason[] = [
 ];
 
 export const CACHE_STATS_NOTE =
-  "Cache reuse vs the previous crawl (informational — not part of the score).";
+  "Cache reuse vs the previous crawl (informational: not part of the score).";
 
 /** hits / total as a 0–100 integer percentage. */
 export function cacheHitRatePercent(stats: CacheStats): number {

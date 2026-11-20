@@ -1,6 +1,6 @@
 // Shared presentation helpers for rendering the report-only "Site profile"
 // section across all output formats. The resolved site metadata is
-// informational — it NEVER affects the score (mirrors technologies.ts).
+// informational: it NEVER affects the score (mirrors technologies.ts).
 
 import type { ContactPoint, SiteMetadata } from "./types";
 
@@ -146,7 +146,7 @@ export interface SiteProfileRow {
 
 /**
  * Build the ordered, non-empty rows of the Site profile for a resolved
- * `SiteMetadata`. Pure — no I/O. Rows with no value are omitted entirely so
+ * `SiteMetadata`. Pure: no I/O. Rows with no value are omitted entirely so
  * every formatter renders the same compact set.
  */
 export function siteProfileRows(meta: SiteMetadata): SiteProfileRow[] {
@@ -197,4 +197,4 @@ export function siteProfileFlags(meta: SiteMetadata): string | null {
 }
 
 /** Standard one-line note shown above the section in every format. */
-export const SITE_PROFILE_NOTE = "Resolved site context — informational, not part of the score.";
+export const SITE_PROFILE_NOTE = "Resolved site context: informational, not part of the score.";

@@ -60,8 +60,6 @@ const INCOMPLETE = "exposed-files-incomplete";
 /** Per-request timeout, on top of the shared probe budget's deadline. */
 export const EXPOSED_FILE_PROBE_TIMEOUT_MS = 10_000;
 
-const ENABLE_HINT = "Run with --probe aggressive (or --pentest) to check, on a site you own or may test.";
-
 type ProbeOutcome =
   | { kind: "not-allowed" }
   | { kind: "error" }
@@ -252,7 +250,7 @@ export const exposedFilesRule: Rule = {
             name: NOT_CHECKED,
             status: "skipped",
             skipReason: PROBE_LEVEL_TOO_LOW_SKIP_REASON,
-            message: `Exposed sensitive files not checked: probing is ${level}, and this rule only probes at aggressive. ${ENABLE_HINT}`,
+            message: `Exposed sensitive files not checked: probing is ${level}, and this rule only probes at aggressive.`,
             value: "not-checked",
             details: { probeLevel: level, requiredLevel: "aggressive" },
           },

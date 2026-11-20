@@ -3927,9 +3927,9 @@
   ]
  },
  "security/exposed-files": {
-  "digest": "88417882991078",
+  "digest": "242287976103433",
   "lines": [
-   "exposed-files-not-checked|skipped|Exposed sensitive files not checked: probing is passive, and this rule only probes at aggressive. Run with --probe aggressive (or --pentest) to check, on a site you own or may test.|\"not-checked\"|"
+   "exposed-files-not-checked|skipped|Exposed sensitive files not checked: probing is passive, and this rule only probes at aggressive.|\"not-checked\"|"
   ]
  },
  "security/form-captcha": {
