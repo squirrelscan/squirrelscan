@@ -3278,8 +3278,12 @@ export interface RunSyncDelta {
  * checkout, and never appears on pricing, marketing, docs, dashboard plan
  * pickers or CLI upsells. An admin assigns it from the admin dashboard. Public
  * surfaces must enumerate `SELF_SERVE_PLAN_IDS`, never `Object.keys(PLANS)`.
+ *
+ * `team_legacy` (squirrelscan/repo#5002) is the per-seat Team plan, kept for subscribers who bought it
+ * before Team went flat; it is not self-serve and ranks with `team`. `business` is the tier above Team,
+ * not self-serve (unlisted) until it is switched on.
  */
-export type PlanId = "free" | "starter" | "team" | "enterprise";
+export type PlanId = "free" | "starter" | "team" | "team_legacy" | "business" | "enterprise";
 export type OrgRole = "owner" | "admin" | "editor" | "viewer" | "billing";
 
 /** Stripe subscription billing interval. Annual prepays 12 months at the
@@ -3303,6 +3307,12 @@ export interface PlanDefinition {
   maxOrgs: number;
   maxWebsites: number;
   maxMembers: number;
+  /**
+   * A HIDDEN abuse cap on members for a plan whose `maxMembers` is -1 (sold as unlimited), like
+   * `maxWebsites` is for websites: never surfaced in UI or marketing. Absent = no cap. Optional, so a
+   * plan arriving over the wire from an older server reads as uncapped.
+   */
+  memberAbuseCap?: number;
   /**
    * Max cloud renders in flight per audit. The hosted runner holds a cloud
    * audit's renders to it, and an all-rendered crawl also runs exactly that
@@ -3410,12 +3420,10 @@ export interface PlanDefinition {
    */
   selfServe: boolean;
   /**
-   * Per-seat pricing for seat-based plans (Team, #625). Only seat-based plans
-   * set it; `undefined` means flat subscription pricing (free/starter). At
-   * launch, the monthly credit grant is pooled into the org's monthly bucket as
-   * `seats * includedCreditsPerSeat`, and checkout uses `quantity = seats` with
-   * a `minSeats` floor.
-   * TODO(#625 Phase 2): Team's values are TBD — pricing questions still open.
+   * Per-seat pricing (#625). Since squirrelscan/repo#5002 only `team_legacy` sets it: the grandfathered
+   * per-seat Team subscription, whose monthly grant is pooled as `seats * includedCreditsPerSeat` and
+   * whose Stripe quantity tracks seats with a `minSeats` floor. `undefined` = flat pricing (every other
+   * plan, the flat Team included).
    */
   perSeat?: {
     priceMonthUsd: number;

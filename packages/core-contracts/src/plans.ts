@@ -99,25 +99,23 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     unlimitedCredits: false,
     selfServe: true,
   },
+  /**
+   * Flat Team (squirrelscan/repo#5002, decided 2026-11-20): one price for the org, no seat charge,
+   * unlimited members, a pooled monthly grant. The per-seat Team it replaced lives on as `team_legacy`
+   * for the subscribers who bought it. Trials (`organizations.trial_ends_at`) run on this plan.
+   */
   team: {
     id: "team",
     name: "Team",
-    // Purchasable via per-seat Stripe checkout (#736): checkout uses
-    // `quantity = seats` against STRIPE_PRICE_TEAM_SEAT, and the invoice.paid
-    // webhook maps that price back to this plan. Seat-based pricing lives in
-    // `perSeat` below.
-    //
-    // monthlyCredits stays 0 here: the recurring grant is pooled as
-    // `seats * perSeat.includedCreditsPerSeat`, but that seat-aware grant math
-    // ships in Phase 2c (#625). Until then the flat grant reads this 0 — no org
-    // is over-credited by a placeholder.
-    monthlyCredits: 0,
+    priceMonthUsd: 89,
+    // 12 months prepaid at the cost of 10.
+    priceYearUsd: 890,
+    monthlyCredits: 15000,
     maxOrgs: 1,
     maxWebsites: 100,
-    // TODO(#625 Phase 2b): replace the open cap with the paid seat count
-    // (Stripe subscription quantity). -1 = no fixed cap, so the invite routes
-    // treat Team as invite-capable.
+    // Sold as unlimited; the hidden cap below only stops abuse.
     maxMembers: -1,
+    memberAbuseCap: 100,
     renderConcurrency: 10,
     scheduledCrawls: true,
     maxScheduledWebsites: -1,
@@ -131,6 +129,33 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxPagesPerAudit: 10000,
     unlimitedCredits: false,
     selfServe: true,
+  },
+  /**
+   * The per-seat Team plan as sold before #5002 ($29 a seat, minimum 2, 3,000 credits a seat pooled),
+   * kept unchanged for the subscribers on it and for comped orgs moved onto it (#5002 D8). Not
+   * self-serve: nobody new can buy it. Its seat prices (STRIPE_PRICE_TEAM_SEAT*) map here. Ranks with
+   * `team`, so every "Team and up" entitlement holds, and its limits are Team's.
+   */
+  team_legacy: {
+    id: "team_legacy",
+    name: "Team",
+    // Purchased via per-seat Stripe checkout (#736): `quantity = seats` against
+    // STRIPE_PRICE_TEAM_SEAT; the monthly grant is pooled as
+    // `seats * perSeat.includedCreditsPerSeat`, so the flat grant stays 0.
+    monthlyCredits: 0,
+    maxOrgs: 1,
+    maxWebsites: 100,
+    // -1 = no fixed cap: every member is a paid seat (Stripe quantity).
+    maxMembers: -1,
+    renderConcurrency: 10,
+    scheduledCrawls: true,
+    maxScheduledWebsites: -1,
+    scheduleFrequencies: SCHEDULE_FREQUENCIES,
+    customHeaders: true,
+    brokenLinkAlerts: true,
+    maxPagesPerAudit: 10000,
+    unlimitedCredits: false,
+    selfServe: false,
     perSeat: {
       priceMonthUsd: 29,
       // Annual per-seat = 12 months prepaid at the cost of 10.
@@ -138,6 +163,35 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
       includedCreditsPerSeat: 3000,
       minSeats: 2,
     },
+  },
+  /**
+   * Business (squirrelscan/repo#5002, decided 2026-11-20): the tier above Team. UNLISTED until it is
+   * switched on: `selfServe: false` keeps it off the pricing page, plan pickers, checkout and upsells
+   * (D2, D7), and flipping it to true is the launch. Raises Team's limits (D6, D9). Its 25,000-page
+   * ceiling is above `REPORT_LIMITS.maxPages` until the cloud runner can carry it, and `planMaxPages()`
+   * clamps it meanwhile; raising that ceiling blocks the launch.
+   */
+  business: {
+    id: "business",
+    name: "Business",
+    priceMonthUsd: 249,
+    // 12 months prepaid at the cost of 10.
+    priceYearUsd: 2490,
+    monthlyCredits: 45000,
+    maxOrgs: 1,
+    // Hidden abuse cap, like every plan's; Business's is higher (D6).
+    maxWebsites: 500,
+    maxMembers: -1,
+    memberAbuseCap: 100,
+    renderConcurrency: 20,
+    scheduledCrawls: true,
+    maxScheduledWebsites: -1,
+    scheduleFrequencies: SCHEDULE_FREQUENCIES,
+    customHeaders: true,
+    brokenLinkAlerts: true,
+    maxPagesPerAudit: 25000,
+    unlimitedCredits: false,
+    selfServe: false,
   },
   /**
    * INTERNAL / invite-only (decided 2026-08-28). This is how enterprise billing
@@ -166,19 +220,21 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     // abuse cap is a hosted-tier guard; a contracted org is not that risk.
     maxWebsites: -1,
     maxMembers: -1,
-    // At least Team's, like maxPagesPerAudit below.
+    // Team's 10 for now, below Business's 20 on purpose: unlike the page ceiling, nothing clamps
+    // renders at dispatch, and 20 renders at once on the paid container is unmeasured. Raise it with
+    // the runner capacity work that blocks turning Business on (#5002 D9).
     renderConcurrency: 10,
     scheduledCrawls: true,
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
     brokenLinkAlerts: true,
-    // At least Team's ceiling, never below it (#1028) — a contracted plan that
-    // audited fewer pages than the tier under it would be a pricing bug. Kept
-    // as its own literal rather than a reference to Team's so a Team-tier
-    // change is a deliberate decision here too; still clamped at dispatch by
+    // At least Business's ceiling, never below it (#1028) — a contracted plan
+    // that audited fewer pages than the tier under it would be a pricing bug.
+    // Kept as its own literal rather than a reference so a tier change is a
+    // deliberate decision here too; still clamped at dispatch by
     // `REPORT_LIMITS.maxPages` like every other plan.
-    maxPagesPerAudit: 10000,
+    maxPagesPerAudit: 25000,
     unlimitedCredits: true,
     selfServe: false,
   },
@@ -200,19 +256,22 @@ export function getPlan(planId: string): PlanDefinition {
   return Object.hasOwn(PLANS, planId) ? PLANS[planId as PlanId] : PLANS.free;
 }
 
-// Tier hierarchy: free < starter < team < enterprise. Keep in sync with PlanId —
-// a new tier must be ranked here (an unranked id resolves to 0 = free, matching
-// getPlan). Enterprise ranks top so it inherits every `planAtLeast` entitlement.
+// Tier hierarchy: free < starter < team = team_legacy < business < enterprise. Keep in sync with
+// PlanId — a new tier must be ranked here (an unranked id resolves to 0 = free, matching getPlan).
+// team_legacy ranks WITH team (#5002): the per-seat subscriber keeps every Team entitlement.
+// Enterprise ranks top so it inherits every `planAtLeast` entitlement.
 const PLAN_RANK: Record<PlanId, number> = {
   free: 0,
   starter: 1,
   team: 2,
-  enterprise: 3,
+  team_legacy: 2,
+  business: 3,
+  enterprise: 4,
 };
 
 /**
  * True when `planId` sits at or above `floor` in the tier hierarchy
- * (free < starter < team < enterprise). Accepts a raw string; an unknown id ranks as free.
+ * (free < starter < team = team_legacy < business < enterprise). Accepts a raw string; an unknown id ranks as free.
  * Use for "at least this tier" entitlement gates (e.g. `planAtLeast(id,
  * "starter")` = "any paid plan") instead of a binary `id !== "free"` so a
  * higher tier inherits every entitlement of the tiers below it.
