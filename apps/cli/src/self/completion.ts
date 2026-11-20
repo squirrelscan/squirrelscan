@@ -25,6 +25,134 @@ const levelValues = AUDIT_LEVELS.join(" ");
 const ticketTypeValues = TICKET_TYPES.join(" ");
 const ticketStatusValues = TICKET_STATUSES.join(" ");
 
+/** audit flags for bash completion, one per line so PRs adding a flag never conflict. */
+const auditBashFlags = [
+  "--max-pages",
+  "-m",
+  "--max-depth",
+  "--concurrency",
+  "--per-host",
+  "--level",
+  "--coverage",
+  "-C",
+  "--format",
+  "-f",
+  "--output",
+  "-o",
+  "--refresh",
+  "-r",
+  "--fresh-ua",
+  "--store-scripts",
+  "--no-store-scripts",
+  "--content-store",
+  "--incremental",
+  "--no-incremental",
+  "--resume",
+  "--verbose",
+  "-v",
+  "--debug",
+  "--trace",
+  "--project-name",
+  "-n",
+  "--publish",
+  "-p",
+  "--no-publish",
+  "--ephemeral",
+  "--no-ephemeral",
+  "--visibility",
+  "--follow-redirect",
+  "--no-follow-redirect",
+  "--yes",
+  "-y",
+  "--render",
+  "--render-mode",
+  "--http",
+  "--offline",
+  "--external-links",
+  "--no-external-links",
+  "--no-internal-links",
+  "--no-classifier",
+  "--fail-on",
+  "--header",
+  "-H",
+  "--header-host",
+  "--bypass-cache",
+  "--rule-include",
+  "--rule-exclude",
+  "--wcag-level",
+  "--target-url",
+  "--disable-discovery-probes",
+  "--discovery-probe-path",
+  "--crawl-timeout",
+  "--probe",
+  "-P",
+  "--passive",
+  "--aggressive",
+  "--probe-budget",
+  "--pentest",
+  "--summary",
+  "--include-passed",
+  "--help",
+  "--include-info",
+  "--include-pages",
+  "--full-report",
+  "--max-duration",
+  "--no-ignore",
+  "--urls-file",
+  "--out-dir",
+  "--retry-failed",
+  "--restart",
+  "--url-timeout",
+  "--max-urls",
+  "--allow-private-hosts",
+].join(" ");
+
+/** crawl flags for bash completion, one per line so PRs adding a flag never conflict. */
+const crawlBashFlags = [
+  "--max-pages",
+  "-m",
+  "--concurrency",
+  "--per-host",
+  "--level",
+  "--coverage",
+  "-C",
+  "--refresh",
+  "-r",
+  "--fresh-ua",
+  "--resume",
+  "--disable-discovery-probes",
+  "--discovery-probe-path",
+  "--help",
+].join(" ");
+
+/** report flags for bash completion, one per line so PRs adding a flag never conflict. */
+const reportBashFlags = [
+  "--list",
+  "-l",
+  "--severity",
+  "--category",
+  "--group",
+  "--format",
+  "-f",
+  "--diff",
+  "--regression-since",
+  "--allow-cross-site",
+  "--output",
+  "-o",
+  "--input",
+  "-i",
+  "--publish",
+  "-p",
+  "--visibility",
+  "--summary",
+  "--include-passed",
+  "--include-info",
+  "--help",
+  "--include-pages",
+  "--full-report",
+  "--wcag-checklist",
+].join(" ");
+
 export type Shell = "bash" | "zsh" | "fish";
 
 /**
@@ -270,7 +398,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --content-store --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --bypass-cache --rule-include --rule-exclude --wcag-level --target-url --disable-discovery-probes --discovery-probe-path --crawl-timeout --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help --include-info --include-pages --full-report --max-duration --no-ignore --urls-file --out-dir --retry-failed --restart --url-timeout --max-urls --allow-private-hosts" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "${auditBashFlags}" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -306,7 +434,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --disable-discovery-probes --discovery-probe-path --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "${crawlBashFlags}" -- "\${cur}") )
       return 0
       ;;
     ci)
@@ -362,7 +490,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--list -l --severity --category --group --format -f --diff --regression-since --allow-cross-site --output -o --input -i --publish -p --visibility --summary --include-passed --include-info --help --include-pages --full-report --wcag-checklist" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "${reportBashFlags}" -- "\${cur}") )
       return 0
       ;;
     feedback)
