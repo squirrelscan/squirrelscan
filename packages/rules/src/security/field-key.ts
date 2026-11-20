@@ -6,20 +6,24 @@
 // `$.users[].password`, quoting a key that is not an identifier. The runner's
 // endpoint dedupe (endpoint-dedupe.ts) turns both into one field key so it can
 // tell when the two rules point at the same field of the same answer: `$`, then
-// `.name` per key (masked to `*` exactly as the auth rule masks it) and `[]` per
-// array, every index folded. A path that cannot be read back (cut at its length
-// cap, or not in either form) has no key and matches nothing, so its finding is
-// kept. Keys are built from paths already in the report: they hold nothing the
-// report does not.
+// `.name` per key and `[]` per array, every index folded. A path that cannot be
+// read back (cut at its length cap, or not in either form) has no key and
+// matches nothing, so its finding is kept. So does a path through a key the auth
+// rule masks: `user.*` stands for every masked key under `user` (`totp_secret2`,
+// `api_key2`), so it cannot show two findings name the same field, and a
+// duplicate beats a lost finding. Keys are built from paths already in the
+// report: they hold nothing the report does not.
 
-/** The auth rule's mask: only a plain field name is kept (auth-endpoint-disclosure `childPath`). */
-function maskKey(key: string): string {
-  return /^[A-Za-z_-]{1,32}$/.test(key) ? key : "*";
+/** True when the auth rule keeps `key` as written (auth-endpoint-disclosure `childPath`); any other key it masks to `*`. */
+function isPlainKey(key: string): boolean {
+  return /^[A-Za-z_-]{1,32}$/.test(key);
 }
 
 /** The field key of an auth-endpoint-disclosure item's `meta.field`, or undefined. */
 export function authFieldKey(path: string): string | undefined {
   if (path === "" || path === "(root)") return undefined;
+  // A masked segment: `*` alone between the start, a `.` or `]` and the end, a `.` or `[`.
+  if (/(?:^|[.\]])\*(?=$|[.[])/.test(path)) return undefined;
   const folded = path.replace(/\[\d+\]/g, "[]");
   return folded.startsWith("[") ? `$${folded}` : `$.${folded}`;
 }
@@ -37,8 +41,8 @@ export function jsonFieldKey(path: string): string | undefined {
     }
     if (path[i] === ".") {
       const m = /^[A-Za-z_$][A-Za-z0-9_$]*/.exec(path.slice(i + 1));
-      if (!m) return undefined;
-      out += `.${maskKey(m[0])}`;
+      if (!m || !isPlainKey(m[0])) return undefined;
+      out += `.${m[0]}`;
       i += 1 + m[0].length;
       continue;
     }
@@ -53,7 +57,8 @@ export function jsonFieldKey(path: string): string | undefined {
       } catch {
         return undefined;
       }
-      out += `.${maskKey(key)}`;
+      if (!isPlainKey(key)) return undefined;
+      out += `.${key}`;
       i += 2 + m[0].length;
       continue;
     }

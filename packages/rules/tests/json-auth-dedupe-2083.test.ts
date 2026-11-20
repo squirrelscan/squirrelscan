@@ -354,9 +354,13 @@ describe("the cross-rule dedupe (squirrelscan#2083)", () => {
     expect(jsonFieldKey("$.users[].password")).toBe(authFieldKey("users[3].password"));
     expect(jsonFieldKey("$[].password")).toBe(authFieldKey("[0].password"));
     expect(jsonFieldKey('$["reset-token"]')).toBe(authFieldKey("reset-token"));
-    // A key the auth rule masks (a digit, an email) is masked the same way.
-    expect(jsonFieldKey('$.byUser["jo@example.com"].password')).toBe(authFieldKey("byUser.*.password"));
-    expect(jsonFieldKey("$.token2")).toBe(authFieldKey("*"));
+    // A key the auth rule masks (a digit, an email) cannot be told from another
+    // masked key, so a path through one has no key on either side.
+    expect(jsonFieldKey('$.byUser["jo@example.com"].password')).toBeUndefined();
+    expect(authFieldKey("byUser.*.password")).toBeUndefined();
+    expect(jsonFieldKey("$.token2")).toBeUndefined();
+    expect(authFieldKey("*")).toBeUndefined();
+    expect(authFieldKey("[0].*")).toBeUndefined();
     expect(jsonFieldKey(`$.${"a".repeat(158)}…`)).toBeUndefined();
     expect(jsonFieldKey("(response text)")).toBeUndefined();
   });
@@ -375,6 +379,23 @@ describe("the cross-rule dedupe (squirrelscan#2083)", () => {
     expect(checks[0]!.details).toMatchObject({ fields: 1, endpoint: ACCOUNT });
     expect(checks[0]!.message).toBe(`${ACCOUNT} returns card number to a request without credentials`);
     expect(out.has(UNAUTHENTICATED_API_RULE_ID)).toBe(false);
+  });
+
+  test("two different masked keys under one parent never match: json keeps its finding", () => {
+    // The auth rule reports user.totp_secret2 as user.*; json finds user.api_key2.
+    // Both mask to one shape, but they are different fields, so a duplicate at worst.
+    const json = [jsonFinding(ACCOUNT, [["$.user.api_key2", "API key"]])];
+    const out = dedupeCrossRuleFindings(
+      new Map([
+        [JSON_SENSITIVE_FIELDS_RULE_ID, { meta: jsonSensitiveFieldsRule.meta, checks: json }],
+        [AUTH_ENDPOINT_DISCLOSURE_RULE_ID, { meta: authEndpointDisclosureRule.meta, checks: [authFinding(ACCOUNT, ["user.*"])] }],
+      ])
+    );
+    expect(out.has(JSON_SENSITIVE_FIELDS_RULE_ID)).toBe(false);
+    // A masked parent the auth rule reported whole covers nothing beneath it either.
+    const nested = [jsonFinding(ACCOUNT, [['$.byUser["jo@example.com"].password', "plaintext password"]])];
+    const reported = new Map([[ACCOUNT, new Set([authFieldKey("byUser.*") ?? "$.byUser.*"])]]);
+    expect(dropFieldsReportedElsewhere(nested, reported)).toBe(nested);
   });
 
   test("a credential inside a field the auth rule reported whole is the same leak", () => {
