@@ -69,7 +69,7 @@ What a count can and cannot tell apart:
 
 The rule emits checks named `supabase-rls`:
 
-- Fail, one check per project, when one or more tables report rows. Message: `1 Supabase table(s) in abcdefghijklmnopqrst.supabase.co report rows to the site's public anon key: profiles. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`. Each exposed table is an item such as `profiles (42 row(s) visible to the anon key)`. No row, value or column name is fetched, so none is stored or reported.
+- Fail, one check per project, when one or more tables report rows. Message: `1 Supabase table(s) in abcdefghijklmnopqrst.supabase.co report rows to the site's public anon key. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`. Each exposed table is an item labelled with the bare table name, such as `profiles`, with the count beside it: `42 row(s) visible to the anon key`. No row, value or column name is fetched, so none is stored or reported.
 - Pass only when every table the code names, in every project found, got a definite answer: protected, zero rows or missing. Message: `No Supabase table reported rows to the public anon key (4 table(s) probed in 1 project(s))`.
 - Skipped, reason `probe-incomplete` (not checked), when any table got no definite answer: the project throttled or challenged a probe, a probe failed, answered with an HTML error page or had no usable total, the budget ran out partway, or a table or project was left out by the per-audit caps. Those tables may be readable, so the run is never a pass and never clears an earlier finding.
 - Skipped, reason `not-applicable`, when the site's scripts hold no Supabase project with an anon key.
@@ -82,14 +82,18 @@ The rule emits checks named `supabase-rls`:
 
 ### Tables that are meant to be public
 
-A table you publish on purpose, such as a public `posts` table, still fails, because a count cannot tell an intended read policy from RLS left off. To waive it, add an [`[[ignore]]`](/configuration/ignore) entry that matches its item id (`<ref>.supabase.co/rest/v1/<table>`) by table name, and every other table keeps being checked:
+A table you publish on purpose, such as a public `posts` table, still fails, because a count cannot tell an intended read policy from RLS left off. To waive it, add an [`[[ignore]]`](/configuration/ignore) entry that names the table. The bare table name waives it in every project the site uses, and every other table keeps being checked:
 
 ```toml squirrel.toml
 [[ignore]]
 rule   = "security/supabase-rls"
-items  = ["glob:*/rest/v1/posts"]
+items  = ["posts"]
 reason = "posts is public by design"
 ```
+
+A bare name is an exact match: `posts` does not waive `posts_drafts`. The item id, `<ref>.supabase.co/rest/v1/<table>`, also matches, so `glob:*/rest/v1/posts` waives the same table, and the full id waives it in one project only.
+
+When other tables in the same project are still exposed, the check keeps failing, its count drops to the tables left, and the waived table is not listed. When every exposed table in a project is waived, the check passes and says how many were waived.
 
 ### Limits
 

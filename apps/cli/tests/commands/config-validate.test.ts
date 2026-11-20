@@ -124,6 +124,18 @@ reason = "Shopify sets these"
     expect(stdout).toEqual([`Config valid: ${join(dir, "squirrel.toml")}`]);
   });
 
+  // #2103: a Supabase table waived by its bare name, as the rule page shows.
+  test("a security/supabase-rls entry that waives a table by its bare name is valid", async () => {
+    await validate(`[[ignore]]
+rule = "security/supabase-rls"
+items = ["posts"]
+reason = "posts is public by design"
+`);
+    expect(exitCode).toBeNull();
+    expect(stderr).toEqual([]);
+    expect(stdout).toEqual([`Config valid: ${join(dir, "squirrel.toml")}`]);
+  });
+
   test("reports an entry that names no rule, one that names compromise detection, and an unsafe regex", async () => {
     await validate(`[[ignore]]
 rule = "performance/ttfb"
