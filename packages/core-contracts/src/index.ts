@@ -8,6 +8,7 @@ export * from "./rule-outcome";
 // Start URL redirects (#1281): chain, outcome and exit-code contract.
 export * from "./seed-redirect";
 export * from "./seed-verification";
+export * from "./finding-coverage";
 
 // Cache-stats aggregation helper (#108).
 export * from "./cache-stats";
@@ -87,6 +88,7 @@ import type { PageMap } from "./page-map";
 import type { RefusedFetch } from "./refused-fetch";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import type { SeedRedirectHop, SeedRedirectRecord } from "./seed-redirect";
+import type { FindingCoverage, RequestedPages } from "./finding-coverage";
 import type { SeedVerification } from "./seed-verification";
 import type { SiteMetadata } from "./site-metadata";
 import type {
@@ -1203,6 +1205,10 @@ export interface AuditReport {
      * the run could say.
      */
     seedVerification?: SeedVerification;
+    /** The page set the caller asked this run to check, and how much of it was re-observed (#2079). */
+    requested?: RequestedPages;
+    /** Per rule check: pages held with an open finding vs pages re-checked and carried (#2079). */
+    findings?: FindingCoverage;
   };
   /**
    * Scan scope disclosure (#1180): where the audit ran and how much of the site

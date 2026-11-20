@@ -1,0 +1,1 @@
+- Smart-audit reports state, per rule check, how many pages held an open finding going in, how many this run re-checked and how many stayed carried (`meta.coverage.findings`), and the requested page set when one is given (`meta.coverage.requested`), so a consumer can decide whether an issue may resolve after a partial re-audit. JSON schema 1.30. (#2079)
