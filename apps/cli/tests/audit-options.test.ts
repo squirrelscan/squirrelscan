@@ -110,6 +110,17 @@ describe("mergeOptionsToConfig", () => {
     expect(offline.internal_links?.enabled).not.toBe(false);
   });
 
+  // repo-public#2109: the engine derives "may request other hosts" from
+  // external_links.enabled, so each run kind that must not contact other hosts
+  // has to switch it off here.
+  test("a targeted run switches external link checks off", () => {
+    const merged = mergeOptionsToConfig(getDefaultConfig(), {
+      url: "https://example.com",
+      targetUrls: ["https://example.com/a"],
+    });
+    expect(merged.external_links.enabled).toBe(false);
+  });
+
   // #2307: the page classifier is on by default; --no-classifier switches it off for the run and
   // the config's own choice stands when the flag is absent.
   test("the page classifier is on by default and --no-classifier turns it off", () => {

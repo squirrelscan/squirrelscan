@@ -17,9 +17,4 @@ export const LINK_VERDICT_RULE_IDS: ReadonlySet<string> = new Set([
   "links/broken-external-links",
   "integrity/known-malicious-url",
   "reliability/broken-forms",
-  // Reads `site.externalLinks === undefined` as "this audit may not request
-  // other hosts" (--offline, external link checking off): the only signal a
-  // rule has for that. Listed so it reads the bound field, never the one the
-  // link check has not filled yet.
-  "security/supabase-rls",
 ]);

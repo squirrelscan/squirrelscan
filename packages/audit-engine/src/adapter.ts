@@ -2450,6 +2450,7 @@ export function runRulesOnStorage(
         config.external_links?.enabled === false
           ? undefined
           : externalLinksData,
+      mayRequestOtherHosts: config.external_links?.enabled !== false,
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
       robotsUserAgent: crawlRobotsUserAgent(crawl, config),
       ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
@@ -3519,6 +3520,7 @@ function buildStreamingSiteData(
         config.external_links?.enabled === false
           ? undefined
           : externalLinksData,
+      mayRequestOtherHosts: config.external_links?.enabled !== false,
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
       robotsUserAgent: crawlRobotsUserAgent(crawl, config),
       ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
