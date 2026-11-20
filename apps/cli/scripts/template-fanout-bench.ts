@@ -70,13 +70,18 @@ import {
 } from "@squirrelscan/audit-engine";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { createRunner } from "@squirrelscan/rules";
-import { Database } from "bun:sqlite";
 import { Effect } from "effect";
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createProjectRuleCacheStore } from "@/audit/rule-cache-store";
+import {
+  armCacheStore,
+  armEnv,
+  parseRuleCacheArm,
+  prepareArmCache,
+  type RuleCacheArm,
+} from "./lib/rule-cache-arm";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -115,23 +120,15 @@ if (SIGNATURE !== "current" && SIGNATURE !== "derived") {
   console.error(`--signature must be "current" or "derived", got ${JSON.stringify(SIGNATURE)}`);
   process.exit(1);
 }
-const RULE_CACHE = arg("rule-cache", "");
-if (RULE_CACHE !== "" && !["off", "cold", "warm"].includes(RULE_CACHE)) {
-  console.error(`--rule-cache must be "off", "cold" or "warm", got ${JSON.stringify(RULE_CACHE)}`);
+const RULE_CACHE_RAW = arg("rule-cache", "");
+const RULE_CACHE_ARM: RuleCacheArm | null = parseRuleCacheArm(RULE_CACHE_RAW);
+if (RULE_CACHE_RAW !== "" && !RULE_CACHE_ARM) {
+  console.error(`--rule-cache must be "off", "cold" or "warm", got ${JSON.stringify(RULE_CACHE_RAW)}`);
   process.exit(1);
 }
+const RULE_CACHE: RuleCacheArm | "" = RULE_CACHE_ARM ?? "";
 /** Constant: the bench needs the same key on every run, and the engine's real context hash needs a full audit context. */
 const BENCH_CONTEXT_HASH = "template-fanout-bench";
-
-/** Empty the cache table of a disposable copy. Done by the child, before its timer starts. */
-function truncateRuleCache(db: string): void {
-  const conn = new Database(db);
-  try {
-    conn.run("DELETE FROM page_rule_cache");
-  } finally {
-    conn.close();
-  }
-}
 
 /** The median of the paired (a - b) differences, in the order given. */
 function pairedMedian(a: number[], b: number[]): number {
@@ -198,14 +195,12 @@ async function openCrawl(db: string) {
 if (flag("child")) {
   const fanout = RULE_CACHE !== "" || arg("arm", "on") === "on";
   // Before the open and the timer: truncating is setup, not the thing measured.
-  if (RULE_CACHE === "cold") truncateRuleCache(DB);
+  if (RULE_CACHE_ARM) await prepareArmCache(RULE_CACHE_ARM, DB, async () => {});
   // The parent hands the child the disposable COPY as --db, so the child never
   // opens the corpus it was pointed at.
   const { storage, crawlId, siteData } = await openCrawl(DB);
-  const cacheStore =
-    RULE_CACHE === "cold" || RULE_CACHE === "warm"
-      ? createProjectRuleCacheStore(storage, crawlId)
-      : undefined;
+  // Through the real kill switch: `off` arrives with SQUIRREL_RULE_CACHE=off.
+  const cacheStore = RULE_CACHE_ARM ? armCacheStore(RULE_CACHE_ARM, storage, crawlId) : undefined;
   const started = performance.now();
   const cpuStart = process.cpuUsage();
   const result = await run(
@@ -227,6 +222,7 @@ if (flag("child")) {
   await run(storage.close());
   console.log(
     `CHILD ${JSON.stringify({
+      arm: RULE_CACHE_ARM,
       ms,
       cpuMs,
       pages: result.pageUrls.length,
@@ -269,19 +265,19 @@ try {
 
   // `warm` needs a populated cache before the first timed run. One untimed run
   // with the cache on fills it; the timed `warm` children then replay it.
-  if (RULE_CACHE === "warm") {
-    const fill = await openCrawl(corpus.db);
-    await run(
-      streamPageRules(fill.storage, fill.crawlId, createRunner(CONFIG), fill.siteData, {
-        batchSize: BATCH,
-        templateFanout: true,
-        ruleCache: bindRuleCache(
-          createProjectRuleCacheStore(fill.storage, fill.crawlId),
-          BENCH_CONTEXT_HASH
-        ),
-      })
-    );
-    await run(fill.storage.close());
+  if (RULE_CACHE_ARM === "warm") {
+    await prepareArmCache("warm", corpus.db, async () => {
+      const fill = await openCrawl(corpus.db);
+      const store = armCacheStore("warm", fill.storage, fill.crawlId);
+      await run(
+        streamPageRules(fill.storage, fill.crawlId, createRunner(CONFIG), fill.siteData, {
+          batchSize: BATCH,
+          templateFanout: true,
+          ...(store ? { ruleCache: bindRuleCache(store, BENCH_CONTEXT_HASH) } : {}),
+        })
+      );
+      await run(fill.storage.close());
+    });
   }
 
   if (flag("coverage")) {
@@ -366,13 +362,14 @@ try {
   } else if (RULE_CACHE !== "") {
     // ── rule-cache timing (#1971) ──────────────────────────────────────────────
     interface CacheSample {
+      arm: RuleCacheArm;
       ms: number;
       cpuMs: number;
       pages: number;
       replayedPages: number;
       freshPages: number;
     }
-    const runChild = (mode: string): CacheSample | null => {
+    const runChild = (mode: RuleCacheArm): CacheSample | null => {
       const proc = Bun.spawnSync({
         cmd: [
           process.execPath,
@@ -387,6 +384,7 @@ try {
           String(BATCH),
           ...(arg("crawl", "") ? ["--crawl", arg("crawl", "")] : []),
         ],
+        env: armEnv(mode),
         stdout: "pipe",
         stderr: "pipe",
       });
@@ -407,7 +405,7 @@ try {
     };
     // The arm under test is `off` against whichever of cold|warm was asked for.
     // `--rule-cache off` alone compares off against itself: a noise floor.
-    const armB = RULE_CACHE;
+    const armB: RuleCacheArm = RULE_CACHE_ARM!;
     const offRuns: CacheSample[] = [];
     const armRuns: CacheSample[] = [];
     for (let i = 0; i < REPEATS; i++) {
@@ -418,7 +416,14 @@ try {
         offRuns.push(a);
         armRuns.push(b);
       }
-      process.stderr.write(`\r  repeat ${i + 1}/${REPEATS}   `);
+      // One self-describing row per run, with the arm that produced it.
+      if (a && b) {
+        for (const r of [a, b]) {
+          console.log(
+            `run ${i + 1} arm=${r.arm} cpuMs=${r.cpuMs.toFixed(0)} wallMs=${r.ms.toFixed(0)} replayed=${r.replayedPages} fresh=${r.freshPages}`
+          );
+        }
+      }
     }
     process.stderr.write("\n");
     if (offRuns.length === 0) {
@@ -436,6 +441,7 @@ try {
     const pct = (diff / med(off)) * 100;
     const fmt = (xs: number[]) => xs.map((x) => x.toFixed(0)).join(", ");
     console.log(`db            ${DB}`);
+    console.log(`rule-cache    off vs ${armB}`);
     console.log(`pages         ${offRuns[0]!.pages}`);
     console.log(`pairs         ${offRuns.length} of ${REPEATS} interleaved (off, then ${armB})`);
     console.log(`load average  ${loadavg().map((x) => x.toFixed(2)).join(" ")} (should be under 4)`);
