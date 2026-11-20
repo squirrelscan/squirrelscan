@@ -390,9 +390,9 @@ describe("targeted run note (#1777)", () => {
     );
   });
 
-  test("says how many of the given URLs were audited and that site-wide rules did not run", () => {
+  test("says how many of the given URLs were audited and that rules needing the whole site did not run", () => {
     expect(scanScopeLine(scope({ requested: 4, audited: 3, unaudited: [] }))).toBe(
-      "Scan: 3 pages crawled from the CLI (page limit 100). Targeted run: 3 of 4 URLs given were audited; site-wide rules were not run.",
+      "Scan: 3 pages crawled from the CLI (page limit 100). Targeted run: 3 of 4 URLs given were audited; rules that need the whole site were not run.",
     );
     expect(scanScopeLine(scope({ requested: 1, audited: 1, unaudited: [] }))).toContain(
       "1 of 1 URL given was audited",
@@ -423,10 +423,10 @@ describe("audit level line of a targeted run (#1777)", () => {
         ...extra,
       } as never,
     });
-  test("says only the listed URLs were audited and no links were checked", () => {
-    expect(auditLevelLine(level({ targeted: true }))).toContain(
-      "Targeted: only the listed URLs were audited, and no links were checked.",
-    );
+  test("says only the listed URLs were audited, and no longer that no links were checked (#1778)", () => {
+    const line = auditLevelLine(level({ targeted: true }));
+    expect(line).toContain("Targeted: only the listed URLs were audited.");
+    expect(line).not.toContain("no links were checked");
   });
   test("an ordinary run's line is unchanged", () => {
     expect(auditLevelLine(level({}))).toBe("Audit level: Surface.");

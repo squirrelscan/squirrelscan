@@ -65,6 +65,8 @@ export type NotComparedReason =
   | "rule-not-run-in-baseline"
   /** The issue's page is not among the pages the current audit crawled (`detail` is the page). */
   | "page-not-crawled"
+  /** The current audit was targeted (`--target-url`) and the issue names no page, so no listed page speaks for it (#1778). */
+  | "targeted-run"
   /** The rule skipped the issue's page in the current audit (a noindex or unreadable page; `detail` is the page). */
   | "rule-skipped-on-page"
   /**
