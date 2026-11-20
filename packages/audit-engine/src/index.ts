@@ -56,6 +56,7 @@ export {
   getScoreColor,
   formatHealthScore,
   buildScoringResultsFromMerged,
+  countCarriedNotEvaluated,
   // Streaming fold-to-tallies scoring (#1021)
   calculateHealthScoreFromTallies,
   foldRuleResultIntoTallies,

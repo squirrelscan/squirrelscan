@@ -23,6 +23,7 @@ import {
   buildCheckTallies,
   buildScoringResultsFromMerged,
   checksPerPageFromTallies,
+  countCarriedNotEvaluated,
   mergeFindings,
   type CarriedFinding,
   type FlatFinding,
@@ -251,6 +252,11 @@ export function runSmartAudits(
         )
       : undefined;
 
+    // (pub#2099) The pages as the store holds them before the merge rewrites the
+    // crawled ones: a carried page's row carries what its last crawl did not
+    // evaluate, which the union scorer takes off its passes.
+    const priorPages = yield* storage.getSitePages(siteKey);
+
     const merged = yield* mergeFindings({
       store: storage,
       siteKey,
@@ -366,6 +372,10 @@ export function runSmartAudits(
       ruleMetaIndex,
       carriedChecksPerPage: (ruleId) =>
         checksPerPageFromTallies(input.checkTallies?.[ruleId]),
+      carriedNotEvaluated: countCarriedNotEvaluated(
+        priorPages,
+        carriedPageUrls
+      ),
     });
 
     const seedSummary =

@@ -163,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 48;
+export const SCHEMA_VERSION = 49;
 
 /**
  * Most node keys one page's `entity_map_pages.refs` row stores (#2135). A relative
@@ -719,6 +719,12 @@ const MIGRATIONS: Record<number, string[]> = {
     "ALTER TABLE markdown_response ADD COLUMN strict_negotiation_answered INTEGER",
     "ALTER TABLE markdown_response ADD COLUMN md_variant_answered INTEGER",
   ],
+  // Version 49: the page checks a page's last crawl did not evaluate (pub#2099),
+  // JSON text (`SitePageRecord.notEvaluated`), so a local smart re-audit that
+  // carries the page scores it as the full audit did. ADDITIVE and nullable: a row
+  // written before this reads as nothing recorded, and an older CLI's named-column
+  // INSERT leaves it NULL. Also listed in SITE_PAGES_ALTER_COLUMNS. Local sqlite only.
+  49: ["ALTER TABLE site_pages ADD COLUMN not_evaluated TEXT"],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -899,6 +905,32 @@ const MARKDOWN_RESPONSE_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: strin
   { name: "strict_negotiation_answered", type: "INTEGER" },
   { name: "md_variant_answered", type: "INTEGER" },
 ];
+
+// Same guard for `site_pages`. Every upsertSitePages INSERT names the column
+// migration 49 added (pub#2099), so a DB stamped past 49 without it would fail
+// every smart-audit page write.
+const SITE_PAGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "not_evaluated", type: "TEXT" },
+];
+
+/**
+ * (pub#2099) A `site_pages.not_evaluated` cell read back. NULL (a row written
+ * before the column, or a page evaluated in full), malformed JSON, or anything
+ * but a non-empty array of strings reads as nothing recorded: null, never a
+ * throw, so a damaged cell costs only the exact carried tally, not the audit.
+ */
+function parseNotEvaluated(value: unknown): string[] | null {
+  if (typeof value !== "string" || value.length === 0) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+  if (!parsed.every((k): k is string => typeof k === "string")) return null;
+  return parsed;
+}
 
 // A nullable 0/1 column read back as an optional boolean: NULL (a row written
 // before the column existed) stays absent, so it reads as unknown, not false.
@@ -1316,6 +1348,8 @@ CREATE TABLE IF NOT EXISTS site_pages (
   state TEXT NOT NULL,
   last_seen_crawl_id TEXT NOT NULL,
   last_seen_at INTEGER NOT NULL,
+  -- JSON array of "ruleId|checkName" the page's last crawl did not evaluate (pub#2099)
+  not_evaluated TEXT,
   PRIMARY KEY (site_key, normalized_url)
 );
 
@@ -1728,6 +1762,7 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("page_features", PAGE_FEATURES_ALTER_COLUMNS);
     this.reconcileColumns("rule_results", RULE_RESULTS_ALTER_COLUMNS);
     this.reconcileColumns("markdown_response", MARKDOWN_RESPONSE_ALTER_COLUMNS);
+    this.reconcileColumns("site_pages", SITE_PAGES_ALTER_COLUMNS);
     this.indexesAfterMigrations();
   }
 
@@ -1782,7 +1817,8 @@ export class SQLiteStorage implements CrawlStorage {
       | "resource_sizes"
       | "page_features"
       | "rule_results"
-      | "markdown_response",
+      | "markdown_response"
+      | "site_pages",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -6528,8 +6564,9 @@ export class SQLiteStorage implements CrawlStorage {
         const db = this.getDb();
         const stmt = db.prepare(`
           INSERT OR REPLACE INTO site_pages (
-            site_key, normalized_url, last_status, state, last_seen_crawl_id, last_seen_at
-          ) VALUES (?, ?, ?, ?, ?, ?)
+            site_key, normalized_url, last_status, state, last_seen_crawl_id, last_seen_at,
+            not_evaluated
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
         const insertAll = db.transaction(() => {
           for (const p of pages) {
@@ -6539,7 +6576,12 @@ export class SQLiteStorage implements CrawlStorage {
               p.lastStatus,
               p.state,
               p.lastSeenCrawlId,
-              p.lastSeenAt
+              p.lastSeenAt,
+              // (pub#2099) NULL when absent, so a re-crawl that evaluated the
+              // page in full clears the record an earlier crawl left.
+              p.notEvaluated && p.notEvaluated.length > 0
+                ? JSON.stringify(p.notEvaluated)
+                : null
             );
           }
         });
@@ -6558,17 +6600,23 @@ export class SQLiteStorage implements CrawlStorage {
         // Deterministic order so repeat audits emit pages in a stable order
         // (#150) — normalized_url is the per-page key here.
         const stmt = db.prepare(
-          "SELECT * FROM site_pages WHERE site_key = ? ORDER BY normalized_url ASC"
+          `SELECT site_key, normalized_url, last_status, state, last_seen_crawl_id,
+                  last_seen_at, not_evaluated
+             FROM site_pages WHERE site_key = ? ORDER BY normalized_url ASC`
         );
         const rows = stmt.all(siteKey) as Record<string, unknown>[];
-        return rows.map((row) => ({
-          siteKey: row.site_key as string,
-          normalizedUrl: row.normalized_url as string,
-          lastStatus: row.last_status as number,
-          state: row.state as SitePageRecord["state"],
-          lastSeenCrawlId: row.last_seen_crawl_id as string,
-          lastSeenAt: row.last_seen_at as number,
-        }));
+        return rows.map((row) => {
+          const notEvaluated = parseNotEvaluated(row.not_evaluated);
+          return {
+            siteKey: row.site_key as string,
+            normalizedUrl: row.normalized_url as string,
+            lastStatus: row.last_status as number,
+            state: row.state as SitePageRecord["state"],
+            lastSeenCrawlId: row.last_seen_crawl_id as string,
+            lastSeenAt: row.last_seen_at as number,
+            ...(notEvaluated ? { notEvaluated } : {}),
+          };
+        });
       },
       catch: (e) => StorageError.read(e),
     });
