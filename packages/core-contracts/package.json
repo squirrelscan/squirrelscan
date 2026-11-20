@@ -17,6 +17,7 @@
     "./offsite-redirect": "./src/offsite-redirect.ts",
     "./seed-redirect": "./src/seed-redirect.ts",
     "./seed-verification": "./src/seed-verification.ts",
+    "./finding-coverage": "./src/finding-coverage.ts",
     "./ignore": "./src/ignore.ts",
     "./untrusted-keys": "./src/untrusted-keys.ts",
     "./credits": "./src/credits.ts",
