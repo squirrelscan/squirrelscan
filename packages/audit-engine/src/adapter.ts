@@ -35,6 +35,7 @@ import {
   SerialPageRuleExecutor,
 } from "./page-rule-executor";
 import type { LateLinkVerdicts, LinkVerdictSettlement } from "./late-link-verdicts";
+import type { LateCloudResults } from "./late-cloud-results";
 
 import type { Config, ExternalLinksConfig } from "@squirrelscan/config";
 import type {
@@ -122,6 +123,7 @@ import {
 } from "./streaming";
 import {
   bindRuleCache,
+  lateBoundRuleCache,
   withoutStoringAfterIgnoreTimeout,
   computeRunContextHash,
   type RuleCacheDisabledReason,
@@ -3585,6 +3587,20 @@ export function runStreamingRules(
     linkVerdicts?: LateLinkVerdicts;
     /** Called around the wait for the late-bound verdicts, with the settlement at "end". */
     onLinkVerdicts?: (boundary: "start" | "end", settlement?: LinkVerdictSettlement) => void;
+    /**
+     * Late-bound cloud results (pub#2121): the cloud prefetch is still running.
+     * The pass builds the runner once Stage 0 has decided the site profile, runs
+     * each page's rules once that page's cloud results are final, and runs the
+     * site rules on the settled store. `scope.cloudResults` and
+     * `scope.siteMetadata` are ignored: this supplies both. Every finding is the
+     * one the serial path (prefetch awaited, its store in `scope`) produces.
+     *
+     * With `ruleCache`, a page whose batch was keyed before the prefetch settled
+     * neither replays nor stores; pages keyed after it use exactly the serial
+     * run-context key. With plugin rules, the page pass waits for the prefetch to
+     * settle (their reads are not ours to know).
+     */
+    lateCloudResults?: LateCloudResults;
   },
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
@@ -3619,9 +3635,12 @@ export function runStreamingRules(
             additionalNamespaces: [...(intelScope?.additionalNamespaces ?? []), ...pluginRulePack],
           }
         : intelScope;
-    const runner = createRunner(config, effectiveScope, {
-      onIgnoreTimeout: opts?.onIgnoreTimeout,
-    });
+    const lateCloud = opts?.lateCloudResults;
+    const makeRunner = (runnerScope: RunnerScope | undefined) =>
+      createRunner(config, runnerScope, { onIgnoreTimeout: opts?.onIgnoreTimeout });
+    // pub#2121: with late cloud results the runner waits for Stage 0, so it is built after the
+    // site-fetch phase (nothing before the page pass reads it) and those phases overlap the prefetch.
+    const serialRunner = lateCloud ? undefined : makeRunner(effectiveScope);
 
     // Pass 1: DOM-free scalar universe (one batch of DOMs live at a time).
     const {
@@ -3651,6 +3670,15 @@ export function runStreamingRules(
       ),
     );
 
+    let runnerScope = effectiveScope;
+    if (lateCloud) {
+      const siteMetadata = yield* Effect.promise(() => lateCloud.siteMetadata());
+      runnerScope = { ...effectiveScope, cloudResults: lateCloud.store, siteMetadata };
+      // A plugin page rule may read any cloud key, not only its own page's: give it the settled store.
+      if (pluginRulePack.length > 0) yield* Effect.promise(() => lateCloud.settle());
+    }
+    const runner = serialRunner ?? makeRunner(runnerScope);
+
     // Pass 2: streamed page-rule pass — per-page DOM-drop, merge + fold. The
     // page-signal collector captures the six all-pages DOM-scanner rules' per-page
     // signal (leaked-secrets, byte weight, template fingerprint + integrity signals,
@@ -3672,14 +3700,14 @@ export function runStreamingRules(
       } else if (pluginRulePack.length > 0) {
         ruleCacheDisabled = "plugin-rules";
       } else {
-        const ctxHash = yield* Effect.promise(() =>
+        const runContextHash = (cloud: Pick<RunnerScope, "siteMetadata" | "cloudResults"> | undefined) =>
           computeRunContextHash({
             engineVersion: ruleCacheOpts.engineVersion,
             rulesVersion: ruleCacheOpts.rulesVersion,
             pageRules: runner.pageRuleSignature(),
             siteData: siteDataForPageRules,
-            siteMetadata: effectiveScope?.siteMetadata,
-            cloudResults: effectiveScope?.cloudResults,
+            siteMetadata: cloud?.siteMetadata,
+            cloudResults: cloud?.cloudResults,
             // Read through the runner's own view of config (`RulesConfig`), which
             // is where the escape hatch is declared; the engine's `Config` type
             // predates it and does not carry it.
@@ -3689,17 +3717,37 @@ export function runStreamingRules(
             utcYear: new Date().getUTCFullYear(),
             utcMonth: new Date().getUTCMonth(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          }),
-        );
-        if ("hash" in ctxHash) {
-          // An `[[ignore]]` entry that ran over its work budget stops waiving from that
-          // point, so a verdict computed after it is not the one the list gives with its
-          // full budget: never stored, so a later run re-evaluates the page and says so.
-          ruleCache = withoutStoringAfterIgnoreTimeout(
-            bindRuleCache(ruleCacheOpts.store, ctxHash.hash),
+          });
+        // An `[[ignore]]` entry that ran over its work budget stops waiving from that
+        // point, so a verdict computed after it is not the one the list gives with its
+        // full budget: never stored, so a later run re-evaluates the page and says so.
+        const bind = (hash: string) =>
+          withoutStoringAfterIgnoreTimeout(
+            bindRuleCache(ruleCacheOpts.store, hash),
             () => runner.ignoreTimedOutEntries().length,
           );
-        } else ruleCacheDisabled = ctxHash.disabled;
+        if (lateCloud) {
+          // pub#2121: the run-context key hashes the whole cloud store, which is only
+          // known once the prefetch settles. It is then hashed from the settled store,
+          // the same inputs the serial path hashes, so the key is the serial key.
+          ruleCache = lateBoundRuleCache(
+            () => lateCloud.settled,
+            async () => {
+              const ctxHash = await runContextHash(
+                lateCloud.result
+                  ? { siteMetadata: runnerScope?.siteMetadata, cloudResults: lateCloud.store }
+                  : undefined,
+              );
+              if ("hash" in ctxHash) return bind(ctxHash.hash);
+              ruleCacheDisabled = ctxHash.disabled;
+              return null;
+            },
+          );
+        } else {
+          const ctxHash = yield* Effect.promise(() => runContextHash(effectiveScope));
+          if ("hash" in ctxHash) ruleCache = bind(ctxHash.hash);
+          else ruleCacheDisabled = ctxHash.disabled;
+        }
       }
     }
 
@@ -3775,6 +3823,7 @@ export function runStreamingRules(
       ruleCache,
       pageSink: opts?.pageSink,
       retainPageResults: opts?.retainPageResults,
+      ...(lateCloud ? { cloudReady: (url: string) => lateCloud.pageReady(url) } : {}),
       }),
     );
     const collectedSignals: CollectedSiteSignals = { pages: collectedPages, secretsBudget };
@@ -3811,6 +3860,8 @@ export function runStreamingRules(
     const pluginRuleIds = new Set(plugins?.rules.map((rule) => rule.meta.id) ?? []);
     const readsLinkVerdicts = (ruleId: string) =>
       LINK_VERDICT_RULE_IDS.has(ruleId) || pluginRuleIds.has(ruleId);
+    // pub#2121: the site rules read the settled store (some iterate a service in batch order).
+    if (lateCloud) yield* Effect.promise(() => lateCloud.settle());
     const sitePass = yield* phase("site-rules", () =>
       Effect.gen(function* () {
         const endpointSurface = endpointCollector.finish(siteDataForPageRules);

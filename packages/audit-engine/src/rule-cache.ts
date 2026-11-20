@@ -773,6 +773,50 @@ export function withoutStoringAfterIgnoreTimeout(cache: StreamRuleCache, timedOu
 }
 
 /**
+ * A cache bound only once its run context can be hashed (pub#2121): with late
+ * cloud results the context includes a cloud store that is final only when the
+ * prefetch settles. Until `ready()` is true every page gets a null key, so it
+ * neither replays nor stores (its rules read early results, not the store the
+ * key would hash). The first key asked for after that binds the cache through
+ * `bind` (null: no cache for the rest of the run), and every page from then on
+ * uses the bound cache, i.e. the key the serial run would use.
+ */
+export function lateBoundRuleCache(
+  ready: () => boolean,
+  bind: () => Promise<StreamRuleCache | null>
+): StreamRuleCache {
+  let binding: Promise<StreamRuleCache | null> | undefined;
+  let bound: StreamRuleCache | null = null;
+  const resolve = () =>
+    (binding ??= bind().then((cache) => {
+      bound = cache;
+      return cache;
+    }));
+  return {
+    async keyFor(page, soft404Confirmation) {
+      if (!binding && !ready()) return null;
+      const cache = await resolve();
+      return cache ? cache.keyFor(page, soft404Confirmation) : null;
+    },
+    async load(keys) {
+      // A key only exists once the cache is bound.
+      if (keys.length === 0 || !binding) return new Map();
+      const cache = await binding;
+      return cache ? cache.load(keys) : new Map();
+    },
+    putFresh(key, page, entry) {
+      bound?.putFresh(key, page, entry);
+    },
+    carryForward(key, page) {
+      bound?.carryForward(key, page);
+    },
+    async flush() {
+      await bound?.flush?.();
+    },
+  };
+}
+
+/**
  * The page rules of a runner, in execution order, with their resolved options —
  * the run-context ingredient that makes a rule added, removed, reordered,
  * disabled or reconfigured invalidate every entry.

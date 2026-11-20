@@ -302,6 +302,13 @@ export function streamPageRules(
      * responsible for every consumer that used to read the three maps.
      */
     retainPageResults?: boolean;
+    /**
+     * Late-bound cloud results (pub#2121): called with each page's url before the
+     * page is handled; a promise means its cloud results are not final yet, and
+     * the page waits for it (bounded by `deadlineAt`). Null or absent: no wait,
+     * byte-identical to before. See {@link LateCloudResults.pageReady}.
+     */
+    cloudReady?: (pageUrl: string) => Promise<void> | null;
   }
 ): Effect.Effect<StreamPageRulesResult, never, never> {
   return Effect.gen(function* () {
@@ -373,6 +380,7 @@ export function streamPageRules(
     let pagesDone = 0;
     let batchIndex = 0;
     const deadlineAt = opts?.deadlineAt;
+    const cloudReady = opts?.cloudReady;
     let deadlineHit = false;
     const maxPageBytes = opts?.maxPageBytes;
     let oversizeSkipped = 0;
@@ -454,6 +462,11 @@ export function streamPageRules(
       const parsedByUrl = new Map(parsedBatch.map((e) => [e.page.normalizedUrl, e.parsed]));
 
       for (const page of batch) {
+        // pub#2121: a page whose cloud prefetch is still running waits here, before
+        // the deadline check, so a wait that runs past the deadline ends the loop
+        // exactly as a slow page before it would.
+        const cloudWait = cloudReady?.(page.url);
+        if (cloudWait) yield* Effect.promise(() => untilDeadline(cloudWait, deadlineAt));
         if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
           deadlineHit = true;
           break;
@@ -941,4 +954,14 @@ function replayPage(
       .pipe(Effect.catchAll(() => Effect.void));
     for (const c of collectors) c.replay!(page, entry.signals[c.id]);
   });
+}
+
+/** `wait`, or the deadline if it comes first (pub#2121). No deadline: just `wait`. */
+function untilDeadline(wait: Promise<void>, deadlineAt: number | undefined): Promise<void> {
+  if (deadlineAt === undefined) return wait;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, Math.max(0, deadlineAt - Date.now()));
+  });
+  return Promise.race([wait, deadline]).finally(() => clearTimeout(timer));
 }
