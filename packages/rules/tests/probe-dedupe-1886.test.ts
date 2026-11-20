@@ -2,16 +2,19 @@
 // both probe a current-user endpoint such as /api/me. One audit requests it once
 // (the anonymous GET is shared through the probe budget), and one exposure is one
 // finding: auth-endpoint-disclosure when the answer carries a password, secret or
-// the user record, unauthenticated-api otherwise. Also the release gate for the
-// auth rule (#1920): a throttled, challenged, WAF-blocked or 5xx answer, and no
-// candidate at all, are never a pass.
+// the user record, unauthenticated-api otherwise. Each rule reports on its own and
+// the runner keeps one finding per endpoint after the site pass (squirrelscan#2082),
+// so every result here goes through that same dedupe before it is counted. Also the
+// release gate for the auth rule (#1920): a throttled, challenged, WAF-blocked or
+// 5xx answer, and no candidate at all, are never a pass.
 
 // oxlint-disable sonarjs/no-hardcoded-passwords -- the fixtures are fake leaked credentials, which is what the rules detect
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { authEndpointDisclosureRule } from "../src/security/auth-endpoint-disclosure";
-import { unauthenticatedApiRule } from "../src/security/unauthenticated-api";
+import { AUTH_ENDPOINT_DISCLOSURE_RULE_ID, authEndpointDisclosureRule } from "../src/security/auth-endpoint-disclosure";
+import { dedupeEndpointFindings } from "../src/security/endpoint-dedupe";
+import { UNAUTHENTICATED_API_RULE_ID, unauthenticatedApiRule } from "../src/security/unauthenticated-api";
 import type { CheckResult, RuleContext } from "../src/types";
 import {
   BASE,
@@ -50,6 +53,13 @@ const PLAIN_USER = { id: 42, email: "jo@example.com", name: "Jo", phone: "+61 40
 
 const meSurface = () => surface([candidate("/api/me", { method: "GET" })]);
 
+/** The runner's post-site-pass dedupe (squirrelscan#2082) over one audit's two results. */
+function throughDedupe(api: CheckResult[], auth: CheckResult[] | undefined): { api: CheckResult[]; auth: CheckResult[] } {
+  const results = new Map([[UNAUTHENTICATED_API_RULE_ID, { meta: unauthenticatedApiRule.meta, checks: api }]]);
+  if (auth) results.set(AUTH_ENDPOINT_DISCLOSURE_RULE_ID, { meta: authEndpointDisclosureRule.meta, checks: auth });
+  return { api: dedupeEndpointFindings(results)?.checks ?? api, auth: auth ?? [] };
+}
+
 /** Run both rules on ONE context (one audit, one probe budget), in either order. */
 async function runBoth(
   routes: Record<string, Route>,
@@ -58,16 +68,19 @@ async function runBoth(
   const stub = stubFetch(routes);
   restore = stub.restore;
   const ctx: RuleContext = { ...ruleCtx({ surface: meSurface() }), ruleEnabled: opts.ruleEnabled };
+  // A disabled rule does not run, as in the runner.
+  const authOn = opts.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
+  const runAuth = async () => (authOn ? (await authEndpointDisclosureRule.run(ctx)).checks : undefined);
   let api: CheckResult[];
-  let auth: CheckResult[];
+  let auth: CheckResult[] | undefined;
   if (opts.authFirst) {
-    auth = (await authEndpointDisclosureRule.run(ctx)).checks;
+    auth = await runAuth();
     api = (await unauthenticatedApiRule.run(ctx)).checks;
   } else {
     api = (await unauthenticatedApiRule.run(ctx)).checks;
-    auth = (await authEndpointDisclosureRule.run(ctx)).checks;
+    auth = await runAuth();
   }
-  return { api, auth, sent: stub.sent };
+  return { ...throughDedupe(api, auth), sent: stub.sent };
 }
 
 const fails = (checks: CheckResult[]) => checks.filter((c) => c.status === "fail" || c.status === "warn");
@@ -89,7 +102,7 @@ describe("squirrelscan#1886: one request and one finding per endpoint", () => {
       expect(fails(auth)[0]?.details).toMatchObject({ endpoint: ME });
       expect(fails(api)).toHaveLength(0);
       const clean = api.find((c) => c.status === "pass");
-      expect(clean?.details).toMatchObject({ deferredToAuth: 1 });
+      expect(clean?.details).toMatchObject({ reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID, reportedElsewhere: 1 });
     });
 
     test(`records without a password, secret or user row stay with unauthenticated-api (${order})`, async () => {
@@ -105,8 +118,9 @@ describe("squirrelscan#1886: one request and one finding per endpoint", () => {
       // unauthenticated-api probes call sites first (/api/me), then the literal (/api/session).
       // auth-endpoint-disclosure keeps discovery order: /api/session first, which answers 429,
       // so it stops sending before /api/me. api first: the auth rule reads the /api/me answer
-      // already fetched and reports it. auth first: /api/me is left unread, so
-      // unauthenticated-api keeps it. Either way one finding and one request.
+      // already fetched and reports it, and the dedupe drops unauthenticated-api's copy.
+      // auth first: /api/me is left unread, so only unauthenticated-api reports it.
+      // Either way one finding and one request.
       const stub = stubFetch({
         [ME]: () => json(LEAKY_USER),
         [`${BASE}/api/session`]: () => new Response("slow down", { status: 429 }),
@@ -127,6 +141,7 @@ describe("squirrelscan#1886: one request and one finding per endpoint", () => {
         api = (await unauthenticatedApiRule.run(ctx)).checks;
         auth = (await authEndpointDisclosureRule.run(ctx)).checks;
       }
+      ({ api, auth } = throughDedupe(api, auth));
       expect(meRequests(stub.sent)).toHaveLength(1);
       expect(fails(api).length + fails(auth).length).toBe(1);
       if (authFirst) expect(fails(api)).toHaveLength(1);

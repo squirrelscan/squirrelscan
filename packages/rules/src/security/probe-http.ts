@@ -139,17 +139,27 @@ export const ANONYMOUS_GET_TIMEOUT_MS = 10_000;
 export const ANONYMOUS_GET_CAP = 256 * 1024;
 
 /**
+ * The normalised endpoint URL both probing rules request and report: query and
+ * fragment dropped. The key one audit's shared answer is cached under, and the
+ * key the runner dedupes their findings on (squirrelscan#2082). Throws on an
+ * unparseable URL, like `new URL`.
+ */
+export function anonymousGetUrl(endpointUrl: string): string {
+  const u = new URL(endpointUrl);
+  u.search = "";
+  u.hash = "";
+  return u.href;
+}
+
+/**
  * The exact URL and init for an anonymous GET of an API or auth endpoint:
  * query and fragment dropped, no cookie, no Authorization header, no redirect
  * followed. security/unauthenticated-api and security/auth-endpoint-disclosure
  * send this same request, so one answer serves both (squirrelscan#1886).
  */
 export function buildAnonymousGet(endpointUrl: string): { url: string; init: RequestInit } {
-  const u = new URL(endpointUrl);
-  u.search = "";
-  u.hash = "";
   return {
-    url: u.href,
+    url: anonymousGetUrl(endpointUrl),
     init: {
       method: "GET",
       credentials: "omit",
@@ -199,8 +209,8 @@ export function sendAnonymousGet(
 /**
  * The answer another rule already got for `endpointUrl` in this audit, without
  * sending anything. A rule that stopped probing (throttled, challenged, out of
- * budget) still reads these, so a finding another rule deferred to it is never
- * lost (squirrelscan#1886).
+ * budget) still reads these, so it reports what is already known
+ * (squirrelscan#1886).
  */
 export function peekAnonymousGet(
   probe: ProbeBudget | undefined,

@@ -77,7 +77,7 @@ A field name that looks like data itself, such as an email address, a long numbe
 
 ### One finding per endpoint
 
-`security/auth-endpoint-disclosure` probes current-user and session endpoints such as `/api/me` with the same anonymous `GET`. One audit sends that request once and both rules read the answer. When it carries a password, a password hash, a credential secret or the internal user record, `security/auth-endpoint-disclosure` reports it, as the more specific finding, and this rule leaves the endpoint out (the pass check's details count it as `deferredToAuth`). If `security/auth-endpoint-disclosure` is disabled, this rule reports the endpoint as usual.
+`security/auth-endpoint-disclosure` probes current-user and session endpoints such as `/api/me` with the same anonymous `GET`. One audit sends that request once and both rules read the answer. Each rule reports what it finds, and once every site rule has finished, squirrel keeps one finding per endpoint. When `security/auth-endpoint-disclosure` reported the endpoint (a password, a password hash, a credential secret or the internal user record), its finding is the one kept, as the more specific finding. Otherwise this rule's finding is kept. That includes the case where `security/auth-endpoint-disclosure` is disabled, ran out of probe budget, threw an error or ran past its time budget, so a leaking endpoint is never left without a finding. The dropped finding is removed from the counts and the score, not only hidden. When it was this rule's only finding and every endpoint was verified, the rule passes, and the pass check's details name the other rule (`reportedBy`) and how many endpoints it reported (`reportedElsewhere`).
 
 ### What is not flagged
 

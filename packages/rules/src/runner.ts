@@ -48,6 +48,8 @@ import {
   siteRuleBudgetMs,
 } from "./rule-budget";
 import { IgnoreTable, isIgnorable, stripItemSelectors, type IgnoreEntry } from "./ignore";
+import { dedupeEndpointFindings } from "./security/endpoint-dedupe";
+import { UNAUTHENTICATED_API_RULE_ID } from "./security/unauthenticated-api";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
 import { pageTypeRuleSkip, skippablePageType } from "./shared/page-type";
 
@@ -1075,6 +1077,18 @@ export class RuleRunner {
         // path, collected-signals.ts) is recorded against that rule and page here,
         // the same shape as a timeout in the runner itself.
         const collectedTimeouts = collectedTimeoutChecks(collectedSignals);
+
+        // One finding per leaking endpoint (squirrelscan#2082): an endpoint both
+        // security/auth-endpoint-disclosure and security/unauthenticated-api
+        // reported keeps the auth rule's finding. Done here, before any check is
+        // collected, counted, stored or scored, so the dropped finding leaves no
+        // trace, and after every rule settled, so it holds whatever order they ran
+        // in and however either ended (thrown, timed out).
+        const dedupedApi = dedupeEndpointFindings(new Map(siteRules.map((rule, i) => [rule.meta.id, results[i]])));
+        if (dedupedApi) {
+          const i = siteRules.findIndex((rule) => rule.meta.id === UNAUTHENTICATED_API_RULE_ID);
+          results[i] = dedupedApi;
+        }
 
         const allChecks: CheckResult[] = [];
         const ruleResults = new Map<string, RuleRunResult>();
