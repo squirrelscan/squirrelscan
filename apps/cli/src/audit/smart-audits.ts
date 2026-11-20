@@ -13,13 +13,16 @@
 
 import type {
   CheckResult,
+  CheckTallies,
   CrawlStorage,
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 
 import {
+  buildCheckTallies,
   buildScoringResultsFromMerged,
+  checksPerPageFromTallies,
   mergeFindings,
   type CarriedFinding,
   type FlatFinding,
@@ -35,6 +38,38 @@ import {
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isNonPublicUrl } from "@squirrelscan/utils/non-public-host";
 import { Effect } from "effect";
+
+/**
+ * (pub#2097) Fold one page's checks into the run's per-check-name tallies, the
+ * figure `carriedChecksPerPage` reads. Counts are the scorer's own
+ * (`buildCheckTallies`), summed across pages, so the carried-page credit matches
+ * the full audit's. Bounded by rules x check names, not by pages.
+ */
+export function addPageCheckTallies(
+  into: CheckTallies,
+  entries: ReadonlyArray<readonly [string, readonly CheckResult[]]>,
+  severityOf: (ruleId: string) => string
+): void {
+  const record: Record<
+    string,
+    { meta: { severity: string }; checks: CheckResult[] }
+  > = {};
+  for (const [ruleId, checks] of entries) {
+    record[ruleId] = {
+      meta: { severity: severityOf(ruleId) },
+      checks: [...checks],
+    };
+  }
+  for (const [ruleId, byName] of Object.entries(buildCheckTallies(record))) {
+    const target = (into[ruleId] ??= {});
+    for (const [name, t] of Object.entries(byName)) {
+      const cur = (target[name] ??= {});
+      for (const k of ["passed", "warnings", "failed"] as const) {
+        if (t[k]) cur[k] = (cur[k] ?? 0) + t[k]!;
+      }
+    }
+  }
+}
 
 /**
  * Statuses that mean the page is GONE, so its checks are not active findings.
@@ -129,6 +164,12 @@ export interface RunSmartAuditsInput {
   notEvaluated?: NotEvaluatedEvidence;
   /** Normalized URLs page rules actually ran on, in crawl order. */
   scoredPageUrls: readonly string[];
+  /**
+   * This run's per-check-name tallies (the full audit's check units, bounded by rules x check names).
+   * Read for the checks a page-scope rule runs per page, so a carried page is credited the same
+   * passes a full audit counts (repo#3360, pub#2097). Absent: one check per page.
+   */
+  checkTallies?: CheckTallies;
   /** ruleId -> folded tally; read for `meta` only (the bounded rule index). */
   ruleMeta: ReadonlyMap<string, RuleTally>;
   /** All page records for this crawl (status used to detect 404/410). */
@@ -323,6 +364,8 @@ export function runSmartAudits(
       carriedFindings,
       carriedPageUrls,
       ruleMetaIndex,
+      carriedChecksPerPage: (ruleId) =>
+        checksPerPageFromTallies(input.checkTallies?.[ruleId]),
     });
 
     const seedSummary =

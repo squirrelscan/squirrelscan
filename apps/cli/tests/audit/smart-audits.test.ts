@@ -7,7 +7,7 @@
 // tests therefore drive the same join the report does (`joinSmartUnion`) over a
 // stand-in for that read, so what they assert is still the union.
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
+import type { CheckResult, CheckTallies } from "@squirrelscan/core-contracts";
 import type { RuleMeta, RuleRunResult } from "@squirrelscan/rules";
 
 import { flattenChecks, type RuleTally } from "@squirrelscan/audit-engine";
@@ -17,9 +17,13 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import { calculateHealthScore } from "@/audit/scoring";
-import { runSmartAudits, type SmartAuditResult } from "@/audit/smart-audits";
+import {
+  addPageCheckTallies,
+  runSmartAudits,
+  type SmartAuditResult,
+} from "@/audit/smart-audits";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
-import { joinSmartUnion } from "@/reports/reconstruct";
+import { countUnionTotals, joinSmartUnion } from "@/reports/reconstruct";
 
 const META: RuleMeta = {
   id: "core/meta-title",
@@ -406,5 +410,114 @@ describe("pub#629: rules a private host skips stay out of the union", () => {
     const { result } = await twoRuns(SITE);
     expect(result.coverage.carriedFindings).toBe(15);
     expect(result.carriedRuleResults.has(HTTPS.id)).toBe(true);
+  });
+});
+
+describe("pub#2097: incremental re-audit counts in the full audit's check units", () => {
+  const MULTI: RuleMeta = {
+    id: "a11y/multi-check-2097",
+    name: "Multi check",
+    description: "Runs two checks per page",
+    category: "core",
+    scope: "page",
+    severity: "error",
+    weight: 5,
+  };
+  const PAGES = 6;
+  // Pages 0..3 fail "alt-missing" with 3 items each; every page passes "alt-size".
+  const pageChecks = (i: number): CheckResult[] => [
+    i < 4
+      ? {
+          name: "alt-missing",
+          status: "fail",
+          message: "Images lack alt",
+          pageUrl: url(i),
+          items: [
+            { id: "a", label: "a" },
+            { id: "b", label: "b" },
+            { id: "c", label: "c" },
+          ],
+        }
+      : { name: "alt-missing", status: "pass", message: "OK", pageUrl: url(i) },
+    { name: "alt-size", status: "pass", message: "OK", pageUrl: url(i) },
+  ];
+  const ruleMeta = new Map<string, RuleTally>([
+    [MULTI.id, { meta: MULTI } as RuleTally],
+  ]);
+
+  function runOver(pageIdx: number[]) {
+    const freshFindings: ReturnType<typeof flattenChecks> = [];
+    const fresh: CheckResult[] = [];
+    const checkTallies: CheckTallies = {};
+    for (const i of pageIdx) {
+      const checks = pageChecks(i);
+      fresh.push(...checks);
+      for (const f of flattenChecks(url(i), MULTI.id, checks))
+        freshFindings.push(f);
+      addPageCheckTallies(checkTallies, [[MULTI.id, checks]], () => "error");
+    }
+    return {
+      freshFindings,
+      scoredPageUrls: pageIdx.map(url),
+      checkTallies,
+      freshByRule: new Map([[MULTI.id, fresh]]),
+    };
+  }
+
+  test("a re-audit of two pages matches the full audit's totals and score", async () => {
+    const store = new SQLiteStorage(":memory:");
+    await run(store.init());
+    const pages = (idx: number[]) =>
+      idx.map((i) => ({ normalizedUrl: url(i), status: 200 }));
+    const all = Array.from({ length: PAGES }, (_, i) => i);
+
+    const fullInput = runOver(all);
+    const full = await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c1",
+        siteKey: SITE,
+        ...fullInput,
+        ruleMeta,
+        pages: pages(all),
+      })
+    );
+    const fullUnion = new Map<string, RuleRunResult>([
+      [MULTI.id, { meta: MULTI, checks: fullInput.freshByRule.get(MULTI.id)! }],
+    ]);
+    expect(full.coverage.carriedFindings).toBe(0);
+
+    const partInput = runOver([0, 1]);
+    const part = await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: SITE,
+        ...partInput,
+        ruleMeta,
+        pages: pages([0, 1]),
+      })
+    );
+    const partUnion = new Map<string, RuleRunResult>();
+    for (const [ruleId, checks] of joinSmartUnion(
+      partInput.freshByRule,
+      part
+    )) {
+      const carried = part.carriedRuleResults.get(ruleId);
+      partUnion.set(ruleId, {
+        meta: MULTI,
+        checks,
+        ...(carried?.syntheticPassCount !== undefined
+          ? { syntheticPassCount: carried.syntheticPassCount }
+          : {}),
+      });
+    }
+
+    expect(countUnionTotals([...partUnion.values()])).toEqual(
+      countUnionTotals([...fullUnion.values()])
+    );
+    expect(calculateHealthScore({ results: partUnion }).overall).toBe(
+      calculateHealthScore({ results: fullUnion }).overall
+    );
   });
 });
