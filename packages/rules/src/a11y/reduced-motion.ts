@@ -37,6 +37,26 @@ export interface CssMotionSummary {
   infiniteAnimationSelectors: string[];
   /** Selectors of the rules that set `scroll-behavior: smooth`, capped like the animation selectors. */
   smoothScrollSelectors: string[];
+  /**
+   * Selectors of the rules inside a `prefers-reduced-motion: reduce` block that set animation,
+   * transition or scroll-behavior: the motion that block actually covers (capped like the others).
+   */
+  reducedMotionSelectors: string[];
+  /** A reduced-motion block resets motion globally (`*`, `html`, `body`, `:root`), or gates motion with `no-preference`. */
+  reducedMotionGlobal: boolean;
+}
+
+/** Declarations that switch motion off or down inside a reduced-motion block. */
+const MOTION_PROPERTY = /^(-webkit-)?(animation|transition)(-[a-z-]+)?$|^scroll-behavior$/;
+
+/** A selector with case and whitespace normalized, so a reduced-motion rule and a motion rule compare equal. */
+function normalizeSelector(sel: string): string {
+  return sel.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** The selector list of a rule, split into normalized parts. */
+function selectorParts(list: string): string[] {
+  return splitSelectorList(list).map(normalizeSelector).filter(Boolean);
 }
 
 /**
@@ -95,11 +115,28 @@ export function stylesheetMotionOf(css: string): CssMotionSummary {
     hasSmoothScroll: false,
     infiniteAnimationSelectors: [],
     smoothScrollSelectors: [],
+    reducedMotionSelectors: [],
+    reducedMotionGlobal: false,
   };
   // Cheap pre-filter: nothing to parse when none of these words appear.
   if (!/infinite|smooth|prefers-reduced-motion/i.test(text)) return summary;
   for (const rule of parseRules(text, MAX_CSS_RULES)) {
-    if (rule.at?.some((a) => /^\s*@media\b/i.test(a) && REDUCED_MOTION.test(a))) summary.mentionsReducedMotion = true;
+    const reducedAt = rule.at?.find((a) => /^\s*@media\b/i.test(a) && REDUCED_MOTION.test(a));
+    if (reducedAt) {
+      summary.mentionsReducedMotion = true;
+      if (!/no-preference/i.test(reducedAt)) {
+        // A reduce block covers only the selectors whose rules touch motion.
+        if ([...parseDeclarations(rule.body).keys()].some((property) => MOTION_PROPERTY.test(property))) {
+          for (const part of selectorParts(rule.selector)) {
+            if (ALWAYS_MATCHES.has(part)) summary.reducedMotionGlobal = true;
+            else pushSelector(summary.reducedMotionSelectors, part);
+          }
+        }
+      } else {
+        // `no-preference` gates the motion inside it; any such block counts as page-wide handling.
+        summary.reducedMotionGlobal = true;
+      }
+    }
     if (rule.at?.some((a) => REDUCED_MOTION.test(a) || /@keyframes|@-webkit-keyframes/i.test(a))) continue;
     if (!/infinite|smooth/i.test(rule.body)) continue;
     for (const [property, raw] of parseDeclarations(rule.body)) {
@@ -155,9 +192,16 @@ export function staticSelector(sel: string): string {
 const ALWAYS_MATCHES = new Set(["html", ":root", "body", "*"]);
 
 /** True when any selector in the lists matches an element on the page. Bounded by `budget` querySelector calls. */
-function anySelectorMatches(doc: Document, lists: readonly string[], budget: { left: number }): boolean {
+function anySelectorMatches(
+  doc: Document,
+  lists: readonly string[],
+  budget: { left: number },
+  covered: ReadonlySet<string> = new Set(),
+): boolean {
   for (const list of lists) {
     for (const part of splitSelectorList(list)) {
+      // A selector a reduced-motion block also names is handled; it is not a finding.
+      if (covered.has(normalizeSelector(part))) continue;
       if (ALWAYS_MATCHES.has(part.trim().toLowerCase())) return true;
       if (budget.left <= 0) return false;
       const sel = staticSelector(part);
@@ -310,7 +354,9 @@ export const reducedMotionRule: Rule = {
     const budget = { left: MAX_SELECTOR_QUERIES };
     let unreadSheets = 0;
     const inline = stylesheetMotionOf(inlineCss);
-    if (inline.mentionsReducedMotion) handled = true;
+    // A reduced-motion block handles the whole page only as a global reset; otherwise only the selectors it names.
+    const covered = new Set<string>(inline.reducedMotionSelectors);
+    if (inline.reducedMotionGlobal) handled = true;
     // Inline style attributes always count: they apply to their own element.
     let attrInfinite = false;
     let attrCount = 0;
@@ -323,10 +369,7 @@ export const reducedMotionRule: Rule = {
       }
       if (attrInfinite) break;
     }
-    let cssInfinite =
-      attrInfinite || (inline.hasInfiniteAnimation && anySelectorMatches(doc, inline.infiniteAnimationSelectors, budget));
-    let cssSmooth = inline.hasSmoothScroll && anySelectorMatches(doc, inline.smoothScrollSelectors, budget);
-    let cssSource = cssInfinite || cssSmooth ? "inline <style>" : "";
+    const readSheets: { sheet: StylesheetMotionData; abs: string }[] = [];
     for (const el of doc.querySelectorAll("link[href]")) {
       const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
       if (!rel.includes("stylesheet")) continue;
@@ -343,16 +386,31 @@ export const reducedMotionRule: Rule = {
         if (!isFontOnlyHost(abs)) unreadSheets++;
         continue;
       }
-      if (sheet.mentionsReducedMotion) handled = true;
+      if (sheet.reducedMotionGlobal) handled = true;
+      for (const sel of sheet.reducedMotionSelectors ?? []) covered.add(sel);
+      readSheets.push({ sheet, abs });
+    }
+
+    // Motion is judged once every sheet's reduced-motion rules are known.
+    let cssInfinite =
+      attrInfinite ||
+      (inline.hasInfiniteAnimation && anySelectorMatches(doc, inline.infiniteAnimationSelectors, budget, covered));
+    let cssSmooth = inline.hasSmoothScroll && anySelectorMatches(doc, inline.smoothScrollSelectors, budget, covered);
+    let cssSource = cssInfinite || cssSmooth ? "inline <style>" : "";
+    for (const { sheet, abs } of readSheets) {
       if (
         sheet.hasInfiniteAnimation &&
         !cssInfinite &&
-        anySelectorMatches(doc, sheet.infiniteAnimationSelectors ?? [], budget)
+        anySelectorMatches(doc, sheet.infiniteAnimationSelectors ?? [], budget, covered)
       ) {
         cssInfinite = true;
         cssSource ||= shownUrl(abs);
       }
-      if (sheet.hasSmoothScroll && !cssSmooth && anySelectorMatches(doc, sheet.smoothScrollSelectors ?? [], budget)) {
+      if (
+        sheet.hasSmoothScroll &&
+        !cssSmooth &&
+        anySelectorMatches(doc, sheet.smoothScrollSelectors ?? [], budget, covered)
+      ) {
         cssSmooth = true;
         cssSource ||= shownUrl(abs);
       }
