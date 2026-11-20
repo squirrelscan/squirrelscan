@@ -59,10 +59,63 @@ describe("plan definitions", () => {
     expect(plan.renderConcurrency).toBeGreaterThanOrEqual(PLANS.team.renderConcurrency);
     expect(plan.scheduledCrawls).toBe(true);
     expect(plan.customHeaders).toBe(true);
-    expect(plan.maxPagesPerAudit).toBe(10000);
+    expect(plan.maxPagesPerAudit).toBe(25000);
     // #1028: a contracted plan must never audit fewer pages than the tier
-    // below it, whatever the two literals are set to.
+    // below it, whatever the literals are set to.
     expect(plan.maxPagesPerAudit).toBeGreaterThanOrEqual(PLANS.team.maxPagesPerAudit);
+    expect(plan.maxPagesPerAudit).toBeGreaterThanOrEqual(PLANS.business.maxPagesPerAudit);
+  });
+});
+
+describe("the flat Team, legacy Team and Business ladder (squirrelscan/repo#5002)", () => {
+  test("Team is flat: $89 or $890 a year for 15,000 pooled credits, unlimited members, no seats", () => {
+    const plan = PLANS.team;
+    expect(plan.priceMonthUsd).toBe(89);
+    expect(plan.priceYearUsd).toBe(890);
+    expect(plan.monthlyCredits).toBe(15000);
+    expect(plan.maxMembers).toBe(-1);
+    expect(plan.memberAbuseCap).toBe(100);
+    expect(plan.perSeat).toBeUndefined();
+    expect(plan.selfServe).toBe(true);
+  });
+
+  test("team_legacy is today's per-seat Team, unchanged, and nobody new can buy it", () => {
+    const plan = PLANS.team_legacy;
+    expect(plan.name).toBe("Team");
+    expect(plan.perSeat).toEqual({
+      priceMonthUsd: 29,
+      priceYearUsd: 290,
+      includedCreditsPerSeat: 3000,
+      minSeats: 2,
+    });
+    expect(plan.monthlyCredits).toBe(0);
+    expect(plan.selfServe).toBe(false);
+    // Same limits as Team, so the subscriber loses nothing.
+    expect(plan.maxPagesPerAudit).toBe(PLANS.team.maxPagesPerAudit);
+    expect(plan.renderConcurrency).toBe(PLANS.team.renderConcurrency);
+    expect(plan.maxWebsites).toBe(PLANS.team.maxWebsites);
+  });
+
+  test("Business is $249 or $2,490 a year for 45,000 credits, unlisted, with raised limits", () => {
+    const plan = PLANS.business;
+    expect(plan.priceMonthUsd).toBe(249);
+    expect(plan.priceYearUsd).toBe(2490);
+    expect(plan.monthlyCredits).toBe(45000);
+    expect(plan.selfServe).toBe(false);
+    expect(plan.maxPagesPerAudit).toBe(25000);
+    expect(plan.renderConcurrency).toBe(20);
+    expect(plan.maxWebsites).toBe(500);
+    expect(plan.perSeat).toBeUndefined();
+  });
+
+  test("each paid rung buys more credits per dollar than the one below", () => {
+    const perDollar = (id: PlanId) => PLANS[id].monthlyCredits / (PLANS[id].priceMonthUsd ?? 1);
+    expect(perDollar("team")).toBeGreaterThan(perDollar("starter"));
+    expect(perDollar("business")).toBeGreaterThan(perDollar("team"));
+  });
+
+  test("only team_legacy is per-seat", () => {
+    expect(ALL_PLAN_IDS.filter((id) => PLANS[id].perSeat !== undefined)).toEqual(["team_legacy"]);
   });
 });
 
@@ -70,10 +123,14 @@ describe("render width per plan (squirrelscan/repo#2480, #3576)", () => {
   // The cloud runner, the CLI clamp, the pricing page and the dashboard note all
   // read this one number per plan. Free is 2 (it was 1, which made a scheduled
   // free audit's crawl a page-at-a-time render); the paid widths are unchanged.
-  test("free 2, Pro 5, Team 10, Enterprise 10, never narrower going up", () => {
+  test("free 2, Pro 5, Team 10, Business 20, Enterprise 10, never narrower going up to Team", () => {
     expect(PLANS.free.renderConcurrency).toBe(2);
     expect(PLANS.starter.renderConcurrency).toBe(5);
     expect(PLANS.team.renderConcurrency).toBe(10);
+    expect(PLANS.team_legacy.renderConcurrency).toBe(10);
+    // Business's 20 is unlisted and blocked on the runner capacity work (#5002 D9); enterprise stays at
+    // 10 until then, because nothing clamps renders at dispatch.
+    expect(PLANS.business.renderConcurrency).toBe(20);
     expect(PLANS.enterprise.renderConcurrency).toBe(10);
     expect(PLANS.starter.renderConcurrency).toBeGreaterThan(PLANS.free.renderConcurrency);
   });
@@ -91,11 +148,15 @@ describe("SELF_SERVE_PLAN_IDS", () => {
       expect(SELF_SERVE_PLAN_IDS.includes(id)).toBe(PLANS[id].selfServe);
     }
     expect(SELF_SERVE_PLAN_IDS).not.toContain("enterprise");
+    expect(SELF_SERVE_PLAN_IDS).not.toContain("team_legacy");
+    expect(SELF_SERVE_PLAN_IDS).not.toContain("business");
   });
 
   test("isSelfServePlan agrees, and an unknown id falls back to free", () => {
     expect(isSelfServePlan("team")).toBe(true);
     expect(isSelfServePlan("enterprise")).toBe(false);
+    expect(isSelfServePlan("team_legacy")).toBe(false);
+    expect(isSelfServePlan("business")).toBe(false);
     expect(isSelfServePlan("nope")).toBe(true); // → free, which is self-serve
   });
 });
@@ -135,6 +196,15 @@ describe("planAtLeast", () => {
     expect(planAtLeast("team", "starter")).toBe(true);
     expect(planAtLeast("starter", "team")).toBe(false);
     expect(planAtLeast("free", "starter")).toBe(false);
+  });
+
+  test("team_legacy ranks with team; business sits between team and enterprise (#5002)", () => {
+    expect(planAtLeast("team_legacy", "team")).toBe(true);
+    expect(planAtLeast("team", "team_legacy")).toBe(true);
+    expect(planAtLeast("business", "team")).toBe(true);
+    expect(planAtLeast("team", "business")).toBe(false);
+    expect(planAtLeast("team_legacy", "business")).toBe(false);
+    expect(planAtLeast("business", "enterprise")).toBe(false);
   });
 });
 
@@ -294,21 +364,27 @@ describe("plan prices and monthly credits are pinned", () => {
   test("monthly price (USD)", () => {
     expect(PLANS.free.priceMonthUsd).toBeUndefined();
     expect(PLANS.starter.priceMonthUsd).toBe(19);
-    expect(PLANS.team.priceMonthUsd).toBeUndefined();
-    expect(PLANS.team.perSeat?.priceMonthUsd).toBe(29);
+    expect(PLANS.team.priceMonthUsd).toBe(89);
+    expect(PLANS.team_legacy.priceMonthUsd).toBeUndefined();
+    expect(PLANS.team_legacy.perSeat?.priceMonthUsd).toBe(29);
+    expect(PLANS.business.priceMonthUsd).toBe(249);
     expect(PLANS.enterprise.priceMonthUsd).toBeUndefined();
   });
 
   test("yearly price (USD)", () => {
     expect(PLANS.starter.priceYearUsd).toBe(190);
-    expect(PLANS.team.perSeat?.priceYearUsd).toBe(290);
+    expect(PLANS.team.priceYearUsd).toBe(890);
+    expect(PLANS.team_legacy.perSeat?.priceYearUsd).toBe(290);
+    expect(PLANS.business.priceYearUsd).toBe(2490);
   });
 
   test("monthly credits", () => {
     expect(PLANS.free.monthlyCredits).toBe(500);
     expect(PLANS.starter.monthlyCredits).toBe(3000);
-    expect(PLANS.team.monthlyCredits).toBe(0);
-    expect(PLANS.team.perSeat?.includedCreditsPerSeat).toBe(3000);
+    expect(PLANS.team.monthlyCredits).toBe(15000);
+    expect(PLANS.team_legacy.monthlyCredits).toBe(0);
+    expect(PLANS.team_legacy.perSeat?.includedCreditsPerSeat).toBe(3000);
+    expect(PLANS.business.monthlyCredits).toBe(45000);
     expect(PLANS.enterprise.monthlyCredits).toBe(0);
   });
 

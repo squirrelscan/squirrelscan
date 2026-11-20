@@ -1,0 +1,1 @@
+- Team is now a flat plan: $89 a month or $890 a year for 15,000 pooled credits, with unlimited members and no seat charge. Per-seat Team subscriptions keep their price, seats and credits (#2148).
