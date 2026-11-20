@@ -10,7 +10,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { AuditReport, EditorSummary } from "../src/types";
+import type { EditorSummary } from "@squirrelscan/core-contracts";
+import type { AuditReport } from "../src/types";
 import { editorSummaryView, toEditorSummary } from "../src/editor-summary";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";

@@ -5,6 +5,7 @@
 // the fix still lists the path as an internal link, so the reuse path filters it too.
 // Driven through the real crawler with a mock document fetcher, as #354's test is.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { describe, expect, test } from "bun:test";
@@ -96,7 +97,7 @@ async function createCrawlRecord(storage: CrawlStorage, config: Record<string, u
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );

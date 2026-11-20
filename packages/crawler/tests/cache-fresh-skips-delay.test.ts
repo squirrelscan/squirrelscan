@@ -3,6 +3,7 @@
 // this drives a real two-pass incremental crawl and asserts pass 2 (all pages
 // cache-fresh) does no fetches and does not sleep off the per-host delay.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { describe, expect, test } from "bun:test";
@@ -105,7 +106,7 @@ async function createCrawlRecord(
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );

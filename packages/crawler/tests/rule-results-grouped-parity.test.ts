@@ -12,7 +12,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { CheckResult } from "../src/storage/types";
+import type { CheckResult } from "@squirrelscan/core-contracts";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {

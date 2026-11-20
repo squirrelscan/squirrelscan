@@ -160,7 +160,7 @@ describe("rendered output", () => {
 
   test("label precedence is heading, then aria-label, then id", () => {
     const make = (hint: Record<string, string>) =>
-      describeRoot({ ...groups[0]!, rootHint: hint } as ComponentFixGroup);
+      describeRoot({ ...groups[0]!, rootHint: hint } as unknown as ComponentFixGroup);
     expect(make({ heading: "H", ariaLabel: "A", id: "i" })).toBe('"H"');
     expect(make({ ariaLabel: "A", id: "i" })).toBe('"A"');
     expect(make({ id: "i" })).toBe("#i");

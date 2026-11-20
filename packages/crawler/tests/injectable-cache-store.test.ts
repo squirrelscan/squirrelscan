@@ -15,7 +15,7 @@ import { Effect } from "effect";
 import { createCrawler } from "../src/core/crawler";
 import { SQLiteStorage } from "../src/storage/sqlite";
 import type { CacheLookup, CacheStore } from "../src/cache-store";
-import type { CrawlFetcher } from "../src/core/types";
+import type { CrawlFetcher } from "../src/fetcher";
 import type { PageRecord } from "../src/storage/types";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {

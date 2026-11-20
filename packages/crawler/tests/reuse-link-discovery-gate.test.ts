@@ -2,6 +2,7 @@
 // does. Drives a real two-pass incremental crawl: pass 1 caches a homepage that
 // links to /off-map (not in the sitemap); pass 2 reuses it from cache.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { describe, expect, test } from "bun:test";
@@ -97,7 +98,7 @@ async function createCrawlRecord(
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );

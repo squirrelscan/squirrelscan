@@ -124,7 +124,7 @@ describe("crawl status: an illegal write is a no-op that does not throw", () => 
 
   test("a refused write is reported to the hook with both statuses, and never throws", async () => {
     const { s, id } = await crawlAt("completed");
-    const seen: Array<{ kind: string; from: string; to: string }> = [];
+    const seen: Array<{ kind: string; id: string; from: string; to: string }> = [];
     s.onIgnoredTransition = (info) => seen.push(info);
     await run(s.updateCrawl(id, { status: "paused" }));
     expect(seen).toEqual([{ kind: "crawl", id, from: "completed", to: "paused" }]);
@@ -196,7 +196,7 @@ describe("frontier status", () => {
 
   test("a refused frontier write is reported and never throws", async () => {
     const { s, id } = await frontierAt("pending");
-    const seen: Array<{ kind: string; from: string; to: string }> = [];
+    const seen: Array<{ kind: string; id: string; from: string; to: string }> = [];
     s.onIgnoredTransition = (info) => seen.push(info);
     await run(s.updateFrontierStatus(id, "https://e.test/a", "done"));
     expect(seen).toEqual([{ kind: "frontier", id: "https://e.test/a", from: "pending", to: "done" }]);

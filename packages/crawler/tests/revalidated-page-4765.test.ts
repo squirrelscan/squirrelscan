@@ -61,7 +61,7 @@ function stored(): PageRecord {
       xRobotsTag: NOINDEX,
     },
     fetcherId: "cloud-render",
-  } as PageRecord;
+  } as unknown as PageRecord; // parentUrl: null mirrors a stored row
 }
 
 function result(over: {

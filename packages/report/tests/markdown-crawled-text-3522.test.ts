@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { AuditReport, EntityMap, ReportRuleResult } from "../src/types";
+import type { AuditReport, EntityMap, HealthScore, ReportRuleResult } from "../src/types";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderEntityDiffMarkdown } from "../src/entities-diff";
 import {
@@ -104,7 +104,7 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
       baseReport({
         status: "partial",
         statusReason: `Crawl stopped at ${PAYLOAD}\n\n# Injected heading`,
-        healthScore: { overall: 80, categories: [] },
+        healthScore: { overall: 80, categories: [] } as unknown as HealthScore, // partial on purpose
       }),
     );
     expect(hostileTargets(md)).toEqual([]);

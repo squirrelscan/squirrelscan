@@ -30,7 +30,7 @@ const GIB = 1024 * 1024 * 1024;
 const FETCH_OPTIONS = { userAgent: "squirrel-test", timeoutMs: 30_000, followRedirects: true };
 
 /** `total` bytes of spaces through a streaming compressor, never held whole. */
-async function bomb(compressor: NodeJS.ReadWriteStream, total: number): Promise<Buffer> {
+async function bomb(compressor: NodeJS.ReadWriteStream, total: number): Promise<Buffer<ArrayBuffer>> {
   const out: Buffer[] = [];
   compressor.on("data", (chunk: Buffer) => out.push(chunk));
   const ended = new Promise((resolve) => compressor.on("end", resolve));
@@ -71,8 +71,8 @@ async function peakRssGrowth(run: () => Promise<unknown>): Promise<number> {
   return Math.max(peak, process.memoryUsage().rss) - before;
 }
 
-let gzipBomb: Buffer;
-let brBomb: Buffer;
+let gzipBomb: Buffer<ArrayBuffer>;
+let brBomb: Buffer<ArrayBuffer>;
 let server: ReturnType<typeof Bun.serve>;
 let origin: string;
 
@@ -163,7 +163,7 @@ const HTML = (title: string, links: string[]) =>
     .join("")}</body></html>`;
 
 /** One coding per path, so the crawl meets every one Bun decodes. */
-const ENCODERS: Record<string, [string, (body: string) => Uint8Array]> = {
+const ENCODERS: Record<string, [string, (body: string) => Uint8Array<ArrayBuffer>]> = {
   "/home": ["gzip", (b) => gzipSync(b)],
   "/about": ["br", (b) => brotliCompressSync(b)],
   "/team": ["deflate", (b) => deflateSync(b)],
@@ -178,7 +178,7 @@ describe("every request a crawl sends", () => {
   });
 
   test("turns the runtime's decoding off, on every hop, and still decodes every page", async () => {
-    const site = Bun.serve({
+    const site: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
       fetch(req) {
         const path = new URL(req.url).pathname;

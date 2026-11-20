@@ -33,7 +33,7 @@ import {
   sitemapWalkWindowMs,
 } from "../src/sitemaps";
 import { WELL_KNOWN_PATHS } from "../src/well-known";
-import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
+import type { Crawler, CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
 // Mirrors SITEMAP_FETCH_CONCURRENCY in src/sitemaps.ts (not exported).
 const SITEMAP_FETCH_CONCURRENCY = 5;
@@ -101,7 +101,7 @@ interface Origin {
 // so the server is never the thing that gives up — the client has to be.
 function serveStallingProbes(): Origin {
   const hits = new Map<string, number>();
-  const server = Bun.serve({
+  const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     idleTimeout: 0,
     fetch(req) {
@@ -118,7 +118,7 @@ function serveStallingProbes(): Origin {
 
 interface CrawlOutcome {
   crawlId: string;
-  crawler: Awaited<ReturnType<typeof Effect.runPromise<Awaited<ReturnType<typeof createCrawler>>>>>;
+  crawler: Crawler;
   pages: number;
   firstPageAfterMs: number | undefined;
   totalMs: number;
@@ -241,7 +241,7 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
     // could not tell a working budget from one that starves honest origins.
     // Seven sequential stages at LATENCY_MS each still fit inside the budget.
     const LATENCY_MS = 80;
-    const server = Bun.serve({
+    const server: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
       idleTimeout: 0,
       async fetch(req) {
@@ -316,7 +316,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     // list. Under a fixed preamble budget this walk is cut off partway.
     const RESPONSE_MS = 120;
     let requests = 0;
-    const server = Bun.serve({
+    const server: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
       idleTimeout: 0,
       async fetch() {
@@ -349,7 +349,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     // CHUNK, which is what stops the rest of a level being chunked and awaited
     // just to record a skip.
     let requests = 0;
-    const server = Bun.serve({
+    const server: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
       idleTimeout: 0,
       fetch() {
@@ -391,7 +391,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     // round and 5 of 68 candidates were ever visited. Only a chunk where
     // nothing came back at all should burn the window.
     let requests = 0;
-    const server = Bun.serve({
+    const server: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
       idleTimeout: 0,
       fetch() {
@@ -426,7 +426,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     // true indefinitely. Progress separates a stall from honest slowness; only
     // the hard stop separates honest slowness from a deliberate slow drip.
     let served = 0;
-    const server = Bun.serve({
+    const server: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
       idleTimeout: 0,
       fetch() {
@@ -468,7 +468,7 @@ describe("sitemapWalkWindowMs / walk hard stop", () => {
   test("a hard stop shorter than the window is honored, not widened to it", async () => {
     // Silently raising a configured cap to the window length is how a bound
     // stops being one. The nearer of the two wins.
-    const server = Bun.serve({ port: 0, idleTimeout: 0, fetch: () => stalledBodyResponse() });
+    const server: ReturnType<typeof Bun.serve> = Bun.serve({ port: 0, idleTimeout: 0, fetch: () => stalledBodyResponse() });
     servers.push(server);
     const origin = `http://localhost:${server.port}`;
 

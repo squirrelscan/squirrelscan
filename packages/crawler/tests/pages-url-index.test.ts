@@ -16,7 +16,7 @@
 // loaded machine proves nothing, and the index existing proves nothing either
 // if the planner does not pick it.
 
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -143,7 +143,7 @@ async function crawlWith(
   return id;
 }
 
-function planFor(sql: string, ...params: unknown[]): string {
+function planFor(sql: string, ...params: SQLQueryBindings[]): string {
   const db = new Database(dbPath, { readonly: true });
   try {
     const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as Array<{

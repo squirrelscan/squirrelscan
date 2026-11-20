@@ -5,6 +5,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
+  },
   "scripts": {
     "typecheck": "tsgo --noEmit"
   },

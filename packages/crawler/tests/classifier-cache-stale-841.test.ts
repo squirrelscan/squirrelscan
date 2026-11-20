@@ -2,6 +2,7 @@
 // a changed classifier never relabelled an unchanged page. A cached page whose stored classification is
 // from another classifier is re-parsed from its stored html, with no fetch (repo#3369). Drives a real two-pass incremental crawl.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import type { PageClassifierHook } from "@squirrelscan/parser";
@@ -99,7 +100,7 @@ async function createCrawlRecord(
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );

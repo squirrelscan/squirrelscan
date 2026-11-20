@@ -190,7 +190,7 @@ describe("precedence", () => {
       kasada: true,
       unknown: true,
     } satisfies Record<WafProvider, true>;
-    expect([...PROVIDER_PRECEDENCE].sort()).toEqual(Object.keys(every).sort());
+    expect<string[]>([...PROVIDER_PRECEDENCE].sort()).toEqual(Object.keys(every).sort());
   });
 });
 

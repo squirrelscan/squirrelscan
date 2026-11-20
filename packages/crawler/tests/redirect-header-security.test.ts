@@ -308,7 +308,8 @@ describe("probe fetch cross-origin header stripping (#1395)", () => {
       expect(result.success).toBe(true);
       // Secret header dropped on the cross-origin hop; UA (allowlisted) survives.
       expect(targetSawSecret).toBeNull();
-      expect(targetSawUserAgent).toBe("squirrel-test");
+      // Assigned in a callback, so TS narrows it to null here.
+      expect(targetSawUserAgent as string | null).toBe("squirrel-test");
     } finally {
       source.stop(true);
       target.stop(true);

@@ -3,6 +3,7 @@
 // the shared predicate leaves a redirect kept on purpose (`keptAsPage`) a page; and a cached legacy 2xx row the
 // engine drops takes no page slot and queues its destination.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { describe, expect, test } from "bun:test";
@@ -99,7 +100,7 @@ async function createCrawlRecord(
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );
