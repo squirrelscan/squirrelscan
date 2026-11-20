@@ -1882,14 +1882,16 @@ export const audit = defineCommand({
       // --fail-on score:<category> against a category the --rule-include/
       // --rule-exclude filter excludes can never trip (no data that run) —
       // reject it before crawling rather than silently no-op the gate. #1066
-      if (ruleFilterActive) {
-        const resolvedRules = resolveRulesConfig(config.rules, ruleFilter);
+      // The zero-rules refusal also covers a selection that comes only from
+      // squirrel.toml (`[rules] enable` plus `wcag_level`), pub#2110.
+      const resolvedRules = resolveRulesConfig(config.rules, ruleFilter);
+      {
         // --rule-include X --rule-exclude X would crawl everything and score
         // nothing: reject the contradiction before the crawl starts. The
         // WCAG level's disables count too (repo#3093): `--rule-include
         // a11y/touch-targets --wcag-level AA` leaves no rule to run.
         const effectiveWcagLevel = wcagLevel ?? config.rules.wcag_level;
-        const zeroRules = zeroRulesError(ruleFilter.enable, resolvedRules, {
+        const zeroRules = zeroRulesError(resolvedRules.enable, resolvedRules, {
           level: effectiveWcagLevel,
           disables: wcagRuleDisables(effectiveWcagLevel),
         });
@@ -1898,6 +1900,8 @@ export const audit = defineCommand({
           exitWith({ early: "validation" });
           return;
         }
+      }
+      if (ruleFilterActive) {
         for (const c of failOn.conditions) {
           if (
             c.metric === "category-score" &&

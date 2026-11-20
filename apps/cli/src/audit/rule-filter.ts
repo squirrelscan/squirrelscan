@@ -126,7 +126,7 @@ export function zeroRulesError(
   wcag: { level: WcagLevel | undefined; disables: string[] }
 ): string | null {
   if (filterResolvesToZeroCategories(enable, resolved)) {
-    return "--rule-include/--rule-exclude contradict each other: every included category is also excluded, so no rules would run";
+    return "--rule-include/--rule-exclude (or [rules] enable/disable) contradict each other: every included category is also excluded, so no rules would run";
   }
   if (
     wcag.level &&
@@ -136,7 +136,7 @@ export function zeroRulesError(
       disable: [...resolved.disable, ...wcag.disables],
     })
   ) {
-    return `--rule-include selects only accessibility rules that WCAG level ${wcag.level} (--wcag-level or [rules] wcag_level) leaves out, so no rules would run`;
+    return `The rule selection (--rule-include or [rules] enable) selects only accessibility rules that WCAG level ${wcag.level} (--wcag-level or [rules] wcag_level) leaves out, so no rules would run`;
   }
   return null;
 }
