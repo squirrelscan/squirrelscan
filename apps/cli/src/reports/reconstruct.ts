@@ -16,6 +16,7 @@ import {
   detachFromPage,
   foldChecksToCanonical,
   foldRuleResultIntoTallies,
+  isCarriedContinuation,
   isRedirectSourcePage,
   type RuleTally,
 } from "@squirrelscan/audit-engine";
@@ -295,6 +296,32 @@ export interface SmartMergeOverride {
     seedVerification?: import("@squirrelscan/core-contracts/seed-verification").SeedVerification;
   };
   carriedLastSeen: Map<string, number>;
+}
+
+/**
+ * (pub#2097) passed/warnings/failed over a smart re-audit's union checks. A
+ * carried item row past the first is no extra check (the engine's totals and
+ * the scorer's tallies skip it too) and a clean carried page counts its passes
+ * (`syntheticPassCount`), so a re-audit counts in the full audit's units.
+ */
+export function countUnionTotals(
+  results: Iterable<{
+    checks: readonly CheckResult[];
+    syntheticPassCount?: number;
+  }>
+): { passed: number; warnings: number; failed: number } {
+  const totals = { passed: 0, warnings: 0, failed: 0 };
+  for (const result of results) {
+    // Clean carried pages are passes the full audit counts as real checks.
+    totals.passed += result.syntheticPassCount ?? 0;
+    for (const c of result.checks) {
+      if (isCarriedContinuation(c)) continue;
+      if (c.status === "pass") totals.passed++;
+      else if (c.status === "warn") totals.warnings++;
+      else if (c.status === "fail") totals.failed++;
+    }
+  }
+  return totals;
 }
 
 /**
@@ -1211,16 +1238,11 @@ export function reconstructReport(
     let unionWarnings = warnings;
     let unionFailed = failed;
     if (smartMerge) {
-      unionPassed = 0;
-      unionWarnings = 0;
-      unionFailed = 0;
-      for (const result of Object.values(ruleResults)) {
-        for (const c of result.checks) {
-          if (c.status === "pass") unionPassed++;
-          else if (c.status === "warn") unionWarnings++;
-          else if (c.status === "fail") unionFailed++;
-        }
-      }
+      ({
+        passed: unionPassed,
+        warnings: unionWarnings,
+        failed: unionFailed,
+      } = countUnionTotals(scoringResults.values()));
     }
 
     // Aggregate cache stats (#108) — pages (crawl.stats) + sub-resources.
