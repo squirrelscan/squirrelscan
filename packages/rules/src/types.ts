@@ -620,7 +620,7 @@ export interface StylesheetMotionData {
   smoothScrollSelectors: string[];
   /** Selectors of the rules inside a `prefers-reduced-motion: reduce` block that set animation, transition or scroll-behavior: the motion that block covers (a motion rule with the same selector is handled). */
   reducedMotionSelectors?: string[];
-  /** A reduced-motion block resets motion globally (`*`, `html`, `body`, `:root`), or gates motion with `no-preference`: handles the whole page. */
+  /** A `reduce` block resets motion globally (`*`, `html`, `body`, `:root`): handles the whole page. */
   reducedMotionGlobal?: boolean;
 }
 

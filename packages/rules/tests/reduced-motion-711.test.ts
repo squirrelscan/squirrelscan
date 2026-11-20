@@ -405,6 +405,14 @@ describe("a11y/reduced-motion", () => {
       expect(run(page(fa, `<div class="hero"></div>`), { stylesheetMotion: [s] })).toHaveLength(0);
     });
 
+    test("Bootstrap reboot's no-preference smooth scroll does not handle the page's own motion", () => {
+      const reboot = "@media (prefers-reduced-motion: no-preference){:root{scroll-behavior:smooth}}";
+      expect(stylesheetMotionOf(reboot).reducedMotionGlobal).toBe(false);
+      const s = sheet({ url: "https://example.com/fa.css", ...stylesheetMotionOf(reboot) });
+      const checks = run(page(fa, `<marquee>hi</marquee>`), { stylesheetMotion: [s] });
+      expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-marquee:warn"]);
+    });
+
     test("stylesheetMotionOf reports covered selectors and the global flag", () => {
       const scoped = stylesheetMotionOf("@media (prefers-reduced-motion: reduce){.A , .b{animation:none} .c{color:red}}");
       expect(scoped.reducedMotionSelectors).toEqual([".a", ".b"]);

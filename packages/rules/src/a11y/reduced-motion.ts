@@ -42,7 +42,7 @@ export interface CssMotionSummary {
    * transition or scroll-behavior: the motion that block actually covers (capped like the others).
    */
   reducedMotionSelectors: string[];
-  /** A reduced-motion block resets motion globally (`*`, `html`, `body`, `:root`), or gates motion with `no-preference`. */
+  /** A `reduce` block resets motion globally (`*`, `html`, `body`, `:root`). */
   reducedMotionGlobal: boolean;
 }
 
@@ -124,17 +124,16 @@ export function stylesheetMotionOf(css: string): CssMotionSummary {
     const reducedAt = rule.at?.find((a) => /^\s*@media\b/i.test(a) && REDUCED_MOTION.test(a));
     if (reducedAt) {
       summary.mentionsReducedMotion = true;
-      if (!/no-preference/i.test(reducedAt)) {
-        // A reduce block covers only the selectors whose rules touch motion.
-        if ([...parseDeclarations(rule.body).keys()].some((property) => MOTION_PROPERTY.test(property))) {
-          for (const part of selectorParts(rule.selector)) {
-            if (ALWAYS_MATCHES.has(part)) summary.reducedMotionGlobal = true;
-            else pushSelector(summary.reducedMotionSelectors, part);
-          }
+      // A reduce block covers only the selectors whose rules touch motion. Motion inside a
+      // `no-preference` block is already gated (skipped below), so it covers nothing else.
+      if (
+        !/no-preference/i.test(reducedAt) &&
+        [...parseDeclarations(rule.body).keys()].some((property) => MOTION_PROPERTY.test(property))
+      ) {
+        for (const part of selectorParts(rule.selector)) {
+          if (ALWAYS_MATCHES.has(part)) summary.reducedMotionGlobal = true;
+          else pushSelector(summary.reducedMotionSelectors, part);
         }
-      } else {
-        // `no-preference` gates the motion inside it; any such block counts as page-wide handling.
-        summary.reducedMotionGlobal = true;
       }
     }
     if (rule.at?.some((a) => REDUCED_MOTION.test(a) || /@keyframes|@-webkit-keyframes/i.test(a))) continue;
