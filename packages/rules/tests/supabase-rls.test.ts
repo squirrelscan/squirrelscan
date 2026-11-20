@@ -16,6 +16,7 @@ import {
   classifyTableResponse,
   createSupabaseRlsRule,
   discoverSupabase,
+  MAX_PROJECTS,
   MAX_TABLE_PROBES,
   MAX_TABLES_PER_PROJECT,
   readSupabaseJwt,
@@ -215,7 +216,8 @@ describe("discovery (sends nothing)", () => {
     );
     expect(d.projects).toHaveLength(1);
     expect(d.projects[0]).toMatchObject({ ref: REF, host: HOST, keyKind: "anon-jwt", key: ANON });
-    expect(d.tables).toEqual(["todos", "invoices", "notes"]);
+    // Name order, not the order the code names them in (#2104).
+    expect(d.tables).toEqual(["invoices", "notes", "todos"]);
   });
 
   test("Array.from and Buffer.from with a string are not tables, and rpc is not a table", () => {
@@ -270,10 +272,49 @@ describe("discovery (sends nothing)", () => {
   });
 
   test("tables come only from the site's code, deduped and capped per project", () => {
-    const many = Array.from({ length: 12 }, (_, i) => `t${i}`);
-    expect(tableTargets(many)).toHaveLength(8);
+    const many = Array.from({ length: MAX_TABLES_PER_PROJECT + 4 }, (_, i) => `t${i}`);
+    expect(tableTargets(many)).toHaveLength(MAX_TABLES_PER_PROJECT);
     expect(tableTargets(["todos", "todos"])).toEqual(["todos"]);
     expect(tableTargets([])).toEqual([]);
+  });
+
+  test("the caps are 2 projects, 30 tables per project and 40 probes per audit (#2104)", () => {
+    // Literal pins: raising a cap makes the rule louder, so it is a reviewed change.
+    expect(MAX_PROJECTS).toBe(2);
+    expect(MAX_TABLES_PER_PROJECT).toBe(30);
+    expect(MAX_TABLE_PROBES).toBe(40);
+  });
+
+  test("past the cap, the first tables in code-unit name order are kept, whatever order the code names them", () => {
+    expect(tableTargets(["zeta", "Beta", "alpha", "t10", "t2", "_x"])).toEqual([
+      "Beta",
+      "_x",
+      "alpha",
+      "t10",
+      "t2",
+      "zeta",
+    ]);
+    const names = Array.from({ length: MAX_TABLES_PER_PROJECT + 5 }, (_, i) => `t${String(i).padStart(3, "0")}`);
+    const reversed = [...names].reverse();
+    expect(tableTargets(reversed)).toEqual(names.slice(0, MAX_TABLES_PER_PROJECT));
+  });
+
+  test("discovery is the same whatever order the scripts were fetched in", () => {
+    const second = "zyxwvutsrqponmlkjihg";
+    const third = "mmmmmmmmmmnnnnnnnnnn";
+    const keyFor = (ref: string) => jwt({ iss: "supabase", ref, role: "anon", exp: 2000000000 });
+    const sources = [
+      { url: "https://example.com/c.js", content: `createClient("https://${second}.supabase.co","${keyFor(second)}");sb.from("orders").select()` },
+      { url: "https://example.com/a.js", content: bundle(`sb.from("profiles").select();fetch("/rest/v1/accounts")`) },
+      { url: "https://example.com/b.js", content: `createClient("https://${third}.supabase.co","${keyFor(third)}");sb.from("Messages").select()` },
+    ];
+    const forward = discoverSupabase(sources, NOW_MS / 1000);
+    const backward = discoverSupabase([...sources].reverse(), NOW_MS / 1000);
+    expect(backward).toEqual(forward);
+    // Projects in ref order, the first MAX_PROJECTS (2) probed.
+    expect(forward.projects.map((p) => p.ref)).toEqual([REF, third]);
+    expect(forward.projectsSkipped).toBe(1);
+    expect(forward.tables).toEqual(["Messages", "accounts", "orders", "profiles"]);
   });
 
   test("the probe is a HEAD with a row count on the project host, with the anon key", () => {
@@ -381,9 +422,9 @@ describe("security/supabase-rls", () => {
 
     // HEAD only: never a GET, never a query string, never a body pulled.
     expect(sent.map((r) => `${r.method} ${r.host}${new URL(r.url).pathname}`)).toEqual([
-      `HEAD ${HOST}/rest/v1/todos`,
-      `HEAD ${HOST}/rest/v1/profiles`,
       `HEAD ${HOST}/rest/v1/invoices`,
+      `HEAD ${HOST}/rest/v1/profiles`,
+      `HEAD ${HOST}/rest/v1/todos`,
     ]);
     expect(bodyPulls).toBe(0);
     for (const r of sent) {
@@ -609,7 +650,13 @@ describe("security/supabase-rls", () => {
   test("table probes are capped across the run, and a capped run is not a pass", async () => {
     bodyPulls = 0;
     const sent = stubFetch({});
-    const tables = Array.from({ length: 12 }, (_, i) => `sb.from("t${i}").select()`).join(";");
+    // Named in reverse, so code order and name order differ.
+    const count = MAX_TABLES_PER_PROJECT + 4;
+    const names = Array.from({ length: count }, (_, i) => `t${String(i).padStart(3, "0")}`);
+    const tables = [...names]
+      .reverse()
+      .map((n) => `sb.from("${n}").select()`)
+      .join(";");
     const second = "zyxwvutsrqponmlkjihg";
     const key2 = jwt({ iss: "supabase", ref: second, role: "anon", exp: 2000000000 });
     const checks = await run(
@@ -626,11 +673,20 @@ describe("security/supabase-rls", () => {
     expect(sent).toHaveLength(MAX_TABLE_PROBES);
     expect(sent.every((r) => r.method === "HEAD")).toBe(true);
     expect(bodyPulls).toBe(0);
-    expect(new Set(sent.map((r) => r.host))).toEqual(new Set([HOST, `${second}.supabase.co`]));
-    // 2 projects x 12 code tables = 24 planned, 10 sent. Left out by a cap:
-    // 4 per project past MAX_TABLES_PER_PROJECT (8), so 8, plus 6 of the second
-    // project's 8 targets past the per-run cap of 10: 14. They could be open,
-    // so the run is incomplete (not checked), never a pass.
+    // The first project (by ref) gets the first MAX_TABLES_PER_PROJECT tables
+    // by name; the second gets the first ones by name until the per-run cap.
+    const secondShare = MAX_TABLE_PROBES - MAX_TABLES_PER_PROJECT;
+    expect(sent.map((r) => `${r.host}${new URL(r.url).pathname}`)).toEqual([
+      ...names.slice(0, MAX_TABLES_PER_PROJECT).map((n) => `${HOST}/rest/v1/${n}`),
+      ...names.slice(0, secondShare).map((n) => `${second}.supabase.co/rest/v1/${n}`),
+    ]);
+    // 2 projects x `count` code tables planned, MAX_TABLE_PROBES sent and each
+    // answered 404 (definite). Left out by a cap: 4 per project past
+    // MAX_TABLES_PER_PROJECT, plus the second project's targets past the
+    // per-run cap. They could be open, so the run is not checked, never a pass.
+    const planned = 2 * count;
+    const capped = 2 * 4 + (MAX_TABLES_PER_PROJECT - secondShare);
+    expect(planned - MAX_TABLE_PROBES).toBe(capped);
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
       status: "skipped",
@@ -638,13 +694,37 @@ describe("security/supabase-rls", () => {
       value: "not-checked",
     });
     expect(checks.some((c) => c.status === "pass")).toBe(false);
-    expect(checks[0]!.details).toMatchObject({ tablesProbed: 10, tablesCapped: 14 });
-    expect(checks[0]!.message).toContain("14 of 24 table probe(s)");
+    expect(checks[0]!.details).toMatchObject({
+      tablesProbed: MAX_TABLE_PROBES,
+      tablesCapped: capped,
+      tablesPlanned: planned,
+      tablesChecked: MAX_TABLE_PROBES,
+      tablesUnchecked: capped,
+    });
+    expect(checks[0]!.message).toContain(
+      `${MAX_TABLE_PROBES} of ${planned} table probe(s) got a definite answer and ${capped} were left unchecked`,
+    );
+  });
+
+  test("the same site audited twice, its scripts fetched in another order, probes the same tables", async () => {
+    const names = Array.from({ length: MAX_TABLES_PER_PROJECT + 3 }, (_, i) => `t${String(i).padStart(3, "0")}`);
+    const half = Math.floor(names.length / 2);
+    const scripts = [
+      script(bundle(names.slice(half).map((n) => `sb.from("${n}").select()`).join(";")), "https://example.com/z.js"),
+      script(names.slice(0, half).map((n) => `sb.from("${n}").select()`).join(";"), "https://example.com/a.js"),
+    ];
+    const first = stubFetch({});
+    await run(ctx({ scripts }));
+    const second = stubFetch({});
+    await run(ctx({ scripts: [...scripts].reverse() }));
+    const paths = (sent: Sent[]) => sent.map((r) => new URL(r.url).pathname);
+    expect(paths(first)).toEqual(names.slice(0, MAX_TABLES_PER_PROJECT).map((n) => `/rest/v1/${n}`));
+    expect(paths(second)).toEqual(paths(first));
   });
 
   test("tables past the per-project cap count as unanswered: eight 401s and a ninth never sent is not a pass", async () => {
     bodyPulls = 0;
-    const names = Array.from({ length: MAX_TABLES_PER_PROJECT + 1 }, (_, i) => `t${i}`);
+    const names = Array.from({ length: MAX_TABLES_PER_PROJECT + 1 }, (_, i) => `t${String(i).padStart(3, "0")}`);
     const routes: Record<string, () => Response> = {};
     for (const n of names) routes[`${HOST}/rest/v1/${n}`] = () => answer(401);
     const sent = stubFetch(routes);
@@ -653,7 +733,7 @@ describe("security/supabase-rls", () => {
     );
     // The ninth table is never probed, so it has no answer and may be open.
     expect(sent).toHaveLength(MAX_TABLES_PER_PROJECT);
-    expect(sent.some((r) => r.url.endsWith(`/rest/v1/t${MAX_TABLES_PER_PROJECT}`))).toBe(false);
+    expect(sent.some((r) => r.url.endsWith(`/rest/v1/${names[MAX_TABLES_PER_PROJECT]}`))).toBe(false);
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
       status: "skipped",
@@ -662,8 +742,57 @@ describe("security/supabase-rls", () => {
     });
     expect(checks.some((c) => c.status === "pass")).toBe(false);
     expect(checks[0]!.message).toContain(`${MAX_TABLES_PER_PROJECT} tables per project`);
-    expect(checks[0]!.message).toContain(`1 of ${MAX_TABLES_PER_PROJECT + 1} table probe(s)`);
-    expect(checks[0]!.details).toMatchObject({ tablesProbed: MAX_TABLES_PER_PROJECT, tablesCapped: 1 });
+    expect(checks[0]!.message).toContain(
+      `${MAX_TABLES_PER_PROJECT} of ${MAX_TABLES_PER_PROJECT + 1} table probe(s) got a definite answer and 1 were left unchecked`,
+    );
+    expect(checks[0]!.details).toMatchObject({
+      tablesProbed: MAX_TABLES_PER_PROJECT,
+      tablesCapped: 1,
+      tablesChecked: MAX_TABLES_PER_PROJECT,
+      tablesUnchecked: 1,
+    });
+  });
+
+  test("a fail cut short by a 429 says how many tables went unchecked", async () => {
+    stubFetch({
+      [`${HOST}/rest/v1/a`]: () => answer(200, "0-0/5"),
+      [`${HOST}/rest/v1/b`]: () => answer(429),
+    });
+    const checks = await run(
+      ctx({
+        scripts: [
+          script(bundle(`sb.from("d").select();sb.from("c").select();sb.from("b").select();sb.from("a").select()`)),
+        ],
+      }),
+    );
+    expect(checks).toHaveLength(1);
+    expect(checks[0]!.status).toBe("fail");
+    // a answered (exposed), b throttled, c and d never sent: 1 of 4 checked.
+    expect(checks[0]!.message).toContain(
+      "The list may be incomplete: 1 of 4 table probe(s) got a definite answer and 3 were left unchecked",
+    );
+    expect(checks[0]!.message).toContain("throttled the probes");
+    expect(checks[0]!.details).toMatchObject({ tablesChecked: 1, tablesUnchecked: 3, throttled: true });
+  });
+
+  test("a fail past the per-project cap says how many tables went unchecked; a complete fail does not", async () => {
+    const names = Array.from({ length: MAX_TABLES_PER_PROJECT + 2 }, (_, i) => `t${String(i).padStart(3, "0")}`);
+    stubFetch({ [`${HOST}/rest/v1/${names[0]}`]: () => answer(200, "0-0/1") });
+    const capped = await run(
+      ctx({ scripts: [script(bundle(names.map((n) => `sb.from("${n}").select()`).join(";")))] }),
+    );
+    expect(capped).toHaveLength(1);
+    expect(capped[0]!.status).toBe("fail");
+    expect(capped[0]!.message).toContain(
+      `${MAX_TABLES_PER_PROJECT} of ${names.length} table probe(s) got a definite answer and 2 were left unchecked`,
+    );
+    expect(capped[0]!.message).toContain(`${MAX_TABLES_PER_PROJECT} tables per project`);
+
+    stubFetch({ [`${HOST}/rest/v1/a`]: () => answer(200, "0-0/1") });
+    const complete = await run(ctx({ scripts: [script(bundle(`sb.from("a").select();sb.from("b").select()`))] }));
+    expect(complete[0]!.status).toBe("fail");
+    expect(complete[0]!.message).not.toContain("may be incomplete");
+    expect(complete[0]!.details).toMatchObject({ tablesChecked: 2, tablesUnchecked: 0 });
   });
 
   test("a 401 then 429s: the run stops at the first 429 and is not a pass", async () => {
