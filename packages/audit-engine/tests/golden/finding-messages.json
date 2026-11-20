@@ -3241,6 +3241,12 @@
    "responsive-size|info|No images found on page||"
   ]
  },
+ "images/sitemap-missing": {
+  "digest": "155814294609272",
+  "lines": [
+   "sitemap-missing-image|skipped|The sitemap declares no image entries||"
+  ]
+ },
  "images/srcset": {
   "digest": "57331192790133",
   "lines": [

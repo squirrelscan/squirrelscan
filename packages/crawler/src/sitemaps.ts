@@ -116,6 +116,31 @@ function sitemapEntries(value: unknown): Record<string, unknown>[] {
   );
 }
 
+/**
+ * Image entries kept per `<url>`. Google allows 1000; a product page lists a handful. The cap bounds
+ * what a hostile or huge sitemap holds in memory, and a URL over it is marked `imagesTruncated` so a
+ * rule never reads the kept prefix as the full list.
+ */
+export const SITEMAP_MAX_IMAGES_PER_URL = 50;
+
+/** The `<image:loc>` values of one `<url>` entry, absolute, capped (see {@link SITEMAP_MAX_IMAGES_PER_URL}). */
+function sitemapImages(entry: Record<string, unknown>): { images: string[]; truncated: boolean } {
+  const images: string[] = [];
+  let truncated = false;
+  for (const image of sitemapEntries(entry["image:image"])) {
+    const raw = fieldText(image["image:loc"]);
+    if (!raw) continue;
+    const loc = decodeXmlEscapes(raw);
+    if (!/^https?:\/\//i.test(loc)) continue;
+    if (images.length >= SITEMAP_MAX_IMAGES_PER_URL) {
+      truncated = true;
+      break;
+    }
+    images.push(loc);
+  }
+  return { images, truncated };
+}
+
 type SitemapField = "loc" | "lastmod" | "changefreq" | "priority";
 
 /**
@@ -356,11 +381,14 @@ export function parseSitemap(content: string, url: string): SitemapData {
         const priorityText = fields.read(entry, "priority");
         const priority = priorityText ? Number.parseFloat(priorityText) : undefined;
 
+        const { images, truncated } = sitemapImages(entry);
         urls.push({
           loc,
           lastmod: fields.read(entry, "lastmod"),
           changefreq: fields.read(entry, "changefreq"),
           priority: Number.isNaN(priority ?? Number.NaN) ? undefined : priority,
+          ...(images.length > 0 ? { images } : {}),
+          ...(truncated ? { imagesTruncated: true } : {}),
         });
       }
       errors.push(...fields.errors(), ...locs.errors());

@@ -16,6 +16,7 @@ import { offscreenLazyRule } from "./offscreen-lazy";
 import { optimizedRule } from "./optimized";
 import { pictureElementRule } from "./picture-element";
 import { responsiveSizeRule } from "./responsive-size";
+import { sitemapMissingRule } from "./sitemap-missing";
 import { srcsetRule } from "./srcset";
 import { svgInlineRule } from "./svg-inline";
 
@@ -39,6 +40,7 @@ export const rules: Rule[] = [
   figureFigcaptionRule,
   pictureElementRule,
   hotlinkedRule,
+  sitemapMissingRule,
 ];
 
 export {
@@ -56,6 +58,7 @@ export {
   optimizedRule,
   pictureElementRule,
   responsiveSizeRule,
+  sitemapMissingRule,
   srcsetRule,
   svgInlineRule,
 };

@@ -368,7 +368,8 @@
                   "rules/images/responsive-size",
                   "rules/images/offscreen-lazy",
                   "rules/images/optimized",
-                  "rules/images/hotlinked"
+                  "rules/images/hotlinked",
+                  "rules/images/sitemap-missing"
                 ]
               },
               {

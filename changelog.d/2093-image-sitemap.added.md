@@ -1,0 +1,1 @@
+- squirrel parses image sitemap entries and the new `images/sitemap-missing` info rule flags an indexable page whose og:image or Product image is not in its sitemap image entries; sites with no image entries are skipped (#2093)

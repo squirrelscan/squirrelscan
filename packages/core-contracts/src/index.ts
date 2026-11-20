@@ -2989,6 +2989,13 @@ export interface SitemapUrl {
   lastmod?: string;
   changefreq?: string;
   priority?: number;
+  /**
+   * `<image:image><image:loc>` entries under this `<url>` (Google image sitemap extension), absolute URLs as
+   * written, capped per URL. Absent when the entry declares none.
+   */
+  images?: string[];
+  /** The entry declared more image entries than were kept, so `images` is a prefix, not the full list. */
+  imagesTruncated?: boolean;
 }
 
 export interface SitemapData {
