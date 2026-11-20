@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
-    "effect": "^3.21.3"
+    "effect": "^3.22.5"
   },
   "scripts": {
     "typecheck": "tsgo --noEmit"

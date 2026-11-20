@@ -20,7 +20,7 @@
     "@squirrelscan/core-contracts": "workspace:*",
     "@squirrelscan/crawler": "workspace:*",
     "@squirrelscan/parser": "workspace:*",
-    "effect": "^3.21.3"
+    "effect": "^3.22.5"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",

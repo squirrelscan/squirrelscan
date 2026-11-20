@@ -34,7 +34,7 @@ runtime dependency closure of `apps/cli`.
 | `domhandler@6.0.1` | BSD-2-Clause | [source](https://github.com/fb55/domhandler) |
 | `domutils@3.2.2` | BSD-2-Clause | [source](https://github.com/fb55/domutils) |
 | `domutils@4.0.2` | BSD-2-Clause | [source](https://github.com/fb55/domutils) |
-| `effect@3.22.0` | MIT | [source](https://github.com/Effect-TS/effect) |
+| `effect@3.22.5` | MIT | [source](https://github.com/Effect-TS/effect) |
 | `entities@4.5.0` | BSD-2-Clause | [source](https://github.com/fb55/entities) |
 | `entities@7.0.1` | BSD-2-Clause | [source](https://github.com/fb55/entities) |
 | `entities@8.0.0` | BSD-2-Clause | [source](https://github.com/fb55/entities) |
@@ -828,7 +828,7 @@ Packages: `anynum@1.0.1`, `fast-xml-builder@1.3.1`, `is-unsafe@2.0.3`, `xml-nami
 
 ### LICENSE (5f58d41e2a9d)
 
-Packages: `effect@3.22.0`
+Packages: `effect@3.22.5`
 
     MIT License
 

@@ -18,7 +18,7 @@
     "changelog:convert": "bun run scripts/changelog.ts convert",
     "docs:check": "cd docs && bun run check",
     "docs:build": "cd docs && bun run build",
-    "audit:dependencies": "bun audit --ignore=GHSA-gcqx-w48m-w2h4 --ignore=GHSA-wx4j-mvgx-mqwp --ignore=GHSA-9wv6-86v2-598j --ignore=GHSA-238p-pmpm-9mq7 --ignore=GHSA-98hj-9722-w3j8 --ignore=GHSA-mpr7-6m5w-76rw --ignore=GHSA-fc5q-39xc-vjpf --ignore=GHSA-7589-6fvf-x4pw",
+    "audit:dependencies": "bun audit --ignore=GHSA-gcqx-w48m-w2h4 --ignore=GHSA-wx4j-mvgx-mqwp --ignore=GHSA-9wv6-86v2-598j --ignore=GHSA-238p-pmpm-9mq7 --ignore=GHSA-98hj-9722-w3j8 --ignore=GHSA-mpr7-6m5w-76rw --ignore=GHSA-fc5q-39xc-vjpf",
     "notices:generate": "bun run scripts/generate-third-party-notices.ts",
     "notices:check": "bun run scripts/generate-third-party-notices.ts --check",
     "check:psl-freshness": "bun run scripts/check-tldts-freshness.ts",

@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.183",
+      "version": "0.0.188",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
@@ -34,7 +34,7 @@
         "@squirrelscan/tls-probe": "workspace:*",
         "@squirrelscan/utils": "workspace:*",
         "citty": "^0.1.6",
-        "effect": "^3.21.3",
+        "effect": "^3.22.5",
         "fast-xml-parser": "^5.12.0",
         "gradient-string": "^3.0.0",
         "linkedom": "^0.18.12",
@@ -97,7 +97,7 @@
         "@squirrelscan/threat-intel": "workspace:*",
         "@squirrelscan/utils": "workspace:*",
         "@squirrelscan/waf-detect": "workspace:*",
-        "effect": "^3.21.3",
+        "effect": "^3.22.5",
       },
       "devDependencies": {
         "@sinclair/typebox": "^0.34.49",
@@ -128,7 +128,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
-        "effect": "^3.21.3",
+        "effect": "^3.22.5",
       },
     },
     "packages/crawler": {
@@ -139,7 +139,7 @@
         "@squirrelscan/fetchers": "workspace:*",
         "@squirrelscan/parser": "workspace:*",
         "@squirrelscan/utils": "workspace:*",
-        "effect": "^3.21.3",
+        "effect": "^3.22.5",
         "fast-xml-parser": "^5.12.0",
         "robots-parser": "^3.0.1",
         "tldts": "^7",
@@ -179,7 +179,7 @@
       "dependencies": {
         "@squirrelscan/core-contracts": "workspace:*",
         "@squirrelscan/utils": "workspace:*",
-        "effect": "^3.21.3",
+        "effect": "^3.22.5",
         "htmlparser2": "^10.1.0",
         "linkedom": "^0.18.12",
       },
@@ -236,7 +236,7 @@
         "@squirrelscan/core-contracts": "workspace:*",
         "@squirrelscan/crawler": "workspace:*",
         "@squirrelscan/parser": "workspace:*",
-        "effect": "^3.21.3",
+        "effect": "^3.22.5",
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
@@ -1587,7 +1587,7 @@
 
     "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
 
-    "effect": ["effect@3.22.0", "", { "dependencies": { "@standard-schema/spec": "^1.0.0", "fast-check": "^3.23.1" } }, "sha512-jhYFe0zTlIRqYFrKTS+6luhmS/Tm0f+JLo0K9KUxvtFab1SUGEszQi2ehOP6QzAZvy831lDmTwwzvVDZSPNz3g=="],
+    "effect": ["effect@3.22.5", "", { "dependencies": { "@standard-schema/spec": "^1.0.0", "fast-check": "^3.23.1" } }, "sha512-AdIU4llI19BzhJ4xUBZix7kS8oiYSlCsJ61j3UM3UyJw9ecDrsrrweDFm/Ku1nHbJWMLoynK+1Me4it3Zkmjpw=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.395", "", {}, "sha512-7zt9Aw+SrmxLWLN0zhaTWZQiCdryLVrYTq5R7iZakLvi2UQPYMMsROYV/2qVCzMeCiSXHwKOU+sZ4zOVVlrtKA=="],
 

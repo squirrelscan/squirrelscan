@@ -29,7 +29,7 @@
     "@squirrelscan/threat-intel": "workspace:*",
     "@squirrelscan/utils": "workspace:*",
     "@squirrelscan/waf-detect": "workspace:*",
-    "effect": "^3.21.3"
+    "effect": "^3.22.5"
   },
   "devDependencies": {
     "@sinclair/typebox": "^0.34.49",

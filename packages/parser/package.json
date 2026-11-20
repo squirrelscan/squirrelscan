@@ -11,7 +11,7 @@
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*",
     "@squirrelscan/utils": "workspace:*",
-    "effect": "^3.21.3",
+    "effect": "^3.22.5",
     "htmlparser2": "^10.1.0",
     "linkedom": "^0.18.12"
   },

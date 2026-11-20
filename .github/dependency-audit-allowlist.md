@@ -8,15 +8,6 @@ advisory stop matching (check with `bun audit` after removing the ignore, on the
 hide a later regression of the same advisory. The `dependency-advisory` workflow opens an issue when
 the audit fails; it is also the moment to prune.
 
-## GHSA-7589-6fvf-x4pw
-
-effect `<=3.22.0`: ReDoS in the regex that `Schema.TemplateLiteral` compiles (high). The tree resolves
-`3.22.0`. Nothing in this repository uses `Schema.TemplateLiteral` (no use in `apps/` or `packages/`
-sources), so no squirrel code path builds the vulnerable regex, and there is no untrusted input to it.
-
-TEMPORARY: the fix is effect `3.22.5`, in #2143. That change removes this ignore and this section when
-it merges, after the v0.0.189 release.
-
 ## GHSA-9wv6-86v2-598j
 
 `path-to-regexp@6.1.0` is installed only through Tangly's `@astrojs/vercel`
