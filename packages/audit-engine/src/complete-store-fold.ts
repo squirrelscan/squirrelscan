@@ -592,7 +592,9 @@ export function createCompleteStoreTallyFold(
   const cleanCarriedPasses = (ruleId: string): number => {
     const clean = carriedPageUrls.size - (carriedDirtyPagesByRule.get(ruleId) ?? 0);
     const k = checksPerPage(ruleId);
-    if (k <= 1) return clean;
+    // (#2167) A rule that scored nothing this run owes carried pages no pass.
+    if (k === 0) return 0;
+    if (k === 1) return clean;
     return Math.max(0, k * clean + (carriedDirtyPassesByRule.get(ruleId) ?? 0));
   };
 
@@ -1086,8 +1088,14 @@ export function carriedChecksPerPageFor(
   },
   ruleId: string,
 ): number {
-  if (!tallies.completeStore) return checksPerPageFromTallies(tallies.perPageTallies[ruleId]);
-  return tallies.completeTallies ? checksPerPageFromTallies(tallies.completeTallies[ruleId]) : 1;
+  // (#2167) Tallies leave out a class that scores nothing (all-info checks), and a
+  // reader takes a missing rule as 0 scored. The full audit scores such a rule as
+  // nothing, so a carried page owes it no check: 0, not the old floor of 1. A
+  // chunked body with no tallies at all (an older CLI) cannot say, and keeps 1.
+  const byRule = tallies.completeStore ? tallies.completeTallies : tallies.perPageTallies;
+  if (!byRule) return 1;
+  const byName = byRule[ruleId];
+  return byName ? checksPerPageFromTallies(byName) : 0;
 }
 
 /** Split a batch of findings into per-page groups, preserving arrival order. */

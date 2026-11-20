@@ -1,0 +1,1 @@
+- A capped re-audit now scores the same as a full audit of an unchanged site: carried pages no longer earn a pass for rules whose checks are all info. (#2167)

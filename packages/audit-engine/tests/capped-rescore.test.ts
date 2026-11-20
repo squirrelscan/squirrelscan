@@ -38,6 +38,7 @@ import {
 
 import {
   aggregateUntouchedCarried,
+  carriedChecksPerPageFor,
   isAggregatableCarriedRow,
   type UntouchedCarriedPage,
 } from "../src/complete-store-fold";
@@ -1044,13 +1045,36 @@ describe("a capped report published chunked scores as published in one POST (rep
     expect(comparable(rescored(afterChunked))).toEqual(comparable(rescored(afterUncapped)));
     expect(afterChunked.coverage).toEqual(afterUncapped.coverage);
     // The carried side is the whole class, counted in the full audit's check units
-    // (repo#3360), so the unchanged site scores as it did. The 1-point gap (47 vs
-    // 46) predates repo#3360: carried pages earn perf/ttfb passes the full audit
-    // skipped for want of timing data.
+    // (repo#3360), so the unchanged site scores as it did. (#2167) That includes
+    // rules whose checks are all info: the full audit scores them as nothing, so
+    // carried pages earn them no pass either.
     const fullScore = rescored(first).healthScore.overall!;
-    expect(Math.abs(rescored(afterChunked).healthScore.overall! - fullScore)).toBeLessThanOrEqual(1);
+    expect(rescored(afterChunked).healthScore.overall!).toBe(fullScore);
     // After the sampled store the re-run scores the clipped pages clean.
     expect(rescored(afterCapped).healthScore.overall!).toBeGreaterThan(fullScore);
+  });
+
+  test("(#2167) an info-only rule earns carried pages no pass on the single-POST paths, capped or uncapped", async () => {
+    const full = fullReport(busyShapes(range(0, 60)));
+    const store = new MemStore();
+    const first = await publishChunked(store, "audit_1", full, 1_779_000_000_000);
+    const fullScore = rescored(first).healthScore.overall!;
+    const rerun = fullReport(busyShapes(range(0, 3)));
+    const now = 1_780_000_000_000;
+    // The producer's tallies leave the all-info rule out: nothing scored.
+    const body = await cappedBody(rerun);
+    expect(body.checkTallies["content/word-count"]).toBeUndefined();
+    const viaCapped = rescored(await publish(store.clone(), "audit_2", body, now));
+    const viaUncapped = rescored(await publish(store.clone(), "audit_2", uncappedBody(rerun), now));
+    // Older CLI against this cloud: a chunked shell with no tallies still scores.
+    const viaOldChunked = rescored(
+      await publishChunked(store.clone(), "audit_2", rerun, now, { tallies: false }),
+    );
+    expect(viaCapped.healthScore.overall).toBe(fullScore);
+    expect(viaUncapped.healthScore.overall).toBe(fullScore);
+    expect(Number.isFinite(viaOldChunked.healthScore.overall)).toBe(true);
+    // The info-only rule adds no pass: the carried passes match with and without it.
+    expect(viaCapped.totals.passed).toBe(viaUncapped.totals.passed);
   });
 
   test("(repo#3360) a 3-page re-run of an unchanged 60-page site scores within 2 points of the full audit", async () => {
@@ -1205,3 +1229,15 @@ describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)",
 });
 
 describeSitePagesContract("capped-rescore.test.ts MemStore", () => new MemStore());
+
+describe("carriedChecksPerPageFor (#2167)", () => {
+  const tallies = { "core/a": { x: { passed: 5 } } };
+  test("a rule the tallies leave out scored nothing: no carried check", () => {
+    expect(carriedChecksPerPageFor({ completeStore: false, completeTallies: undefined, perPageTallies: tallies }, "content/info")).toBe(0);
+    expect(carriedChecksPerPageFor({ completeStore: true, completeTallies: tallies, perPageTallies: {} }, "content/info")).toBe(0);
+    expect(carriedChecksPerPageFor({ completeStore: false, completeTallies: undefined, perPageTallies: tallies }, "core/a")).toBe(1);
+  });
+  test("a chunked body with no tallies (older CLI) keeps one check per page", () => {
+    expect(carriedChecksPerPageFor({ completeStore: true, completeTallies: undefined, perPageTallies: {} }, "content/info")).toBe(1);
+  });
+});

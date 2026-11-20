@@ -374,7 +374,7 @@ export function buildScoringResultsFromMerged(
     // many carried pages have a finding for the rule as they streamed, and
     // |carriedPageUrls| minus that is the same set difference.
     let cleanCarriedPasses = 0;
-    const perPage = Math.max(1, Math.floor(checksPerPage?.(ruleId) ?? 1));
+    const perPage = Math.max(0, Math.floor(checksPerPage?.(ruleId) ?? 1));
     if (carriedSource) {
       cleanCarriedPasses =
         carriedSource.carriedPasses?.(ruleId) ??

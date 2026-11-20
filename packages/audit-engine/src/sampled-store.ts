@@ -347,7 +347,7 @@ export class SampledStoreEstimator {
       const byName = this.marker.checkTallies[ruleId] as Record<string, CheckTally>;
       if (!byName || typeof byName !== "object") continue;
       // As the union read it (buildScoringResultsFromMerged).
-      const perPage = Math.max(1, Math.floor(input.carriedChecksPerPage?.(ruleId) ?? 1));
+      const perPage = Math.max(0, Math.floor(input.carriedChecksPerPage?.(ruleId) ?? 1));
 
       // ── What the union counted for the rows this replaces ─────────────────
       // The sampled rows still carried for their check (the estimate stands in
