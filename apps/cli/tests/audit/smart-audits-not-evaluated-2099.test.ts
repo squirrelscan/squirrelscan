@@ -3,7 +3,11 @@
 // (`not_evaluated`), so these tests go through a real SQLite store: in memory for
 // the tally, on disk for the migration and the older-CLI read and write.
 
-import type { CheckResult, SitePageRecord } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  CheckTallies,
+  SitePageRecord,
+} from "@squirrelscan/core-contracts";
 import type { RuleMeta, RuleRunResult } from "@squirrelscan/rules";
 
 import {
@@ -18,9 +22,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { runSmartAudits, type SmartAuditResult } from "@/audit/smart-audits";
+import {
+  addPageCheckTallies,
+  runSmartAudits,
+  type SmartAuditResult,
+} from "@/audit/smart-audits";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
-import { joinSmartUnion } from "@/reports/reconstruct";
+import { countUnionTotals, joinSmartUnion } from "@/reports/reconstruct";
 
 const TTFB: RuleMeta = {
   id: "perf/ttfb",
@@ -350,5 +358,103 @@ describe("(pub#2099) site_pages.not_evaluated migration", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("(pub#2099 + pub#2159) carried findings and carried not-evaluated checks compose", () => {
+  const MULTI: RuleMeta = {
+    id: "a11y/multi-check-2099",
+    name: "Multi check",
+    description: "Runs two checks per page",
+    category: "core",
+    scope: "page",
+    severity: "error",
+    weight: 5,
+  };
+  const PAGES = 8;
+  // alt-missing fails on pages 0..3; alt-size has no data (skipped) on 3 and 5.
+  // Page 3 carries a finding AND a not-evaluated record for the other check;
+  // page 5 is clean with the not-evaluated check #2159 counts in check units.
+  const checksFor = (i: number): CheckResult[] => [
+    i < 4
+      ? {
+          name: "alt-missing",
+          status: "fail",
+          message: "No alt",
+          pageUrl: url(i),
+        }
+      : { name: "alt-missing", status: "pass", message: "OK", pageUrl: url(i) },
+    i === 3 || i === 5
+      ? {
+          name: "alt-size",
+          status: "skipped",
+          message: "No data",
+          pageUrl: url(i),
+        }
+      : { name: "alt-size", status: "pass", message: "OK", pageUrl: url(i) },
+  ];
+  const ruleMeta = new Map<string, RuleTally>([
+    [MULTI.id, { meta: MULTI } as RuleTally],
+  ]);
+  const pageRows = (idx: number[]) =>
+    idx.map((i) => ({ normalizedUrl: url(i), status: 200 }));
+
+  function runOver(idx: number[]) {
+    const collector = createNotEvaluatedCollector((u) => u);
+    const freshFindings: ReturnType<typeof flattenChecks> = [];
+    const fresh: CheckResult[] = [];
+    const checkTallies: CheckTallies = {};
+    for (const i of idx) {
+      const checks = checksFor(i);
+      fresh.push(...checks);
+      for (const c of checks) collector.add(MULTI.id, c, url(i));
+      for (const f of flattenChecks(url(i), MULTI.id, checks))
+        freshFindings.push(f);
+      addPageCheckTallies(checkTallies, [[MULTI.id, checks]], () => "error");
+    }
+    return {
+      freshFindings,
+      scoredPageUrls: idx.map(url),
+      checkTallies,
+      notEvaluated: collector.result(),
+      ruleMeta,
+      pages: pageRows(idx),
+      freshByRule: new Map([[MULTI.id, fresh]]),
+    };
+  }
+
+  test("a 2-page re-run counts each unit once and matches the full audit per rule", async () => {
+    const store = new SQLiteStorage(":memory:");
+    await run(store.init());
+    const all = range(0, PAGES);
+    const { freshByRule: fullChecks, ...fullIn } = runOver(all);
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c1",
+        siteKey: SITE,
+        ...fullIn,
+      })
+    );
+    const { freshByRule, ...partIn } = runOver([0, 1]);
+    const part = await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: SITE,
+        ...partIn,
+      })
+    );
+    const carried = part.carriedRuleResults.get(MULTI.id);
+    const union = {
+      checks: new Map(joinSmartUnion(freshByRule, part)).get(MULTI.id) ?? [],
+      ...(carried?.syntheticPassCount !== undefined
+        ? { syntheticPassCount: carried.syntheticPassCount }
+        : {}),
+    };
+    const expected = countUnionTotals([{ checks: fullChecks.get(MULTI.id)! }]);
+    expect(countUnionTotals([union])).toEqual(expected);
+    // Sanity: both mechanisms are in play, so a revert of either moves the count.
+    expect(expected.passed).toBe(PAGES * 2 - 4 - 2);
   });
 });
