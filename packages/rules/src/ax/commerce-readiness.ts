@@ -76,7 +76,7 @@ function returnsFilled(
   }
   return allNodes.some(
     (n) =>
-      hasType(n, "MerchantReturnPolicy") ||
+      (hasType(n, "MerchantReturnPolicy") && isFilled(n)) ||
       filledAny(values(n, "hasMerchantReturnPolicy", resolve)),
   );
 }
@@ -197,8 +197,11 @@ export const commerceReadinessRule: Rule = {
 
     const jsonLd: StructuredNode[] = [];
     let primary: StructuredNode | null = null;
+    // JSON-LD blocks with text that yielded no node: they may be a Product that stopped parsing.
+    let unreadJsonLd = 0;
     for (const script of Array.from(doc.querySelectorAll('script[type="application/ld+json"]'))) {
       const nodes = flattenJsonLdNodes(script.textContent || "");
+      if (nodes.length === 0 && (script.textContent ?? "").trim() !== "") unreadJsonLd++;
       jsonLd.push(...nodes);
       if (!primary) primary = nodes.find((n) => hasType(n, ...PRODUCT_TYPES)) ?? null;
     }
@@ -211,15 +214,21 @@ export const commerceReadinessRule: Rule = {
       null;
 
     if (!candidate) {
-      // A page read whole with no Product markup has no offer to judge: a verdict. A page read in
-      // part may carry its Product markup past the cut, so it was not judged (inconclusive).
-      const readWhole = htmlReadState(ctx) === "complete";
+      // Design call (#2134): a page read whole whose markup is all readable and carries no Product
+      // has no offer left to judge, so a stored "missing fields" finding resolves (the page stopped
+      // declaring one on purpose). Anything that may hide a Product keeps that finding open: a page
+      // read in part, JSON-LD that does not parse, or microdata/RDFa the reader does not support.
+      const readWhole =
+        htmlReadState(ctx) === "complete" &&
+        unreadJsonLd === 0 &&
+        !micro.unsupported &&
+        !rdfa.unsupported;
       checks.push({
         name: "offer-completeness",
         status: "info",
         message: readWhole
           ? "No Product markup on this page, so offer completeness was not judged"
-          : "Offer completeness not checked: the page was not read completely and no Product markup was found",
+          : "Offer completeness not checked: the page was not read completely or its structured data could not be read, and no Product markup was found",
         ...(readWhole ? {} : { details: { inconclusive: true } }),
       });
       return { checks };
