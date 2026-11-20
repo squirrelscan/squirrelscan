@@ -5,7 +5,8 @@
 #
 #   printf 'docs/a.mdx\nCHANGELOG.md\n' | bash scripts/ci-classify.sh
 #
-# Output, always these five lines in this order, each `true` or `false`:
+# Output, always these seven lines in this order. The first five are each
+# `true` or `false`:
 #
 #   code       any path outside the docs set: Format, lint, and typecheck,
 #              CLI tests, Dependency audit, Public suffix data freshness
@@ -13,6 +14,20 @@
 #   installer  Installer script syntax
 #   release    Release tooling tests
 #   build      Compile CLI
+#
+# The last two are JSON arrays (#2180), from `scripts/test-suites.ts --select`:
+#
+#   workspaces  workspace dirs that hold a changed file or depend on one,
+#               transitively: where quality runs format, lint and typecheck
+#   suites      the scripts/test-suites.ts suites those workspaces own (a
+#               workspace that is no named suite root maps to `rest`): one
+#               CLI tests matrix job each
+#
+# The selection is FULL (every workspace, every suite) on any path outside
+# apps/*, packages/* and the docs set, so install.sh, CHANGELOG.md and the
+# release scripts select everything even though the five bits above stay
+# narrow. A docs-only change selects nothing: `[]` twice. Pushes to main and an
+# unknown base are FULL too, but that is decided in ci.yml, not here.
 #
 # Fail open. An empty list, or ANY path no rule below names, sets all five to
 # true: a workflow, the setup action, bun.lock, the root package.json, a root
@@ -26,6 +41,9 @@ set -euo pipefail
 
 code=false engine=false installer=false release=false build=false
 all=false seen=false
+# sel_full: some path is outside apps/*, packages/* and the docs set.
+# ws_paths: the apps/* and packages/* paths, for test-suites.ts --select.
+sel_full=false ws_paths=()
 
 # bun's own test-file convention, as in scripts/test-suites.ts (TEST_FILE).
 test_file='(\.|_)([Tt][Ee][Ss][Tt]|[Ss][Pp][Ee][Cc])\.(m|c)?[jt]sx?$'
@@ -53,7 +71,7 @@ while IFS= read -r path || [ -n "$path" ]; do
     # header-sync check lives in quality, which `code` already runs.
     install.sh | install.ps1 | scripts/install-ps-contract.test.ps1 | \
       scripts/install-contract.test.ts)
-      code=true installer=true ;;
+      code=true installer=true sel_full=true ;;
     # Release inputs. CHANGELOG.md changes only in a release bump PR now (#2113),
     # and must not fall through to "everything": only release.ts and release.yml
     # read it, at release time, and the shell tests use their own fixtures.
@@ -62,15 +80,16 @@ while IFS= read -r path || [ -n "$path" ]; do
       scripts/check-released-changelog.sh | scripts/test-released-changelog.sh | \
       scripts/changelog.ts | scripts/changelog.test.ts | \
       scripts/check-changelog-entries.sh | scripts/test-changelog-entries.sh)
-      code=true release=true ;;
+      code=true release=true sel_full=true ;;
     # The golden suite lives here, fixtures included: any change runs it.
     packages/audit-engine/*)
-      code=true engine=true build=true ;;
+      code=true engine=true build=true ws_paths+=("$path") ;;
     # The version file is also a release input.
     apps/cli/package.json)
-      code=true build=true release=true ;;
+      code=true build=true release=true ws_paths+=("$path") ;;
     packages/* | apps/cli/*)
       code=true
+      ws_paths+=("$path")
       # Test-only: CLI tests run it; the golden suite and the compiled binary
       # never see it (rules-fingerprint.ts skips test files for the same
       # reason). The one cross-package read in the golden tests globs every
@@ -90,8 +109,20 @@ while IFS= read -r path || [ -n "$path" ]; do
 done
 
 if [ "$all" = true ] || [ "$seen" = false ]; then
-  code=true engine=true installer=true release=true build=true
+  code=true engine=true installer=true release=true build=true sel_full=true
 fi
 
 printf 'code=%s\nengine=%s\ninstaller=%s\nrelease=%s\nbuild=%s\n' \
   "$code" "$engine" "$installer" "$release" "$build"
+
+# The workspace graph and the suite table live in test-suites.ts; bun is only
+# needed when a workspace path is in play. Any failure here fails the script,
+# and ci.yml then runs everything.
+suites_ts="$(cd "$(dirname "$0")" && pwd)/test-suites.ts"
+if [ "$sel_full" = true ]; then
+  bun "$suites_ts" --select-all < /dev/null
+elif [ "${#ws_paths[@]}" -gt 0 ]; then
+  printf '%s\n' "${ws_paths[@]}" | bun "$suites_ts" --select
+else
+  printf 'workspaces=[]\nsuites=[]\n'
+fi

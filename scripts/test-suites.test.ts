@@ -4,8 +4,13 @@ import { fileURLToPath } from "node:url";
 import {
   TEST_FILE,
   bunFilter,
+  type Workspace,
   checkCoverage,
+  fullSelection,
   planSuites,
+  readWorkspaces,
+  selectFor,
+  suiteForWorkspace,
   selectedBy,
   suiteNames,
   suiteRoot,
@@ -105,6 +110,19 @@ describe("suitesRunBy", () => {
     expect(suitesRunBy(workflowRunning(["cli", "rest"]))).toEqual(["cli", "rest"]);
   });
 
+  test("reads the CLI tests matrix fallback when a step runs the matrix suite", () => {
+    const yaml = [
+      `        suite: \${{ fromJSON(needs.changes.outputs.suites || '["cli","rest"]') }}`,
+      `        run: bun run scripts/test-suites.ts --run "\${SUITE}"`,
+    ].join("\n");
+    expect(suitesRunBy(yaml)).toEqual(["cli", "rest"]);
+  });
+
+  test("a matrix list with no step running it covers nothing", () => {
+    const yaml = `        suite: \${{ fromJSON(needs.changes.outputs.suites || '["cli","rest"]') }}\n`;
+    expect(suitesRunBy(yaml)).toEqual([]);
+  });
+
   test("ignores a commented-out step, which runs nothing", () => {
     const yaml = `${workflowRunning(["cli"])}      # - run: bun run scripts/test-suites.ts --run rest\n`;
     expect(suitesRunBy(yaml)).toEqual(["cli"]);
@@ -183,5 +201,54 @@ describe("the real repository", () => {
 
     expect(tree.length).toBeGreaterThan(300);
     expect(checkCoverage(tree, workflow)).toEqual([]);
+  });
+});
+
+/** A small graph: c depends on b, b on a; d stands alone; cli on b and d. */
+const graph: Workspace[] = [
+  { dir: "apps/cli", name: "cli", deps: ["b", "d"] },
+  { dir: "packages/a", name: "a", deps: [] },
+  { dir: "packages/b", name: "b", deps: ["a"] },
+  { dir: "packages/rules", name: "rules", deps: ["b"] },
+  { dir: "packages/d", name: "d", deps: [] },
+];
+
+describe("selectFor (#2180)", () => {
+  test("a change reaches its workspace and every transitive dependent", () => {
+    expect(selectFor(["packages/a/src/x.ts"], graph)).toEqual({
+      workspaces: ["apps/cli", "packages/a", "packages/b", "packages/rules"],
+      suites: ["cli", "rules", "rest"],
+    });
+  });
+
+  test("does not reach dependencies, only dependents", () => {
+    expect(selectFor(["packages/rules/src/x.ts"], graph)).toEqual({
+      workspaces: ["packages/rules"],
+      suites: ["rules"],
+    });
+  });
+
+  test("ignores paths outside apps/ and packages/", () => {
+    expect(selectFor(["docs/a.mdx", ""], graph)).toEqual({ workspaces: [], suites: [] });
+  });
+
+  test("a path in no known workspace selects everything", () => {
+    expect(selectFor(["packages/gone/src/x.ts"], graph)).toEqual(fullSelection(graph));
+    expect(fullSelection(graph).suites).toEqual(suiteNames());
+  });
+
+  test("a named suite root maps to its suite, anything else to rest", () => {
+    expect(suiteForWorkspace("packages/rules")).toBe("rules");
+    expect(suiteForWorkspace("packages/waf-detect")).toBe("rest");
+  });
+
+  test("the real graph: core-contracts reaches every suite, rules reaches three", () => {
+    const real = readWorkspaces();
+    expect(selectFor(["packages/core-contracts/src/x.ts"], real).suites).toEqual(suiteNames());
+    expect(selectFor(["packages/rules/src/x.ts"], real).suites).toEqual([
+      "audit-engine",
+      "cli",
+      "rules",
+    ]);
   });
 });

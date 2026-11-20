@@ -18,6 +18,7 @@
  * entry point.
  */
 
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -96,18 +97,42 @@ export function suiteNames(): string[] {
 }
 
 /**
- * Suite names ci.yml actually runs, parsed from its `--run <suite>` steps.
+ * Suite names ci.yml actually runs. Two shapes count:
+ *   - a literal `--run <suite>` step;
+ *   - the CLI tests matrix (#2180): its full-run fallback list, the JSON array
+ *     in `suite: ${{ fromJSON(... || '[...]') }}`, counts only when a step
+ *     also runs `--run "${SUITE}"` or `--run ${{ matrix.suite }}`. The
+ *     fallback is what runs on main, on an unknown base and when the changes
+ *     job failed, so it must name every suite.
  * Comment lines are skipped: a commented-out step runs nothing and must not
  * count as coverage, and the job's own comment block names this script.
  */
 export function suitesRunBy(workflowYaml: string): string[] {
   const names: string[] = [];
+  const matrix: string[] = [];
+  let matrixStep = false;
   for (const line of workflowYaml.split("\n")) {
     if (/^\s*#/.test(line)) continue;
+    const fallback = line.match(
+      /^\s*suite:\s*\$\{\{\s*fromJSON\(.*\|\|\s*'(\[[^']*\])'\s*\)\s*\}\}/,
+    );
+    if (fallback) {
+      const parsed: unknown = JSON.parse(fallback[1] as string);
+      if (Array.isArray(parsed)) matrix.push(...parsed.map(String));
+      continue;
+    }
+    if (
+      /test-suites\.ts\s+--run\s+(?:"\$\{SUITE\}"|"\$SUITE"|\$\{\{\s*matrix\.suite\s*\}\})/.test(
+        line,
+      )
+    ) {
+      matrixStep = true;
+      continue;
+    }
     const match = line.match(/test-suites\.ts\s+--run\s+([a-z0-9-]+)/);
     if (match) names.push(match[1] as string);
   }
-  return names;
+  return matrixStep ? [...names, ...matrix] : names;
 }
 
 /**
@@ -162,11 +187,146 @@ export function checkCoverage(files: string[], workflowYaml: string): string[] {
   return problems;
 }
 
+// ---------------------------------------------------------------------------
+// Diff selection (#2180): which workspaces and suites a change reaches.
+//
+// ci-classify.sh decides whether the selection is FULL (any path outside
+// apps/*, packages/* and the docs set, or an unknown base). Otherwise it pipes
+// the apps/* and packages/* paths to `--select`, which maps them here:
+//   - a workspace is affected when it holds a changed file or depends on one
+//     (any `workspace:` dependency, dev and peer included), transitively;
+//   - each affected workspace selects the named suite rooted at it, or `rest`.
+// A path in no known workspace (a deleted or brand-new package) fails open to
+// the full selection, as an unknown path does in ci-classify.sh.
+// ---------------------------------------------------------------------------
+
+export interface Workspace {
+  dir: string;
+  name: string;
+  /** Names of the workspace packages this one depends on via `workspace:`. */
+  deps: string[];
+}
+
+export interface Selection {
+  workspaces: string[];
+  suites: string[];
+}
+
+const DEP_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
+
+/** Every workspace the root package.json declares, with its `workspace:` deps. */
+export function readWorkspaces(root: string = repoRoot): Workspace[] {
+  const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+    workspaces?: string[];
+  };
+  const found: Workspace[] = [];
+  for (const pattern of manifest.workspaces ?? []) {
+    const glob = new Bun.Glob(`${pattern}/package.json`);
+    for (const rel of glob.scanSync({ cwd: root, onlyFiles: true })) {
+      const pkg = JSON.parse(readFileSync(join(root, rel), "utf8")) as Record<string, unknown>;
+      const deps = new Set<string>();
+      for (const field of DEP_FIELDS) {
+        const table = pkg[field];
+        if (!table || typeof table !== "object") continue;
+        for (const [dep, spec] of Object.entries(table as Record<string, unknown>)) {
+          if (typeof spec === "string" && spec.startsWith("workspace:")) deps.add(dep);
+        }
+      }
+      found.push({ dir: dirname(rel), name: String(pkg.name ?? dirname(rel)), deps: [...deps] });
+    }
+  }
+  return found.sort((a, b) => a.dir.localeCompare(b.dir));
+}
+
+/** The workspace dir a path belongs to: `apps/<x>` or `packages/<x>`, else null. */
+export function workspaceOf(path: string): string | null {
+  const parts = path.split("/");
+  if ((parts[0] === "apps" || parts[0] === "packages") && parts.length > 2 && parts[1]) {
+    return `${parts[0]}/${parts[1]}`;
+  }
+  return null;
+}
+
+/** The suite that owns a workspace's test files. */
+export function suiteForWorkspace(dir: string): string {
+  return NAMED_SUITES.find((s) => s.roots.includes(dir))?.name ?? REST_SUITE;
+}
+
+/** The selection that runs everything. */
+export function fullSelection(workspaces: Workspace[]): Selection {
+  return { workspaces: workspaces.map((w) => w.dir), suites: suiteNames() };
+}
+
+/**
+ * Affected workspaces and suites for a list of changed paths. Paths outside
+ * apps/* and packages/* are ignored (ci-classify.sh has already routed them);
+ * a path in an apps/ or packages/ dir that is not a workspace runs everything.
+ */
+export function selectFor(paths: string[], workspaces: Workspace[]): Selection {
+  const byDir = new Map(workspaces.map((w) => [w.dir, w]));
+  const dependents = new Map<string, string[]>();
+  for (const w of workspaces) {
+    for (const dep of w.deps) {
+      const list = dependents.get(dep) ?? [];
+      list.push(w.dir);
+      dependents.set(dep, list);
+    }
+  }
+
+  const affected = new Set<string>();
+  const queue: string[] = [];
+  for (const path of paths) {
+    if (path === "") continue;
+    const dir = workspaceOf(path);
+    if (dir === null) continue;
+    if (!byDir.has(dir)) return fullSelection(workspaces);
+    if (!affected.has(dir)) {
+      affected.add(dir);
+      queue.push(dir);
+    }
+  }
+  while (queue.length > 0) {
+    const dir = queue.shift() as string;
+    const name = (byDir.get(dir) as Workspace).name;
+    for (const dependent of dependents.get(name) ?? []) {
+      if (!affected.has(dependent)) {
+        affected.add(dependent);
+        queue.push(dependent);
+      }
+    }
+  }
+
+  const dirs = workspaces.map((w) => w.dir).filter((d) => affected.has(d));
+  const wanted = new Set(dirs.map(suiteForWorkspace));
+  return { workspaces: dirs, suites: suiteNames().filter((s) => wanted.has(s)) };
+}
+
+/** `workspaces=<json>` and `suites=<json>`, the lines ci-classify.sh appends. */
+export function formatSelection(sel: Selection): string {
+  return `workspaces=${JSON.stringify(sel.workspaces)}\nsuites=${JSON.stringify(sel.suites)}`;
+}
+
 async function main(): Promise<number> {
   const [flag, value] = process.argv.slice(2);
 
   if (flag === "--list") {
     console.log(suiteNames().join("\n"));
+    return 0;
+  }
+
+  // Reads changed paths (one per line) on stdin. `--select-all` ignores stdin.
+  if (flag === "--select" || flag === "--select-all") {
+    const workspaces = readWorkspaces();
+    const sel =
+      flag === "--select-all"
+        ? fullSelection(workspaces)
+        : selectFor((await Bun.stdin.text()).split("\n"), workspaces);
+    console.log(formatSelection(sel));
     return 0;
   }
 
@@ -206,7 +366,9 @@ async function main(): Promise<number> {
     return await proc.exited;
   }
 
-  console.error("usage: bun run scripts/test-suites.ts --list | --check | --run <suite>");
+  console.error(
+    "usage: bun run scripts/test-suites.ts --list | --check | --run <suite> | --select | --select-all",
+  );
   return 1;
 }
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Table test for scripts/ci-classify.sh, the changed-path classifier behind
-# ci.yml's per-job gates. Each case is a diff (paths separated by spaces) and
-# the jobs it must run, as code/engine/installer/release/build bits.
+# ci.yml's per-job gates. Each `expect` case is a diff (paths separated by
+# spaces) and the jobs it must run, as code/engine/installer/release/build bits.
+# Each `expect_sel` case checks the workspace and suite selection (#2180).
 # Run: bash scripts/test-ci-classify.sh
 set -euo pipefail
 
@@ -14,7 +15,7 @@ expect() {
   local want="$1" name="$2"
   shift 2
   local got
-  got=$(printf '%s\n' "$@" | bash "$CLASSIFY" | cut -d= -f2 | sed 's/true/1/;s/false/0/' | tr -d '\n')
+  got=$(printf '%s\n' "$@" | bash "$CLASSIFY" | sed -n 1,5p | cut -d= -f2 | sed 's/true/1/;s/false/0/' | tr -d '\n')
   count=$((count + 1))
   if [ "$got" != "${want// /}" ]; then
     echo "FAIL $name: want $want, got $got (code engine installer release build)"
@@ -69,6 +70,66 @@ expect "1 1 1 1 1" "blank lines only" "" ""
 expect "1 1 1 1 1" "docs look-alike" docsx/a.mdx
 expect "1 1 1 1 1" "README in a subdirectory of npm" npm/README.md
 expect "1 1 1 1 1" "installer look-alike" install.sh.bak
+
+# expect_sel <workspaces-json> <suites-json> <name> [paths...]
+expect_sel() {
+  local want_ws="$1" want_suites="$2" name="$3"
+  shift 3
+  local out got_ws got_suites
+  out=$(printf '%s\n' "$@" | bash "$CLASSIFY")
+  got_ws=$(printf '%s\n' "$out" | sed -n 's/^workspaces=//p')
+  got_suites=$(printf '%s\n' "$out" | sed -n 's/^suites=//p')
+  count=$((count + 1))
+  if [ "$got_ws" != "$want_ws" ] || [ "$got_suites" != "$want_suites" ]; then
+    echo "FAIL $name: want workspaces=$want_ws suites=$want_suites, got workspaces=$got_ws suites=$got_suites"
+    failed=1
+  fi
+}
+
+# The full selection, from the tree: every workspace the root manifest
+# declares, and every suite test-suites.ts knows.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ALL=$(bun "$ROOT/scripts/test-suites.ts" --select-all)
+ALL_WS=$(printf '%s\n' "$ALL" | sed -n 's/^workspaces=//p')
+ALL_SUITES=$(printf '%s\n' "$ALL" | sed -n 's/^suites=//p')
+# Literal, so a suite that drops out of the full set fails here too.
+[ "$ALL_SUITES" = '["audit-engine","crawler","cli","rules","report","rest"]' ] || {
+  echo "FAIL full suite set changed: $ALL_SUITES"
+  failed=1
+}
+case "$ALL_WS" in
+  *'"apps/cli"'*'"packages/core-contracts"'*'"packages/rules"'*) ;;
+  *) echo "FAIL full workspace set is missing a workspace: $ALL_WS"; failed=1 ;;
+esac
+
+expect_sel '[]' '[]' "sel: docs only" docs/guides/ci.mdx docs/docs.json CONTRIBUTING.md
+expect_sel '[]' '[]' "sel: changelog.d entry only" changelog.d/2180-ci.changed.md
+expect_sel '["apps/cli","packages/audit-engine","packages/rules"]' '["audit-engine","cli","rules"]' \
+  "sel: rules only reaches rules, audit-engine and cli" packages/rules/src/crawl/robots-txt.ts
+expect_sel '["apps/cli","packages/audit-engine","packages/rules"]' '["audit-engine","cli","rules"]' \
+  "sel: rules test only" packages/rules/tests/docs-rule-pages.test.ts
+expect_sel '["apps/cli"]' '["cli"]' "sel: CLI only" apps/cli/src/cli/walk-heartbeat.ts
+expect_sel '["apps/cli","packages/audit-engine"]' '["audit-engine","cli"]' \
+  "sel: audit-engine" packages/audit-engine/tests/streaming-golden.test.ts
+expect_sel '["apps/cli","packages/audit-engine","packages/report"]' '["audit-engine","cli","report"]' \
+  "sel: report" packages/report/src/output/page/prompts.ts
+expect_sel '["apps/cli","packages/api-client"]' '["cli","rest"]' \
+  "sel: a non-root workspace maps to rest" packages/api-client/src/index.ts
+expect_sel '["apps/cli","packages/audit-engine","packages/rules"]' '["audit-engine","cli","rules"]' \
+  "sel: docs + rules" docs/a.mdx packages/rules/src/a.ts
+# Every suite, but not every workspace: api-client, waf-detect and docs do not
+# depend on core-contracts.
+expect_sel '["apps/cli","packages/audit-engine","packages/cloud-client","packages/config","packages/core-contracts","packages/crawler","packages/fetchers","packages/page-classifier","packages/parser","packages/report","packages/rules","packages/synthetic-site","packages/tech-detect","packages/threat-intel","packages/tls-probe","packages/utils"]' \
+  "$ALL_SUITES" "sel: core-contracts reaches every suite" packages/core-contracts/src/index.ts
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: root file is FULL" bun.lock
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: root manifest is FULL" package.json
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: workflow is FULL" .github/workflows/ci.yml
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: script is FULL" scripts/test-suites.ts
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: installer is FULL" install.sh
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: CHANGELOG.md is FULL" CHANGELOG.md
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: rules + root file is FULL" packages/rules/src/a.ts tsconfig.json
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: unknown package is FULL" packages/not-a-workspace/src/a.ts
+expect_sel "$ALL_WS" "$ALL_SUITES" "sel: empty diff is FULL"
 
 if [ "$failed" -ne 0 ]; then
   echo "ci-classify: some of $count cases failed" >&2
