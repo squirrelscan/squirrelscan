@@ -16,11 +16,13 @@ import type {
   CategoryScore,
   GroupScore,
   RuleGroup,
+  SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import {
   auditFailureDetail,
   auditFailureReasonText,
 } from "@squirrelscan/core-contracts/failure-reason";
+import { RESOLUTION_ANY_CHECK } from "@squirrelscan/core-contracts/resolution";
 import { getScoreGrade, getScoreColor } from "@squirrelscan/core-contracts/scoring";
 import { wafBlockReason, type WafBlockedPage } from "@squirrelscan/core-contracts/waf-block";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
@@ -165,6 +167,46 @@ export interface MergedScoringInput {
    * Absent or 1: one pass per clean page, as before.
    */
   carriedChecksPerPage?: (ruleId: string) => number;
+  /**
+   * (pub#2099) Per rule, the (carried page, check) pairs the run that last crawled
+   * the page did not evaluate there: {@link countCarriedNotEvaluated} over the
+   * pages' {@link SitePageRecord.notEvaluated}. A full audit scores such a check on
+   * the page neither way, so the carried pages earn that many fewer passes (the
+   * rule's total clamped at 0). A record never names a check its page holds a row
+   * for, so the count comes off without reading rows, and the materialized path
+   * and the chunked fold take off the same figure. Absent: nothing recorded (rows
+   * written before the record existed), every page scores as before.
+   * Read by the materialized path only: with {@link carriedSource} the source
+   * counts the carried passes itself.
+   */
+  carriedNotEvaluated?: ReadonlyMap<string, number>;
+}
+
+/**
+ * (pub#2099) Count the recorded not-evaluated checks of the carried pages, per
+ * rule: one per `${ruleId}|${checkName}` entry of a page in `carriedPageUrls`,
+ * reading each url's last row (as the merge session does for a url listed twice).
+ * A row without the record counts nothing. Bounded by the site's pages, which the
+ * caller already holds.
+ */
+export function countCarriedNotEvaluated(
+  pages: readonly SitePageRecord[],
+  carriedPageUrls: PageUrlSet,
+): Map<string, number> {
+  const last = new Map<string, SitePageRecord>();
+  for (const p of pages) last.set(p.normalizedUrl, p);
+  const counts = new Map<string, number>();
+  for (const [url, p] of last) {
+    if (!p.notEvaluated || p.notEvaluated.length === 0 || !carriedPageUrls.has(url)) continue;
+    for (const key of new Set(p.notEvaluated)) {
+      // A rule id never holds the separator; a check name may.
+      const sep = key.indexOf("|");
+      if (sep <= 0 || key.slice(sep + 1) === RESOLUTION_ANY_CHECK) continue;
+      const ruleId = key.slice(0, sep);
+      counts.set(ruleId, (counts.get(ruleId) ?? 0) + 1);
+    }
+  }
+  return counts;
 }
 
 /**
@@ -391,6 +433,8 @@ export function buildScoringResultsFromMerged(
           // One check per page: a page with a row has no pass left.
         }
       }
+      // (pub#2099) No pass for a check the page's last crawl did not evaluate.
+      cleanCarriedPasses -= input.carriedNotEvaluated?.get(ruleId) ?? 0;
       if (cleanCarriedPasses < 0) cleanCarriedPasses = 0;
     }
     // ADD to any fresh-clean count the reconstruction stamped (#1023), rather

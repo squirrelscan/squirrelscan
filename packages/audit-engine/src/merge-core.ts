@@ -29,6 +29,7 @@ import {
   isRuleWideGapSkipReason,
   resolutionRuleKey,
   resolutionUrlHash,
+  RESOLUTION_ANY_CHECK,
 } from "@squirrelscan/core-contracts/resolution";
 
 import { findingFingerprint } from "./fingerprint";
@@ -264,6 +265,14 @@ export interface NotEvaluatedEvidence {
   pageRules: Set<string>;
   /** Rules that timed out or threw with no page to name (or a clipped list): every page carries. */
   rules: Set<string>;
+  /**
+   * (pub#2099) The same page checks, by page: normalized url ->
+   * `${ruleId}|${checkName}`. What the merge records on the page's `site_pages`
+   * row ({@link SitePageRecord.notEvaluated}). A rule that did not run on a page
+   * names no check, so it is not here. Optional so hand-built evidence needs only
+   * the sets above; absent, nothing is recorded from it.
+   */
+  byPage?: Map<string, Set<string>>;
 }
 
 /**
@@ -349,15 +358,24 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
     result() {
       const pageChecks = new Set<string>();
       const clippedChecks = new Set<string>();
+      const byPage = new Map<string, Set<string>>();
+      const note = (page: string, key: string): void => {
+        const keys = byPage.get(page);
+        if (keys) keys.add(key);
+        else byPage.set(page, new Set([key]));
+      };
       for (const [checkKey, entry] of skips) {
         if (!entry.gap && !evaluated.has(checkKey)) continue;
         const sep = checkKey.indexOf(KEY_SEP);
         const ruleId = checkKey.slice(0, sep);
         const checkName = checkKey.slice(sep + 1);
-        for (const page of entry.pages) pageChecks.add(pageCheckKey(page, ruleId, checkName));
+        for (const page of entry.pages) {
+          pageChecks.add(pageCheckKey(page, ruleId, checkName));
+          note(page, checkKey);
+        }
         if (entry.clipped) clippedChecks.add(checkKey);
       }
-      return { pageChecks, clippedChecks, pageRules, rules };
+      return { pageChecks, clippedChecks, pageRules, rules, byPage };
     },
   };
 }
@@ -1205,6 +1223,57 @@ export function createMergeSession(
   /** Pages this run crawled or saw removed. Bounded by the run. */
   const thisRun = new Map<string, SitePageRecord>();
   const pageOf = (url: string): SitePageRecord | undefined => thisRun.get(url) ?? priorOf(url);
+  // (pub#2099) What this run did not evaluate on each crawled page, recorded on its
+  // row so a later run that carries the page scores it as this one did: read off
+  // the published checks, and off the unsampled signal by the page's own hash. The
+  // signal is inverted once, so each page costs one lookup.
+  //
+  // The record names only checks the page holds NO row for, so a scorer can take
+  // the recorded checks off a carried page's passes without reading its rows (the
+  // chunked fold sees an untouched page only as an aggregate, pub#497): a check
+  // with a fresh finding here is left out now, and one the merge carries a prior
+  // row for is taken out as it carries it (`keepRowFor`). A rule-wide key (the
+  // rule did not run on the page) names no check, so it is not recorded and the
+  // page scores as before for that rule.
+  let signalNotEvaluated: Map<string, string[]> | undefined;
+  if (resolution) {
+    signalNotEvaluated = new Map();
+    for (const [key, hashes] of resolution.notEvaluatedByCheck) {
+      if (key.endsWith(`${KEY_SEP}${RESOLUTION_ANY_CHECK}`)) continue;
+      for (const hash of hashes) {
+        const keys = signalNotEvaluated.get(hash);
+        if (keys) keys.push(key);
+        else signalNotEvaluated.set(hash, [key]);
+      }
+    }
+  }
+  let freshPageChecks: Set<string> | undefined;
+  const notEvaluatedOn = (url: string): string[] | undefined => {
+    const fromChecks = notEvaluated?.byPage?.get(url);
+    const fromSignal = signalNotEvaluated?.get(resolutionUrlHash(url));
+    if (!fromChecks && !fromSignal) return undefined;
+    freshPageChecks ??= new Set(
+      Array.from(freshByKey.values(), (f) => pageCheckKey(f.normalizedUrl, f.ruleId, f.checkName)),
+    );
+    const keys = new Set<string>();
+    for (const key of [...(fromChecks ?? []), ...(fromSignal ?? [])]) {
+      const sep = key.indexOf(KEY_SEP);
+      if (freshPageChecks.has(pageCheckKey(url, key.slice(0, sep), key.slice(sep + 1)))) continue;
+      keys.add(key);
+    }
+    return keys.size > 0 ? [...keys].sort() : undefined;
+  };
+  /** (pub#2099) The merge keeps a prior row for this check on a crawled page: the
+   *  row holds its verdict, so the page's record no longer names the check. */
+  const keepRowFor = (prior: PageFindingRecord): void => {
+    const page = thisRun.get(prior.normalizedUrl);
+    if (!page?.notEvaluated) return;
+    const key = `${prior.ruleId}${KEY_SEP}${prior.checkName}`;
+    if (!page.notEvaluated.includes(key)) return;
+    const rest = page.notEvaluated.filter((k) => k !== key);
+    if (rest.length > 0) page.notEvaluated = rest;
+    else delete page.notEvaluated;
+  };
   // Crawled this run (excluding removed) → active with the real HTTP status.
   const markCrawled = (url: string): void => {
     if (removedUrls.has(url)) return;
@@ -1215,6 +1284,9 @@ export function createMergeSession(
     const canonical = canonicals
       ? (canonicals.get(url) ?? (canonicalsComplete === false ? was : was ? null : undefined))
       : was;
+    // A page this run evaluated in full gets no key at all (byte-identical rows),
+    // and its new row drops any record an earlier crawl left.
+    const skipped = notEvaluatedOn(url);
     thisRun.set(url, {
       siteKey,
       normalizedUrl: url,
@@ -1223,6 +1295,7 @@ export function createMergeSession(
       lastSeenCrawlId: crawlId,
       lastSeenAt: now,
       ...(canonical !== undefined ? { canonical } : {}),
+      ...(skipped ? { notEvaluated: skipped } : {}),
     });
   };
   for (const url of crawledUrls) markCrawled(url);
@@ -1461,6 +1534,7 @@ export function createMergeSession(
         notEvaluated?.pageRules.has(pageRuleKey(prior.normalizedUrl, prior.ruleId))
       ) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        keepRowFor(prior);
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));
         return;
@@ -1488,12 +1562,14 @@ export function createMergeSession(
         signal?.truncatedChecks.has(ruleKey)
       ) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        keepRowFor(prior);
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));
         return;
       }
       if (hasAnyHash(signal?.notEvaluatedByCheck.get(checkKey), priorHashes)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        keepRowFor(prior);
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));
         return;
@@ -1532,6 +1608,7 @@ export function createMergeSession(
             lastSeenCrawlId: crawlId,
             lastSeenAt: now,
           };
+          keepRowFor(prior);
           sink.persist(carried);
           sink.active(toMerged(carried, unrendered));
           return;
@@ -1551,6 +1628,7 @@ export function createMergeSession(
         // No authoritative signal for this check and the page is absent from
         // the sampled payload — exactly today's un-crawled behavior: carry.
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        keepRowFor(prior);
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));
         return;
@@ -1564,6 +1642,7 @@ export function createMergeSession(
       const sample = sampledCheckPages?.get(checkKey);
       if (sample && !sample.has(prior.normalizedUrl)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        keepRowFor(prior);
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));
         return;
@@ -1584,6 +1663,7 @@ export function createMergeSession(
           completeItemChecks?.has(pageCheck);
         if (!clean) {
           const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+          keepRowFor(prior);
           sink.persist(carried);
           sink.active(toMerged(carried, unrendered));
           return;
@@ -1603,6 +1683,7 @@ export function createMergeSession(
       // sit past the clip.
       if (incompleteItemChecks?.has(pageCheck)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        keepRowFor(prior);
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));
         return;

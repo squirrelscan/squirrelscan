@@ -966,6 +966,9 @@ function skipShapes(pages: number[]): PageShape[] {
   return busyShapes(pages).map((s) => ({ ...s, metaSkipped: s.i % 13 === 0 }));
 }
 
+/** The perf/ttfb rule's scored tally (pub#2099). */
+const ttfbTally = (r: CloudSmartAuditsResult) => r.scoringTallies?.get("perf/ttfb")?.tally;
+
 const categoriesOf = (r: CloudSmartAuditsResult): string[] =>
   rescored(r).healthScore.categories.map((c) => c.category);
 
@@ -1044,9 +1047,12 @@ describe("a capped report published chunked scores as published in one POST (rep
     expect(comparable(rescored(afterChunked))).toEqual(comparable(rescored(afterUncapped)));
     expect(afterChunked.coverage).toEqual(afterUncapped.coverage);
     // The carried side is the whole class, counted in the full audit's check units
-    // (repo#3360), so the unchanged site scores as it did. The 1-point gap (47 vs
-    // 46) predates repo#3360: carried pages earn perf/ttfb passes the full audit
-    // skipped for want of timing data.
+    // (repo#3360), and (pub#2099) a carried page earns no perf/ttfb pass where the
+    // full audit had no timing data to judge it (11, 22, 33, 44, 55): that rule
+    // tallies exactly as in the full audit.
+    expect(ttfbTally(afterChunked)).toEqual(ttfbTally(first));
+    // The 1-point gap left (47 vs 46) is the info-only rules (content/word-count):
+    // a carried page earns them a pass the full audit scores as nothing (pub#2167).
     const fullScore = rescored(first).healthScore.overall!;
     expect(Math.abs(rescored(afterChunked).healthScore.overall! - fullScore)).toBeLessThanOrEqual(1);
     // After the sampled store the re-run scores the clipped pages clean.
@@ -1148,6 +1154,75 @@ describe("a capped report published chunked scores as published in one POST (rep
       const chunked = await publishChunked(seed.clone(), "audit_2", report, now, { driver });
       expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
       expect(chunked.coverage).toEqual(single.coverage);
+    }
+  });
+});
+
+describe("(pub#2099) a carried page earns no pass for a check its last crawl did not evaluate", () => {
+  // busyShapes: perf/ttfb has no timing data on 11, 22, 33, 44 and 55, slow on
+  // every sixth page, fine elsewhere.
+  const skippedTtfb = range(0, 60).filter((i) => i % 6 !== 0 && i % 11 === 0);
+  const passingTtfb = range(0, 60).filter((i) => i % 6 !== 0 && i % 11 !== 0).length;
+  const t1 = 1_779_000_000_000;
+  const now = 1_780_000_000_000;
+
+  test("a 3-page re-run tallies perf/ttfb exactly as the full audit, as one POST and chunked", async () => {
+    const seed = new MemStore();
+    const first = await publishChunked(seed, "audit_1", fullReport(busyShapes(range(0, 60))), t1);
+    expect(ttfbTally(first)?.passed).toBe(passingTtfb);
+    const report = fullReport(busyShapes(range(0, 3)));
+    const single = await publish(seed.clone(), "audit_2", await cappedBody(report), now);
+    expect(ttfbTally(single)).toEqual(ttfbTally(first));
+    for (const driver of DRIVERS) {
+      const chunked = await publishChunked(seed.clone(), "audit_2", report, now, { driver });
+      expect(chunked.completeStore).toBe(true);
+      expect(ttfbTally(chunked)).toEqual(ttfbTally(first));
+    }
+  });
+
+  test("the page row records the skipped check, and only where the page holds no row for it", async () => {
+    const seed = await seeded(fullReport(busyShapes(range(0, 60))));
+    const recorded = (store: MemStore) =>
+      [...store.pages.values()]
+        .filter((p) => p.notEvaluated?.includes("perf/ttfb|ttfb"))
+        .map((p) => p.normalizedUrl)
+        .sort();
+    expect(recorded(seed)).toEqual(skippedTtfb.map(url).sort());
+    // Run 2 has no timing data on 12, 18 and 24, slow in run 1: the merge keeps
+    // their open rows (#508), which hold the verdict, so the record leaves them out.
+    const shapes = busyShapes(range(0, 40)).map((s) => ({
+      ...s,
+      ttfb: [12, 18, 24].includes(s.i) ? ("skipped" as const) : s.ttfb,
+    }));
+    const singleStore = seed.clone();
+    await publish(singleStore, "audit_2", await cappedBody(fullReport(shapes)), now);
+    const chunkedStore = seed.clone();
+    await publishChunked(chunkedStore, "audit_2", fullReport(shapes), now);
+    for (const store of [singleStore, chunkedStore]) {
+      expect(await openUrls(store, "perf/ttfb", "ttfb")).toEqual(
+        new Set([...range(0, 60).filter((i) => i % 6 === 0), 12, 18, 24].map(url)),
+      );
+      expect(recorded(store)).toEqual(skippedTtfb.map(url).sort());
+    }
+    // A run 3 that carries them counts each once: its open row, no pass.
+    const rerun = fullReport(busyShapes(range(0, 3)));
+    const single = await publish(singleStore.clone(), "audit_3", await cappedBody(rerun), now + 1);
+    const chunked = await publishChunked(chunkedStore.clone(), "audit_3", rerun, now + 1);
+    expect(ttfbTally(chunked)).toEqual(ttfbTally(single));
+    expect(ttfbTally(single)?.passed).toBe(passingTtfb);
+  });
+
+  test("a store written before the record (no notEvaluated) scores as it did: the skipped pages pass", async () => {
+    const seed = await seeded(fullReport(busyShapes(range(0, 60))));
+    const legacy = seed.clone();
+    for (const p of legacy.pages.values()) delete p.notEvaluated;
+    const report = fullReport(busyShapes(range(0, 3)));
+    const single = await publish(legacy.clone(), "audit_2", await cappedBody(report), now);
+    // Every carried page without a ttfb row earns its pass, as before pub#2099.
+    expect(ttfbTally(single)?.passed).toBe(passingTtfb + skippedTtfb.length);
+    for (const driver of DRIVERS) {
+      const chunked = await publishChunked(legacy.clone(), "audit_2", report, now, { driver });
+      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
     }
   });
 });

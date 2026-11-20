@@ -71,6 +71,7 @@ import type { SkippedPassCounts } from "./stream-findings";
 import {
   addChecksToTally,
   buildScoringResultsFromMerged,
+  countCarriedNotEvaluated,
   foldRuleResultIntoTallies,
   isCarriedContinuation,
   type CarriedFinding,
@@ -1224,6 +1225,7 @@ export async function runCloudSmartAudits(
       freshTallies: completeTallies,
       carriedPageUrls,
       ruleMetaIndex,
+      carriedNotEvaluated: countCarriedNotEvaluated(priorPages, carriedPageUrls),
       // Same exclusion the union scoring applies below via `freshForUnion`: a
       // page that 404/410'd this run is not one of the known non-removed pages.
       removedUrls,
@@ -1326,6 +1328,7 @@ export async function runCloudSmartAudits(
         carriedFindings,
         carriedPageUrls,
         ruleMetaIndex,
+        carriedNotEvaluated: countCarriedNotEvaluated(priorPages, carriedPageUrls),
         removedUrls,
       });
       // Pushed one at a time: a spread of a whole site's backlog is an argument
@@ -1414,12 +1417,17 @@ export async function runCloudSmartAudits(
     scoredTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
   const carriedChecksPerPage = (ruleId: string): number =>
     carriedChecksPerPageFor({ completeStore: !!completeStore, completeTallies, perPageTallies }, ruleId);
+  // (pub#2099) The checks the union's carried pages were not evaluated for when
+  // last crawled, off their stored rows (a row written before the record existed
+  // counts nothing, so its page scores as before).
+  const carriedNotEvaluated = countCarriedNotEvaluated(priorPages, unionCarriedPages);
   const unionRuleResults = buildScoringResultsFromMerged({
     freshResults: freshForUnion,
     carriedFindings: unionCarried,
     carriedPageUrls: unionCarriedPages,
     ruleMetaIndex,
     carriedChecksPerPage,
+    carriedNotEvaluated,
     ...(carriedSource ? { carriedSource } : {}),
   });
 
@@ -1434,6 +1442,7 @@ export async function runCloudSmartAudits(
       carriedPageUrls: unionCarriedPages,
       ruleMetaIndex,
       carriedChecksPerPage,
+      carriedNotEvaluated,
     }));
     // The coverage line counts what the report shows as carried, and only those
     // are tagged: a fresh check on the page of a carry left out is not carried.
@@ -1888,6 +1897,7 @@ function scoreFromCheckTallies(input: {
   carriedPageUrls: PageUrlSet;
   ruleMetaIndex: Map<string, RuleRunResult["meta"]>;
   carriedChecksPerPage?: (ruleId: string) => number;
+  carriedNotEvaluated?: ReadonlyMap<string, number>;
 }): {
   scoringTallies: Map<string, RuleTally>;
   reportTotals: NonNullable<CloudSmartAuditsResult["reportTotals"]>;
@@ -1903,6 +1913,7 @@ function scoreFromCheckTallies(input: {
     carriedPageUrls: input.carriedPageUrls,
     ruleMetaIndex: input.ruleMetaIndex,
     ...(input.carriedChecksPerPage ? { carriedChecksPerPage: input.carriedChecksPerPage } : {}),
+    ...(input.carriedNotEvaluated ? { carriedNotEvaluated: input.carriedNotEvaluated } : {}),
   });
 
   // Keyed like the union: every published rule (an emptied one keeps its key, and
