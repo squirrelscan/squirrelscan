@@ -1,0 +1,22 @@
+[
+  "content/near-duplicate",
+  "crawl/custom-404",
+  "crawl/single-page-site",
+  "links/no-contextual-inbound",
+  "links/orphan-pages",
+  "links/weak-internal-links",
+  "perf/content-in-js-bundle",
+  "reliability/broken-forms",
+  "security/auth-endpoint-disclosure",
+  "security/client-side-authz",
+  "security/exposed-actuator",
+  "security/exposed-files",
+  "security/graphql-get-mutations",
+  "security/graphql-introspection",
+  "security/http-to-https",
+  "security/json-sensitive-fields",
+  "security/open-redirect",
+  "security/supabase-rls",
+  "security/tls-certificate",
+  "security/unauthenticated-api"
+]
