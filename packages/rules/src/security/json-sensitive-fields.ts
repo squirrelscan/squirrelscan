@@ -23,7 +23,17 @@
 // timeout, and at most JSON_RESPONSE_CAP decoded bytes read (the GraphQL
 // probe's capped reader, so a compression bomb is never inflated). The request
 // is what any visitor's browser could send: the rule reads what the endpoint
-// gives an anonymous caller.
+// gives an anonymous caller. An endpoint security/auth-endpoint-disclosure also
+// probes (same path, no query string) is read from the anonymous GET the two
+// rules share instead, so the audit requests it once (squirrelscan#2083).
+//
+// One field, one finding (squirrelscan#2083). This rule reports every field it
+// finds, whatever other rule also reads the answer. After the site pass the
+// runner's endpoint dedupe (endpoint-dedupe.ts) takes out a field that
+// security/auth-endpoint-disclosure reported on the same endpoint: that rule is
+// the more specific one for a password, hash or secret on an auth or session
+// endpoint, so it keeps the finding (`dropFieldsReportedElsewhere`). This rule's
+// other fields on that endpoint, and its bulk personal data finding, stand.
 //
 // Not checked is never clean (#1920). No candidate endpoint, or any endpoint
 // left unverified (an HTTP 429, a bot challenge or a 403 carrying WAF markers,
@@ -64,9 +74,20 @@ import type { EndpointCandidate } from "../endpoint-surface";
 import type { ProbeBudget } from "../probe-budget";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { AUTH_ENDPOINT_DISCLOSURE_RULE_ID, selectAuthCandidates } from "./auth-endpoint-disclosure";
+import { fieldIsCovered, jsonFieldKey } from "./field-key";
 import { isGraphqlPath, isStateChangingPath, isSuccessStatus } from "./graphql-probe";
-import { isThrottledOrChallenged, isUnverifiedReply, readCapped } from "./probe-http";
+import {
+  ANONYMOUS_GET_CAP,
+  anonymousGetUrl,
+  isThrottledOrChallenged,
+  isUnverifiedReply,
+  readCapped,
+  sendAnonymousGet,
+} from "./probe-http";
 import { isShippedServerSecret, scanContentBounded } from "./leaked-secrets";
+
+export const JSON_SENSITIVE_FIELDS_RULE_ID = "security/json-sensitive-fields";
 
 const CHECK_SENSITIVE = "json-sensitive-fields";
 const CHECK_BULK_PII = "json-bulk-pii";
@@ -248,6 +269,48 @@ export async function sendJsonProbe(
     return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
   } finally {
     done.abort();
+  }
+}
+
+interface CandidateAnswer {
+  outcome: JsonProbeOutcome;
+  /** Decoded bytes the answer was read up to. */
+  capBytes: number;
+}
+
+/**
+ * The answer for one endpoint. An endpoint security/auth-endpoint-disclosure
+ * also probes (`shareable`) is read from the anonymous GET both rules share, so
+ * the audit requests it once (squirrelscan#2083, as #1886 did for
+ * security/unauthenticated-api). That GET reads at most ANONYMOUS_GET_CAP
+ * bytes. An answer over that cap is one the auth rule cannot parse, so this
+ * rule requests it again with its own larger cap rather than read less of it
+ * than it would alone.
+ */
+async function probeCandidate(
+  probe: ProbeBudget | undefined,
+  url: string,
+  shareable: boolean
+): Promise<CandidateAnswer> {
+  if (!shareable) return { outcome: await sendJsonProbe(probe, url), capBytes: JSON_RESPONSE_CAP };
+  const outcome = await sendAnonymousGet(probe, url);
+  if (outcome.sent && "response" in outcome && outcome.response.truncated) {
+    const own = await sendJsonProbe(probe, url);
+    if (own.sent) return { outcome: own, capBytes: JSON_RESPONSE_CAP };
+  }
+  return { outcome, capBytes: ANONYMOUS_GET_CAP };
+}
+
+function formatBytes(bytes: number): string {
+  return bytes >= 1024 * 1024 ? `${bytes / (1024 * 1024)} MB` : `${bytes / 1024} KB`;
+}
+
+/** True when the auth rule sends the same anonymous GET for this endpoint: same URL, no query string. */
+function sharesAuthRequest(url: string, authUrls: ReadonlySet<string>): boolean {
+  try {
+    return anonymousGetUrl(url) === url && authUrls.has(url);
+  } catch {
+    return false;
   }
 }
 
@@ -746,6 +809,14 @@ function sensitiveItems(url: string, findings: SensitiveFinding[]): CheckItem[] 
   }));
 }
 
+/** The words after the kinds in a sensitive-fields message, before any partial-read note. */
+const SENSITIVE_MESSAGE_TAIL = " to a request without credentials";
+
+function sensitiveMessage(url: string, kinds: readonly string[], partial: string): string {
+  const more = kinds.length > 4 ? ` and ${kinds.length - 4} more kind(s)` : "";
+  return `${url} returns ${kinds.slice(0, 4).join(", ")}${more}${SENSITIVE_MESSAGE_TAIL}${partial}`;
+}
+
 function piiSummary(pii: JsonScanResult["pii"]): string {
   const parts: string[] = [];
   if (pii.distinctEmails > 0) parts.push(`${pii.distinctEmails} distinct email address(es)`);
@@ -756,7 +827,7 @@ function piiSummary(pii: JsonScanResult["pii"]): string {
 
 export const jsonSensitiveFieldsRule: Rule = {
   meta: {
-    id: "security/json-sensitive-fields",
+    id: JSON_SENSITIVE_FIELDS_RULE_ID,
     name: "Sensitive Fields in JSON API Responses",
     description:
       "Sends one GET to each same-origin API endpoint the site's own pages and scripts call, without cookies, and flags JSON responses that hand an anonymous caller password hashes, tokens, secrets, card numbers or personal data for many records. Runs only when probing is active or aggressive.",
@@ -810,6 +881,12 @@ export const jsonSensitiveFieldsRule: Rule = {
       return { checks };
     }
 
+    // An endpoint the auth rule also probes is read from the one anonymous GET
+    // both rules share (squirrelscan#2083). Undefined `ruleEnabled` means the
+    // default rule set.
+    const authRuleOn = ctx.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
+    const authUrls = new Set(authRuleOn ? selectAuthCandidates(ctx).candidates.map((c) => c.url) : []);
+
     let probed = 0;
     let errored = 0;
     let jsonAnswers = 0;
@@ -818,7 +895,11 @@ export const jsonSensitiveFieldsRule: Rule = {
     let pushback = false;
     let flagged = 0;
     for (const candidate of selection.candidates) {
-      const outcome = await sendJsonProbe(ctx.probe, candidate.url);
+      const { outcome, capBytes } = await probeCandidate(
+        ctx.probe,
+        candidate.url,
+        sharesAuthRequest(candidate.url, authUrls)
+      );
       if (!outcome.sent) {
         budgetStopped = true;
         break;
@@ -843,9 +924,8 @@ export const jsonSensitiveFieldsRule: Rule = {
       const scan = scanJsonResponse(response, candidate.url);
       if (!scan) continue;
       jsonAnswers++;
-      const partial = scan.truncated
-        ? " (the response is over 1 MB, so only its first 1 MB was read)"
-        : "";
+      const cap = formatBytes(capBytes);
+      const partial = scan.truncated ? ` (the response is over ${cap}, so only its first ${cap} was read)` : "";
       const endpointMeta = {
         endpoint: candidate.url,
         discoveredVia: candidate.discoveredVia,
@@ -860,7 +940,7 @@ export const jsonSensitiveFieldsRule: Rule = {
         checks.push({
           name: CHECK_SENSITIVE,
           status: "fail",
-          message: `${candidate.url} returns ${kinds.slice(0, 4).join(", ")}${kinds.length > 4 ? ` and ${kinds.length - 4} more kind(s)` : ""} to a request without credentials${partial}`,
+          message: sensitiveMessage(candidate.url, kinds, partial),
           items: sensitiveItems(candidate.url, scan.sensitive),
           details: { ...endpointMeta, fields: scan.sensitive.length },
         });
@@ -955,3 +1035,73 @@ export const jsonSensitiveFieldsRule: Rule = {
     return { checks };
   },
 };
+
+// ── one finding per field (squirrelscan#2083) ───────────────────────
+
+/** The normalised endpoint (anonymousGetUrl) a check or item is about, or undefined. */
+function endpointKey(url: unknown): string | undefined {
+  if (typeof url !== "string") return undefined;
+  try {
+    return anonymousGetUrl(url);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Take out of this rule's results every field another rule reported on the
+ * same endpoint. `reported` maps a normalised endpoint (anonymousGetUrl) to the
+ * field keys (field-key.ts) reported there. Field level: only the overlapping
+ * items leave a `json-sensitive-fields` check, which is rebuilt from what is
+ * left (its kinds, message and field count), or removed when nothing is left.
+ * The endpoint's other fields and every `json-bulk-pii` check are untouched.
+ * A run left with no finding reads clean, unless it was incomplete, which stays
+ * not checked (#1920). Pure: returns `checks` itself when nothing was dropped.
+ */
+export function dropFieldsReportedElsewhere(
+  checks: CheckResult[],
+  reported: ReadonlyMap<string, ReadonlySet<string>>
+): CheckResult[] {
+  if (reported.size === 0) return checks;
+  let dropped = 0;
+  const out: CheckResult[] = [];
+  for (const check of checks) {
+    const fields = check.name === CHECK_SENSITIVE ? reported.get(endpointKey(check.details?.endpoint) ?? "") : undefined;
+    const items = check.items ?? [];
+    const covered = (item: CheckItem): boolean => {
+      const path = item.meta?.path;
+      const key = typeof path === "string" ? jsonFieldKey(path) : undefined;
+      return key !== undefined && fields !== undefined && fieldIsCovered(key, fields);
+    };
+    if (fields === undefined || !items.some(covered)) {
+      out.push(check);
+      continue;
+    }
+    const kept = items.filter((item) => !covered(item));
+    dropped += items.length - kept.length;
+    if (kept.length === 0) continue;
+    const url = String(check.details?.endpoint);
+    const kinds = [...new Set(kept.map((item) => String(item.meta?.kind)))];
+    const tail = check.message.indexOf(SENSITIVE_MESSAGE_TAIL);
+    const partial = tail >= 0 ? check.message.slice(tail + SENSITIVE_MESSAGE_TAIL.length) : "";
+    const total = typeof check.details?.fields === "number" ? check.details.fields : items.length;
+    out.push({
+      ...check,
+      message: sensitiveMessage(url, kinds, partial),
+      items: kept,
+      details: { ...check.details, fields: total - (items.length - kept.length) },
+    });
+  }
+  if (dropped === 0) return checks;
+  const findingsLeft = out.some((c) => c.name === CHECK_SENSITIVE || c.name === CHECK_BULK_PII);
+  const incomplete = out.some((c) => c.name === CHECK_CLEAN && c.status === "skipped");
+  if (!findingsLeft && !incomplete) {
+    out.push({
+      name: CHECK_CLEAN,
+      status: "pass",
+      message: `No JSON response carried other sensitive fields or bulk personal data (${dropped} field(s) reported by ${AUTH_ENDPOINT_DISCLOSURE_RULE_ID})`,
+      details: { reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID, reportedElsewhere: dropped },
+    });
+  }
+  return out;
+}
