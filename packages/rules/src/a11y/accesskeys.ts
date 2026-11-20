@@ -1,5 +1,6 @@
 // a11y/accesskeys - Access keys are unique
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI, querySelectorAllByAttrCI } from "@squirrelscan/utils";
@@ -14,6 +15,7 @@ export const accesskeysRule: Rule = {
     category: "a11y",
     wcagNone:
       "It flags two elements that share an accesskey value, which no WCAG success criterion forbids; 2.1.4 Character Key Shortcuts covers single-key shortcuts with no modifier, and an access key always has one.",
+    wcagRelated: [wcag("2.1.1"), wcag("2.1.4")],
     scope: "page",
     findingScope: "page",
     verdictScope: "page",
