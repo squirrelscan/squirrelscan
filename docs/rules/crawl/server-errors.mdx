@@ -9,13 +9,14 @@ A 5xx status means the server failed to answer a request it should have been abl
 
 ## What squirrel checks
 
-The rule is site-wide and reads every page the crawl fetched.
+The rule is site-wide and reads every page the crawl fetched. Each failing page is its own finding, stored against that page's URL, so an audit comparison shows "this page answers 503" and a page that recovers resolves on its own while other pages still fail.
 
+- `server-errors` fails once per page that answered 5xx. Message: `https://example.com/boom answers with a 500 server error`. The item is labelled with the URL and its status code. Severity error, weight 8.
+- Every other fetched page passes, so a page that answered 5xx last audit and 200 this audit resolves. A page the crawl did not fetch this audit is not judged, and its earlier finding stays open (not crawled).
 - Skipped when no pages were crawled. Message: `No pages crawled`.
-- Pass when no crawled page answered 5xx and the crawl reached every page it knew of. Message: `No crawled page answered with a 5xx status`.
-- Not checked when no crawled page answered 5xx but the crawl stopped at its page cap or with URLs still queued: a page it never fetched may still be failing, so the audit does not call the site clean, and an earlier finding stays open. Message: `Not checked: the crawl stopped at its 500-page cap, so a page not crawled may still answer 5xx`.
-- Not checked when no crawled page answered 5xx but the crawl gave up on some pages (a timeout, a refused connection, a body it could not read): one of those may still be failing, so an earlier finding stays open. Message: `Not checked: the crawl could not fetch 3 page(s), and any of them may still answer 5xx`.
-- `server-errors` fails with one item per page, labelled with the URL and its status code. Message: `2 crawled pages answer with a 5xx server error`. Severity error, weight 8.
+- A site-level pass when no crawled page answered 5xx and the crawl reached every page it knew of. Message: `No crawled page answered with a 5xx status`.
+- Not checked when the crawl stopped at its page cap or with URLs still queued: a page it never fetched may still be failing, so the audit does not call the site clean, and an earlier finding on a page not fetched stays open. Message: `Not checked: the crawl stopped at its 500-page cap, so a page not crawled may still answer 5xx`.
+- Not checked when the crawl gave up on some pages (a timeout, a refused connection, a body it could not read): one of those may still be failing, so an earlier finding stays open. Message: `Not checked: the crawl could not fetch 3 page(s), and any of them may still answer 5xx`.
 
 A redirecting URL is a redirect, not a page, so it is not counted here.
 

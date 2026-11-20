@@ -1,0 +1,1 @@
+- `crawl/server-errors` now reports each 5xx page as its own finding, so findings store, compare and resolve per page: a page that recovers resolves while other pages still fail, and a page the crawl did not fetch keeps its open finding (#2130).
