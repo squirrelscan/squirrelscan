@@ -1,0 +1,1 @@
+- `security/supabase-rls` and `reliability/broken-forms` now read an explicit "this audit may request other hosts" flag instead of inferring it from the external link results, so `security/supabase-rls` runs in the normal pass and is no longer capped by the late link-check deadline on aggressive runs with a time limit (#2109)

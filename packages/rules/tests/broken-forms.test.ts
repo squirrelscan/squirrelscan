@@ -28,6 +28,9 @@ function site(pages: PageSpec[], extra: Partial<SiteData> = {}): SiteData {
     })),
     robotsTxt: null,
     sitemaps: null,
+    // The engine's flag: on whenever external link checking is, which is
+    // when it binds an `externalLinks` array (repo-public#2109).
+    mayRequestOtherHosts: extra.externalLinks !== undefined,
     ...extra,
   } as SiteData;
 }
@@ -286,6 +289,22 @@ describe("reliability/broken-forms: action reachability", () => {
       `<form action="https://forms.vendor.com/submit" method="post"><input name="a"></form>`,
     );
     const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("aggressive")));
+    expect(calls).toHaveLength(0);
+    expect(check(result.checks, "unchecked-form-actions")?.message).toContain(
+      "external link checking is off",
+    );
+  });
+
+  test("reads mayRequestOtherHosts, not externalLinks: bound verdicts with the flag false request nothing", async () => {
+    const html = doc(
+      `<form action="https://forms.vendor.com/submit" method="post"><input name="a"></form>`,
+    );
+    const result = await rule.run(
+      ctx(
+        site([{ url: HOME, html }], { externalLinks: [], mayRequestOtherHosts: false }),
+        budget("aggressive"),
+      ),
+    );
     expect(calls).toHaveLength(0);
     expect(check(result.checks, "unchecked-form-actions")?.message).toContain(
       "external link checking is off",
