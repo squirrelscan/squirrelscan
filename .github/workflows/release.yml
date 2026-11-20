@@ -32,6 +32,19 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
+      # Install and update verify each binary's attestation against
+      # release.yml@refs/heads/main (#169, pub#1810). A run dispatched from any
+      # other ref would publish binaries every install rejects, so stop here,
+      # before checkout or any build. The SHA check further down does not cover
+      # this: a branch whose head equals main's tip passes it with the wrong
+      # attestation identity. #1822
+      - name: Refuse to release from a ref other than main
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::release.yml must be dispatched from main, not ${GITHUB_REF}. Its attestation identity would not be release.yml@refs/heads/main, so installs would reject the binaries."
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
