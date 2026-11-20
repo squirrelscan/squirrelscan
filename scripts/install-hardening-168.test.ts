@@ -201,7 +201,7 @@ const mode = (path: string): number => statSync(path).mode & 0o777;
 const read = (path: string): string => (existsSync(path) ? readFileSync(path, "utf8") : "");
 
 describe("a clean install works with the shims (the baseline the other tests change)", () => {
-  test("installs, runs the binary from the temp dir and leaves no temp directory", async () => {
+  test.concurrent("installs, runs the binary from the temp dir and leaves no temp directory", async () => {
     const r = await install();
     expect(r.stderr).not.toContain("Error:");
     expect(r.code).toBe(0);
@@ -212,7 +212,7 @@ describe("a clean install works with the shims (the baseline the other tests cha
 });
 
 describe("umask (#168)", () => {
-  test("a permissive inherited umask still gives nothing group or world writable", async () => {
+  test.concurrent("a permissive inherited umask still gives nothing group or world writable", async () => {
     const r = await install({ umask: "0000" });
     expect(r.code).toBe(0);
     // The binary ran under the tightened umask, and what it created is not writable by others.
@@ -221,7 +221,7 @@ describe("umask (#168)", () => {
     expect(mode(join(r.home, "bin", "squirrel")) & 0o022).toBe(0);
   }, 60_000);
 
-  test("a stricter umask is kept, not loosened to 022", async () => {
+  test.concurrent("a stricter umask is kept, not loosened to 022", async () => {
     const r = await install({ umask: "0077" });
     expect(r.code).toBe(0);
     expect(read(join(r.home, "ran.txt"))).toMatch(/umask=0*77/);
@@ -230,7 +230,7 @@ describe("umask (#168)", () => {
 });
 
 describe("size check (#168)", () => {
-  test("a download whose byte count differs from the manifest is rejected before hashing", async () => {
+  test.concurrent("a download whose byte count differs from the manifest is rejected before hashing", async () => {
     const r = await install({ manifest: { size: 12345 } });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("Size mismatch");
@@ -239,21 +239,21 @@ describe("size check (#168)", () => {
     expect(existsSync(join(r.home, "ran.txt"))).toBe(false);
   }, 60_000);
 
-  test("a matching size passes on to the checksum, which still catches a wrong hash", async () => {
+  test.concurrent("a matching size passes on to the checksum, which still catches a wrong hash", async () => {
     const r = await install({ manifest: { sha256: "0".repeat(64) } });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("Checksum mismatch");
     expect(r.stderr).not.toContain("Size mismatch");
   }, 60_000);
 
-  test("a manifest without a size, or with a size that is not a number, skips the check", async () => {
+  test.concurrent("a manifest without a size, or with a size that is not a number, skips the check", async () => {
     const without = await install({ manifest: { size: undefined } });
     expect(without.code).toBe(0);
     const junk = await install({ manifest: { size: "lots" } });
     expect(junk.code).toBe(0);
   }, 120_000);
 
-  test("the grep fallback reads a whole-number size, and nothing from a quoted or missing one", async () => {
+  test.concurrent("the grep fallback reads a whole-number size, and nothing from a quoted or missing one", async () => {
     const body = (size: string) =>
       `{"binaries":{"linux-x64":{"filename":"f","sha256":"s",${size}}}}`;
     const script = (json: string) => `source "$1"; json_get_nested_number '${json}' linux-x64 size`;
@@ -283,7 +283,7 @@ describe("signals (#168)", () => {
     ["SIGTERM", 143],
     ["SIGHUP", 129],
   ] as const) {
-    test(`${name} during the download exits ${code}, removes the temp directory and files no report`, async () => {
+    test.concurrent(`${name} during the download exits ${code}, removes the temp directory and files no report`, async () => {
       const r = await install({
         stall: true,
         // Telemetry on, so the report path runs through the curl shim and is logged.
@@ -312,7 +312,7 @@ describe("signals (#168)", () => {
 });
 
 describe("two signals in a row (#168)", () => {
-  test("HUP then INT a few ms apart still ends the installer (bash 3.2 lost the second one in a plain wait)", async () => {
+  test.concurrent("HUP then INT a few ms apart still ends the installer (bash 3.2 lost the second one in a plain wait)", async () => {
     const r = await install({
       stall: true,
       during: async (paths, proc) => {
@@ -327,7 +327,7 @@ describe("two signals in a row (#168)", () => {
 });
 
 describe("SQUIRREL_BIN_DIR and HOME guards (#168)", () => {
-  test.each([["/"], ["//"], ["///"], ["   "], [" / "], ["/."], ["/.."], ["/usr/.."], ["/a/../.."], ["/./"], ["/usr/../"], ["/*/.."]])(
+  test.concurrent.each([["/"], ["//"], ["///"], ["   "], [" / "], ["/."], ["/.."], ["/usr/.."], ["/a/../.."], ["/./"], ["/usr/../"], ["/*/.."]])(
     "SQUIRREL_BIN_DIR=%j aborts with a clear error",
     async (value) => {
       const r = await install({ env: { SQUIRREL_BIN_DIR: value } });
@@ -341,13 +341,13 @@ describe("SQUIRREL_BIN_DIR and HOME guards (#168)", () => {
     60_000,
   );
 
-  test("an empty SQUIRREL_BIN_DIR means not set: the default directory is used", async () => {
+  test.concurrent("an empty SQUIRREL_BIN_DIR means not set: the default directory is used", async () => {
     const r = await install({ env: { SQUIRREL_BIN_DIR: "" } });
     expect(r.code).toBe(0);
     expect(existsSync(join(r.home, ".local", "bin", "squirrel"))).toBe(true);
   }, 60_000);
 
-  test("an ordinary directory, with a trailing slash, still works", async () => {
+  test.concurrent("an ordinary directory, with a trailing slash, still works", async () => {
     const dir = join(tmpdir(), `sq-168-bin-${process.pid}`);
     const r = await install({ env: { SQUIRREL_BIN_DIR: `${dir}/` } });
     pending.push(dir);
@@ -355,14 +355,14 @@ describe("SQUIRREL_BIN_DIR and HOME guards (#168)", () => {
     expect(existsSync(join(dir, "squirrel"))).toBe(true);
   }, 60_000);
 
-  test("a path that merely contains dots and is not the root is accepted", async () => {
+  test.concurrent("a path that merely contains dots and is not the root is accepted", async () => {
     const dir = join(tmpdir(), `sq-168-dots-${process.pid}`);
     const r = await install({ env: { SQUIRREL_BIN_DIR: `${dir}/x/../bin` } });
     pending.push(dir);
     expect(r.code).toBe(0);
   }, 60_000);
 
-  test("HOME unset: an actionable error, not an unbound variable", async () => {
+  test.concurrent("HOME unset: an actionable error, not an unbound variable", async () => {
     const r = await install({ unsetHome: true });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("HOME is not set");
@@ -373,7 +373,7 @@ describe("SQUIRREL_BIN_DIR and HOME guards (#168)", () => {
     expect(r.stderr).not.toContain("unbound variable");
   }, 60_000);
 
-  test("HOME empty is the same error", async () => {
+  test.concurrent("HOME empty is the same error", async () => {
     const r = await install({ env: { HOME: "" } });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("HOME is not set");
@@ -386,7 +386,7 @@ describe("a signal sent to the installer alone (#168)", () => {
     ["SIGINT", 130],
     ["SIGHUP", 129],
   ] as const) {
-    test(`${name} to the installer PID alone is handled at once, mid-download, not after curl returns`, async () => {
+    test.concurrent(`${name} to the installer PID alone is handled at once, mid-download, not after curl returns`, async () => {
       const started = performance.now();
       const r = await install({
         stall: true,
@@ -406,7 +406,7 @@ describe("a signal sent to the installer alone (#168)", () => {
 });
 
 describe("noexec temp directory (#168)", () => {
-  test("falls back to ~/.squirrel/tmp, installs from there, and cleans the staging directory", async () => {
+  test.concurrent("falls back to ~/.squirrel/tmp, installs from there, and cleans the staging directory", async () => {
     const r = await install({ noexec: "tmp" });
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("Trying ~/.squirrel/tmp");
@@ -417,7 +417,7 @@ describe("noexec temp directory (#168)", () => {
     expect(readdirSync(join(r.home, ".squirrel", "tmp"))).toEqual([]);
   }, 60_000);
 
-  test("when both places are noexec the error names noexec and how to get out of it", async () => {
+  test.concurrent("when both places are noexec the error names noexec and how to get out of it", async () => {
     const r = await install({
       noexec: "all",
       env: { CI: undefined, NO_TELEMETRY: undefined, DO_NOT_TRACK: undefined },
@@ -437,13 +437,13 @@ describe("noexec temp directory (#168)", () => {
     expect(log).toContain("self_install_noexec");
   }, 60_000);
 
-  test("the detection does not depend on the language of any message", async () => {
+  test.concurrent("the detection does not depend on the language of any message", async () => {
     const r = await install({ noexec: "tmp", env: { LC_ALL: "de_DE.UTF-8", LANG: "de_DE.UTF-8", LANGUAGE: "de" } });
     expect(r.code).toBe(0);
     expect(read(join(r.home, "ran.txt"))).toContain(`ran-from=${r.home}/.squirrel/tmp/install.`);
   }, 60_000);
 
-  test("when ~/.squirrel/tmp cannot be created the error says that, not that noexec is the cause", async () => {
+  test.concurrent("when ~/.squirrel/tmp cannot be created the error says that, not that noexec is the cause", async () => {
     const r = await install({
       noexec: "tmp",
       // `~/.squirrel` is a file: nothing can be created under it.
@@ -456,7 +456,7 @@ describe("noexec temp directory (#168)", () => {
     expect(readdirSync(r.tmp)).toEqual([]);
   }, 60_000);
 
-  test("a binary that fails for another reason is not mistaken for noexec", async () => {
+  test.concurrent("a binary that fails for another reason is not mistaken for noexec", async () => {
     const r = await install({ binary: "#!/bin/sh\necho boom >&2\nexit 3\n" });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("Self install failed with exit code 3");
