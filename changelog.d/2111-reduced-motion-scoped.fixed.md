@@ -1,0 +1,1 @@
+- a11y/reduced-motion counts a reduced-motion rule as handling only for the selectors it covers, or for the whole page when it is a global reset (`*`, `html`, `body`, `:root`), so a library stylesheet such as Font Awesome 6 no longer hides a page's own motion (#2111)
