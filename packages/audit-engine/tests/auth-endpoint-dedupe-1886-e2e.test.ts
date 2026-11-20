@@ -1,8 +1,9 @@
 // squirrelscan#1886 end to end, through the real crawler, store, endpoint discovery pass and
 // rule runner (never a hand-built candidate list): a current-user endpoint that a page calls
 // from an inline <script> and that leaks the user row is requested ONCE per audit and reported
-// ONCE, by security/auth-endpoint-disclosure, while security/unauthenticated-api, which also
-// probes it, steps aside. Also the release-gate e2e for auth-endpoint-disclosure (pub#1920):
+// ONCE, by security/auth-endpoint-disclosure. security/unauthenticated-api, which also
+// probes it, reports it too, and the runner's post-site-pass dedupe keeps only the auth
+// rule's finding (squirrelscan#2082). Also the release-gate e2e for auth-endpoint-disclosure (pub#1920):
 // it finds the endpoint from real page code and flags it without echoing a value.
 
 // oxlint-disable sonarjs/no-hardcoded-passwords -- the fixture is a fake leaked credential, which is what the rule detects
@@ -131,7 +132,10 @@ describe("one request and one finding for a leaking /api/me (squirrelscan#1886)"
 
       const api = results.get("security/unauthenticated-api") ?? [];
       expect(problems(api)).toHaveLength(0);
-      expect(api.find((c) => c.status === "pass")?.details).toMatchObject({ deferredToAuth: 1 });
+      expect(api.find((c) => c.status === "pass")?.details).toMatchObject({
+        reportedBy: "security/auth-endpoint-disclosure",
+        reportedElsewhere: 1,
+      });
 
       const serialized = JSON.stringify([...results]);
       for (const value of VALUES) expect(serialized).not.toContain(value);

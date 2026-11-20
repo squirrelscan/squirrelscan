@@ -53,28 +53,6 @@ import {
 
 export const AUTH_ENDPOINT_DISCLOSURE_RULE_ID = "security/auth-endpoint-disclosure";
 
-// Endpoints this rule had to leave unread in an audit (throttled, challenged or
-// out of budget, and no other rule had fetched them yet), keyed on the audit's
-// probe budget. security/unauthenticated-api defers a leaking endpoint to this
-// rule only when it is NOT in here, so whichever rule runs first, the endpoint
-// is reported exactly once (squirrelscan#1886).
-const unreadByAuth = new WeakMap<ProbeBudget, Set<string>>();
-
-function markUnread(probe: ProbeBudget | undefined, url: string): void {
-  if (!probe) return;
-  let set = unreadByAuth.get(probe);
-  if (!set) {
-    set = new Set();
-    unreadByAuth.set(probe, set);
-  }
-  set.add(url);
-}
-
-/** True when this rule left `url` unread in the audit that owns `probe`, so it will not report it. */
-export function authRuleLeftUnread(probe: ProbeBudget | undefined, url: string): boolean {
-  return probe ? (unreadByAuth.get(probe)?.has(url) ?? false) : false;
-}
-
 const CHECK_PROBLEM = "auth-endpoint-disclosure";
 const CHECK_CLEAN = "auth-endpoint-clean";
 const CHECK_SKIPPED = "auth-endpoint-not-checked";
@@ -648,13 +626,13 @@ export const authEndpointDisclosureRule: Rule = {
     const leaks: Array<{ candidate: AuthCandidate; fields: DisclosedField[] }> = [];
     for (const candidate of selection.candidates) {
       // After pushback nothing new is sent (#1920), but an answer another rule
-      // already got in this audit is still read: unauthenticated-api defers a
-      // leaking endpoint to this rule, so skipping it would lose the finding
-      // (squirrelscan#1886). Likewise past a budget refusal.
+      // already got in this audit is still read, so the more specific finding is
+      // reported whenever the answer is known (squirrelscan#1886). Likewise past a
+      // budget refusal. Either rule reports on its own; the runner keeps one
+      // finding per endpoint after the site pass (squirrelscan#2082).
       const verdict = await probeEndpoint(ctx, candidate, pushback);
       if (verdict.kind === "not-sent") {
         if (!pushback) budgetStopped = true;
-        markUnread(ctx.probe, candidate.url);
         continue;
       }
       probed++;

@@ -64,13 +64,7 @@ import type { EndpointCandidate } from "../endpoint-surface";
 import type { ProbeBudget } from "../probe-budget";
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import {
-  AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
-  authRuleLeftUnread,
-  findDisclosures,
-  parseJsonAnswer,
-  selectAuthCandidates,
-} from "./auth-endpoint-disclosure";
+import { AUTH_ENDPOINT_DISCLOSURE_RULE_ID } from "./auth-endpoint-disclosure";
 import { isGraphqlPath, isStateChangingPath } from "./graphql-probe";
 import {
   ANONYMOUS_GET_CAP,
@@ -79,6 +73,7 @@ import {
   isThrottledOrChallenged,
   isUnverifiedReply,
   sendAnonymousGet,
+  anonymousGetUrl,
 } from "./probe-http";
 
 /** Endpoints probed per run. */
@@ -838,13 +833,14 @@ interface Flagged {
 }
 
 function listedFields(summary: FieldSummary, tier: Tier): string[] {
-  const s = summary.sensitive;
-  const ordered =
-    tier === "sensitive"
-      ? [...(s.credential ?? []), ...(s.personal ?? []), ...(s.internal ?? [])]
-      : tier === "public"
-        ? summary.publicFields
-        : [...(s.user ?? []), ...summary.fields];
+  if (tier === "sensitive") return sensitiveFields(summary.sensitive);
+  const ordered = tier === "public" ? summary.publicFields : [...(summary.sensitive.user ?? []), ...summary.fields];
+  return [...new Set(ordered)].slice(0, MAX_LISTED_FIELDS);
+}
+
+/** The credential, personal and internal fields listed for a sensitive finding. Reads an item's meta too, which carries them. */
+function sensitiveFields(s: FieldSummary["sensitive"]): string[] {
+  const ordered = [...(s.credential ?? []), ...(s.personal ?? []), ...(s.internal ?? [])];
   return [...new Set(ordered)].slice(0, MAX_LISTED_FIELDS);
 }
 
@@ -878,21 +874,21 @@ function itemFor(f: Flagged): CheckItem {
 
 const TIER_CHECKS: Record<
   Tier,
-  { name: string; status: CheckResult["status"]; severity: string; message: (n: number, first: Flagged) => string }
+  { name: string; status: CheckResult["status"]; severity: string; message: (n: number, first: CheckItem) => string }
 > = {
   sensitive: {
     name: CHECK_SENSITIVE,
     status: "fail",
     severity: "high",
-    message: (n, f) =>
-      `${n} API endpoint(s) return records with credential, personal or internal fields to a request with no cookies or Authorization header, for example ${f.candidate.url} (${listedFields(f.verdict.summary, "sensitive").join(", ")})`,
+    message: (n, first) =>
+      `${n} API endpoint(s) return records with credential, personal or internal fields to a request with no cookies or Authorization header, for example ${first.id} (${sensitiveFields((first.meta ?? {}) as FieldSummary["sensitive"]).join(", ")})`,
   },
   data: {
     name: CHECK_DATA,
     status: "warn",
     severity: "medium",
-    message: (n, f) =>
-      `${n} API endpoint(s) return records to a request with no cookies or Authorization header, for example ${f.candidate.url}: confirm the data is meant to be public`,
+    message: (n, first) =>
+      `${n} API endpoint(s) return records to a request with no cookies or Authorization header, for example ${first.id}: confirm the data is meant to be public`,
   },
   public: {
     name: CHECK_PUBLIC,
@@ -903,9 +899,29 @@ const TIER_CHECKS: Record<
   },
 };
 
+const TIERS: readonly Tier[] = ["sensitive", "data", "public"];
+
+/**
+ * One tier's problem check over its items. The message reads only the items, so
+ * a check rebuilt after the runner's dedupe says exactly what a run that found
+ * those endpoints alone would have said (squirrelscan#2082).
+ */
+function tierCheck(tier: Tier, items: CheckItem[], probed: number): CheckResult {
+  const spec = TIER_CHECKS[tier];
+  return {
+    name: spec.name,
+    status: spec.status,
+    message: spec.message(items.length, items[0]!),
+    items,
+    details: { severity: spec.severity, endpoints: items.length, probed },
+  };
+}
+
+export const UNAUTHENTICATED_API_RULE_ID = "security/unauthenticated-api";
+
 export const unauthenticatedApiRule: Rule = {
   meta: {
-    id: "security/unauthenticated-api",
+    id: UNAUTHENTICATED_API_RULE_ID,
     name: "Unauthenticated API Data",
     description:
       "Probes the site's own API endpoints with one GET that carries no cookies and no Authorization header, and flags an endpoint that answers with records. Records with credential, personal or internal fields fail; records that read as published content are informational. Runs only when probing is active or aggressive.",
@@ -960,14 +976,10 @@ export const unauthenticatedApiRule: Rule = {
       return { checks };
     }
 
-    // An endpoint security/auth-endpoint-disclosure also probes is reported
-    // once: by that rule when the answer carries a password, secret or the
-    // user record (the more specific finding), by this rule otherwise, and by
-    // this rule when the auth rule left it unread (squirrelscan#1886).
-    // Undefined `ruleEnabled` means the default rule set.
-    const authRuleOn = ctx.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
-    const authUrls = new Set(authRuleOn ? selectAuthCandidates(ctx).candidates.map((c) => c.url) : []);
-    let deferredToAuth = 0;
+    // Every leaking endpoint is reported here, including the current-user
+    // endpoints security/auth-endpoint-disclosure also probes. The runner keeps
+    // one finding per endpoint after the site pass (dropEndpointsReportedElsewhere,
+    // squirrelscan#2082), so nothing hangs on how or whether the other rule ran.
 
     let probed = 0;
     let errored = 0;
@@ -1000,17 +1012,6 @@ export const unauthenticatedApiRule: Rule = {
       }
       const verdict = readApiResponse(response);
       if (verdict.kind === "records") {
-        // Checked after this rule's own GET resolved: by then the auth rule has
-        // either read this answer (it was memoized before the request left) or
-        // marked the endpoint unread, whichever order the rules run in.
-        if (
-          authUrls.has(candidate.url) &&
-          !authRuleLeftUnread(ctx.probe, candidate.url) &&
-          disclosesToAuthRule(response)
-        ) {
-          deferredToAuth++;
-          continue;
-        }
         flagged.push({ candidate, verdict, tier: tierOf(verdict.summary) });
       }
     }
@@ -1026,17 +1027,10 @@ export const unauthenticatedApiRule: Rule = {
       return { checks };
     }
 
-    for (const tier of ["sensitive", "data", "public"] as const) {
+    for (const tier of TIERS) {
       const hits = flagged.filter((f) => f.tier === tier);
       if (hits.length === 0) continue;
-      const spec = TIER_CHECKS[tier];
-      checks.push({
-        name: spec.name,
-        status: spec.status,
-        message: spec.message(hits.length, hits[0]!),
-        items: hits.map(itemFor),
-        details: { severity: spec.severity, endpoints: hits.length, probed },
-      });
+      checks.push(tierCheck(tier, hits.map(itemFor), probed));
     }
 
     // An endpoint that was never answered (budget, throttle, challenge, error,
@@ -1053,7 +1047,6 @@ export const unauthenticatedApiRule: Rule = {
       budgetStopped,
       verified,
       unverified,
-      ...(deferredToAuth > 0 ? { deferredToAuth } : {}),
     };
     if (unverified > 0) {
       const why: string[] = [];
@@ -1079,10 +1072,7 @@ export const unauthenticatedApiRule: Rule = {
       checks.push({
         name: CHECK_CLEAN,
         status: "pass",
-        message:
-          deferredToAuth > 0
-            ? `No other API endpoint returned records without authentication (${probed} endpoint(s) probed; ${deferredToAuth} reported by ${AUTH_ENDPOINT_DISCLOSURE_RULE_ID})`
-            : `No API endpoint returned records without authentication (${probed} endpoint(s) probed)`,
+        message: `No API endpoint returned records without authentication (${probed} endpoint(s) probed)`,
         details: runDetails,
       });
     }
@@ -1090,8 +1080,58 @@ export const unauthenticatedApiRule: Rule = {
   },
 };
 
-/** True when security/auth-endpoint-disclosure reports this answer itself. */
-function disclosesToAuthRule(response: ApiProbeResponse): boolean {
-  const json = parseJsonAnswer(response);
-  return json !== undefined && findDisclosures(json).length > 0;
+/** The tier a problem check reports, by check name. */
+const TIER_BY_CHECK: ReadonlyMap<string, Tier> = new Map(TIERS.map((t) => [TIER_CHECKS[t].name, t]));
+
+/**
+ * This rule's checks with every finding on an endpoint in `reported` taken out,
+ * for the runner's one-finding-per-endpoint pass (squirrelscan#2082). `reported`
+ * holds normalised endpoint URLs (anonymousGetUrl) that
+ * security/auth-endpoint-disclosure reported in the same audit.
+ *
+ * Nothing the dropped findings counted is left behind: a tier check is rebuilt
+ * from its remaining items (message, count and endpoints), a tier check with
+ * none left goes, and when no finding is left on a run that verified every
+ * endpoint (no not-checked row) the rule reads clean, saying how many endpoints
+ * the other rule reported. Returns `checks` itself when nothing matched.
+ */
+export function dropEndpointsReportedElsewhere(
+  checks: CheckResult[],
+  reported: ReadonlySet<string>
+): CheckResult[] {
+  if (reported.size === 0) return checks;
+  const covered = (item: CheckItem): boolean => {
+    try {
+      return reported.has(anonymousGetUrl(item.id));
+    } catch {
+      return false;
+    }
+  };
+  let dropped = 0;
+  let probed: number | undefined;
+  const out: CheckResult[] = [];
+  for (const check of checks) {
+    const tier = TIER_BY_CHECK.get(check.name);
+    const items = check.items ?? [];
+    if (tier === undefined || !items.some(covered)) {
+      out.push(check);
+      continue;
+    }
+    probed = (check.details as { probed?: number } | undefined)?.probed;
+    const kept = items.filter((item) => !covered(item));
+    dropped += items.length - kept.length;
+    if (kept.length > 0) out.push(tierCheck(tier, kept, probed ?? 0));
+  }
+  if (dropped === 0) return checks;
+  const findingsLeft = out.some((c) => TIER_BY_CHECK.has(c.name));
+  const incomplete = out.some((c) => c.name === CHECK_UNCHECKED);
+  if (!findingsLeft && !incomplete) {
+    out.push({
+      name: CHECK_CLEAN,
+      status: "pass",
+      message: `No other API endpoint returned records without authentication (${probed ?? 0} endpoint(s) probed; ${dropped} reported by ${AUTH_ENDPOINT_DISCLOSURE_RULE_ID})`,
+      details: { probed: probed ?? 0, reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID, reportedElsewhere: dropped },
+    });
+  }
+  return out;
 }
