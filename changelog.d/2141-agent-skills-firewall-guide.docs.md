@@ -1,0 +1,1 @@
+- The agent skills served over MCP (the `io.modelcontextprotocol/skills` extension of `squirrel mcp` and the hosted server) now point firewall and connection reset troubleshooting at the new firewall guide, and carry squirrelscan 2.3 (#2141).
