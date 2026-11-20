@@ -61,7 +61,8 @@ while IFS= read -r path || [ -n "$path" ]; do
       scripts/extract-changelog.awk | scripts/test-changelog-extraction.sh | \
       scripts/check-released-changelog.sh | scripts/test-released-changelog.sh | \
       scripts/changelog.ts | scripts/changelog.test.ts | \
-      scripts/check-changelog-entries.sh | scripts/test-changelog-entries.sh)
+      scripts/check-changelog-entries.sh | scripts/test-changelog-entries.sh | \
+      scripts/release-ci-reuse.ts | scripts/release-ci-reuse.test.ts)
       code=true release=true ;;
     # The golden suite lives here, fixtures included: any change runs it.
     packages/audit-engine/*)

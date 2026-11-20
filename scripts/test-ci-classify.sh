@@ -49,6 +49,7 @@ expect "1 0 1 0 0" "installer contract test" scripts/install-ps-contract.test.ps
 expect "1 0 0 1 0" "changelog only" CHANGELOG.md
 expect "1 0 0 1 0" "release script" scripts/release.ts scripts/release-version.test.ts
 expect "1 0 0 1 0" "released changelog guard" scripts/check-released-changelog.sh
+expect "1 0 0 1 0" "release CI reuse (#1824)" scripts/release-ci-reuse.ts scripts/release-ci-reuse.test.ts
 expect "1 0 0 1 0" "released changelog guard tests" scripts/test-released-changelog.sh
 expect "1 0 0 1 1" "CLI version file" apps/cli/package.json
 expect "1 1 1 1 1" "release bump (#1056: npm manifest is unnamed)" CHANGELOG.md apps/cli/package.json npm/package.json

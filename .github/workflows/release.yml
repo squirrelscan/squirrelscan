@@ -97,65 +97,214 @@ jobs:
           # old marketplace to squirrelscan/skills, where the plugins live now.
           bun run scripts/sync-plugin-manifests.ts --check
 
-  quality:
-    name: Release quality gate
+  # Release quality gate (#1824). CI has usually just passed on this exact tree:
+  # the release bump PR's run, or main's push run (a rebase-merge gives the commit
+  # a new sha but keeps the tree). `ci-reuse` looks for a successful ci.yml run
+  # that provably tested this tree with every gating job green
+  # (scripts/release-ci-reuse.ts explains "provably"). Found: the checks below are
+  # skipped and only the dependency audit, whose answer moves with the advisory
+  # database, runs again. Not found, or the lookup failed: every check runs here
+  # as parallel jobs, the same split ci.yml uses, instead of one ~45 min serial
+  # job. `quality` keeps the gate's name and is what `tag` waits on.
+  ci-reuse:
+    name: Find a CI run for this tree
     needs: version
     runs-on: ubuntu-latest
-    # bun test alone takes 31-36 min (releases 11-12/11-13) and the reuse step can wait up to 45 min for main CI first;
-    # a real stall fails here instead of at the 6 h default
-    timeout-minutes: 100
+    timeout-minutes: 5
     permissions:
       contents: read
-      actions: read # main CI's jobs at this sha (the reuse step below)
+      actions: read # ci.yml's runs and jobs
+    outputs:
+      reused: ${{ steps.find.outputs.reused }}
+      run_url: ${{ steps.find.outputs.run_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
-      # Main CI (ci.yml on push) already runs every test file ("CLI tests", via scripts/test-suites.ts), the engine
-      # goldens and the release tooling tests. When all three jobs passed at THIS exact sha, the three test steps below
-      # are skipped instead of re-running ~30 min of the same suite (#1839). Main CI still running: wait for it (cap
-      # 45 min). Anything else (no run, a skipped or failed job, cancelled, API error) runs the tests here as before.
-      - name: Reuse main CI's test results at this sha
-        id: mainci
+      # The version job already proved this sha carries the version; re-checked on
+      # the bytes the reused run tested, so a reuse can never vouch for a tree that
+      # disagrees with the version being tagged. A mismatch fails the release.
+      - name: Verify this tree carries the release version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016  # ${v} is a JS template literal, not shell
+          bun -e '
+            import { manifestsCarry } from "./scripts/release.ts";
+            const v = process.env.VERSION;
+            if (!(await manifestsCarry(v))) {
+              console.log(`::error::the release tree does not carry v${v}.`);
+              process.exit(1);
+            }
+          '
+      - name: Look for a green CI run of this tree
+        id: find
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.sha }}
           REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
         run: |
-          set -u
-          deadline=$(( $(date +%s) + 45 * 60 ))
-          ok=false
-          while :; do
-            run=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&per_page=5" \
-              --jq '[.workflow_runs[] | select(.head_branch == "main")] | sort_by(.created_at) | last | (.id|tostring) + " " + .status' 2>/dev/null) || run=""
-            id=${run%% *}; status=${run#* }
-            if [ -z "$run" ] || [ "$id" = null ]; then echo "no main CI run for $SHA: running the tests here"; break; fi
-            if [ "$status" = completed ]; then
-              jobs=$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
-                --jq '[.jobs[] | select(.name == "CLI tests" or .name == "Audit engine golden tests" or .name == "Release tooling tests") | .conclusion] | (length|tostring) + " " + (all(. == "success")|tostring)' 2>/dev/null) || jobs=""
-              echo "main CI run $id at $SHA: test jobs found, all success = $jobs"
-              [ "$jobs" = "3 true" ] && ok=true
-              break
-            fi
-            [ "$(date +%s)" -ge "$deadline" ] && { echo "main CI run $id still $status after 45 min: running the tests here"; break; }
-            echo "main CI run $id is $status; waiting"; sleep 30
-          done
-          echo "passed=$ok" >> "$GITHUB_OUTPUT"
-      # No manifest stamping: the `version` job has already established that the
-      # checked-out tree carries $VERSION, so the gate runs against exactly the
-      # bytes that will be tagged.
+          set -euo pipefail
+          TREE=$(git rev-parse 'HEAD^{tree}') bun run scripts/release-ci-reuse.ts
+
+  # Always runs, reuse or not: bun audit's answer moves with the advisory
+  # database, not only with bun.lock, and it takes seconds.
+  release-dependency-audit:
+    name: Release dependency audit
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun run audit:dependencies
+
+  # The fallback jobs. Each runs when ci-reuse succeeded without finding a
+  # reusable run; a lookup error inside it counts as "not found", so a broken
+  # lookup means more checks, never fewer. ci-reuse failing outright (the version
+  # stamp check) fails the gate, so these do not start. No manifest stamping: the `version` job has already established
+  # that the checked-out tree carries $VERSION, so these run against exactly the
+  # bytes that will be tagged.
+  release-checks:
+    name: Release format, lint, and typecheck
+    needs: [version, ci-reuse]
+    if: ${{ needs.ci-reuse.outputs.reused != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      # The suite split below is only "every test file" while this holds.
+      - run: bun run scripts/test-suites.ts --check
       - run: bun run format:check
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run notices:check
-      - run: bun run audit:dependencies
-      - run: bun test
-        if: steps.mainci.outputs.passed != 'true'
-        # per-test timeouts already default to 5 s; this catches a hook or an open handle that keeps the process alive
-        timeout-minutes: 55
+
+  # The two test jobs mirror ci.yml's "CLI tests" halves: together they run every
+  # test file (scripts/test-suites.ts owns the split; release-checks verifies it).
+  release-tests-app:
+    name: Release tests (apps/cli and crawler)
+    needs: [version, ci-reuse]
+    if: ${{ needs.ci-reuse.outputs.reused != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: setup
+        uses: ./.github/actions/setup-bun
+      # Every suite runs even when an earlier one is red; each still fails the job.
+      - name: Report tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run report
+      - name: apps/cli tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run cli
+      - name: Crawler tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run crawler
+
+  release-tests-packages:
+    name: Release tests (rules, engine and the rest)
+    needs: [version, ci-reuse]
+    if: ${{ needs.ci-reuse.outputs.reused != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: setup
+        uses: ./.github/actions/setup-bun
+      - name: Rules tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run rules
+      - name: Remaining package and script tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run rest
+      - name: Audit engine tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run audit-engine
+
+  release-engine:
+    name: Release audit engine golden tests
+    needs: [version, ci-reuse]
+    if: ${{ needs.ci-reuse.outputs.reused != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
       - run: bun run test:engine
-        if: steps.mainci.outputs.passed != 'true'
+
+  release-tooling:
+    name: Release tooling tests (release gate)
+    needs: [version, ci-reuse]
+    if: ${{ needs.ci-reuse.outputs.reused != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
       - run: bun run test:release
-        if: steps.mainci.outputs.passed != 'true'
+
+  # The gate `tag` waits on. Passes only when the version stamp check and the
+  # dependency audit passed AND either a reusable CI run was found or every
+  # fallback job passed. A skipped, cancelled or failed fallback job is a red
+  # gate unless reuse was established.
+  quality:
+    name: Release quality gate
+    needs:
+      [
+        version,
+        ci-reuse,
+        release-dependency-audit,
+        release-checks,
+        release-tests-app,
+        release-tests-packages,
+        release-engine,
+        release-tooling,
+      ]
+    if: ${{ !cancelled() && needs.version.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every check passed here or in a reused CI run
+        env:
+          REUSE: ${{ needs.ci-reuse.result }}
+          REUSED: ${{ needs.ci-reuse.outputs.reused }}
+          RUN_URL: ${{ needs.ci-reuse.outputs.run_url }}
+          AUDIT: ${{ needs.release-dependency-audit.result }}
+          CHECKS: ${{ needs.release-checks.result }}
+          TESTS_APP: ${{ needs.release-tests-app.result }}
+          TESTS_PACKAGES: ${{ needs.release-tests-packages.result }}
+          ENGINE: ${{ needs.release-engine.result }}
+          TOOLING: ${{ needs.release-tooling.result }}
+        run: |
+          set -u
+          echo "version stamp and CI lookup: $REUSE (reused=$REUSED); dependency audit: $AUDIT"
+          echo "checks: $CHECKS; tests: $TESTS_APP / $TESTS_PACKAGES; engine: $ENGINE; release tooling: $TOOLING"
+          [ "$REUSE" = success ] || { echo "::error::the version stamp check or the CI lookup failed"; exit 1; }
+          [ "$AUDIT" = success ] || { echo "::error::the dependency audit did not pass"; exit 1; }
+          if [ "$REUSED" = true ]; then
+            echo "Reused CI run $RUN_URL"
+            exit 0
+          fi
+          for r in "$CHECKS" "$TESTS_APP" "$TESTS_PACKAGES" "$ENGINE" "$TOOLING"; do
+            [ "$r" = success ] || { echo "::error::a release check did not pass"; exit 1; }
+          done
+          echo "Every check passed in this run"
 
   tag:
     name: Create release tag
