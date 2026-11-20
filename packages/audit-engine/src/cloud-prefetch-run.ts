@@ -698,9 +698,11 @@ export interface ContainerPrefetchInput {
    */
   deadlineMs?: number;
   /**
-   * For a caller that enforces its own deadline: pass an accumulator, and call
-   * its `abandon()` when the deadline fires to get the same partial result.
-   * Ignored when `deadlineMs` is set (that path owns its accumulator).
+   * Caller-owned accumulator. Without `deadlineMs`: for a caller that enforces
+   * its own deadline, which calls its `abandon()` when the deadline fires to get
+   * the same partial result. With `deadlineMs`: the deadline path uses it in
+   * place of a private one, so a caller can read it while the prefetch runs
+   * (`LateCloudResults`, pub#2121).
    */
   accumulator?: CloudPrefetchAccumulator;
   /** The plan's `renderConcurrency`: page batches in flight at once (repo#2129). */
@@ -803,7 +805,7 @@ export async function runContainerCloudPrefetchFromPayloads(
     // No `confirm` — the dashboard spendAck already consented; the cap bounds spend.
   };
   if (input.deadlineMs !== undefined) {
-    return prefetchCloudDataWithDeadline(prefetchInput, input.deadlineMs);
+    return prefetchCloudDataWithDeadline(prefetchInput, input.deadlineMs, input.accumulator);
   }
   return prefetchCloudData({
     ...prefetchInput,
