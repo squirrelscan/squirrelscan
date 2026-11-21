@@ -62,7 +62,7 @@ const warn = (msg: string) => ({
 describe("generateConsoleReport", () => {
   test("omits Group Breakdown when healthScore has no groups (back-compat)", () => {
     const out = capture(createMinimalReport());
-    expect(out).not.toContain("Group Breakdown:");
+    expect(out).not.toContain("Group Breakdown");
   });
 
   test("renders the 4 top-level group scores as a Group Breakdown (#1017)", () => {
@@ -109,7 +109,7 @@ describe("generateConsoleReport", () => {
     ];
 
     const out = capture(report);
-    expect(out).toContain("Group Breakdown:");
+    expect(out).toContain("Group Breakdown (checks):");
     expect(out).toContain("SEO");
     expect(out).toContain("Performance");
     expect(out).toContain("Security");
@@ -118,8 +118,8 @@ describe("generateConsoleReport", () => {
 
     // Group Breakdown precedes the finer Category Breakdown (matches
     // text.ts/markdown.ts ordering).
-    const groupIdx = out.indexOf("Group Breakdown:");
-    const categoryIdx = out.indexOf("Category Breakdown:");
+    const groupIdx = out.indexOf("Group Breakdown (checks):");
+    const categoryIdx = out.indexOf("Category Breakdown (checks):");
     expect(groupIdx).toBeGreaterThan(-1);
     expect(categoryIdx).toBeGreaterThan(groupIdx);
   });

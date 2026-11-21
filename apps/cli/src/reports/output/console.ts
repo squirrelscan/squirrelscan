@@ -290,14 +290,14 @@ export function generateConsoleReport(
       if (category.failCount > 0) {
         counts.push(
           fmt.red(
-            `${category.failCount} error${category.failCount > 1 ? "s" : ""}`
+            `${category.failCount} error finding${category.failCount > 1 ? "s" : ""}`
           )
         );
       }
       if (category.warnCount > 0) {
         counts.push(
           fmt.yellow(
-            `${category.warnCount} warning${category.warnCount > 1 ? "s" : ""}`
+            `${category.warnCount} warning finding${category.warnCount > 1 ? "s" : ""}`
           )
         );
       }
@@ -800,7 +800,7 @@ function printEntities(map: EntityMap): void {
 function printGroupBreakdown(groups: GroupScore[], report: AuditReport): void {
   if (groups.length === 0) return;
 
-  log(fmt.bold("Group Breakdown:"));
+  log(fmt.bold("Group Breakdown (checks):"));
   log(divider());
 
   const maxP = Math.max(...groups.map((g) => g.passed)).toString().length;
@@ -856,7 +856,7 @@ function printCategoryBreakdown(score: HealthScore, report: AuditReport): void {
 
   if (score.categories.length === 0) return;
 
-  log(fmt.bold("Category Breakdown:"));
+  log(fmt.bold("Category Breakdown (checks):"));
   log(divider());
 
   const maxP = Math.max(...score.categories.map((c) => c.passed)).toString()
