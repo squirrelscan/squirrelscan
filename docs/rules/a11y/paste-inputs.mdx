@@ -1,6 +1,6 @@
 ---
-title: "Inputs that block paste, and why that fails users"
-description: "Blocking paste forces people to retype passwords by hand. squirrel finds onpaste, oncopy and oncut handlers that cancel the event."
+title: "Password fields that block paste, and why that fails users"
+description: "Blocking paste forces people to retype passwords and codes by hand. squirrel finds password and one-time-code fields whose onpaste handler cancels the event."
 ---
 
 ## What paste blocking is
@@ -11,13 +11,15 @@ Anyone transferring a password by copy and paste, from a manager, a note or anot
 
 ## What squirrel checks
 
-One check, `paste-inputs`, at severity warning. It covers `<input>` of type `text`, `password`, `email`, `tel`, `url` or `search`, `<input>` with no `type` at all, and `<textarea>`.
+One check, `paste-inputs`, at severity warning. It covers authentication fields only, the ones [WCAG 2.2 success criterion 3.3.8](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) is about: an `<input type="password">`, and any `<input>` or `<textarea>` whose `autocomplete` includes `current-password`, `new-password` or `one-time-code`. Inputs that take no typed value (`hidden`, `checkbox`, `submit` and the like) are skipped.
 
-For each it reads the `onpaste`, `oncopy` and `oncut` attributes and flags any whose value contains, case-insensitively, `return false`, `return!1`, `preventDefault`, `event.returnValue=false` or `event.returnValue=!1`.
+For each it reads the `onpaste` attribute and flags it when the value contains, case-insensitively, `return false`, `return!1`, `preventDefault`, `event.returnValue=false` or `event.returnValue=!1`.
 
-- Fail with `N input(s) prevent paste`. Items read `password (blocks: paste, copy)`, naming the field by its `name`, falling back to `id`, then `placeholder`, then type. Every offender is listed.
-- Pass with `No paste-blocking inputs detected`.
-- Info with `No text inputs found`.
+- Fail with `N authentication field(s) prevent paste`. Items read `password (type=password)` or `code (autocomplete=one-time-code)`, naming the field by its `name`, falling back to `id`, then `placeholder`, followed by why it counts as an authentication field. Every offender is listed.
+- Pass with `No paste-blocking authentication fields detected`.
+- Info with `No password or one-time-code fields found`.
+
+Paste, copy or cut blocking on any other field, a "confirm email" field for example, is not reported, and neither is copy or cut blocking on a password field. Those still frustrate people, but they fall outside 3.3.8, and this rule reports only what the criterion covers.
 
 Only inline handler attributes are read. A listener attached with `addEventListener` is invisible here, so a pass is not proof that paste works. Test it by hand on the fields that matter.
 
@@ -68,7 +70,11 @@ enable = ["a11y/paste-inputs"]
 
 {/* rule-wcag:start */}
 
-No WCAG success criterion: It flags paste, copy or cut blocking on any text field, not only the authentication fields 3.3.8 Accessible Authentication (Minimum) covers, so the rule as a whole maps to no criterion (narrowing it is squirrelscan/squirrelscan#2106). A run narrowed with `--wcag-level` leaves this rule out.
+The WCAG success criteria this rule's findings map to. These automated checks cover part of WCAG; passing them does not mean a site conforms. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules mapped to a criterion at Level A or AA.
+
+| Criterion | Level | Introduced in |
+| --- | --- | --- |
+| 3.3.8 Accessible Authentication (Minimum) | AA | WCAG 2.2 |
 
 {/* rule-wcag:end */}
 

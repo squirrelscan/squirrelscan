@@ -22,7 +22,6 @@ const UNMAPPED = [
   "a11y/input-types",
   "a11y/landmark-one-main",
   "a11y/landmark-regions",
-  "a11y/paste-inputs",
   "a11y/table-duplicate-name",
 ];
 
@@ -84,8 +83,12 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
       .map((r) => r.meta.id)
       .sort();
     expect(none).toEqual(UNMAPPED);
-    const paste = a11y.find((r) => r.meta.id === "a11y/paste-inputs")!.meta;
-    expect(paste.wcagNone).toContain("squirrelscan/squirrelscan#2106");
+  });
+
+  test("paste-inputs cites 3.3.8 Accessible Authentication (Minimum) at AA (squirrelscan/squirrelscan#2106)", () => {
+    const meta = a11y.find((r) => r.meta.id === "a11y/paste-inputs")!.meta;
+    expect(meta.wcag).toEqual([{ sc: "3.3.8", level: "AA", version: "2.2" }]);
+    expect(meta.wcagNone).toBeUndefined();
   });
 
   test("every criterion any rule cites, in any category, is in the table (pub#2024 review)", () => {

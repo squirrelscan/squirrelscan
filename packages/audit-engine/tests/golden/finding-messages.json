@@ -292,9 +292,9 @@
   ]
  },
  "a11y/paste-inputs": {
-  "digest": "173333113103104",
+  "digest": "24722325530017",
   "lines": [
-   "paste-inputs|info|No text inputs found||"
+   "paste-inputs|info|No password or one-time-code fields found||"
   ]
  },
  "a11y/reduced-motion": {
