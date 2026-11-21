@@ -13,7 +13,10 @@
 
 import { getPathname } from "@squirrelscan/utils";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import {
+  CHECK_NOT_APPLICABLE_SKIP_REASON,
+  SCAN_TRUNCATED_SKIP_REASON,
+} from "@squirrelscan/core-contracts/resolution";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { htmlReadState } from "../shared/structured-nodes";
@@ -75,6 +78,7 @@ const ONSITE_PATH_RES: readonly RegExp[] = [
 
 const CTA_CLASS_RE = /(?:^|[\s_-])(?:btn|button|cta)(?:$|[\s_-])/i;
 const MAX_CTAS = 200;
+const MAX_LINKS = 2000;
 const MAX_SAMPLES = 5;
 
 const hostMatches = (host: string, list: readonly string[]): boolean =>
@@ -177,7 +181,21 @@ export const conversionPathRule: Rule = {
     }
 
     const schemaTypes = ctx.parsed.schemas?.types ?? [];
+    // JSON-LD past the cut of a page read in part may make it a money page (or an editorial one), so
+    // "not a money page" is only a verdict when the page was read whole or the path already settles it.
+    const readState = htmlReadState(ctx);
     if (!isMoneyPage(ctx.page.url, schemaTypes)) {
+      if (readState !== "complete" && !EDITORIAL_PATH_RE.test(getPathname(ctx.page.url))) {
+        checks.push({
+          name: CHECK,
+          status: "skipped",
+          message:
+            "Not judged: the page was not read completely and its schema types may sit past the cut",
+          skipReason: SCAN_TRUNCATED_SKIP_REASON,
+          details: { foldKey: SCAN_TRUNCATED_SKIP_REASON, readState },
+        });
+        return { checks };
+      }
       checks.push({
         name: CHECK,
         status: "skipped",
@@ -216,8 +234,12 @@ export const conversionPathRule: Rule = {
     let hasOnsitePath = false;
     const ctaKinds: { kind: CtaKind; host: string }[] = [];
     let seen = 0;
+    let linkCapHit = false;
     for (const a of body.querySelectorAll("a[href]")) {
-      if (++seen > 2000) break;
+      if (++seen > MAX_LINKS) {
+        linkCapHit = true;
+        break;
+      }
       const href = (a.getAttribute("href") ?? "").trim();
       if (!href) continue;
       if (/^(?:mailto|tel):/i.test(href)) {
@@ -250,6 +272,18 @@ export const conversionPathRule: Rule = {
         status: "info",
         message: "Calls to action not checked: the page was not read completely",
         details: { ...details, inconclusive: true },
+      });
+      return { checks };
+    }
+
+    if (ctaKinds.length === 0 && linkCapHit) {
+      // The scan stopped at its link cap: a call to action may sit past it, so this is a gap.
+      checks.push({
+        name: CHECK,
+        status: "skipped",
+        message: `Calls to action not checked: the page has more than ${MAX_LINKS} links and none of the first ${MAX_LINKS} was a call to action`,
+        skipReason: SCAN_TRUNCATED_SKIP_REASON,
+        details: { ...details, foldKey: SCAN_TRUNCATED_SKIP_REASON, linkCap: MAX_LINKS },
       });
       return { checks };
     }

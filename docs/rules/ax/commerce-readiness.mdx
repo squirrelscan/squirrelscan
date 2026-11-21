@@ -11,7 +11,7 @@ A shopping agent compares products and, increasingly, buys them for a person. It
 
 The rule runs on each crawled page of a site detected as `ecommerce` or `marketplace`. It reads the page's own structured data (JSON-LD, microdata and RDFa, the same markup [schema/product](/rules/schema/product) reads) and emits up to three kinds of check.
 
-- `offer-completeness`: on a page with Product or ProductGroup markup, looks for six fields on the offer: `price`, `priceCurrency`, `availability`, `shippingDetails`, a return policy (`hasMerchantReturnPolicy` on the offer, the product or an organization node, or a `MerchantReturnPolicy` node) and an identifier (`gtin`, `gtin8`, `gtin12`, `gtin13`, `gtin14`, `mpn`, `sku` or `productID`). It passes when all six are declared. It warns with `Offer is missing N of 6 fields a shopping agent needs` and lists each missing field as an item. When the page was not read completely (a truncated response, or microdata the reader does not follow), a missing field is not proven, so the check reports at info status instead and a finding from an earlier audit stays open. A page read whole with no Product markup reports at info status and is not judged. A page read in part with no Product markup found is reported the same way, and a finding from an earlier audit stays open, since the markup may sit past the cut.
+- `offer-completeness`: on a page with Product or ProductGroup markup, looks for six fields on the offer: `price`, `priceCurrency`, `availability`, `shippingDetails`, a return policy (`hasMerchantReturnPolicy` on the offer, the product or an organization node, or a `MerchantReturnPolicy` node that carries at least one property besides its type) and an identifier (`gtin`, `gtin8`, `gtin12`, `gtin13`, `gtin14`, `mpn`, `sku` or `productID`). It passes when all six are declared. It warns with `Offer is missing N of 6 fields a shopping agent needs` and lists each missing field as an item. When the page was not read completely (a truncated response, or microdata the reader does not follow), a missing field is not proven, so the check reports at info status instead and a finding from an earlier audit stays open. A page read whole, with every structured data block readable, and no Product markup reports at info status and is not judged: a finding from an earlier audit resolves, because the page no longer declares an offer. A page with no Product markup found that was read in part, or that has JSON-LD that does not parse or microdata or RDFa the reader does not follow, is reported at info status as not checked, and a finding from an earlier audit stays open, since the markup may sit past the cut or inside the block that failed.
 - `commerce-feed`: info only. Reported when the page links to what looks like a product feed (a `merchant`, `product-feed` or `google-shopping` style path, or `products.xml`, `products.json` or `products.csv`).
 - `commerce-manifest`: info only. Reported when the page links to an agent checkout manifest under `/.well-known/` (`ucp`, `acp.json` or `agentic-commerce`). The manifest is detected, not fetched or validated: the standards are still competing.
 
@@ -46,8 +46,14 @@ Add the missing fields to the Product's `offers`:
     "price": "19.99",
     "priceCurrency": "USD",
     "availability": "https://schema.org/InStock",
-    "shippingDetails": { "@type": "OfferShippingDetails" },
-    "hasMerchantReturnPolicy": { "@type": "MerchantReturnPolicy" }
+    "shippingDetails": {
+      "@type": "OfferShippingDetails",
+      "shippingRate": { "@type": "MonetaryAmount", "value": "4.99" }
+    },
+    "hasMerchantReturnPolicy": {
+      "@type": "MerchantReturnPolicy",
+      "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow"
+    }
   }
 }
 ```

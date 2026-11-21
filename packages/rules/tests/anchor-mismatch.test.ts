@@ -10,6 +10,8 @@ import {
   evaluateAnchorGraph,
   meaningfulTokens,
   tokenize,
+  sharesStem,
+  stripTrailingCount,
   tokensMatch,
 } from "../src/links/anchor-mismatch";
 import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
@@ -920,4 +922,95 @@ describe("links/anchor-mismatch compounds and listing labels (#1626)", () => {
       expect(c.status).toBe("pass");
     }
   });
+});
+
+describe("links/anchor-mismatch translated stores (#2092)", () => {
+  const DK = "https://example.com/da-dk/collections/cykelsadel";
+
+  test("Danish inflections: Sadler / Til cykelsadlerne -> /da-dk/collections/cykelsadel", async () => {
+    const c = await check([
+      { ...HOME, links: [body("/da-dk/collections/cykelsadel", "Sadler / Til cykelsadlerne")] },
+      { url: DK, title: "Køb cykelsadel: komfort og sport" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("an inflected word alone ('Sadler') still meets the compound title word", async () => {
+    const c = await check([
+      { ...HOME, links: [body("/da-dk/collections/cykelsadel", "Sadler")] },
+      { url: DK, title: "Cykelsadel" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("stems need 5 shared characters (or e-elision) on words of 5+", () => {
+    expect(sharesStem("cykelsadlerne", "cykelsadel")).toBe(true);
+    expect(sharesStem("sadler", "sadel")).toBe(true);
+    expect(sharesStem("shoes", "shirt")).toBe(false);
+    expect(sharesStem("freezerrepairs", "freezers")).toBe(false);
+    expect(sharesStem("bike", "bikes")).toBe(false);
+  });
+
+  test("a trailing count is stripped: Beklaedning (15) -> German handle, Danish title", async () => {
+    expect(stripTrailingCount("Beklaedning (15)")).toBe("Beklaedning");
+    expect(stripTrailingCount("Shoes [1,200]")).toBe("Shoes");
+    expect(stripTrailingCount("(15)")).toBe("(15)");
+    const c = await check([
+      { ...HOME, links: [body("/da-dk/collections/bekleidung", "Beklaedning (15)")] },
+      { url: "https://example.com/da-dk/collections/bekleidung", title: "Beklædning | Shop" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("the count is not the match: a count-only difference does not hide a real mismatch", async () => {
+    const c = await check([
+      { ...HOME, links: [body("/da-dk/collections/bekleidung", "Sko (15)")] },
+      { url: "https://example.com/da-dk/collections/bekleidung", title: "Beklædning | Shop" },
+    ]);
+    expect(c.status).toBe("warn");
+  });
+
+  test("Mere om klubben -> /da-dk/pages/club matches the Danish title, not the slug", async () => {
+    const c = await check([
+      { ...HOME, links: [body("/da-dk/pages/club", "Mere om klubben")] },
+      { url: "https://example.com/da-dk/pages/club", title: "Klubben | Cykelklub" },
+    ]);
+    expect(c.status).toBe("pass");
+  });
+
+  test("the locale segment is routing: the Danish word 'da' does not match /da-dk/", async () => {
+    const c = await check([
+      { ...HOME, links: [body("/da-dk/pages/club", "Da")] },
+      { url: "https://example.com/da-dk/pages/club", title: "Klubben" },
+    ]);
+    // "da" is under the 2-char stem floor of every other rule: it was only ever the locale.
+    expect(c.status).toBe("warn");
+  });
+
+  test("a genuine mismatch on a translated page is still reported", async () => {
+    const c = await check([
+      { ...HOME, links: [body("/da-dk/collections/cykelsadel", "Gratis fragt")] },
+      { url: DK, title: "Køb cykelsadel: komfort og sport" },
+    ]);
+    expect(c.status).toBe("warn");
+    expect(c.items?.[0]?.label).toContain('"Gratis fragt"');
+  });
+
+  test("header, footer and nav landmark links stay excluded (real HTML)", async () => {
+    const page = (url: string, html: string): PageSpec => {
+      const parsed = parsePage(html, url);
+      return { url, title: parsed.meta.title ?? undefined, h1: parsed.h1.texts, links: parsed.links };
+    };
+    const html = `<html><head><title>Home</title></head><body>
+      <header><a href="/da-dk/collections/cykelsadel">Gratis fragt</a></header>
+      <nav><a href="/da-dk/collections/cykelsadel">Tilbud</a></nav>
+      <main><p>Intet her.</p></main>
+      <footer><a href="/da-dk/collections/cykelsadel">Kontakt os</a></footer></body></html>`;
+    const c = await check([
+      page(BASE, html),
+      page(DK, "<html><head><title>Køb cykelsadel</title></head><body></body></html>"),
+    ]);
+    // Every link is chrome, so nothing was compared: skipped, never a warning.
+    expect(c.status).toBe("skipped");
+  }, 30_000);
 });
