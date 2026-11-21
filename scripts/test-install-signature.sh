@@ -380,6 +380,36 @@ check eval 'grep -q "add --no-cache.*openssl" "$WORK/apk.log"'
 check eval '! gh_verify_ran'
 CASE_PATH=""
 
+# apk add is atomic: with BOTH libstdc++ and openssl missing and openssl
+# unavailable from the mirror, the combined add fails; libstdc++ alone must be
+# retried, openssl reported as a warning, and the install must go on.
+SHIMS_MUSL2="$WORK/shims-musl2"
+mkdir -p "$SHIMS_MUSL2"
+cp "$SHIMS/curl" "$SHIMS_MUSL2/curl"
+cp "$SHIMS_MUSL/id" "$SHIMS_MUSL2/id"
+cat > "$SHIMS_MUSL2/apk" <<APKEOF
+#!/bin/sh
+echo "\$*" >> "$WORK/apk2.log"
+case "\$*" in *openssl*) exit 1 ;; esac
+echo "\$*" >> "$WORK/apk2.installed"
+exit 0
+APKEOF
+chmod 755 "$SHIMS_MUSL2/id" "$SHIMS_MUSL2/apk"
+# ensure_musl_runtime sees no libstdc++ (ls shim) and no openssl on PATH.
+{
+  echo 'ls() { return 1; }'
+  cat "$WORK/install-era-musl.sh"
+} > "$WORK/install-era-musl2.sh"
+rm -f "$WORK/apk2.log" "$WORK/apk2.installed"
+CASE_PATH="$SHIMS_MUSL2:$WORK/farm-nogh-nossl"
+# The install then stops at the signature check (no openssl anywhere), which
+# proves it got past ensure_musl_runtime instead of dying on libstdc++.
+run_case "era: Alpine/musl, libstdc++ and openssl missing, apk refuses openssl: libstdc++ retried alone, install continues" \
+  "$WORK/install-era-musl2.sh" "$R/good" fail "Auto-install of openssl failed"
+check eval 'case "$LAST_STDERR" in *"Missing libstdc++"*) false ;; *"Installed libstdc++"*) true ;; *) false ;; esac'
+check eval 'grep -qx "add --no-cache libstdc++" "$WORK/apk2.installed"'
+CASE_PATH=""
+
 # Before the era, and with the field unset, today's behaviour holds exactly.
 CASE_PATH="$PATH_NOGH"
 run_case "pre-era version, no gh, no .sig files: warns, installs (unchanged)" "$PRE_ERA" "$no_sig_dir" pass "relying on the sha256 checksum only"

@@ -1232,13 +1232,15 @@ describe.concurrent("install.sh report_error payload", () => {
         cut: "body",
         prelude: `ls() { return 1; }\napk() { :; }\n${prelude}`,
       });
+    const noOpenssl =
+      'command() { if [ "$1" = "-v" ] && [ "$2" = "openssl" ]; then return 1; fi; builtin command "$@"; }';
     const noSudo =
       'command() { if [ "$1" = "-v" ] && [ "$2" = "sudo" ]; then return 1; fi; builtin command "$@"; }';
 
     test("non-root with sudo: names sudo apk add and links the install page", async () => {
-      const r = await run("id() { echo 1000; }\nsudo() { :; }");
+      const r = await run(`id() { echo 1000; }\nsudo() { :; }\n${noOpenssl}`);
       expect(r.code).not.toBe(0);
-      expect(r.stderr).toContain("sudo apk add libstdc++");
+      expect(r.stderr).toContain("sudo apk add libstdc++ openssl");
       expect(r.stderr).toContain("https://docs.squirrelscan.com/install");
       expect(r.stderr).toContain("Missing libstdc++");
     }, SPAWN_TIMEOUT_MS);

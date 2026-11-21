@@ -1371,6 +1371,13 @@ ensure_musl_runtime() {
       warn "Auto-install of openssl failed"
       return 0
     fi
+    # apk add is atomic: a failing openssl also kept libstdc++ out. Retry the
+    # required package alone so a mirror without openssl does not fail the install.
+    if [ "$need_openssl" = true ] && apk add --no-cache libstdc++ >/dev/null 2>&1; then
+      info "Installed libstdc++"
+      warn "Auto-install of openssl failed"
+      return 0
+    fi
     warn "Auto-install of $pkgs failed"
   fi
 
@@ -1383,11 +1390,13 @@ ensure_musl_runtime() {
   # Non-root, no apk, or apk failed → clear, actionable instructions.
   warn "squirrel needs libstdc++ to run on Alpine/musl."
   if command -v apk >/dev/null 2>&1; then
+    local fix_pkgs="libstdc++"
+    [ "$need_openssl" = false ] || fix_pkgs="libstdc++ openssl"
     echo "  Install it, then re-run the installer:" >&2
     if [ "$(id -u)" = "0" ] || ! command -v sudo >/dev/null 2>&1; then
-      echo "      apk add libstdc++" >&2
+      echo "      apk add $fix_pkgs" >&2
     else
-      echo "      sudo apk add libstdc++" >&2
+      echo "      sudo apk add $fix_pkgs" >&2
     fi
   else
     echo "  Install libstdc++ (and libgcc) with your package manager, then re-run." >&2
@@ -1804,7 +1813,7 @@ os_release_ids() {
         printf '%s ' "$line"
         ;;
     esac
-  done < "$f" | tr 'A-Z' 'a-z'
+  done < "$f" | tr '[:upper:]' '[:lower:]'
 }
 
 # openssl_missing_hint: the exact fix for a signed release when openssl is
