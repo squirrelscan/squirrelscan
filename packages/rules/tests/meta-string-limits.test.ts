@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { describe, expect, test } from "bun:test";
+
 import { loadAllRules } from "../src/loader";
 
 // Every rule's STATIC meta is publish-payload: the API publish schema caps
@@ -18,14 +19,22 @@ describe("rule meta strings vs REPORT_LIMITS publish caps", () => {
     "%s meta fits publish caps",
     (_id, meta) => {
       expect(meta.id.length).toBeLessThanOrEqual(REPORT_LIMITS.maxShortString);
-      expect(meta.name.length).toBeLessThanOrEqual(REPORT_LIMITS.maxShortString);
-      expect(meta.description.length).toBeLessThanOrEqual(REPORT_LIMITS.maxMediumString);
+      expect(meta.name.length).toBeLessThanOrEqual(
+        REPORT_LIMITS.maxShortString
+      );
+      expect(meta.description.length).toBeLessThanOrEqual(
+        REPORT_LIMITS.maxMediumString
+      );
       if (meta.subcategory) {
-        expect(meta.subcategory.length).toBeLessThanOrEqual(REPORT_LIMITS.maxShortString);
+        expect(meta.subcategory.length).toBeLessThanOrEqual(
+          REPORT_LIMITS.maxShortString
+        );
       }
       if (meta.solution) {
-        expect(meta.solution.length).toBeLessThanOrEqual(REPORT_LIMITS.maxLongString);
+        expect(meta.solution.length).toBeLessThanOrEqual(
+          REPORT_LIMITS.maxLongString
+        );
       }
-    },
+    }
   );
 });

@@ -1,8 +1,8 @@
 // core/charset - Check for charset declaration
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { getAttrCI, querySelectorByAttrValueCI } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** The `charset=` parameter of a Content-Type value, quotes dropped (`charset="utf-8"` is valid). */
 function charsetParam(contentType: string): string | undefined {
@@ -59,7 +59,9 @@ function declaredWithinPrescan(html: string): boolean {
     if (!/^<meta[\s/>]/i.test(tag) || !isCharsetDeclaration(tag)) continue;
     if (m.groups?.metaEnd === undefined) return false;
     const end = m.index + tag.length;
-    return new TextEncoder().encode(prefix.slice(0, end)).length <= PRESCAN_BYTES;
+    return (
+      new TextEncoder().encode(prefix.slice(0, end)).length <= PRESCAN_BYTES
+    );
   }
   return false;
 }
@@ -171,7 +173,8 @@ export const charsetRule: Rule = {
               message:
                 "The Content-Type header already sets UTF-8; moving the charset meta into the first 1024 bytes is a conformance fix only",
               value: declaredCharset,
-              expected: "charset meta serialized completely within the first 1024 bytes",
+              expected:
+                "charset meta serialized completely within the first 1024 bytes",
             });
           } else {
             // Without a header the browser has already guessed.
@@ -180,7 +183,8 @@ export const charsetRule: Rule = {
               status: "warn",
               message: "Charset meta is not within the first 1024 bytes",
               value: declaredCharset,
-              expected: "charset meta serialized completely within the first 1024 bytes",
+              expected:
+                "charset meta serialized completely within the first 1024 bytes",
             });
           }
         } else if (charsetMeta) {

@@ -3,12 +3,12 @@
 // same finding: a previous run had it under one name, the next run reports it under the other, and it does NOT
 // resolve (which would send a false "fixed" notification and open a "new" finding for the same link).
 
-import { describe, expect, test } from "bun:test";
-
 import type { PageFindingRecord } from "@squirrelscan/core-contracts";
+
 import { buildSupersededIndex } from "@squirrelscan/core-contracts/resolution";
 import { loadAllRules } from "@squirrelscan/rules";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import { computeMerge, type FlatFinding } from "../src/merge-core";
 
@@ -17,7 +17,9 @@ const RULE = "links/broken-links";
 const LINK = "https://example.com/gone";
 const PAGE = normalizePageUrl("https://example.com/");
 
-const superseded = buildSupersededIndex([...loadAllRules().values()].map((r) => r.meta));
+const superseded = buildSupersededIndex(
+  [...loadAllRules().values()].map((r) => r.meta)
+);
 
 const prior = (checkName: string): PageFindingRecord => ({
   siteKey: SITE,

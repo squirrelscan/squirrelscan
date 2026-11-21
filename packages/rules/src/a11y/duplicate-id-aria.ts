@@ -1,6 +1,7 @@
 // a11y/duplicate-id-aria - No duplicate IDs used in ARIA
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const duplicateIdAriaRule: Rule = {

@@ -6,14 +6,14 @@
 // structural signals: a CMP loader script/stylesheet, a known CMP container, or
 // a cookie/consent-keyed widget carrying an accept/reject control.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult, SiteMetadata } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { cookieConsentRule } from "../src/legal/cookie-consent";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 function pageCtx(html: string, siteMetadata?: SiteMetadata): RuleContext {
   const parsed = parsePage(html, "https://example.com/");
@@ -31,7 +31,10 @@ function pageCtx(html: string, siteMetadata?: SiteMetadata): RuleContext {
   };
 }
 
-async function status(html: string, meta?: SiteMetadata): Promise<CheckResult["status"] | undefined> {
+async function status(
+  html: string,
+  meta?: SiteMetadata
+): Promise<CheckResult["status"] | undefined> {
   const checks = (await cookieConsentRule.run(pageCtx(html, meta))).checks;
   return checks.find((c) => c.name === "cookie-consent")?.status;
 }

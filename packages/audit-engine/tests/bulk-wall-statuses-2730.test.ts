@@ -16,34 +16,53 @@ import {
 
 const OPTIONS = { ttlSeconds: 60, concurrency: 2, timeoutMs: 2000 };
 
-function answer(href: string, extra: Partial<ExternalCheckResult>): ExternalCheckResult {
-  return { href, status: null, error: null, redirectTarget: null, fromCache: false, ...extra };
+function answer(
+  href: string,
+  extra: Partial<ExternalCheckResult>
+): ExternalCheckResult {
+  return {
+    href,
+    status: null,
+    error: null,
+    redirectTarget: null,
+    fromCache: false,
+    ...extra,
+  };
 }
 
 /** A bulk checker that answers every url it is asked about, so no local fetch happens. */
 function bulk(answers: ExternalCheckResult[]) {
   const byHref = new Map(answers.map((a) => [a.href, a]));
-  return async (urls: string[]) => new Map(urls.flatMap((u) => (byHref.has(u) ? [[u, byHref.get(u)!] as const] : [])));
+  return async (urls: string[]) =>
+    new Map(
+      urls.flatMap((u) => (byHref.has(u) ? [[u, byHref.get(u)!] as const] : []))
+    );
 }
 
 async function run(
   answers: ExternalCheckResult[],
   cache: LinkCache | null = null,
-  onVerdict?: (result: ExternalCheckResult) => void,
+  onVerdict?: (result: ExternalCheckResult) => void
 ) {
   const results = await Effect.runPromise(
     checkExternalLinks(
       answers.map((a) => a.href),
       cache,
-      { ...OPTIONS, bulkChecker: bulk(answers), ...(onVerdict ? { onVerdict } : {}) },
-    ),
+      {
+        ...OPTIONS,
+        bulkChecker: bulk(answers),
+        ...(onVerdict ? { onVerdict } : {}),
+      }
+    )
   );
   return new Map(results.map((r) => [r.href, r]));
 }
 
 describe("bulk checker wall statuses (repo#2730)", () => {
   test("a bare 999, 401 or 406 is unverifiable, status kept", async () => {
-    const answers = [999, 401, 406].map((status) => answer(`https://example.com/${status}`, { status }));
+    const answers = [999, 401, 406].map((status) =>
+      answer(`https://example.com/${status}`, { status })
+    );
     const byHref = await run(answers);
     for (const status of [999, 401, 406]) {
       expect(byHref.get(`https://example.com/${status}`)).toMatchObject({
@@ -69,7 +88,9 @@ describe("bulk checker wall statuses (repo#2730)", () => {
   });
 
   test("a 404 is unchanged", async () => {
-    const r = (await run([answer("https://example.com/404", { status: 404 })])).get("https://example.com/404")!;
+    const r = (
+      await run([answer("https://example.com/404", { status: 404 })])
+    ).get("https://example.com/404")!;
     expect(r.status).toBe(404);
     expect(r.wafBlocked).toBeUndefined();
   });
@@ -85,7 +106,11 @@ describe("bulk checker wall statuses (repo#2730)", () => {
         }),
       ])
     ).get("https://example.com/406")!;
-    expect(r).toMatchObject({ wafBlocked: true, wafProvider: "cloudflare", unverifiedReason: "blocked" });
+    expect(r).toMatchObject({
+      wafBlocked: true,
+      wafProvider: "cloudflare",
+      unverifiedReason: "blocked",
+    });
   });
 
   test("the unverifiable answer is not cached, a 404 is", async () => {
@@ -99,14 +124,16 @@ describe("bulk checker wall statuses (repo#2730)", () => {
         answer("https://example.com/999", { status: 999 }),
         answer("https://example.com/404", { status: 404 }),
       ],
-      cache,
+      cache
     );
     expect(written.map((e) => e.href)).toEqual(["https://example.com/404"]);
   });
 
   test("the late-bound verdict carries the same unverifiable answer (repo#2144)", async () => {
     const told: ExternalCheckResult[] = [];
-    await run([answer("https://example.com/999", { status: 999 })], null, (r) => told.push(r));
+    await run([answer("https://example.com/999", { status: 999 })], null, (r) =>
+      told.push(r)
+    );
     expect(told).toHaveLength(1);
     expect(told[0]).toMatchObject({
       href: "https://example.com/999",

@@ -8,14 +8,14 @@
 // with neither still flags (with dual-path messaging), a full PostalAddress
 // is unaffected, and @graph-wrapped (Yoast-style) LocalBusiness nodes parse.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { localBusinessSchemaRule } from "../src/schema/local-business";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 function pageCtx(html: string, url = "https://example.com/"): RuleContext {
   return {
@@ -35,7 +35,7 @@ function check(checks: CheckResult[], name: string): CheckResult | undefined {
 
 function withSchema(schema: unknown): string {
   return `<html><head><script type="application/ld+json">${JSON.stringify(
-    schema,
+    schema
   )}</script></head><body><p>content</p></body></html>`;
 }
 
@@ -47,7 +47,7 @@ describe("schema/local-business — SAB support (#700)", () => {
       name: "Bob's Mobile Carpentry",
       areaServed: "Sydney, NSW",
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     expect(check(checks, "local-business-location")?.status).toBe("pass");
     expect(check(checks, "local-business-required")?.status).toBe("pass");
@@ -61,7 +61,7 @@ describe("schema/local-business — SAB support (#700)", () => {
       name: "Roving Repairs",
       areaServed: ["Sydney", "Parramatta", "Newcastle"],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("pass");
   });
 
@@ -75,7 +75,7 @@ describe("schema/local-business — SAB support (#700)", () => {
         address: { "@type": "PostalAddress", addressLocality: "Sydney" },
       },
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("pass");
   });
 
@@ -88,7 +88,7 @@ describe("schema/local-business — SAB support (#700)", () => {
         polygon: "-34.4 150.8 -34.5 150.9 -34.6 150.7",
       },
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("pass");
   });
 
@@ -98,7 +98,7 @@ describe("schema/local-business — SAB support (#700)", () => {
       name: "Acme Electrical",
       areaServed: { "@type": "AdministrativeArea", name: "Greater Sydney" },
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("pass");
   });
 
@@ -108,7 +108,7 @@ describe("schema/local-business — SAB support (#700)", () => {
       name: "Legacy Landscaping",
       serviceArea: { "@type": "AdministrativeArea", name: "Melbourne" },
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("pass");
   });
 
@@ -118,7 +118,7 @@ describe("schema/local-business — SAB support (#700)", () => {
       name: "Vague Business",
       areaServed: {},
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("warn");
   });
 
@@ -130,10 +130,14 @@ describe("schema/local-business — SAB support (#700)", () => {
           name: "Referencing Business",
           areaServed: { "@id": "#servicearea" },
         },
-        { "@id": "#servicearea", "@type": "AdministrativeArea", name: "Greater Sydney" },
+        {
+          "@id": "#servicearea",
+          "@type": "AdministrativeArea",
+          name: "Greater Sydney",
+        },
       ],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("pass");
   });
 
@@ -143,7 +147,7 @@ describe("schema/local-business — SAB support (#700)", () => {
       name: "Broken Reference Business",
       areaServed: { "@id": "#nowhere" },
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("warn");
   });
 
@@ -153,7 +157,7 @@ describe("schema/local-business — SAB support (#700)", () => {
       name: "Informal Address Co",
       address: "123 Main St, Sydney NSW 2000",
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
@@ -166,7 +170,7 @@ describe("schema/local-business — SAB support (#700)", () => {
       "@type": "LocalBusiness",
       name: "Mystery Shop",
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     const location = check(checks, "local-business-location");
 
     expect(location?.status).toBe("warn");
@@ -185,7 +189,7 @@ describe("schema/local-business — SAB support (#700)", () => {
         postalCode: "2000",
       },
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     expect(check(checks, "local-business-required")?.status).toBe("pass");
     expect(check(checks, "local-business-location")).toBeUndefined();
@@ -198,11 +202,14 @@ describe("schema/local-business — SAB support (#700)", () => {
       name: "Half Store",
       address: { "@type": "PostalAddress", streetAddress: "123 Main St" },
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
-    expect(addressCheck?.items?.map((i) => i.id)).toEqual(["addressLocality", "postalCode"]);
+    expect(addressCheck?.items?.map((i) => i.id)).toEqual([
+      "addressLocality",
+      "postalCode",
+    ]);
     // Address IS present, so the SAB location check must not also fire.
     expect(check(checks, "local-business-location")).toBeUndefined();
   });
@@ -219,7 +226,7 @@ describe("schema/local-business — SAB support (#700)", () => {
         },
       ],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     expect(check(checks, "local-business-location")?.status).toBe("pass");
     expect(check(checks, "local-business-schema")).toBeUndefined();
@@ -229,7 +236,7 @@ describe("schema/local-business — SAB support (#700)", () => {
     const html = withSchema({
       "@graph": [{ "@type": "LocalBusiness", name: "Graph Shop" }],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")?.status).toBe("warn");
   });
 
@@ -248,14 +255,14 @@ describe("schema/local-business — SAB support (#700)", () => {
         },
       ],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-location")).toBeUndefined();
     expect(check(checks, "local-business-address")).toBeUndefined();
   });
 
   test("no LocalBusiness schema at all → info, no location check", async () => {
     const html = "<html><body><p>No schema here.</p></body></html>";
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     expect(check(checks, "local-business-schema")?.status).toBe("info");
     expect(check(checks, "local-business-location")).toBeUndefined();
   });

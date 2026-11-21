@@ -2,18 +2,25 @@
 // One derivation for the published report (output/html.tsx) and the dashboard's
 // overview and audit page, so a number cannot read differently in each.
 
-import type { RuleGroup } from "./categories";
-import { GROUP_CODES, getGroupName } from "./categories";
-import { scanScopeUnfetched } from "./coverage";
 import type { SitemapDiscovery } from "@squirrelscan/core-contracts";
+
+import type { RuleGroup } from "./categories";
 import type { AuditReport, GroupScore } from "./types";
 
+import { GROUP_CODES, getGroupName } from "./categories";
+import { scanScopeUnfetched } from "./coverage";
+
 /** What the page counts read: any report-shaped object with these three fields. */
-type PageCountSource = Pick<AuditReport, "totalPages" | "coverage" | "scanScope">;
+type PageCountSource = Pick<
+  AuditReport,
+  "totalPages" | "coverage" | "scanScope"
+>;
 
 /** A non-negative whole number off report JSON, or 0 (stored reports of any origin). */
 export function count(v: unknown): number {
-  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
+  return typeof v === "number" && Number.isFinite(v) && v >= 0
+    ? Math.floor(v)
+    : 0;
 }
 
 /**
@@ -36,23 +43,29 @@ export function discoveredPages(report: PageCountSource): {
     }
   ).sitemaps;
   const sitemap = count(sm?.totalUrls);
-  const crawlOnly = Array.isArray(sm?.missingPages) ? sm.missingPages.length : 0;
+  const crawlOnly = Array.isArray(sm?.missingPages)
+    ? sm.missingPages.length
+    : 0;
   const unfetched = scanScopeUnfetched(report);
   const total = Math.max(
     count(report.totalPages),
     count(report.coverage?.knownPages),
     sitemap + crawlOnly,
     // Fetched and still-queued URLs are disjoint, so their sum is a floor too.
-    count(report.scanScope?.pagesCrawled) + unfetched,
+    count(report.scanScope?.pagesCrawled) + unfetched
   );
   return { total, sitemap, crawlOnly, unfetched };
 }
 
 /** The discovered-pages count, with whether it is a floor ("N+") because the crawl was cut short. */
-export function discoveredCount(report: PageCountSource): { total: number; floor: boolean } {
+export function discoveredCount(report: PageCountSource): {
+  total: number;
+  floor: boolean;
+} {
   const found = discoveredPages(report);
   const floor =
-    (!!report.scanScope?.capped || report.scanScope?.stopReason !== undefined) &&
+    (!!report.scanScope?.capped ||
+      report.scanScope?.stopReason !== undefined) &&
     found.total > count(report.totalPages);
   return { total: found.total, floor };
 }
@@ -91,13 +104,14 @@ export interface SectionScoreRow {
  * yields fewer rows (possibly none), never a placeholder.
  */
 export function sectionScoreRows(
-  groups: readonly GroupScore[] | null | undefined,
+  groups: readonly GroupScore[] | null | undefined
 ): SectionScoreRow[] {
   const byGroup = new Map((groups ?? []).map((g) => [g.group, g]));
   const rows: SectionScoreRow[] = [];
   for (const code of GROUP_CODES) {
     const g = byGroup.get(code);
-    if (!g || typeof g.score !== "number" || !Number.isFinite(g.score)) continue;
+    if (!g || typeof g.score !== "number" || !Number.isFinite(g.score))
+      continue;
     rows.push({
       group: code,
       name: getGroupName(code),

@@ -1,14 +1,30 @@
 // reliability/broken-forms - forms that silently lose submissions (#707).
 
+import { parsePage } from "@squirrelscan/parser";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type {
+  CheckResult,
+  ExternalLinkCheckData,
+  RuleContext,
+  SiteData,
+} from "../src/types";
 
-import { getCategoryGroup, getCategoryName, CATEGORY_CODES } from "../src/categories";
+import {
+  getCategoryGroup,
+  getCategoryName,
+  CATEGORY_CODES,
+} from "../src/categories";
 import { loadAllRules } from "../src/loader";
-import { createProbeBudget, type ProbeBudget, type ProbeLevel } from "../src/probe-budget";
-import { brokenFormsRule, createBrokenFormsRule } from "../src/reliability/broken-forms";
-import type { CheckResult, ExternalLinkCheckData, RuleContext, SiteData } from "../src/types";
+import {
+  createProbeBudget,
+  type ProbeBudget,
+  type ProbeLevel,
+} from "../src/probe-budget";
+import {
+  brokenFormsRule,
+  createBrokenFormsRule,
+} from "../src/reliability/broken-forms";
 
 const HOME = "https://example.com/";
 
@@ -82,16 +98,26 @@ interface Call {
   signal: AbortSignal | null;
 }
 let calls: Call[] = [];
-let answer: (url: string, method: string) => Response | "throw" = (_url, _method) =>
-  new Response(null, { status: 200 });
+let answer: (url: string, method: string) => Response | "throw" = (
+  _url,
+  _method
+) => new Response(null, { status: 200 });
 
 const realFetch = globalThis.fetch;
 
 beforeEach(() => {
   calls = [];
   answer = (_url, _method) => new Response(null, { status: 200 });
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit
+  ) => {
+    const raw =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
     // Record the name the request was for: pinned requests carry it in Host.
     const logical = new URL(raw);
     const host = new Headers(init?.headers).get("host");
@@ -114,15 +140,17 @@ const CONTACT = (inner: string, attrs = 'action="/contact" method="post"') =>
 
 describe("reliability/broken-forms: unnamed fields", () => {
   test("warns on an unnamed email field in a form with a real action", async () => {
-    const html = CONTACT(`<input name="name" type="text"><input id="email" type="email">`);
+    const html = CONTACT(
+      `<input name="name" type="text"><input id="email" type="email">`
+    );
     const result = await rule.run(
       ctx(
         site([
           { url: HOME, html },
           { url: "https://example.com/contact", html: "" },
         ]),
-        budget("active"),
-      ),
+        budget("active")
+      )
     );
     const warn = check(result.checks, "unnamed-form-fields");
     expect(warn?.status).toBe("warn");
@@ -132,27 +160,35 @@ describe("reliability/broken-forms: unnamed fields", () => {
   });
 
   test("a fully named form produces no finding and passes", async () => {
-    const html = CONTACT(`<input name="name" type="text"><input name="email" type="email">`);
+    const html = CONTACT(
+      `<input name="name" type="text"><input name="email" type="email">`
+    );
     const result = await rule.run(
       ctx(
         site([
           { url: HOME, html },
           { url: "https://example.com/contact", html: "" },
         ]),
-        budget("active"),
-      ),
+        budget("active")
+      )
     );
     expect(check(result.checks, "unnamed-form-fields")).toBeUndefined();
-    expect(check(result.checks, "unnamed-form-fields-no-action")).toBeUndefined();
+    expect(
+      check(result.checks, "unnamed-form-fields-no-action")
+    ).toBeUndefined();
     expect(check(result.checks, "broken-forms")?.status).toBe("pass");
   });
 
   test('a form with no action, or action="#", reports unnamed fields as info, not warn', async () => {
     for (const attrs of ['method="post"', 'action="#" method="post"']) {
       const html = doc(`<form ${attrs}><input id="email" type="email"></form>`);
-      const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+      const result = await rule.run(
+        ctx(site([{ url: HOME, html }]), budget("active"))
+      );
       expect(check(result.checks, "unnamed-form-fields")).toBeUndefined();
-      expect(check(result.checks, "unnamed-form-fields-no-action")?.status).toBe("info");
+      expect(
+        check(result.checks, "unnamed-form-fields-no-action")?.status
+      ).toBe("info");
     }
   });
 
@@ -167,7 +203,9 @@ describe("reliability/broken-forms: unnamed fields", () => {
         <input type="text" form="other">
       </form>
       <form id="other" action="/other" method="post"></form>`);
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("active"))
+    );
     // Only the `form="other"` control is unnamed, and it belongs to #other, not #contact.
     const warn = check(result.checks, "unnamed-form-fields");
     expect(warn?.items).toHaveLength(1);
@@ -179,7 +217,9 @@ describe("reliability/broken-forms: unnamed fields", () => {
     const html = doc(`
       <form id="contact" action="/contact" method="post"></form>
       <input id="stray" type="text" form="contact">`);
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("active"))
+    );
     const warn = check(result.checks, "unnamed-form-fields");
     expect(warn?.status).toBe("warn");
     expect(labels(warn).join("\n")).toContain("form#contact");
@@ -195,8 +235,8 @@ describe("reliability/broken-forms: action reachability", () => {
           { url: HOME, html },
           { url: "https://example.com/contact", html: "", statusCode: 404 },
         ]),
-        budget("aggressive"),
-      ),
+        budget("aggressive")
+      )
     );
     expect(check(result.checks, "dead-form-action")?.status).toBe("fail");
     expect(calls).toHaveLength(0);
@@ -205,17 +245,22 @@ describe("reliability/broken-forms: action reachability", () => {
   test("an uncrawled same-origin action answering 405 to HEAD and GET is not broken; 404 warns as maybe POST-only", async () => {
     const html = CONTACT(`<input name="a">`);
     answer = () => new Response(null, { status: 405 });
-    let result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+    let result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("active"))
+    );
     expect(check(result.checks, "dead-form-action")).toBeUndefined();
     expect(calls.map((c) => c.method)).toEqual(["HEAD", "GET"]);
 
     calls = [];
-    answer = (_url, method) => new Response(null, { status: method === "HEAD" ? 405 : 404 });
+    answer = (_url, method) =>
+      new Response(null, { status: method === "HEAD" ? 405 : 404 });
     result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
     expect(check(result.checks, "dead-form-action")).toBeUndefined();
     const probe404 = check(result.checks, "form-action-not-found-to-probe");
     expect(probe404?.status).toBe("warn");
-    expect(labels(probe404).join("\n")).toContain("the endpoint may accept POST only");
+    expect(labels(probe404).join("\n")).toContain(
+      "the endpoint may accept POST only"
+    );
   });
 
   test("no probe ever uses POST", async () => {
@@ -226,12 +271,16 @@ describe("reliability/broken-forms: action reachability", () => {
     answer = () => new Response(null, { status: 500 });
     await rule.run(ctx(site([{ url: HOME, html }]), budget("aggressive")));
     expect(calls.length).toBeGreaterThan(0);
-    expect(calls.every((c) => c.method === "HEAD" || c.method === "GET")).toBe(true);
+    expect(calls.every((c) => c.method === "HEAD" || c.method === "GET")).toBe(
+      true
+    );
   });
 
   test("passive probing sends nothing for an uncrawled action and says so", async () => {
     const html = CONTACT(`<input name="a">`);
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("passive")));
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("passive"))
+    );
     expect(calls).toHaveLength(0);
     const unchecked = check(result.checks, "unchecked-form-actions");
     expect(unchecked?.status).toBe("info");
@@ -243,24 +292,32 @@ describe("reliability/broken-forms: action reachability", () => {
       <form action="https://staging.example.com/lead" method="post"><input name="a"></form>
       <form action="http://localhost:3000/subscribe" method="post"><input name="a"></form>
       <form action="mailto:hi@example.com" method="post"><input name="a"></form>`);
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("aggressive")));
-    expect(check(result.checks, "non-production-form-action")?.status).toBe("warn");
-    expect(labels(check(result.checks, "non-production-form-action")).join("\n")).toContain(
-      "staging.example.com",
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("aggressive"))
     );
-    expect(labels(check(result.checks, "non-production-form-action")).join("\n")).toContain(
-      "localhost",
+    expect(check(result.checks, "non-production-form-action")?.status).toBe(
+      "warn"
     );
+    expect(
+      labels(check(result.checks, "non-production-form-action")).join("\n")
+    ).toContain("staging.example.com");
+    expect(
+      labels(check(result.checks, "non-production-form-action")).join("\n")
+    ).toContain("localhost");
     expect(check(result.checks, "mailto-form-action")?.status).toBe("warn");
     expect(calls).toHaveLength(0);
   });
 
   test("an http: action to a public host is left to security/form-https, not probed here", async () => {
     const html = doc(
-      `<form action="http://pay.example.org/x" method="post"><input name="a"></form>`,
+      `<form action="http://pay.example.org/x" method="post"><input name="a"></form>`
     );
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("aggressive")));
-    expect(result.checks.filter((c) => c.name.includes("form-action"))).toHaveLength(0);
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("aggressive"))
+    );
+    expect(
+      result.checks.filter((c) => c.name.includes("form-action"))
+    ).toHaveLength(0);
     expect(calls).toHaveLength(0);
   });
 
@@ -272,35 +329,52 @@ describe("reliability/broken-forms: action reachability", () => {
     answer = (url) => {
       if (url.endsWith("/a")) return new Response(null, { status: 429 });
       if (url.endsWith("/b"))
-        return new Response(null, { status: 503, headers: { "retry-after": "60" } });
-      return new Response(null, { status: 403, headers: { "cf-mitigated": "challenge" } });
+        return new Response(null, {
+          status: 503,
+          headers: { "retry-after": "60" },
+        });
+      return new Response(null, {
+        status: 403,
+        headers: { "cf-mitigated": "challenge" },
+      });
     };
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("active"))
+    );
     expect(check(result.checks, "dead-form-action")).toBeUndefined();
     expect(check(result.checks, "unreachable-form-action")).toBeUndefined();
-    expect(check(result.checks, "unverified-form-actions")?.status).toBe("info");
+    expect(check(result.checks, "unverified-form-actions")?.status).toBe(
+      "info"
+    );
   });
 
   test("a third-party action is not requested when external link checking is off", async () => {
     const html = doc(
-      `<form action="https://forms.vendor.com/submit" method="post"><input name="a"></form>`,
+      `<form action="https://forms.vendor.com/submit" method="post"><input name="a"></form>`
     );
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("aggressive")));
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("aggressive"))
+    );
     expect(calls).toHaveLength(0);
     expect(check(result.checks, "unchecked-form-actions")?.message).toContain(
-      "external link checking is off",
+      "external link checking is off"
     );
   });
 
   test("a third-party action is requested only when external link checking is on", async () => {
     const html = doc(
-      `<form action="https://forms.vendor.com/submit" method="post"><input name="a"></form>`,
+      `<form action="https://forms.vendor.com/submit" method="post"><input name="a"></form>`
     );
     const external: ExternalLinkCheckData[] = [];
     const result = await rule.run(
-      ctx(site([{ url: HOME, html }], { externalLinks: external }), budget("active")),
+      ctx(
+        site([{ url: HOME, html }], { externalLinks: external }),
+        budget("active")
+      )
     );
-    expect(calls.map((c) => c.url)).toEqual(["https://forms.vendor.com/submit"]);
+    expect(calls.map((c) => c.url)).toEqual([
+      "https://forms.vendor.com/submit",
+    ]);
     expect(calls[0]?.method).toBe("HEAD");
     expect(result.checks.length).toBeGreaterThan(0);
   });
@@ -308,25 +382,35 @@ describe("reliability/broken-forms: action reachability", () => {
   test("a first-party action that answers 404 to the probe warns (maybe POST-only); one the crawl found 404 is an error", async () => {
     const html = CONTACT(`<input name="a">`);
     answer = () => new Response(null, { status: 404 });
-    const probed = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+    const probed = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("active"))
+    );
     expect(check(probed.checks, "dead-form-action")).toBeUndefined();
-    expect(check(probed.checks, "form-action-not-found-to-probe")?.status).toBe("warn");
+    expect(check(probed.checks, "form-action-not-found-to-probe")?.status).toBe(
+      "warn"
+    );
 
     const crawled = await rule.run(
       ctx(
         site([
           { url: HOME, html },
-          { url: "https://example.com/contact", html: doc("gone"), statusCode: 404 },
+          {
+            url: "https://example.com/contact",
+            html: doc("gone"),
+            statusCode: 404,
+          },
         ]),
-        budget("active"),
-      ),
+        budget("active")
+      )
     );
     expect(check(crawled.checks, "dead-form-action")?.status).toBe("fail");
   });
 
   test("auditing localhost: a relative action is the site's own, never a non-production warning", async () => {
     const local = "http://localhost:3000/";
-    const html = doc(`<form action="/subscribe" method="post"><input name="email"></form>`);
+    const html = doc(
+      `<form action="/subscribe" method="post"><input name="email"></form>`
+    );
     const localSite = {
       baseUrl: "http://localhost:3000",
       pages: [{ url: local, statusCode: 200, parsed: parsePage(html, local) }],
@@ -342,11 +426,13 @@ describe("reliability/broken-forms: action reachability", () => {
   test("a preview deployment's own actions are not non-production warnings", async () => {
     const preview = "https://acme-git-main-acme.vercel.app/";
     const html = doc(
-      `<form action="https://acme-git-main-acme.vercel.app/api/lead" method="post"><input name="a"></form>`,
+      `<form action="https://acme-git-main-acme.vercel.app/api/lead" method="post"><input name="a"></form>`
     );
     const previewSite = {
       baseUrl: "https://acme-git-main-acme.vercel.app",
-      pages: [{ url: preview, statusCode: 200, parsed: parsePage(html, preview) }],
+      pages: [
+        { url: preview, statusCode: 200, parsed: parsePage(html, preview) },
+      ],
       robotsTxt: null,
       sitemaps: null,
     } as unknown as SiteData;
@@ -358,7 +444,10 @@ describe("reliability/broken-forms: action reachability", () => {
     const html = CONTACT(`<input name="a">`);
     let seen: Headers | undefined;
     let seenInit: RequestInit | undefined;
-    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    globalThis.fetch = (async (
+      _input: string | URL | Request,
+      init?: RequestInit
+    ) => {
       seen = new Headers(init?.headers);
       seenInit = init;
       return new Response(null, { status: 200 });
@@ -370,7 +459,9 @@ describe("reliability/broken-forms: action reachability", () => {
     expect(seenInit?.credentials).toBe("omit");
     expect(seenInit?.redirect).toBe("manual");
     // Undecoded (#2717): the runtime never inflates a compressed body the probe drops.
-    expect((seenInit as { decompress?: boolean } | undefined)?.decompress).toBe(false);
+    expect((seenInit as { decompress?: boolean } | undefined)?.decompress).toBe(
+      false
+    );
   });
 
   test("a third-party action on a private or metadata address is never requested", async () => {
@@ -382,7 +473,10 @@ describe("reliability/broken-forms: action reachability", () => {
     let result: Awaited<ReturnType<typeof rule.run>>;
     try {
       result = await rule.run(
-        ctx(site([{ url: HOME, html }], { externalLinks: [] }), budget("aggressive")),
+        ctx(
+          site([{ url: HOME, html }], { externalLinks: [] }),
+          budget("aggressive")
+        )
       );
     } finally {
       delete DNS["inside.vendor.com"];
@@ -408,12 +502,14 @@ describe("reliability/broken-forms: action reachability", () => {
 
   test("a same-site name that resolves to the metadata address is refused", async () => {
     const html = doc(
-      `<form action="https://meta.example.com/x" method="post"><input name="a"></form>`,
+      `<form action="https://meta.example.com/x" method="post"><input name="a"></form>`
     );
     DNS["meta.example.com"] = ["169.254.169.254"];
     let result: Awaited<ReturnType<typeof rule.run>>;
     try {
-      result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+      result = await rule.run(
+        ctx(site([{ url: HOME, html }]), budget("active"))
+      );
     } finally {
       delete DNS["meta.example.com"];
     }
@@ -423,18 +519,20 @@ describe("reliability/broken-forms: action reachability", () => {
 
   test("a public site's subdomain that resolves privately is never probed", async () => {
     const html = doc(
-      `<form action="https://intranet.example.com/x" method="post"><input name="a"></form>`,
+      `<form action="https://intranet.example.com/x" method="post"><input name="a"></form>`
     );
     DNS["intranet.example.com"] = ["10.1.2.3"];
     let result: Awaited<ReturnType<typeof rule.run>>;
     try {
-      result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+      result = await rule.run(
+        ctx(site([{ url: HOME, html }]), budget("active"))
+      );
     } finally {
       delete DNS["intranet.example.com"];
     }
     expect(calls).toHaveLength(0);
     expect(check(result.checks, "unchecked-form-actions")?.message).toContain(
-      "private, loopback or link-local",
+      "private, loopback or link-local"
     );
   });
 
@@ -452,12 +550,14 @@ describe("reliability/broken-forms: action reachability", () => {
 
   test("another port on the site's own host that resolves privately is never probed", async () => {
     const html = doc(
-      `<form action="https://example.com:8443/x" method="post"><input name="a"></form>`,
+      `<form action="https://example.com:8443/x" method="post"><input name="a"></form>`
     );
     DNS["example.com"] = ["127.0.0.1"];
     let result: Awaited<ReturnType<typeof rule.run>>;
     try {
-      result = await rule.run(ctx(site([{ url: HOME, html }]), budget("active")));
+      result = await rule.run(
+        ctx(site([{ url: HOME, html }]), budget("active"))
+      );
     } finally {
       DNS["example.com"] = ["93.184.216.34"];
     }
@@ -468,9 +568,11 @@ describe("reliability/broken-forms: action reachability", () => {
   test("at most 10 endpoints per site are probed; the rest are not checked", async () => {
     const forms = Array.from(
       { length: 30 },
-      (_, n) => `<form action="/a${n}" method="post"><input name="q"></form>`,
+      (_, n) => `<form action="/a${n}" method="post"><input name="q"></form>`
     ).join("");
-    const result = await rule.run(ctx(site([{ url: HOME, html: doc(forms) }]), budget("active")));
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html: doc(forms) }]), budget("active"))
+    );
     expect(calls).toHaveLength(10);
     const unchecked = check(result.checks, "unchecked-form-actions");
     expect(unchecked?.items).toHaveLength(20);
@@ -480,9 +582,12 @@ describe("reliability/broken-forms: action reachability", () => {
   test("query variants of one endpoint share a single probe", async () => {
     const forms = Array.from(
       { length: 30 },
-      (_, n) => `<form action="/cart/add?id=${n}" method="post"><input name="q"></form>`,
+      (_, n) =>
+        `<form action="/cart/add?id=${n}" method="post"><input name="q"></form>`
     ).join("");
-    const result = await rule.run(ctx(site([{ url: HOME, html: doc(forms) }]), budget("active")));
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html: doc(forms) }]), budget("active"))
+    );
     expect(calls).toHaveLength(1);
     expect(check(result.checks, "unchecked-form-actions")).toBeUndefined();
   });
@@ -493,20 +598,23 @@ describe("reliability/broken-forms: action reachability", () => {
       Array.from(
         { length: 8 },
         (_, n) =>
-          `<form action="https://forms${v}.vendor${v}.com/f${n}" method="post"><input name="q"></form>`,
-      ).join(""),
+          `<form action="https://forms${v}.vendor${v}.com/f${n}" method="post"><input name="q"></form>`
+      ).join("")
     ).join("");
     const own = Array.from(
       { length: 5 },
-      (_, n) => `<form action="/own${n}" method="post"><input name="q"></form>`,
+      (_, n) => `<form action="/own${n}" method="post"><input name="q"></form>`
     ).join("");
-    for (let v = 0; v < 4; v++) DNS[`forms${v}.vendor${v}.com`] = [`93.184.216.${40 + v}`];
+    for (let v = 0; v < 4; v++)
+      DNS[`forms${v}.vendor${v}.com`] = [`93.184.216.${40 + v}`];
     try {
       await rule.run(
         ctx(
-          site([{ url: HOME, html: doc(vendors + own) }], { externalLinks: [] }),
-          budget("aggressive"),
-        ),
+          site([{ url: HOME, html: doc(vendors + own) }], {
+            externalLinks: [],
+          }),
+          budget("aggressive")
+        )
       );
     } finally {
       for (let v = 0; v < 4; v++) delete DNS[`forms${v}.vendor${v}.com`];
@@ -529,19 +637,25 @@ describe("reliability/broken-forms: action reachability", () => {
       <form action="http://192.168.1.10/api" method="post"><input name="a"></form>`);
     const previewSite = {
       baseUrl: "https://acme.netlify.app",
-      pages: [{ url: preview, statusCode: 200, parsed: parsePage(html, preview) }],
+      pages: [
+        { url: preview, statusCode: 200, parsed: parsePage(html, preview) },
+      ],
       robotsTxt: null,
       sitemaps: null,
     } as unknown as SiteData;
     const result = await rule.run(ctx(previewSite, budget("passive")));
-    const warned = labels(check(result.checks, "non-production-form-action")).join("\n");
+    const warned = labels(
+      check(result.checks, "non-production-form-action")
+    ).join("\n");
     expect(warned).toContain("localhost");
     expect(warned).toContain("192.168.1.10");
   });
 
   test("an IPv6-literal site probes its own actions", async () => {
     const v6 = "https://[2606:4700::1111]/";
-    const html = doc(`<form action="/contact" method="post"><input name="a"></form>`);
+    const html = doc(
+      `<form action="/contact" method="post"><input name="a"></form>`
+    );
     const v6Site = {
       baseUrl: "https://[2606:4700::1111]",
       pages: [{ url: v6, statusCode: 200, parsed: parsePage(html, v6) }],
@@ -555,9 +669,11 @@ describe("reliability/broken-forms: action reachability", () => {
 
   test("a crafted action cannot turn a label into a markdown link", async () => {
     const html = doc(
-      `<form action="mailto:x@example.com?subject=](https://evil.example/pwn)" method="post"><input name="a"></form>`,
+      `<form action="mailto:x@example.com?subject=](https://evil.example/pwn)" method="post"><input name="a"></form>`
     );
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("passive")));
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("passive"))
+    );
     const text = labels(check(result.checks, "mailto-form-action")).join("\n");
     expect(text).not.toContain("](https://evil.example");
   });
@@ -574,8 +690,15 @@ describe("reliability/broken-forms: probe connections (#766)", () => {
         },
       });
     answer = (_url, method) =>
-      method === "HEAD" ? new Response(null, { status: 405 }) : new Response(endless());
-    await rule.run(ctx(site([{ url: HOME, html: CONTACT(`<input name="a">`) }]), budget("active")));
+      method === "HEAD"
+        ? new Response(null, { status: 405 })
+        : new Response(endless());
+    await rule.run(
+      ctx(
+        site([{ url: HOME, html: CONTACT(`<input name="a">`) }]),
+        budget("active")
+      )
+    );
     expect(calls.map((c) => c.method)).toEqual(["HEAD", "GET"]);
     expect(calls.every((c) => c.signal?.aborted === true)).toBe(true);
   });
@@ -599,8 +722,12 @@ describe("reliability/broken-forms: local-only names (pub#813)", () => {
     const html = doc(`
       <form action="http://myapp.test/lead" method="post"><input name="a"></form>
       <form action="http://intranet/submit" method="post"><input name="a"></form>`);
-    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("aggressive")));
-    const warned = labels(check(result.checks, "non-production-form-action")).join("\n");
+    const result = await rule.run(
+      ctx(site([{ url: HOME, html }]), budget("aggressive"))
+    );
+    const warned = labels(
+      check(result.checks, "non-production-form-action")
+    ).join("\n");
     expect(warned).toContain("myapp.test");
     expect(warned).toContain("intranet");
     expect(calls).toHaveLength(0);
@@ -620,7 +747,9 @@ describe("reliability/broken-forms: local-only names (pub#813)", () => {
         sitemaps: null,
       } as unknown as SiteData;
       const result = await rule.run(ctx(localSite, budget("passive")));
-      expect(check(result.checks, "non-production-form-action")).toBeUndefined();
+      expect(
+        check(result.checks, "non-production-form-action")
+      ).toBeUndefined();
     });
   }
 });

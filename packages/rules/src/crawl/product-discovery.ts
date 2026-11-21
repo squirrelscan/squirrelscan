@@ -10,6 +10,7 @@
 // in the streaming engine. A site without that evidence gets no check at all.
 
 import type { SitemapReadState } from "@squirrelscan/core-contracts";
+
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
 import type { CheckResult, RuleContext, SiteData } from "../types";
@@ -18,8 +19,10 @@ import type { CheckResult, RuleContext, SiteData } from "../types";
 export const COMMERCE_MIN_PRODUCT_PAGES = 3;
 
 /** A product-shaped sitemap URL: a slug under a product segment, so the `/products` index is not one. */
-const PRODUCT_PATH = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:products?|p|items?)\/[^/]{1,200}/i;
-const CART_PATH = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:cart|basket|bag|checkout)(?:\/|$)/i;
+const PRODUCT_PATH =
+  /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:products?|p|items?)\/[^/]{1,200}/i;
+const CART_PATH =
+  /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:cart|basket|bag|checkout)(?:\/|$)/i;
 const PRODUCT_SITEMAP_NAME = /product/i;
 
 type Page = SiteData["pages"][number];
@@ -45,7 +48,9 @@ function isProductPage(page: Page): boolean {
   // TOP-LEVEL nodes only (the collection's `all`, @graph children included): a Product nested in a
   // Review.itemReviewed, an ItemList element or an Offer.itemOffered does not make the page a product page.
   // `types` is the fallback for a collection that carries no nodes; it is built from the same top-level nodes.
-  const schemas = page.parsed?.schemas as { all?: unknown; types?: unknown } | undefined;
+  const schemas = page.parsed?.schemas as
+    | { all?: unknown; types?: unknown }
+    | undefined;
   const nodeTypes: unknown[] = [];
   if (Array.isArray(schemas?.all)) {
     for (const node of schemas.all) {
@@ -63,7 +68,10 @@ function isProductPage(page: Page): boolean {
     if (name === "Product" || name === "ProductGroup") return true;
   }
   const ogType = page.parsed?.og?.type;
-  return typeof ogType === "string" && /^(?:og:)?product(?:\.[a-z]{1,32})?$/i.test(ogType.trim());
+  return (
+    typeof ogType === "string" &&
+    /^(?:og:)?product(?:\.[a-z]{1,32})?$/i.test(ogType.trim())
+  );
 }
 
 function linksToCart(page: Page): boolean {
@@ -109,7 +117,9 @@ export function discoverProductUrls(site: SiteData): ProductDiscovery {
   const sitemapAll = new Set<string>();
   const sitemapProducts = new Set<string>();
   for (const sitemap of site.sitemaps?.discovered ?? []) {
-    const productSitemap = PRODUCT_SITEMAP_NAME.test(pathOrNull(sitemap.url) ?? "");
+    const productSitemap = PRODUCT_SITEMAP_NAME.test(
+      pathOrNull(sitemap.url) ?? ""
+    );
     for (const entry of sitemap.urls) {
       const normalized = normalizedOrNull(entry.loc);
       if (!normalized) continue;
@@ -144,8 +154,10 @@ export function discoverProductUrls(site: SiteData): ProductDiscovery {
     if (!url || crawledProducts.has(url)) continue;
     crawledProducts.add(url);
     const finalUrl = page.finalUrl ? normalizedOrNull(page.finalUrl) : null;
-    const inSitemap = sitemapAll.has(url) || (finalUrl !== null && sitemapAll.has(finalUrl));
-    const isLinked = linked.has(url) || (finalUrl !== null && linked.has(finalUrl));
+    const inSitemap =
+      sitemapAll.has(url) || (finalUrl !== null && sitemapAll.has(finalUrl));
+    const isLinked =
+      linked.has(url) || (finalUrl !== null && linked.has(finalUrl));
     if (inSitemap && isLinked) both++;
     else if (inSitemap) sitemapOnly++;
     else crawlOnly++;
@@ -165,11 +177,15 @@ export function discoverProductUrls(site: SiteData): ProductDiscovery {
   };
 }
 
-function sitemapStateText(state: SitemapReadState | undefined, found: boolean): string {
+function sitemapStateText(
+  state: SitemapReadState | undefined,
+  found: boolean
+): string {
   if (state === "complete") return "sitemap read completely";
   if (state === "partial")
     return "sitemap only partly read (a cap, deadline or failed fetch), so its product list is a lower bound";
-  if (state === "unreadable") return "sitemap unreadable, so no sitemap product URLs are known";
+  if (state === "unreadable")
+    return "sitemap unreadable, so no sitemap product URLs are known";
   return found ? "sitemap read state not recorded" : "no sitemap found";
 }
 
@@ -192,11 +208,13 @@ export function productDiscoveryCheck(ctx: RuleContext): CheckResult | null {
   ];
   if (crawlBounded) {
     parts.push(
-      `the crawl stopped at its ${limits.maxPages}-page limit, so crawl coverage is bounded, not a measure of missing products`,
+      `the crawl stopped at its ${limits.maxPages}-page limit, so crawl coverage is bounded, not a measure of missing products`
     );
   }
   if (site.linkDiscoveryOff)
-    parts.push("the crawl did not follow links, so crawl-link discovery was not observed");
+    parts.push(
+      "the crawl did not follow links, so crawl-link discovery was not observed"
+    );
 
   return {
     name: "product-discovery",

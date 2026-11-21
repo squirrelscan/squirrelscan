@@ -3,11 +3,13 @@
 // key, and the URL may sit far past the head of a big bundle. A bundle that ships
 // supabase-js (its own strings) and quotes a project URL anywhere is Supabase.
 
+import { detectTechnologies } from "@squirrelscan/tech-detect";
 import { describe, expect, test } from "bun:test";
 
-import { detectTechnologies } from "@squirrelscan/tech-detect";
-
-import { buildTechInputs, detectReportTechnologiesMulti } from "../src/technologies";
+import {
+  buildTechInputs,
+  detectReportTechnologiesMulti,
+} from "../src/technologies";
 
 const REF = "abcdefghijklmnopqrst";
 // Key-shaped values are assembled at run time so no literal sits in this file.
@@ -17,7 +19,8 @@ const JWT = ["eyJ", "x".repeat(60)].join("");
 
 // supabase-js's own strings, minified as a production build ships them.
 const NOTICE = `console.warn("\\u26A0\\uFE0F  Node.js 18 and below are deprecated and will no longer be supported in future versions of @supabase/supabase-js. Please upgrade to Node.js 20 or later. For more information, visit: https://github.com/orgs/supabase/discussions/37217")`;
-const STORAGE_KEY = "const k=e=>`sb-${new URL(e).hostname.split(\".\")[0]}-auth-token`;";
+const STORAGE_KEY =
+  'const k=e=>`sb-${new URL(e).hostname.split(".")[0]}-auth-token`;';
 
 /** Minified-looking filler: string-heavy code with no vendor signal. */
 function filler(bytes: number): string {
@@ -35,7 +38,7 @@ function detect(code: string): string[] {
         html: `<!doctype html><div id="root"></div><script type="module" src="/assets/index-1.js"></script>`,
       },
     ],
-    [{ url, content: code, sourcePages: ["https://example.com/"] }],
+    [{ url, content: code, sourcePages: ["https://example.com/"] }]
   );
   return detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
 }
@@ -65,30 +68,48 @@ describe("#1379 supabase-js signature plus a quoted project URL", () => {
   });
 
   test("dozens of earlier quoted placeholder URLs do not push the real one out of the sample", () => {
-    const others = Array.from({ length: 40 }, (_, i) => `a${i}="https://your-project.supabase.co",`).join("");
+    const others = Array.from(
+      { length: 40 },
+      (_, i) => `a${i}="https://your-project.supabase.co",`
+    ).join("");
     const code = `${filler(120_000)}var ${others}z=0;${filler(60_000)}${NOTICE};${filler(60_000)}let l="https://${REF}.supabase.co",h=g(l);${filler(300_000)}`;
     expect(detect(code)).toContain("supabase");
   });
 
   test("200 earlier identical quoted URLs and 60 distinct placeholders do not push the real one out", () => {
-    const same = Array.from({ length: 200 }, () => `a="https://your-project.supabase.co",`).join("");
-    const distinct = Array.from({ length: 60 }, (_, i) => `b${i}="https://your-project-${i}.supabase.co",`).join("");
+    const same = Array.from(
+      { length: 200 },
+      () => `a="https://your-project.supabase.co",`
+    ).join("");
+    const distinct = Array.from(
+      { length: 60 },
+      (_, i) => `b${i}="https://your-project-${i}.supabase.co",`
+    ).join("");
     const code = `${filler(120_000)}var ${same}${distinct}z=0;${filler(60_000)}${NOTICE};${filler(60_000)}let l="https://${REF}.supabase.co",h=g(l);${filler(300_000)}`;
     expect(detect(code)).toContain("supabase");
   });
 
   test("hundreds of earlier URL-and-non-key pairs do not hide the real key pair", () => {
-    const decoys = Array.from({ length: 300 }, (_, i) => `a${i}=["https://${REF}.supabase.co","n${i}"],`).join("");
+    const decoys = Array.from(
+      { length: 300 },
+      (_, i) => `a${i}=["https://${REF}.supabase.co","n${i}"],`
+    ).join("");
     const code = `${filler(120_000)}var ${decoys}z=0;${filler(60_000)}const pD="https://${REF}.supabase.co",gD="${JWT}",Cf=hD(pD,gD);${filler(300_000)}`;
     expect(detect(code)).toContain("supabase");
   });
 
   test("not detected: library strings and no project URL", () => {
-    expect(detect(`${filler(20_000)}${NOTICE};${STORAGE_KEY}${filler(20_000)}`)).not.toContain("supabase");
+    expect(
+      detect(`${filler(20_000)}${NOTICE};${STORAGE_KEY}${filler(20_000)}`)
+    ).not.toContain("supabase");
   });
 
   test("not detected: a project URL and no library signature", () => {
-    expect(detect(`${filler(20_000)}let l="https://${REF}.supabase.co";${filler(20_000)}`)).not.toContain("supabase");
+    expect(
+      detect(
+        `${filler(20_000)}let l="https://${REF}.supabase.co";${filler(20_000)}`
+      )
+    ).not.toContain("supabase");
   });
 
   test("not detected: a docs link and a placeholder URL", () => {

@@ -3,21 +3,31 @@
 // The no-false-positive fixtures carry the weight: a CSP is easy to over-read, so
 // every case a correct policy can produce has to stay clean.
 
-import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
-import { cspBlocksOwnResourcesRule } from "../src/security/csp-blocks-own-resources";
-import { rules as securityRules } from "../src/security";
-import { CSP_VENDORS } from "../src/security/csp-vendors";
-import { parseCspPolicies, policiesAllow } from "../src/security/csp-source-match";
 import type { RuleContext } from "../src/types";
+
+import { rules as securityRules } from "../src/security";
+import { cspBlocksOwnResourcesRule } from "../src/security/csp-blocks-own-resources";
+import {
+  parseCspPolicies,
+  policiesAllow,
+} from "../src/security/csp-source-match";
+import { CSP_VENDORS } from "../src/security/csp-vendors";
 
 const PAGE = "https://shop.test/";
 
 async function run(
   head: string,
   csp: string | undefined,
-  opts: { url?: string; body?: string; scripts?: { url: string; content: string }[]; preloaded?: { url: string; content: string }[]; headers?: Record<string, string> } = {},
+  opts: {
+    url?: string;
+    body?: string;
+    scripts?: { url: string; content: string }[];
+    preloaded?: { url: string; content: string }[];
+    headers?: Record<string, string>;
+  } = {}
 ) {
   const url = opts.url ?? PAGE;
   const html = `<!DOCTYPE html><html><head><title>t</title>${head}</head><body>${opts.body ?? "hello"}</body></html>`;
@@ -51,23 +61,25 @@ const hostsOf = (check: Awaited<ReturnType<typeof run>>) =>
 
 describe("acceptance fixtures", () => {
   test("gtag for an Ads-linked property with a thin connect-src is an error naming the missing hosts", async () => {
-    const check = (await run(
+    const check = await run(
       `<script async src="https://www.googletagmanager.com/gtag/js?id=G-ABC123DEF4"></script>
        <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
        gtag('js',new Date());gtag('config','G-ABC123DEF4');gtag('config','AW-123456789');</script>`,
-      "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://www.google.com; frame-src https://td.doubleclick.net; connect-src 'self' https://www.google-analytics.com",
-    ));
+      "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://www.google.com; frame-src https://td.doubleclick.net; connect-src 'self' https://www.google-analytics.com"
+    );
     expect(check.status).toBe("fail");
     expect(hostsOf(check)).toEqual([
       "connect-src:analytics.google.com",
       "connect-src:stats.g.doubleclick.net",
       "connect-src:www.google.com",
     ]);
-    expect(check.message).toContain("connect-src: add analytics.google.com, www.google.com, stats.g.doubleclick.net");
+    expect(check.message).toContain(
+      "connect-src: add analytics.google.com, www.google.com, stats.g.doubleclick.net"
+    );
   });
 
   test("a third-party script URL named only inside a preloaded same-origin chunk is a note, not a warning (pub#776)", async () => {
-    const check = (await run(
+    const check = await run(
       `<link rel="modulepreload" href="/assets/booking-4f2a.js">`,
       "default-src 'self'; script-src 'self'",
       {
@@ -77,45 +89,82 @@ describe("acceptance fixtures", () => {
             content: `export function open(){const s=document.createElement("script");s.src="https://widget.bookings.example/embed/v2/widget.js";document.head.appendChild(s)}`,
           },
         ],
-      },
-    ));
+      }
+    );
     // The page may never call open(), so the host is not counted as blocked.
     expect(check.status).toBe("pass");
   });
 
   test("a *.example.com source allows cdn.example.com and blocks example.com", async () => {
-    const policy = "default-src 'self'; script-src 'self' https://*.example.com";
-    expect((await run(`<script src="https://cdn.example.com/a.js"></script>`, policy)).status).toBe("pass");
-    const apex = (await run(`<script src="https://example.com/a.js"></script>`, policy));
+    const policy =
+      "default-src 'self'; script-src 'self' https://*.example.com";
+    expect(
+      (
+        await run(
+          `<script src="https://cdn.example.com/a.js"></script>`,
+          policy
+        )
+      ).status
+    ).toBe("pass");
+    const apex = await run(
+      `<script src="https://example.com/a.js"></script>`,
+      policy
+    );
     expect(apex.status).toBe("warn");
     expect(hostsOf(apex)).toEqual(["script-src:example.com"]);
   });
 
   test("no CSP header passes, and a report-only policy blocks nothing", async () => {
     const head = `<script src="https://cdn.other.test/a.js"></script>`;
-    const none = (await run(head, undefined));
+    const none = await run(head, undefined);
     expect(none.status).toBe("pass");
     expect(none.message).toContain("security/csp");
-    expect((await run(head, undefined, { headers: { "content-security-policy-report-only": "script-src 'none'" } })).status).toBe("pass");
+    expect(
+      (
+        await run(head, undefined, {
+          headers: {
+            "content-security-policy-report-only": "script-src 'none'",
+          },
+        })
+      ).status
+    ).toBe("pass");
   });
 });
 
 describe("severity", () => {
   test("a blocked analytics, payments or captcha host fails, an unknown host warns", async () => {
     const csp = "default-src 'self'";
-    expect((await run(`<script src="https://js.stripe.com/v3/"></script>`, csp)).status).toBe("fail");
-    expect((await run(`<script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>`, csp)).status).toBe("fail");
-    expect((await run(`<script src="https://static.randomvendor.test/x.js"></script>`, csp)).status).toBe("warn");
+    expect(
+      (await run(`<script src="https://js.stripe.com/v3/"></script>`, csp))
+        .status
+    ).toBe("fail");
+    expect(
+      (
+        await run(
+          `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>`,
+          csp
+        )
+      ).status
+    ).toBe("fail");
+    expect(
+      (
+        await run(
+          `<script src="https://static.randomvendor.test/x.js"></script>`,
+          csp
+        )
+      ).status
+    ).toBe("warn");
   });
 
   test("Stripe, Turnstile, reCAPTCHA and PostHog name the hosts the HTML never loads", async () => {
-    const csp = "default-src 'self'; script-src 'self' https://js.stripe.com https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://us-assets.i.posthog.com";
+    const csp =
+      "default-src 'self'; script-src 'self' https://js.stripe.com https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://us-assets.i.posthog.com";
     const check = await run(
       `<script src="https://js.stripe.com/v3/"></script>
        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
        <script src="https://www.google.com/recaptcha/api.js"></script>
        <script src="https://us-assets.i.posthog.com/static/array.js"></script>`,
-      csp,
+      csp
     );
     expect(hostsOf(check)).toEqual([
       "default-src:api.stripe.com",
@@ -133,118 +182,224 @@ describe("vendor detection", () => {
   const gtmFrame = `<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-ABC123"></iframe></noscript>`;
 
   test("a GTM noscript frame needs frame-src, and a lookalike host is not GTM", async () => {
-    const check = await run(gtm, "script-src 'self' https://www.googletagmanager.com; frame-src 'self'", { body: gtmFrame });
+    const check = await run(
+      gtm,
+      "script-src 'self' https://www.googletagmanager.com; frame-src 'self'",
+      { body: gtmFrame }
+    );
     expect(hostsOf(check)).toEqual(["frame-src:www.googletagmanager.com"]);
-    await ok(`<script src="https://www.googletagmanager.com.evil.test/gtm.js?id=GTM-ABC123"></script>`, "default-src *");
+    await ok(
+      `<script src="https://www.googletagmanager.com.evil.test/gtm.js?id=GTM-ABC123"></script>`,
+      "default-src *"
+    );
   });
 
   test("a PostHog proxy on the site's own host needs no vendor host", async () => {
-    await ok(`<script>posthog.init('phc_x', {api_host: 'https://t.shop.test'})</script>`, "default-src 'self'");
+    await ok(
+      `<script>posthog.init('phc_x', {api_host: 'https://t.shop.test'})</script>`,
+      "default-src 'self'"
+    );
   });
 
-  const ok = async (head: string, csp: string) => expect((await run(head, csp)).status).toBe("pass");
+  const ok = async (head: string, csp: string) =>
+    expect((await run(head, csp)).status).toBe("pass");
 });
 
 describe("policy scope", () => {
   test("each page is judged by its own policy", async () => {
     const head = `<script src="https://cdn.other.test/a.js"></script>`;
-    expect((await run(head, "script-src 'self'", { url: "https://shop.test/a" })).status).toBe("warn");
-    expect((await run(head, "script-src 'self' https://cdn.other.test", { url: "https://shop.test/b" })).status).toBe("pass");
+    expect(
+      (await run(head, "script-src 'self'", { url: "https://shop.test/a" }))
+        .status
+    ).toBe("warn");
+    expect(
+      (
+        await run(head, "script-src 'self' https://cdn.other.test", {
+          url: "https://shop.test/b",
+        })
+      ).status
+    ).toBe("pass");
   });
 
   test("a meta http-equiv policy is enforced too", async () => {
-    const check = (await run(
+    const check = await run(
       `<meta http-equiv="Content-Security-Policy" content="script-src 'self'"><script src="https://cdn.other.test/a.js"></script>`,
-      undefined,
-    ));
+      undefined
+    );
     expect(check.status).toBe("warn");
   });
 
   test("every policy of a multi-policy header has to allow the resource", async () => {
     const head = `<script src="https://cdn.other.test/a.js"></script>`;
-    expect((await run(head, "script-src 'self' https://cdn.other.test, script-src 'self'")).status).toBe("warn");
+    expect(
+      (
+        await run(
+          head,
+          "script-src 'self' https://cdn.other.test, script-src 'self'"
+        )
+      ).status
+    ).toBe("warn");
   });
 });
 
 describe("no false positives", () => {
-  const ok = async (head: string, csp: string, opts = {}) => expect((await run(head, csp, opts)).status).toBe("pass");
+  const ok = async (head: string, csp: string, opts = {}) =>
+    expect((await run(head, csp, opts)).status).toBe("pass");
 
   test("'self' allows same-origin scripts, styles, images and frames", async () => {
     await ok(
       `<script src="/a.js"></script><link rel="stylesheet" href="/a.css"><img src="/a.png"><iframe src="/embed"></iframe>`,
-      "default-src 'self'",
+      "default-src 'self'"
     );
   });
 
   test("directive fallback: script-src-elem, child-src and default-src", async () => {
-    await ok(`<script src="https://cdn.x.test/a.js"></script>`, "script-src 'none'; script-src-elem https://cdn.x.test");
-    await ok(`<iframe src="https://embed.x.test/f"></iframe>`, "default-src 'none'; child-src https://embed.x.test");
-    await ok(`<img src="https://img.x.test/a.png">`, "default-src https://img.x.test");
+    await ok(
+      `<script src="https://cdn.x.test/a.js"></script>`,
+      "script-src 'none'; script-src-elem https://cdn.x.test"
+    );
+    await ok(
+      `<iframe src="https://embed.x.test/f"></iframe>`,
+      "default-src 'none'; child-src https://embed.x.test"
+    );
+    await ok(
+      `<img src="https://img.x.test/a.png">`,
+      "default-src https://img.x.test"
+    );
   });
 
   test("a directive that is not set allows everything", async () => {
-    await ok(`<img src="https://img.x.test/a.png"><iframe src="https://e.x.test/"></iframe>`, "script-src 'self'");
+    await ok(
+      `<img src="https://img.x.test/a.png"><iframe src="https://e.x.test/"></iframe>`,
+      "script-src 'self'"
+    );
   });
 
   test("scheme, port and path sources", async () => {
-    await ok(`<script src="https://cdn.x.test/lib/a.js"></script>`, "script-src https:");
-    await ok(`<script src="https://cdn.x.test:8443/a.js"></script>`, "script-src https://cdn.x.test:8443");
-    await ok(`<script src="https://cdn.x.test:8443/a.js"></script>`, "script-src https://cdn.x.test:*");
-    await ok(`<script src="https://cdn.x.test/lib/a.js"></script>`, "script-src https://cdn.x.test/lib/");
-    await ok(`<script src="https://cdn.x.test/lib/a.js"></script>`, "script-src https://cdn.x.test/lib/a.js");
-    await ok(`<script src="https://cdn.x.test/a.js"></script>`, "script-src cdn.x.test");
-    await ok(`<script src="https://CDN.X.TEST/a.js"></script>`, "SCRIPT-SRC HTTPS://cdn.x.test");
+    await ok(
+      `<script src="https://cdn.x.test/lib/a.js"></script>`,
+      "script-src https:"
+    );
+    await ok(
+      `<script src="https://cdn.x.test:8443/a.js"></script>`,
+      "script-src https://cdn.x.test:8443"
+    );
+    await ok(
+      `<script src="https://cdn.x.test:8443/a.js"></script>`,
+      "script-src https://cdn.x.test:*"
+    );
+    await ok(
+      `<script src="https://cdn.x.test/lib/a.js"></script>`,
+      "script-src https://cdn.x.test/lib/"
+    );
+    await ok(
+      `<script src="https://cdn.x.test/lib/a.js"></script>`,
+      "script-src https://cdn.x.test/lib/a.js"
+    );
+    await ok(
+      `<script src="https://cdn.x.test/a.js"></script>`,
+      "script-src cdn.x.test"
+    );
+    await ok(
+      `<script src="https://CDN.X.TEST/a.js"></script>`,
+      "SCRIPT-SRC HTTPS://cdn.x.test"
+    );
     await ok(`<script src="https://cdn.x.test/a.js"></script>`, "script-src *");
   });
 
   test("a nonce on the element allows it", async () => {
-    await ok(`<script nonce="r4nd0m" src="https://cdn.x.test/a.js"></script>`, "script-src 'nonce-r4nd0m'");
+    await ok(
+      `<script nonce="r4nd0m" src="https://cdn.x.test/a.js"></script>`,
+      "script-src 'nonce-r4nd0m'"
+    );
   });
 
   test("'strict-dynamic' makes a host check undecidable, so nothing is reported", async () => {
-    await ok(`<script src="https://cdn.x.test/a.js"></script>`, "script-src 'nonce-abc' 'strict-dynamic'");
+    await ok(
+      `<script src="https://cdn.x.test/a.js"></script>`,
+      "script-src 'nonce-abc' 'strict-dynamic'"
+    );
   });
 
   test("a hash source with an integrity attribute is undecidable, not a block", async () => {
-    await ok(`<script src="https://cdn.x.test/a.js" integrity="sha384-abc"></script>`, "script-src 'sha384-abc'");
-    expect((await run(`<script src="https://cdn.x.test/a.js"></script>`, "script-src 'sha384-abc'")).status).toBe("warn");
+    await ok(
+      `<script src="https://cdn.x.test/a.js" integrity="sha384-abc"></script>`,
+      "script-src 'sha384-abc'"
+    );
+    expect(
+      (
+        await run(
+          `<script src="https://cdn.x.test/a.js"></script>`,
+          "script-src 'sha384-abc'"
+        )
+      ).status
+    ).toBe("warn");
   });
 
   test("a commented-out vendor snippet does not count as use", async () => {
-    await ok(`<!-- <script src="https://js.stripe.com/v3/"></script> -->`, "default-src 'self'");
+    await ok(
+      `<!-- <script src="https://js.stripe.com/v3/"></script> -->`,
+      "default-src 'self'"
+    );
   });
 
   test("comments that rebuild each other or never close hide a vendor snippet", async () => {
-    await ok(`<!<!-- x -->-- see https://js.stripe.com/v3/ -->`, "default-src 'self'");
+    await ok(
+      `<!<!-- x -->-- see https://js.stripe.com/v3/ -->`,
+      "default-src 'self'"
+    );
     await ok(`<!-- see https://js.stripe.com/v3/`, "default-src 'self'");
   });
 
   test("a comma inside a meta policy does not split it", async () => {
-    await ok(`<meta http-equiv="Content-Security-Policy" content="script-src 'self' https://a.test, https://b.test"><script src="https://b.test/a.js"></script>`, "");
-  });
-
-  test("a noscript fallback and a data: image are not judged", async () => {
-    await ok(`<img src="data:image/gif;base64,R0lGOD"><noscript><img src="https://px.x.test/p.gif"></noscript>`, "img-src 'self'");
-  });
-
-  test("a chunk URL without a script-loading context is not a load", async () => {
     await ok(
-      `<link rel="modulepreload" href="/c.js">`,
-      "script-src 'self'",
-      { scripts: [{ url: "https://shop.test/c.js", content: `/* docs: https://cdn.jsdelivr.net/npm/lib/dist/lib.js */ const homepage = "https://example.org/lib.js";` }] },
+      `<meta http-equiv="Content-Security-Policy" content="script-src 'self' https://a.test, https://b.test"><script src="https://b.test/a.js"></script>`,
+      ""
     );
   });
 
+  test("a noscript fallback and a data: image are not judged", async () => {
+    await ok(
+      `<img src="data:image/gif;base64,R0lGOD"><noscript><img src="https://px.x.test/p.gif"></noscript>`,
+      "img-src 'self'"
+    );
+  });
+
+  test("a chunk URL without a script-loading context is not a load", async () => {
+    await ok(`<link rel="modulepreload" href="/c.js">`, "script-src 'self'", {
+      scripts: [
+        {
+          url: "https://shop.test/c.js",
+          content: `/* docs: https://cdn.jsdelivr.net/npm/lib/dist/lib.js */ const homepage = "https://example.org/lib.js";`,
+        },
+      ],
+    });
+  });
+
   test("a chunk-injected script under a nonce policy is undecidable, a plain tag is not", async () => {
-    const chunk = { url: "https://shop.test/c.js", content: `s.src="https://widget.x.test/w.js";document.head.appendChild(s)` };
-    await ok(`<link rel="modulepreload" href="/c.js">`, "script-src 'self' 'nonce-abc'", { preloaded: [chunk] });
-    expect((await run(`<script src="https://widget.x.test/w.js"></script>`, "script-src 'self' 'nonce-abc'")).status).toBe("warn");
+    const chunk = {
+      url: "https://shop.test/c.js",
+      content: `s.src="https://widget.x.test/w.js";document.head.appendChild(s)`,
+    };
+    await ok(
+      `<link rel="modulepreload" href="/c.js">`,
+      "script-src 'self' 'nonce-abc'",
+      { preloaded: [chunk] }
+    );
+    expect(
+      (
+        await run(
+          `<script src="https://widget.x.test/w.js"></script>`,
+          "script-src 'self' 'nonce-abc'"
+        )
+      ).status
+    ).toBe("warn");
   });
 
   test("a path-scoped source still allows a vendor host", async () => {
     await ok(
       `<script>gtag('config','G-ABC123DEF4')</script>`,
-      "default-src 'self'; connect-src https://www.google-analytics.com/g/collect https://analytics.google.com/g/collect",
+      "default-src 'self'; connect-src https://www.google-analytics.com/g/collect https://analytics.google.com/g/collect"
     );
   });
 
@@ -252,32 +407,55 @@ describe("no false positives", () => {
     await ok(
       `<link rel="modulepreload" href="/c.js">`,
       "script-src 'self' https://widget.ok.test",
-      { scripts: [{ url: "https://shop.test/c.js", content: `s.src="https://widget.ok.test/w.js";document.head.appendChild(s);import("https://shop.test/lazy.js")` }] },
+      {
+        scripts: [
+          {
+            url: "https://shop.test/c.js",
+            content: `s.src="https://widget.ok.test/w.js";document.head.appendChild(s);import("https://shop.test/lazy.js")`,
+          },
+        ],
+      }
     );
   });
 
   test("vendors are checked only when the page uses them, and a proxied PostHog is not", async () => {
-    await ok(`<script>posthog.init('phc_abc', {api_host: '/ingest'})</script>`, "default-src 'self'");
+    await ok(
+      `<script>posthog.init('phc_abc', {api_host: '/ingest'})</script>`,
+      "default-src 'self'"
+    );
     await ok("", "default-src 'none'", { body: "no resources at all" });
   });
 
   test("a page whose policy covers a GA4-only setup passes", async () => {
     await ok(
       `<script async src="https://www.googletagmanager.com/gtag/js?id=G-ABC123DEF4"></script><script>gtag('config','G-ABC123DEF4')</script>`,
-      "default-src 'self'; script-src 'self' https://www.googletagmanager.com; connect-src 'self' https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com",
+      "default-src 'self'; script-src 'self' https://www.googletagmanager.com; connect-src 'self' https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com"
     );
   });
 });
 
 describe("source matching", () => {
-  const allow = (policy: string, url: string, kind: "script" | "connect" = "script") =>
-    policiesAllow(parseCspPolicies(policy), new URL(url), kind, new URL(PAGE)).allowed;
+  const allow = (
+    policy: string,
+    url: string,
+    kind: "script" | "connect" = "script"
+  ) =>
+    policiesAllow(parseCspPolicies(policy), new URL(url), kind, new URL(PAGE))
+      .allowed;
 
   test("*.example.com does not match example.com, and 'self' needs the same port", () => {
-    expect(allow("script-src *.example.com", "https://example.com/a.js")).toBe(false);
-    expect(allow("script-src *.example.com", "https://a.b.example.com/a.js")).toBe(true);
-    expect(allow("script-src 'self'", "https://shop.test:8443/a.js")).toBe(false);
-    expect(allow("script-src https://x.test", "https://x.test:444/a.js")).toBe(false);
+    expect(allow("script-src *.example.com", "https://example.com/a.js")).toBe(
+      false
+    );
+    expect(
+      allow("script-src *.example.com", "https://a.b.example.com/a.js")
+    ).toBe(true);
+    expect(allow("script-src 'self'", "https://shop.test:8443/a.js")).toBe(
+      false
+    );
+    expect(allow("script-src https://x.test", "https://x.test:444/a.js")).toBe(
+      false
+    );
   });
 
   test("a scheme-less source on an https page rejects http, an empty list rejects all", () => {
@@ -287,17 +465,32 @@ describe("source matching", () => {
   });
 
   test("the first duplicate directive wins", () => {
-    expect(allow("script-src https://a.test; script-src https://b.test", "https://a.test/x.js")).toBe(true);
-    expect(allow("script-src https://a.test; script-src https://b.test", "https://b.test/x.js")).toBe(false);
+    expect(
+      allow(
+        "script-src https://a.test; script-src https://b.test",
+        "https://a.test/x.js"
+      )
+    ).toBe(true);
+    expect(
+      allow(
+        "script-src https://a.test; script-src https://b.test",
+        "https://b.test/x.js"
+      )
+    ).toBe(false);
   });
 });
 
 describe("registration and vendor table", () => {
   test("the rule is registered once under security", () => {
-    expect(securityRules.filter((r) => r.meta.id === "security/csp-blocks-own-resources")).toHaveLength(1);
+    expect(
+      securityRules.filter(
+        (r) => r.meta.id === "security/csp-blocks-own-resources"
+      )
+    ).toHaveLength(1);
   });
 
   test("every vendor entry records an ISO last-verified date", () => {
-    for (const vendor of CSP_VENDORS) expect(vendor.lastVerified).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    for (const vendor of CSP_VENDORS)
+      expect(vendor.lastVerified).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

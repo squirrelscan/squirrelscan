@@ -26,6 +26,8 @@ describe("robots.txt Sitemap host reading needs a public suffix (repo#2318)", ()
   });
 
   test("a filename whose extension is a real TLD is still read as a host (documented edge)", () => {
-    expect(resolveRobotsSitemapUrl("sitemap.pl/x", BASE).reading).toBe("scheme-less-host");
+    expect(resolveRobotsSitemapUrl("sitemap.pl/x", BASE).reading).toBe(
+      "scheme-less-host"
+    );
   });
 });

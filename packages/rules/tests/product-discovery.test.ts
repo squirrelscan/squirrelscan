@@ -1,18 +1,29 @@
 // crawl/sitemap-coverage product-discovery check (#1651): provenance of a shop's product URLs and
 // the sitemap's read state, never a missing-product claim.
 
-import { describe, expect, test } from "bun:test";
-import { parseHTML } from "@squirrelscan/parser/dom";
-
-import type { SitemapDiscovery, SitemapReadState } from "@squirrelscan/core-contracts";
+import type {
+  SitemapDiscovery,
+  SitemapReadState,
+} from "@squirrelscan/core-contracts";
 
 import { parseSchemas } from "@squirrelscan/parser";
+import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type {
+  CheckResult,
+  ParsedPage,
+  RuleContext,
+  SiteData,
+} from "../src/types";
 
 import { sitemapCoverageRule } from "../src/crawl/sitemap-coverage";
-import type { CheckResult, ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const BASE = "https://example.com";
-const INVENTORY = Array.from({ length: 12 }, (_, i) => `${BASE}/products/item-${i + 1}`);
+const INVENTORY = Array.from(
+  { length: 12 },
+  (_, i) => `${BASE}/products/item-${i + 1}`
+);
 
 function link(url: string, isInternal = true) {
   return { url, text: "", isInternal };
@@ -44,7 +55,10 @@ function plainPage(url: string, links: string[] = []) {
   };
 }
 
-function sitemaps(locs: string[], readState?: SitemapReadState): SitemapDiscovery {
+function sitemaps(
+  locs: string[],
+  readState?: SitemapReadState
+): SitemapDiscovery {
   return {
     discovered: [
       {
@@ -67,12 +81,25 @@ function sitemaps(locs: string[], readState?: SitemapReadState): SitemapDiscover
 
 async function run(site: Partial<SiteData>): Promise<CheckResult[]> {
   const ctx = {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
-    site: { baseUrl: BASE, robotsTxt: null, sitemaps: null, pages: [], ...site },
+    site: {
+      baseUrl: BASE,
+      robotsTxt: null,
+      sitemaps: null,
+      pages: [],
+      ...site,
+    },
     options: {},
   } as unknown as RuleContext;
-  return ((await sitemapCoverageRule.run(ctx)) as { checks: CheckResult[] }).checks;
+  return ((await sitemapCoverageRule.run(ctx)) as { checks: CheckResult[] })
+    .checks;
 }
 
 function discovery(checks: CheckResult[]): CheckResult | undefined {
@@ -83,14 +110,19 @@ function discovery(checks: CheckResult[]): CheckResult | undefined {
 function boundedShop(): Pick<SiteData, "pages" | "crawlLimits"> {
   const products = INVENTORY.slice(0, 7);
   return {
-    pages: [plainPage(`${BASE}/`, products.slice(0, 4)), ...products.map((u) => productPage(u))],
+    pages: [
+      plainPage(`${BASE}/`, products.slice(0, 4)),
+      ...products.map((u) => productPage(u)),
+    ],
     crawlLimits: { pagesCrawled: 8, maxPages: 8 },
   };
 }
 
 describe("crawl/sitemap-coverage product discovery (#1651)", () => {
   test("bounded crawl against a complete product sitemap: provenance by source, bounded not missing", async () => {
-    const check = discovery(await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete") }));
+    const check = discovery(
+      await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete") })
+    );
     expect(check?.status).toBe("info");
     expect(check?.details).toMatchObject({
       total: 12,
@@ -101,18 +133,28 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
       crawlBounded: true,
     });
     expect(check?.message).toContain("sitemap read completely");
-    expect(check?.message).toContain("bounded, not a measure of missing products");
+    expect(check?.message).toContain(
+      "bounded, not a measure of missing products"
+    );
   });
 
   test("never asserts missing products, whatever the sitemap state", async () => {
-    for (const state of ["complete", "partial", "unreadable", undefined] as const) {
-      const checks = (await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, state) }));
+    for (const state of [
+      "complete",
+      "partial",
+      "unreadable",
+      undefined,
+    ] as const) {
+      const checks = await run({
+        ...boundedShop(),
+        sitemaps: sitemaps(INVENTORY, state),
+      });
       for (const check of checks) {
         if (check.name !== "product-discovery") continue;
         expect(check.status).toBe("info");
         // The only mention of "missing" is the negation that crawl coverage is not a measure of it.
         expect(check.message).not.toMatch(
-          /\d+ [^;]{0,40}missing|missing from|not in (the )?sitemap/i,
+          /\d+ [^;]{0,40}missing|missing from|not in (the )?sitemap/i
         );
         expect(check.details).toMatchObject({ inventory: "unknown" });
         expect(check.details).not.toHaveProperty("missing");
@@ -129,7 +171,11 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
       sitemapState: "none",
     });
     const unreadable = discovery(
-      (await run({ pages, crawlLimits, sitemaps: { ...sitemaps([], "unreadable"), discovered: [] } })),
+      await run({
+        pages,
+        crawlLimits,
+        sitemaps: { ...sitemaps([], "unreadable"), discovered: [] },
+      })
     );
     // The state travels even when nothing was read.
     expect(unreadable?.details).toMatchObject({ sitemapState: "unreadable" });
@@ -138,40 +184,70 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
 
   test("partial sitemap is distinguished from complete", async () => {
     const check = discovery(
-      (await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY.slice(0, 6), "partial") })),
+      await run({
+        ...boundedShop(),
+        sitemaps: sitemaps(INVENTORY.slice(0, 6), "partial"),
+      })
     );
-    expect(check?.details).toMatchObject({ sitemapState: "partial", sitemapProductUrls: 6 });
+    expect(check?.details).toMatchObject({
+      sitemapState: "partial",
+      sitemapProductUrls: 6,
+    });
     expect(check?.message).toContain("lower bound");
   });
 
   test("a read state that was never recorded is unknown, not complete", async () => {
-    const check = discovery(await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY) }));
+    const check = discovery(
+      await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY) })
+    );
     expect(check?.details).toMatchObject({ sitemapState: "unknown" });
     expect(check?.message).not.toContain("read completely");
   });
 
   test("a crawl that did not follow links claims no crawl-link discovery", async () => {
     const check = discovery(
-      (await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete"), linkDiscoveryOff: true })),
+      await run({
+        ...boundedShop(),
+        sitemaps: sitemaps(INVENTORY, "complete"),
+        linkDiscoveryOff: true,
+      })
     );
-    expect(check?.details).toMatchObject({ bySource: { both: 0, sitemap: 12, crawl: 0 } });
+    expect(check?.details).toMatchObject({
+      bySource: { both: 0, sitemap: 12, crawl: 0 },
+    });
   });
 
   test("a site without commerce evidence is unchanged: no check", async () => {
-    const pages = [plainPage(`${BASE}/`), plainPage(`${BASE}/about`), plainPage(`${BASE}/blog`)];
-    expect(discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))).toBeUndefined();
-    // Two product pages alone are below the threshold.
-    const two = [plainPage(`${BASE}/`), productPage(INVENTORY[0]!), productPage(INVENTORY[1]!)];
+    const pages = [
+      plainPage(`${BASE}/`),
+      plainPage(`${BASE}/about`),
+      plainPage(`${BASE}/blog`),
+    ];
     expect(
-      discovery(await run({ pages: two, sitemaps: sitemaps(INVENTORY, "complete") })),
+      discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))
+    ).toBeUndefined();
+    // Two product pages alone are below the threshold.
+    const two = [
+      plainPage(`${BASE}/`),
+      productPage(INVENTORY[0]!),
+      productPage(INVENTORY[1]!),
+    ];
+    expect(
+      discovery(
+        await run({ pages: two, sitemaps: sitemaps(INVENTORY, "complete") })
+      )
     ).toBeUndefined();
   });
 
   test("one product page plus a cart link is enough evidence", async () => {
-    const pages = [plainPage(`${BASE}/`, [`${BASE}/cart`]), productPage(INVENTORY[0]!)];
-    expect(discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))?.status).toBe(
-      "info",
-    );
+    const pages = [
+      plainPage(`${BASE}/`, [`${BASE}/cart`]),
+      productPage(INVENTORY[0]!),
+    ];
+    expect(
+      discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))
+        ?.status
+    ).toBe("info");
   });
 
   test("og:type=product counts as product evidence", async () => {
@@ -186,18 +262,23 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
       } as unknown as ParsedPage,
     });
     const pages = INVENTORY.slice(0, 3).map(og);
-    expect(discovery(await run({ pages }))?.details).toMatchObject({ crawledProductPages: 3 });
+    expect(discovery(await run({ pages }))?.details).toMatchObject({
+      crawledProductPages: 3,
+    });
   });
 
   test("the existing coverage verdict is untouched", async () => {
-    const checks = (await run({ ...boundedShop(), sitemaps: sitemaps(INVENTORY, "complete") }));
+    const checks = await run({
+      ...boundedShop(),
+      sitemaps: sitemaps(INVENTORY, "complete"),
+    });
     expect(checks.map((c) => c.name)).toContain("sitemap-coverage");
   });
 
   // Real parser output, so the nested-type cases run against what a crawl actually stores.
   function jsonLdPage(url: string, ld: unknown, links: string[] = []) {
     const { document } = parseHTML(
-      `<html><head><script type="application/ld+json">${JSON.stringify(ld)}</script></head><body></body></html>`,
+      `<html><head><script type="application/ld+json">${JSON.stringify(ld)}</script></head><body></body></html>`
     );
     return {
       url,
@@ -214,15 +295,30 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
   test("a Product nested in a Review, ItemList or Offer is not a product page", async () => {
     const product = { "@type": "Product", name: "Widget" };
     const pages = [
-      jsonLdPage(`${BASE}/reviews/a`, { "@type": "Review", itemReviewed: product }),
-      jsonLdPage(`${BASE}/reviews/b`, { "@type": "Review", itemReviewed: product }),
-      jsonLdPage(`${BASE}/reviews/c`, { "@type": "Review", itemReviewed: product }),
+      jsonLdPage(`${BASE}/reviews/a`, {
+        "@type": "Review",
+        itemReviewed: product,
+      }),
+      jsonLdPage(`${BASE}/reviews/b`, {
+        "@type": "Review",
+        itemReviewed: product,
+      }),
+      jsonLdPage(`${BASE}/reviews/c`, {
+        "@type": "Review",
+        itemReviewed: product,
+      }),
     ];
-    expect(discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))).toBeUndefined();
+    expect(
+      discovery(await run({ pages, sitemaps: sitemaps(INVENTORY, "complete") }))
+    ).toBeUndefined();
 
     const list = {
       "@type": "ItemList",
-      itemListElement: [1, 2, 3].map((position) => ({ "@type": "ListItem", position, item: product })),
+      itemListElement: [1, 2, 3].map((position) => ({
+        "@type": "ListItem",
+        position,
+        item: product,
+      })),
     };
     const category = [
       jsonLdPage(`${BASE}/products/shoes`, list, [`${BASE}/cart`]),
@@ -234,7 +330,7 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
     const offered = jsonLdPage(
       `${BASE}/products/x`,
       { "@type": "Offer", itemOffered: product },
-      [`${BASE}/cart`],
+      [`${BASE}/cart`]
     );
     expect(discovery(await run({ pages: [offered] }))).toBeUndefined();
   });
@@ -243,16 +339,24 @@ describe("crawl/sitemap-coverage product discovery (#1651)", () => {
     const pages = [
       jsonLdPage(`${BASE}/products/a`, { "@type": "Product" }),
       jsonLdPage(`${BASE}/products/b`, { "@type": "ProductGroup" }),
-      jsonLdPage(`${BASE}/products/c`, { "@graph": [{ "@type": "WebPage" }, { "@type": ["Product"] }] }),
+      jsonLdPage(`${BASE}/products/c`, {
+        "@graph": [{ "@type": "WebPage" }, { "@type": ["Product"] }],
+      }),
     ];
-    expect(discovery(await run({ pages }))?.details).toMatchObject({ crawledProductPages: 3 });
+    expect(discovery(await run({ pages }))?.details).toMatchObject({
+      crawledProductPages: 3,
+    });
   });
 
   test("one embedded Product page plus a nav cart link needs a product-shaped path of its own", async () => {
     const nav = [`${BASE}/cart`];
     const blog = jsonLdPage(`${BASE}/blog/post`, { "@type": "Product" }, nav);
     expect(discovery(await run({ pages: [blog] }))).toBeUndefined();
-    const shop = jsonLdPage(`${BASE}/products/post`, { "@type": "Product" }, nav);
+    const shop = jsonLdPage(
+      `${BASE}/products/post`,
+      { "@type": "Product" },
+      nav
+    );
     expect(discovery(await run({ pages: [shop] }))?.status).toBe("info");
   });
 });

@@ -4,12 +4,12 @@
 // from `site.pages[].parsed.links`: this proves both builders hand it the same
 // graph, and the two engines agree on the verdict.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -124,16 +124,30 @@ async function clickChecks(engine: "v1" | "streaming"): Promise<CheckResult[]> {
 
       let result;
       if (engine === "streaming") {
-        result = yield* runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, {
-          batchSize: 1,
-        });
+        result = yield* runStreamingRules(
+          storage,
+          crawlId,
+          CONFIG,
+          EMPTY_ASSETS,
+          undefined,
+          {
+            batchSize: 1,
+          }
+        );
       } else {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+        result = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          EMPTY_ASSETS
+        );
       }
-      return (result.ruleResultsMap.get("links/click-depth")?.checks ?? []) as CheckResult[];
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+      return (result.ruleResultsMap.get("links/click-depth")?.checks ??
+        []) as CheckResult[];
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
@@ -144,7 +158,9 @@ for (const engine of ["v1", "streaming"] as const) {
       expect(checks).toHaveLength(1);
       const c = checks[0]!;
       expect(c.status).toBe("warn");
-      expect(c.items?.map((i) => [i.id, i.meta?.depth])).toEqual([[`${BASE}/d`, 4]]);
+      expect(c.items?.map((i) => [i.id, i.meta?.depth])).toEqual([
+        [`${BASE}/d`, 4],
+      ]);
       expect(c.details).toMatchObject({ total: 1, deepest: 4, threshold: 3 });
     });
   });

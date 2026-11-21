@@ -66,22 +66,44 @@ if (COST) {
   await run(costStore.init());
   const db = (costStore as unknown as { getDb(): Database }).getDb();
   const SQL: Array<[string, string]> = [
-    ["getIncomingLinkCount", "SELECT COUNT(*) as count FROM link_appearances WHERE crawl_id = ? AND href = ?"],
-    ["getCachedPage", "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1"],
+    [
+      "getIncomingLinkCount",
+      "SELECT COUNT(*) as count FROM link_appearances WHERE crawl_id = ? AND href = ?",
+    ],
+    [
+      "getCachedPage",
+      "SELECT * FROM pages WHERE normalized_url = ? ORDER BY fetched_at DESC, rowid DESC LIMIT 1",
+    ],
     ["updateCrawl (stats)", "UPDATE crawls SET stats = ? WHERE id = ?"],
-    ["upsertFrontier", "INSERT OR REPLACE INTO frontier (crawl_id, normalized_url, raw_url, depth, parent_url, priority, status, source, enqueued_at, fetched_at, retry_count, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"],
+    [
+      "upsertFrontier",
+      "INSERT OR REPLACE INTO frontier (crawl_id, normalized_url, raw_url, depth, parent_url, priority, status, source, enqueued_at, fetched_at, retry_count, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ],
     // The widest statement in the file. Compilation does not need bindings —
     // it reports its 25 parameters and compiles fine — so an earlier version of
     // this that excluded it for "needing the full binding set" was wrong.
-    ["getLinksByPage", "SELECT DISTINCT l.* FROM links l INNER JOIN link_appearances la ON l.crawl_id = la.crawl_id AND l.href = la.href WHERE la.page_url = ? ORDER BY l.crawl_id DESC"],
-    ["getImagesByPage", "SELECT DISTINCT i.* FROM images i INNER JOIN image_appearances ia ON i.crawl_id = ia.crawl_id AND i.src = ia.src WHERE ia.page_url = ? ORDER BY i.crawl_id DESC"],
-    ["upsertPage", "INSERT OR REPLACE INTO pages (crawl_id, url, normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at, etag, last_modified, content_hash, html, parsed_data, headers, security_headers, request_headers, fetcher_id, fallback_reason, source_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"],
+    [
+      "getLinksByPage",
+      "SELECT DISTINCT l.* FROM links l INNER JOIN link_appearances la ON l.crawl_id = la.crawl_id AND l.href = la.href WHERE la.page_url = ? ORDER BY l.crawl_id DESC",
+    ],
+    [
+      "getImagesByPage",
+      "SELECT DISTINCT i.* FROM images i INNER JOIN image_appearances ia ON i.crawl_id = ia.crawl_id AND i.src = ia.src WHERE ia.page_url = ? ORDER BY i.crawl_id DESC",
+    ],
+    [
+      "upsertPage",
+      "INSERT OR REPLACE INTO pages (crawl_id, url, normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type, size_bytes, load_time_ms, ttfb, download_time, fetched_at, etag, last_modified, content_hash, html, parsed_data, headers, security_headers, request_headers, fetcher_id, fallback_reason, source_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ],
   ];
   const N = 5_000;
   // Interleaved, minimum of five rounds: the two arms then share whatever the
   // machine is doing rather than one of them getting a quiet stretch.
-  console.log(`compilation cost per statement, minimum of five interleaved rounds of ${N}:`);
-  console.log(`  ${"statement".padEnd(22)} ${"prepare".padStart(10)} ${"query hit".padStart(10)}`);
+  console.log(
+    `compilation cost per statement, minimum of five interleaved rounds of ${N}:`
+  );
+  console.log(
+    `  ${"statement".padEnd(22)} ${"prepare".padStart(10)} ${"query hit".padStart(10)}`
+  );
   let totalPrepare = 0;
   for (const [name, sql] of SQL) {
     let bestPrepare = Infinity;
@@ -96,17 +118,20 @@ if (COST) {
     }
     totalPrepare += bestPrepare;
     console.log(
-      `  ${name.padEnd(22)} ${`${bestPrepare.toFixed(2)} us`.padStart(10)} ${`${bestQuery.toFixed(2)} us`.padStart(10)}`,
+      `  ${name.padEnd(22)} ${`${bestPrepare.toFixed(2)} us`.padStart(10)} ${`${bestQuery.toFixed(2)} us`.padStart(10)}`
     );
   }
-  console.log(`  ${"sum of the seven".padEnd(22)} ${`${totalPrepare.toFixed(2)} us`.padStart(10)}`);
+  console.log(
+    `  ${"sum of the seven".padEnd(22)} ${`${totalPrepare.toFixed(2)} us`.padStart(10)}`
+  );
   await run(costStore.close());
   process.exit(0);
 }
 
 // ── the origin ───────────────────────────────────────────────────────────────
 
-const path = (i: number) => (i === 0 ? "/" : `/p/${String(i).padStart(5, "0")}`);
+const path = (i: number) =>
+  i === 0 ? "/" : `/p/${String(i).padStart(5, "0")}`;
 
 const server = Bun.serve({
   port: 0,
@@ -125,17 +150,17 @@ const server = Bun.serve({
     // page would just spend the run in the parser.
     const links = Array.from(
       { length: LINKS },
-      (_, k) => `<a href="${path((index * 7 + k * 13) % PAGES)}">Link ${k}</a>`,
+      (_, k) => `<a href="${path((index * 7 + k * 13) % PAGES)}">Link ${k}</a>`
     ).join("");
     const images = Array.from(
       { length: 8 },
-      (_, k) => `<img src="/img/${index}/${k}.png" alt="Image ${k}">`,
+      (_, k) => `<img src="/img/${index}/${k}.png" alt="Image ${k}">`
     ).join("");
     return new Response(
       `<!doctype html><html lang="en"><head><title>Page ${index}</title>` +
         `<meta name="description" content="Census page ${index}"></head>` +
         `<body><h1>Page ${index}</h1><nav>${links}</nav>${images}</body></html>`,
-      { headers: { "content-type": "text/html; charset=utf-8" } },
+      { headers: { "content-type": "text/html; charset=utf-8" } }
     );
   },
 });
@@ -172,28 +197,26 @@ let insideQuery = 0;
 let queryCompiles = 0;
 const realPrepare = Database.prototype.prepare;
 const realQuery = Database.prototype.query;
-(Database.prototype as unknown as Record<string, unknown>).prepare = function patched(
-  this: Database,
-  sql: string,
-  ...rest: unknown[]
-) {
-  if (insideQuery > 0) queryCompiles++;
-  else prepareCalls.set(sql, (prepareCalls.get(sql) ?? 0) + 1);
-  return (realPrepare as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
-};
-(Database.prototype as unknown as Record<string, unknown>).query = function patchedQuery(
-  this: Database,
-  sql: string,
-  ...rest: unknown[]
-) {
-  queryCalls.set(sql, (queryCalls.get(sql) ?? 0) + 1);
-  insideQuery++;
-  try {
-    return (realQuery as (this: Database, sql: string, ...r: unknown[]) => unknown).call(this, sql, ...rest);
-  } finally {
-    insideQuery--;
-  }
-};
+(Database.prototype as unknown as Record<string, unknown>).prepare =
+  function patched(this: Database, sql: string, ...rest: unknown[]) {
+    if (insideQuery > 0) queryCompiles++;
+    else prepareCalls.set(sql, (prepareCalls.get(sql) ?? 0) + 1);
+    return (
+      realPrepare as (this: Database, sql: string, ...r: unknown[]) => unknown
+    ).call(this, sql, ...rest);
+  };
+(Database.prototype as unknown as Record<string, unknown>).query =
+  function patchedQuery(this: Database, sql: string, ...rest: unknown[]) {
+    queryCalls.set(sql, (queryCalls.get(sql) ?? 0) + 1);
+    insideQuery++;
+    try {
+      return (
+        realQuery as (this: Database, sql: string, ...r: unknown[]) => unknown
+      ).call(this, sql, ...rest);
+    } finally {
+      insideQuery--;
+    }
+  };
 
 const storage = new SQLiteStorage(":memory:");
 await run(storage.init());
@@ -204,15 +227,43 @@ await run(storage.init());
 // worker makes discovery order a function of the site, which is what lets two
 // revisions be compared at all.
 const concurrency = DIGEST ? 1 : 8;
-const crawler = await run(createCrawler({ storage, config: { maxPages: PAGES, concurrency, perHostConcurrency: concurrency, delayMs: 0, perHostDelayMs: 0, respectRobots: false, incremental: INCREMENTAL } as never }));
+const crawler = await run(
+  createCrawler({
+    storage,
+    config: {
+      maxPages: PAGES,
+      concurrency,
+      perHostConcurrency: concurrency,
+      delayMs: 0,
+      perHostDelayMs: 0,
+      respectRobots: false,
+      incremental: INCREMENTAL,
+    } as never,
+  })
+);
 
 const startedAt = Date.now();
-let crawlId = await run(crawler.start(origin) as Effect.Effect<string, unknown, never>);
+let crawlId = await run(
+  crawler.start(origin) as Effect.Effect<string, unknown, never>
+);
 if (TWICE) {
   const second = await run(
-    createCrawler({ storage, config: { maxPages: PAGES, concurrency, perHostConcurrency: concurrency, delayMs: 0, perHostDelayMs: 0, respectRobots: false, incremental: INCREMENTAL } as never }),
+    createCrawler({
+      storage,
+      config: {
+        maxPages: PAGES,
+        concurrency,
+        perHostConcurrency: concurrency,
+        delayMs: 0,
+        perHostDelayMs: 0,
+        respectRobots: false,
+        incremental: INCREMENTAL,
+      } as never,
+    })
   );
-  crawlId = await run(second.start(origin) as Effect.Effect<string, unknown, never>);
+  crawlId = await run(
+    second.start(origin) as Effect.Effect<string, unknown, never>
+  );
 }
 const elapsed = Date.now() - startedAt;
 const pageCount = await run(storage.getPageCount(crawlId));
@@ -222,7 +273,9 @@ if (DIGEST) {
   // it made of each one, and every frontier verdict. Volatile columns are left
   // out on purpose — timings and row ids differ run to run and would mask the
   // question with noise rather than answer it.
-  const db = (storage as unknown as { getDb(): import("bun:sqlite").Database }).getDb();
+  const db = (
+    storage as unknown as { getDb(): import("bun:sqlite").Database }
+  ).getDb();
   // Every deterministic column, not a readable subset. Two narrower versions of
   // this were defeated in review: one passed with `parsed_data` nulled on all
   // 120 rows, the next passed with every stored `url` replaced by CORRUPTED.
@@ -232,24 +285,26 @@ if (DIGEST) {
       `SELECT url, normalized_url, final_url, depth, parent_url, redirect_chain, status, content_type,
               size_bytes, content_hash, html, parsed_data, headers, security_headers,
               request_headers, etag, last_modified, fetcher_id, fallback_reason, source_hash
-       FROM pages WHERE crawl_id = ? ORDER BY normalized_url`,
+       FROM pages WHERE crawl_id = ? ORDER BY normalized_url`
     )
     .all(crawlId);
   const frontier = db
     .query(
       `SELECT normalized_url, raw_url, depth, parent_url, priority, status, source, retry_count, reason
-       FROM frontier WHERE crawl_id = ? ORDER BY normalized_url`,
+       FROM frontier WHERE crawl_id = ? ORDER BY normalized_url`
     )
     .all(crawlId);
   // The crawls row too: the stats UPDATE is one of the converted statements, so
   // leaving its output out would exempt the change from its own check.
   const crawls = db
-    .query(`SELECT base_url, seed_url, original_url, status, config, stats FROM crawls WHERE id = ?`)
+    .query(
+      `SELECT base_url, seed_url, original_url, status, config, stats FROM crawls WHERE id = ?`
+    )
     .all(crawlId);
   const links = db
     .query(
       `SELECT href, page_url, position, is_nofollow FROM link_appearances
-       WHERE crawl_id = ? ORDER BY page_url, href, position`,
+       WHERE crawl_id = ? ORDER BY page_url, href, position`
     )
     .all(crawlId);
   // The origin is stripped before hashing. `port: 0` takes an ephemeral port,
@@ -260,7 +315,12 @@ if (DIGEST) {
     typeof value === "string" ? value.split(origin).join("{origin}") : value;
   const normalise = (rows: unknown[]) =>
     rows.map((row) =>
-      Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([k, v]) => [k, strip(v)])),
+      Object.fromEntries(
+        Object.entries(row as Record<string, unknown>).map(([k, v]) => [
+          k,
+          strip(v),
+        ])
+      )
     );
   const digestable = {
     pages: normalise(pages),
@@ -276,7 +336,7 @@ if (DIGEST) {
   console.log(
     `DIGEST pages=${pages.length} frontier=${frontier.length} links=${links.length} ` +
       `crawls=${crawls.length} ` +
-      `sha256=${hash.digest("hex").slice(0, 32)}`,
+      `sha256=${hash.digest("hex").slice(0, 32)}`
   );
   await run(storage.close());
   server.stop(true);
@@ -298,7 +358,7 @@ console.log(
     `${directPrepares} from prepare across ${rows.length} texts, ` +
     `${queryCompiles} from query misses\n` +
     `${queryTotal} query calls over ${queryCalls.size} distinct texts, ` +
-    `${queryTotal - queryCompiles} of them served without compiling\n`,
+    `${queryTotal - queryCompiles} of them served without compiling\n`
 );
 // Bun 1.3.14 caches the first 20 texts PER DATABASE and never evicts: text 21
 // and beyond recompile on every call, forever, silently. Measured: 25 texts
@@ -311,7 +371,7 @@ if (queryCalls.size >= CACHE_TEXTS) {
   console.log(
     `  WARNING: ${queryCalls.size} distinct query texts against a ${CACHE_TEXTS}-entry cache. ` +
       `A text that never gets IN recompiles on every call; the ones already ` +
-      `cached stay cached.\n`,
+      `cached stay cached.\n`
   );
 }
 console.log(`${"count".padStart(8)} ${"per page".padStart(9)}  sql`);
@@ -319,9 +379,12 @@ for (const [sql, n] of rows.slice(0, TOP)) {
   const flat = sql.replace(/\s+/g, " ").trim();
   console.log(
     `${String(n).padStart(8)} ${(n / Math.max(1, pageCount)).toFixed(1).padStart(9)}  ` +
-      `${flat.length > 110 ? `${flat.slice(0, 107)}...` : flat}`,
+      `${flat.length > 110 ? `${flat.slice(0, 107)}...` : flat}`
   );
 }
 const tail = rows.slice(TOP).reduce((sum, [, n]) => sum + n, 0);
-if (tail > 0) console.log(`${String(tail).padStart(8)} ${"".padStart(9)}  (${rows.length - TOP} more SQL texts)`);
+if (tail > 0)
+  console.log(
+    `${String(tail).padStart(8)} ${"".padStart(9)}  (${rows.length - TOP} more SQL texts)`
+  );
 await run(storage.close());

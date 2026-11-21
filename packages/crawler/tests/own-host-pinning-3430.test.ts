@@ -8,13 +8,13 @@
 // where something else resolves the name (an HTTP proxy from the environment,
 // a transport that pins) the own hosts still go out by name.
 
+import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
-import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
+import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
 import { createCrawler } from "../src/core/crawler";
-import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 const CONFIG: Partial<CrawlerConfig> = {
@@ -49,7 +49,7 @@ const page = (body: string, title = "Fixture") =>
     `<!doctype html><html><head><title>${title}</title></head><body>${body}</body></html>`,
     {
       headers: { "content-type": "text/html; charset=utf-8" },
-    },
+    }
   );
 
 beforeEach(() => {
@@ -67,7 +67,7 @@ beforeEach(() => {
               `<a href="/about">About</a>`,
               `<a href="/go-www">twin</a>`,
               `<a href="/go-cdn">cdn</a>`,
-            ].join(""),
+            ].join("")
           );
         case "/about":
           return page("About us", "About");
@@ -89,11 +89,15 @@ beforeEach(() => {
     requested.push({ url, host });
     const address = new URL(url).hostname.replace(/^\[|\]$/g, "");
     if (REFUSED.includes(address)) return page(MARKER, MARKER);
-    if (CANNED.has(address)) return page(`<a href="/lan-about">About</a>`, "LAN");
+    if (CANNED.has(address))
+      return page(`<a href="/lan-about">About</a>`, "LAN");
     if (address === "127.0.0.1") return realFetch(input, init);
     // A request by name: the resolver in the test never reaches the network,
     // so answer the fixture site's page for the logical URL.
-    return realFetch(url.replace(/^http:\/\/[^/]+/, `http://127.0.0.1:${server.port}`), init);
+    return realFetch(
+      url.replace(/^http:\/\/[^/]+/, `http://127.0.0.1:${server.port}`),
+      init
+    );
   }) as typeof fetch;
 });
 
@@ -119,7 +123,10 @@ function resolver(overrides: Record<string, string[] | (() => string[])>) {
   const resolveHost = async (hostname: string) => {
     asked.push(hostname);
     const answer = answers[hostname];
-    if (!answer) throw Object.assign(new Error(`ENOTFOUND ${hostname}`), { code: "ENOTFOUND" });
+    if (!answer)
+      throw Object.assign(new Error(`ENOTFOUND ${hostname}`), {
+        code: "ENOTFOUND",
+      });
     return typeof answer === "function" ? answer() : answer;
   };
   return { resolveHost, asked };
@@ -131,24 +138,30 @@ async function crawl(seed: string, config: Partial<CrawlerConfig>) {
   return Effect.runPromise(
     Effect.gen(function* () {
       yield* storage.init();
-      const crawler = yield* createCrawler({ config: { ...CONFIG, ...config }, storage });
+      const crawler = yield* createCrawler({
+        config: { ...CONFIG, ...config },
+        storage,
+      });
       const events = Effect.runFork(
         Stream.runForEach(crawler.events, (event: CrawlerEvent) =>
           Effect.sync(() => {
-            if (event.type === "page:failed") failed.push({ url: event.url, error: event.error });
-          }),
-        ),
+            if (event.type === "page:failed")
+              failed.push({ url: event.url, error: event.error });
+          })
+        )
       );
       const crawlId = yield* crawler.start(seed, seed);
       const pages = yield* storage.getPages(crawlId);
       yield* Fiber.interrupt(events);
       return { pages, failed };
-    }),
+    })
   );
 }
 
 const reachedRefused = () =>
-  requested.filter((r) => REFUSED.includes(new URL(r.url).hostname.replace(/^\[|\]$/g, "")));
+  requested.filter((r) =>
+    REFUSED.includes(new URL(r.url).hostname.replace(/^\[|\]$/g, ""))
+  );
 
 describe.each([
   ["the crawler's own fetch", {}],
@@ -157,13 +170,19 @@ describe.each([
   test("an audited host that resolves to the metadata address is never requested", async () => {
     const { resolveHost } = resolver({ "meta.test": ["169.254.169.254"] });
     const seed = `http://meta.test:${server.port}/`;
-    const { pages, failed } = await crawl(seed, { ...fetcher, pinOwnHosts: true, resolveHost });
+    const { pages, failed } = await crawl(seed, {
+      ...fetcher,
+      pinOwnHosts: true,
+      resolveHost,
+    });
 
     expect(reachedRefused()).toEqual([]);
     expect(requested.filter((r) => r.url.includes("meta.test"))).toEqual([]);
     expect(pages.filter((p) => p.status === 200)).toEqual([]);
     expect(failed.map((f) => f.url)).toContain(seed);
-    expect(failed.find((f) => f.url === seed)?.error).toContain("Not requested");
+    expect(failed.find((f) => f.url === seed)?.error).toContain(
+      "Not requested"
+    );
   });
 
   test("a redirect to a www twin or project domain answering a metadata address is not followed", async () => {
@@ -184,16 +203,20 @@ describe.each([
     expect(ok).toContain(`${origin}/`);
     expect(ok).toContain(`${origin}/about`);
     // Both redirects were reached, so each refusal was a real decision.
-    const ended = pages.filter((p) => p.url.includes("/go-")).map((p) => [p.url, p.status]);
+    const ended = pages
+      .filter((p) => p.url.includes("/go-"))
+      .map((p) => [p.url, p.status]);
     expect(ended.sort()).toEqual([
       [`${origin}/go-cdn`, 302],
       [`${origin}/go-www`, 302],
     ]);
     expect(reachedRefused()).toEqual([]);
     // Neither refused name went out by name either.
-    expect(requested.filter((r) => /www\.site\.test|cdn\.site\.test/.test(r.url + r.host))).toEqual(
-      [],
-    );
+    expect(
+      requested.filter((r) =>
+        /www\.site\.test|cdn\.site\.test/.test(r.url + r.host)
+      )
+    ).toEqual([]);
     expect(JSON.stringify(pages)).not.toContain(MARKER);
   });
 
@@ -204,9 +227,15 @@ describe.each([
       "site.test": () => (++calls === 1 ? ["127.0.0.1"] : ["169.254.169.254"]),
     });
     const origin = `http://site.test:${server.port}`;
-    const { pages } = await crawl(`${origin}/`, { ...fetcher, pinOwnHosts: true, resolveHost });
+    const { pages } = await crawl(`${origin}/`, {
+      ...fetcher,
+      pinOwnHosts: true,
+      resolveHost,
+    });
 
-    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(`${origin}/about`);
+    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(
+      `${origin}/about`
+    );
     expect(asked.filter((h) => h === "site.test")).toHaveLength(1);
     const own = requested.filter((r) => r.host === `site.test:${server.port}`);
     expect(own.length).toBeGreaterThanOrEqual(2);
@@ -216,14 +245,23 @@ describe.each([
 
   test.each([
     ["localhost", ["127.0.0.1", "::1"]],
-    ["an mDNS name that also answers a scoped link-local address", ["fe80::1%en0", "127.0.0.1"]],
+    [
+      "an mDNS name that also answers a scoped link-local address",
+      ["fe80::1%en0", "127.0.0.1"],
+    ],
   ])("%s keeps crawling", async (_label, answer) => {
     const name = _label === "localhost" ? "localhost" : "printer.local";
     const { resolveHost } = resolver({ [name]: answer });
     const origin = `http://${name}:${server.port}`;
-    const { pages } = await crawl(`${origin}/`, { ...fetcher, pinOwnHosts: true, resolveHost });
+    const { pages } = await crawl(`${origin}/`, {
+      ...fetcher,
+      pinOwnHosts: true,
+      resolveHost,
+    });
 
-    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(`${origin}/about`);
+    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(
+      `${origin}/about`
+    );
     expect(reachedRefused()).toEqual([]);
   });
 
@@ -235,8 +273,12 @@ describe.each([
       resolveHost,
     });
 
-    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain("http://lan.test/");
-    expect(requested.some((r) => new URL(r.url).hostname === "10.0.0.5")).toBe(true);
+    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(
+      "http://lan.test/"
+    );
+    expect(requested.some((r) => new URL(r.url).hostname === "10.0.0.5")).toBe(
+      true
+    );
   });
 });
 
@@ -259,8 +301,12 @@ describe("where something else resolves the name, own hosts still go out by name
     const origin = `http://site.test:${server.port}`;
     const { pages } = await crawl(`${origin}/`, { ...config, resolveHost });
 
-    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(`${origin}/about`);
-    expect(requested.some((r) => new URL(r.url).hostname === "site.test")).toBe(true);
+    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(
+      `${origin}/about`
+    );
+    expect(requested.some((r) => new URL(r.url).hostname === "site.test")).toBe(
+      true
+    );
     expect(asked).not.toContain("site.test");
   });
 });

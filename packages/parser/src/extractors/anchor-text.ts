@@ -56,11 +56,17 @@ const BOUNDARY_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 // Text a browser does not render as part of the link: its content is never anchor text.
-const NON_TEXT_TAGS: ReadonlySet<string> = new Set(["script", "style", "template", "noscript"]);
+const NON_TEXT_TAGS: ReadonlySet<string> = new Set([
+  "script",
+  "style",
+  "template",
+  "noscript",
+]);
 
 // An inline `style="display:block"` (or flex, grid, ...) makes an element a layout block whatever
 // its tag. Class-based CSS cannot be seen at parse time.
-const INLINE_BLOCK_DISPLAY = /display\s*:\s*(?:block|flex|grid|table|list-item|flow-root)/i;
+const INLINE_BLOCK_DISPLAY =
+  /display\s*:\s*(?:block|flex|grid|table|list-item|flow-root)/i;
 
 export interface AnchorTextResult {
   text: string;
@@ -119,12 +125,15 @@ export function anchorTextResult(element: Element): AnchorTextResult {
   const parts: string[] = [];
   const pushPart = (): void => {
     const part = partChunks.join("").trim();
-    if (part !== "" && parts.length < MAX_PARTS) parts.push(part.slice(0, MAX_PART_LENGTH));
+    if (part !== "" && parts.length < MAX_PARTS)
+      parts.push(part.slice(0, MAX_PART_LENGTH));
   };
   let lastParent: Node | null = null;
-  const stack: Array<{ nodes: NodeListOf<ChildNode>; i: number; boundary: boolean }> = [
-    { nodes: element.childNodes, i: 0, boundary: false },
-  ];
+  const stack: Array<{
+    nodes: NodeListOf<ChildNode>;
+    i: number;
+    boundary: boolean;
+  }> = [{ nodes: element.childNodes, i: 0, boundary: false }];
   while (stack.length > 0) {
     const frame = stack[stack.length - 1]!;
     if (frame.i >= frame.nodes.length) {
@@ -174,7 +183,8 @@ export function anchorTextResult(element: Element): AnchorTextResult {
         continue;
       }
       const boundary =
-        BOUNDARY_TAGS.has(tag) || INLINE_BLOCK_DISPLAY.test(el.getAttribute("style") ?? "");
+        BOUNDARY_TAGS.has(tag) ||
+        INLINE_BLOCK_DISPLAY.test(el.getAttribute("style") ?? "");
       if (boundary) pendingGap = true;
       stack.push({ nodes: el.childNodes, i: 0, boundary });
     }

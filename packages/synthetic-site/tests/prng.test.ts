@@ -21,7 +21,9 @@ describe("pickFewExcluding", () => {
 
   test("returns up to count elements, fewer when the pool is too small", () => {
     const rng = createRng("pick-few-small-pool");
-    expect(pickFewExcluding(rng, [1, 2, 3], -1, 5).length).toBeLessThanOrEqual(3);
+    expect(pickFewExcluding(rng, [1, 2, 3], -1, 5).length).toBeLessThanOrEqual(
+      3
+    );
     expect(pickFewExcluding(rng, [], -1, 5)).toEqual([]);
     expect(pickFewExcluding(rng, [1, 2], 1, 5)).toEqual([2]); // only non-excluded element
   });
@@ -63,8 +65,16 @@ describe("pickExcluding", () => {
   });
 
   test("deterministic given the same rng sequence", () => {
-    const a = pickExcluding(createRng("pick-exclude-determinism"), [1, 2, 3, 4], 2);
-    const b = pickExcluding(createRng("pick-exclude-determinism"), [1, 2, 3, 4], 2);
+    const a = pickExcluding(
+      createRng("pick-exclude-determinism"),
+      [1, 2, 3, 4],
+      2
+    );
+    const b = pickExcluding(
+      createRng("pick-exclude-determinism"),
+      [1, 2, 3, 4],
+      2
+    );
     expect(a).toBe(b);
   });
 });

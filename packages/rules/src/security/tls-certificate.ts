@@ -6,6 +6,7 @@
 // vets every address before it connects (the CLI). Without one the rule says
 // "not checked". The facts and their meaning are @squirrelscan/utils/tls-certificate.
 
+import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import {
   certificateProblems,
   daysUntil,
@@ -19,8 +20,6 @@ import {
 } from "@squirrelscan/utils/tls-certificate";
 import { z } from "zod";
 
-import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
-
 export { wwwVariant };
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -33,7 +32,7 @@ export const optionsSchema = z
       .min(1)
       .optional()
       .describe(
-        "Warn when the certificate expires within this many days. Unset (the default): relative to the certificate's lifetime, see expiryWindowFor",
+        "Warn when the certificate expires within this many days. Unset (the default): relative to the certificate's lifetime, see expiryWindowFor"
       ),
     error_days: z
       .number()
@@ -41,28 +40,58 @@ export const optionsSchema = z
       .min(0)
       .optional()
       .describe(
-        "Error when the certificate expires within this many days. Unset (the default): 7 days, or a tenth of the certificate's lifetime for a short-lived one",
+        "Error when the certificate expires within this many days. Unset (the default): 7 days, or a tenth of the certificate's lifetime for a short-lived one"
       ),
     key_types: z
       .array(z.enum(["rsa", "ecdsa", "ed25519", "dsa"]))
       .min(1)
       .default(["rsa", "ecdsa", "ed25519"])
-      .describe("Public key types the certificate may use; any other type warns (a DSA key warns by default)"),
-    rsa_min_bits: z.number().int().min(512).max(16384).default(2048).describe("Smallest RSA modulus, in bits, that does not warn"),
-    ecdsa_min_bits: z.number().int().min(112).max(1024).default(256).describe("Smallest elliptic curve, in bits (the curve size: 256 for P-256), that does not warn"),
-    dsa_min_bits: z.number().int().min(512).max(16384).default(2048).describe("Smallest DSA modulus, in bits, that does not warn; only meaningful when `dsa` is in key_types"),
+      .describe(
+        "Public key types the certificate may use; any other type warns (a DSA key warns by default)"
+      ),
+    rsa_min_bits: z
+      .number()
+      .int()
+      .min(512)
+      .max(16384)
+      .default(2048)
+      .describe("Smallest RSA modulus, in bits, that does not warn"),
+    ecdsa_min_bits: z
+      .number()
+      .int()
+      .min(112)
+      .max(1024)
+      .default(256)
+      .describe(
+        "Smallest elliptic curve, in bits (the curve size: 256 for P-256), that does not warn"
+      ),
+    dsa_min_bits: z
+      .number()
+      .int()
+      .min(512)
+      .max(16384)
+      .default(2048)
+      .describe(
+        "Smallest DSA modulus, in bits, that does not warn; only meaningful when `dsa` is in key_types"
+      ),
     reject_weak_signature: z
       .boolean()
       .default(true)
-      .describe("Warn when the leaf certificate is signed with SHA-1, MD5, MD4 or MD2"),
+      .describe(
+        "Warn when the leaf certificate is signed with SHA-1, MD5, MD4 or MD2"
+      ),
     min_tls_version: z
       .enum(["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"])
       .default("TLSv1.2")
-      .describe("Warn when the handshake negotiates a lower protocol version. squirrel's runtime refuses below TLS 1.2 (such a server is `not checked`), so only TLSv1.3 against a server that tops out at TLS 1.2 can warn"),
+      .describe(
+        "Warn when the handshake negotiates a lower protocol version. squirrel's runtime refuses below TLS 1.2 (such a server is `not checked`), so only TLSv1.3 against a server that tops out at TLS 1.2 can warn"
+      ),
     check_counterpart: z
       .boolean()
       .default(true)
-      .describe("Also handshake with the www or apex counterpart of the audited host; false skips that handshake"),
+      .describe(
+        "Also handshake with the www or apex counterpart of the audited host; false skips that handshake"
+      ),
   })
   // Otherwise the warning band is empty and every near expiry reads as an error.
   .refine(
@@ -73,7 +102,7 @@ export const optionsSchema = z
     {
       message: "error_days must not be more than warn_days",
       path: ["error_days"],
-    },
+    }
   );
 
 export type TlsCertificateOptions = z.infer<typeof optionsSchema>;
@@ -127,15 +156,21 @@ export interface ExpiryWindow {
  */
 export function expiryWindowFor(
   certificate: TlsCertificate,
-  options: TlsCertificateOptions,
+  options: TlsCertificateOptions
 ): ExpiryWindow {
   const lifetimeDays = Math.round(
-    (certificate.validTo.getTime() - certificate.validFrom.getTime()) / DAY_MS,
+    (certificate.validTo.getTime() - certificate.validFrom.getTime()) / DAY_MS
   );
   const known = Number.isFinite(lifetimeDays) && lifetimeDays > 0;
 
   const derivedError = known
-    ? Math.max(MIN_ERROR_DAYS, Math.min(DEFAULT_ERROR_DAYS, Math.floor(lifetimeDays * ERROR_LIFETIME_FRACTION)))
+    ? Math.max(
+        MIN_ERROR_DAYS,
+        Math.min(
+          DEFAULT_ERROR_DAYS,
+          Math.floor(lifetimeDays * ERROR_LIFETIME_FRACTION)
+        )
+      )
     : DEFAULT_ERROR_DAYS;
   const errorDays = options.error_days ?? derivedError;
 
@@ -150,7 +185,9 @@ export function expiryWindowFor(
   const margin = known
     ? Math.min(RENEWAL_MARGIN_DAYS, lifetimeDays * RENEWAL_MARGIN_FRACTION)
     : RENEWAL_MARGIN_DAYS;
-  const derivedWarn = known ? Math.floor(lifetimeDays / 3 - margin) : FALLBACK_WARN_DAYS;
+  const derivedWarn = known
+    ? Math.floor(lifetimeDays / 3 - margin)
+    : FALLBACK_WARN_DAYS;
   return {
     warnDays: Math.max(errorDays, derivedWarn),
     errorDays,
@@ -161,7 +198,6 @@ export function expiryWindowFor(
 
 const DAY_MS = 86_400_000;
 
-
 export type { TlsProbeFn };
 
 export interface TlsCertificateDeps {
@@ -170,7 +206,6 @@ export interface TlsCertificateDeps {
   /** A hosted audit: the not-checked wording carries no advice about networks, proxies or --offline (#3922). */
   hosted?: boolean;
 }
-
 
 export const tlsCertificateRule: Rule = {
   meta: {
@@ -214,7 +249,7 @@ export const tlsCertificateRule: Rule = {
 export async function checkTlsCertificate(
   siteUrl: string,
   options: TlsCertificateOptions,
-  deps: TlsCertificateDeps,
+  deps: TlsCertificateDeps
 ): Promise<RuleResult> {
   let url: URL;
   try {
@@ -228,7 +263,8 @@ export async function checkTlsCertificate(
         {
           name: "tls-certificate",
           status: "skipped",
-          message: "Not applicable: site not served over HTTPS (security/https covers it)",
+          message:
+            "Not applicable: site not served over HTTPS (security/https covers it)",
           skipReason: "not-https",
         },
       ],
@@ -248,9 +284,12 @@ export async function checkTlsCertificate(
     return { checks: [notChecked(hostname, probe, deps.hosted === true)] };
   }
 
-  const checks: CheckResult[] = [expiryCheck(probe.certificate, options, deps.now)];
+  const checks: CheckResult[] = [
+    expiryCheck(probe.certificate, options, deps.now),
+  ];
   for (const problem of certificateProblems(probe, hostname, deps.now)) {
-    if (problem.kind === "expired" || problem.kind === "not-yet-valid") continue;
+    if (problem.kind === "expired" || problem.kind === "not-yet-valid")
+      continue;
     checks.push(problemCheck(problem, hostname, probe.certificate));
   }
   const key = keyCheck(probe.certificate, options);
@@ -283,17 +322,27 @@ export async function checkTlsCertificate(
   return { checks };
 }
 
-const KEY_TYPE_NAMES = { rsa: "RSA", ecdsa: "ECDSA", ed25519: "Ed25519", dsa: "DSA", other: "an unrecognised key type" } as const;
+const KEY_TYPE_NAMES = {
+  rsa: "RSA",
+  ecdsa: "ECDSA",
+  ed25519: "Ed25519",
+  dsa: "DSA",
+  other: "an unrecognised key type",
+} as const;
 
 /** The key as a person names it: `RSA 1024 bits`, `ECDSA P-256`, `Ed25519`, `DSA 1024 bits`. */
 export function describeKey(certificate: TlsCertificate): string | undefined {
-  const type = certificate.keyType ?? (certificate.rsaBits !== undefined ? "rsa" : undefined);
+  const type =
+    certificate.keyType ??
+    (certificate.rsaBits !== undefined ? "rsa" : undefined);
   if (!type) return undefined;
   switch (type) {
     case "rsa":
       return `RSA ${certificate.keyBits ?? certificate.rsaBits} bits`;
     case "dsa":
-      return certificate.keyBits !== undefined ? `DSA ${certificate.keyBits} bits` : "DSA";
+      return certificate.keyBits !== undefined
+        ? `DSA ${certificate.keyBits} bits`
+        : "DSA";
     case "ecdsa":
       return `ECDSA ${certificate.curve ?? (certificate.keyBits !== undefined ? `${certificate.keyBits} bits` : "")}`.trim();
     case "ed25519":
@@ -304,8 +353,13 @@ export function describeKey(certificate: TlsCertificate): string | undefined {
 }
 
 /** Warns when the key type is not allowed or its size is below the minimum for its type; nothing when it is fine. */
-function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): CheckResult | undefined {
-  const type = certificate.keyType ?? (certificate.rsaBits !== undefined ? "rsa" : undefined);
+function keyCheck(
+  certificate: TlsCertificate,
+  options: TlsCertificateOptions
+): CheckResult | undefined {
+  const type =
+    certificate.keyType ??
+    (certificate.rsaBits !== undefined ? "rsa" : undefined);
   const named = describeKey(certificate);
   if (!type || !named) return undefined;
   const allowed = options.key_types;
@@ -321,7 +375,13 @@ function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): 
   }
   const bits = certificate.keyBits ?? certificate.rsaBits;
   const minimum =
-    type === "rsa" ? options.rsa_min_bits : type === "ecdsa" ? options.ecdsa_min_bits : type === "dsa" ? options.dsa_min_bits : undefined;
+    type === "rsa"
+      ? options.rsa_min_bits
+      : type === "ecdsa"
+        ? options.ecdsa_min_bits
+        : type === "dsa"
+          ? options.dsa_min_bits
+          : undefined;
   if (minimum !== undefined && bits !== undefined && bits < minimum) {
     return {
       name: "tls-certificate-key",
@@ -338,9 +398,17 @@ function keyCheck(certificate: TlsCertificate, options: TlsCertificateOptions): 
 const WEAK_SIGNATURE = /(^|[^a-z0-9])(sha1|sha-1|md5|md4|md2)([^0-9]|$)/i;
 
 /** Warns when the leaf is signed with a broken hash. The leaf only: the probe cannot read the rest of the chain. */
-function signatureCheck(certificate: TlsCertificate, options: TlsCertificateOptions): CheckResult | undefined {
+function signatureCheck(
+  certificate: TlsCertificate,
+  options: TlsCertificateOptions
+): CheckResult | undefined {
   const algorithm = certificate.signatureAlgorithm;
-  if (!options.reject_weak_signature || !algorithm || !WEAK_SIGNATURE.test(algorithm)) return undefined;
+  if (
+    !options.reject_weak_signature ||
+    !algorithm ||
+    !WEAK_SIGNATURE.test(algorithm)
+  )
+    return undefined;
   return {
     name: "tls-certificate-signature",
     status: "warn",
@@ -353,7 +421,10 @@ function signatureCheck(certificate: TlsCertificate, options: TlsCertificateOpti
 const PROTOCOL_ORDER = ["SSLv3", "TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"];
 
 /** Warns when the server chose a protocol below `min_tls_version`. */
-function protocolCheck(protocol: string | undefined, options: TlsCertificateOptions): CheckResult | undefined {
+function protocolCheck(
+  protocol: string | undefined,
+  options: TlsCertificateOptions
+): CheckResult | undefined {
   if (!protocol) return undefined;
   const got = PROTOCOL_ORDER.indexOf(protocol);
   const wanted = PROTOCOL_ORDER.indexOf(options.min_tls_version);
@@ -370,7 +441,7 @@ function protocolCheck(protocol: string | undefined, options: TlsCertificateOpti
 function expiryCheck(
   certificate: TlsCertificate,
   options: TlsCertificateOptions,
-  now: Date,
+  now: Date
 ): CheckResult {
   const expires = isoDate(certificate.validTo);
   const days = daysUntil(certificate.validTo, now);
@@ -443,7 +514,7 @@ function expiryCheck(
 function problemCheck(
   problem: TlsProblem,
   hostname: string,
-  certificate: TlsCertificate,
+  certificate: TlsCertificate
 ): CheckResult {
   const message = describeProblem(problem, hostname, certificate);
   if (problem.kind === "hostname") {
@@ -461,7 +532,8 @@ function problemCheck(
     status: "fail",
     message,
     value: problem.kind,
-    expected: "a certificate that chains to a trusted root through the served intermediates",
+    expected:
+      "a certificate that chains to a trusted root through the served intermediates",
   };
 }
 
@@ -469,7 +541,7 @@ function problemCheck(
 function describeProblem(
   problem: TlsProblem,
   hostname: string,
-  certificate: TlsCertificate,
+  certificate: TlsCertificate
 ): string {
   switch (problem.kind) {
     case "expired":
@@ -490,7 +562,7 @@ function describeProblem(
 function notChecked(
   hostname: string,
   probe: Exclude<TlsProbe, { kind: "certificate" }>,
-  hosted: boolean,
+  hosted: boolean
 ): CheckResult {
   // Skipped, not info (#1259): a skipped check carrying a not-checked reason is
   // what every report lists under "Not checked", and the JSON `notChecked` too.
@@ -509,13 +581,13 @@ function notChecked(
     // A PROXY_ code names the hosted container's own plumbing, so it is left out too.
     if (probe.kind === "unavailable" || probe.code.startsWith("PROXY_")) {
       return skipped(
-        "TLS certificate not checked: the hosted audit could not open a TLS connection to the site",
+        "TLS certificate not checked: the hosted audit could not open a TLS connection to the site"
       );
     }
     return skipped(
       probe.code === "EGRESS_REFUSED"
         ? `TLS certificate not checked: the hosted audit does not connect to the address ${hostname} resolves to`
-        : `TLS certificate not checked: the hosted audit made no TLS handshake with ${hostname}, error ${probe.code}`,
+        : `TLS certificate not checked: the hosted audit made no TLS handshake with ${hostname}, error ${probe.code}`
     );
   }
   if (probe.kind === "unavailable") {
@@ -527,7 +599,7 @@ function notChecked(
   }
   // `(${code})` would read as a count to the message merge (#2244).
   return skipped(
-    `TLS certificate not checked: no TLS handshake with ${hostname}, error ${probe.code}`,
+    `TLS certificate not checked: no TLS handshake with ${hostname}, error ${probe.code}`
   );
 }
 
@@ -539,7 +611,9 @@ const DETAIL_NAMES = 50;
 function coveredNames(names: readonly string[]): string {
   if (names.length === 0) return "no names";
   const shown = names.slice(0, MESSAGE_NAMES).join(", ");
-  return names.length > MESSAGE_NAMES ? `${shown} and ${names.length - MESSAGE_NAMES} more` : shown;
+  return names.length > MESSAGE_NAMES
+    ? `${shown} and ${names.length - MESSAGE_NAMES} more`
+    : shown;
 }
 
 function dayText(days: number): string {

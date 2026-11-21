@@ -1,10 +1,9 @@
 // images/aspect-mismatch - Declared image aspect ratio conflicts with its CSS box
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 export const optionsSchema = z.object({
   tolerance: z
@@ -104,7 +103,11 @@ export const aspectMismatchRule: Rule = {
       const decls = parseStyle(img.getAttribute("style") || "");
       // object-fit cover/contain reshapes the image → no distortion, skip.
       if (NON_DISTORTING_FIT.has(decls.get("object-fit") ?? "")) continue;
-      if (NON_DISTORTING_FIT_CLASS.test((img.getAttribute("class") || "").toLowerCase())) {
+      if (
+        NON_DISTORTING_FIT_CLASS.test(
+          (img.getAttribute("class") || "").toLowerCase()
+        )
+      ) {
         continue;
       }
 
@@ -127,7 +130,10 @@ export const aspectMismatchRule: Rule = {
         status: "warn",
         message: `${mismatched.length} image(s) with conflicting attribute vs CSS aspect ratio (distortion risk)`,
         items: mismatched.slice(0, 10),
-        details: mismatched.length > 10 ? { additional: mismatched.length - 10 } : undefined,
+        details:
+          mismatched.length > 10
+            ? { additional: mismatched.length - 10 }
+            : undefined,
       });
     } else {
       checks.push({

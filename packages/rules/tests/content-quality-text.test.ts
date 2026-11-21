@@ -9,8 +9,8 @@ describe("content quality text extraction", () => {
   });
 
   test("drops excluded element bodies", () => {
-    expect(extractTextFromHtml("<main>Keep<script>drop()</script> this</main>")).toBe(
-      "Keep this",
-    );
+    expect(
+      extractTextFromHtml("<main>Keep<script>drop()</script> this</main>")
+    ).toBe("Keep this");
   });
 });

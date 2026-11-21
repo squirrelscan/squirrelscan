@@ -11,8 +11,6 @@
 // Second half of the same bug: the cloud keyed those pages with a query-BLIND
 // normalizer, so 384 `?id=N` pages collapsed into one `page_findings` row.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
@@ -20,25 +18,46 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 
-import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import {
+  resolutionCheckKey,
+  resolutionUrlHash,
+} from "@squirrelscan/core-contracts/resolution";
+import {
+  foldOverflowChecks,
+  sampleChecksForPublish,
+} from "@squirrelscan/rules/fold";
+import { describe, expect, test } from "bun:test";
 
 import { findingKey } from "../src/merge-core";
-import { foldOverflowChecks, sampleChecksForPublish } from "@squirrelscan/rules/fold";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
-import { buildSkippedPassCounts, buildStreamFindings } from "../src/stream-findings";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { calculateHealthScore } from "../src/scoring";
+import {
+  buildSkippedPassCounts,
+  buildStreamFindings,
+} from "../src/stream-findings";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
 
-  private key(f: { normalizedUrl: string; ruleId: string; checkName: string; locator: string }) {
+  private key(f: {
+    normalizedUrl: string;
+    ruleId: string;
+    checkName: string;
+    locator: string;
+  }) {
     return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
   }
 
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -55,7 +74,7 @@ class MemStore implements SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void> {
     this.pages.set(normalizedUrl, {
       siteKey,
@@ -67,17 +86,26 @@ class MemStore implements SmartAuditStore {
     });
     for (const [k, f] of this.findings) {
       if (f.normalizedUrl === normalizedUrl && f.state === "open") {
-        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+        this.findings.set(k, {
+          ...f,
+          state: "stale",
+          lastSeenCrawlId: crawlId,
+        });
       }
     }
   }
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void> {
     for (const p of pages)
-      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+      await this.markPageRemoved(
+        siteKey,
+        p.normalizedUrl,
+        crawlId,
+        p.lastStatus
+      );
   }
   async compactFindings(): Promise<number> {
     return 0;
@@ -98,7 +126,10 @@ const pageMeta = {
 const AUGUST = Date.UTC(2026, 7, 19, 12, 0, 0);
 const NOW = Date.UTC(2026, 8, 11, 17, 11, 27);
 
-function warnCheck(pageUrl: string, overrides: Partial<CheckResult> = {}): CheckResult {
+function warnCheck(
+  pageUrl: string,
+  overrides: Partial<CheckResult> = {}
+): CheckResult {
   return {
     name: "meta-title",
     status: "warn",
@@ -113,9 +144,15 @@ function passCheck(pageUrl: string): CheckResult {
 }
 
 /** The 16 pages this run actually crawled: 2 warn, 14 clean. */
-const FRESH_PAGES = Array.from({ length: 16 }, (_, i) => `https://gaijin.test/p/${i}`);
+const FRESH_PAGES = Array.from(
+  { length: 16 },
+  (_, i) => `https://gaijin.test/p/${i}`
+);
 /** 400 pages only the PRODUCER's local store knows about. */
-const CARRIED_PAGES = Array.from({ length: 400 }, (_, i) => `https://gaijin.test/old/${i}`);
+const CARRIED_PAGES = Array.from(
+  { length: 400 },
+  (_, i) => `https://gaijin.test/old/${i}`
+);
 
 function freshChecks(): CheckResult[] {
   return [
@@ -125,7 +162,9 @@ function freshChecks(): CheckResult[] {
 }
 
 function carriedChecks(): CheckResult[] {
-  return CARRIED_PAGES.map((u) => warnCheck(u, { provenance: "carried", lastSeenAt: AUGUST }));
+  return CARRIED_PAGES.map((u) =>
+    warnCheck(u, { provenance: "carried", lastSeenAt: AUGUST })
+  );
 }
 
 describe("#2063 — producer-carried checks are not this run's evidence", () => {
@@ -136,7 +175,10 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
       siteKey: "web_1",
       crawlId: "audit_1",
       ruleResults: {
-        "core/meta-title": { meta: pageMeta, checks: [...freshChecks(), ...carriedChecks()] },
+        "core/meta-title": {
+          meta: pageMeta,
+          checks: [...freshChecks(), ...carriedChecks()],
+        },
       },
       // The CLI ships only non-2xx statuses, so the crawled set comes from the
       // fresh checks alone — exactly the shape that laundered before.
@@ -169,7 +211,10 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
       siteKey: "web_1",
       crawlId: "audit_1",
       ruleResults: {
-        "core/meta-title": { meta: pageMeta, checks: [...freshChecks(), ...carriedChecks()] },
+        "core/meta-title": {
+          meta: pageMeta,
+          checks: [...freshChecks(), ...carriedChecks()],
+        },
       },
       pageStatuses: [],
       now: NOW,
@@ -178,14 +223,18 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
       store: new MemStore(),
       siteKey: "web_1",
       crawlId: "audit_1",
-      ruleResults: { "core/meta-title": { meta: pageMeta, checks: freshChecks() } },
+      ruleResults: {
+        "core/meta-title": { meta: pageMeta, checks: freshChecks() },
+      },
       pageStatuses: [],
       now: NOW,
     });
 
     expect(withCarried.coverage).toEqual(freshOnly.coverage);
-    expect(calculateHealthScore({ results: withCarried.unionRuleResults }).overall).toBe(
-      calculateHealthScore({ results: freshOnly.unionRuleResults }).overall,
+    expect(
+      calculateHealthScore({ results: withCarried.unionRuleResults }).overall
+    ).toBe(
+      calculateHealthScore({ results: freshOnly.unionRuleResults }).overall
     );
   });
 
@@ -196,7 +245,9 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
       store,
       siteKey: "web_1",
       crawlId: "audit_1",
-      ruleResults: { "core/meta-title": { meta: pageMeta, checks: freshChecks() } },
+      ruleResults: {
+        "core/meta-title": { meta: pageMeta, checks: freshChecks() },
+      },
       pageStatuses: [],
       now: AUGUST,
     });
@@ -211,7 +262,10 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
           meta: pageMeta,
           checks: [
             warnCheck(FRESH_PAGES[1]!),
-            warnCheck(FRESH_PAGES[0]!, { provenance: "carried", lastSeenAt: 1 }),
+            warnCheck(FRESH_PAGES[0]!, {
+              provenance: "carried",
+              lastSeenAt: 1,
+            }),
           ],
         },
       },
@@ -227,10 +281,12 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
     expect(r.replayedUnknownPages).toBe(0);
     // The cloud's own last-seen (run 1), NOT the bogus `lastSeenAt: 1` the
     // producer published.
-    expect(r.carriedLastSeen.get(`${FRESH_PAGES[0]}|core/meta-title|meta-title`)).toBe(AUGUST);
+    expect(
+      r.carriedLastSeen.get(`${FRESH_PAGES[0]}|core/meta-title|meta-title`)
+    ).toBe(AUGUST);
 
     const carried = (await store.getFindings("web_1", ["open"])).find(
-      (f) => f.normalizedUrl === FRESH_PAGES[0],
+      (f) => f.normalizedUrl === FRESH_PAGES[0]
     );
     expect(carried!.provenance).toBe("carried");
     expect(carried!.firstSeenAt).toBe(AUGUST);
@@ -253,7 +309,11 @@ describe("#2063 — producer-carried checks are not this run's evidence", () => 
               status: "warn",
               message: "Title is too short (+399 more pages)",
               pages: CARRIED_PAGES,
-              details: { aggregated: true, occurrences: 400, pagesTruncated: 400 },
+              details: {
+                aggregated: true,
+                occurrences: 400,
+                pagesTruncated: 400,
+              },
               provenance: "carried",
               lastSeenAt: AUGUST,
             },
@@ -281,14 +341,19 @@ describe("#2063 — query strings are part of a page's identity", () => {
       siteKey: "web_1",
       crawlId: "audit_1",
       ruleResults: {
-        "core/meta-title": { meta: pageMeta, checks: [warnCheck(Q1), warnCheck(Q2)] },
+        "core/meta-title": {
+          meta: pageMeta,
+          checks: [warnCheck(Q1), warnCheck(Q2)],
+        },
       },
       pageStatuses: [],
       now: NOW,
     });
 
     expect(r.coverage.auditedPages).toBe(2);
-    const urls = (await store.getFindings("web_1")).map((f) => f.normalizedUrl).sort();
+    const urls = (await store.getFindings("web_1"))
+      .map((f) => f.normalizedUrl)
+      .sort();
     expect(urls).toEqual([Q1, Q2]);
     expect([...store.pages.keys()].sort()).toEqual([Q1, Q2]);
   });
@@ -300,7 +365,10 @@ describe("#2063 — query strings are part of a page's identity", () => {
       siteKey: "web_1",
       crawlId: "audit_1",
       ruleResults: {
-        "core/meta-title": { meta: pageMeta, checks: [warnCheck(Q1), warnCheck(Q2)] },
+        "core/meta-title": {
+          meta: pageMeta,
+          checks: [warnCheck(Q1), warnCheck(Q2)],
+        },
       },
       pageStatuses: [],
       now: AUGUST,
@@ -310,12 +378,16 @@ describe("#2063 — query strings are part of a page's identity", () => {
       store,
       siteKey: "web_1",
       crawlId: "audit_2",
-      ruleResults: { "core/meta-title": { meta: pageMeta, checks: [passCheck(Q1)] } },
+      ruleResults: {
+        "core/meta-title": { meta: pageMeta, checks: [passCheck(Q1)] },
+      },
       pageStatuses: [],
       now: NOW,
     });
 
-    const byUrl = new Map((await store.getFindings("web_1")).map((f) => [f.normalizedUrl, f]));
+    const byUrl = new Map(
+      (await store.getFindings("web_1")).map((f) => [f.normalizedUrl, f])
+    );
     expect(byUrl.get(Q1)!.state).toBe("resolved");
     expect(byUrl.get(Q2)!.state).toBe("open");
     expect(byUrl.get(Q2)!.provenance).toBe("carried");
@@ -332,7 +404,10 @@ describe("#2063 — query strings are part of a page's identity", () => {
       siteKey: "web_1",
       crawlId: "audit_1",
       ruleResults: {
-        "core/meta-title": { meta: pageMeta, checks: [warnCheck(Q1), warnCheck(Q2)] },
+        "core/meta-title": {
+          meta: pageMeta,
+          checks: [warnCheck(Q1), warnCheck(Q2)],
+        },
       },
       pageStatuses: [],
       now: AUGUST,
@@ -344,7 +419,9 @@ describe("#2063 — query strings are part of a page's identity", () => {
       store,
       siteKey: "web_1",
       crawlId: "audit_2",
-      ruleResults: { "core/meta-title": { meta: pageMeta, checks: [warnCheck(Q2)] } },
+      ruleResults: {
+        "core/meta-title": { meta: pageMeta, checks: [warnCheck(Q2)] },
+      },
       pageStatuses: [],
       resolutionSignal: {
         crawledUrls: [Q1, Q2],
@@ -358,7 +435,9 @@ describe("#2063 — query strings are part of a page's identity", () => {
       now: NOW,
     });
 
-    const byUrl = new Map((await store.getFindings("web_1")).map((f) => [f.normalizedUrl, f]));
+    const byUrl = new Map(
+      (await store.getFindings("web_1")).map((f) => [f.normalizedUrl, f])
+    );
     expect(byUrl.get(Q1)!.state).toBe("open");
     expect(byUrl.get(Q1)!.provenance).toBe("carried");
   });
@@ -372,7 +451,10 @@ describe("#2063 — query strings are part of a page's identity", () => {
       ruleResults: {
         "core/meta-title": {
           meta: pageMeta,
-          checks: [warnCheck("https://gaijin.test/about/"), warnCheck("https://gaijin.test/about")],
+          checks: [
+            warnCheck("https://gaijin.test/about/"),
+            warnCheck("https://gaijin.test/about"),
+          ],
         },
       },
       pageStatuses: [],
@@ -396,7 +478,7 @@ describe("#2063 — the sample sets describe this run only", () => {
   function truncatedAggregate(
     pages: string[],
     total: number,
-    overrides: Partial<CheckResult> = {},
+    overrides: Partial<CheckResult> = {}
   ): CheckResult {
     return {
       name: CHECK,
@@ -471,7 +553,9 @@ describe("#2063 — the sample sets describe this run only", () => {
       now: NOW,
     });
 
-    const clipped = (await store.getFindings("web_1")).find((f) => f.normalizedUrl === CLIPPED);
+    const clipped = (await store.getFindings("web_1")).find(
+      (f) => f.normalizedUrl === CLIPPED
+    );
     expect(clipped!.state).toBe("open");
     expect(clipped!.provenance).toBe("carried");
     // The sampled branch unfolds before it filters, so the aggregate is counted
@@ -491,7 +575,9 @@ describe("#2063 — the sample sets describe this run only", () => {
           checks: [
             ...freshChecks(),
             warnCheck(CARRIED_PAGES[0]!, { provenance: "unrendered" }),
-            truncatedAggregate(CARRIED_PAGES.slice(0, 50), 400, { provenance: "unrendered" }),
+            truncatedAggregate(CARRIED_PAGES.slice(0, 50), 400, {
+              provenance: "unrendered",
+            }),
           ],
         },
       },
@@ -531,13 +617,20 @@ describe("#2063 — complete-store mode keeps replays out of the union", () => {
         meta: pageMeta,
         checks: [
           warnCheck(CRAWLED),
-          warnCheck(REPLAYED, { provenance: "carried" as const, lastSeenAt: 1 }),
+          warnCheck(REPLAYED, {
+            provenance: "carried" as const,
+            lastSeenAt: 1,
+          }),
           {
             name: "meta-title",
             status: "warn" as const,
             message: "Title is too short (+399 more pages)",
             pages: CARRIED_PAGES.slice(0, 100),
-            details: { aggregated: true, occurrences: 400, pagesTruncated: 400 },
+            details: {
+              aggregated: true,
+              occurrences: 400,
+              pagesTruncated: 400,
+            },
             provenance: "carried" as const,
             lastSeenAt: AUGUST,
           },
@@ -545,7 +638,13 @@ describe("#2063 — complete-store mode keeps replays out of the union", () => {
       },
       [SITE_RULE]: {
         meta: siteMeta,
-        checks: [{ name: "robots-exists", status: "warn" as const, message: "No robots.txt" }],
+        checks: [
+          {
+            name: "robots-exists",
+            status: "warn" as const,
+            message: "No robots.txt",
+          },
+        ],
       },
     };
   }
@@ -561,7 +660,9 @@ describe("#2063 — complete-store mode keeps replays out of the union", () => {
     // The site has no open findings at all.
   }
 
-  function assertClean(result: Awaited<ReturnType<typeof runCloudSmartAudits>>) {
+  function assertClean(
+    result: Awaited<ReturnType<typeof runCloudSmartAudits>>
+  ) {
     // Complete mode does NOT unfold, so the aggregate is refused as one check.
     expect(result.replayedChecksDropped).toBe(2);
     expect(result.coverage.auditedPages).toBe(1);
@@ -623,7 +724,10 @@ describe("#2063 — the container streams this run's evidence only", () => {
         meta: pageMeta,
         checks: [
           warnCheck(CRAWLED),
-          warnCheck(REPLAYED, { provenance: "carried" as const, lastSeenAt: AUGUST }),
+          warnCheck(REPLAYED, {
+            provenance: "carried" as const,
+            lastSeenAt: AUGUST,
+          }),
           warnCheck(CARRIED_PAGES[1]!, { provenance: "unrendered" as const }),
           {
             name: "meta-title",
@@ -658,9 +762,22 @@ describe("#2063 — the container streams this run's evidence only", () => {
       [RULE]: {
         checks: [
           warnCheck(CRAWLED),
-          { name: "title-length", status: "pass", message: "ok", pageUrl: CRAWLED },
-          warnCheck(FRESH_PAGES[1]!, { provenance: "carried" as const, lastSeenAt: AUGUST }),
-          { name: "title-length", status: "pass", message: "ok", pageUrl: FRESH_PAGES[1]! },
+          {
+            name: "title-length",
+            status: "pass",
+            message: "ok",
+            pageUrl: CRAWLED,
+          },
+          warnCheck(FRESH_PAGES[1]!, {
+            provenance: "carried" as const,
+            lastSeenAt: AUGUST,
+          }),
+          {
+            name: "title-length",
+            status: "pass",
+            message: "ok",
+            pageUrl: FRESH_PAGES[1]!,
+          },
         ],
       },
     });
@@ -673,7 +790,12 @@ describe("#2063 — a rule emptied by the filter still scores its crawled pages"
   const REAL_RULE = "core/meta-title";
   /** Every check this rule published is a replay, so the filter empties it. */
   const EMPTIED_RULE = "content/word-count";
-  const wordCountMeta = { ...pageMeta, id: "word-count", name: "Word Count", category: "content" as const };
+  const wordCountMeta = {
+    ...pageMeta,
+    id: "word-count",
+    name: "Word Count",
+    category: "content" as const,
+  };
   const CRAWLED = FRESH_PAGES[0]!;
 
   async function* noOpenPages(): AsyncGenerator<{
@@ -698,7 +820,10 @@ describe("#2063 — a rule emptied by the filter still scores its crawled pages"
         [EMPTIED_RULE]: {
           meta: wordCountMeta,
           checks: [
-            warnCheck(CARRIED_PAGES[0]!, { provenance: "carried" as const, lastSeenAt: AUGUST }),
+            warnCheck(CARRIED_PAGES[0]!, {
+              provenance: "carried" as const,
+              lastSeenAt: AUGUST,
+            }),
             warnCheck(CARRIED_PAGES[1]!, { provenance: "unrendered" as const }),
           ],
         },
@@ -741,9 +866,17 @@ describe("#2063 — a rule emptied by the filter still scores its crawled pages"
 // producer fold through server merge, because neither half alone would catch it.
 describe("#2072 — a mixed group over the fold cap cannot launder its carried half", () => {
   const RULE = "ax/token-weight";
-  const tokenMeta = { ...pageMeta, id: "token-weight", name: "Token Weight", category: "ax" as const };
+  const tokenMeta = {
+    ...pageMeta,
+    id: "token-weight",
+    name: "Token Weight",
+    category: "ax" as const,
+  };
   const CRAWLED = Array.from({ length: 16 }, (_, i) => `https://x.test/p/${i}`);
-  const REPLAYED = Array.from({ length: 481 }, (_, i) => `https://x.test/old/${i}?id=${i}`);
+  const REPLAYED = Array.from(
+    { length: 481 },
+    (_, i) => `https://x.test/old/${i}?id=${i}`
+  );
 
   /** Two checks per page, for both halves — what the rule emits before publish. */
   function prePublishChecks(): CheckResult[] {
@@ -753,14 +886,18 @@ describe("#2072 — a mixed group over the fold cap cannot launder its carried h
       message: "Visible text is under 15% of the page HTML",
       pageUrl: url,
       items: [{ id: url, label: "~7%", sourcePages: [url] }],
-      ...(replayed ? { provenance: "carried" as const, lastSeenAt: AUGUST } : {}),
+      ...(replayed
+        ? { provenance: "carried" as const, lastSeenAt: AUGUST }
+        : {}),
     });
     const budget = (url: string, replayed: boolean): CheckResult => ({
       name: "token-weight-budget",
       status: "pass",
       message: "within budget",
       pageUrl: url,
-      ...(replayed ? { provenance: "carried" as const, lastSeenAt: AUGUST } : {}),
+      ...(replayed
+        ? { provenance: "carried" as const, lastSeenAt: AUGUST }
+        : {}),
     });
     return [
       ...CRAWLED.flatMap((u) => [ratio(u, false), budget(u, false)]),
@@ -778,7 +915,9 @@ describe("#2072 — a mixed group over the fold cap cannot launder its carried h
     // issue-class-only key produced.
     expect(published).toHaveLength(4);
 
-    const carriedAggregates = published.filter((c) => c.provenance === "carried");
+    const carriedAggregates = published.filter(
+      (c) => c.provenance === "carried"
+    );
     expect(carriedAggregates).toHaveLength(2);
     for (const agg of carriedAggregates) {
       expect(agg.lastSeenAt).toBe(AUGUST);
@@ -787,7 +926,8 @@ describe("#2072 — a mixed group over the fold cap cannot launder its carried h
     // The fresh half is unlabelled, which is what fresh looks like on the wire.
     const freshAggregates = published.filter((c) => c.provenance === undefined);
     expect(freshAggregates).toHaveLength(2);
-    for (const agg of freshAggregates) expect(agg.pages).toHaveLength(CRAWLED.length);
+    for (const agg of freshAggregates)
+      expect(agg.pages).toHaveLength(CRAWLED.length);
 
     const store = new MemStore();
     const r = await runCloudSmartAudits({
@@ -808,4 +948,7 @@ describe("#2072 — a mixed group over the fold cap cannot launder its carried h
   });
 });
 
-describeSitePagesContract("carried-provenance-merge.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "carried-provenance-merge.test.ts MemStore",
+  () => new MemStore()
+);

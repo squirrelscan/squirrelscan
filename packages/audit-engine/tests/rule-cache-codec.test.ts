@@ -6,11 +6,11 @@
 // verdicts, and a codec that turns a `Set` into `{}` silently empties the template
 // fingerprint every replayed page contributes to `template-discontinuity`.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type { PageFeatureRow } from "@squirrelscan/core-contracts";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import type { PageFeatureRow } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   canonicalJson,
@@ -30,10 +30,10 @@ describe("sha256Hex", () => {
     // The published SHA-256 vectors for "" and "abc". The entropy detector cannot
     // tell a digest from a credential, and these are neither secret nor ours.
     expect(await sha256Hex("")).toBe(
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", // pragma: allowlist secret
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" // pragma: allowlist secret
     );
     expect(await sha256Hex("abc")).toBe(
-      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", // pragma: allowlist secret
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" // pragma: allowlist secret
     );
   });
 
@@ -54,15 +54,21 @@ describe("canonicalJson", () => {
   });
 
   test("keeps Set and Map iteration order, which is observable", () => {
-    expect(canonicalJson(new Set(["a", "b"]))).not.toBe(canonicalJson(new Set(["b", "a"])));
-    expect(canonicalJson(new Map([["a", 1]]))).not.toBe(canonicalJson({ a: 1 }));
+    expect(canonicalJson(new Set(["a", "b"]))).not.toBe(
+      canonicalJson(new Set(["b", "a"]))
+    );
+    expect(canonicalJson(new Map([["a", 1]]))).not.toBe(
+      canonicalJson({ a: 1 })
+    );
   });
 
   // Three inputs that a single "not finite" token would have merged, and two
   // arrays that a hole-skipping `.map` would have. A rule option distinguishing
   // any of these pairs would otherwise change behaviour under an unchanged key.
   test("does not merge distinct numbers or array shapes", () => {
-    const forms = [NaN, Infinity, -Infinity].map((n) => canonicalJson({ limit: n }));
+    const forms = [NaN, Infinity, -Infinity].map((n) =>
+      canonicalJson({ limit: n })
+    );
     expect(new Set(forms).size).toBe(3);
     expect(canonicalJson([])).not.toBe(canonicalJson(new Array(1)));
     // A hole is observable (`0 in arr`), so it is not `undefined` either.
@@ -93,7 +99,9 @@ describe("canonicalJson", () => {
 describe("cache payload codec", () => {
   test("round-trips a Set, which plain JSON would empty", () => {
     const value = { assetHosts: new Set(["a.test", "b.test"]) };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value)))
+    ) as typeof value;
     expect(back.assetHosts).toBeInstanceOf(Set);
     expect([...back.assetHosts]).toEqual(["a.test", "b.test"]);
     // The failure this exists to stop: without tagging, the Set is `{}`.
@@ -107,7 +115,9 @@ describe("cache payload codec", () => {
       n: null,
       list: [1, "two", { three: undefined }],
     };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value)))
+    ) as typeof value;
     expect(back.m).toBeInstanceOf(Map);
     expect((back.m.get("k") as { deep: Set<number> }).deep).toBeInstanceOf(Set);
     expect("u" in back).toBe(true);
@@ -120,7 +130,9 @@ describe("cache payload codec", () => {
   // that collides with a tag. Escaping is what keeps that from decoding as a Set.
   test("survives a data object whose own key looks like a tag", () => {
     const value = { details: { $s: ["not-a-set"], $m: 1, $u: "text" } };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value)))
+    ) as typeof value;
     expect(back).toEqual(value);
     expect(back.details.$s).toEqual(["not-a-set"]);
   });
@@ -128,7 +140,10 @@ describe("cache payload codec", () => {
   test("an entry round-trips through the stored string form", () => {
     const entry = {
       ruleResults: [
-        ["core/title", [{ name: "title-present", status: "pass" as const, message: "ok" }]],
+        [
+          "core/title",
+          [{ name: "title-present", status: "pass" as const, message: "ok" }],
+        ],
         [
           "core/meta",
           [
@@ -143,14 +158,23 @@ describe("cache payload codec", () => {
         ],
       ] as const,
       features: { normalizedUrl: "/a", status: 200, depth: 0 } as never,
-      signals: { "site-dom-signals": { url: "/a", fingerprint: { assetHosts: new Set(["x"]) } } },
+      signals: {
+        "site-dom-signals": {
+          url: "/a",
+          fingerprint: { assetHosts: new Set(["x"]) },
+        },
+      },
     };
-    const back = decodePageRuleCacheEntry(encodePageRuleCacheEntry(entry as never));
+    const back = decodePageRuleCacheEntry(
+      encodePageRuleCacheEntry(entry as never)
+    );
     expect(back).not.toBeNull();
     // The number stays a number. `rule_results` cannot serve as this cache
     // precisely because it stores value through String().
     expect(back!.ruleResults[1]![1][0]!.value).toBe(42);
-    const signal = back!.signals["site-dom-signals"] as { fingerprint: { assetHosts: Set<string> } };
+    const signal = back!.signals["site-dom-signals"] as {
+      fingerprint: { assetHosts: Set<string> };
+    };
     expect(signal.fingerprint.assetHosts).toBeInstanceOf(Set);
   });
 
@@ -159,7 +183,9 @@ describe("cache payload codec", () => {
   // `Record<string, unknown>`, so a rule may put one there.
   test("round-trips a Date, which a plain-object walk would empty", () => {
     const value = { details: { when: new Date("2026-01-01T00:00:00.000Z") } };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value)))
+    ) as typeof value;
     expect(back.details.when).toBeInstanceOf(Date);
     expect(JSON.stringify(back)).toBe(JSON.stringify(value));
   });
@@ -170,7 +196,9 @@ describe("cache payload codec", () => {
     const value = JSON.parse('{"details":{"__proto__":"kept","other":1}}') as {
       details: Record<string, unknown>;
     };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value)))
+    ) as typeof value;
     expect(Object.hasOwn(back.details, "__proto__")).toBe(true);
     expect(JSON.stringify(back)).toBe(JSON.stringify(value));
   });
@@ -179,7 +207,9 @@ describe("cache payload codec", () => {
   // invalid Date and not the epoch.
   test("round-trips an invalid Date as invalid", () => {
     const value = { details: { when: new Date(NaN) } };
-    const back = decodeCacheValue(JSON.parse(JSON.stringify(encodeCacheValue(value)))) as typeof value;
+    const back = decodeCacheValue(
+      JSON.parse(JSON.stringify(encodeCacheValue(value)))
+    ) as typeof value;
     expect(back.details.when).toBeInstanceOf(Date);
     expect(Number.isNaN(back.details.when.getTime())).toBe(true);
     expect(JSON.stringify(back)).toBe(JSON.stringify(value));
@@ -187,7 +217,9 @@ describe("cache payload codec", () => {
 
   test("an unreadable payload is a miss, not a throw", () => {
     expect(decodePageRuleCacheEntry("{not json")).toBeNull();
-    expect(decodePageRuleCacheEntry(JSON.stringify({ nothing: true }))).toBeNull();
+    expect(
+      decodePageRuleCacheEntry(JSON.stringify({ nothing: true }))
+    ).toBeNull();
   });
 });
 
@@ -246,13 +278,15 @@ describe("hreflang alternates through a replay", () => {
 
   async function replay(row: PageFeatureRow): Promise<PageFeatureRow | null> {
     const back = decodePageRuleCacheEntry(
-      encodePageRuleCacheEntry({ ruleResults: [], features: row, signals: {} }),
+      encodePageRuleCacheEntry({ ruleResults: [], features: row, signals: {} })
     );
     expect(back).not.toBeNull();
     const store = new SQLiteStorage(":memory:");
     await run(store.init());
     await run(store.upsertPageFeatures("crawl-1", back!.features));
-    const stored = await run(store.getPageFeatures("crawl-1", row.normalizedUrl));
+    const stored = await run(
+      store.getPageFeatures("crawl-1", row.normalizedUrl)
+    );
     await run(store.close());
     return stored;
   }
@@ -276,7 +310,12 @@ describe("run context", () => {
     engineVersion: "0.0.91",
     rulesVersion: "rules-a",
     pageRules: [{ id: "core/meta-title", options: { max_length: 75 } }],
-    siteData: { baseUrl: "http://x.test", pages: [], robotsTxt: null, sitemaps: null } as never,
+    siteData: {
+      baseUrl: "http://x.test",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    } as never,
     siteMetadata: undefined,
     cloudResults: undefined,
     ignoreApplicability: false,
@@ -308,26 +347,36 @@ describe("run context", () => {
   // The escape hatch changes a gated rule from a `skipped` check to its real
   // verdict without touching the rule list or any rule's options.
   test("moves with the applicability escape hatch", async () => {
-    expect(await hashOf({ ignoreApplicability: true })).not.toBe(await hashOf({}));
+    expect(await hashOf({ ignoreApplicability: true })).not.toBe(
+      await hashOf({})
+    );
   });
 
   // `content/date-agreement` resolves a bare schema date through `Date.parse`,
   // which reads it in LOCAL time, so the same page yields a different year in a
   // different zone.
   test("moves with the runtime time zone", async () => {
-    expect(await hashOf({ timeZone: "Australia/Sydney" })).not.toBe(await hashOf({}));
+    expect(await hashOf({ timeZone: "Australia/Sydney" })).not.toBe(
+      await hashOf({})
+    );
   });
 
   // A rule fixed without a version bump changes nothing but its code.
   test("moves with the rules version", async () => {
-    expect(await hashOf({ rulesVersion: "rules-b" })).not.toBe(await hashOf({}));
+    expect(await hashOf({ rulesVersion: "rules-b" })).not.toBe(
+      await hashOf({})
+    );
   });
 
   test("moves with the build, the rule list and a rule's options", async () => {
-    expect(await hashOf({ engineVersion: "0.0.92" })).not.toBe(await hashOf({}));
+    expect(await hashOf({ engineVersion: "0.0.92" })).not.toBe(
+      await hashOf({})
+    );
     expect(await hashOf({ pageRules: [] })).not.toBe(await hashOf({}));
     expect(
-      await hashOf({ pageRules: [{ id: "core/meta-title", options: { max_length: 12 } }] }),
+      await hashOf({
+        pageRules: [{ id: "core/meta-title", options: { max_length: 12 } }],
+      })
     ).not.toBe(await hashOf({}));
   });
 
@@ -374,7 +423,9 @@ describe("run context", () => {
       hashOf({ siteData: withImage({ animated: true }) }),
     ]);
     for (const hash of moved) expect(hash).not.toBe(measured);
-    expect(await hashOf({ siteData: withImage({ cacheReason: "304" }) })).toBe(measured);
+    expect(await hashOf({ siteData: withImage({ cacheReason: "304" }) })).toBe(
+      measured
+    );
   });
 
   // Fail CLOSED: a run context holding something that is not plain data must not
@@ -385,7 +436,10 @@ describe("run context", () => {
         return null;
       }
     }
-    const out = await computeRunContextHash({ ...base, siteMetadata: new IntelHandle() });
+    const out = await computeRunContextHash({
+      ...base,
+      siteMetadata: new IntelHandle(),
+    });
     expect(out).toEqual({ disabled: "unhashable-run-context" });
   });
 });

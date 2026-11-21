@@ -3,18 +3,22 @@
 // `regions` to one page per section on its own page; a link rule counts pages per section across
 // the site; the fold adds them up, once per page. A parse without sections records nothing.
 
-import { describe, expect, test } from "bun:test";
-
 import { parsePage } from "@squirrelscan/parser";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
 import { linkTextRule } from "../src/a11y/link-text";
 import { staleCopyrightRule } from "../src/content/stale-copyright";
-import { foldOverflowChecks, sampleChecksForPublish, unfoldAggregateCheck } from "../src/fold";
+import {
+  foldOverflowChecks,
+  sampleChecksForPublish,
+  unfoldAggregateCheck,
+} from "../src/fold";
 import { anchorTextRule } from "../src/links/anchor-text";
 import { brokenLinksRule } from "../src/links/broken-links";
 import { telMailtoRule } from "../src/links/tel-mailto";
-import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
 const BASE = "https://example.com";
 
@@ -29,7 +33,8 @@ function pageCtx(body: string, strip = false): RuleContext {
   } as unknown as RuleContext;
 }
 
-const check = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
+const check = (checks: CheckResult[], name: string) =>
+  checks.find((c) => c.name === name);
 
 describe("a11y/link-text records the section of each flagged link", () => {
   const body =
@@ -49,18 +54,26 @@ describe("a11y/link-text records the section of each flagged link", () => {
   });
 
   test("the same link repeated in two parts of the page is matched to each in order", async () => {
-    const checks = (await linkTextRule.run(
-      pageCtx('<nav><a href="/x">learn more</a></nav><main><a href="/x">learn more</a></main>'),
-    )).checks;
+    const checks = (
+      await linkTextRule.run(
+        pageCtx(
+          '<nav><a href="/x">learn more</a></nav><main><a href="/x">learn more</a></main>'
+        )
+      )
+    ).checks;
     expect(check(checks, "link-text-generic")!.items).toEqual([
       { id: "learn more", regions: { navigation: 1, content: 1 } },
     ]);
   });
 
   test("an anchor the link extractor leaves out does not take another's placement", async () => {
-    const checks = (await linkTextRule.run(
-      pageCtx('<header><a href="#">click here</a></header><footer><a href="https://example.com/#">click here</a></footer>'),
-    )).checks;
+    const checks = (
+      await linkTextRule.run(
+        pageCtx(
+          '<header><a href="#">click here</a></header><footer><a href="https://example.com/#">click here</a></footer>'
+        )
+      )
+    ).checks;
     expect(check(checks, "link-text-generic")!.items).toEqual([
       { id: "click here", regions: { footer: 1 } },
     ]);
@@ -68,30 +81,54 @@ describe("a11y/link-text records the section of each flagged link", () => {
 
   test("a parse without sections records no region, and the items are as before", async () => {
     const checks = (await linkTextRule.run(pageCtx(body, true))).checks;
-    expect(check(checks, "link-text-generic")!.items).toEqual([{ id: "read more" }]);
-    expect(check(checks, "link-text-empty")!.items).toEqual([{ id: "/d", label: "icon-font" }]);
+    expect(check(checks, "link-text-generic")!.items).toEqual([
+      { id: "read more" },
+    ]);
+    expect(check(checks, "link-text-empty")!.items).toEqual([
+      { id: "/d", label: "icon-font" },
+    ]);
   });
 });
 
 describe("page-scope link rules with section labels add regions", () => {
   test("links/anchor-text", async () => {
-    const checks = (await anchorTextRule.run(pageCtx('<footer><a href="/x">click here</a></footer>'))).checks;
-    expect(check(checks, "generic-anchor")!.items![0]).toMatchObject({ regions: { footer: 1 } });
+    const checks = (
+      await anchorTextRule.run(
+        pageCtx('<footer><a href="/x">click here</a></footer>')
+      )
+    ).checks;
+    expect(check(checks, "generic-anchor")!.items![0]).toMatchObject({
+      regions: { footer: 1 },
+    });
   });
 
   test("links/tel-mailto", async () => {
-    const checks = (await telMailtoRule.run(
-      pageCtx('<footer><a href="tel:+61299999999">Call 02 1234 5678</a></footer>'),
-    )).checks;
-    expect(check(checks, "tel-mismatch")!.items![0]).toMatchObject({ regions: { footer: 1 } });
+    const checks = (
+      await telMailtoRule.run(
+        pageCtx(
+          '<footer><a href="tel:+61299999999">Call 02 1234 5678</a></footer>'
+        )
+      )
+    ).checks;
+    expect(check(checks, "tel-mismatch")!.items![0]).toMatchObject({
+      regions: { footer: 1 },
+    });
   });
 });
 
 describe("content/stale-copyright names the footer", () => {
   test("a stale year is a footer finding", async () => {
-    const { document } = parseHTML("<html><body><footer>© 2019 Acme</footer></body></html>");
+    const { document } = parseHTML(
+      "<html><body><footer>© 2019 Acme</footer></body></html>"
+    );
     const ctx = {
-      page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: `${BASE}/`,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: { document } as unknown as ParsedPage,
       options: { current_year: 2026 },
     } as unknown as RuleContext;
@@ -111,23 +148,37 @@ describe("links/broken-links counts pages per section", () => {
       parsed: {
         links: [
           { url: gone, text: "", isInternal: true, section: "footer" },
-          ...(k < 2 ? [{ url: gone, text: "", isInternal: true, section: "content" }] : []),
+          ...(k < 2
+            ? [{ url: gone, text: "", isInternal: true, section: "content" }]
+            : []),
         ],
       },
     }));
     const ctx = {
-      page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: `${BASE}/`,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: {},
       site: {
         baseUrl: BASE,
         robotsTxt: null,
         sitemaps: null,
-        pages: [...pages, { url: gone, statusCode: 404, parsed: { links: [] } }],
+        pages: [
+          ...pages,
+          { url: gone, statusCode: 404, parsed: { links: [] } },
+        ],
       },
       options: {},
     } as unknown as RuleContext;
     // A link in the footer of every page is a sitewide link (#1772): its own check, with the same counts per section.
-    const item = check((await brokenLinksRule.run(ctx)).checks, "broken-links-sitewide")!.items![0]!;
+    const item = check(
+      (await brokenLinksRule.run(ctx)).checks,
+      "broken-links-sitewide"
+    )!.items![0]!;
     expect(item.regions).toEqual({ footer: 10, content: 2 });
   });
 });
@@ -142,7 +193,9 @@ describe("the fold adds per-page regions once per page", () => {
       items: [
         { id: "/", label: "icon-font", regions: { header: 1 } },
         // The same id again on the same page, in the footer this time.
-        ...(k === 0 ? [{ id: "/", label: "icon-font", regions: { header: 1, footer: 1 } }] : []),
+        ...(k === 0
+          ? [{ id: "/", label: "icon-font", regions: { header: 1, footer: 1 } }]
+          : []),
       ],
     }));
     const [aggregate] = foldOverflowChecks(checks, {
@@ -155,7 +208,9 @@ describe("the fold adds per-page regions once per page", () => {
     expect(item.regions).toEqual({ header: 6, footer: 1 });
     expect(item.sourcePages).toHaveLength(4);
     expect(item.pageCount).toBe(6);
-    expect(item.sources?.find((s) => s.page === `${BASE}/p0`)?.sections).toEqual({ header: 1, footer: 1 });
+    expect(
+      item.sources?.find((s) => s.page === `${BASE}/p0`)?.sections
+    ).toEqual({ header: 1, footer: 1 });
   });
 
   test("an aggregate unfolded and folded again keeps its counts", () => {
@@ -166,10 +221,18 @@ describe("the fold adds per-page regions once per page", () => {
       pageUrl: `${BASE}/p${String(k).padStart(2, "0")}`,
       items: [{ id: "read more", regions: { footer: 1 } }],
     }));
-    const limits = { maxChecks: 1, maxPagesPerCheck: 100, maxItemsPerCheck: 100, maxSourcePagesPerItem: 100 };
+    const limits = {
+      maxChecks: 1,
+      maxPagesPerCheck: 100,
+      maxItemsPerCheck: 100,
+      maxSourcePagesPerItem: 100,
+    };
     const [aggregate] = foldOverflowChecks(checks, limits);
     expect(aggregate!.items![0]!.regions).toEqual({ footer: 12 });
-    const [again] = foldOverflowChecks(unfoldAggregateCheck(aggregate!), limits);
+    const [again] = foldOverflowChecks(
+      unfoldAggregateCheck(aggregate!),
+      limits
+    );
     expect(again!.items![0]!.regions).toEqual({ footer: 12 });
   });
 
@@ -200,6 +263,9 @@ describe("the fold adds per-page regions once per page", () => {
         items: [{ id: `${BASE}/gone`, sourcePages, regions: { footer: 49 } }],
       },
     ]);
-    expect(check!.items![0]).toMatchObject({ pageCount: 52, regions: { footer: 49 } });
+    expect(check!.items![0]).toMatchObject({
+      pageCount: 52,
+      regions: { footer: 49 },
+    });
   });
 });

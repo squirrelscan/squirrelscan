@@ -8,10 +8,8 @@
 // 258 KB body of deflated zeros raised a local workerd's RSS by ~215 MiB).
 // `inflateRawSync`'s `maxOutputLength` stops inside the inflate.
 
-import { Buffer } from "node:buffer";
-import { inflateRawSync } from "node:zlib";
-
 import type { ResolutionSignal } from "@squirrelscan/core-contracts";
+
 import {
   REPORT_LIMITS,
   RESOLUTION_PUBLISH_LIMITS,
@@ -22,8 +20,14 @@ import {
   type CompactResolutionSignal,
   resolutionUrlHash,
 } from "@squirrelscan/core-contracts/resolution";
+import { Buffer } from "node:buffer";
+import { inflateRawSync } from "node:zlib";
 
-const isStringArray = (value: unknown, max: number, maxLength: number): value is string[] =>
+const isStringArray = (
+  value: unknown,
+  max: number,
+  maxLength: number
+): value is string[] =>
   Array.isArray(value) &&
   value.length <= max &&
   value.every((s) => typeof s === "string" && s.length <= maxLength);
@@ -42,23 +46,41 @@ const isStringArray = (value: unknown, max: number, maxLength: number): value is
  * small hostile body cannot cost the API isolate (128 MB) more than a few MiB.
  */
 export async function decodeResolutionSignal(
-  compact: CompactResolutionSignal,
+  compact: CompactResolutionSignal
 ): Promise<ResolutionSignal> {
-  if (compact.v !== 1) throw new Error(`unknown compact resolution signal version ${compact.v}`);
+  if (compact.v !== 1)
+    throw new Error(`unknown compact resolution signal version ${compact.v}`);
   // The publish schema bounds this too; the decoder does not rely on it.
-  if (typeof compact.data !== "string" || compact.data.length > RESOLUTION_PUBLISH_LIMITS.maxBytes) {
-    throw new Error("compact resolution signal: data past the signal's byte budget");
+  if (
+    typeof compact.data !== "string" ||
+    compact.data.length > RESOLUTION_PUBLISH_LIMITS.maxBytes
+  ) {
+    throw new Error(
+      "compact resolution signal: data past the signal's byte budget"
+    );
   }
-  const json = inflateCapped(compact.data, RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes);
+  const json = inflateCapped(
+    compact.data,
+    RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes
+  );
   assertParseBounded(json);
   const payload = JSON.parse(json) as Partial<CompactResolutionPayload>;
   const maxKey = REPORT_LIMITS.maxMediumString;
-  if (payload.v !== 1) throw new Error("compact resolution payload: bad version");
-  if (!isStringArray(payload.urls, limits.maxCrawledUrls, REPORT_LIMITS.maxUrlLength)) {
+  if (payload.v !== 1)
+    throw new Error("compact resolution payload: bad version");
+  if (
+    !isStringArray(
+      payload.urls,
+      limits.maxCrawledUrls,
+      REPORT_LIMITS.maxUrlLength
+    )
+  ) {
     throw new Error("compact resolution payload: bad urls");
   }
   const other = payload.other ?? [];
-  if (!isStringArray(other, limits.maxHashesTotal, REPORT_LIMITS.maxUrlLength)) {
+  if (
+    !isStringArray(other, limits.maxHashesTotal, REPORT_LIMITS.maxUrlLength)
+  ) {
     throw new Error("compact resolution payload: bad other");
   }
   if (typeof payload.complete !== "boolean") {
@@ -89,16 +111,20 @@ export async function decodeResolutionSignal(
   const hashes: string[] = [];
   const hashAt = (index: number): string =>
     (hashes[index] ??= resolutionUrlHash(
-      index < urls.length ? urls[index]! : other[index - urls.length]!,
+      index < urls.length ? urls[index]! : other[index - urls.length]!
     ));
   const decodeMap = <T>(
     field: string,
     record: Record<string, number[]> | undefined,
     indexLimit: number,
-    value: (index: number) => T,
+    value: (index: number) => T
   ): Record<string, T[]> => {
     if (record === undefined) return {};
-    if (typeof record !== "object" || record === null || Array.isArray(record)) {
+    if (
+      typeof record !== "object" ||
+      record === null ||
+      Array.isArray(record)
+    ) {
       throw new Error(`compact resolution payload: bad ${field}`);
     }
     const entries = Object.entries(record);
@@ -107,7 +133,11 @@ export async function decodeResolutionSignal(
     const out: Record<string, T[]> = {};
     let total = 0;
     for (const [key, gaps] of entries) {
-      if (key.length > maxKey || !Array.isArray(gaps) || gaps.length > limits.maxHashesPerCheck) {
+      if (
+        key.length > maxKey ||
+        !Array.isArray(gaps) ||
+        gaps.length > limits.maxHashesPerCheck
+      ) {
         throw new Error(`compact resolution payload: bad ${field} entry`);
       }
       total += gaps.length;
@@ -128,9 +158,20 @@ export async function decodeResolutionSignal(
     }
     return out;
   };
-  if (payload.failing === undefined) throw new Error("compact resolution payload: no failing");
-  const failing = decodeMap("failing", payload.failing, urls.length + other.length, hashAt);
-  const notEvaluated = decodeMap("notEvaluated", payload.notEvaluated, urls.length, hashAt);
+  if (payload.failing === undefined)
+    throw new Error("compact resolution payload: no failing");
+  const failing = decodeMap(
+    "failing",
+    payload.failing,
+    urls.length + other.length,
+    hashAt
+  );
+  const notEvaluated = decodeMap(
+    "notEvaluated",
+    payload.notEvaluated,
+    urls.length,
+    hashAt
+  );
 
   // (#2673) The unlisted crawled pages' hashes: one string of 8-hex values, only
   // with a clipped list, at most one per crawled page the list leaves out.
@@ -147,7 +188,8 @@ export async function decodeResolutionSignal(
       throw new Error("compact resolution payload: bad hashes");
     }
     crawledHashes = [];
-    for (let i = 0; i < hashes.length; i += 8) crawledHashes.push(hashes.slice(i, i + 8));
+    for (let i = 0; i < hashes.length; i += 8)
+      crawledHashes.push(hashes.slice(i, i + 8));
   }
   // (#2688) The unlisted pages each key did not evaluate, by index into those
   // hashes: folded into `notEvaluated`, within its caps, which then covers the
@@ -155,33 +197,44 @@ export async function decodeResolutionSignal(
   if (payload.hashesNotEvaluated !== undefined) {
     const hashList = crawledHashes;
     if (!hashList) {
-      throw new Error("compact resolution payload: hashesNotEvaluated without hashes");
+      throw new Error(
+        "compact resolution payload: hashesNotEvaluated without hashes"
+      );
     }
     const unlisted = decodeMap(
       "hashesNotEvaluated",
       payload.hashesNotEvaluated,
       hashList.length,
-      (i) => hashList[i]!,
+      (i) => hashList[i]!
     );
     let total = 0;
     for (const set of Object.values(notEvaluated)) total += set.length;
     for (const [key, set] of Object.entries(unlisted)) {
       const merged = [...(notEvaluated[key] ?? []), ...set];
       total += set.length;
-      if (merged.length > limits.maxHashesPerCheck || total > limits.maxHashesTotal) {
+      if (
+        merged.length > limits.maxHashesPerCheck ||
+        total > limits.maxHashesTotal
+      ) {
         throw new Error("compact resolution payload: notEvaluated size");
       }
       notEvaluated[key] = merged;
     }
   }
 
-  const removedByStatus = decodeMap("removed", payload.removed, urls.length, (i) => urls[i]!);
+  const removedByStatus = decodeMap(
+    "removed",
+    payload.removed,
+    urls.length,
+    (i) => urls[i]!
+  );
   const removedPages: Array<{ url: string; status: number }> = [];
   for (const [status, removedUrls] of Object.entries(removedByStatus)) {
     if (status !== "404" && status !== "410") {
       throw new Error("compact resolution payload: bad removed status");
     }
-    for (const url of removedUrls) removedPages.push({ url, status: Number(status) });
+    for (const url of removedUrls)
+      removedPages.push({ url, status: Number(status) });
   }
   const removedCount = payload.removedCount ?? 0;
   if (
@@ -200,7 +253,9 @@ export async function decodeResolutionSignal(
     failing,
     ...(Object.keys(notEvaluated).length > 0 ? { notEvaluated } : {}),
     ...(truncated.length > 0 ? { truncated } : {}),
-    ...(payload.complete ? {} : { crawledComplete: false, crawledCount: pages }),
+    ...(payload.complete
+      ? {}
+      : { crawledComplete: false, crawledCount: pages }),
     ...(removedPages.length > 0 ? { removedPages } : {}),
     ...(removedCount > 0 ? { removedCount } : {}),
     ...(crawledHashes && crawledHashes.length > 0 ? { crawledHashes } : {}),
@@ -214,10 +269,17 @@ export async function decodeResolutionSignal(
 function inflateCapped(base64: string, maxBytes: number): string {
   let out: Buffer;
   try {
-    out = inflateRawSync(Buffer.from(base64, "base64"), { maxOutputLength: maxBytes });
+    out = inflateRawSync(Buffer.from(base64, "base64"), {
+      maxOutputLength: maxBytes,
+    });
   } catch (err) {
-    if (err instanceof RangeError || (err as { code?: string })?.code === "ERR_BUFFER_TOO_LARGE") {
-      throw new Error(`compact resolution signal inflates past ${maxBytes} bytes`);
+    if (
+      err instanceof RangeError ||
+      (err as { code?: string })?.code === "ERR_BUFFER_TOO_LARGE"
+    ) {
+      throw new Error(
+        `compact resolution signal inflates past ${maxBytes} bytes`
+      );
     }
     throw err;
   }
@@ -233,7 +295,8 @@ function inflateCapped(base64: string, maxBytes: number): string {
 // (strings).
 const limits = RESOLUTION_SIGNAL_LIMITS;
 const MAX_CONTAINERS = 4 * limits.maxChecks + 16;
-const MAX_STRINGS = limits.maxCrawledUrls + limits.maxHashesTotal + 5 * limits.maxChecks + 16;
+const MAX_STRINGS =
+  limits.maxCrawledUrls + limits.maxHashesTotal + 5 * limits.maxChecks + 16;
 /** The longest string a valid payload holds: `hashes` (#2673), 8 hex per crawled page. */
 const MAX_STRING_CHARS = 8 * limits.maxCrawledUrls;
 const MAX_SEPARATORS =
@@ -261,7 +324,9 @@ function assertParseBounded(json: string): void {
       if (c === 92 /* \ */) i++;
       else if (c === 34 /* " */) inString = false;
       if (i - stringStart > MAX_STRING_CHARS) {
-        throw new Error("compact resolution payload: shape past the signal's bounds");
+        throw new Error(
+          "compact resolution payload: shape past the signal's bounds"
+        );
       }
       continue;
     }
@@ -269,15 +334,21 @@ function assertParseBounded(json: string): void {
       inString = true;
       stringStart = i;
       if (++strings > MAX_STRINGS) {
-        throw new Error("compact resolution payload: shape past the signal's bounds");
+        throw new Error(
+          "compact resolution payload: shape past the signal's bounds"
+        );
       }
     } else if (c === 123 /* { */ || c === 91 /* [ */) {
       if (++containers > MAX_CONTAINERS || ++depth > MAX_DEPTH) {
-        throw new Error("compact resolution payload: shape past the signal's bounds");
+        throw new Error(
+          "compact resolution payload: shape past the signal's bounds"
+        );
       }
     } else if (c === 125 /* } */ || c === 93 /* ] */) depth--;
     else if (c === 44 /* , */ && ++separators > MAX_SEPARATORS) {
-      throw new Error("compact resolution payload: shape past the signal's bounds");
+      throw new Error(
+        "compact resolution payload: shape past the signal's bounds"
+      );
     }
   }
 }

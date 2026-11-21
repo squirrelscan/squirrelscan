@@ -1,12 +1,11 @@
 // perf/lcp-hints - LCP optimization hints
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
-import { resolveImageUrl } from "../shared/lcp-candidate";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { resolveImageUrl } from "../shared/lcp-candidate";
 import { getCWVHints } from "./cwv";
 
 const MAX_REPORTED_PRELOAD_URLS = 10;
@@ -51,15 +50,22 @@ export const lcpHintsRule: Rule = {
           page: ctx.page.url,
           candidates: hints.largeImagesWithoutPreload.map((src) => ({
             src: reportedUrl(resolveImageUrl(src, ctx.page.url) ?? src),
-            reason: "first eager likely-LCP candidate, no matching image preload on the page",
+            reason:
+              "first eager likely-LCP candidate, no matching image preload on the page",
           })),
-          preloads: preloadUrls.slice(0, MAX_REPORTED_PRELOAD_URLS).map(reportedUrl),
-          additionalPreloads: Math.max(0, preloadUrls.length - MAX_REPORTED_PRELOAD_URLS),
+          preloads: preloadUrls
+            .slice(0, MAX_REPORTED_PRELOAD_URLS)
+            .map(reportedUrl),
+          additionalPreloads: Math.max(
+            0,
+            preloadUrls.length - MAX_REPORTED_PRELOAD_URLS
+          ),
         },
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "The likely LCP candidate is inferred from markup; LCP was not measured in a browser or field data.",
+          uncertainty:
+            "The likely LCP candidate is inferred from markup; LCP was not measured in a browser or field data.",
         },
       });
     } else {
@@ -70,7 +76,8 @@ export const lcpHintsRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "This is a markup heuristic, not a browser or field LCP measurement.",
+          uncertainty:
+            "This is a markup heuristic, not a browser or field LCP measurement.",
         },
       });
     }

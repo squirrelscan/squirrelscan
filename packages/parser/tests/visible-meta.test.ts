@@ -24,7 +24,8 @@ function articleWithAuthor(author: string): string {
 }
 
 function visibleAuthor(author: string): string | null {
-  return extractVisibleMeta(parseDocument(articleWithAuthor(author))).visibleAuthor;
+  return extractVisibleMeta(parseDocument(articleWithAuthor(author)))
+    .visibleAuthor;
 }
 
 describe("extractVisibleMeta — bare Editor byline suppression (#138)", () => {

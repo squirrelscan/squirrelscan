@@ -16,7 +16,7 @@ const TUPLES: Array<[string, string, string | null, string | null]> = [
   ["fail", "Missing meta description", null, null],
   ["warn", "Title too long", "72", "≤ 60"],
   ["fail", "Broken link", "https://x.test/a", null],
-  ["warn", "msg with | pipe and \"quotes\"", null, "expected|value"],
+  ["warn", 'msg with | pipe and "quotes"', null, "expected|value"],
   ["fail", "", "", ""],
 ];
 
@@ -64,8 +64,8 @@ describe("fingerprint cross-impl parity", () => {
   // GOLDEN: pins the algorithm. If this changes, every stored fingerprint is
   // orphaned — only bump deliberately + document the one-time re-fingerprint.
   test("golden value is stable", () => {
-    expect(findingFingerprint("fail", "Missing meta description", null, null)).toBe(
-      "b40bb59e3f90d1aa479ed006308d70e1892d5214aabe12894448e9444b77b617"
-    );
+    expect(
+      findingFingerprint("fail", "Missing meta description", null, null)
+    ).toBe("b40bb59e3f90d1aa479ed006308d70e1892d5214aabe12894448e9444b77b617");
   });
 });

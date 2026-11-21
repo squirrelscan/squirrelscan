@@ -1,8 +1,8 @@
 // images/lazy-loading - Lazy loading check
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const lazyLoadingRule: Rule = {
   meta: {

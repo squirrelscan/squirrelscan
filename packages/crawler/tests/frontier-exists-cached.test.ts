@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { CrawlMetadata, FrontierRecord } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -20,7 +21,10 @@ async function freshStore(): Promise<SQLiteStorage> {
   return store;
 }
 
-async function freshCrawl(store: SQLiteStorage, baseUrl: string): Promise<string> {
+async function freshCrawl(
+  store: SQLiteStorage,
+  baseUrl: string
+): Promise<string> {
   const meta: Omit<CrawlMetadata, "id"> = {
     baseUrl,
     startedAt: 1,
@@ -82,8 +86,12 @@ describe("hasFrontierEntry", () => {
     const crawlId = await freshCrawl(store, "https://example.com");
     await seed(store, crawlId, "https://example.com/known");
 
-    expect(await run(store.hasFrontierEntry(crawlId, "https://example.com/known"))).toBe(true);
-    expect(await run(store.hasFrontierEntry(crawlId, "https://example.com/unknown"))).toBe(false);
+    expect(
+      await run(store.hasFrontierEntry(crawlId, "https://example.com/known"))
+    ).toBe(true);
+    expect(
+      await run(store.hasFrontierEntry(crawlId, "https://example.com/unknown"))
+    ).toBe(false);
     store.close();
   });
 
@@ -131,7 +139,9 @@ describe("hasFrontierEntry", () => {
     // The whole point of this path is that it is called once per discovered
     // link. Count compilations: db.query caches by SQL text, db.prepare does
     // not, so a regression to prepare shows up here as one compile per call.
-    const db = (store as unknown as { getDb: () => import("bun:sqlite").Database }).getDb();
+    const db = (
+      store as unknown as { getDb: () => import("bun:sqlite").Database }
+    ).getDb();
     let compiles = 0;
     const realPrepare = db.prepare.bind(db);
     const realQuery = db.query.bind(db);

@@ -10,8 +10,9 @@
 import { getPathname } from "@squirrelscan/utils";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 
-import { getRenderedProseText } from "../content/text-content";
 import type { RuleContext } from "../types";
+
+import { getRenderedProseText } from "../content/text-content";
 
 export interface InPageSection {
   /** URL of the page holding the section. */
@@ -24,7 +25,8 @@ export interface InPageSection {
   hasContactMethod: boolean;
 }
 
-const countWords = (text: string): number => text.split(/\s+/).filter(Boolean).length;
+const countWords = (text: string): number =>
+  text.split(/\s+/).filter(Boolean).length;
 
 /** Most `#fragment` anchors read per page: bounds the work on a page of thousands of links. */
 const MAX_FRAGMENT_LINKS = 500;
@@ -68,7 +70,10 @@ export interface InPageSectionSignal {
 export function buildInPageSectionSignal(doc: Document): InPageSectionSignal {
   const out: InPageSectionSignal = { about: null, contact: null };
   const linked = new Set<string>();
-  for (const a of Array.from(doc.querySelectorAll("a[href^='#']")).slice(0, MAX_FRAGMENT_LINKS)) {
+  for (const a of Array.from(doc.querySelectorAll("a[href^='#']")).slice(
+    0,
+    MAX_FRAGMENT_LINKS
+  )) {
     const id = fragmentId((a.getAttribute("href") ?? "").trim());
     if (id) linked.add(id);
   }
@@ -85,10 +90,16 @@ export function buildInPageSectionSignal(doc: Document): InPageSectionSignal {
     // stays one path segment instead of reading as a deeper path or a query.
     const asPath = `/${encodeURIComponent(id)}`;
     for (const kind of ["about", "contact"] as const) {
-      if (out[kind] || !EEAT_PAGE_PATTERNS[kind].some((p) => p.test(asPath))) continue;
+      if (out[kind] || !EEAT_PAGE_PATTERNS[kind].some((p) => p.test(asPath)))
+        continue;
       hasContactMethod ??=
-        doc.querySelector("a[href^='mailto:' i], a[href^='tel:' i], form") !== null;
-      out[kind] = { id, wordCount: countWords(getRenderedProseText(el)), hasContactMethod };
+        doc.querySelector("a[href^='mailto:' i], a[href^='tel:' i], form") !==
+        null;
+      out[kind] = {
+        id,
+        wordCount: countWords(getRenderedProseText(el)),
+        hasContactMethod,
+      };
     }
   }
   return out;
@@ -99,9 +110,15 @@ export function buildInPageSectionSignal(doc: Document): InPageSectionSignal {
  * would read as "no section" and warn on a one-page site. Mirrors links/broken-anchors:
  * the rules skip and ask for a re-run instead (#1236).
  */
-export function inPageSectionsUnmeasured(ctx: Pick<RuleContext, "collectedSignals">): boolean {
+export function inPageSectionsUnmeasured(
+  ctx: Pick<RuleContext, "collectedSignals">
+): boolean {
   const pages = ctx.collectedSignals?.pages;
-  return !!pages && pages.length > 0 && pages.every((rec) => rec.inPageSections === undefined);
+  return (
+    !!pages &&
+    pages.length > 0 &&
+    pages.every((rec) => rec.inPageSections === undefined)
+  );
 }
 
 export const INPAGE_SECTIONS_UNMEASURED_MESSAGE =
@@ -114,7 +131,7 @@ export const INPAGE_SECTIONS_UNMEASURED_MESSAGE =
  */
 export function findInPageSection(
   ctx: Pick<RuleContext, "site" | "collectedSignals">,
-  kind: InPageSectionKind,
+  kind: InPageSectionKind
 ): InPageSection | null {
   const collected = ctx.collectedSignals;
   if (collected) {

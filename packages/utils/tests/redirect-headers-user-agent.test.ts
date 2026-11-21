@@ -16,7 +16,7 @@ describe("headersForRedirect and the User-Agent", () => {
         Cookie: "session=secret",
       },
       "https://site.test/a",
-      "https://other.test/b",
+      "https://other.test/b"
     );
     expect(next.get("user-agent")).toBe("acme-monitor/2.0");
     expect(next.has("authorization")).toBe(false);
@@ -28,7 +28,7 @@ describe("headersForRedirect and the User-Agent", () => {
     const next = headersForRedirect(
       { "User-Agent": "acme-monitor/2.0", Authorization: "Bearer secret" },
       "https://site.test/a",
-      "https://site.test/b",
+      "https://site.test/b"
     );
     expect(next.get("authorization")).toBe("Bearer secret");
   });

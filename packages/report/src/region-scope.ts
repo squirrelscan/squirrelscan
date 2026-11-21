@@ -12,7 +12,12 @@ import {
 } from "@squirrelscan/core-contracts";
 
 import { isRedundantPageItem } from "./affected-pages";
-import { checkPageTypeScope, hasCarriedPages, pageTypeScopeLine, type PageTypeScopeCheck } from "./page-type-scope";
+import {
+  checkPageTypeScope,
+  hasCarriedPages,
+  pageTypeScopeLine,
+  type PageTypeScopeCheck,
+} from "./page-type-scope";
 import { structureNumber } from "./structure";
 
 /**
@@ -59,7 +64,10 @@ const REGION_NAME: Record<TemplateRegion, string> = {
 };
 
 export function isTemplateRegion(value: unknown): value is TemplateRegion {
-  return typeof value === "string" && (TEMPLATE_REGIONS as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (TEMPLATE_REGIONS as readonly string[]).includes(value)
+  );
 }
 
 export interface RegionScope {
@@ -73,10 +81,15 @@ export interface RegionScope {
 }
 
 const count = (value: unknown): number =>
-  typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : 0;
 
 /** Audited pages with at least one link in the region; 0 when the report has no structure. */
-function regionPagesOf(structure: ReportStructure | undefined, region: TemplateRegion): number {
+function regionPagesOf(
+  structure: ReportStructure | undefined,
+  region: TemplateRegion
+): number {
   if (!structure || !Array.isArray(structure.sections)) return 0;
   return count(structure.sections.find((s) => s?.section === region)?.pages);
 }
@@ -85,7 +98,7 @@ function scopeOf(
   region: TemplateRegion,
   pages: number,
   totalPages: number,
-  structure: ReportStructure | undefined,
+  structure: ReportStructure | undefined
 ): RegionScope | undefined {
   const havingRegion = regionPagesOf(structure, region);
   if (pages < REGION_SCOPE_MIN_PAGES || havingRegion === 0) return undefined;
@@ -93,7 +106,12 @@ function scopeOf(
   // with no links): never print "on 50 of 48 pages".
   const regionPages = Math.max(havingRegion, pages);
   if (pages / regionPages < REGION_SCOPE_MIN_SHARE) return undefined;
-  return { region, pages, regionPages, otherPages: Math.max(0, totalPages - pages) };
+  return {
+    region,
+    pages,
+    regionPages,
+    otherPages: Math.max(0, totalPages - pages),
+  };
 }
 
 /** Pages an item is on: its listed pages, or the count a capped list keeps beside them. */
@@ -112,7 +130,7 @@ function itemTotalPages(item: CheckItem): number {
 export function itemRegionScope(
   item: CheckItem,
   structure: ReportStructure | undefined,
-  check?: PageTypeScopeCheck,
+  check?: PageTypeScopeCheck
 ): RegionScope | undefined {
   if (check && hasCarriedPages(check)) return undefined;
   const regions = item.regions;
@@ -121,7 +139,12 @@ export function itemRegionScope(
   for (const region of TEMPLATE_REGIONS) {
     const pages = count(Object.hasOwn(regions, region) ? regions[region] : 0);
     if (pages === 0) continue;
-    const scope = scopeOf(region, pages, Math.max(itemTotalPages(item), pages), structure);
+    const scope = scopeOf(
+      region,
+      pages,
+      Math.max(itemTotalPages(item), pages),
+      structure
+    );
     if (scope && (!best || scope.pages > best.pages)) best = scope;
   }
   return best;
@@ -135,7 +158,7 @@ export function itemRegionScope(
 export function checkRegionScope(
   check: PageTypeScopeCheck,
   pages: number,
-  structure: ReportStructure | undefined,
+  structure: ReportStructure | undefined
 ): RegionScope | undefined {
   if (hasCarriedPages(check)) return undefined;
   const region = check.details?.region;
@@ -153,13 +176,15 @@ export function checkRegionScope(
 export function checkPagesScopedAway(
   check: PageTypeScopeCheck & { items?: CheckItem[] },
   pages: number,
-  structure: ReportStructure | undefined,
+  structure: ReportStructure | undefined
 ): boolean {
   if (checkRegionScope(check, pages, structure)) return true;
   if (checkPageTypeScope(check, pages, structure)) return true;
   const items = check.items ?? [];
   if (items.length === 0 || items.some(isRedundantPageItem)) return false;
-  return items.some((item) => itemRegionScope(item, structure, check) !== undefined);
+  return items.some(
+    (item) => itemRegionScope(item, structure, check) !== undefined
+  );
 }
 
 /**
@@ -169,7 +194,7 @@ export function checkPagesScopedAway(
 export function checkScopeLine(
   check: PageTypeScopeCheck,
   pages: number,
-  structure: ReportStructure | undefined,
+  structure: ReportStructure | undefined
 ): string | undefined {
   const region = checkRegionScope(check, pages, structure);
   if (region) return regionScopeLine(region);
@@ -191,7 +216,10 @@ export function regionScopeLine(scope: RegionScope): string {
  * in a region drops the ", linked in the footer" phrase its rule added from `meta.sections`: the
  * region line says where it is. Any other label, and every unscoped item's, is as the rule wrote it.
  */
-export function itemLabel(item: CheckItem, scope: RegionScope | undefined): string | undefined {
+export function itemLabel(
+  item: CheckItem,
+  scope: RegionScope | undefined
+): string | undefined {
   const label = item.label;
   if (!label || !scope) return label;
   const sections = item.meta?.sections;

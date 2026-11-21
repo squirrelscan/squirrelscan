@@ -4,9 +4,10 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import type { PageFindingRecord, SitePageRecord } from "../src/storage/types";
-import { SQLiteStorage } from "../src/storage/sqlite";
+
 // The contract suite lives with the store interface it pins, in audit-engine.
 import { describeSitePagesContract } from "../../audit-engine/tests/helpers/site-pages-contract";
+import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -51,7 +52,7 @@ describe("page_findings store", () => {
         finding(),
         finding({ normalizedUrl: "https://example.com/b", fingerprint: "fp2" }),
         finding({ siteKey: "https://other.com", fingerprint: "fp3" }),
-      ]),
+      ])
     );
     const got = await run(store.getFindings(SITE));
     expect(got.length).toBe(2);
@@ -65,7 +66,9 @@ describe("page_findings store", () => {
   test("upsert is idempotent on the PK (url, rule, check, locator)", async () => {
     const store = await freshStore();
     await run(store.upsertFindings([finding({ message: "v1" })]));
-    await run(store.upsertFindings([finding({ message: "v2", fingerprint: "fp-new" })]));
+    await run(
+      store.upsertFindings([finding({ message: "v2", fingerprint: "fp-new" })])
+    );
     const got = await run(store.getFindings(SITE));
     expect(got.length).toBe(1);
     expect(got[0].message).toBe("v2");
@@ -80,7 +83,7 @@ describe("page_findings store", () => {
         finding({ locator: "" }),
         finding({ locator: "item-1", fingerprint: "fp-i1" }),
         finding({ locator: "item-2", fingerprint: "fp-i2" }),
-      ]),
+      ])
     );
     const got = await run(store.getFindings(SITE));
     expect(got.length).toBe(3);
@@ -90,7 +93,11 @@ describe("page_findings store", () => {
   test("markPageRemoved stales findings + flips page state", async () => {
     const store = await freshStore();
     const url = "https://example.com/gone";
-    await run(store.upsertFindings([finding({ normalizedUrl: url, fingerprint: "fpg" })]));
+    await run(
+      store.upsertFindings([
+        finding({ normalizedUrl: url, fingerprint: "fpg" }),
+      ])
+    );
     await run(
       store.upsertSitePages([
         {
@@ -101,7 +108,7 @@ describe("page_findings store", () => {
           lastSeenCrawlId: "crawl-1",
           lastSeenAt: 1000,
         },
-      ]),
+      ])
     );
     await run(store.markPageRemoved(SITE, url, "crawl-2", 404));
 
@@ -119,7 +126,7 @@ describe("page_findings store", () => {
         finding({ locator: "a", state: "open", fingerprint: "fa" }),
         finding({ locator: "b", state: "resolved", fingerprint: "fb" }),
         finding({ locator: "c", state: "stale", fingerprint: "fc" }),
-      ]),
+      ])
     );
     const open = await run(store.getFindings(SITE, ["open"]));
     expect(open.length).toBe(1);
@@ -186,10 +193,25 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertFindings([
-        finding({ locator: "old-resolved", state: "resolved", fingerprint: "r1", lastSeenAt: NOW - 200 * DAY }),
-        finding({ locator: "old-stale", state: "stale", fingerprint: "s1", lastSeenAt: NOW - 200 * DAY }),
-        finding({ locator: "recent-resolved", state: "resolved", fingerprint: "r2", lastSeenAt: NOW - 1 * DAY }),
-      ]),
+        finding({
+          locator: "old-resolved",
+          state: "resolved",
+          fingerprint: "r1",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+        finding({
+          locator: "old-stale",
+          state: "stale",
+          fingerprint: "s1",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+        finding({
+          locator: "recent-resolved",
+          state: "resolved",
+          fingerprint: "r2",
+          lastSeenAt: NOW - 1 * DAY,
+        }),
+      ])
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
     expect(deleted).toBe(2);
@@ -204,10 +226,26 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertFindings([
-        finding({ locator: "ancient-open", state: "open", fingerprint: "o1", lastSeenAt: NOW - 9999 * DAY }),
-        finding({ locator: "ancient-open-carried", state: "open", provenance: "carried", fingerprint: "o2", lastSeenAt: NOW - 9999 * DAY }),
-        finding({ locator: "ancient-stale", state: "stale", fingerprint: "s1", lastSeenAt: NOW - 9999 * DAY }),
-      ]),
+        finding({
+          locator: "ancient-open",
+          state: "open",
+          fingerprint: "o1",
+          lastSeenAt: NOW - 9999 * DAY,
+        }),
+        finding({
+          locator: "ancient-open-carried",
+          state: "open",
+          provenance: "carried",
+          fingerprint: "o2",
+          lastSeenAt: NOW - 9999 * DAY,
+        }),
+        finding({
+          locator: "ancient-stale",
+          state: "stale",
+          fingerprint: "s1",
+          lastSeenAt: NOW - 9999 * DAY,
+        }),
+      ])
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
     expect(deleted).toBe(1); // only the stale row
@@ -224,10 +262,22 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertSitePages([
-        sitePage({ normalizedUrl: "https://example.com/active-old", state: "active", lastSeenAt: NOW - 9999 * DAY }),
-        sitePage({ normalizedUrl: "https://example.com/removed-old", state: "removed", lastSeenAt: NOW - 200 * DAY }),
-        sitePage({ normalizedUrl: "https://example.com/removed-recent", state: "removed", lastSeenAt: NOW - 1 * DAY }),
-      ]),
+        sitePage({
+          normalizedUrl: "https://example.com/active-old",
+          state: "active",
+          lastSeenAt: NOW - 9999 * DAY,
+        }),
+        sitePage({
+          normalizedUrl: "https://example.com/removed-old",
+          state: "removed",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+        sitePage({
+          normalizedUrl: "https://example.com/removed-recent",
+          state: "removed",
+          lastSeenAt: NOW - 1 * DAY,
+        }),
+      ])
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
     expect(deleted).toBe(1); // only removed-old
@@ -243,8 +293,13 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertFindings([
-        finding({ locator: "recent", state: "resolved", fingerprint: "r1", lastSeenAt: NOW - 10 * DAY }),
-      ]),
+        finding({
+          locator: "recent",
+          state: "resolved",
+          fingerprint: "r1",
+          lastSeenAt: NOW - 10 * DAY,
+        }),
+      ])
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
     expect(deleted).toBe(0);
@@ -262,13 +317,18 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
         state: "resolved",
         fingerprint: `fp${i}`,
         lastSeenAt: NOW - (5 - i) * 1000,
-      }),
+      })
     );
     // plus one open row that must be ignored by the cap entirely
-    await run(store.upsertFindings([...recent, finding({ locator: "keep-open", state: "open", fingerprint: "open" })]));
+    await run(
+      store.upsertFindings([
+        ...recent,
+        finding({ locator: "keep-open", state: "open", fingerprint: "open" }),
+      ])
+    );
 
     const deleted = await run(
-      store.compactFindings(SITE, { now: NOW, maxTerminalFindings: 2 }),
+      store.compactFindings(SITE, { now: NOW, maxTerminalFindings: 2 })
     );
     expect(deleted).toBe(3); // 5 terminal - 2 kept
 
@@ -283,11 +343,16 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     // many open rows, zero terminal → cap of 1 deletes nothing
     const opens = Array.from({ length: 10 }, (_, i) =>
-      finding({ locator: `o${i}`, state: "open", fingerprint: `fp${i}`, lastSeenAt: NOW - i * 1000 }),
+      finding({
+        locator: `o${i}`,
+        state: "open",
+        fingerprint: `fp${i}`,
+        lastSeenAt: NOW - i * 1000,
+      })
     );
     await run(store.upsertFindings(opens));
     const deleted = await run(
-      store.compactFindings(SITE, { now: NOW, maxTerminalFindings: 1 }),
+      store.compactFindings(SITE, { now: NOW, maxTerminalFindings: 1 })
     );
     expect(deleted).toBe(0);
     expect((await run(store.getFindings(SITE))).length).toBe(10);
@@ -298,9 +363,21 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     const store = await freshStore();
     await run(
       store.upsertFindings([
-        finding({ siteKey: SITE, locator: "a", state: "stale", fingerprint: "f1", lastSeenAt: NOW - 200 * DAY }),
-        finding({ siteKey: "https://other.com", locator: "b", state: "stale", fingerprint: "f2", lastSeenAt: NOW - 200 * DAY }),
-      ]),
+        finding({
+          siteKey: SITE,
+          locator: "a",
+          state: "stale",
+          fingerprint: "f1",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+        finding({
+          siteKey: "https://other.com",
+          locator: "b",
+          state: "stale",
+          fingerprint: "f2",
+          lastSeenAt: NOW - 200 * DAY,
+        }),
+      ])
     );
     const deleted = await run(store.compactFindings(SITE, { now: NOW }));
     expect(deleted).toBe(1);
@@ -318,10 +395,11 @@ describeSitePagesContract(
     return {
       store,
       getSitePages: (siteKey: string) => run(store.getSitePages(siteKey)),
-      upsertSitePages: (pages: SitePageRecord[]) => run(store.upsertSitePages(pages)),
+      upsertSitePages: (pages: SitePageRecord[]) =>
+        run(store.upsertSitePages(pages)),
     };
   },
   async ({ store }) => {
     await run(store.close());
-  },
+  }
 );

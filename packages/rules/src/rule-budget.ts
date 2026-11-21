@@ -139,13 +139,20 @@ export function runWithinBudget<T>(fn: () => T, budgetMs: number): T {
   slot.fn = fn;
   const started = performance.now();
   try {
-    return callSlot.runInContext(context, { timeout: Math.ceil(budgetMs) }) as T;
+    return callSlot.runInContext(context, {
+      timeout: Math.ceil(budgetMs),
+    }) as T;
   } catch (e) {
-    if ((e as { code?: unknown } | null)?.code === "ERR_SCRIPT_EXECUTION_TIMEOUT") {
+    if (
+      (e as { code?: unknown } | null)?.code === "ERR_SCRIPT_EXECUTION_TIMEOUT"
+    ) {
       // The rule stopped at an arbitrary point, possibly mid `exec()` loop on a
       // shared `/g` or `/y` regex whose `lastIndex` would carry into the next rule.
       resetSharedRegexes();
-      throw new RuleTimeoutError(budgetMs, Math.round(performance.now() - started));
+      throw new RuleTimeoutError(
+        budgetMs,
+        Math.round(performance.now() - started)
+      );
     }
     throw e;
   } finally {

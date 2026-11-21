@@ -72,7 +72,9 @@ export function stripComments(css: string): string {
 
 /** A character that continues a CSS name: `myurl(` is not `url(`. */
 export function isNameChar(ch: string | undefined): boolean {
-  return ch !== undefined && (/[-_a-zA-Z0-9\\]/.test(ch) || ch.charCodeAt(0) >= 0x80);
+  return (
+    ch !== undefined && (/[-_a-zA-Z0-9\\]/.test(ch) || ch.charCodeAt(0) >= 0x80)
+  );
 }
 
 const CSS_WHITESPACE = new Set(["\t", "\n", "\f", "\r", " "]);

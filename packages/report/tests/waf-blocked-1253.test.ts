@@ -2,10 +2,12 @@
 // what matched, the code and the remedies; other blocked pages are counted and
 // listed in every output and never scored. Site-chosen strings are escaped.
 
+import type { WafBlockedPage } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { WafBlockedPage } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../src/types";
+
 import { getAuditFailureNotice } from "../src/failure-notice";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
@@ -71,7 +73,7 @@ describe("a blocked seed", () => {
     const text = renderText(seedBlocked);
     expect(text).toContain("AUDIT BLOCKED");
     expect(text).toContain(
-      "Cloudflare served a challenge or block page instead of shop.example.com",
+      "Cloudflare served a challenge or block page instead of shop.example.com"
     );
     expect(text).toContain("cf-mitigated: challenge header, HTTP 403");
     expect(text).toContain("blocked_by_cloudflare");
@@ -89,7 +91,7 @@ describe("a blocked seed", () => {
     expect(xml).toContain('<status state="blocked"');
     expect(xml).toContain("<remedy>Allowlist the `SquirrelScan` user agent");
     expect(xml).toContain(
-      '<waf-blocked pages="1" providers="Cloudflare" code="blocked_by_cloudflare">',
+      '<waf-blocked pages="1" providers="Cloudflare" code="blocked_by_cloudflare">'
     );
   });
 
@@ -111,10 +113,12 @@ describe("a blocked seed", () => {
       "shop.example.com",
       undefined,
       "http_4xx",
-      seed,
+      seed
     );
     expect(notice?.heading).toBe("Cloudflare blocked the audit");
-    expect(notice?.steps[0]).toContain("Allowlist the `SquirrelScan` user agent");
+    expect(notice?.steps[0]).toContain(
+      "Allowlist the `SquirrelScan` user agent"
+    );
     const html = renderHtml(seedBlocked);
     expect(html).toContain("Cloudflare blocked the audit");
   });
@@ -125,13 +129,19 @@ describe("blocked pages that did not stop the audit", () => {
     const line =
       "3 of 15 pages blocked by DataDome. Blocked pages were not audited and do not count in the score.";
     expect(renderText(someBlocked)).toContain(line);
-    expect(renderText(someBlocked)).toContain("https://shop.example.com/cart: DataDome, HTTP 200");
+    expect(renderText(someBlocked)).toContain(
+      "https://shop.example.com/cart: DataDome, HTTP 200"
+    );
     expect(renderMarkdown(someBlocked)).toContain(line);
     expect(renderLlm(someBlocked)).toContain(
-      '<waf-blocked pages="3" providers="DataDome" code="blocked_by_datadome">',
+      '<waf-blocked pages="3" providers="DataDome" code="blocked_by_datadome">'
     );
-    expect(renderLlm(someBlocked)).toContain("Do not report them as broken pages.");
-    expect(renderHtml(someBlocked)).toContain("3 of 15 pages blocked by DataDome");
+    expect(renderLlm(someBlocked)).toContain(
+      "Do not report them as broken pages."
+    );
+    expect(renderHtml(someBlocked)).toContain(
+      "3 of 15 pages blocked by DataDome"
+    );
     expect(JSON.parse(renderJson(someBlocked)).wafBlocked).toMatchObject({
       total: 3,
       providers: ["DataDome"],
@@ -168,7 +178,11 @@ describe("site-chosen fields are escaped", () => {
   test("no output carries the raw escape or an unescaped tag", () => {
     const report: AuditReport = {
       ...someBlocked,
-      wafBlocked: { total: 1, pages: [hostile], providers: ["Evil\u001b[2J<b>"] },
+      wafBlocked: {
+        total: 1,
+        pages: [hostile],
+        providers: ["Evil\u001b[2J<b>"],
+      },
     };
     for (const out of [
       renderText(report),

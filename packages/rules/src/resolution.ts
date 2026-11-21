@@ -15,9 +15,11 @@
 // Worker-clean like fold.ts: core-contracts + utils only, no rule runtime. The
 // compact encoder deflates with node:zlib, which only the producers (Bun) call.
 
-import { deflateRawSync } from "node:zlib";
+import type {
+  CheckResult,
+  ResolutionSignal,
+} from "@squirrelscan/core-contracts";
 
-import type { CheckResult, ResolutionSignal } from "@squirrelscan/core-contracts";
 import {
   REPORT_LIMITS,
   RESOLUTION_PUBLISH_LIMITS,
@@ -40,6 +42,7 @@ import {
 } from "@squirrelscan/core-contracts/resolution";
 import { byteLength } from "@squirrelscan/utils/bytes";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { deflateRawSync } from "node:zlib";
 
 import { clipPageStatusesToBytes } from "./fold";
 
@@ -130,7 +133,7 @@ function isThrownRuleRow(ruleId: string, check: CheckResult): boolean {
  */
 function collectResolutionEvidence(
   ruleResults: Record<string, { checks: CheckResult[] }>,
-  crawledPageUrls: string[],
+  crawledPageUrls: string[]
 ): ResolutionEvidence {
   const limits = RESOLUTION_SIGNAL_LIMITS;
   // Keys in report order, so the whole-signal budget clips deterministically;
@@ -164,7 +167,10 @@ function collectResolutionEvidence(
   let timedOutRules = 0;
   for (const [ruleId, rule] of Object.entries(ruleResults)) {
     if (
-      rule.checks.some((c) => isRuleWideGapSkipReason(c.skipReason) || isThrownRuleRow(ruleId, c))
+      rule.checks.some(
+        (c) =>
+          isRuleWideGapSkipReason(c.skipReason) || isThrownRuleRow(ruleId, c)
+      )
     )
       timedOutRules++;
   }
@@ -180,7 +186,11 @@ function collectResolutionEvidence(
   const ruleEvaluated = new Map<string, Set<string>>();
   const explicitSkips = new Map<string, Set<string>>();
   const noteExplicitSkip = (key: string, check: CheckResult): void => {
-    const urls = check.pageUrl ? [check.pageUrl] : check.details?.aggregated === true ? (check.pages ?? []) : [];
+    const urls = check.pageUrl
+      ? [check.pageUrl]
+      : check.details?.aggregated === true
+        ? (check.pages ?? [])
+        : [];
     if (urls.length === 0) return;
     let skipped = explicitSkips.get(key);
     if (!skipped) explicitSkips.set(key, (skipped = new Set<string>()));
@@ -205,7 +215,10 @@ function collectResolutionEvidence(
 
   for (const [ruleId, rule] of Object.entries(ruleResults)) {
     for (const check of rule.checks) {
-      if (check.status === "skipped" && isRuleNotApplicableReason(check.skipReason)) {
+      if (
+        check.status === "skipped" &&
+        isRuleNotApplicableReason(check.skipReason)
+      ) {
         // A fold can turn these into one aggregate with pages[]. The runner gives
         // the skip its own `details.foldKey`, so an aggregate is trusted only when
         // it carries that key (every constituent was a noindex skip, not a mix
@@ -238,7 +251,9 @@ function collectResolutionEvidence(
         // absent key resolves. Recorded per rule, keyed below.
         const listed = check.pageUrl
           ? [check.pageUrl]
-          : check.details?.aggregated === true && check.pages && check.pages.length > 0
+          : check.details?.aggregated === true &&
+              check.pages &&
+              check.pages.length > 0
             ? check.pages
             : null;
         const clipped =
@@ -286,11 +301,13 @@ function collectResolutionEvidence(
       const checkNotApplicable =
         check.status === "skipped" &&
         check.skipReason === CHECK_NOT_APPLICABLE_SKIP_REASON &&
-        (!!check.pageUrl || check.details?.foldKey === CHECK_NOT_APPLICABLE_SKIP_REASON);
+        (!!check.pageUrl ||
+          check.details?.foldKey === CHECK_NOT_APPLICABLE_SKIP_REASON);
       // (#1031) An `info` is a verdict too ("No form inputs found": the check ran on the page and found
       // nothing to fail), unless the rule marks it `details.inconclusive` ("could not judge": content too
       // short, markup unreadable, classifier unsure): that one is not evaluation evidence, like a skip.
-      const inconclusive = check.status === "info" && check.details?.inconclusive === true;
+      const inconclusive =
+        check.status === "info" && check.details?.inconclusive === true;
       if ((check.status === "skipped" && !checkNotApplicable) || inconclusive) {
         const skipKey = resolutionCheckKey(ruleId, check.name);
         noteExplicitSkip(skipKey, check);
@@ -319,7 +336,8 @@ function collectResolutionEvidence(
       // the signal's own budget: a producer replaying thousands of stale findings
       // would push the pages this crawl DID evaluate past `maxChecks` and out of
       // the signal entirely, which costs real resolutions.
-      if (check.provenance === "carried" || check.provenance === "unrendered") continue;
+      if (check.provenance === "carried" || check.provenance === "unrendered")
+        continue;
       const aggregated = check.details?.aggregated === true;
       const pageUrls = check.pageUrl
         ? [check.pageUrl]
@@ -346,11 +364,15 @@ function collectResolutionEvidence(
       for (const url of pageUrls) ev.add(normalized(url));
       if (check.status !== "skipped") {
         let rulePages = ruleEvaluated.get(ruleId);
-        if (!rulePages) ruleEvaluated.set(ruleId, (rulePages = new Set<string>()));
+        if (!rulePages)
+          ruleEvaluated.set(ruleId, (rulePages = new Set<string>()));
         for (const url of pageUrls) rulePages.add(normalized(url));
       }
       if (check.name.endsWith(UNCONFIRMED_CHECK_SUFFIX)) {
-        const base = resolutionCheckKey(ruleId, check.name.slice(0, -UNCONFIRMED_CHECK_SUFFIX.length));
+        const base = resolutionCheckKey(
+          ruleId,
+          check.name.slice(0, -UNCONFIRMED_CHECK_SUFFIX.length)
+        );
         let pages = unconfirmedOf.get(base);
         if (!pages) {
           pages = new Set<string>();
@@ -417,7 +439,8 @@ function collectResolutionEvidence(
   // Each failing set in URL order, so where a count cap cuts it and which page
   // stands for a hash collision depend on the pages, not on the order the checks
   // listed them in.
-  for (const [key, pages] of failing) failing.set(key, new Set([...pages].sort()));
+  for (const [key, pages] of failing)
+    failing.set(key, new Set([...pages].sort()));
 
   // Deduped by normalized URL (not by hash) — see `evaluated` above for why
   // hash identity must not decide membership.
@@ -437,7 +460,10 @@ function collectResolutionEvidence(
   for (const [ruleId, pages] of timedOut) {
     if (evaluated.size >= limits.maxChecks) break; // unreachable: `checkCap` reserved the room
     const key = resolutionRuleKey(ruleId);
-    evaluated.set(key, pages === true ? new Set() : new Set(crawled.filter((n) => !pages.has(n))));
+    evaluated.set(
+      key,
+      pages === true ? new Set() : new Set(crawled.filter((n) => !pages.has(n)))
+    );
   }
 
   const hashCache = new Map<string, string>();
@@ -480,11 +506,12 @@ function collectResolutionEvidence(
  */
 export function buildResolutionSignal(
   ruleResults: Record<string, { checks: CheckResult[] }>,
-  crawledPageUrls: string[],
+  crawledPageUrls: string[]
 ): ResolutionSignal | undefined {
   const limits = RESOLUTION_SIGNAL_LIMITS;
   const evidence = collectResolutionEvidence(ruleResults, crawledPageUrls);
-  if (evidence.crawledRaw.length === 0 && evidence.failing.size === 0) return undefined;
+  if (evidence.crawledRaw.length === 0 && evidence.failing.size === 0)
+    return undefined;
   const truncated = new Set(evidence.truncated);
   const urlHash = evidence.hash;
 
@@ -507,7 +534,10 @@ export function buildResolutionSignal(
   // publish-payload invariant.
   let totalHashes = 0;
   for (const [key, set] of failing) {
-    const budget = Math.min(limits.maxHashesPerCheck, limits.maxHashesTotal - totalHashes);
+    const budget = Math.min(
+      limits.maxHashesPerCheck,
+      limits.maxHashesTotal - totalHashes
+    );
     if (set.size > budget) {
       const kept = [...set].slice(0, Math.max(0, budget));
       set.clear();
@@ -532,7 +562,9 @@ export function buildResolutionSignal(
     let notEvaluatedTotal = 0;
     for (const [key, ev] of evidence.evaluated) {
       if (truncated.has(key)) continue; // already non-authoritative
-      const missing = evidence.crawled.filter((norm) => !ev.has(norm)).map(urlHash);
+      const missing = evidence.crawled
+        .filter((norm) => !ev.has(norm))
+        .map(urlHash);
       if (missing.length === 0) continue;
       // An oversized complement costs more than it's worth: drop resolve
       // authority for the key instead (safe direction).
@@ -578,10 +610,11 @@ function compactPayload(
   evidence: ResolutionEvidence,
   listed: number,
   kept?: ReadonlySet<string>,
-  withHashes = false,
+  withHashes = false
 ): CompactResolutionPayload {
   const limits = RESOLUTION_SIGNAL_LIMITS;
-  const complete = !evidence.crawledOverCap && listed >= evidence.crawled.length;
+  const complete =
+    !evidence.crawledOverCap && listed >= evidence.crawled.length;
   const listedPages = evidence.crawled.slice(0, listed);
   // Sorted: neighbouring URLs share long prefixes, which is most of what makes
   // the list deflate to ~10 bytes a page on a real site.
@@ -602,7 +635,10 @@ function compactPayload(
     // The same per-check and whole-signal caps as the original shape, which
     // also bound what the decoder materializes server-side. Counted in distinct
     // hashes, as the original counts its hash set, so both clip at the same page.
-    const budget = Math.min(limits.maxHashesPerCheck, limits.maxHashesTotal - total);
+    const budget = Math.min(
+      limits.maxHashesPerCheck,
+      limits.maxHashesTotal - total
+    );
     const indexes: number[] = [];
     const hashes = new Set<string>();
     for (const url of pages) {
@@ -642,7 +678,9 @@ function compactPayload(
   // Not past the collection cap: pages beyond `maxCrawledUrls` were never
   // collected, and a set that misses some crawled pages would read as complete.
   const unlistedPages =
-    withHashes && !complete && !evidence.crawledOverCap ? evidence.crawled.slice(listed) : [];
+    withHashes && !complete && !evidence.crawledOverCap
+      ? evidence.crawled.slice(listed)
+      : [];
   const hashes = [...new Set(unlistedPages.map(evidence.hash))].sort();
   const hashIndex = new Map<string, number>();
   for (let i = 0; i < hashes.length; i++) hashIndex.set(hashes[i]!, i);
@@ -657,7 +695,8 @@ function compactPayload(
   for (const [key, ev] of evidence.evaluated) {
     if (truncated.has(key)) continue;
     const missing: number[] = [];
-    for (const url of listedPages) if (!ev.has(url)) missing.push(position.get(url)!);
+    for (const url of listedPages)
+      if (!ev.has(url)) missing.push(position.get(url)!);
     const missingHashed = new Set<number>();
     for (const url of unlistedPages) {
       if (!ev.has(url)) missingHashed.add(hashIndex.get(evidence.hash(url))!);
@@ -697,14 +736,16 @@ function compactPayload(
     for (const indexes of failing.values()) {
       for (let i = 0; i < indexes.length; i++) {
         const index = indexes[i]!;
-        if (index >= urls.length) indexes[i] = sortedIndex.get(other[index - urls.length]!)!;
+        if (index >= urls.length)
+          indexes[i] = sortedIndex.get(other[index - urls.length]!)!;
       }
     }
   }
 
   const gaps = (map: Map<string, number[]>): Record<string, number[]> => {
     const out: Record<string, number[]> = {};
-    for (const [key, indexes] of map) out[key] = encodeIndexGaps(indexes.sort((a, b) => a - b));
+    for (const [key, indexes] of map)
+      out[key] = encodeIndexGaps(indexes.sort((a, b) => a - b));
     return out;
   };
   return {
@@ -720,20 +761,28 @@ function compactPayload(
     ...(removed.size > 0 ? { removed: gaps(removed) } : {}),
     // Bounded by `pages` as the decoder requires: only crawled pages are removed.
     ...(evidence.removed.size > 0
-      ? { removedCount: Math.min(evidence.removed.size, REPORT_LIMITS.maxPages) }
+      ? {
+          removedCount: Math.min(evidence.removed.size, REPORT_LIMITS.maxPages),
+        }
       : {}),
     ...(hashes.length > 0 ? { hashes: hashes.join("") } : {}),
-    ...(hashesNotEvaluated.size > 0 ? { hashesNotEvaluated: gaps(hashesNotEvaluated) } : {}),
+    ...(hashesNotEvaluated.size > 0
+      ? { hashesNotEvaluated: gaps(hashesNotEvaluated) }
+      : {}),
   };
 }
 
 /** Deflate + base64 a payload; undefined past the decoder's inflated-size cap. */
 function deflatePayload(
-  payload: CompactResolutionPayload,
+  payload: CompactResolutionPayload
 ): { signal: CompactResolutionSignal; bytes: number } | undefined {
   const json = Buffer.from(JSON.stringify(payload), "utf8");
-  if (json.byteLength > RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes) return undefined;
-  const signal: CompactResolutionSignal = { v: 1, data: deflateRawSync(json).toString("base64") };
+  if (json.byteLength > RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes)
+    return undefined;
+  const signal: CompactResolutionSignal = {
+    v: 1,
+    data: deflateRawSync(json).toString("base64"),
+  };
   // base64 and the envelope are ASCII: characters are bytes.
   return { signal, bytes: JSON.stringify(signal).length };
 }
@@ -751,7 +800,7 @@ function keyCosts(payload: CompactResolutionPayload): Map<string, number> {
     const sets = JSON.stringify(
       unlisted
         ? [key, gaps, payload.notEvaluated?.[key] ?? [], unlisted]
-        : [key, gaps, payload.notEvaluated?.[key] ?? []],
+        : [key, gaps, payload.notEvaluated?.[key] ?? []]
     );
     costs.set(key, deflateRawSync(Buffer.from(sets, "utf8")).byteLength);
   }
@@ -792,10 +841,11 @@ export function buildCompactResolutionSignal(
   // the capped rescore reads them (it needs `checkTallies`), so only a producer
   // that sends tallies (the report capper) asks: for any other a hash only takes
   // room the listed prefix could use.
-  options: { pageHashes?: boolean } = {},
+  options: { pageHashes?: boolean } = {}
 ): CompactResolutionSignal | undefined {
   const evidence = collectResolutionEvidence(ruleResults, crawledPageUrls);
-  if (evidence.crawled.length === 0 && evidence.failing.size === 0) return undefined;
+  if (evidence.crawled.length === 0 && evidence.failing.size === 0)
+    return undefined;
   for (const { url, status } of removedPages) {
     if (!REMOVED_PAGE_STATUSES.has(status)) continue;
     const norm = normalizePageUrl(url);
@@ -804,7 +854,9 @@ export function buildCompactResolutionSignal(
   const fitWith =
     (hashes: boolean): Fit =>
     (listed, kept) => {
-      const out = deflatePayload(compactPayload(evidence, listed, kept, hashes));
+      const out = deflatePayload(
+        compactPayload(evidence, listed, kept, hashes)
+      );
       return out && out.bytes <= maxBytes ? out.signal : undefined;
     };
   const fit = fitWith(false);
@@ -825,7 +877,11 @@ export function buildCompactResolutionSignal(
   // B alone is what a long-slug site at thousands of pages needs; A alone, for
   // a list that just fits, would keep pages but give up nearly every failing key.
   const none = new Set<string>();
-  const candidates: Array<{ signal: CompactResolutionSignal; listed: number; keys: number }> = [];
+  const candidates: Array<{
+    signal: CompactResolutionSignal;
+    listed: number;
+    keys: number;
+  }> = [];
   const keyCount = evidence.failing.size;
   if (fit(all, none)) {
     const kept = largestKeySet(evidence, all, fit);
@@ -855,11 +911,16 @@ export function buildCompactResolutionSignal(
     });
   }
   if (candidates.length === 0) return undefined;
-  candidates.sort((a, b) => b.listed * b.keys - a.listed * a.keys || b.listed - a.listed);
+  candidates.sort(
+    (a, b) => b.listed * b.keys - a.listed * a.keys || b.listed - a.listed
+  );
   return candidates[0]!.signal;
 }
 
-type Fit = (listed: number, kept?: ReadonlySet<string>) => CompactResolutionSignal | undefined;
+type Fit = (
+  listed: number,
+  kept?: ReadonlySet<string>
+) => CompactResolutionSignal | undefined;
 
 /**
  * Largest `listed` in [1, limit) for which `fit` succeeds (binary search; `limit`
@@ -867,7 +928,7 @@ type Fit = (listed: number, kept?: ReadonlySet<string>) => CompactResolutionSign
  */
 function largestPrefix(
   limit: number,
-  fit: (listed: number) => CompactResolutionSignal | undefined,
+  fit: (listed: number) => CompactResolutionSignal | undefined
 ): { signal: CompactResolutionSignal; listed: number } | undefined {
   let best = limit > 1 ? fit(1) : undefined;
   if (!best) return undefined;
@@ -895,9 +956,11 @@ function largestKeySet(
   evidence: ResolutionEvidence,
   listed: number,
   fit: Fit,
-  withHashes = false,
+  withHashes = false
 ): { signal: CompactResolutionSignal; keys: number } {
-  const costs = keyCosts(compactPayload(evidence, listed, undefined, withHashes));
+  const costs = keyCosts(
+    compactPayload(evidence, listed, undefined, withHashes)
+  );
   const order = [...costs.keys()]
     .map((key, i) => ({ key, i, cost: costs.get(key)! }))
     .sort((a, b) => a.cost - b.cost || a.i - b.i)
@@ -930,7 +993,9 @@ const REMOVED_PAGE_STATUSES = new Set([404, 410]);
  * counts these too (here and in the report capper).
  */
 export const PAGE_STATUSES_KEY_BYTES = byteLength(',"pageStatuses":');
-export const RESOLUTION_SIGNAL_KEY_BYTES = byteLength(',"resolutionSignalCompact":');
+export const RESOLUTION_SIGNAL_KEY_BYTES = byteLength(
+  ',"resolutionSignalCompact":'
+);
 
 /** The crawl-sized publish fields, fitted to RESOLUTION_PUBLISH_LIMITS. */
 export interface PublishResolution {
@@ -955,9 +1020,12 @@ export interface PublishResolution {
 export function buildPublishResolution(
   ruleResults: Record<string, { checks: CheckResult[] }>,
   pages: ReadonlyArray<{ url?: unknown; statusCode?: unknown }>,
-  limits: { maxBytes: number; maxPageStatusBytes: number } = RESOLUTION_PUBLISH_LIMITS,
+  limits: {
+    maxBytes: number;
+    maxPageStatusBytes: number;
+  } = RESOLUTION_PUBLISH_LIMITS,
   // See buildCompactResolutionSignal: only a producer that sends `checkTallies`.
-  options: { pageHashes?: boolean } = {},
+  options: { pageHashes?: boolean } = {}
 ): PublishResolution {
   const crawled: string[] = [];
   let statuses: Array<{ url: string; status: number }> = [];
@@ -973,24 +1041,31 @@ export function buildPublishResolution(
   const removed = statuses.filter((s) => REMOVED_PAGE_STATUSES.has(s.status));
   // The publish schema REJECTS (not clamps) a list over MAX_PAGES.
   statuses = statuses.slice(0, REPORT_LIMITS.maxPages);
-  if (statuses.length > 0 && byteLength(JSON.stringify(statuses)) > limits.maxPageStatusBytes) {
+  if (
+    statuses.length > 0 &&
+    byteLength(JSON.stringify(statuses)) > limits.maxPageStatusBytes
+  ) {
     statuses = [
       ...statuses.filter((s) => REMOVED_PAGE_STATUSES.has(s.status)),
       ...statuses.filter((s) => !REMOVED_PAGE_STATUSES.has(s.status)),
     ];
     statuses = clipPageStatusesToBytes(
       { pageStatuses: statuses },
-      limits.maxPageStatusBytes,
+      limits.maxPageStatusBytes
     ).pageStatuses!;
   }
   // The budget covers both fields as they sit in the body, keys included.
-  const statusBytes = statuses.length > 0 ? byteLength(JSON.stringify(statuses)) : 0;
+  const statusBytes =
+    statuses.length > 0 ? byteLength(JSON.stringify(statuses)) : 0;
   const signal = buildCompactResolutionSignal(
     ruleResults,
     crawled,
-    limits.maxBytes - statusBytes - PAGE_STATUSES_KEY_BYTES - RESOLUTION_SIGNAL_KEY_BYTES,
+    limits.maxBytes -
+      statusBytes -
+      PAGE_STATUSES_KEY_BYTES -
+      RESOLUTION_SIGNAL_KEY_BYTES,
     removed,
-    options,
+    options
   );
   return {
     ...(statuses.length > 0 ? { pageStatuses: statuses } : {}),

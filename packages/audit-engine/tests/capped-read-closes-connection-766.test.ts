@@ -6,10 +6,9 @@
 // receiving, for as long as the origin kept sending. Only a raw socket server
 // can show this: Bun.serve hides when the client hangs up.
 
+import { parsePage } from "@squirrelscan/parser";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { parsePage } from "@squirrelscan/parser";
 
 import { runCloakingProbe } from "../src/cloaking-probe";
 import { checkExternalLinks } from "../src/external-checker";
@@ -82,7 +81,10 @@ function endlessServer(head: string, headHead = head): Endless {
  * Waits up to 3 s for every body connection to close, then returns the latest
  * close relative to `returnedAt`, or -1 if one is still open.
  */
-async function lastCloseDelay(server: Endless, returnedAt: number): Promise<number> {
+async function lastCloseDelay(
+  server: Endless,
+  returnedAt: number
+): Promise<number> {
   const open = () => server.closes().some((at) => at === 0);
   while (open() && Date.now() - returnedAt < 3_000) await Bun.sleep(10);
   if (server.closes().length === 0 || open()) return -1;
@@ -91,12 +93,14 @@ async function lastCloseDelay(server: Endless, returnedAt: number): Promise<numb
 
 describe("the engine's requests close their connections (#766)", () => {
   test("the external link checker's 403 interstitial read", async () => {
-    const server = endlessServer("HTTP/1.1 403 Forbidden\r\ncontent-type: text/html");
+    const server = endlessServer(
+      "HTTP/1.1 403 Forbidden\r\ncontent-type: text/html"
+    );
     const [result] = await Effect.runPromise(
       checkExternalLinks([server.url], null, {
         timeoutMs: DEADLINE_MS,
         egress: { allowPrivateNetwork: true },
-      }),
+      })
     );
     const delay = await lastCloseDelay(server, Date.now());
     expect(result?.status).toBe(403);
@@ -105,12 +109,14 @@ describe("the engine's requests close their connections (#766)", () => {
   });
 
   test("the script fetcher, over its size cap", async () => {
-    const server = endlessServer("HTTP/1.1 200 OK\r\ncontent-type: application/javascript");
+    const server = endlessServer(
+      "HTTP/1.1 200 OK\r\ncontent-type: application/javascript"
+    );
     const [result] = await Effect.runPromise(
       fetchScriptContents([server.url], {
         timeoutMs: DEADLINE_MS,
         maxSizeBytes: 64 * 1024,
-      }),
+      })
     );
     const delay = await lastCloseDelay(server, Date.now());
     expect(result?.error).toBe("script too large");
@@ -122,8 +128,14 @@ describe("the engine's requests close their connections (#766)", () => {
     const server = endlessServer("HTTP/1.1 200 OK\r\ncontent-type: text/html");
     const shell = `<!doctype html><html id="__next_error__"><head><meta name="robots" content="noindex" /><title>Page Not Found</title></head><body><h1>Page Not Found</h1></body></html>`;
     const summary = await confirmSoft404Candidates(
-      [{ url: server.url, statusCode: 200, parsed: parsePage(shell, server.url) }],
-      { userAgent: "squirrel-test", timeoutMs: DEADLINE_MS },
+      [
+        {
+          url: server.url,
+          statusCode: 200,
+          parsed: parsePage(shell, server.url),
+        },
+      ],
+      { userAgent: "squirrel-test", timeoutMs: DEADLINE_MS }
     );
     const delay = await lastCloseDelay(server, Date.now());
     expect(summary.candidates).toBe(1);
@@ -133,14 +145,17 @@ describe("the engine's requests close their connections (#766)", () => {
 
   test("the cloaking probe", async () => {
     const server = endlessServer("HTTP/1.1 200 OK\r\ncontent-type: text/html");
-    const [probe] = await runCloakingProbe([{ url: server.url, reason: "orphan" }], {
-      maxPages: 1,
-      recentDays: 30,
-      queryVariation: false,
-      googlebotUserAgent: "Googlebot-test",
-      defaultUserAgent: "squirrel-test",
-      timeoutMs: DEADLINE_MS,
-    });
+    const [probe] = await runCloakingProbe(
+      [{ url: server.url, reason: "orphan" }],
+      {
+        maxPages: 1,
+        recentDays: 30,
+        queryVariation: false,
+        googlebotUserAgent: "Googlebot-test",
+        defaultUserAgent: "squirrel-test",
+        timeoutMs: DEADLINE_MS,
+      }
+    );
     const delay = await lastCloseDelay(server, Date.now());
     expect(probe?.defaultStatus).toBe(200);
     expect(server.closes()).toHaveLength(2);
@@ -151,7 +166,7 @@ describe("the engine's requests close their connections (#766)", () => {
   test("the link target probe's GET, when HEAD is refused and Range ignored", async () => {
     const server = endlessServer(
       "HTTP/1.1 200 OK\r\ncontent-type: text/html",
-      "HTTP/1.1 405 Method Not Allowed",
+      "HTTP/1.1 405 Method Not Allowed"
     );
     const probe = await Effect.runPromise(
       probeLinkTargets([server.url], {
@@ -159,7 +174,7 @@ describe("the engine's requests close their connections (#766)", () => {
         timeoutMs: DEADLINE_MS,
         concurrency: 1,
         mayRequest: () => true,
-      }),
+      })
     );
     const delay = await lastCloseDelay(server, Date.now());
     expect(probe.results[0]?.status).toBe(200);
@@ -172,10 +187,10 @@ describe("the engine's requests close their connections (#766)", () => {
     // unread.
     const server = endlessServer(
       "HTTP/1.1 200 OK\r\ncontent-type: text/css\r\ncontent-length: 1000000000000",
-      "HTTP/1.1 405 Method Not Allowed",
+      "HTTP/1.1 405 Method Not Allowed"
     );
     const [result] = await Effect.runPromise(
-      checkResourceSizes([server.url], { timeoutMs: DEADLINE_MS }),
+      checkResourceSizes([server.url], { timeoutMs: DEADLINE_MS })
     );
     const delay = await lastCloseDelay(server, Date.now());
     expect(result?.sizeBytes).toBe(1_000_000_000_000);

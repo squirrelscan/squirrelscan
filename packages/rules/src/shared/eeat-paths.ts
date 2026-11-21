@@ -7,11 +7,14 @@
 // the same matcher as `excludePatterns` (`matchesExcludePattern`): a substring of
 // the path, an exact segment between slashes, or `regex:`.
 
-import { z } from "zod";
-
 import type { WellKnownProbeData } from "@squirrelscan/core-contracts";
 
-import { excludePatternError, getPathname, matchesExcludePattern } from "@squirrelscan/utils";
+import {
+  excludePatternError,
+  getPathname,
+  matchesExcludePattern,
+} from "@squirrelscan/utils";
+import { z } from "zod";
 
 /** The `paths` option, identical on the three rules. */
 export const eeatPathsSchema = z
@@ -32,7 +35,7 @@ export const eeatPathsSchema = z
   })
   .default([])
   .describe(
-    "Site-specific paths of the page, matched like excludePatterns (substring, /exact-segment/ or regex:), checked in addition to the built-in slugs",
+    "Site-specific paths of the page, matched like excludePatterns (substring, /exact-segment/ or regex:), checked in addition to the built-in slugs"
   );
 
 /**
@@ -41,7 +44,10 @@ export const eeatPathsSchema = z
  * `/pages/manufaktur` does not match `?next=/pages/manufaktur`, and `manufaktur` does
  * not match every page on a host called manufaktur.de.
  */
-export function matchesConfiguredPaths(url: string, paths: readonly string[]): boolean {
+export function matchesConfiguredPaths(
+  url: string,
+  paths: readonly string[]
+): boolean {
   if (paths.length === 0) return false;
   return matchesExcludePattern(getPathname(url) || url, [...paths]);
 }
@@ -72,14 +78,25 @@ export const MIN_PROBED_PAGE_WORDS = 10;
  */
 export function probedConfiguredPages(
   site: { wellKnown?: WellKnownProbeData | null } | undefined,
-  paths: readonly string[],
+  paths: readonly string[]
 ): ProbedConfiguredPage[] {
   const out: ProbedConfiguredPage[] = [];
   for (const probe of site?.wellKnown?.probes ?? []) {
-    if (!probe.configuredPage || !matchesConfiguredPaths(probe.path, paths)) continue;
-    const base = { path: probe.path, url: probe.url, status: probe.status, wordCount: probe.wordCount ?? null };
+    if (!probe.configuredPage || !matchesConfiguredPaths(probe.path, paths))
+      continue;
+    const base = {
+      path: probe.path,
+      url: probe.url,
+      status: probe.status,
+      wordCount: probe.wordCount ?? null,
+    };
     if (probe.blockedByRobots) {
-      out.push({ ...base, outcome: "blocked", status: 0, reason: "disallowed by robots.txt, not requested" });
+      out.push({
+        ...base,
+        outcome: "blocked",
+        status: 0,
+        reason: "disallowed by robots.txt, not requested",
+      });
     } else if (probe.status >= 200 && probe.status < 300) {
       out.push(judgeAnswer(probe, base));
     } else if (probe.status >= 300) {
@@ -91,22 +108,30 @@ export function probedConfiguredPages(
 
 function judgeAnswer(
   probe: WellKnownProbeData["probes"][number],
-  base: Omit<ProbedConfiguredPage, "outcome" | "reason">,
+  base: Omit<ProbedConfiguredPage, "outcome" | "reason">
 ): ProbedConfiguredPage {
-  const missing = (reason: string): ProbedConfiguredPage => ({ ...base, outcome: "missing", reason });
+  const missing = (reason: string): ProbedConfiguredPage => ({
+    ...base,
+    outcome: "missing",
+    reason,
+  });
   if (probe.finalUrl) {
     try {
       const asked = new URL(probe.url);
       const landed = new URL(probe.finalUrl);
-      if (landed.origin !== asked.origin) return missing(`redirected to another site (${landed.host})`);
-      if (landed.pathname === "/" || landed.pathname === "") return missing("redirected to /");
+      if (landed.origin !== asked.origin)
+        return missing(`redirected to another site (${landed.host})`);
+      if (landed.pathname === "/" || landed.pathname === "")
+        return missing("redirected to /");
     } catch {
       // An unparseable final URL is judged on the answer alone.
     }
   }
-  if (!probe.looksHtml && !/html/i.test(probe.contentType ?? "")) return missing("not an HTML page");
+  if (!probe.looksHtml && !/html/i.test(probe.contentType ?? ""))
+    return missing("not an HTML page");
   if (base.wordCount === null) return { ...base, outcome: "found", reason: "" };
-  if (base.wordCount < MIN_PROBED_PAGE_WORDS) return missing("no readable page content");
+  if (base.wordCount < MIN_PROBED_PAGE_WORDS)
+    return missing("no readable page content");
   return { ...base, outcome: "found", reason: "" };
 }
 
@@ -115,8 +140,14 @@ const NOTE_PATH_CHARS = 80;
 
 /** The part of a missing-page finding that says what was probed: `(probed /agentur: 404)`. Bounded: at most 5 paths, each cut at 80 characters. */
 export function probedNote(probes: readonly ProbedConfiguredPage[]): string {
-  const cut = (text: string): string => (text.length > NOTE_PATH_CHARS ? `${text.slice(0, NOTE_PATH_CHARS)}...` : text);
-  const parts = probes.slice(0, NOTE_PATHS).map((p) => cut(`${p.path}: ${p.reason}`));
-  if (probes.length > NOTE_PATHS) parts.push(`and ${probes.length - NOTE_PATHS} more`);
+  const cut = (text: string): string =>
+    text.length > NOTE_PATH_CHARS
+      ? `${text.slice(0, NOTE_PATH_CHARS)}...`
+      : text;
+  const parts = probes
+    .slice(0, NOTE_PATHS)
+    .map((p) => cut(`${p.path}: ${p.reason}`));
+  if (probes.length > NOTE_PATHS)
+    parts.push(`and ${probes.length - NOTE_PATHS} more`);
   return `(probed ${parts.join(", ")})`;
 }

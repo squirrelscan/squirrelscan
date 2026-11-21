@@ -31,16 +31,24 @@
 // packages/rules/tests/fixtures/template-invariance-measured.json and asserted by
 // rule-verdict-scope.test.ts.
 
+import type { Config } from "@squirrelscan/config";
+import type { PageData, SiteData } from "@squirrelscan/rules";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import {
+  createRunner,
+  loadAllRules,
+  mayFanOutAcrossTemplate,
+} from "@squirrelscan/rules";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { SQLiteStorage } from "@squirrelscan/crawler";
-import { createRunner, loadAllRules, mayFanOutAcrossTemplate } from "@squirrelscan/rules";
-import type { PageData, SiteData } from "@squirrelscan/rules";
-import type { Config } from "@squirrelscan/config";
-
-import { createSiteQuery, extractPageFeatures, templateVerdictKey } from "../src/index";
 import { parseHtmlForRules } from "../src/adapter";
+import {
+  createSiteQuery,
+  extractPageFeatures,
+  templateVerdictKey,
+} from "../src/index";
 import { CORPUS, mkPage, ORIGIN } from "./helpers/template-corpus";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -57,7 +65,10 @@ const CRAWL = "crawl-1";
 // two falsifiers cannot drift apart.
 // ---------------------------------------------------------------------------
 
-const CONFIG = { rule_options: {}, rules: { enable: ["*"] } } as unknown as Config;
+const CONFIG = {
+  rule_options: {},
+  rules: { enable: ["*"] },
+} as unknown as Config;
 const SITE_DATA = {
   baseUrl: ORIGIN,
   pages: [],
@@ -84,7 +95,9 @@ async function measure(): Promise<Measured> {
   for (const { url, html } of CORPUS) {
     const page = mkPage(url, html);
     const parsed = parseHtmlForRules(html, url);
-    await run(store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed)));
+    await run(
+      store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed))
+    );
 
     const pageData: PageData = {
       url,
@@ -99,20 +112,41 @@ async function measure(): Promise<Measured> {
     for (const [ruleId, rr] of result.ruleResults) {
       let byUrl = verdicts.get(ruleId);
       if (!byUrl) verdicts.set(ruleId, (byUrl = new Map()));
-      byUrl.set(url, templateVerdictKey(rr.checks as unknown as Array<Record<string, unknown>>, url));
+      byUrl.set(
+        url,
+        templateVerdictKey(
+          rr.checks as unknown as Array<Record<string, unknown>>,
+          url
+        )
+      );
     }
   }
 
   const sq = await run(createSiteQuery(store, CRAWL));
-  const clusters = sq.templateClusters().map((c) => ({ fp: c.fp, urls: [...c.urls] }));
-  const all = await run(store.getPageFeatureTemplateClusters(CRAWL, { maxGroups: 1000, maxUrlsPerGroup: 1000 }));
+  const clusters = sq
+    .templateClusters()
+    .map((c) => ({ fp: c.fp, urls: [...c.urls] }));
+  const all = await run(
+    store.getPageFeatureTemplateClusters(CRAWL, {
+      maxGroups: 1000,
+      maxUrlsPerGroup: 1000,
+    })
+  );
   await run(store.close());
 
-  return { verdicts, clusters, clusterCount: all.length, pageCount: CORPUS.length };
+  return {
+    verdicts,
+    clusters,
+    clusterCount: all.length,
+    pageCount: CORPUS.length,
+  };
 }
 
 /** Rules that disagree inside a multi-page cluster, with the pair that proves it. */
-function divergences(m: Measured, ruleIds: Iterable<string>): Map<string, { fp: string; a: string; b: string }> {
+function divergences(
+  m: Measured,
+  ruleIds: Iterable<string>
+): Map<string, { fp: string; a: string; b: string }> {
   const out = new Map<string, { fp: string; a: string; b: string }>();
   for (const ruleId of ruleIds) {
     const byUrl = m.verdicts.get(ruleId);
@@ -132,9 +166,15 @@ function divergences(m: Measured, ruleIds: Iterable<string>): Map<string, { fp: 
 }
 
 const measured = await measure();
-const pageRules = [...loadAllRules().values()].filter((r) => r.meta.scope === "page");
-const fannable = pageRules.filter((r) => mayFanOutAcrossTemplate(r.meta)).map((r) => r.meta.id);
-const perPage = pageRules.filter((r) => !mayFanOutAcrossTemplate(r.meta)).map((r) => r.meta.id);
+const pageRules = [...loadAllRules().values()].filter(
+  (r) => r.meta.scope === "page"
+);
+const fannable = pageRules
+  .filter((r) => mayFanOutAcrossTemplate(r.meta))
+  .map((r) => r.meta.id);
+const perPage = pageRules
+  .filter((r) => !mayFanOutAcrossTemplate(r.meta))
+  .map((r) => r.meta.id);
 
 // ---------------------------------------------------------------------------
 // The corpus is only evidence if it is adversarial
@@ -143,7 +183,9 @@ const perPage = pageRules.filter((r) => !mayFanOutAcrossTemplate(r.meta)).map((r
 describe("the fixture corpus has real multi-page clusters", () => {
   test("three templates cluster, and the two one-off pages do not", () => {
     expect(measured.clusters.length).toBe(3);
-    expect(measured.clusters.map((c) => c.urls.length).sort()).toEqual([3, 4, 4]);
+    expect(measured.clusters.map((c) => c.urls.length).sort()).toEqual([
+      3, 4, 4,
+    ]);
     // 5 groups in total: 3 templates + 2 singletons. `templateClusters()` reports
     // only the multi-page ones, which is why a singleton can never make a rule
     // look invariant here.
@@ -181,10 +223,10 @@ describe("the fixture corpus has real multi-page clusters", () => {
       if (!comparedOn) {
         throw new Error(
           `${ruleId} declares verdictScope "template" but emitted no verdict on two members ` +
-            "of any cluster in this corpus, so the gate below proves nothing about it.",
+            "of any cluster in this corpus, so the gate below proves nothing about it."
         );
       }
-    },
+    }
   );
 });
 
@@ -213,11 +255,11 @@ describe("rules declaring verdictScope template are constant across a cluster", 
             throw new Error(
               `${ruleId} is declared verdictScope "template" but disagrees inside cluster ${fp}:\n` +
                 `  ${base}\n    ${byUrl.get(base)}\n` +
-                `  ${other}\n    ${byUrl.get(other)}`,
+                `  ${other}\n    ${byUrl.get(other)}`
             );
           }
         }
       }
-    },
+    }
   );
 });

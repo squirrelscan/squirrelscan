@@ -3,20 +3,24 @@
 // one generic "No pages could be fetched" paragraph, so a dead DNS record, an
 // expired certificate and a 503 all read identically.
 
-import { describe, expect, test } from "bun:test";
-
 import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
 
+import { describe, expect, test } from "bun:test";
+
 import type { AuditReport } from "../src/types";
-import { getAuditFailureNotice, reportFailureReasonCode } from "../src/failure-notice";
-import { renderText } from "../src/output/text";
-import { renderMarkdown } from "../src/output/markdown";
-import { renderLlm } from "../src/output/llm";
+
+import {
+  getAuditFailureNotice,
+  reportFailureReasonCode,
+} from "../src/failure-notice";
 import { renderJson } from "../src/output/json";
+import { renderLlm } from "../src/output/llm";
+import { renderMarkdown } from "../src/output/markdown";
+import { renderText } from "../src/output/text";
 
 function failedReport(
   statusReason: string,
-  statusReasonCode?: AuditFailureReasonCode,
+  statusReasonCode?: AuditFailureReasonCode
 ): AuditReport {
   return {
     baseUrl: "https://ejconsultor.es",
@@ -32,12 +36,18 @@ function failedReport(
   };
 }
 
-const DNS = failedReport("DNS lookup failed for ejconsultor.es: NXDOMAIN", "dns");
+const DNS = failedReport(
+  "DNS lookup failed for ejconsultor.es: NXDOMAIN",
+  "dns"
+);
 const TLS = failedReport(
   "TLS handshake with ejconsultor.es failed: certificate has expired",
-  "tls",
+  "tls"
 );
-const SERVER = failedReport("ejconsultor.es returned 503 Service Unavailable", "http_5xx");
+const SERVER = failedReport(
+  "ejconsultor.es returned 503 Service Unavailable",
+  "http_5xx"
+);
 
 describe("text output (#1822)", () => {
   test("prints the specific reason, not the generic paragraph", () => {
@@ -82,7 +92,9 @@ describe("llm output (#1822)", () => {
     expect(out).toContain("hostname did not resolve");
     expect(out).toContain("squirrel audit https://ejconsultor.es");
     // Agent-facing copy carries no em-dashes.
-    expect(out.slice(out.indexOf("<status"), out.indexOf("</status>"))).not.toContain("—");
+    expect(
+      out.slice(out.indexOf("<status"), out.indexOf("</status>"))
+    ).not.toContain("—");
   });
 
   test("a certificate failure and a server error give different guidance", () => {
@@ -92,7 +104,7 @@ describe("llm output (#1822)", () => {
 
   test("an unclassified failure keeps the pre-#1822 sentence", () => {
     expect(renderLlm(failedReport("No pages were crawled"))).toContain(
-      "No pages could be fetched from the site",
+      "No pages could be fetched from the site"
     );
   });
 });
@@ -106,7 +118,11 @@ describe("json output (#1822)", () => {
 
   test("a report stored before #1822 gets its code derived from the reason text", () => {
     const parsed = JSON.parse(
-      renderJson(failedReport("TLS handshake with example.com failed: self-signed certificate")),
+      renderJson(
+        failedReport(
+          "TLS handshake with example.com failed: self-signed certificate"
+        )
+      )
     );
     expect(parsed.statusReasonCode).toBe("tls");
   });
@@ -121,7 +137,7 @@ describe("json output (#1822)", () => {
         warnings: 0,
         failed: 0,
         ruleResults: {},
-      }),
+      })
     );
     expect(parsed.statusReasonCode).toBeUndefined();
   });
@@ -129,7 +145,12 @@ describe("json output (#1822)", () => {
 
 describe("the shared failure notice (#1822)", () => {
   test("a coded failure gets class-specific cause and next-step copy", () => {
-    const notice = getAuditFailureNotice("failed", "ejconsultor.es", undefined, "dns");
+    const notice = getAuditFailureNotice(
+      "failed",
+      "ejconsultor.es",
+      undefined,
+      "dns"
+    );
     expect(notice?.body[0]).toContain("resolve");
     expect(notice?.body[1]).toContain("DNS records");
   });
@@ -137,23 +158,32 @@ describe("the shared failure notice (#1822)", () => {
   test("no code, or `unknown`, keeps the pre-#1822 copy verbatim (#935)", () => {
     const legacy = getAuditFailureNotice("failed", "example.com");
     expect(legacy?.body[0]).toBe(
-      "We couldn't fetch any pages from your site, so there was nothing to audit. The site may have been down, unreachable, or timing out when we tried.",
+      "We couldn't fetch any pages from your site, so there was nothing to audit. The site may have been down, unreachable, or timing out when we tried."
     );
-    expect(legacy?.body[1]).toBe("Check that the site is reachable and try again.");
-    expect(getAuditFailureNotice("failed", "example.com", undefined, "unknown")).toEqual(legacy!);
+    expect(legacy?.body[1]).toBe(
+      "Check that the site is reachable and try again."
+    );
+    expect(
+      getAuditFailureNotice("failed", "example.com", undefined, "unknown")
+    ).toEqual(legacy!);
   });
 
   test("a blocked run is untouched by the code (#792 copy is load-bearing)", () => {
-    expect(getAuditFailureNotice("blocked", "example.com", undefined, "http_4xx")).toEqual(
-      getAuditFailureNotice("blocked", "example.com")!,
-    );
+    expect(
+      getAuditFailureNotice("blocked", "example.com", undefined, "http_4xx")
+    ).toEqual(getAuditFailureNotice("blocked", "example.com")!);
   });
 
   test("reportFailureReasonCode prefers the stored code and falls back to the text", () => {
-    expect(reportFailureReasonCode({ statusReasonCode: "tls", statusReason: "anything" })).toBe(
-      "tls",
-    );
-    expect(reportFailureReasonCode({ statusReason: "Crawl request timed out" })).toBe("timeout");
+    expect(
+      reportFailureReasonCode({
+        statusReasonCode: "tls",
+        statusReason: "anything",
+      })
+    ).toBe("tls");
+    expect(
+      reportFailureReasonCode({ statusReason: "Crawl request timed out" })
+    ).toBe("timeout");
     // Never undefined: an unreadable reason is still a failure.
     expect(reportFailureReasonCode({})).toBe("unknown");
   });
@@ -165,14 +195,19 @@ describe("#1822 and #1829 do not fight over the notice (#1822)", () => {
       "blocked",
       "example.com",
       { pages: 4, hosts: ["example.com"] },
-      "http_4xx",
+      "http_4xx"
     );
     expect(notice?.heading).toBe("Your site rate limited the audit");
     expect(notice?.body[0]).toContain("throttling, not bot protection");
   });
 
   test("a failed audit with no throttling still gets the class-specific copy", () => {
-    const notice = getAuditFailureNotice("failed", "example.com", undefined, "tls");
+    const notice = getAuditFailureNotice(
+      "failed",
+      "example.com",
+      undefined,
+      "tls"
+    );
     expect(notice?.body[0]).toContain("TLS handshake");
   });
 });
@@ -211,7 +246,7 @@ describe("the reason is escaped before it reaches markdown (#1822)", () => {
   // at the start of the line turns the rest of the section into a blockquote.
   const HOSTILE = failedReport(
     "TLS handshake with example.com failed: > swallow [me](http://evil.test) `x`",
-    "tls",
+    "tls"
   );
 
   test("markdown escapes it, and the next step still renders after it", () => {
@@ -231,6 +266,8 @@ describe("the reason is escaped before it reaches markdown (#1822)", () => {
   });
 
   test("a normal reason is unchanged by the escaping", () => {
-    expect(renderMarkdown(DNS)).toContain("DNS lookup failed for ejconsultor.es: NXDOMAIN");
+    expect(renderMarkdown(DNS)).toContain(
+      "DNS lookup failed for ejconsultor.es: NXDOMAIN"
+    );
   });
 });

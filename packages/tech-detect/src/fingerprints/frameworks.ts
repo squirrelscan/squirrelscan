@@ -43,7 +43,10 @@ export const FRAMEWORK_FINGERPRINTS: TechFingerprint[] = [
       { type: "html", pattern: /data-v-[a-f0-9]+/ },
       { type: "html", pattern: /__VUE__/ },
       { type: "script-content", pattern: /__VUE__/ },
-      { type: "script-url", pattern: /vue(?:\.runtime)?(?:\.global)?(?:\.prod)?\.(?:min\.)?js/i },
+      {
+        type: "script-url",
+        pattern: /vue(?:\.runtime)?(?:\.global)?(?:\.prod)?\.(?:min\.)?js/i,
+      },
     ],
     versionPattern: /vue@(\d+\.\d+\.\d+)/i,
   },
@@ -103,7 +106,10 @@ export const FRAMEWORK_FINGERPRINTS: TechFingerprint[] = [
       },
       { type: "html", pattern: /[\s<](?:data-|x-)?ng-app(?:=|[\s>])/i },
       { type: "script-url", pattern: /@angular\/core/i },
-      { type: "script-url", pattern: /(?:^|\/)zone(?:-evergreen)?(?:\.min)?\.js(?:[?#"']|$)/i },
+      {
+        type: "script-url",
+        pattern: /(?:^|\/)zone(?:-evergreen)?(?:\.min)?\.js(?:[?#"']|$)/i,
+      },
       { type: "script-content", pattern: /getAllAngularRootElements/ },
     ],
     versionPattern: /ng-version="(\d+\.\d+\.\d+)"/,

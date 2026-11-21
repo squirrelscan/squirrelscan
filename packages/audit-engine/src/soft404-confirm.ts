@@ -28,18 +28,22 @@
 // delay, with an overall wall-clock budget; ON by default, opt out via
 // `[integrity.soft404_confirm]` on rate-limited hosts.
 
+import type { ParsedPage } from "@squirrelscan/rules";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
+
 import { applyBrowserHeaders } from "@squirrelscan/crawler";
-import { detectSoft404, parsePage, type Soft404Confirmation } from "@squirrelscan/parser";
+import {
+  detectSoft404,
+  parsePage,
+  type Soft404Confirmation,
+} from "@squirrelscan/parser";
+import { decodedPageBytes } from "@squirrelscan/utils/bytes";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 
 import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
 import { customHeadersFor, type ScopedHeaderOptions } from "./lib/header-scope";
 import { probeFetch } from "./lib/probe-fetch";
-import { decodedPageBytes } from "@squirrelscan/utils/bytes";
-import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
-
-import type { ParsedPage } from "@squirrelscan/rules";
-import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 // Confirmation body is truncated to this length before we retain/parse it, so a
 // huge page can't blow up the reparse. The read itself is streamed and stops at
@@ -67,7 +71,7 @@ export interface ConfirmResponse {
 export type ConfirmFetch = (
   url: string,
   userAgent: string,
-  headers?: Record<string, string>,
+  headers?: Record<string, string>
 ) => Promise<ConfirmResponse>;
 
 /** A crawled page the confirm pass may re-fetch; `parsed` is mutated in place. */
@@ -87,7 +91,8 @@ export interface Soft404ConfirmPage {
 /** Default overall wall-clock budget for the whole pass; exhausted → unconfirmed. */
 export const DEFAULT_WALL_BUDGET_MS = 60_000;
 
-export type Soft404ConfirmOptions = Soft404ConfirmBaseOptions & ScopedHeaderOptions;
+export type Soft404ConfirmOptions = Soft404ConfirmBaseOptions &
+  ScopedHeaderOptions;
 
 interface Soft404ConfirmBaseOptions {
   /**
@@ -158,7 +163,11 @@ function detectionInput(statusCode: number, parsed: ParsedPage) {
   };
 }
 
-function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: AbortSignal): ConfirmFetch {
+function defaultConfirmFetch(
+  timeoutMs: number,
+  egress?: EgressPolicy,
+  cancel?: AbortSignal
+): ConfirmFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -177,7 +186,7 @@ function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: 
       const res = await probeFetch(
         url,
         { headers: reqHeaders, signal: controller.signal },
-        egress,
+        egress
       );
       let body = "";
       try {
@@ -195,7 +204,11 @@ function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: 
         },
       };
     } catch (e) {
-      return { status: 0, body: "", error: e instanceof Error ? e.message : String(e) };
+      return {
+        status: 0,
+        body: "",
+        error: e instanceof Error ? e.message : String(e),
+      };
     } finally {
       clearTimeout(timer);
       cancel?.removeEventListener("abort", onCancel);
@@ -210,12 +223,12 @@ function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: 
 async function confirmOne(
   candidate: Soft404ConfirmPage,
   opts: Soft404ConfirmOptions,
-  fetchImpl: ConfirmFetch,
+  fetchImpl: ConfirmFetch
 ): Promise<Soft404Confirmation> {
   const res = await fetchImpl(
     candidate.url,
     opts.userAgent,
-    customHeadersFor(candidate.url, opts.customHeaders, opts.headerScope),
+    customHeadersFor(candidate.url, opts.customHeaders, opts.headerScope)
   );
   // Only a fresh 2xx lets us re-judge the "serves 404 content with HTTP 200"
   // claim. A network error (status 0) or any non-2xx re-fetch can't confirm or
@@ -224,7 +237,11 @@ async function confirmOne(
 
   // #1502: a body over the parse cap is never parsed, here or anywhere else; it cannot be judged, so it is unconfirmed
   // (annotated, never dropped). The body is already decoded, so its size is the parser's.
-  if (opts.maxParseBytes !== undefined && decodedPageBytes(undefined, res.body) > opts.maxParseBytes) return "unconfirmed";
+  if (
+    opts.maxParseBytes !== undefined &&
+    decodedPageBytes(undefined, res.body) > opts.maxParseBytes
+  )
+    return "unconfirmed";
 
   // A WAF/bot-challenge served on re-fetch (e.g. a 200 interstitial to an
   // unexpected UA) is NOT real content — never call that "intermittent". Treat
@@ -241,7 +258,11 @@ async function confirmOne(
   return detection.isSoft404 ? "confirmed" : "intermittent";
 }
 
-async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+async function mapPool<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   const worker = async () => {
@@ -251,14 +272,23 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
       out[idx] = await fn(items[idx]!);
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker)
+  );
   return out;
 }
 
 /** Whether a confirmation pass has anything to fetch: a candidate that is not rendered, with the pass enabled. */
-export function hasSoft404FetchWork(pages: Soft404ConfirmPage[], enabled: boolean | undefined): boolean {
+export function hasSoft404FetchWork(
+  pages: Soft404ConfirmPage[],
+  enabled: boolean | undefined
+): boolean {
   if (enabled === false) return false;
-  return pages.some((p) => !p.rendered && detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404);
+  return pages.some(
+    (p) =>
+      !p.rendered &&
+      detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404
+  );
 }
 
 /**
@@ -269,7 +299,8 @@ export function hasSoft404FetchWork(pages: Soft404ConfirmPage[], enabled: boolea
 export function markUnresolvedSoft404(pages: Soft404ConfirmPage[]): void {
   for (const p of pages) {
     if (p.parsed.soft404Confirmation !== undefined) continue;
-    if (!detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404) continue;
+    if (!detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404)
+      continue;
     p.parsed.soft404Confirmation = "unconfirmed";
   }
 }
@@ -286,7 +317,11 @@ export function markUnresolvedSoft404(pages: Soft404ConfirmPage[]): void {
 export async function confirmSoft404Candidates(
   pages: Soft404ConfirmPage[],
   opts: Soft404ConfirmOptions,
-  fetchImpl: ConfirmFetch = defaultConfirmFetch(opts.timeoutMs ?? 15_000, opts.egress, opts.signal),
+  fetchImpl: ConfirmFetch = defaultConfirmFetch(
+    opts.timeoutMs ?? 15_000,
+    opts.egress,
+    opts.signal
+  )
 ): Promise<Soft404ConfirmSummary> {
   const summary: Soft404ConfirmSummary = {
     candidates: 0,
@@ -303,7 +338,7 @@ export async function confirmSoft404Candidates(
   };
 
   const candidates = pages.filter(
-    (p) => detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404,
+    (p) => detectSoft404(detectionInput(p.statusCode, p.parsed)).isSoft404
   );
   summary.candidates = candidates.length;
   if (candidates.length === 0) return summary;
@@ -332,7 +367,8 @@ export async function confirmSoft404Candidates(
   for (const c of fetchable.slice(cap)) record(c, "unconfirmed");
 
   const now = opts.now ?? (() => Date.now());
-  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const sleep =
+    opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const perHostDelayMs = Math.max(0, opts.perHostDelayMs ?? 0);
   const wallBudgetMs = Math.max(0, opts.wallBudgetMs ?? DEFAULT_WALL_BUDGET_MS);
   const start = now();
@@ -365,7 +401,7 @@ export async function confirmSoft404Candidates(
         }
       }
       const verdict = await confirmOne(c, opts, fetchImpl).catch(
-        (): Soft404Confirmation => "unconfirmed",
+        (): Soft404Confirmation => "unconfirmed"
       );
       record(c, verdict);
     }

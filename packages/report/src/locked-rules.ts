@@ -19,7 +19,11 @@ import type {
   LockedRule,
   LockedRuleReason,
 } from "@squirrelscan/core-contracts";
-import { isAuditFailed, isLockedRuleReason } from "@squirrelscan/core-contracts";
+
+import {
+  isAuditFailed,
+  isLockedRuleReason,
+} from "@squirrelscan/core-contracts";
 
 export type LockedRulesAudience =
   | "audit-failed"
@@ -68,7 +72,9 @@ export interface LockedRulesGroup {
 const MAX_DETAIL_CHARS = 200;
 
 /** A rule's reason when it is one of the closed set; anything else reads as no reason. */
-export function lockedRuleReason(rule: LockedRule): LockedRuleReason | undefined {
+export function lockedRuleReason(
+  rule: LockedRule
+): LockedRuleReason | undefined {
   return isLockedRuleReason(rule.reason) ? rule.reason : undefined;
 }
 
@@ -79,7 +85,10 @@ export function lockedRuleReason(rule: LockedRule): LockedRuleReason | undefined
  */
 function plainLine(value: string): string {
   // eslint-disable-next-line no-control-regex
-  return value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** A rule's detail as one short line, or undefined. */
@@ -87,7 +96,9 @@ export function lockedRuleDetail(rule: LockedRule): string | undefined {
   if (typeof rule.detail !== "string") return undefined;
   const line = plainLine(rule.detail);
   if (!line) return undefined;
-  return line.length > MAX_DETAIL_CHARS ? `${line.slice(0, MAX_DETAIL_CHARS - 1)}…` : line;
+  return line.length > MAX_DETAIL_CHARS
+    ? `${line.slice(0, MAX_DETAIL_CHARS - 1)}…`
+    : line;
 }
 
 /** A locked rule as every renderer lists it: reason only when it is in the closed set, detail as one short line. */
@@ -129,13 +140,19 @@ function groupText(
   reason: LockedRuleReason | undefined,
   rules: LockedRule[],
   plan: CloudPlanTier,
-  legacyAction: string,
+  legacyAction: string
 ): string {
   const n = rules.length;
   const these = n === 1 ? "This check" : `These ${n} checks`;
-  const details = [...new Set(rules.map(lockedRuleDetail).filter((d): d is string => !!d))];
-  const detail = details.length > 0 ? ` ${details.map((d) => (/[.!?]$/.test(d) ? d : `${d}.`)).join(" ")}` : "";
-  if (reason === "plan") return `${these} ${n === 1 ? "is" : "are"} not included in ${PLAN_NAMES[plan]}.${detail}`;
+  const details = [
+    ...new Set(rules.map(lockedRuleDetail).filter((d): d is string => !!d)),
+  ];
+  const detail =
+    details.length > 0
+      ? ` ${details.map((d) => (/[.!?]$/.test(d) ? d : `${d}.`)).join(" ")}`
+      : "";
+  if (reason === "plan")
+    return `${these} ${n === 1 ? "is" : "are"} not included in ${PLAN_NAMES[plan]}.${detail}`;
   if (reason === "credits") {
     return `${these} did not run because the audit ran out of credits. Add credits, then re-run the audit to include ${n === 1 ? "it" : "them"}.${detail}`;
   }
@@ -167,7 +184,9 @@ export interface LockedRulesReportShape {
  * publisher) keep the audience wording unchanged, and a failed audit keeps its
  * own message: nothing ran, whatever the reasons say.
  */
-export function lockedRulesMessage(report: LockedRulesReportShape): LockedRulesMessage | null {
+export function lockedRulesMessage(
+  report: LockedRulesReportShape
+): LockedRulesMessage | null {
   const legacy = audienceMessage(report);
   const locked = report.lockedRules;
   if (!legacy || !locked || legacy.audience === "audit-failed") return legacy;
@@ -195,7 +214,8 @@ export function lockedRulesMessage(report: LockedRulesReportShape): LockedRulesM
   // The upsell link (add credits, or get started) only goes with a plan exclusion, an audit out of credits, or
   // a rule with no reason.
   const upsell = groups.some(
-    (g) => g.reason === undefined || g.reason === "plan" || g.reason === "credits",
+    (g) =>
+      g.reason === undefined || g.reason === "plan" || g.reason === "credits"
   );
   const { cta: _cta, ...rest } = legacy;
   return {
@@ -206,7 +226,9 @@ export function lockedRulesMessage(report: LockedRulesReportShape): LockedRulesM
   };
 }
 
-function audienceMessage(report: LockedRulesReportShape): LockedRulesMessage | null {
+function audienceMessage(
+  report: LockedRulesReportShape
+): LockedRulesMessage | null {
   const locked = report.lockedRules;
   if (!locked || locked.length === 0) return null;
 
@@ -260,7 +282,10 @@ function audienceMessage(report: LockedRulesReportShape): LockedRulesMessage | n
       audience: "free-upsell",
       action:
         "These cloud checks didn't run this audit (out of credits, or a quick scan). Free and Pro run the same checks: Pro just grants more monthly credits and lets you top up.",
-      cta: { label: "Add credits in your dashboard", url: "https://app.squirrelscan.com" },
+      cta: {
+        label: "Add credits in your dashboard",
+        url: "https://app.squirrelscan.com",
+      },
     };
   }
   return {
@@ -270,6 +295,9 @@ function audienceMessage(report: LockedRulesReportShape): LockedRulesMessage | n
     // keeps agent-facing copy em-dash-free (see tests/llm-status.test.ts).
     action:
       "Cloud-powered checks (page rendering, AI content analysis, link-rot, brand protection, and more) run with a free squirrelscan account.",
-    cta: { label: "Get started to unlock them", url: "https://squirrelscan.com" },
+    cta: {
+      label: "Get started to unlock them",
+      url: "https://squirrelscan.com",
+    },
   };
 }

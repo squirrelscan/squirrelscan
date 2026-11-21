@@ -9,18 +9,18 @@
 // The streaming run is given an EMPTY `site.pages`, so passing also proves the
 // streaming branch reads nothing off the resident page array.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type { PageRecord } from "@squirrelscan/core-contracts";
+import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { parsePage } from "@squirrelscan/parser";
 import { loadAllRules } from "@squirrelscan/rules";
 import { extractNapSignal } from "@squirrelscan/utils";
-import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
-import type { PageRecord } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
-import { createSiteQuery, extractPageFeatures } from "../src/index";
 import { parseHtmlForRules } from "../src/adapter";
+import { createSiteQuery, extractPageFeatures } from "../src/index";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -59,7 +59,9 @@ function specHtml(spec: Spec): string {
         },
       })}</script>`
     : "";
-  const body = spec.phone ? `<a href="tel:${spec.phone}">${spec.phone}</a>` : "<p>hi</p>";
+  const body = spec.phone
+    ? `<a href="tel:${spec.phone}">${spec.phone}</a>`
+    : "<p>hi</p>";
   return `<html><head>${head}</head><body>${body}</body></html>`;
 }
 
@@ -91,19 +93,67 @@ function mkPage(spec: Spec): { page: PageRecord; parsed: ParsedPage } {
 // 10-page floor is cleared: 9 share one number, 3 render it differently, and one
 // address deviates outright — so the run exercises warn AND fail in one pass.
 const FIXTURE: Spec[] = [
-  { normalizedUrl: "https://example.com/p01", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p02", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p03", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p04", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p05", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p06", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p07", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p08", phone: "+1 (555) 123-4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p09", phone: "+1 (555) 123-4567", street: "123 Main Street" },
-  { normalizedUrl: "https://example.com/p10", phone: "555.123.4567", street: "123 Main St" },
-  { normalizedUrl: "https://example.com/p11", phone: "555.123.4567", street: "123 Main St" },
+  {
+    normalizedUrl: "https://example.com/p01",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p02",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p03",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p04",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p05",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p06",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p07",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p08",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p09",
+    phone: "+1 (555) 123-4567",
+    street: "123 Main Street",
+  },
+  {
+    normalizedUrl: "https://example.com/p10",
+    phone: "555.123.4567",
+    street: "123 Main St",
+  },
+  {
+    normalizedUrl: "https://example.com/p11",
+    phone: "555.123.4567",
+    street: "123 Main St",
+  },
   // Genuinely different address, and no phone at all.
-  { normalizedUrl: "https://example.com/p12", phone: null, street: "77 Other Rd" },
+  {
+    normalizedUrl: "https://example.com/p12",
+    phone: null,
+    street: "77 Other Rd",
+  },
 ];
 
 async function seedAndRun(rule: Rule) {
@@ -111,7 +161,9 @@ async function seedAndRun(rule: Rule) {
   const built = FIXTURE.map(mkPage);
 
   for (const { page, parsed } of built) {
-    await run(store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed)));
+    await run(
+      store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed))
+    );
   }
 
   const sitePages = [...built]
@@ -164,7 +216,7 @@ describe("dual-path golden — local/nap-consistency (extractor → v20 columns 
     const phone = byName.get("phone-consistency")!;
     expect(phone.status).toBe("warn");
     expect(phone.message).toBe(
-      "The same phone number is formatted 2 different ways across 11 pages",
+      "The same phone number is formatted 2 different ways across 11 pages"
     );
     expect(phone.items?.map((i) => [i.id, i.meta?.pageCount])).toEqual([
       ["+1 (555) 123-4567", 9],
@@ -182,7 +234,9 @@ describe("dual-path golden — local/nap-consistency (extractor → v20 columns 
       deviantPages: 1,
       samplePages: 12,
     });
-    expect(address.items?.[0]?.sourcePages).toEqual(["https://example.com/p12"]);
+    expect(address.items?.[0]?.sourcePages).toEqual([
+      "https://example.com/p12",
+    ]);
   });
 });
 

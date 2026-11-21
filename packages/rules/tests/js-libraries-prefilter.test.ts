@@ -9,15 +9,17 @@
 // a bundle-sized script and asserts the padded answer still carries everything
 // the unpadded answer had.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
-
-import { jsLibrariesRule } from "../src/performance/js-libraries";
 import type { RuleContext } from "../src/types";
 
+import { jsLibrariesRule } from "../src/performance/js-libraries";
+
 // Minified-looking filler that matches no library signature on its own.
-const PAD = "function q0(a,b){return a+b*2}var z9=[1,2,3].map(q0);".repeat(1400);
+const PAD = "function q0(a,b){return a+b*2}var z9=[1,2,3].map(q0);".repeat(
+  1400
+);
 
 async function detected(script: string): Promise<string[]> {
   const url = "https://example.com/";
@@ -25,13 +27,21 @@ async function detected(script: string): Promise<string[]> {
   const ctx = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url),
-    site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, scripts: [] },
+    site: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      scripts: [],
+    },
     options: {},
   } as unknown as RuleContext;
   // The whole item, not just its id: the label carries WHERE the library was
   // detected ("inline code" against "HTML markers"), and a prefilter that skips
   // the inline pass but not the HTML one changes that without changing the id.
-  const check = (await jsLibrariesRule.run(ctx)).checks.find((c) => c.name === "js-libraries-detected");
+  const check = (await jsLibrariesRule.run(ctx)).checks.find(
+    (c) => c.name === "js-libraries-detected"
+  );
   return (check?.items ?? []).map((i) => JSON.stringify(i)).sort();
 }
 
@@ -63,12 +73,13 @@ describe("perf/js-libraries: the inline prefilter never loses a detection", () =
     const lost: string[] = [];
     for (const [name, token] of SIGNATURES) {
       for (const lead of LEAD_INS) {
-        const bare = (await detected(`${SHORT_PAD}${lead}${token}`));
+        const bare = await detected(`${SHORT_PAD}${lead}${token}`);
         // A signature that does not detect unpadded proves nothing about padding.
         expect(bare.join(" ")).toContain(`"${name}"`);
-        const padded = (await detected(`${PAD}${lead}${token}\n${PAD}`));
+        const padded = await detected(`${PAD}${lead}${token}\n${PAD}`);
         for (const item of bare) {
-          if (!padded.includes(item)) lost.push(`${name} after ${JSON.stringify(lead)}: ${item}`);
+          if (!padded.includes(item))
+            lost.push(`${name} after ${JSON.stringify(lead)}: ${item}`);
         }
       }
     }
@@ -83,11 +94,21 @@ describe("perf/js-libraries: the inline prefilter never loses a detection", () =
     const ctx = {
       page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
       parsed: parsePage(html, url),
-      site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, scripts: [] },
+      site: {
+        baseUrl: "https://example.com",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+        scripts: [],
+      },
       options: {},
     } as unknown as RuleContext;
-    const check = (await jsLibrariesRule.run(ctx)).checks.find((c) => c.name === "js-libraries-detected");
+    const check = (await jsLibrariesRule.run(ctx)).checks.find(
+      (c) => c.name === "js-libraries-detected"
+    );
     expect((check?.items ?? []).map((i) => i.id)).toContain("Angular v17.1.0");
-    expect((check?.items ?? []).find((i) => i.id === "Angular v17.1.0")?.label).toBe("HTML markers");
+    expect(
+      (check?.items ?? []).find((i) => i.id === "Angular v17.1.0")?.label
+    ).toBe("HTML markers");
   });
 });

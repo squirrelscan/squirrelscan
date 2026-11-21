@@ -37,8 +37,9 @@ const MAX_HEADING_CHARS = 200;
  */
 function heavyPage(i: number, bytes: number): PageRecord {
   const chunk = 20_000;
-  const body = Array.from({ length: Math.max(1, Math.ceil(bytes / chunk)) }, (_, k) =>
-    `${i}-${k} `.padEnd(chunk, "abcdefghij "),
+  const body = Array.from(
+    { length: Math.max(1, Math.ceil(bytes / chunk)) },
+    (_, k) => `${i}-${k} `.padEnd(chunk, "abcdefghij ")
   ).join(" ");
   const html =
     `<!doctype html><html><head><title>Title ${i} of the page</title>` +
@@ -89,7 +90,8 @@ function heavyPage(i: number, bytes: number): PageRecord {
   } as PageRecord;
 }
 
-const contextFor = (page: PageRecord) => Effect.runSync(buildSiteContext([page]));
+const contextFor = (page: PageRecord) =>
+  Effect.runSync(buildSiteContext([page]));
 
 /** The payload builder's body WITHOUT the detach — what the bug looked like. */
 function attachedPayload(i: number, bytes: number) {
@@ -104,7 +106,9 @@ function attachedPayload(i: number, bytes: number) {
     title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
     textExcerpt: parsed.content.textContent.slice(0, MAX_EXCERPT_BYTES),
     meta: Object.keys(meta).length > 0 ? meta : undefined,
-    headings: parsed.headings.headings.slice(0, 20).map((h) => h.text.slice(0, MAX_HEADING_CHARS)),
+    headings: parsed.headings.headings
+      .slice(0, 20)
+      .map((h) => h.text.slice(0, MAX_HEADING_CHARS)),
   };
 }
 
@@ -119,7 +123,8 @@ describe("cloud-prefetch page payloads (#253)", () => {
       // so the parser's own cost is present in all three arms and subtracts out.
       control: (i) => attachedPayload(i, SOURCE_BYTES).textExcerpt.length,
       attached: (i) => attachedPayload(i, SOURCE_BYTES),
-      detached: (i) => buildCloudPagePayloads(contextFor(heavyPage(i, SOURCE_BYTES)))[0],
+      detached: (i) =>
+        buildCloudPagePayloads(contextFor(heavyPage(i, SOURCE_BYTES)))[0],
     });
 
     expectDetached(result, {

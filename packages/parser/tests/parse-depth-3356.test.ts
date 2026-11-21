@@ -8,9 +8,9 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { parseHTML } from "../src/dom";
 import { createSiteChromeTest, isInSiteChrome } from "../src/extractors/chrome";
 import { createLinkPositionTest, extractLinks } from "../src/extractors/links";
-import { parseHTML } from "../src/dom";
 import { parsePage } from "../src/html";
 import { referenceDetectLinkPosition } from "./fixtures/reference-3356/link-position";
 
@@ -28,7 +28,8 @@ function rng(seed: number): () => number {
   };
 }
 
-const pick = <T>(r: () => number, items: readonly T[]): T => items[Math.floor(r() * items.length)]!;
+const pick = <T>(r: () => number, items: readonly T[]): T =>
+  items[Math.floor(r() * items.length)]!;
 
 const CONTAINERS = [
   "div",
@@ -64,7 +65,9 @@ function tree(r: () => number, depth: number): string {
   if (depth === 0 || r() < 0.2) return link;
   const tag = pick(r, CONTAINERS);
   const name = tag.split(" ")[0]!;
-  const kids = Array.from({ length: 1 + Math.floor(r() * 3) }, () => tree(r, depth - 1));
+  const kids = Array.from({ length: 1 + Math.floor(r() * 3) }, () =>
+    tree(r, depth - 1)
+  );
   return `${r() < 0.5 ? link : ""}<${tag}>${kids.join("")}</${name}>`;
 }
 
@@ -74,29 +77,33 @@ function randomPage(seed: number): string {
 }
 
 describe("every anchor gets the answer the single walks gave (#3356)", () => {
-  test("chrome flag and position on 600 seeded random pages, both extractors", () => {
-    for (let seed = 1; seed <= 600; seed++) {
-      const html = randomPage(seed);
-      const { document } = parseHTML(html);
-      const anchors = Array.from(document.querySelectorAll("a[href]"));
-      const expected = anchors.map((a) => ({
-        isChrome: isInSiteChrome(a as never),
-        position: referenceDetectLinkPosition(a as never),
-      }));
+  test(
+    "chrome flag and position on 600 seeded random pages, both extractors",
+    () => {
+      for (let seed = 1; seed <= 600; seed++) {
+        const html = randomPage(seed);
+        const { document } = parseHTML(html);
+        const anchors = Array.from(document.querySelectorAll("a[href]"));
+        const expected = anchors.map((a) => ({
+          isChrome: isInSiteChrome(a as never),
+          position: referenceDetectLinkPosition(a as never),
+        }));
 
-      const extracted = extractLinks(document as never, URL);
-      expect(
-        extracted.map(({ isChrome, position }) => ({ isChrome, position })),
-        `seed ${seed}`,
-      ).toEqual(expected);
+        const extracted = extractLinks(document as never, URL);
+        expect(
+          extracted.map(({ isChrome, position }) => ({ isChrome, position })),
+          `seed ${seed}`
+        ).toEqual(expected);
 
-      const parsed = parsePage(html, URL).links;
-      expect(
-        parsed.map((l) => l.isChrome),
-        `seed ${seed}`,
-      ).toEqual(expected.map((e) => e.isChrome));
-    }
-  }, { timeout: 30_000 });
+        const parsed = parsePage(html, URL).links;
+        expect(
+          parsed.map((l) => l.isChrome),
+          `seed ${seed}`
+        ).toEqual(expected.map((e) => e.isChrome));
+      }
+    },
+    { timeout: 30_000 }
+  );
 });
 
 /** parsePage's whole run on `html`, in ms: the best of 3, so a busy runner's stall is not the parser's. */
@@ -133,28 +140,44 @@ const MAX_GROWTH = 10;
 describe("nesting costs a walk, not a walk per link (#3356)", () => {
   for (const [shape, open, close] of [
     ["role=text spans", '<span role="text"><a href="/x">x</a>', "</span>"],
-    ["aria-hidden divs", '<div aria-hidden="true"><a href="/x">x</a>', "</div>"],
+    [
+      "aria-hidden divs",
+      '<div aria-hidden="true"><a href="/x">x</a>',
+      "</div>",
+    ],
     ["blockquotes", '<blockquote><a href="/x">l</a>', "</blockquote>"],
   ] as const) {
-    test(`20,000 nested ${shape} cost linear time (4x the depth, under ${MAX_GROWTH}x the time)`, () => {
-      expect(growth((depth) => parseMs(nested(depth, open, close)))).toBeLessThan(MAX_GROWTH);
-    }, { timeout: 60_000 });
+    test(
+      `20,000 nested ${shape} cost linear time (4x the depth, under ${MAX_GROWTH}x the time)`,
+      () => {
+        expect(
+          growth((depth) => parseMs(nested(depth, open, close)))
+        ).toBeLessThan(MAX_GROWTH);
+      },
+      { timeout: 60_000 }
+    );
   }
 
-  test("extractLinks on nested links costs linear time and finds every link", () => {
-    const extractMs = (depth: number): number => {
-      const { document } = parseHTML(nested(depth, '<div class="x"><a href="/x">x</a>', "</div>"));
-      let best = Number.POSITIVE_INFINITY;
-      for (let i = 0; i < 3; i++) {
-        const start = performance.now();
-        const found = extractLinks(document as never, URL);
-        best = Math.min(best, performance.now() - start);
-        expect(found).toHaveLength(depth);
-      }
-      return best;
-    };
-    expect(growth(extractMs)).toBeLessThan(MAX_GROWTH);
-  }, { timeout: 60_000 });
+  test(
+    "extractLinks on nested links costs linear time and finds every link",
+    () => {
+      const extractMs = (depth: number): number => {
+        const { document } = parseHTML(
+          nested(depth, '<div class="x"><a href="/x">x</a>', "</div>")
+        );
+        let best = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < 3; i++) {
+          const start = performance.now();
+          const found = extractLinks(document as never, URL);
+          best = Math.min(best, performance.now() - start);
+          expect(found).toHaveLength(depth);
+        }
+        return best;
+      };
+      expect(growth(extractMs)).toBeLessThan(MAX_GROWTH);
+    },
+    { timeout: 60_000 }
+  );
 });
 
 describe("the memo holds no page alive (#2343)", () => {
@@ -163,9 +186,11 @@ describe("the memo holds no page alive (#2343)", () => {
    * The anchors are found by walking `children`, not `querySelectorAll`, whose
    * selector engine keeps the last document it searched alive on its own.
    */
-  function walkAndDrop(memos: ReadonlyArray<(element: Element) => unknown>): WeakRef<object> {
+  function walkAndDrop(
+    memos: ReadonlyArray<(element: Element) => unknown>
+  ): WeakRef<object> {
     const { document } = parseHTML(
-      `<html><body><nav><div><a href="/a">a</a></div></nav><main><p><a href="/b">b</a></p></main></body></html>`,
+      `<html><body><nav><div><a href="/a">a</a></div></nav><main><p><a href="/b">b</a></p></main></body></html>`
     );
     const stack: Element[] = [document.documentElement as unknown as Element];
     while (stack.length > 0) {

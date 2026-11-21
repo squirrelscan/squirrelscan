@@ -91,7 +91,8 @@ const NAMED_ENTITIES: Record<string, string> = {
 // `&#39;`, `&#x27;`, `&quot;`. The name is bounded so a stray `&` in front of
 // a long word costs a bounded look, and the numeric forms are bounded because
 // no code point needs more digits than that.
-const ENTITY_RE = /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z][a-zA-Z0-9]{1,15}));/g;
+const ENTITY_RE =
+  /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z][a-zA-Z0-9]{1,15}));/g;
 
 function codePointToString(code: number): string | null {
   // Surrogates and out-of-range values are not characters; keep the entity.
@@ -107,12 +108,22 @@ function codePointToString(code: number): string | null {
  */
 export function decodeHtmlEntities(text: string): string {
   if (text.indexOf("&") === -1) return text;
-  return text.replace(ENTITY_RE, (whole, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
-    if (dec !== undefined) return codePointToString(Number.parseInt(dec, 10)) ?? whole;
-    if (hex !== undefined) return codePointToString(Number.parseInt(hex, 16)) ?? whole;
-    if (name !== undefined) return NAMED_ENTITIES[name] ?? whole;
-    return whole;
-  });
+  return text.replace(
+    ENTITY_RE,
+    (
+      whole,
+      dec: string | undefined,
+      hex: string | undefined,
+      name: string | undefined
+    ) => {
+      if (dec !== undefined)
+        return codePointToString(Number.parseInt(dec, 10)) ?? whole;
+      if (hex !== undefined)
+        return codePointToString(Number.parseInt(hex, 16)) ?? whole;
+      if (name !== undefined) return NAMED_ENTITIES[name] ?? whole;
+      return whole;
+    }
+  );
 }
 
 // ── JavaScript string escapes ───────────────────────────────────────────────
@@ -121,7 +132,8 @@ export function decodeHtmlEntities(text: string): string {
 // a key gets hidden, and decoding `\\u0041` (an escaped backslash followed by
 // the letter u) would invent text the engine never sees. The odd-backslash
 // check below handles that case.
-const JS_ESCAPE_RE = /\\(?:u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2}))/g;
+const JS_ESCAPE_RE =
+  /\\(?:u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2}))/g;
 
 /**
  * Decode the Unicode and hex escapes in script text. Applied to the whole text
@@ -133,18 +145,26 @@ export function unescapeJsStrings(text: string): string {
   if (text.indexOf("\\u") === -1 && text.indexOf("\\x") === -1) return text;
   return text.replace(
     JS_ESCAPE_RE,
-    (whole, braced: string | undefined, four: string | undefined, two: string | undefined, offset: number) => {
+    (
+      whole,
+      braced: string | undefined,
+      four: string | undefined,
+      two: string | undefined,
+      offset: number
+    ) => {
       // An even run of backslashes before this one means the backslash that
       // opens the escape is itself escaped, and the `u` is a literal `u`.
       let slashes = 0;
-      for (let i = offset - 1; i >= 0 && text.charCodeAt(i) === 92; i--) slashes++;
+      for (let i = offset - 1; i >= 0 && text.charCodeAt(i) === 92; i--)
+        slashes++;
       if (slashes % 2 === 1) return whole;
       const code = Number.parseInt(braced ?? four ?? two ?? "", 16);
       // `😀` is how a script spells one astral character as two
       // code units; the engine joins them and so does this.
-      if (four !== undefined && code >= 0xd800 && code <= 0xdfff) return String.fromCharCode(code);
+      if (four !== undefined && code >= 0xd800 && code <= 0xdfff)
+        return String.fromCharCode(code);
       return codePointToString(code) ?? whole;
-    },
+    }
   );
 }
 
@@ -162,7 +182,8 @@ const PERCENT_MIN_ESCAPES = 3;
  * those escapes (a `%26` after it is the next parameter), and it starts after a non-token character or after an escape that decodes to a delimiter (`%3D` `=`, `%22` `"`, `%27` `'`, `%26` `&`, `%3A` `:`: `key=token`), not in the middle
  * of a base64 payload (after a letter, a digit, `+`, `/`, `%2B`, `%2F`, or the `%2C` of a `data:` URL).
  */
-const TWITTER_BEARER_SHAPE_RE = /(?:(?<![A-Za-z0-9+/])|(?<=%(?:3[Dd]|22|27|26|3[Aa])))A{19}(?:[A-Za-z0-9]|%2[BbFf]|%3[Dd]){1,300}/g;
+const TWITTER_BEARER_SHAPE_RE =
+  /(?:(?<![A-Za-z0-9+/])|(?<=%(?:3[Dd]|22|27|26|3[Aa])))A{19}(?:[A-Za-z0-9]|%2[BbFf]|%3[Dd]){1,300}/g;
 /** Where the placeholder for the kept `%` is looked for: private-use code points not present in the run. */
 const KEPT_PERCENT_FIRST = 0xe000;
 const KEPT_PERCENT_COUNT = 256;
@@ -182,7 +203,11 @@ const PERCENT_MAX_RUN_CHARS = 1024 * 1024;
 
 function isHexAt(text: string, index: number): boolean {
   const code = text.charCodeAt(index);
-  return (code >= 48 && code <= 57) || (code >= 65 && code <= 70) || (code >= 97 && code <= 102);
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 70) ||
+    (code >= 97 && code <= 102)
+  );
 }
 
 // What ends a URL-encoded run: whitespace, a quote, an angle bracket, a
@@ -192,7 +217,8 @@ function isHexAt(text: string, index: number): boolean {
 // kilobyte away. `&`, `=`, `+`, `.`, `-`, `_`, `~`, `*`, `!` stay in: a query
 // string is made of them.
 const PERCENT_RUN_STOP = new Uint8Array(128);
-for (const ch of " \t\n\r\v\f\"'<>`;{}()[],") PERCENT_RUN_STOP[ch.charCodeAt(0)] = 1;
+for (const ch of " \t\n\r\v\f\"'<>`;{}()[],")
+  PERCENT_RUN_STOP[ch.charCodeAt(0)] = 1;
 function endsPercentRun(code: number): boolean {
   return code < 128 && PERCENT_RUN_STOP[code] === 1;
 }
@@ -211,14 +237,21 @@ export function decodePercentRun(run: string): string | null {
     kept = freeKeptPercent(run);
     if (kept !== undefined) {
       const placeholder = kept;
-      run = run.replace(TWITTER_BEARER_SHAPE_RE, (token) => (token.includes("%") ? token.replaceAll("%", placeholder) : token));
+      run = run.replace(TWITTER_BEARER_SHAPE_RE, (token) =>
+        token.includes("%") ? token.replaceAll("%", placeholder) : token
+      );
     }
   }
   const bytes: number[] = [];
   let escapes = 0;
   for (let i = 0; i < run.length; i++) {
     const code = run.charCodeAt(i);
-    if (code === 37 && i + 2 < run.length && isHexAt(run, i + 1) && isHexAt(run, i + 2)) {
+    if (
+      code === 37 &&
+      i + 2 < run.length &&
+      isHexAt(run, i + 1) &&
+      isHexAt(run, i + 2)
+    ) {
       bytes.push(Number.parseInt(run.slice(i + 1, i + 3), 16));
       escapes++;
       i += 2;
@@ -228,7 +261,8 @@ export function decodePercentRun(run: string): string | null {
       // A non-ASCII character inside a URL-encoded run: encode it as UTF-8 so
       // the byte check and the decode below see one consistent stream.
       const point = run.codePointAt(i) ?? code;
-      for (const byte of Buffer.from(String.fromCodePoint(point), "utf8")) bytes.push(byte);
+      for (const byte of Buffer.from(String.fromCodePoint(point), "utf8"))
+        bytes.push(byte);
       if (point > 0xffff) i++;
       continue;
     }
@@ -268,7 +302,8 @@ export function decodePercentRuns(text: string): string {
     }
     let start = at;
     const floor = Math.max(copied, scanned);
-    while (start > floor && !endsPercentRun(text.charCodeAt(start - 1))) start--;
+    while (start > floor && !endsPercentRun(text.charCodeAt(start - 1)))
+      start--;
     let end = at + 3;
     while (end < length && !endsPercentRun(text.charCodeAt(end))) end++;
     if (end - start <= PERCENT_MAX_RUN_CHARS) {
@@ -295,8 +330,12 @@ export function decodePercentRuns(text: string): string {
  * the other would report the escaped text under the generic assignment
  * pattern as a second, different "value" of the same key.
  */
-export function decodeForLocation(content: string, location: ReportedLocation): string {
-  if (location === "html") return unescapeJsStrings(decodePercentRuns(decodeHtmlEntities(content)));
+export function decodeForLocation(
+  content: string,
+  location: ReportedLocation
+): string {
+  if (location === "html")
+    return unescapeJsStrings(decodePercentRuns(decodeHtmlEntities(content)));
   // Script text, and the inside of a decoded blob whatever it came from: a
   // JSON config blob escapes the same way a script string does.
   return unescapeJsStrings(decodePercentRuns(content));
@@ -320,12 +359,18 @@ const BASE64_MAX_DECODED_TOTAL = 8 * 1024 * 1024;
 // A byte a decoded blob may carry and still be text. Tab, LF, CR, and the
 // printable ASCII range; anything above 0x7f is settled by UTF-8 validity.
 function isTextByte(byte: number): boolean {
-  return (byte >= 0x20 && byte !== 0x7f) || byte === 0x09 || byte === 0x0a || byte === 0x0d;
+  return (
+    (byte >= 0x20 && byte !== 0x7f) ||
+    byte === 0x09 ||
+    byte === 0x0a ||
+    byte === 0x0d
+  );
 }
 
 // The base64 and base64url alphabets together, as a lookup on the code unit.
 const B64_CHAR = new Uint8Array(128);
-for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/-_") { // pragma: allowlist secret
+for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/-_") {
+  // pragma: allowlist secret
   B64_CHAR[ch.charCodeAt(0)] = 1;
 }
 
@@ -348,7 +393,10 @@ const SRI_HEAD_RE = /^sha(?:256|384|512)-/;
 
 /** Is the run at `start` the payload of a data: URI or an SRI hash? */
 export function isExcludedBase64Run(text: string, start: number): boolean {
-  if (start >= DATA_URI_LEAD.length && text.startsWith(DATA_URI_LEAD, start - DATA_URI_LEAD.length)) {
+  if (
+    start >= DATA_URI_LEAD.length &&
+    text.startsWith(DATA_URI_LEAD, start - DATA_URI_LEAD.length)
+  ) {
     return true;
   }
   if (SRI_HEAD_RE.test(text.slice(start, start + 7))) return true;
@@ -386,7 +434,10 @@ const B64_RUN_RE = sharedRegex(/[A-Za-z0-9+/_-]*={0,2}/y);
  * characters, because the first qualifying sample sits that close to it) and
  * forward with one sticky regex exec. Sampling then resumes past the run.
  */
-export function findBase64Runs(text: string, minChars = BASE64_MIN_CHARS): Base64Run[] {
+export function findBase64Runs(
+  text: string,
+  minChars = BASE64_MIN_CHARS
+): Base64Run[] {
   const runs: Base64Run[] = [];
   const length = text.length;
   if (length < minChars) return runs;
@@ -455,7 +506,9 @@ export function looksLikeBase64Text(blob: string): boolean {
     } else if (code === 43) standard++;
     else if (code === 45 || code === 95) urlSafe++;
   }
-  return upper > 0 && lower > 0 && slashes < 6 && !(standard > 0 && urlSafe > 0);
+  return (
+    upper > 0 && lower > 0 && slashes < 6 && !(standard > 0 && urlSafe > 0)
+  );
 }
 
 /**
@@ -465,7 +518,8 @@ export function looksLikeBase64Text(blob: string): boolean {
  * allocates its full length.
  */
 export function decodeBase64Text(blob: string): string | null {
-  if (blob.length < BASE64_MIN_CHARS || blob.length > BASE64_MAX_BLOB_CHARS) return null;
+  if (blob.length < BASE64_MIN_CHARS || blob.length > BASE64_MAX_BLOB_CHARS)
+    return null;
   if (!looksLikeBase64Text(blob)) return null;
   const head = Buffer.from(blob.slice(0, BASE64_MIN_CHARS), "base64");
   if (head.length < 40) return null;
@@ -487,7 +541,7 @@ export type BlobScanner = (
   content: string,
   location: ReportedLocation,
   sourceUrl: string | undefined,
-  depth: number,
+  depth: number
 ) => LeakedSecret[];
 
 /**
@@ -501,7 +555,7 @@ export function scanBase64Blobs(
   location: ReportedLocation,
   sourceUrl: string | undefined,
   depth: number,
-  scan: BlobScanner,
+  scan: BlobScanner
 ): LeakedSecret[] {
   if (depth >= BASE64_MAX_DEPTH) return [];
   const found: LeakedSecret[] = [];
@@ -519,7 +573,12 @@ export function scanBase64Blobs(
     if (decoded === null) continue;
     // Appended one at a time: a decoded blob can carry thousands of findings,
     // and spreading that many arguments is an engine-dependent RangeError.
-    for (const finding of scan(decoded, decodedLocation, sourceUrl, depth + 1)) {
+    for (const finding of scan(
+      decoded,
+      decodedLocation,
+      sourceUrl,
+      depth + 1
+    )) {
       // The decoded value has no one-to-one character mapping back to the
       // encoded source. Point at the first character of the source blob; an
       // outer decoded blob overwrites this again with its own source start.

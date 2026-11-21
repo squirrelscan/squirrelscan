@@ -9,7 +9,8 @@
 // video with no autoplay, no loop and no controls is played by script, so it
 // stays flagged.
 
-const CAPTION_TRACK_SELECTOR = 'track[kind="captions"], track[kind="subtitles"]';
+const CAPTION_TRACK_SELECTOR =
+  'track[kind="captions"], track[kind="subtitles"]';
 
 interface VideoElement {
   hasAttribute(name: string): boolean;
@@ -40,7 +41,7 @@ export interface VideoPartition<T extends VideoElement> {
 }
 
 export function partitionDecorativeVideos<T extends VideoElement>(
-  videos: Iterable<T>,
+  videos: Iterable<T>
 ): VideoPartition<T> {
   const checked: T[] = [];
   let decorativeSkipped = 0;

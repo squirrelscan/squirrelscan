@@ -56,14 +56,20 @@ describe("plan definitions", () => {
     expect(plan.maxWebsites).toBe(-1);
     expect(plan.maxMembers).toBe(-1);
     // Like the page ceiling below: never narrower than the tier under it.
-    expect(plan.renderConcurrency).toBeGreaterThanOrEqual(PLANS.team.renderConcurrency);
+    expect(plan.renderConcurrency).toBeGreaterThanOrEqual(
+      PLANS.team.renderConcurrency
+    );
     expect(plan.scheduledCrawls).toBe(true);
     expect(plan.customHeaders).toBe(true);
     expect(plan.maxPagesPerAudit).toBe(25000);
     // #1028: a contracted plan must never audit fewer pages than the tier
     // below it, whatever the literals are set to.
-    expect(plan.maxPagesPerAudit).toBeGreaterThanOrEqual(PLANS.team.maxPagesPerAudit);
-    expect(plan.maxPagesPerAudit).toBeGreaterThanOrEqual(PLANS.business.maxPagesPerAudit);
+    expect(plan.maxPagesPerAudit).toBeGreaterThanOrEqual(
+      PLANS.team.maxPagesPerAudit
+    );
+    expect(plan.maxPagesPerAudit).toBeGreaterThanOrEqual(
+      PLANS.business.maxPagesPerAudit
+    );
   });
 });
 
@@ -109,13 +115,16 @@ describe("the flat Team, legacy Team and Business ladder (squirrelscan/repo#5002
   });
 
   test("each paid rung buys more credits per dollar than the one below", () => {
-    const perDollar = (id: PlanId) => PLANS[id].monthlyCredits / (PLANS[id].priceMonthUsd ?? 1);
+    const perDollar = (id: PlanId) =>
+      PLANS[id].monthlyCredits / (PLANS[id].priceMonthUsd ?? 1);
     expect(perDollar("team")).toBeGreaterThan(perDollar("starter"));
     expect(perDollar("business")).toBeGreaterThan(perDollar("team"));
   });
 
   test("only team_legacy is per-seat", () => {
-    expect(ALL_PLAN_IDS.filter((id) => PLANS[id].perSeat !== undefined)).toEqual(["team_legacy"]);
+    expect(
+      ALL_PLAN_IDS.filter((id) => PLANS[id].perSeat !== undefined)
+    ).toEqual(["team_legacy"]);
   });
 });
 
@@ -132,7 +141,9 @@ describe("render width per plan (squirrelscan/repo#2480, #3576)", () => {
     // 10 until then, because nothing clamps renders at dispatch.
     expect(PLANS.business.renderConcurrency).toBe(20);
     expect(PLANS.enterprise.renderConcurrency).toBe(10);
-    expect(PLANS.starter.renderConcurrency).toBeGreaterThan(PLANS.free.renderConcurrency);
+    expect(PLANS.starter.renderConcurrency).toBeGreaterThan(
+      PLANS.free.renderConcurrency
+    );
   });
 });
 
@@ -238,7 +249,9 @@ describe("scheduled audit entitlements", () => {
   test("free omits daily; every paid plan allows all three cadences", () => {
     expect([...PLANS.free.scheduleFrequencies!]).toEqual(["weekly", "monthly"]);
     for (const id of ["starter", "team", "enterprise"] as const) {
-      expect([...PLANS[id].scheduleFrequencies!]).toEqual([...SCHEDULE_FREQUENCIES]);
+      expect([...PLANS[id].scheduleFrequencies!]).toEqual([
+        ...SCHEDULE_FREQUENCIES,
+      ]);
     }
     expect(planAllowsScheduleFrequency("free", "daily")).toBe(false);
     expect(planAllowsScheduleFrequency("free", "weekly")).toBe(true);
@@ -286,17 +299,18 @@ describe("scheduled audit entitlements", () => {
       const noCap = { ...PLANS.starter } as PlanDefinition;
       delete noCap.maxScheduledWebsites;
       expect(resolvePlanScheduleLimits(noCap).maxScheduledWebsites).toBe(1);
-      expect([...resolvePlanScheduleLimits(noCap).scheduleFrequencies]).toEqual([
-        ...SCHEDULE_FREQUENCIES,
-      ]);
+      expect([...resolvePlanScheduleLimits(noCap).scheduleFrequencies]).toEqual(
+        [...SCHEDULE_FREQUENCIES]
+      );
 
       const noCadence = { ...PLANS.starter } as PlanDefinition;
       delete noCadence.scheduleFrequencies;
-      expect(resolvePlanScheduleLimits(noCadence).maxScheduledWebsites).toBe(-1);
-      expect([...resolvePlanScheduleLimits(noCadence).scheduleFrequencies]).toEqual([
-        "weekly",
-        "monthly",
-      ]);
+      expect(resolvePlanScheduleLimits(noCadence).maxScheduledWebsites).toBe(
+        -1
+      );
+      expect([
+        ...resolvePlanScheduleLimits(noCadence).scheduleFrequencies,
+      ]).toEqual(["weekly", "monthly"]);
     });
 
     test("no plan at all is still answerable", () => {
@@ -307,13 +321,18 @@ describe("scheduled audit entitlements", () => {
     test("a complete plan is passed through untouched", () => {
       const limits = resolvePlanScheduleLimits(PLANS.team);
       expect(limits.maxScheduledWebsites).toBe(-1);
-      expect([...limits.scheduleFrequencies]).toEqual([...SCHEDULE_FREQUENCIES]);
+      expect([...limits.scheduleFrequencies]).toEqual([
+        ...SCHEDULE_FREQUENCIES,
+      ]);
     });
 
     // 0 is falsy: a plan that explicitly schedules nothing must not be read as
     // "field absent" and silently handed the free tier's one slot.
     test("an explicit zero cap is not mistaken for an absent field", () => {
-      expect(resolvePlanScheduleLimits({ maxScheduledWebsites: 0 }).maxScheduledWebsites).toBe(0);
+      expect(
+        resolvePlanScheduleLimits({ maxScheduledWebsites: 0 })
+          .maxScheduledWebsites
+      ).toBe(0);
     });
   });
 
@@ -330,11 +349,16 @@ describe("scheduled audit entitlements", () => {
   // The label is the most frequent cadence the plan FUNDS, off the ordered
   // list. Testing for `daily` instead would call a monthly-only plan "Weekly".
   test("planScheduleSummary names a cadence the plan actually runs", () => {
-    const monthlyOnly = { ...PLANS.free, scheduleFrequencies: ["monthly"] as const };
+    const monthlyOnly = {
+      ...PLANS.free,
+      scheduleFrequencies: ["monthly"] as const,
+    };
     const limits = resolvePlanScheduleLimits(monthlyOnly);
     expect(limits.scheduleFrequencies).toEqual(["monthly"]);
     // Same derivation planScheduleSummary runs, on a plan `PLANS` cannot express.
-    const cadence = SCHEDULE_FREQUENCIES.find((f) => limits.scheduleFrequencies.includes(f));
+    const cadence = SCHEDULE_FREQUENCIES.find((f) =>
+      limits.scheduleFrequencies.includes(f)
+    );
     expect(cadence).toBe("monthly");
   });
 

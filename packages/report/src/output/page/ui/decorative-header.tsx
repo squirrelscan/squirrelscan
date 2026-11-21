@@ -1,7 +1,8 @@
+import type { ReactNode } from "react";
+
 // Classic JSX in the CLI build needs React in scope.
 import React from "react";
-import type { ReactNode } from "react";
-import { cn } from "./utils";
+
 import {
   IconBot,
   IconCrackedNut,
@@ -16,6 +17,7 @@ import {
   IconTerminal,
   IconTree,
 } from "./icons";
+import { cn } from "./utils";
 
 // Uses the `pixel-grid` and `animate-drift` classes from ../styles.css.
 const FLOATING_ICONS = [
@@ -130,26 +132,35 @@ export interface DecorativeHeaderProps {
   compact?: boolean;
 }
 
-export function DecorativeHeader({ children, className, compact = false }: DecorativeHeaderProps) {
+export function DecorativeHeader({
+  children,
+  className,
+  compact = false,
+}: DecorativeHeaderProps) {
   return (
     <section
       className={cn(
         "pixel-grid border-b-2 border-primary/50 relative overflow-hidden",
         !compact && "min-h-[180px] md:min-h-[220px]",
-        className,
+        className
       )}
     >
       {/* Floating decorative icons - hidden on mobile for performance */}
-      <div className="absolute inset-0 hidden md:block pointer-events-none" aria-hidden="true">
-        {FLOATING_ICONS.map(({ Icon, className: iconClass, size, color, delay }, index) => (
-          <div
-            key={index}
-            className={`absolute opacity-20 animate-drift ${iconClass}`}
-            style={{ animationDelay: `${delay * 0.4}s` }}
-          >
-            <Icon className={`${size} ${color}`} />
-          </div>
-        ))}
+      <div
+        className="absolute inset-0 hidden md:block pointer-events-none"
+        aria-hidden="true"
+      >
+        {FLOATING_ICONS.map(
+          ({ Icon, className: iconClass, size, color, delay }, index) => (
+            <div
+              key={index}
+              className={`absolute opacity-20 animate-drift ${iconClass}`}
+              style={{ animationDelay: `${delay * 0.4}s` }}
+            >
+              <Icon className={`${size} ${color}`} />
+            </div>
+          )
+        )}
       </div>
       {/* Content */}
       <div className="relative z-10">{children}</div>

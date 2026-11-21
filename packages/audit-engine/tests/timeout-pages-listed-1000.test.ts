@@ -6,16 +6,22 @@
 // engine with the rule time budget at 1 ms, in both engines, and again after the
 // publish fold that merges the per-page rows into one aggregate.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
+
+import {
+  resolutionRuleKey,
+  resolutionUrlHash,
+} from "@squirrelscan/core-contracts/resolution";
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { resolutionRuleKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
-import { DEFAULT_FOLD_LIMITS, foldOverflowChecks } from "@squirrelscan/rules/fold";
+import {
+  DEFAULT_FOLD_LIMITS,
+  foldOverflowChecks,
+} from "@squirrelscan/rules/fold";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -45,7 +51,7 @@ const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> =>
   Effect.runPromise(eff as Effect.Effect<A, never, never>);
 
 const BIG_BODY = `<!doctype html><html lang="en"><head><title>Big page</title></head><body>${'<div style="display:none">hidden filler text for the rule to read</div><p>visible copy</p>'.repeat(
-  12_000,
+  12_000
 )}</body></html>`;
 const SMALL_BODY =
   '<!doctype html><html lang="en"><head><title>Small</title></head><body><p>hi</p></body></html>';
@@ -84,7 +90,11 @@ function pageRecord(path: string, body: string): PageRecord {
 
 type Engine = "v1" | "streaming";
 
-async function audit(engine: Engine, config: Config = CONFIG, bigBody: string = BIG_BODY) {
+async function audit(
+  engine: Engine,
+  config: Config = CONFIG,
+  bigBody: string = BIG_BODY
+) {
   const storage = new SQLiteStorage(":memory:");
   return run(
     Effect.gen(function* () {
@@ -112,24 +122,40 @@ async function audit(engine: Engine, config: Config = CONFIG, bigBody: string = 
       yield* storage.upsertPage(crawlId, pageRecord("/big-b", bigBody));
 
       if (engine === "streaming") {
-        return yield* runStreamingRules(storage, crawlId, config, EMPTY_ASSETS, undefined, {
-          batchSize: 1,
-        });
+        return yield* runStreamingRules(
+          storage,
+          crawlId,
+          config,
+          EMPTY_ASSETS,
+          undefined,
+          {
+            batchSize: 1,
+          }
+        );
       }
       const stored = yield* storage.getPages(crawlId);
       const siteContext = yield* buildSiteContext(stored);
-      return yield* runRulesOnStorage(storage, crawlId, siteContext, config, EMPTY_ASSETS);
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+      return yield* runRulesOnStorage(
+        storage,
+        crawlId,
+        siteContext,
+        config,
+        EMPTY_ASSETS
+      );
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
 const CRAWLED = [`${BASE}/`, `${BASE}/big-a`, `${BASE}/big-b`];
-const hashes = (urls: string[]) => urls.map((u) => resolutionUrlHash(normalizePageUrl(u))).sort();
+const hashes = (urls: string[]) =>
+  urls.map((u) => resolutionUrlHash(normalizePageUrl(u))).sort();
 
 // The 1 ms budget can also catch the small page on a cold start, so the pages
 // that timed out are read from the rows rather than assumed.
 const timedOutPages = (checks: CheckResult[]): string[] =>
-  checks.filter((c) => c.skipReason === "rule-timed-out").map((c) => c.pageUrl!);
+  checks
+    .filter((c) => c.skipReason === "rule-timed-out")
+    .map((c) => c.pageUrl!);
 
 describe("a rule that timed out on some pages lists only those (pub#1000)", () => {
   for (const engine of ["v1", "streaming"] as const) {
@@ -141,28 +167,39 @@ describe("a rule that timed out on some pages lists only those (pub#1000)", () =
       expect(timed).toContain(`${BASE}/big-a`);
       expect(timed).toContain(`${BASE}/big-b`);
       for (const url of timed)
-        expect(checks.some((c) => c.pageUrl === url && c.skipReason)).toBe(true);
+        expect(checks.some((c) => c.pageUrl === url && c.skipReason)).toBe(
+          true
+        );
 
-      const signal = buildResolutionSignal({ [RULE]: { checks } } as never, CRAWLED)!;
-      expect([...(signal.notEvaluated?.[resolutionRuleKey(RULE)] ?? [])].sort()).toEqual(
-        hashes(timed),
-      );
+      const signal = buildResolutionSignal(
+        { [RULE]: { checks } } as never,
+        CRAWLED
+      )!;
+      expect(
+        [...(signal.notEvaluated?.[resolutionRuleKey(RULE)] ?? [])].sort()
+      ).toEqual(hashes(timed));
     }, 60_000);
 
     test(`${engine}: after the publish fold the aggregate still lists exactly those pages`, async () => {
       const result = await audit(engine);
       const checks = result.ruleResultsMap.get(RULE)?.checks ?? [];
       const timed = timedOutPages(checks);
-      const folded = foldOverflowChecks(checks, { ...DEFAULT_FOLD_LIMITS, maxChecks: 1 });
+      const folded = foldOverflowChecks(checks, {
+        ...DEFAULT_FOLD_LIMITS,
+        maxChecks: 1,
+      });
       const aggregate = folded.find((c) => c.skipReason === "rule-timed-out");
       expect(aggregate?.pages?.map(normalizePageUrl).sort()).toEqual(
-        timed.map(normalizePageUrl).sort(),
+        timed.map(normalizePageUrl).sort()
       );
 
-      const signal = buildResolutionSignal({ [RULE]: { checks: folded } } as never, CRAWLED)!;
-      expect([...(signal.notEvaluated?.[resolutionRuleKey(RULE)] ?? [])].sort()).toEqual(
-        hashes(timed),
-      );
+      const signal = buildResolutionSignal(
+        { [RULE]: { checks: folded } } as never,
+        CRAWLED
+      )!;
+      expect(
+        [...(signal.notEvaluated?.[resolutionRuleKey(RULE)] ?? [])].sort()
+      ).toEqual(hashes(timed));
     }, 60_000);
   }
 });
@@ -177,7 +214,12 @@ describe("a clipped page list is the safe direction (pub#1000)", () => {
       pages: [`${BASE}/big-a`],
       details: { aggregated: true, occurrences: 5, pagesTruncated: 5 },
     };
-    const signal = buildResolutionSignal({ [RULE]: { checks: [aggregate] } } as never, CRAWLED)!;
-    expect(signal.notEvaluated?.[resolutionRuleKey(RULE)]).toHaveLength(CRAWLED.length);
+    const signal = buildResolutionSignal(
+      { [RULE]: { checks: [aggregate] } } as never,
+      CRAWLED
+    )!;
+    expect(signal.notEvaluated?.[resolutionRuleKey(RULE)]).toHaveLength(
+      CRAWLED.length
+    );
   });
 });

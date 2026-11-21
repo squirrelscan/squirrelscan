@@ -18,10 +18,9 @@
 import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
-import { createHash } from "crypto";
-
 import { normalizeHtmlForFingerprint } from "@squirrelscan/utils/fingerprint";
 import { describe, expect, test } from "bun:test";
+import { createHash } from "crypto";
 import { Effect } from "effect";
 
 import type { CrawlStorage } from "../src/storage/types";
@@ -61,7 +60,10 @@ function response(url: string, body: string, method?: string): FetchResponse {
     status: 200,
     // Rolling Last-Modified, NO cache-control (so pages are never "fresh" and the
     // crawler always takes the conditional-GET/probe path).
-    headers: { "content-type": "text/html; charset=utf-8", "last-modified": nextLastModified() },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "last-modified": nextLastModified(),
+    },
     body,
     timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
     ...(method ? { fetcherMethod: method } : {}),
@@ -125,13 +127,13 @@ async function seedRoot(storage: CrawlStorage, crawlId: string) {
       source: "seed" as const,
       enqueuedAt: Date.now(),
       retryCount: 0,
-    }),
+    })
   );
 }
 
 async function createCrawlRecord(
   storage: CrawlStorage,
-  config: Record<string, unknown>,
+  config: Record<string, unknown>
 ): Promise<string> {
   return Effect.runPromise(
     storage.createCrawl({
@@ -142,19 +144,19 @@ async function createCrawlRecord(
       status: "paused",
       config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
-    }),
+    })
   );
 }
 
 async function runCrawl(
   storage: CrawlStorage,
   config: Record<string, unknown>,
-  documentFetcher: DocumentFetcher,
+  documentFetcher: DocumentFetcher
 ): Promise<string> {
   const crawlId = await createCrawlRecord(storage, config);
   await seedRoot(storage, crawlId);
   const crawler = await Effect.runPromise(
-    createCrawler({ config: { ...config, documentFetcher }, storage }),
+    createCrawler({ config: { ...config, documentFetcher }, storage })
   );
   await Effect.runPromise(crawler.resumeFromStorage(crawlId));
   return crawlId;
@@ -176,7 +178,11 @@ describe("render reuse via normalized source fingerprint (#839)", () => {
         return response(req.url, pageBody(linksFor(req.url)));
       },
     };
-    const coldCfg = { ...baseConfig, incremental: false, useCacheControl: false };
+    const coldCfg = {
+      ...baseConfig,
+      incremental: false,
+      useCacheControl: false,
+    };
     await runCrawl(storage, coldCfg, originFetcher);
 
     // The gate wraps a plain-HTTP probe (origin) around the render fetcher.
@@ -195,7 +201,11 @@ describe("render reuse via normalized source fingerprint (#839)", () => {
       render: renderFetcher,
     });
 
-    const incrementalCfg = { ...baseConfig, incremental: true, useCacheControl: false };
+    const incrementalCfg = {
+      ...baseConfig,
+      incremental: true,
+      useCacheControl: false,
+    };
 
     // ---- Crawl 2: first render-all run — no stored hash yet, so it renders once ----
     const crawl2 = await runCrawl(storage, incrementalCfg, gate);

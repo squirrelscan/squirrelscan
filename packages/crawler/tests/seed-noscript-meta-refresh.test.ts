@@ -6,8 +6,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 const CONFIG: Partial<CrawlerConfig> = {
@@ -65,7 +66,7 @@ async function crawl(origin: string) {
       const meta = yield* storage.getCrawl(crawlId);
       const pages = yield* storage.getPages(crawlId);
       return { meta, pages };
-    }),
+    })
   );
 }
 

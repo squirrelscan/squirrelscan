@@ -19,7 +19,12 @@ import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
 import type { CheckResult } from "../types";
 
-import { coversAllWidths, describeShownWidths, unionWidths, type WidthSet } from "./media-widths";
+import {
+  coversAllWidths,
+  describeShownWidths,
+  unionWidths,
+  type WidthSet,
+} from "./media-widths";
 import {
   cascade,
   type Declared,
@@ -57,29 +62,47 @@ export function widthLabel(shown: string): string {
 
 /** The label for a control the visibility verdict left unconfirmed. */
 export function unconfirmedLabel(seen: StaticVisibility): string {
-  if (seen.state === "unknown" && seen.reason === "script") return SCRIPT_STATE_LABEL;
-  if (seen.state === "unknown" && seen.reason === "width") return widthLabel(seen.shown);
+  if (seen.state === "unknown" && seen.reason === "script")
+    return SCRIPT_STATE_LABEL;
+  if (seen.state === "unknown" && seen.reason === "width")
+    return widthLabel(seen.shown);
   return UNCONFIRMED_LABEL;
 }
 
 /** An unconfirmed item for `id`: its label, and for a width reason the reason and widths as `meta`. */
-export function unconfirmedItem(id: string, seen: StaticVisibility): ControlItem & { id: string } {
+export function unconfirmedItem(
+  id: string,
+  seen: StaticVisibility
+): ControlItem & { id: string } {
   return seen.state === "unknown" && seen.reason === "width"
-    ? { id, label: widthLabel(seen.shown), meta: { reason: WIDTH_REASON, shown: seen.shown } }
+    ? {
+        id,
+        label: widthLabel(seen.shown),
+        meta: { reason: WIDTH_REASON, shown: seen.shown },
+      }
     : { id, label: unconfirmedLabel(seen) };
 }
 
 /** The row message for unconfirmed items: names the width reason when every item has it. */
-export function unconfirmedMessage(what: string, items: ReadonlyArray<ControlItem>): string {
+export function unconfirmedMessage(
+  what: string,
+  items: ReadonlyArray<ControlItem>
+): string {
   return unconfirmedMessageFor(
     what,
     items.length,
-    items.every((item) => typeof item !== "string" && item.meta?.reason === WIDTH_REASON),
+    items.every(
+      (item) => typeof item !== "string" && item.meta?.reason === WIDTH_REASON
+    )
   );
 }
 
 /** `unconfirmedMessage` from a count and whether every item is width-only. */
-export function unconfirmedMessageFor(what: string, count: number, allWidth: boolean): string {
+export function unconfirmedMessageFor(
+  what: string,
+  count: number,
+  allWidth: boolean
+): string {
   return count > 0 && allWidth
     ? `${count} ${what} hidden only at some widths by a media query (unconfirmed)`
     : `${count} ${what} may be hidden by a style (unconfirmed)`;
@@ -192,20 +215,23 @@ function authorStyle(el: Element): {
   }
   const settle = <V extends string>(
     result: { value: V; source: "inline" | "sheet" } | "unknown" | undefined,
-    hides: V,
+    hides: V
   ): V | "unknown" | undefined => {
     if (result === undefined || result === "unknown") return result;
-    if (result.source === "sheet" && result.value === hides && !styles.complete) return "unknown";
+    if (result.source === "sheet" && result.value === hides && !styles.complete)
+      return "unknown";
     return result.value;
   };
-  const displayReach: { shows: boolean; hideWidths?: WidthSet } = { shows: false };
+  const displayReach: { shows: boolean; hideWidths?: WidthSet } = {
+    shows: false,
+  };
   const visibilityReach = { shows: false };
   const display = cascade(
     el,
     styles,
     "display",
     decls.display as Declared<DisplayValue> | undefined,
-    displayReach,
+    displayReach
   );
   let displayValue = settle(display, "none" as DisplayValue);
   let hideWidths: WidthSet | undefined;
@@ -225,15 +251,17 @@ function authorStyle(el: Element): {
         styles,
         "visibility",
         decls.visibility as Declared<VisibilityValue> | undefined,
-        visibilityReach,
+        visibilityReach
       ),
-      "hidden" as VisibilityValue,
+      "hidden" as VisibilityValue
     ),
     displayMayShow: displayReach.shows,
     visibilityMayShow: visibilityReach.shows,
     complete: styles.complete,
     displayInlineImportant:
-      inlineImportant && typeof display === "object" && display.source === "inline",
+      inlineImportant &&
+      typeof display === "object" &&
+      display.source === "inline",
   };
 }
 
@@ -248,9 +276,19 @@ function tagOf(el: Element): string {
  * stay rendered in Chromium, and none of these rules reach SVG or MathML
  * elements (pub#675 review, checked in Chromium).
  */
-function uaHidden(el: Element, foreign: boolean, closedDialogsShown: boolean): boolean {
+function uaHidden(
+  el: Element,
+  foreign: boolean,
+  closedDialogsShown: boolean
+): boolean {
   const tag = tagOf(el);
-  if (foreign || tag === "svg" || tag === "math" || tag === "embed" || tag === "marquee") {
+  if (
+    foreign ||
+    tag === "svg" ||
+    tag === "math" ||
+    tag === "embed" ||
+    tag === "marquee"
+  ) {
     return false;
   }
   const hidden = getAttrCI(el, "hidden");
@@ -271,12 +309,19 @@ const ALWAYS_UNRELIABLE = new Set(
   (
     "a b big code em font i nobr s small strike strong tt u " +
     "svg math select option optgroup caption colgroup ruby rb rt rp rtc"
-  ).split(" "),
+  ).split(" ")
 );
 
 /** What may stay inside a table part rather than be moved out ahead of the table. */
 const TABLE_CHILDREN = new Map<string, Set<string>>([
-  ["table", new Set("caption colgroup col thead tbody tfoot tr script template style".split(" "))],
+  [
+    "table",
+    new Set(
+      "caption colgroup col thead tbody tfoot tr script template style".split(
+        " "
+      )
+    ),
+  ],
   ["tbody", new Set("tr script template style".split(" "))],
   ["thead", new Set("tr script template style".split(" "))],
   ["tfoot", new Set("tr script template style".split(" "))],
@@ -304,7 +349,7 @@ const IGNORED_WRAPPERS = new Set(
   (
     "head frameset frame noframes area base basefont bgsound br col embed hr img image " +
     "input keygen link meta param source track wbr"
-  ).split(" "),
+  ).split(" ")
 );
 
 /**
@@ -327,20 +372,29 @@ function treeMayDiffer(el: Element): boolean {
   if (tag === "p") return el.querySelector(P_CLOSERS) !== null;
   if (tag === "li") return el.querySelector("li") !== null;
   if (tag === "dd" || tag === "dt") return el.querySelector("dd, dt") !== null;
-  if (/^h[1-6]$/.test(tag)) return el.querySelector("h1, h2, h3, h4, h5, h6") !== null;
+  if (/^h[1-6]$/.test(tag))
+    return el.querySelector("h1, h2, h3, h4, h5, h6") !== null;
   if (tag === "button") return el.querySelector("button") !== null;
   if (tag === "td" || tag === "th") {
-    return el.querySelector("td, th, tr, tbody, thead, tfoot, caption, col, colgroup") !== null;
+    return (
+      el.querySelector(
+        "td, th, tr, tbody, thead, tfoot, caption, col, colgroup"
+      ) !== null
+    );
   }
   // A nested <form> start tag is ignored, so the first </form> closes the outer one.
   if (tag === "form") return el.querySelector("form") !== null;
   if (TABLE_CHILDREN.has(tag)) {
     // Stray content anywhere in the table's structure is moved out ahead of
     // the whole table, so every table part inside counts, not only this one.
-    const parts = [el, ...el.querySelectorAll("table, tbody, thead, tfoot, tr")];
+    const parts = [
+      el,
+      ...el.querySelectorAll("table, tbody, thead, tfoot, tr"),
+    ];
     for (const part of parts) {
       const allowed = TABLE_CHILDREN.get(tagOf(part)) as Set<string>;
-      for (const child of part.children) if (!allowed.has(tagOf(child))) return true;
+      for (const child of part.children)
+        if (!allowed.has(tagOf(child))) return true;
     }
   }
   return false;
@@ -403,7 +457,9 @@ interface Resolved {
 }
 
 /** A per-page resolver, memoised per element so shared ancestors are read once. */
-export function createStaticVisibility(options: StaticVisibilityOptions): StaticVisibilityResolver {
+export function createStaticVisibility(
+  options: StaticVisibilityOptions
+): StaticVisibilityResolver {
   const resolved = new Map<Element, Resolved>();
 
   const resolve = (el: Element, parent: Context): Resolved => {
@@ -411,25 +467,40 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     const author = authorStyle(el);
     // SVG and MathML presentation attributes (`<rect visibility="visible">`)
     // sit under author CSS but over inheritance; they are not read here.
-    const inForeign = parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
+    const inForeign =
+      parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
     if (inForeign) {
-      if (author.display === undefined && hasAttrCI(el, "display")) author.display = "unknown";
-      if (author.visibility === undefined && hasAttrCI(el, "visibility")) author.visibility = "unknown";
+      if (author.display === undefined && hasAttrCI(el, "display"))
+        author.display = "unknown";
+      if (author.visibility === undefined && hasAttrCI(el, "visibility"))
+        author.visibility = "unknown";
     }
     const ariaHidden =
-      options.ariaHidden && asciiLower(getAttrCI(el, "aria-hidden") ?? "") === "true";
-    const uaHides = uaHidden(el, parent.foreign, options.closedDialogsShown === true);
+      options.ariaHidden &&
+      asciiLower(getAttrCI(el, "aria-hidden") ?? "") === "true";
+    const uaHides = uaHidden(
+      el,
+      parent.foreign,
+      options.closedDialogsShown === true
+    );
     // An author `display` beats the user-agent rule. One that shows what the
     // user-agent rule hides is not settled while a stylesheet is unread
     // (pub#938): frameworks ship `[hidden] { display: none !important }`,
     // which only an inline `!important` outranks.
-    let display = ariaHidden ? "none" : (author.display ?? (uaHides ? "none" : "shown"));
+    let display = ariaHidden
+      ? "none"
+      : (author.display ?? (uaHides ? "none" : "shown"));
     // pub#988: hidden by an ancestor and this element at some widths each,
     // and at every width between them.
     const widthUnion = author.hideWidths
       ? unionWidths(parent.widthHidden, author.hideWidths)
       : parent.widthHidden;
-    if (display === "shown" && widthUnion.length > 0 && coversAllWidths(widthUnion)) display = "none";
+    if (
+      display === "shown" &&
+      widthUnion.length > 0 &&
+      coversAllWidths(widthUnion)
+    )
+      display = "none";
     if (
       display === "shown" &&
       uaHides &&
@@ -443,12 +514,14 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     // A rule that only shows can undo hiding from elsewhere (pub#940): the
     // `hidden` attribute, a closed dialog, a popover or a decided `display:none`.
     // `aria-hidden` is not CSS: no display rule undoes it, so it is exempt.
-    if (display === "none" && !ariaHidden && author.displayMayShow) display = "unknown";
+    if (display === "none" && !ariaHidden && author.displayMayShow)
+      display = "unknown";
 
     // This element's computed visibility: its own value, else its parent's.
     const own = author.visibility;
     const hiddenBy =
-      own === "hidden" || ((own === undefined || own === "inherit") && parent.visibilityHidden);
+      own === "hidden" ||
+      ((own === undefined || own === "inherit") && parent.visibilityHidden);
     // Likewise a `visibility: visible` rule against hiding it sets or inherits.
     const visibilityHidden = hiddenBy && !author.visibilityMayShow;
     const visibilityUnknown =
@@ -461,7 +534,8 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     // A stray second <html> or <body> only lends the real one attributes.
     const wrapper = tagOf(el) === "html" || tagOf(el) === "body";
     const noJs = parent.noJs || (!wrapper && hasNoJsClass(el));
-    const foreign = parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
+    const foreign =
+      parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
     let children: Context;
     if (tagOf(el) === "template" && !foreign) {
       // A template's contents are never rendered, whatever its own display.
@@ -490,7 +564,8 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
           parent.displayUnknown ||
           display === "unknown" ||
           (treeUnreliable && author.hideWidths !== undefined),
-        visibilityUnknown: visibilityUnknown || (visibilityHidden && !author.complete),
+        visibilityUnknown:
+          visibilityUnknown || (visibilityHidden && !author.complete),
         visibilityHidden: visibilityHidden && author.complete,
         treeUnreliable,
         foreign,
@@ -500,14 +575,19 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     }
 
     let verdict: StaticVisibility;
-    if (display === "none" || (own === "hidden" && !author.visibilityMayShow)) verdict = HIDDEN;
+    if (display === "none" || (own === "hidden" && !author.visibilityMayShow))
+      verdict = HIDDEN;
     else if (display === "unknown" || parent.displayUnknown) verdict = UNKNOWN;
     else if (visibilityHidden) verdict = HIDDEN;
     else if (visibilityUnknown) verdict = UNKNOWN;
     // Hidden only inside width-only media queries, and shown at the other
     // widths (pub#988): unconfirmed, with its own reason.
     else if (widthUnion.length > 0) {
-      verdict = { state: "unknown", reason: "width", shown: describeShownWidths(widthUnion) };
+      verdict = {
+        state: "unknown",
+        reason: "width",
+        shown: describeShownWidths(widthUnion),
+      };
     }
     // Shown only because the stylesheets squirrel read say so: with others
     // unread, a no-js fallback may be hidden once scripts run (pub#989).
@@ -544,7 +624,13 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
  */
 export type ControlItem =
   | string
-  | { id: string; snippet?: string; label?: string; selector?: string; meta?: Record<string, unknown> };
+  | {
+      id: string;
+      snippet?: string;
+      label?: string;
+      selector?: string;
+      meta?: Record<string, unknown>;
+    };
 
 export interface UnnamedControls<T extends ControlItem> {
   /** Files one unnamed control under the finding it belongs to. */
@@ -556,7 +642,9 @@ export interface UnnamedControls<T extends ControlItem> {
 }
 
 export function sortUnnamedControls<T extends ControlItem>(
-  visibility: StaticVisibilityResolver = createStaticVisibility({ ariaHidden: true }),
+  visibility: StaticVisibilityResolver = createStaticVisibility({
+    ariaHidden: true,
+  })
 ): UnnamedControls<T> {
   const failures: T[] = [];
   const unconfirmed: ControlItem[] = [];
@@ -566,13 +654,18 @@ export function sortUnnamedControls<T extends ControlItem>(
       const seen = visibility.visibility(el);
       if (seen.state === "hidden") hidden++;
       else if (seen.state === "unknown") {
-        const base: Exclude<ControlItem, string> = typeof item === "string" ? { id: item } : item;
+        const base: Exclude<ControlItem, string> =
+          typeof item === "string" ? { id: item } : item;
         unconfirmed.push(
           seen.reason === "script"
             ? { ...base, label: SCRIPT_STATE_LABEL }
             : seen.reason === "width"
-              ? { ...base, label: widthLabel(seen.shown), meta: { reason: WIDTH_REASON, shown: seen.shown } }
-              : item,
+              ? {
+                  ...base,
+                  label: widthLabel(seen.shown),
+                  meta: { reason: WIDTH_REASON, shown: seen.shown },
+                }
+              : item
         );
       } else failures.push(item);
     },
@@ -591,18 +684,20 @@ export function sortUnnamedControls<T extends ControlItem>(
 export function unconfirmedRow(
   check: string,
   what: string,
-  items: Array<ControlItem>,
+  items: Array<ControlItem>
 ): CheckResult {
   return {
     name: `${check}${UNCONFIRMED_CHECK_SUFFIX}`,
     status: "warn",
     message: unconfirmedMessage(what, items),
-    items: items
-      .slice(0, 10)
-      .map((item) => ({
-        ...(typeof item === "string" ? { id: item } : item),
-        label: (typeof item === "string" ? undefined : item.label) ?? UNCONFIRMED_LABEL,
-      })),
-    ...(items.length > 10 ? { details: { additional: items.length - 10 } } : {}),
+    items: items.slice(0, 10).map((item) => ({
+      ...(typeof item === "string" ? { id: item } : item),
+      label:
+        (typeof item === "string" ? undefined : item.label) ??
+        UNCONFIRMED_LABEL,
+    })),
+    ...(items.length > 10
+      ? { details: { additional: items.length - 10 } }
+      : {}),
   };
 }

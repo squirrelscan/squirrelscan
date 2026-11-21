@@ -1,12 +1,13 @@
 // security/leaked-secrets: probes of a scan that overruns the time budget (#1556): what it found before the stop is kept.
 // Values are built at runtime from parts; no secret-shaped literal is committed.
 
-import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { RuleContext } from "../../src/types";
 
 import { buildCollectedPageSignal } from "../../src/collected-signals";
 import { leakedSecretsRule } from "../../src/security/leaked-secrets";
-import type { RuleContext } from "../../src/types";
 
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const stripe = (n: number): string => {
@@ -25,29 +26,50 @@ describe("a scan that overruns the time budget keeps what it found (#1556)", () 
   // Each script's text is scanned once now (#1864), not once alone and again inside the page, so the filler that used to
   // be twice as much work is twice as long: well past the 25 ms budget on a fast machine too.
   test("a critical key before a huge tail of filler is kept, and the page is still listed as not fully scanned", () => {
-    const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(150_000);
+    const filler =
+      "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(150_000);
     const html = `<html><body><script>var k = "${stripe(7)}";</script><script>${filler}</script></body></html>`;
-    const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_), budgetMs: 25 });
+    const signal = buildCollectedPageSignal({
+      url: URL_,
+      parsed: parsePage(html, URL_),
+      budgetMs: 25,
+    });
     expect(signal.timedOut?.ruleIds).toContain("security/leaked-secrets");
     expect(signal.secrets.some((s) => s.value === stripe(7))).toBe(true);
   });
 
   test("the rule still says the page was not fully scanned, and does not pass", async () => {
-    const filler = "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(150_000);
+    const filler =
+      "var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(150_000);
     const html = `<html><body><script>var k = "${stripe(8)}";</script><script>${filler}</script></body></html>`;
-    const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_), budgetMs: 25 });
+    const signal = buildCollectedPageSignal({
+      url: URL_,
+      parsed: parsePage(html, URL_),
+      budgetMs: 25,
+    });
     const result = await leakedSecretsRule.run({
       site: { baseUrl: URL_, pages: [], scripts: [] },
       collectedSignals: { pages: [signal] },
     } as unknown as RuleContext);
-    expect(result.checks.find((c) => c.name === "leaked-secrets-unscanned")).toBeDefined();
+    expect(
+      result.checks.find((c) => c.name === "leaked-secrets-unscanned")
+    ).toBeDefined();
     expect(result.checks.some((c) => c.status === "pass")).toBe(false);
-    expect(result.checks.find((c) => c.name === "leaked-secrets-critical" || c.name === "leaked-secrets-high")).toBeDefined();
+    expect(
+      result.checks.find(
+        (c) =>
+          c.name === "leaked-secrets-critical" ||
+          c.name === "leaked-secrets-high"
+      )
+    ).toBeDefined();
   });
 
   test("scripts are read first for the time budget, but the page's findings keep document-then-script order", () => {
     const html = `<html><body><p>${stripe(1)}</p><script>var k = "${stripe(2)}";</script><p>${stripe(3)}</p></body></html>`;
-    const signal = buildCollectedPageSignal({ url: URL_, parsed: parsePage(html, URL_) });
+    const signal = buildCollectedPageSignal({
+      url: URL_,
+      parsed: parsePage(html, URL_),
+    });
     const values = signal.secrets.map((s) => s.value);
     // The document's findings first, then the scripts': the script's value is no longer also read inside the document
     // (#1864), so it is listed with the scripts, after both of the document's.

@@ -27,9 +27,9 @@
 //   quiet mid-check hands its remaining links to the local checker, inside the
 //   same deadline.
 
-import { Effect } from "effect";
-
 import type { CrawlStorage } from "@squirrelscan/core-contracts/storage";
+
+import { Effect } from "effect";
 
 import {
   externalLinkBudgetDeadline,
@@ -42,7 +42,11 @@ import {
   type ExternalLinkCheckProgress,
   type ExternalLinkOccurrences,
 } from "./adapter";
-import { checkExternalLinks, type ExternalCheckResult, type LinkCache } from "./external-checker";
+import {
+  checkExternalLinks,
+  type ExternalCheckResult,
+  type LinkCache,
+} from "./external-checker";
 
 /**
  * Time kept back, before the run's own deadline, for the link rules and the
@@ -75,9 +79,15 @@ export function linkVerdictDeadlineAt(input: {
   runDeadlineAt?: number;
 }): number | undefined {
   const bounds: number[] = [];
-  const budgetDeadline = externalLinkBudgetDeadline({ budgetMs: input.linkBudgetMs }, input.checkStartedAt);
+  const budgetDeadline = externalLinkBudgetDeadline(
+    { budgetMs: input.linkBudgetMs },
+    input.checkStartedAt
+  );
   if (budgetDeadline !== undefined) bounds.push(budgetDeadline);
-  if (input.runDeadlineAt !== undefined && Number.isFinite(input.runDeadlineAt)) {
+  if (
+    input.runDeadlineAt !== undefined &&
+    Number.isFinite(input.runDeadlineAt)
+  ) {
     bounds.push(input.runDeadlineAt - LINK_RULES_RESERVE_MS);
   }
   return bounds.length > 0 ? Math.min(...bounds) : undefined;
@@ -158,17 +168,23 @@ function nothingToCheck(startedAt: number): LateLinkVerdicts {
 export function startLateLinkVerdicts(
   storage: CrawlStorage,
   crawlId: string,
-  options: StartLateLinkVerdictsOptions,
+  options: StartLateLinkVerdictsOptions
 ): Effect.Effect<LateLinkVerdicts, never, never> {
   return Effect.gen(function* () {
     const now = options.now ?? Date.now;
     const startedAt = now();
-    const plan = yield* planExternalLinkCheck(storage, crawlId, options.occurrences, options.config, {
-      linkCache: options.linkCache,
-      priorityHrefs: options.priorityHrefs,
-      egressPinnedByTransport: options.egressPinnedByTransport,
-      resolveHost: options.resolveHost,
-    });
+    const plan = yield* planExternalLinkCheck(
+      storage,
+      crawlId,
+      options.occurrences,
+      options.config,
+      {
+        linkCache: options.linkCache,
+        priorityHrefs: options.priorityHrefs,
+        egressPinnedByTransport: options.egressPinnedByTransport,
+        resolveHost: options.resolveHost,
+      }
+    );
     if (!plan) return nothingToCheck(startedAt);
 
     const deadlineAt = linkVerdictDeadlineAt({
@@ -176,7 +192,15 @@ export function startLateLinkVerdicts(
       linkBudgetMs: options.limits?.budgetMs,
       runDeadlineAt: options.runDeadlineAt,
     });
-    return startPlannedCheck(storage, crawlId, options, plan, startedAt, deadlineAt, now);
+    return startPlannedCheck(
+      storage,
+      crawlId,
+      options,
+      plan,
+      startedAt,
+      deadlineAt,
+      now
+    );
   });
 }
 
@@ -187,7 +211,7 @@ function startPlannedCheck(
   plan: ExternalLinkCheckPlan,
   startedAt: number,
   deadlineAt: number | undefined,
-  now: () => number,
+  now: () => number
 ): LateLinkVerdicts {
   // Verdicts in arrival order, kept only until the seal.
   const arrived = new Map<string, ExternalCheckResult>();
@@ -210,26 +234,31 @@ function startPlannedCheck(
         onVerdict: (result) => {
           if (!sealed) arrived.set(result.href, result);
         },
-      }),
-    ),
+      })
+    )
   ).then(
     (results) => {
       if (!sealed) finished = results;
     },
     // Never rejects in practice (its error channel is `never`); a defect binds what arrived.
-    () => undefined,
+    () => undefined
   );
 
   let settlement: Promise<LinkVerdictSettlement> | null = null;
 
   const bind = async (): Promise<LinkVerdictSettlement> => {
-    const remaining = deadlineAt === undefined ? Number.POSITIVE_INFINITY : deadlineAt - now();
+    const remaining =
+      deadlineAt === undefined ? Number.POSITIVE_INFINITY : deadlineAt - now();
     if (remaining > 0) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
         check,
         ...(Number.isFinite(remaining)
-          ? [new Promise<void>((resolve) => (timer = setTimeout(resolve, remaining)))]
+          ? [
+              new Promise<void>(
+                (resolve) => (timer = setTimeout(resolve, remaining))
+              ),
+            ]
           : []),
       ]);
       if (timer) clearTimeout(timer);
@@ -241,12 +270,26 @@ function startPlannedCheck(
     const expired = finished === null || results.length < plan.hrefs.length;
     await Effect.runPromise(
       Effect.gen(function* () {
-        yield* recordExternalLinkCoverage(storage, crawlId, plan.externalLinkCheck);
-        yield* persistExternalLinkResults(storage, crawlId, options.occurrences, plan, results);
-      }),
+        yield* recordExternalLinkCoverage(
+          storage,
+          crawlId,
+          plan.externalLinkCheck
+        );
+        yield* persistExternalLinkResults(
+          storage,
+          crawlId,
+          options.occurrences,
+          plan,
+          results
+        );
+      })
     );
     const fromCache = results.filter((r) => r.fromCache).length;
-    options.onProgress?.({ checked: results.length, total: plan.hrefs.length, fromCache });
+    options.onProgress?.({
+      checked: results.length,
+      total: plan.hrefs.length,
+      fromCache,
+    });
     return {
       results,
       unverifiable: plan.hrefs.length - results.length,

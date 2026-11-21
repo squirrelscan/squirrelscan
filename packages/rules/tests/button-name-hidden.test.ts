@@ -8,13 +8,14 @@
 // markup and inline `style` attributes only. The issue's `css` fixture hides
 // with a `<style>` block, which is not read, so it still fails (a follow-up).
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { buttonNameRule } from "../src/a11y/button-name";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 async function run(html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
@@ -74,7 +75,8 @@ describe("a11y/button-name: the six repro fixtures (pub#665)", () => {
       expect(await run(fixture(CASES[name]))).toEqual([
         expect.objectContaining({
           status: "pass",
-          message: "All buttons in the accessibility tree have accessible names",
+          message:
+            "All buttons in the accessibility tree have accessible names",
           details: { buttonsChecked: 1, hiddenWithoutName: 1 },
         }),
       ]);
@@ -82,9 +84,15 @@ describe("a11y/button-name: the six repro fixtures (pub#665)", () => {
   }
 
   test("css hides with a <style> block: not reported (pub#678)", async () => {
-    expect(await statuses(fixture(CASES.css))).toEqual({ "button-name": "pass" });
+    expect(await statuses(fixture(CASES.css))).toEqual({
+      "button-name": "pass",
+    });
     // The same hiding written inline is read.
-    expect(await statuses(fixture('<div style="display:none"><button></button></div>'))).toEqual({
+    expect(
+      await statuses(
+        fixture('<div style="display:none"><button></button></div>')
+      )
+    ).toEqual({
       "button-name": "pass",
     });
   });
@@ -101,11 +109,19 @@ describe("a11y/button-name: what counts as hidden", () => {
     }
     // Inherited visibility is settled when the page loads no stylesheet this
     // check does not read; with one, an external rule could undo it.
-    expect(await statuses(fixture('<div style="visibility:hidden"><button></button></div>'))).toEqual({
+    expect(
+      await statuses(
+        fixture('<div style="visibility:hidden"><button></button></div>')
+      )
+    ).toEqual({
       "button-name": "pass",
     });
     expect(
-      (await statuses(fixture('<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><button></button></div>'))),
+      await statuses(
+        fixture(
+          '<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><button></button></div>'
+        )
+      )
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 
@@ -126,15 +142,28 @@ describe("a11y/button-name: what counts as hidden", () => {
 
   test("a hidden and a visible unnamed button: only the visible one fails", async () => {
     expect(
-      (await run(fixture('<div hidden><button id="zoom-in"></button></div><button id="cart"></button>'))),
-    ).toEqual([expect.objectContaining({ status: "fail", items: [{ id: "button#cart" }] })]);
+      await run(
+        fixture(
+          '<div hidden><button id="zoom-in"></button></div><button id="cart"></button>'
+        )
+      )
+    ).toEqual([
+      expect.objectContaining({
+        status: "fail",
+        items: [{ id: "button#cart" }],
+      }),
+    ]);
   });
 });
 
 describe("a11y/button-name: inline styles the check cannot read exactly", () => {
   test("are reported as unconfirmed, not as a failure", async () => {
     expect(
-      (await run(fixture('<div style="display:var(--d)"><button class="zoom-in"></button></div>'))),
+      await run(
+        fixture(
+          '<div style="display:var(--d)"><button class="zoom-in"></button></div>'
+        )
+      )
     ).toEqual([
       expect.objectContaining({
         name: "button-name-unconfirmed",

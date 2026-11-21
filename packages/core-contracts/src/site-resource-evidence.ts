@@ -25,7 +25,13 @@ export const SITE_RESOURCE_EVIDENCE_FORMAT = 1;
 const READABLE_FORMATS = new Set([SITE_RESOURCE_EVIDENCE_FORMAT]);
 
 /** `[kind, origin, page, key, source]`, each an index into its table. */
-export type PackedSiteResourceOccurrence = [number, number, number, number, number];
+export type PackedSiteResourceOccurrence = [
+  number,
+  number,
+  number,
+  number,
+  number,
+];
 
 export interface PackedSiteResourceEvidence {
   v: number;
@@ -38,7 +44,11 @@ export interface PackedSiteResourceEvidence {
 }
 
 /** Append-if-absent, returning the index. One table, one pass. */
-function intern(table: string[], index: Map<string, number>, value: string): number {
+function intern(
+  table: string[],
+  index: Map<string, number>,
+  value: string
+): number {
   const existing = index.get(value);
   if (existing !== undefined) return existing;
   const next = table.length;
@@ -48,7 +58,7 @@ function intern(table: string[], index: Map<string, number>, value: string): num
 }
 
 export function packSiteResourceOccurrences(
-  occurrences: readonly SiteResourceOccurrence[],
+  occurrences: readonly SiteResourceOccurrence[]
 ): PackedSiteResourceEvidence {
   const kinds: string[] = [];
   const origins: string[] = [];
@@ -68,7 +78,7 @@ export function packSiteResourceOccurrences(
       intern(pages, pageIndex, occurrence.pageUrl),
       intern(keys, keyIndex, occurrence.key),
       intern(sources, sourceIndex, occurrence.source),
-    ],
+    ]
   );
 
   return {
@@ -85,7 +95,8 @@ export function packSiteResourceOccurrences(
 function isPacked(value: unknown): value is PackedSiteResourceEvidence {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<PackedSiteResourceEvidence>;
-  if (typeof candidate.v === "number" && !READABLE_FORMATS.has(candidate.v)) return false;
+  if (typeof candidate.v === "number" && !READABLE_FORMATS.has(candidate.v))
+    return false;
   return (
     Array.isArray(candidate.occurrences) &&
     Array.isArray(candidate.keys) &&
@@ -105,7 +116,7 @@ function isPacked(value: unknown): value is PackedSiteResourceEvidence {
  * is additive and a malformed blob must never take its finding down with it.
  */
 export function unpackSiteResourceOccurrences(
-  value: unknown,
+  value: unknown
 ): SiteResourceOccurrence[] | undefined {
   if (value === null || value === undefined) return undefined;
 

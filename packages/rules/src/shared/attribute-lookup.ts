@@ -8,7 +8,11 @@
 // plain string instead.
 
 /** Elements whose `attr` equals `value` exactly, in document order. */
-export function elementsWithAttribute(root: QueryRoot, attr: string, value: string): Element[] {
+export function elementsWithAttribute(
+  root: QueryRoot,
+  attr: string,
+  value: string
+): Element[] {
   const out: Element[] = [];
   for (const el of root.querySelectorAll(`[${attr}]`)) {
     if (el.getAttribute(attr) === value) out.push(el);

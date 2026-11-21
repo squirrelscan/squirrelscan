@@ -5,15 +5,23 @@
 // and must agree: the legacy path decides from parsed meta + headers
 // (`noindexSource`), the streaming path from `page_features.robotsNoindex`.
 
-import { describe, expect, test } from "bun:test";
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
 import { parsePage } from "@squirrelscan/parser";
 import { extractNapSignal } from "@squirrelscan/utils";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { napConsistencyRule } from "../src/local/nap-consistency";
-import { assetDivergenceRule, extractSiteChromeSignal } from "../src/social/asset-divergence";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
+import {
+  assetDivergenceRule,
+  extractSiteChromeSignal,
+} from "../src/social/asset-divergence";
 
 interface Spec {
   path: string;
@@ -35,7 +43,9 @@ function url(path: string): string {
 }
 
 function html(spec: Spec): string {
-  const robots = spec.noindex ? `<meta name="robots" content="noindex,follow">` : "";
+  const robots = spec.noindex
+    ? `<meta name="robots" content="noindex,follow">`
+    : "";
   return (
     `<html><head>${robots}<link rel="icon" href="${spec.favicon}">` +
     `<script type="application/ld+json">${JSON.stringify({
@@ -53,15 +63,25 @@ function parsed(spec: Spec): ParsedPage {
 const headersFor = (spec: Spec): Record<string, string> =>
   spec.headerNoindex ? { "x-robots-tag": "noindex" } : {};
 
-const isNoindex = (spec: Spec): boolean => !!(spec.noindex || spec.headerNoindex);
+const isNoindex = (spec: Spec): boolean =>
+  !!(spec.noindex || spec.headerNoindex);
 
 const baseCtx = {
-  page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: `${BASE}/`,
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as ParsedPage,
   options: {},
 };
 
-function legacyCtx(specs: Spec[], siteIndexable: boolean | undefined): RuleContext {
+function legacyCtx(
+  specs: Spec[],
+  siteIndexable: boolean | undefined
+): RuleContext {
   return {
     ...baseCtx,
     site: {
@@ -120,7 +140,10 @@ function featureRow(spec: Spec): PageFeatureRow {
   };
 }
 
-function streamingCtx(specs: Spec[], siteIndexable: boolean | undefined): RuleContext {
+function streamingCtx(
+  specs: Spec[],
+  siteIndexable: boolean | undefined
+): RuleContext {
   const rows = specs.map(featureRow);
   const unused = (): never => {
     throw new Error("unexpected SiteQuery method");
@@ -156,17 +179,24 @@ function streamingCtx(specs: Spec[], siteIndexable: boolean | undefined): RuleCo
 async function bothPaths(
   rule: Rule,
   specs: Spec[],
-  siteIndexable: boolean | undefined,
+  siteIndexable: boolean | undefined
 ): Promise<CheckResult[]> {
-  const legacy = (await Promise.resolve(rule.run(legacyCtx(specs, siteIndexable)))).checks;
-  const streamed = (await Promise.resolve(rule.run(streamingCtx(specs, siteIndexable)))).checks;
+  const legacy = (
+    await Promise.resolve(rule.run(legacyCtx(specs, siteIndexable)))
+  ).checks;
+  const streamed = (
+    await Promise.resolve(rule.run(streamingCtx(specs, siteIndexable)))
+  ).checks;
   expect(JSON.stringify(streamed)).toBe(JSON.stringify(legacy));
   return legacy as CheckResult[];
 }
 
 function named(list: CheckResult[], name: string): CheckResult {
   const found = list.find((c) => c.name === name);
-  if (!found) throw new Error(`no check ${name} in [${list.map((c) => c.name).join(", ")}]`);
+  if (!found)
+    throw new Error(
+      `no check ${name} in [${list.map((c) => c.name).join(", ")}]`
+    );
   return found;
 }
 
@@ -189,22 +219,31 @@ describe("local/nap-consistency noindex pages (#1773)", () => {
     }));
 
   test("meta noindex pages with a different phone are not reported or counted", async () => {
-    const checks = await bothPaths(napConsistencyRule, [...indexable(), ...noisy({ noindex: true })], true);
+    const checks = await bothPaths(
+      napConsistencyRule,
+      [...indexable(), ...noisy({ noindex: true })],
+      true
+    );
     const phone = named(checks, "phone-consistency");
     expect(phone.status).toBe("pass");
     expect(phone.message).toContain("12 pages");
   });
 
   test("X-Robots-Tag noindex pages are left out too", async () => {
-    const checks = await bothPaths(napConsistencyRule, [
-      ...indexable(),
-      ...noisy({ headerNoindex: true }),
-    ], true);
+    const checks = await bothPaths(
+      napConsistencyRule,
+      [...indexable(), ...noisy({ headerNoindex: true })],
+      true
+    );
     expect(named(checks, "phone-consistency").status).toBe("pass");
   });
 
   test("the same pages without noindex still report the conflict", async () => {
-    const checks = await bothPaths(napConsistencyRule, [...indexable(), ...noisy({})], true);
+    const checks = await bothPaths(
+      napConsistencyRule,
+      [...indexable(), ...noisy({})],
+      true
+    );
     expect(named(checks, "phone-consistency").status).not.toBe("pass");
   });
 
@@ -213,7 +252,7 @@ describe("local/nap-consistency noindex pages (#1773)", () => {
       const checks = await bothPaths(
         napConsistencyRule,
         [...indexable(), ...noisy({ noindex: true })],
-        siteIndexable,
+        siteIndexable
       );
       expect(named(checks, "phone-consistency").status).not.toBe("pass");
     }
@@ -243,29 +282,39 @@ describe("social/asset-divergence noindex pages (#1773)", () => {
     }));
 
   test("meta noindex pages with another favicon are not reported or counted", async () => {
-    const checks = await bothPaths(assetDivergenceRule, [...indexable(), ...stale({ noindex: true })], true);
+    const checks = await bothPaths(
+      assetDivergenceRule,
+      [...indexable(), ...stale({ noindex: true })],
+      true
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
   });
 
   test("X-Robots-Tag noindex pages are left out too", async () => {
-    const checks = await bothPaths(assetDivergenceRule, [
-      ...indexable(),
-      ...stale({ headerNoindex: true }),
-    ], true);
+    const checks = await bothPaths(
+      assetDivergenceRule,
+      [...indexable(), ...stale({ headerNoindex: true })],
+      true
+    );
     expect(checks[0]!.status).toBe("pass");
   });
 
   test("the same pages without noindex are reported", async () => {
-    const checks = await bothPaths(assetDivergenceRule, [...indexable(), ...stale({})], true);
+    const checks = await bothPaths(
+      assetDivergenceRule,
+      [...indexable(), ...stale({})],
+      true
+    );
     expect(checks[0]!.status).not.toBe("pass");
   });
 
   test("noindex pages do not count toward the site floor", async () => {
-    const checks = await bothPaths(assetDivergenceRule, [
-      ...indexable(8),
-      ...stale({ noindex: true }),
-    ], true);
+    const checks = await bothPaths(
+      assetDivergenceRule,
+      [...indexable(8), ...stale({ noindex: true })],
+      true
+    );
     expect(checks[0]!.status).toBe("skipped");
     expect(checks[0]!.message).toContain("Only 8 page(s) crawled");
   });
@@ -275,7 +324,7 @@ describe("social/asset-divergence noindex pages (#1773)", () => {
       const checks = await bothPaths(
         assetDivergenceRule,
         [...indexable(), ...stale({ noindex: true })],
-        siteIndexable,
+        siteIndexable
       );
       expect(checks[0]!.status).not.toBe("pass");
     }

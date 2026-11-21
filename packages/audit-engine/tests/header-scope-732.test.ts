@@ -2,17 +2,19 @@
 // user names, not to every subdomain. Two loopback servers: a different port is
 // a different origin, standing in for a subdomain.
 
+import { headerScopeBase } from "@squirrelscan/utils/headers";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { headerScopeBase } from "@squirrelscan/utils/headers";
 
 import { createHeaderScope } from "../src/lib/header-scope";
 import { checkResourceSizes } from "../src/resource-checker";
 import { fetchScriptContents } from "../src/script-fetcher";
 
 const SECRET = { "X-Api-Key": "audit-secret" };
-const seen: Record<"site" | "cdn", Array<string | null>> = { site: [], cdn: [] };
+const seen: Record<"site" | "cdn", Array<string | null>> = {
+  site: [],
+  cdn: [],
+};
 let site: ReturnType<typeof Bun.serve>;
 let cdn: ReturnType<typeof Bun.serve>;
 
@@ -29,7 +31,9 @@ const serve = (which: "site" | "cdn") =>
       ) {
         return new Response("no", { status: 401 });
       }
-      return new Response("body{}", { headers: { "content-type": "text/css" } });
+      return new Response("body{}", {
+        headers: { "content-type": "text/css" },
+      });
     },
   });
 
@@ -95,19 +99,27 @@ describe("header_hosts entry forms (#959)", () => {
 
 describe("headerScopeBase (#959)", () => {
   test("an https start URL redirected to http keeps its https origin", () => {
-    expect(headerScopeBase("https://example.com/", "http://www.example.com")).toBe(
-      "https://example.com",
-    );
+    expect(
+      headerScopeBase("https://example.com/", "http://www.example.com")
+    ).toBe("https://example.com");
   });
 
   test("otherwise the base URL, including with no start URL", () => {
-    expect(headerScopeBase("http://example.com/", "http://example.com")).toBe("http://example.com");
-    expect(headerScopeBase("https://example.com/", "https://www.example.com")).toBe(
-      "https://www.example.com",
+    expect(headerScopeBase("http://example.com/", "http://example.com")).toBe(
+      "http://example.com"
     );
-    expect(headerScopeBase(undefined, "http://example.com")).toBe("http://example.com");
-    expect(headerScopeBase("", "http://example.com")).toBe("http://example.com");
-    expect(headerScopeBase("not a url", "http://example.com")).toBe("http://example.com");
+    expect(
+      headerScopeBase("https://example.com/", "https://www.example.com")
+    ).toBe("https://www.example.com");
+    expect(headerScopeBase(undefined, "http://example.com")).toBe(
+      "http://example.com"
+    );
+    expect(headerScopeBase("", "http://example.com")).toBe(
+      "http://example.com"
+    );
+    expect(headerScopeBase("not a url", "http://example.com")).toBe(
+      "http://example.com"
+    );
   });
 });
 
@@ -120,7 +132,9 @@ describe("asset pools", () => {
   {
     test("checkResourceSizes pools: the other origin gets no custom header, the audited one does", async () => {
       reset();
-      await Effect.runPromise(checkResourceSizes([siteUrl("/a.css"), cdnUrl("/a.css")], opts()));
+      await Effect.runPromise(
+        checkResourceSizes([siteUrl("/a.css"), cdnUrl("/a.css")], opts())
+      );
       expect(seen.site.every((v) => v === "audit-secret")).toBe(true);
       expect(seen.site.length).toBeGreaterThan(0);
       expect(seen.cdn.length).toBeGreaterThan(0);
@@ -130,7 +144,9 @@ describe("asset pools", () => {
 
   test("script and preload pool", async () => {
     reset();
-    await Effect.runPromise(fetchScriptContents([siteUrl("/a.js"), cdnUrl("/a.js")], opts()));
+    await Effect.runPromise(
+      fetchScriptContents([siteUrl("/a.js"), cdnUrl("/a.js")], opts())
+    );
     expect(seen.site.every((v) => v === "audit-secret")).toBe(true);
     expect(seen.cdn.length).toBeGreaterThan(0);
     expect(seen.cdn.every((v) => v === null)).toBe(true);
@@ -142,7 +158,7 @@ describe("asset pools", () => {
       checkResourceSizes([cdnUrl("/a.css")], {
         customHeaders: SECRET,
         headerScope: createHeaderScope(siteUrl("/"), ["http://127.0.0.1"]),
-      }),
+      })
     );
     expect(seen.cdn.every((v) => v === "audit-secret")).toBe(true);
   });

@@ -7,15 +7,19 @@
 // limit for those two ("status-checked only the 3 most-linked targets ...
 // raise internal_links.max_targets") with the limit at 200.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
+import { notCheckedLines } from "@squirrelscan/report";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-import { notCheckedLines } from "@squirrelscan/report";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const TOKEN_LINK = "/account?token=0123456789abcdef01234567";
@@ -44,15 +48,28 @@ function serveSite(): string {
         case "/":
           return ok(
             html(
-              ["/about", "/missing", "/moved", "/private", "/logout", TOKEN_LINK]
-                .map((href) => `<a href="${href.replaceAll("&", "&amp;")}">${href}</a>`)
-                .join(" "),
-            ),
+              [
+                "/about",
+                "/missing",
+                "/moved",
+                "/private",
+                "/logout",
+                TOKEN_LINK,
+              ]
+                .map(
+                  (href) =>
+                    `<a href="${href.replaceAll("&", "&amp;")}">${href}</a>`
+                )
+                .join(" ")
+            )
           );
         case "/about":
           return ok(html(`<a href="/">Home</a>`));
         case "/moved":
-          return new Response(null, { status: 301, headers: { location: "/gone" } });
+          return new Response(null, {
+            status: 301,
+            headers: { location: "/gone" },
+          });
         case "/gone":
           return new Response(html("Gone"), {
             status: 410,
@@ -66,10 +83,13 @@ function serveSite(): string {
         case "/sitemap.xml":
           return ok(
             `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${url.origin}/</loc></url><url><loc>${url.origin}/about</loc></url></urlset>`,
-            "application/xml",
+            "application/xml"
           );
         case "/robots.txt":
-          return ok(`User-agent: *\nAllow: /\nSitemap: ${url.origin}/sitemap.xml\n`, "text/plain");
+          return ok(
+            `User-agent: *\nAllow: /\nSitemap: ${url.origin}/sitemap.xml\n`,
+            "text/plain"
+          );
       }
       return new Response(html("Not found"), {
         status: 404,
@@ -98,9 +118,11 @@ async function audit(engine: "v1" | "v2", maxTargets?: number) {
         useCacheControl: false,
         disableLinkDiscovery: true,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const storage = crawler.storage as SQLiteStorage;
   const config = {
     rule_options: {},
@@ -112,16 +134,33 @@ async function audit(engine: "v1" | "v2", maxTargets?: number) {
       ...(maxTargets !== undefined ? { max_targets: maxTargets } : {}),
     },
   } as unknown as Config;
-  const preRules = await Effect.runPromise(runStreamingPreRules(storage, crawlId, config, {}));
+  const preRules = await Effect.runPromise(
+    runStreamingPreRules(storage, crawlId, config, {})
+  );
   const ran = await Effect.runPromise(
     Effect.gen(function* () {
       if (engine === "v1") {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        return yield* runRulesOnStorage(storage, crawlId, siteContext, config, preRules.assets);
+        return yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          config,
+          preRules.assets
+        );
       }
-      return yield* runStreamingRules(storage, crawlId, config, preRules.assets);
-    }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+      return yield* runStreamingRules(
+        storage,
+        crawlId,
+        config,
+        preRules.assets
+      );
+    }) as unknown as Effect.Effect<
+      { siteRuleResults: Map<string, CheckResult[]> },
+      never,
+      never
+    >
   );
   const checks = ran.siteRuleResults.get("links/broken-links") ?? [];
   const lines = notCheckedLines({
@@ -151,7 +190,7 @@ for (const engine of ["v1", "v2"] as const) {
       expect(requested).not.toContain("/logout");
       expect(requested).not.toContain(TOKEN_LINK);
       expect(requested).toEqual(
-        expect.arrayContaining(["/missing", "/moved", "/gone", "/private"]),
+        expect.arrayContaining(["/missing", "/moved", "/gone", "/private"])
       );
 
       const skipped = checks.find((c) => c.status === "skipped")!;
@@ -164,7 +203,7 @@ for (const engine of ["v1", "v2"] as const) {
         checks
           .find((c) => c.status === "fail")
           ?.items?.map((i) => i.meta?.statusCode)
-          .sort(),
+          .sort()
       ).toEqual([404, 410]);
     });
 
@@ -174,10 +213,10 @@ for (const engine of ["v1", "v2"] as const) {
       expect(skipped.details?.notFetched).toEqual({ overLimit: 2, action: 2 });
       expect(lines).toHaveLength(1);
       expect(lines[0]).toContain(
-        "(2 past the limit of 1 target; 2 skipped as action or token links)",
+        "(2 past the limit of 1 target; 2 skipped as action or token links)"
       );
       expect(lines[0]).toContain(
-        "Raise internal_links.max_targets, or run a Surface or Full audit",
+        "Raise internal_links.max_targets, or run a Surface or Full audit"
       );
     });
   });

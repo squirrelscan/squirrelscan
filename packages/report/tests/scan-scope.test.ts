@@ -5,11 +5,12 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { auditLevelLine, fullScanHint, scanScopeLine } from "../src/coverage";
-import { renderText } from "../src/output/text";
-import { renderMarkdown } from "../src/output/markdown";
 import { renderHtml } from "../src/output/html";
 import { renderLlm } from "../src/output/llm";
+import { renderMarkdown } from "../src/output/markdown";
+import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -33,19 +34,29 @@ describe("scanScopeLine (#1180)", () => {
   test("origin + version + cap render into one line", () => {
     const report = baseReport({
       generatorVersion: "0.0.76",
-      scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true },
+      scanScope: {
+        origin: "cli",
+        maxPages: 100,
+        pagesCrawled: 100,
+        capped: true,
+      },
     });
     expect(scanScopeLine(report)).toBe(
-      "Scan: 100 pages crawled from the CLI v0.0.76 (page limit 100 reached).",
+      "Scan: 100 pages crawled from the CLI v0.0.76 (page limit 100 reached)."
     );
   });
 
   test("cloud origin, uncapped", () => {
     const report = baseReport({
-      scanScope: { origin: "cloud", maxPages: 500, pagesCrawled: 42, capped: false },
+      scanScope: {
+        origin: "cloud",
+        maxPages: 500,
+        pagesCrawled: 42,
+        capped: false,
+      },
     });
     expect(scanScopeLine(report)).toBe(
-      "Scan: 42 pages crawled from squirrelscan cloud (page limit 500).",
+      "Scan: 42 pages crawled from squirrelscan cloud (page limit 500)."
     );
   });
 
@@ -70,7 +81,7 @@ describe("time-stopped scans", () => {
 
   test("scan line says it stopped early on time, not that the limit was reached", () => {
     expect(scanScopeLine(timeStopped)).toBe(
-      "Scan: 87 pages crawled from squirrelscan cloud (page limit 250, stopped early on time).",
+      "Scan: 87 pages crawled from squirrelscan cloud (page limit 250, stopped early on time)."
     );
   });
 
@@ -86,7 +97,7 @@ describe("time-stopped scans", () => {
       },
     });
     expect(scanScopeLine(report)).toBe(
-      "Scan: 40 pages crawled from squirrelscan cloud (page limit 100 of 500 requested, stopped early on time).",
+      "Scan: 40 pages crawled from squirrelscan cloud (page limit 100 of 500 requested, stopped early on time)."
     );
   });
 
@@ -99,10 +110,15 @@ describe("time-stopped scans", () => {
 
   test("a page-limit stop renders exactly as before when stopReason is absent", () => {
     const report = baseReport({
-      scanScope: { origin: "cloud", maxPages: 250, pagesCrawled: 250, capped: true },
+      scanScope: {
+        origin: "cloud",
+        maxPages: 250,
+        pagesCrawled: 250,
+        capped: true,
+      },
     });
     expect(scanScopeLine(report)).toBe(
-      "Scan: 250 pages crawled from squirrelscan cloud (page limit 250 reached).",
+      "Scan: 250 pages crawled from squirrelscan cloud (page limit 250 reached)."
     );
     expect(fullScanHint(report)).toContain("the page limit stopped the crawl");
   });
@@ -123,7 +139,9 @@ describe("time-stopped scans", () => {
 
   test("renderers carry the note; llm output names the stop reason", () => {
     expect(renderText(timeStopped)).toContain("stopped early on time");
-    expect(renderMarkdown(timeStopped)).toContain("Partial scan: the crawl ran out of time");
+    expect(renderMarkdown(timeStopped)).toContain(
+      "Partial scan: the crawl ran out of time"
+    );
     // The HTML page has no scope line: the coverage notice says the report is partial.
     const html = renderHtml(timeStopped, { reportId: "TESTID" });
     expect(html).toContain('id="coverage-notice"');
@@ -133,7 +151,12 @@ describe("time-stopped scans", () => {
 
   test("llm output omits stop-reason on an ordinary run", () => {
     const report = baseReport({
-      scanScope: { origin: "cloud", maxPages: 250, pagesCrawled: 30, capped: false },
+      scanScope: {
+        origin: "cloud",
+        maxPages: 250,
+        pagesCrawled: 30,
+        capped: false,
+      },
     });
     expect(renderLlm(report)).not.toContain("stop-reason");
   });
@@ -145,19 +168,29 @@ describe("fullScanHint (#1180)", () => {
     expect(
       fullScanHint(
         baseReport({
-          scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 42, capped: false },
+          scanScope: {
+            origin: "cli",
+            maxPages: 100,
+            pagesCrawled: 42,
+            capped: false,
+          },
           coverage: { auditedPages: 42, knownPages: 42, carriedFindings: 0 },
-        }),
-      ),
+        })
+      )
     ).toBeNull();
   });
 
   test("partial union names the re-check target", () => {
     const hint = fullScanHint(
       baseReport({
-        scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true },
+        scanScope: {
+          origin: "cli",
+          maxPages: 100,
+          pagesCrawled: 100,
+          capped: true,
+        },
         coverage: { auditedPages: 100, knownPages: 505, carriedFindings: 3063 },
-      }),
+      })
     );
     expect(hint).toContain("100 of 505 known pages");
     expect(hint).toContain("--max-pages 505");
@@ -166,8 +199,13 @@ describe("fullScanHint (#1180)", () => {
   test("capped without coverage still hints", () => {
     const hint = fullScanHint(
       baseReport({
-        scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true },
-      }),
+        scanScope: {
+          origin: "cli",
+          maxPages: 100,
+          pagesCrawled: 100,
+          capped: true,
+        },
+      })
     );
     expect(hint).toContain("page limit stopped the crawl");
     expect(hint).toContain("--max-pages");
@@ -178,7 +216,12 @@ describe("renderer wiring (#1180)", () => {
   const report = baseReport({
     generatorVersion: "0.0.76",
     totalPages: 100,
-    scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true },
+    scanScope: {
+      origin: "cli",
+      maxPages: 100,
+      pagesCrawled: 100,
+      capped: true,
+    },
     coverage: { auditedPages: 100, knownPages: 505, carriedFindings: 12 },
   });
 
@@ -202,23 +245,31 @@ describe("renderer wiring (#1180)", () => {
     expect(out).toContain('id="coverage-notice"');
     // Smart-audit carry: the rest is carried forward, not missing.
     expect(out).toContain(
-      "This report may not cover the whole site (405 more known pages carried from earlier audits).",
+      "This report may not cover the whole site (405 more known pages carried from earlier audits)."
     );
     expect(out).not.toContain("Partial scan:");
-    expect(out).not.toContain("squirrel audit &#x27;https://example.com/&#x27; --max-pages");
+    expect(out).not.toContain(
+      "squirrel audit &#x27;https://example.com/&#x27; --max-pages"
+    );
   });
 
   test("llm output emits a structured scan-scope element", () => {
     const out = renderLlm(report);
-    expect(out).toContain('<scan-scope origin="cli" crawled="100" max-pages="100" capped="true"/>');
+    expect(out).toContain(
+      '<scan-scope origin="cli" crawled="100" max-pages="100" capped="true"/>'
+    );
   });
 
   test("pre-#1180 reports render without any scope artifacts", () => {
     const legacy = baseReport();
     expect(renderText(legacy)).not.toContain("Scan:");
     // CSS for the class is always in the stylesheet; the rendered element is not.
-    expect(renderHtml(legacy, { reportId: "TESTID" })).not.toContain('class="scan-scope"');
-    expect(renderHtml(legacy, { reportId: "TESTID" })).not.toContain("crawled from");
+    expect(renderHtml(legacy, { reportId: "TESTID" })).not.toContain(
+      'class="scan-scope"'
+    );
+    expect(renderHtml(legacy, { reportId: "TESTID" })).not.toContain(
+      "crawled from"
+    );
   });
 });
 
@@ -242,21 +293,29 @@ describe("a reduced page limit (#1909)", () => {
 
   test("the scan line names both limits", () => {
     expect(scanScopeLine(baseReport({ scanScope: clampedScope }))).toBe(
-      "Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested, reached).",
+      "Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested, reached)."
     );
   });
 
   test("an uncapped clamped run still names both, without 'reached'", () => {
     expect(
       scanScopeLine(
-        baseReport({ scanScope: { ...clampedScope, capped: false, pagesCrawled: 900 } }),
-      ),
-    ).toBe("Scan: 900 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested).");
+        baseReport({
+          scanScope: { ...clampedScope, capped: false, pagesCrawled: 900 },
+        })
+      )
+    ).toBe(
+      "Scan: 900 pages crawled from squirrelscan cloud (page limit 4320 of 10000 requested)."
+    );
   });
 
   test("the CLI reads the same as the cloud — no surface-specific advice here", () => {
-    expect(scanScopeLine(baseReport({ scanScope: { ...clampedScope, origin: "cli" } }))).toBe(
-      "Scan: 4320 pages crawled from the CLI (page limit 4320 of 10000 requested, reached).",
+    expect(
+      scanScopeLine(
+        baseReport({ scanScope: { ...clampedScope, origin: "cli" } })
+      )
+    ).toBe(
+      "Scan: 4320 pages crawled from the CLI (page limit 4320 of 10000 requested, reached)."
     );
   });
 
@@ -264,14 +323,18 @@ describe("a reduced page limit (#1909)", () => {
     // A producer echoing the same number both ways must not render a clamp that
     // never happened, which is why this compares rather than trusting presence.
     expect(
-      scanScopeLine(baseReport({ scanScope: { ...clampedScope, requestedMaxPages: 4320 } })),
-    ).toBe("Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 reached).");
+      scanScopeLine(
+        baseReport({ scanScope: { ...clampedScope, requestedMaxPages: 4320 } })
+      )
+    ).toBe(
+      "Scan: 4320 pages crawled from squirrelscan cloud (page limit 4320 reached)."
+    );
   });
 
   test("the full-scan hint stops telling them to raise the limit", () => {
     const hint = fullScanHint(baseReport({ scanScope: clampedScope }));
     expect(hint).toBe(
-      "Partial scan: the page limit stopped the crawl, so the site may have more pages than this score covers. This run was limited to 4320 of the 10000 pages requested, so raising the limit alone will not extend it.",
+      "Partial scan: the page limit stopped the crawl, so the site may have more pages than this score covers. This run was limited to 4320 of the 10000 pages requested, so raising the limit alone will not extend it."
     );
     // The advice that cannot work: the request was already above what this run
     // could use, so a bigger number is reduced exactly the same way.
@@ -281,7 +344,14 @@ describe("a reduced page limit (#1909)", () => {
 
   test("an unclamped capped run keeps its original advice", () => {
     const hint = fullScanHint(
-      baseReport({ scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true } }),
+      baseReport({
+        scanScope: {
+          origin: "cli",
+          maxPages: 100,
+          pagesCrawled: 100,
+          capped: true,
+        },
+      })
     );
     expect(hint).toContain("Raise --max-pages");
   });
@@ -291,7 +361,7 @@ describe("a reduced page limit (#1909)", () => {
       baseReport({
         scanScope: clampedScope,
         coverage: { auditedPages: 4320, knownPages: 9000, carriedFindings: 12 },
-      }),
+      })
     );
     expect(hint).toContain("4320 of 9000 known pages were re-checked");
     expect(hint).toContain("raising the limit alone will not extend it");
@@ -306,7 +376,9 @@ describe("a reduced page limit (#1909)", () => {
       expect(rendered).toContain("4320 of 10000 requested");
     }
     // The HTML page says it in the coverage notice.
-    expect(renderHtml(report)).toContain("limited to 4,320 of the 10,000 pages requested");
+    expect(renderHtml(report)).toContain(
+      "limited to 4,320 of the 10,000 pages requested"
+    );
   });
 });
 
@@ -322,21 +394,27 @@ describe("XML scan scope (#350)", () => {
           pagesCrawled: 500,
           capped: true,
         },
-      }),
+      })
     );
     expect(out).toContain(
-      '    <scan-scope origin="cloud" crawled="500" max-pages="500" requested-max-pages="5000" capped="true"/>',
+      '    <scan-scope origin="cloud" crawled="500" max-pages="500" requested-max-pages="5000" capped="true"/>'
     );
     // Inside <site>, after the raw count it qualifies.
-    expect(out.indexOf("<scan-scope")).toBeGreaterThan(out.indexOf("<pages-crawled>"));
+    expect(out.indexOf("<scan-scope")).toBeGreaterThan(
+      out.indexOf("<pages-crawled>")
+    );
     expect(out.indexOf("<scan-scope")).toBeLessThan(out.indexOf("</site>"));
   });
 
   test("an uncapped run, and a time stop", () => {
     const uncapped = renderXml(
-      baseReport({ scanScope: { origin: "cli", pagesCrawled: 12, capped: false } }),
+      baseReport({
+        scanScope: { origin: "cli", pagesCrawled: 12, capped: false },
+      })
     );
-    expect(uncapped).toContain('<scan-scope origin="cli" crawled="12" capped="false"/>');
+    expect(uncapped).toContain(
+      '<scan-scope origin="cli" crawled="12" capped="false"/>'
+    );
     const timed = renderXml(
       baseReport({
         scanScope: {
@@ -346,10 +424,10 @@ describe("XML scan scope (#350)", () => {
           capped: false,
           stopReason: "time",
         },
-      }),
+      })
     );
     expect(timed).toContain(
-      '<scan-scope origin="ci" crawled="40" max-pages="100" capped="false" stop-reason="time"/>',
+      '<scan-scope origin="ci" crawled="40" max-pages="100" capped="false" stop-reason="time"/>'
     );
   });
 
@@ -357,7 +435,7 @@ describe("XML scan scope (#350)", () => {
     const out = renderXml(baseReport());
     expect(out).not.toContain("scan-scope");
     expect(out).toContain(
-      "  <site>\n    <url>https://example.com</url>\n    <pages-crawled>1</pages-crawled>\n    <audit-date>2026-06-16T14:30:00.000Z</audit-date>\n  </site>",
+      "  <site>\n    <url>https://example.com</url>\n    <pages-crawled>1</pages-crawled>\n    <audit-date>2026-06-16T14:30:00.000Z</audit-date>\n  </site>"
     );
   });
 
@@ -365,7 +443,7 @@ describe("XML scan scope (#350)", () => {
     const out = renderXml(
       baseReport({
         scanScope: { origin: '"><x' as never, pagesCrawled: 1, capped: false },
-      }),
+      })
     );
     expect(out).toContain('origin="&quot;&gt;&lt;x"');
     expect(out).not.toContain('origin=""><x');
@@ -386,22 +464,28 @@ describe("targeted run note (#1777)", () => {
 
   test("an ordinary audit has no note and its line is unchanged", () => {
     expect(scanScopeLine(scope(undefined))).toBe(
-      "Scan: 3 pages crawled from the CLI (page limit 100).",
+      "Scan: 3 pages crawled from the CLI (page limit 100)."
     );
   });
 
   test("says how many of the given URLs were audited and that rules needing the whole site did not run", () => {
-    expect(scanScopeLine(scope({ requested: 4, audited: 3, unaudited: [] }))).toBe(
-      "Scan: 3 pages crawled from the CLI (page limit 100). Targeted run: 3 of 4 URLs given were audited; rules that need the whole site were not run.",
+    expect(
+      scanScopeLine(scope({ requested: 4, audited: 3, unaudited: [] }))
+    ).toBe(
+      "Scan: 3 pages crawled from the CLI (page limit 100). Targeted run: 3 of 4 URLs given were audited; rules that need the whole site were not run."
     );
-    expect(scanScopeLine(scope({ requested: 1, audited: 1, unaudited: [] }))).toContain(
-      "1 of 1 URL given was audited",
-    );
+    expect(
+      scanScopeLine(scope({ requested: 1, audited: 1, unaudited: [] }))
+    ).toContain("1 of 1 URL given was audited");
   });
 
   test("counts that are not whole numbers read as no note", () => {
-    expect(scanScopeLine(scope({ requested: "x", audited: 1 }))).not.toContain("Targeted run");
-    expect(scanScopeLine(scope({ requested: -1, audited: 1 }))).not.toContain("Targeted run");
+    expect(scanScopeLine(scope({ requested: "x", audited: 1 }))).not.toContain(
+      "Targeted run"
+    );
+    expect(scanScopeLine(scope({ requested: -1, audited: 1 }))).not.toContain(
+      "Targeted run"
+    );
   });
 });
 
@@ -445,7 +529,7 @@ describe("credit-capped scans (repo#2145)", () => {
 
   test("scan line says capped by credits", () => {
     expect(scanScopeLine(credits)).toBe(
-      "Scan: 87 pages crawled from squirrelscan cloud (page limit 250, capped by credits).",
+      "Scan: 87 pages crawled from squirrelscan cloud (page limit 250, capped by credits)."
     );
   });
 
@@ -454,7 +538,7 @@ describe("credit-capped scans (repo#2145)", () => {
       baseReport({
         scanScope: scope,
         coverage: { auditedPages: 87, knownPages: 240, carriedFindings: 0 },
-      }),
+      })
     );
     expect(hint).toContain("Capped by credits");
     expect(hint).toContain("87 of 240 known pages audited");

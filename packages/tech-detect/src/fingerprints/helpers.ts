@@ -1,5 +1,6 @@
-import { assertCollectedTags } from "../collected-tags";
 import type { Detector, ScriptMatchValidator } from "../types";
+
+import { assertCollectedTags } from "../collected-tags";
 
 // Lazy, up to the next script tag open or close: each body is scanned once, so a
 // flood of unclosed tags stays linear, and a config far into a big blob still matches.
@@ -17,7 +18,12 @@ export function scriptSrc(urlSource: string): Detector[] {
   return [
     { type: "script-url", pattern: new RegExp(`^${urlSource}`, "i") },
     // The `src` of a real `<script>` tag, from the page's one parsed list of tags (not a scan of the HTML per signature).
-    { type: "tag-attr", tags: ["script"], attrs: ["src"], pattern: new RegExp(`^${urlSource}`, "i") },
+    {
+      type: "tag-attr",
+      tags: ["script"],
+      attrs: ["src"],
+      pattern: new RegExp(`^${urlSource}`, "i"),
+    },
   ];
 }
 
@@ -26,7 +32,10 @@ export function inScript(bodySource: string, requires: string): Detector {
   return {
     type: "html",
     requires,
-    pattern: new RegExp(`<script\\b[^>]{0,300}>${SCRIPT_BODY}${bodySource}`, "i"),
+    pattern: new RegExp(
+      `<script\\b[^>]{0,300}>${SCRIPT_BODY}${bodySource}`,
+      "i"
+    ),
   };
 }
 
@@ -37,17 +46,33 @@ export function inScript(bodySource: string, requires: string): Detector {
 export function inBundle(
   source: string,
   hint: string,
-  validate?: ScriptMatchValidator,
+  validate?: ScriptMatchValidator
 ): Detector {
-  return { type: "script-content", pattern: new RegExp(source), inCode: true, hint, validate };
+  return {
+    type: "script-content",
+    pattern: new RegExp(source),
+    inCode: true,
+    hint,
+    validate,
+  };
 }
 
 /**
  * `source` in a fetched first-party bundle as code, or inside the string that is the inline script of a script
  * element a framework renders (see `stringValue` in the detector type); `evidence` must match that string.
  */
-export function inBundleString(source: string, hint: string, evidence: RegExp): Detector {
-  return { type: "script-content", pattern: new RegExp(source), inCode: true, stringValue: evidence, hint };
+export function inBundleString(
+  source: string,
+  hint: string,
+  evidence: RegExp
+): Detector {
+  return {
+    type: "script-content",
+    pattern: new RegExp(source),
+    inCode: true,
+    stringValue: evidence,
+    hint,
+  };
 }
 
 /**
@@ -55,7 +80,12 @@ export function inBundleString(source: string, hint: string, evidence: RegExp): 
  * `alsoSource` anywhere (a string included): the library's own strings and a
  * value elsewhere in the file. `alsoHints` are literals the second pattern needs.
  */
-export function inBundleWith(source: string, hint: string, alsoSource: string, alsoHints: string[]): Detector {
+export function inBundleWith(
+  source: string,
+  hint: string,
+  alsoSource: string,
+  alsoHints: string[]
+): Detector {
   return {
     type: "script-content",
     pattern: new RegExp(source),
@@ -78,7 +108,11 @@ export function inStyle(bodySource: string, requires: string): Detector {
  * `urlSource` as the value of a resource attribute on one of `tags`, never an `<a href>`. A `srcset`-style list is read
  * token by token. Read from the page's parsed tags, so it costs a lookup per signature, not a scan of the HTML.
  */
-export function resourceAttr(tags: string, attrs: string, urlSource: string): Detector {
+export function resourceAttr(
+  tags: string,
+  attrs: string,
+  urlSource: string
+): Detector {
   assertCollectedTags(tags.split("|"));
   return {
     type: "tag-attr",

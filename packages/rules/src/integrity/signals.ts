@@ -13,14 +13,18 @@
 // `RuleContext` (page.html, parsed.document, parsed.meta, parsed.content). No new
 // context, infra, or external calls.
 
+import { getAttrCI } from "@squirrelscan/utils";
 import { getDomain } from "tldts";
 
-import { getAttrCI } from "@squirrelscan/utils";
-
-import { getPageSeparatedText } from "../content/text-content";
 import type { RuleContext } from "../types";
 
-import { collectControls, documentBaseHref, readable, scanControls } from "./controls";
+import { getPageSeparatedText } from "../content/text-content";
+import {
+  collectControls,
+  documentBaseHref,
+  readable,
+  scanControls,
+} from "./controls";
 import { cssScanTruncated, overlayGeometry } from "./overlay-style";
 
 /** Distinct page-level compromise signals (one per page-scope rule). */
@@ -161,13 +165,19 @@ function hostMatches(host: string, hosts: string[]): boolean {
 }
 
 /** Whether a destination is one of the brand's own: a sign-in host, or an endpoint host on the paths that are its sign-in (#1418). */
-function isLegitDestination(spec: BrandSpec, host: string, path: string, self: Set<string>): boolean {
+function isLegitDestination(
+  spec: BrandSpec,
+  host: string,
+  path: string,
+  self: Set<string>
+): boolean {
   if (hostMatches(host, spec.legitHosts)) return true;
   return (spec.legitEndpoints ?? []).some(
     (e) =>
       (host === e.host || (e.suffix === true && host.endsWith(`.${e.host}`))) &&
       e.path.test(path) &&
-      (e.tenant === undefined || tenantRelation(host, e.tenant, self) !== undefined),
+      (e.tenant === undefined ||
+        tenantRelation(host, e.tenant, self) !== undefined)
   );
 }
 
@@ -210,17 +220,25 @@ function hrefHost(raw: string | null, base: string): string | null {
 /** The provider names a broker's own query uses, for Google and for Microsoft (`google-oauth2`, `windowslive`, `azure`, ...). */
 const PROVIDER_NAMES: Record<string, RegExp> = {
   Google: /^google(?:[-_.]?(?:oauth2|workspace|apps|com))?$/i,
-  Microsoft: /^(?:windowslive|windows-live|microsoft(?:account)?|azure(?:ad|-ad)?|azuread(?:-oauth2)?|office365|microsoftonline|live)(?:-oauth2)?(?:\.com)?$/i,
+  Microsoft:
+    /^(?:windowslive|windows-live|microsoft(?:account)?|azure(?:ad|-ad)?|azuread(?:-oauth2)?|office365|microsoftonline|live)(?:-oauth2)?(?:\.com)?$/i,
 };
 /** A query parameter of the endpoint names the provider the control's label does. */
-const names = (param: string) => (query: URLSearchParams, brand: string): boolean => {
-  const pattern = PROVIDER_NAMES[brand];
-  return pattern !== undefined && query.getAll(param).some((value) => pattern.test(value.trim()));
-};
+const names =
+  (param: string) =>
+  (query: URLSearchParams, brand: string): boolean => {
+    const pattern = PROVIDER_NAMES[brand];
+    return (
+      pattern !== undefined &&
+      query.getAll(param).some((value) => pattern.test(value.trim()))
+    );
+  };
 /** Okta names a configured identity provider by an opaque id: the parameter must be there, its value cannot be read as a provider. */
-const hasIdp = (query: URLSearchParams): boolean => query.getAll("idp").some((value) => value.trim() !== "");
+const hasIdp = (query: URLSearchParams): boolean =>
+  query.getAll("idp").some((value) => value.trim() !== "");
 
-const OKTA_PATH = /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/;
+const OKTA_PATH =
+  /^\/oauth2\/(?:[\w.-]+\/)?v1\/authorize(?:\/|$)|^\/oauth2\/authorize(?:\/|$)/;
 /**
  * `tenant`: the family has tenants (Auth0, Okta, Cognito): the host is `<tenant><rest>` and `rest` must be exactly the
  * family's own shape (`.auth0.com` with an optional region, `.okta.com`, `.auth.<region>.amazoncognito.com`), so a
@@ -233,25 +251,58 @@ const IDENTITY_BROKER_ENDPOINTS: Array<{
   hint: (query: URLSearchParams, brand: string) => boolean;
   rest?: RegExp;
 }> = [
-  { host: "auth0.com", path: /^\/authorize(?:\/|$)/, hint: names("connection"), rest: /^\.(?:(?:us|eu|au|jp|uk)\.)?auth0\.com$/ },
+  {
+    host: "auth0.com",
+    path: /^\/authorize(?:\/|$)/,
+    hint: names("connection"),
+    rest: /^\.(?:(?:us|eu|au|jp|uk)\.)?auth0\.com$/,
+  },
   { host: "okta.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.okta\.com$/ },
-  { host: "oktapreview.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.oktapreview\.com$/ },
-  { host: "okta-emea.com", path: OKTA_PATH, hint: hasIdp, rest: /^\.okta-emea\.com$/ },
+  {
+    host: "oktapreview.com",
+    path: OKTA_PATH,
+    hint: hasIdp,
+    rest: /^\.oktapreview\.com$/,
+  },
+  {
+    host: "okta-emea.com",
+    path: OKTA_PATH,
+    hint: hasIdp,
+    rest: /^\.okta-emea\.com$/,
+  },
   {
     host: "amazoncognito.com",
     path: /^\/oauth2\/authorize(?:\/|$)/,
     hint: names("identity_provider"),
     rest: /^\.auth(?:-fips)?\.[a-z]{2}(?:-[a-z]+)+-\d\.amazoncognito\.com$/,
   },
-  { host: "supabase.co", path: /^\/auth\/v1\/authorize(?:\/|$)/, hint: names("provider") },
-  { host: "firebaseapp.com", path: /^\/__\/auth\/handler(?:\/|$)/, hint: names("providerId") },
+  {
+    host: "supabase.co",
+    path: /^\/auth\/v1\/authorize(?:\/|$)/,
+    hint: names("provider"),
+  },
+  {
+    host: "firebaseapp.com",
+    path: /^\/__\/auth\/handler(?:\/|$)/,
+    hint: names("providerId"),
+  },
 ];
 
 /** The brands an identity broker can legitimately stand in for. */
 const BROKERED_BRANDS = new Set(["Google", "Microsoft"]);
 
 /** Environment suffixes a site's own tenant may carry (`acme-prod`). Never words an attacker would pick (`login`, `sso`, `secure`, `support`, `eu`). */
-const TENANT_ENVIRONMENTS = new Set(["prod", "production", "dev", "staging", "stage", "test", "qa", "uat", "preview"]);
+const TENANT_ENVIRONMENTS = new Set([
+  "prod",
+  "production",
+  "dev",
+  "staging",
+  "stage",
+  "test",
+  "qa",
+  "uat",
+  "preview",
+]);
 /** Shortest site name a tenant is matched against: a one- or two-letter name matches too much (documented limit: such sites are never spared). */
 const MIN_TENANT_NAME = 3;
 /** Longest query read for a hint: a hint pushed past it is not found, which reads as unhinted (more reporting, never less). */
@@ -259,7 +310,9 @@ const MAX_HINT_QUERY = 8_192;
 
 /** Whether `host` and `path` have the shape of a broker's authorize endpoint (no query read yet). */
 function brokerShaped(host: string, path: string): boolean {
-  return IDENTITY_BROKER_ENDPOINTS.some((e) => hostMatches(host, [e.host]) && e.path.test(path));
+  return IDENTITY_BROKER_ENDPOINTS.some(
+    (e) => hostMatches(host, [e.host]) && e.path.test(path)
+  );
 }
 
 /**
@@ -267,7 +320,11 @@ function brokerShaped(host: string, path: string): boolean {
  * hosted-login case, `acme.okta.com` for `acme.com`), `"environment"` when it is the name plus a hyphenated
  * environment (`acme-prod`), else `undefined` (somebody else's tenant, or one an attacker can name freely).
  */
-function tenantRelation(host: string, rest: RegExp, self: Set<string>): "exact" | "environment" | undefined {
+function tenantRelation(
+  host: string,
+  rest: RegExp,
+  self: Set<string>
+): "exact" | "environment" | undefined {
   const dot = host.indexOf(".");
   if (dot <= 0 || !rest.test(host.slice(dot))) return undefined;
   const tenant = host.slice(0, dot);
@@ -276,7 +333,11 @@ function tenantRelation(host: string, rest: RegExp, self: Set<string>): "exact" 
     const name = registrableDomain(own).split(".")[0] ?? "";
     if (name.length < MIN_TENANT_NAME) continue;
     if (tenant === name) return "exact";
-    if (tenant.startsWith(`${name}-`) && TENANT_ENVIRONMENTS.has(tenant.slice(name.length + 1))) relation = "environment";
+    if (
+      tenant.startsWith(`${name}-`) &&
+      TENANT_ENVIRONMENTS.has(tenant.slice(name.length + 1))
+    )
+      relation = "environment";
   }
   return relation;
 }
@@ -288,11 +349,18 @@ function tenantRelation(host: string, rest: RegExp, self: Set<string>): "exact" 
  * look-alike or deeper label, a tenant with a free-form suffix, and another provider are judged like any other off-brand
  * host (#1494).
  */
-function isBrokerEndpoint(brand: string, host: string, path: string, query: string, self: Set<string>): boolean {
+function isBrokerEndpoint(
+  brand: string,
+  host: string,
+  path: string,
+  query: string,
+  self: Set<string>
+): boolean {
   if (!BROKERED_BRANDS.has(brand)) return false;
   for (const e of IDENTITY_BROKER_ENDPOINTS) {
     if (!hostMatches(host, [e.host]) || !e.path.test(path)) continue;
-    const relation = e.rest === undefined ? undefined : tenantRelation(host, e.rest, self);
+    const relation =
+      e.rest === undefined ? undefined : tenantRelation(host, e.rest, self);
     if (e.rest !== undefined && relation === undefined) continue;
     if (relation === "exact") return true;
     if (query.length > MAX_HINT_QUERY) continue;
@@ -354,12 +422,17 @@ function hasPhrase(label: string, phrase: string): boolean {
  * The URL relative links resolve against: the page's own, unless the document has a `<base href>` (the first one, as a browser reads
  * it) that resolves to an http(s) URL. A link `/signin` under `<base href="https://evil.example/">` leaves the site (#1423).
  */
-export function documentBase(doc: NonNullable<RuleContext["parsed"]["document"]>, pageUrl: string): string {
+export function documentBase(
+  doc: NonNullable<RuleContext["parsed"]["document"]>,
+  pageUrl: string
+): string {
   const href = documentBaseHref(doc);
   if (!href) return pageUrl;
   try {
     const resolved = new URL(href.trim(), pageUrl);
-    return resolved.protocol === "http:" || resolved.protocol === "https:" ? resolved.href : pageUrl;
+    return resolved.protocol === "http:" || resolved.protocol === "https:"
+      ? resolved.href
+      : pageUrl;
   } catch {
     return pageUrl;
   }
@@ -368,7 +441,7 @@ export function documentBase(doc: NonNullable<RuleContext["parsed"]["document"]>
 function credentialDestinations(
   doc: NonNullable<RuleContext["parsed"]["document"]>,
   base: string,
-  pageUrl: string = base,
+  pageUrl: string = base
 ): CredentialDestination[] {
   const out: CredentialDestination[] = [];
 
@@ -380,35 +453,53 @@ function credentialDestinations(
     const host = hrefHost(action, base) ?? hrefHost(pageUrl, pageUrl);
     if (host) {
       const path = hrefPath(action, base);
-      out.push({ host, path, query: brokerShaped(host, path) ? hrefQuery(action, base) : "", brandLabeled: "", signIn: false });
+      out.push({
+        host,
+        path,
+        query: brokerShaped(host, path) ? hrefQuery(action, base) : "",
+        brandLabeled: "",
+        signIn: false,
+      });
     }
   }
 
   // Auth-labeled controls: only those whose own label is a sign-in affordance (wording in ./cues).
   for (const control of collectControls(doc)) {
     const { labels } = control;
-    const providerButton =
-      labels.some((label) => PROVIDER_BUTTON.test(label));
-    if (!providerButton && !labels.some((label) => AUTH_LABEL.test(label))) continue;
+    const providerButton = labels.some((label) => PROVIDER_BUTTON.test(label));
+    if (!providerButton && !labels.some((label) => AUTH_LABEL.test(label)))
+      continue;
     // A link's destination is its href; a button's is its formaction or its form's action. A control with
     // neither (a script-driven button) has no destination to judge.
     // An empty link href resolves to the `<base>` (a browser's reading); an empty form action is the page itself.
-    const emptyLink = control.href !== null && control.href.trim() === "" && control.element.tagName.toLowerCase() === "a";
+    const emptyLink =
+      control.href !== null &&
+      control.href.trim() === "" &&
+      control.element.tagName.toLowerCase() === "a";
     const host =
-      control.href === null ? null : emptyLink ? hrefHost(base, base) : (hrefHost(control.href, base) ?? hrefHost(pageUrl, pageUrl));
+      control.href === null
+        ? null
+        : emptyLink
+          ? hrefHost(base, base)
+          : (hrefHost(control.href, base) ?? hrefHost(pageUrl, pageUrl));
     if (!host) continue;
     const brandSpec = BRAND_SPECS.find((s) =>
-      s.lexicon.some(
-        (p) => labels.some((label) => hasPhrase(label, p))
-      )
+      s.lexicon.some((p) => labels.some((label) => hasPhrase(label, p)))
     );
     const brand = brandSpec?.brand ?? "";
     // "Continue with Google" is the provider's own button wording: a control that names the brand in an
     // "<action> with <brand>" phrase is a sign-in affordance by itself.
-    const signIn = providerButton || labels.some((label) => SIGN_IN_LABEL.test(label));
+    const signIn =
+      providerButton || labels.some((label) => SIGN_IN_LABEL.test(label));
     const path = hrefPath(control.href, base);
     // The query is read only for a broker-shaped destination: a long query on any other link costs nothing.
-    out.push({ host, path, query: brokerShaped(host, path) ? hrefQuery(control.href, base) : "", brandLabeled: brand, signIn });
+    out.push({
+      host,
+      path,
+      query: brokerShaped(host, path) ? hrefQuery(control.href, base) : "",
+      brandLabeled: brand,
+      signIn,
+    });
   }
 
   return out;
@@ -431,7 +522,11 @@ export function detectBrandImpersonation(
   const haystack = authHaystack(ctx);
 
   const self = selfHosts(ctx);
-  const credDests = credentialDestinations(doc, documentBase(doc, ctx.page.url), ctx.page.url);
+  const credDests = credentialDestinations(
+    doc,
+    documentBase(doc, ctx.page.url),
+    ctx.page.url
+  );
 
   // A credential affordance must exist at all: a password field, auth copy, or
   // a control whose own label says sign in or log in, so a missing page-wide
@@ -448,11 +543,15 @@ export function detectBrandImpersonation(
   for (const spec of BRAND_SPECS) {
     // The brand and an action cue are in the page's text, or in the label of a control that names the brand
     // (a label held only in `aria-label`, `title` or a logo's `alt` is in no text).
-    const controlNamesBrand = credDests.some((d) => d.brandLabeled === spec.brand);
-    const matchedBrand = controlNamesBrand || spec.lexicon.some((p) => haystack.includes(p));
+    const controlNamesBrand = credDests.some(
+      (d) => d.brandLabeled === spec.brand
+    );
+    const matchedBrand =
+      controlNamesBrand || spec.lexicon.some((p) => haystack.includes(p));
     if (!matchedBrand) continue;
 
-    const hasAction = controlNamesBrand || spec.actionCues.some((c) => haystack.includes(c));
+    const hasAction =
+      controlNamesBrand || spec.actionCues.some((c) => haystack.includes(c));
     if (!hasAction) continue; // bare mention → not impersonation
 
     // The decisive, FP-safe condition: a credential control EXPLICITLY LABELED
@@ -565,7 +664,8 @@ function safeSrc(src: string, base: string): string {
   if (!src) return "";
   try {
     const url = new URL(src, base);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return `(${url.protocol.replace(":", "")} source)`;
+    if (url.protocol !== "http:" && url.protocol !== "https:")
+      return `(${url.protocol.replace(":", "")} source)`;
     return `${url.origin}${url.pathname}`.slice(0, 120);
   } catch {
     return "(unparsed source)";
@@ -585,13 +685,16 @@ export function integrityScanNotes(ctx: PageSignalContext): {
 } {
   const doc = ctx.parsed.document;
   if (!doc) return {};
-  const { unread, templatesUnread, controls, hiddenCssTruncated } = scanControls(doc);
+  const { unread, templatesUnread, controls, hiddenCssTruncated } =
+    scanControls(doc);
   return {
     ...(unread > 0 ? { controlsUnread: unread } : {}),
     ...(templatesUnread > 0 ? { templatesUnread } : {}),
     ...(cssScanTruncated(doc) ? { cssTruncated: true as const } : {}),
     // an unread CSS rule that may hide a label's text matters only when the page has a control
-    ...(hiddenCssTruncated && controls.length > 0 ? { hiddenCssTruncated: true as const } : {}),
+    ...(hiddenCssTruncated && controls.length > 0
+      ? { hiddenCssTruncated: true as const }
+      : {}),
   };
 }
 
@@ -649,7 +752,15 @@ export function detectFakeAuthOverlay(
 
     const geometry = overlayGeometry(doc, frame);
     const zIndex = geometry.zIndex;
-    if (!(geometry.fixed && zIndex >= 1000 && geometry.fillsViewport && geometry.pinned)) continue;
+    if (
+      !(
+        geometry.fixed &&
+        zIndex >= 1000 &&
+        geometry.fillsViewport &&
+        geometry.pinned
+      )
+    )
+      continue;
 
     {
       // The reason reaches reports: what the page chose (id, src) is shown as an origin and path only, with no
@@ -769,7 +880,9 @@ const signalCache = new WeakMap<object, Set<IntegritySignal>>();
  * Shared by every page-scope rule so each can correlate without a cross-rule
  * aggregation point in the runner. Memoized per parsed document.
  */
-export function detectPageSignals(ctx: PageSignalContext): Set<IntegritySignal> {
+export function detectPageSignals(
+  ctx: PageSignalContext
+): Set<IntegritySignal> {
   const doc = ctx.parsed.document;
   if (doc) {
     const cached = signalCache.get(doc);

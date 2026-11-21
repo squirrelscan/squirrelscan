@@ -1,10 +1,13 @@
 // eeat/author-byline - Author names on content pages
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { flattenJsonLdNodes, getPathname } from "@squirrelscan/utils";
 
-import { bylineConsistencyDeviants, defersToBylineConsistency } from "./byline-consistency";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  bylineConsistencyDeviants,
+  defersToBylineConsistency,
+} from "./byline-consistency";
 
 export const authorBylineRule: Rule = {
   meta: {
@@ -21,7 +24,15 @@ export const authorBylineRule: Rule = {
     // Author bylines are an E-E-A-T signal for editorial / content sites. They're
     // noise on a SaaS marketing site or landing page (no articles to attribute).
     // Gate to content-publishing site types; offline / no-metadata runs as today.
-    appliesWhen: { siteTypes: ["blog", "news", "healthcare_provider", "education", "nonprofit"] },
+    appliesWhen: {
+      siteTypes: [
+        "blog",
+        "news",
+        "healthcare_provider",
+        "education",
+        "nonprofit",
+      ],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -129,7 +140,11 @@ export const authorBylineRule: Rule = {
 
     if (deferredPages > 0) {
       const check = checks.find((c) => c.name === "author-byline");
-      if (check) check.details = { ...check.details, deferredToBylineConsistency: deferredPages };
+      if (check)
+        check.details = {
+          ...check.details,
+          deferredToBylineConsistency: deferredPages,
+        };
     }
 
     return { checks };

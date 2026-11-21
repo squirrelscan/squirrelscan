@@ -6,11 +6,21 @@
 
 import type { Rule } from "./types";
 
-import { IgnoreTable, isIgnorable, ruleMatcher, type IgnoreEntry } from "./ignore";
+import {
+  IgnoreTable,
+  isIgnorable,
+  ruleMatcher,
+  type IgnoreEntry,
+} from "./ignore";
 import { loadKnownRules } from "./loader";
 
 /** Option names the per-rule form of the ignore used to propose (#1262); the `[[ignore]]` table replaces them. */
-const RESERVED_IGNORE_KEYS = new Set(["ignore", "ignore_items", "ignore_urls", "ignore_selectors"]);
+const RESERVED_IGNORE_KEYS = new Set([
+  "ignore",
+  "ignore_items",
+  "ignore_urls",
+  "ignore_selectors",
+]);
 
 /** Keys the rule filter reads from every table, outside any rule's optionsSchema. */
 const FILTER_OPTION_KEYS = new Set(["enabled"]);
@@ -51,7 +61,7 @@ interface OptionIssue {
  */
 export function describeRuleOptionIssues(
   ruleId: string,
-  issues: readonly OptionIssue[],
+  issues: readonly OptionIssue[]
 ): string[] {
   return issues.map((issue) => {
     const where = issue.path.map(String).join(".");
@@ -79,7 +89,7 @@ function similarRuleIds(ruleId: string, rules: Map<string, Rule>): string[] {
  */
 export function checkRuleOptions(
   ruleOptions: Record<string, Record<string, unknown>>,
-  rules: Map<string, Rule> = loadKnownRules(),
+  rules: Map<string, Rule> = loadKnownRules()
 ): RuleOptionsProblem[] {
   const problems: RuleOptionsProblem[] = [];
 
@@ -88,7 +98,9 @@ export function checkRuleOptions(
     if (!rule) {
       const similar = similarRuleIds(ruleId, rules);
       const hint =
-        similar.length > 0 ? ` (did you mean ${similar.map((id) => `"${id}"`).join(" or ")}?)` : "";
+        similar.length > 0
+          ? ` (did you mean ${similar.map((id) => `"${id}"`).join(" or ")}?)`
+          : "";
       problems.push({
         kind: "unknown-rule",
         ruleId,
@@ -111,7 +123,9 @@ export function checkRuleOptions(
     const schema = rule.meta.optionsSchema;
     const declared = Object.keys(schema?.shape ?? {});
     const options =
-      declared.length > 0 ? `options: ${declared.join(", ")}` : "this rule takes no options";
+      declared.length > 0
+        ? `options: ${declared.join(", ")}`
+        : "this rule takes no options";
     for (const key of Object.keys(table)) {
       if (FILTER_OPTION_KEYS.has(key) || declared.includes(key)) continue;
       if (RESERVED_IGNORE_KEYS.has(key)) {
@@ -159,18 +173,24 @@ export function checkRuleOptions(
  */
 export function checkIgnoreEntries(
   entries: readonly IgnoreEntry[] | undefined,
-  rules: Map<string, Rule> = loadKnownRules(),
+  rules: Map<string, Rule> = loadKnownRules()
 ): RuleOptionsProblem[] {
   const problems: RuleOptionsProblem[] = [];
   if (!entries || entries.length === 0) return problems;
-  const where = (i: number, rule: string) => `[[ignore]] entry ${i + 1} (${rule})`;
+  const where = (i: number, rule: string) =>
+    `[[ignore]] entry ${i + 1} (${rule})`;
 
   entries.forEach((entry, i) => {
     const matches = ruleMatcher(entry.rule);
     const matching = [...rules.values()].filter((r) => matches(r.meta.id));
     if (matching.length === 0) {
-      const similar = entry.rule.includes("*") ? [] : similarRuleIds(entry.rule, rules);
-      const hint = similar.length > 0 ? ` (did you mean ${similar.map((id) => `"${id}"`).join(" or ")}?)` : "";
+      const similar = entry.rule.includes("*")
+        ? []
+        : similarRuleIds(entry.rule, rules);
+      const hint =
+        similar.length > 0
+          ? ` (did you mean ${similar.map((id) => `"${id}"`).join(" or ")}?)`
+          : "";
       problems.push({
         kind: "ignore-entry",
         ruleId: entry.rule,
@@ -181,7 +201,11 @@ export function checkIgnoreEntries(
     }
     // An entry with only `selectors` waives by element: it does something only when a rule it names reports one (#1440).
     const hasSelectors = (entry.selectors?.length ?? 0) > 0;
-    if (hasSelectors && (entry.items?.length ?? 0) === 0 && (entry.urls?.length ?? 0) === 0) {
+    if (
+      hasSelectors &&
+      (entry.items?.length ?? 0) === 0 &&
+      (entry.urls?.length ?? 0) === 0
+    ) {
       const reporting = matching.filter((r) => r.meta.itemSelectors === true);
       if (reporting.length === 0) {
         problems.push({
@@ -198,7 +222,10 @@ export function checkIgnoreEntries(
         kind: "ignore-entry",
         ruleId: entry.rule,
         key: "rule",
-        message: `${where(i, entry.rule)}: compromise detection cannot be ignored (${locked.map((r) => r.meta.id).slice(0, 3).join(", ")}), so the entry changes nothing`,
+        message: `${where(i, entry.rule)}: compromise detection cannot be ignored (${locked
+          .map((r) => r.meta.id)
+          .slice(0, 3)
+          .join(", ")}), so the entry changes nothing`,
       });
     }
   });
@@ -222,6 +249,11 @@ function capProblems(problems: RuleOptionsProblem[]): RuleOptionsProblem[] {
   const rest = problems.length - MAX_IGNORE_PROBLEMS;
   return [
     ...problems.slice(0, MAX_IGNORE_PROBLEMS),
-    { kind: "ignore-entry", ruleId: "", key: "rule", message: `[[ignore]]: and ${rest} more problem${rest === 1 ? "" : "s"} like these` },
+    {
+      kind: "ignore-entry",
+      ruleId: "",
+      key: "rule",
+      message: `[[ignore]]: and ${rest} more problem${rest === 1 ? "" : "s"} like these`,
+    },
   ];
 }

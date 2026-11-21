@@ -12,12 +12,12 @@
 // finished report: the report is assembled by a SECOND code path, so a report
 // assertion can pass with the adapter fix deleted.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { PageRecord } from "@squirrelscan/core-contracts";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -29,7 +29,11 @@ import {
 const BASE = "https://shop.example.com";
 
 // Page rules that read a status code and would otherwise indict a throttled page.
-const PAGE_RULES = ["crawl/soft-404", "crawl/indexability", "security/http-to-https"];
+const PAGE_RULES = [
+  "crawl/soft-404",
+  "crawl/indexability",
+  "security/http-to-https",
+];
 const LINK_RULE = "links/broken-links";
 
 // `filterRules` defaults every rule to disabled, so the enable list is
@@ -62,7 +66,8 @@ interface SeedPage {
 
 function pageRecord(crawlId: string, page: SeedPage): PageRecord {
   const url = `${BASE}${page.path}`;
-  const body = page.body ?? html(`<h1>Page ${page.path}</h1><p>Some body copy.</p>`);
+  const body =
+    page.body ?? html(`<h1>Page ${page.path}</h1><p>Some body copy.</p>`);
   return {
     url,
     normalizedUrl: url,
@@ -124,7 +129,9 @@ interface AuditResult {
   gradedUrls: string[];
   /** Failing/warning page checks for one URL. */
   findingsFor: (url: string) => { name: string; status: string }[];
-  checksFor: (ruleId: string) => { name: string; status: string; items?: unknown[] }[];
+  checksFor: (
+    ruleId: string
+  ) => { name: string; status: string; items?: unknown[] }[];
 }
 
 /** Which engine path `auditPages` drives. Both must behave identically: #1829's
@@ -132,7 +139,10 @@ interface AuditResult {
 type EnginePath = "v1" | "streaming";
 
 /** Store the given pages, then run the real rules over them via the real adapter. */
-async function auditPages(pages: SeedPage[], engine: EnginePath = "v1"): Promise<AuditResult> {
+async function auditPages(
+  pages: SeedPage[],
+  engine: EnginePath = "v1"
+): Promise<AuditResult> {
   const storage = new SQLiteStorage(":memory:");
   return run(
     Effect.gen(function* () {
@@ -163,13 +173,26 @@ async function auditPages(pages: SeedPage[], engine: EnginePath = "v1"): Promise
       let result;
       if (engine === "streaming") {
         // batchSize 1 so the exclusion is exercised at every batch boundary.
-        result = yield* runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, {
-          batchSize: 1,
-        });
+        result = yield* runStreamingRules(
+          storage,
+          crawlId,
+          CONFIG,
+          EMPTY_ASSETS,
+          undefined,
+          {
+            batchSize: 1,
+          }
+        );
       } else {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+        result = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          EMPTY_ASSETS
+        );
       }
 
       // `pageResults` is keyed by page URL, so its keys ARE the set of pages the
@@ -177,7 +200,7 @@ async function auditPages(pages: SeedPage[], engine: EnginePath = "v1"): Promise
       const gradedUrls = [...result.pageResults.keys()];
       const findingsFor = (url: string) =>
         (result.pageResults.get(url) ?? []).filter(
-          (c) => c.status === "fail" || c.status === "warn",
+          (c) => c.status === "fail" || c.status === "warn"
         );
 
       return {
@@ -190,7 +213,7 @@ async function auditPages(pages: SeedPage[], engine: EnginePath = "v1"): Promise
             items?: unknown[];
           }[],
       } satisfies AuditResult;
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
@@ -243,13 +266,17 @@ describe("#1829 — rate-limited pages are excluded from page-level scoring", ()
       {
         path: "/",
         status: 200,
-        body: html(`<a href="${BASE}/gone">gone</a><a href="${BASE}/throttled">slow</a>`),
+        body: html(
+          `<a href="${BASE}/gone">gone</a><a href="${BASE}/throttled">slow</a>`
+        ),
       },
       { path: "/gone", status: 404, body: "Not Found" },
       { path: "/throttled", status: 429, body: "Too Many Requests" },
     ]);
 
-    const brokenLinks = checksFor(LINK_RULE).find((c) => c.name === "broken-links");
+    const brokenLinks = checksFor(LINK_RULE).find(
+      (c) => c.name === "broken-links"
+    );
     expect(brokenLinks?.status).toBe("fail");
     expect(brokenLinks?.items?.length).toBe(1);
   });
@@ -261,7 +288,7 @@ describe("#1829 — rate-limited pages are excluded from page-level scoring", ()
     ]);
 
     const notice = checksFor("crawl/rate-limited-pages").find(
-      (c) => c.name === "Rate-limited pages",
+      (c) => c.name === "Rate-limited pages"
     );
     expect(notice?.status).toBe("info");
   });
@@ -282,7 +309,7 @@ describe("#1829 on the streaming path — same exclusion, same advisory (#1860)"
         { path: "/", status: 200 },
         { path: "/suspect", status: 200, body: INDICTABLE_BODY },
       ],
-      "streaming",
+      "streaming"
     );
 
     expect(gradedUrls).toContain(`${BASE}/suspect`);
@@ -295,7 +322,7 @@ describe("#1829 on the streaming path — same exclusion, same advisory (#1860)"
         { path: "/", status: 200 },
         { path: "/suspect", status: 429, body: INDICTABLE_BODY },
       ],
-      "streaming",
+      "streaming"
     );
 
     expect(gradedUrls).toContain(`${BASE}/`);
@@ -309,7 +336,7 @@ describe("#1829 on the streaming path — same exclusion, same advisory (#1860)"
         { path: "/", status: 200 },
         { path: "/suspect", status: 430, body: INDICTABLE_BODY },
       ],
-      "streaming",
+      "streaming"
     );
 
     expect(gradedUrls).not.toContain(`${BASE}/suspect`);
@@ -321,11 +348,11 @@ describe("#1829 on the streaming path — same exclusion, same advisory (#1860)"
         { path: "/", status: 200 },
         { path: "/throttled", status: 429, body: "Too Many Requests" },
       ],
-      "streaming",
+      "streaming"
     );
 
     const notice = checksFor("crawl/rate-limited-pages").find(
-      (c) => c.name === "Rate-limited pages",
+      (c) => c.name === "Rate-limited pages"
     );
     expect(notice?.status).toBe("info");
   });

@@ -24,7 +24,9 @@
  * When you change a matcher or a reason sentence, change BOTH copies of this
  * list in the same pass.
  */
-export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> = [
+export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<
+  readonly [string, string]
+> = [
   // The sentences the engine itself writes.
   ["DNS lookup failed for ejconsultor.es: NXDOMAIN", "dns"],
   ["TLS handshake with example.com failed: certificate has expired", "tls"],
@@ -32,11 +34,17 @@ export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> 
   ["No response from example.com within the request timeout", "timeout"],
   ["example.com returned 404 Not Found", "http_4xx"],
   ["example.com returned 503 Service Unavailable", "http_5xx"],
-  ["Redirect from example.com could not be followed: redirected off-site to other.com", "redirect"],
+  [
+    "Redirect from example.com could not be followed: redirected off-site to other.com",
+    "redirect",
+  ],
   ["robots.txt disallows crawling example.com", "robots"],
   ["No pages were crawled from example.com: something novel", "unknown"],
   // The TLS causes the crawl names from the same handshake (#712).
-  ["TLS handshake with example.com failed: certificate has expired on 2020-01-15", "tls"],
+  [
+    "TLS handshake with example.com failed: certificate has expired on 2020-01-15",
+    "tls",
+  ],
   [
     "TLS handshake with example.com failed: hostname/IP does not match: the certificate does not cover example.com",
     "tls",
@@ -81,7 +89,10 @@ export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> 
 
   // The CLI's reachability probe sentences (apps/cli/src/utils/reachability.ts),
   // written when it cannot reach the site before the crawl starts.
-  ["Cannot reach https://example.com/: SSL/TLS error - certificate issue", "tls"],
+  [
+    "Cannot reach https://example.com/: SSL/TLS error - certificate issue",
+    "tls",
+  ],
   ["Cannot reach https://example.com/: Host not found", "dns"],
   // The near-misses: "host not found" without the probe's "Cannot reach"
   // lead-in, and "certificate" without its whole sentence, are not the site's
@@ -91,7 +102,10 @@ export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> 
 
   // Ours, not the site's. Every one of these must stay `unknown`, or a failure
   // email tells a site owner to fix something that was never theirs.
-  ["Callback 'mark-completed' failed after 3 attempts (HTTP 500: internal error)", "unknown"],
+  [
+    "Callback 'mark-completed' failed after 3 attempts (HTTP 500: internal error)",
+    "unknown",
+  ],
   ["upload failed, HTTP 503 from storage", "unknown"],
   ["database query timed out", "unknown"],
   ["R2_ASSETS.put timed out after 5000ms", "unknown"],

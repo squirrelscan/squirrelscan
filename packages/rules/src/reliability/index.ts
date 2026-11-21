@@ -6,6 +6,10 @@ import { brokenFormsRule } from "./broken-forms";
 import { brokenResourcesRule } from "./broken-resources";
 import { jsErrorsRule } from "./js-errors";
 
-export const rules: Rule[] = [brokenResourcesRule, brokenFormsRule, jsErrorsRule];
+export const rules: Rule[] = [
+  brokenResourcesRule,
+  brokenFormsRule,
+  jsErrorsRule,
+];
 
 export { brokenFormsRule, brokenResourcesRule, jsErrorsRule };

@@ -44,9 +44,8 @@
 //   `getAttribute("data-foo") === "v"` but `dataset.foo === undefined`. Nothing
 //   in the engine reads `dataset`; read attributes by name instead.
 
-import { Element as ElementFacade } from "linkedom";
-
 import { Parser, QuoteType } from "htmlparser2";
+import { Element as ElementFacade } from "linkedom";
 import { parseHTML as linkedomParseHTML } from "linkedom";
 
 /**
@@ -64,11 +63,15 @@ export function parseHTML(
 ): ReturnType<typeof linkedomParseHTML> {
   const parsed = parseContained(args);
   if (parsed.document.documentElement) {
-    if (typeof args[0] === "string" && SHADOW_ROOT_HINT.test(args[0])) flattenDeclarativeShadowRoots(parsed.document as never);
+    if (typeof args[0] === "string" && SHADOW_ROOT_HINT.test(args[0]))
+      flattenDeclarativeShadowRoots(parsed.document as never);
     return parsed;
   }
   const [html, ...rest] = args;
-  return parseContained([`<html><head></head><body>${String(html)}</body></html>`, ...rest] as typeof args);
+  return parseContained([
+    `<html><head></head><body>${String(html)}</body></html>`,
+    ...rest,
+  ] as typeof args);
 }
 
 // ── A parse that throws does not fail the audit (#1557) ───────────────────────────────────────────────────────────────────────
@@ -99,35 +102,57 @@ const PARSE_NOTICES = new WeakMap<object, string[]>();
 export const AUDITED_EMPTY_NOTICE_SUFFIX = "so it was audited empty";
 
 /** True when `notices` say the page could not be parsed and was read as an empty document: nothing it lacks is a finding. */
-export function noticesAuditedEmpty(notices: readonly string[] | undefined): boolean {
-  return notices?.some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX)) === true;
+export function noticesAuditedEmpty(
+  notices: readonly string[] | undefined
+): boolean {
+  return (
+    notices?.some((notice) => notice.endsWith(AUDITED_EMPTY_NOTICE_SUFFIX)) ===
+    true
+  );
 }
 
 /** The same for a document the parser degraded (its notices live beside it), or for a parsed page that carries them. */
 export function auditedEmpty(source: unknown): boolean {
-  if (typeof source === "object" && source !== null && ("parseNotices" in source || "document" in source)) {
+  if (
+    typeof source === "object" &&
+    source !== null &&
+    ("parseNotices" in source || "document" in source)
+  ) {
     const page = source as { parseNotices?: string[]; document?: unknown };
-    return noticesAuditedEmpty(page.parseNotices) || noticesAuditedEmpty(parseNotices(page.document));
+    return (
+      noticesAuditedEmpty(page.parseNotices) ||
+      noticesAuditedEmpty(parseNotices(page.document))
+    );
   }
   return noticesAuditedEmpty(parseNotices(source));
 }
 
 /** The notices of a document `parseHTML` had to degrade to parse (an empty list for any other): see {@link parseContained}. */
 export function parseNotices(document: unknown): string[] {
-  return (typeof document === "object" && document !== null ? PARSE_NOTICES.get(document) : undefined) ?? [];
+  return (
+    (typeof document === "object" && document !== null
+      ? PARSE_NOTICES.get(document)
+      : undefined) ?? []
+  );
 }
 
 /** The options linkedom builds its `Parser` with (`shared/parse-from-string.js`, HTML mode). The cut is only sound while these match. */
-const LINKEDOM_PARSER_OPTIONS = { lowerCaseAttributeNames: false, decodeEntities: true, xmlMode: false } as const;
+const LINKEDOM_PARSER_OPTIONS = {
+  lowerCaseAttributeNames: false,
+  decodeEntities: true,
+  xmlMode: false,
+} as const;
 
-function parseContained(args: Parameters<typeof linkedomParseHTML>): ReturnType<typeof linkedomParseHTML> {
+function parseContained(
+  args: Parameters<typeof linkedomParseHTML>
+): ReturnType<typeof linkedomParseHTML> {
   return parseContainedWith(linkedomParseHTML, args);
 }
 
 /** The containment with the parse function passed in: the production path passes linkedom's, tests pass a stub that throws on demand (no module mocking). */
 export function parseContainedWith(
   parse: typeof linkedomParseHTML,
-  args: Parameters<typeof linkedomParseHTML>,
+  args: Parameters<typeof linkedomParseHTML>
 ): ReturnType<typeof linkedomParseHTML> {
   installClassSplit();
   try {
@@ -147,19 +172,30 @@ export function parseContainedWith(
       }
     }
     const parsed = parse("<html><head></head><body></body></html>", ...rest);
-    PARSE_NOTICES.set(parsed.document, [`the page could not be read (${error instanceof Error ? error.message.slice(0, 120) : "parse error"}), ${AUDITED_EMPTY_NOTICE_SUFFIX}`]);
+    PARSE_NOTICES.set(parsed.document, [
+      `the page could not be read (${error instanceof Error ? error.message.slice(0, 120) : "parse error"}), ${AUDITED_EMPTY_NOTICE_SUFFIX}`,
+    ]);
     return parsed;
   }
 }
 
 function cutNotices(cut: number[]): string[] {
-  const notices = cut.slice(0, MAX_PARSE_NOTICES).map((tokens) => `a class attribute of ${tokens.toLocaleString("en-US")} tokens was cut to the first ${MAX_CLASS_TOKENS.toLocaleString("en-US")} to read the page`);
-  if (cut.length > MAX_PARSE_NOTICES) notices.push(`${(cut.length - MAX_PARSE_NOTICES).toLocaleString("en-US")} more class attributes were cut the same way`);
+  const notices = cut
+    .slice(0, MAX_PARSE_NOTICES)
+    .map(
+      (tokens) =>
+        `a class attribute of ${tokens.toLocaleString("en-US")} tokens was cut to the first ${MAX_CLASS_TOKENS.toLocaleString("en-US")} to read the page`
+    );
+  if (cut.length > MAX_PARSE_NOTICES)
+    notices.push(
+      `${(cut.length - MAX_PARSE_NOTICES).toLocaleString("en-US")} more class attributes were cut the same way`
+    );
   return notices;
 }
 
 /** The five characters the HTML spec splits a class value on (tab, line feed, form feed, carriage return, space): not JavaScript's `\s`. */
-const isClassSpace = (code: number): boolean => code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
+const isClassSpace = (code: number): boolean =>
+  code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
 /** Split a class value as HTML does; every consumer that tokenises `class` uses this, not `\s` (#1567). */
 export const CLASS_SPLIT = /[ \t\n\f\r]+/;
 
@@ -176,7 +212,10 @@ function installClassSplit(): void {
   if (!original?.set) return;
   Object.defineProperty(proto, "className", {
     ...original,
-    set(this: { classList: { clear(): void; add(...tokens: string[]): void } }, value: unknown) {
+    set(
+      this: { classList: { clear(): void; add(...tokens: string[]): void } },
+      value: unknown
+    ) {
       const { classList } = this;
       classList.clear();
       classList.add(...String(value).split(CLASS_SPLIT));
@@ -233,14 +272,19 @@ class ClassProbe extends Parser {
   private constructor(
     private readonly source: string,
     private readonly limit: number,
-    hooks: TagHooks,
+    hooks: TagHooks
   ) {
     super(hooks, LINKEDOM_PARSER_OPTIONS);
   }
 
   override onattribname(start: number, end: number): void {
     this.reading = false;
-    if (end - start !== 5 || this.classSeen || this.source.slice(start, end) !== "class") return;
+    if (
+      end - start !== 5 ||
+      this.classSeen ||
+      this.source.slice(start, end) !== "class"
+    )
+      return;
     this.classSeen = true;
     this.reading = true;
     this.tokens = 0;
@@ -250,7 +294,8 @@ class ClassProbe extends Parser {
 
   override onattribdata(start: number, end: number): void {
     if (!this.reading) return;
-    for (let i = start; i < end; i++) this.take(!isClassSpace(this.source.charCodeAt(i)), i);
+    for (let i = start; i < end; i++)
+      this.take(!isClassSpace(this.source.charCodeAt(i)), i);
   }
 
   override onattribentity(cp: number): void {
@@ -258,10 +303,15 @@ class ClassProbe extends Parser {
     // The tokenizer has just consumed the entity: its start is its own `entityStart` (not in the typed API, read as a number; if a version drops it nothing
     // is cut, and the page falls to the empty document rather than a wrong cut).
     // The cut therefore depends on a private tokenizer field: tests/htmlparser2-entitystart-guard-1576.test.ts fails, naming htmlparser2, when a bump drops it.
-    const tokenizer = (this as unknown as { tokenizer?: { entityStart?: unknown } }).tokenizer;
+    const tokenizer = (
+      this as unknown as { tokenizer?: { entityStart?: unknown } }
+    ).tokenizer;
     const entityStart = tokenizer?.entityStart;
     const known = typeof entityStart === "number" && entityStart >= 0;
-    this.take(!(cp === 32 || cp === 9 || cp === 10 || cp === 12 || cp === 13), known ? entityStart : -1);
+    this.take(
+      !(cp === 32 || cp === 9 || cp === 10 || cp === 12 || cp === 13),
+      known ? entityStart : -1
+    );
   }
 
   override onattribend(quote: QuoteType, end: number): void {
@@ -269,7 +319,8 @@ class ClassProbe extends Parser {
     this.reading = false;
     if (this.cutAt === -1) return;
     // a quoted value ends one before the end the tokenizer reports (it is past the closing quote); an unquoted one ends there
-    const valueEnd = quote === QuoteType.Double || quote === QuoteType.Single ? end - 1 : end;
+    const valueEnd =
+      quote === QuoteType.Double || quote === QuoteType.Single ? end - 1 : end;
     this.pending = { from: this.cutAt, to: valueEnd, tokens: this.tokens };
   }
 
@@ -288,7 +339,10 @@ class ClassProbe extends Parser {
  * token counts that were cut. The offsets come from the tokenizer (see {@link ClassProbe}), so what is cut is what the parse reads
  * as that value and nothing else; a page with no such attribute comes back as the same string.
  */
-export function truncateClassAttributes(html: string, limit: number): { text: string; cut: number[] } {
+export function truncateClassAttributes(
+  html: string,
+  limit: number
+): { text: string; cut: number[] } {
   const probe = ClassProbe.create(html, limit);
   probe.write(html);
   probe.end();
@@ -315,27 +369,63 @@ const SHADOW_ID_SUFFIX = /__sr\d+(?![\w-])/g;
  * checks (message, items, details) before they leave the rule runner. A no-op on a document
  * with no shadow roots, and in place: the checks are the rule's own, fresh from `run()`.
  */
-export function stripShadowIdScopes(checks: unknown[], document: unknown): void {
+export function stripShadowIdScopes(
+  checks: unknown[],
+  document: unknown
+): void {
   if (!document || !SHADOW_SCOPED_DOCUMENTS.has(document as object)) return;
   const scrub = (value: unknown, depth: number): unknown => {
-    if (typeof value === "string") return value.includes("__sr") ? value.replace(SHADOW_ID_SUFFIX, "") : value;
+    if (typeof value === "string")
+      return value.includes("__sr")
+        ? value.replace(SHADOW_ID_SUFFIX, "")
+        : value;
     if (depth > 6 || value === null || typeof value !== "object") return value;
     if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i++) value[i] = scrub(value[i], depth + 1);
+      for (let i = 0; i < value.length; i++)
+        value[i] = scrub(value[i], depth + 1);
       return value;
     }
     const record = value as Record<string, unknown>;
-    for (const key of Object.keys(record)) record[key] = scrub(record[key], depth + 1);
+    for (const key of Object.keys(record))
+      record[key] = scrub(record[key], depth + 1);
     return record;
   };
   for (const check of checks) scrub(check, 0);
 }
 /** Elements a browser lets host a shadow root, besides any custom element (a name with a hyphen). */
-const SHADOW_HOSTS = new Set(["article", "aside", "blockquote", "body", "div", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "main", "nav", "p", "section", "span"]);
+const SHADOW_HOSTS = new Set([
+  "article",
+  "aside",
+  "blockquote",
+  "body",
+  "div",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "main",
+  "nav",
+  "p",
+  "section",
+  "span",
+]);
 const MAX_SHADOW_TEMPLATES = 5000;
 const MAX_SHADOW_DEPTH = 16;
 /** Light DOM children that render nothing, so they never replace a slot's fallback. */
-const UNRENDERED_LIGHT_TAGS = new Set(["style", "script", "template", "link", "meta", "noscript", "title", "base"]);
+const UNRENDERED_LIGHT_TAGS = new Set([
+  "style",
+  "script",
+  "template",
+  "link",
+  "meta",
+  "noscript",
+  "title",
+  "base",
+]);
 
 interface NodeLike {
   nodeType?: number;
@@ -348,13 +438,34 @@ interface NodeLike {
 }
 
 interface TemplateLike {
-  parentNode: { insertBefore(node: unknown, ref: unknown): unknown; removeChild(node: unknown): unknown; localName?: string; childNodes: ArrayLike<unknown> } | null;
+  parentNode: {
+    insertBefore(node: unknown, ref: unknown): unknown;
+    removeChild(node: unknown): unknown;
+    localName?: string;
+    childNodes: ArrayLike<unknown>;
+  } | null;
   getAttribute(name: string): string | null;
-  content?: { childNodes: ArrayLike<unknown>; querySelectorAll(selector: string): ArrayLike<unknown> };
+  content?: {
+    childNodes: ArrayLike<unknown>;
+    querySelectorAll(selector: string): ArrayLike<unknown>;
+  };
 }
 
 /** Attributes whose value is one or more ids of the SAME tree (a shadow root is its own scope for them). */
-const ID_REFERENCE_ATTRIBUTES = ["for", "aria-labelledby", "aria-describedby", "aria-controls", "aria-owns", "aria-details", "aria-activedescendant", "aria-errormessage", "aria-flowto", "headers", "list", "form"];
+const ID_REFERENCE_ATTRIBUTES = [
+  "for",
+  "aria-labelledby",
+  "aria-describedby",
+  "aria-controls",
+  "aria-owns",
+  "aria-details",
+  "aria-activedescendant",
+  "aria-errormessage",
+  "aria-flowto",
+  "headers",
+  "list",
+  "form",
+];
 
 /**
  * Ids are scoped per shadow root: the same `id="q"` in three components is not a duplicate, and a
@@ -362,7 +473,11 @@ const ID_REFERENCE_ATTRIBUTES = ["for", "aria-labelledby", "aria-describedby", "
  * so the ids of one root's content (and the references to them from inside that root) get a
  * per-root suffix, `q__sr2`, keeping every root its own namespace for the id rules.
  */
-function scopeIdsToRoot(content: NonNullable<TemplateLike["content"]>, root: number, document: object): void {
+function scopeIdsToRoot(
+  content: NonNullable<TemplateLike["content"]>,
+  root: number,
+  document: object
+): void {
   const withIds = Array.from(content.querySelectorAll("[id]")) as NodeLike[];
   if (withIds.length === 0) return;
   SHADOW_SCOPED_DOCUMENTS.add(document);
@@ -377,11 +492,16 @@ function scopeIdsToRoot(content: NonNullable<TemplateLike["content"]>, root: num
     if (id) el.setAttribute?.("id", `${id}${suffix}`);
   }
   const selector = ID_REFERENCE_ATTRIBUTES.map((a) => `[${a}]`).join(",");
-  for (const el of Array.from(content.querySelectorAll(selector)) as NodeLike[]) {
+  for (const el of Array.from(
+    content.querySelectorAll(selector)
+  ) as NodeLike[]) {
     for (const attribute of ID_REFERENCE_ATTRIBUTES) {
       const value = el.getAttribute?.(attribute);
       if (!value) continue;
-      const scoped = value.split(/\s+/).map((token) => (ids.has(token) ? `${token}${suffix}` : token)).join(" ");
+      const scoped = value
+        .split(/\s+/)
+        .map((token) => (ids.has(token) ? `${token}${suffix}` : token))
+        .join(" ");
       if (scoped !== value) el.setAttribute?.(attribute, scoped);
     }
   }
@@ -393,21 +513,34 @@ function scopeIdsToRoot(content: NonNullable<TemplateLike["content"]>, root: num
  * named one those with a matching `slot`. Where the host supplies content, the fallback is dropped
  * so it is not checked as if it rendered.
  */
-function dropReplacedSlotFallback(content: NonNullable<TemplateLike["content"]>, host: NonNullable<TemplateLike["parentNode"]>, template: unknown): void {
+function dropReplacedSlotFallback(
+  content: NonNullable<TemplateLike["content"]>,
+  host: NonNullable<TemplateLike["parentNode"]>,
+  template: unknown
+): void {
   const slots = Array.from(content.querySelectorAll("slot")) as NodeLike[];
   if (slots.length === 0) return;
-  const light = (Array.from(host.childNodes) as NodeLike[]).filter((n) => (n as unknown) !== template);
+  const light = (Array.from(host.childNodes) as NodeLike[]).filter(
+    (n) => (n as unknown) !== template
+  );
   const supplied = new Set<string>();
   for (const node of light) {
     if (node.nodeType === 1) {
       // Elements a browser never renders cannot be slotted content.
-      if (UNRENDERED_LIGHT_TAGS.has(((node as { localName?: string }).localName ?? "").toLowerCase())) continue;
+      if (
+        UNRENDERED_LIGHT_TAGS.has(
+          ((node as { localName?: string }).localName ?? "").toLowerCase()
+        )
+      )
+        continue;
       supplied.add(node.getAttribute?.("slot") ?? "");
-    } else if (node.nodeType === 3 && (node.textContent ?? "").trim() !== "") supplied.add("");
+    } else if (node.nodeType === 3 && (node.textContent ?? "").trim() !== "")
+      supplied.add("");
   }
   for (const slot of slots) {
     if (!supplied.has(slot.getAttribute?.("name") ?? "")) continue;
-    for (const child of Array.from(slot.childNodes ?? []) as NodeLike[]) child.remove?.();
+    for (const child of Array.from(slot.childNodes ?? []) as NodeLike[])
+      child.remove?.();
   }
 }
 
@@ -424,19 +557,24 @@ function dropReplacedSlotFallback(content: NonNullable<TemplateLike["content"]>,
  * most {@link MAX_SHADOW_TEMPLATES} roots are inlined, nested up to
  * {@link MAX_SHADOW_DEPTH} levels; templates that are skipped cost nothing against it.
  */
-function flattenDeclarativeShadowRoots(document: { querySelectorAll(selector: string): ArrayLike<unknown> } & object): void {
+function flattenDeclarativeShadowRoots(
+  document: { querySelectorAll(selector: string): ArrayLike<unknown> } & object
+): void {
   const hosted = new WeakSet<object>();
   let budget = MAX_SHADOW_TEMPLATES;
   let rootNumber = 0;
   // Nested templates appear as the outer ones are inlined: repeat until none is left (bounded).
   for (let round = 0; round < MAX_SHADOW_DEPTH && budget > 0; round++) {
-    const templates = Array.from(document.querySelectorAll("template[shadowrootmode]")) as TemplateLike[];
+    const templates = Array.from(
+      document.querySelectorAll("template[shadowrootmode]")
+    ) as TemplateLike[];
     let changed = false;
     for (const template of templates) {
       if (budget <= 0) return;
       const host = template.parentNode;
       const mode = template.getAttribute("shadowrootmode")?.toLowerCase();
-      if (!host || !template.content || (mode !== "open" && mode !== "closed")) continue;
+      if (!host || !template.content || (mode !== "open" && mode !== "closed"))
+        continue;
       const name = host.localName ?? "";
       if (!SHADOW_HOSTS.has(name) && !name.includes("-")) continue;
       if (hosted.has(host)) continue;
@@ -444,7 +582,8 @@ function flattenDeclarativeShadowRoots(document: { querySelectorAll(selector: st
       budget--;
       dropReplacedSlotFallback(template.content, host, template);
       scopeIdsToRoot(template.content, ++rootNumber, document);
-      for (const child of Array.from(template.content.childNodes)) host.insertBefore(child, template);
+      for (const child of Array.from(template.content.childNodes))
+        host.insertBefore(child, template);
       host.removeChild(template);
       changed = true;
     }
@@ -491,7 +630,10 @@ interface SharedState {
 // evaluations of this file (a bundler emitting two copies) share one cache and
 // one install flag rather than the second quietly shadowing the first.
 const STATE_KEY = Symbol.for("squirrelscan.parser.html-attribute-case");
-const globalScope = globalThis as unknown as Record<symbol, SharedState | undefined>;
+const globalScope = globalThis as unknown as Record<
+  symbol,
+  SharedState | undefined
+>;
 
 const state: SharedState = (globalScope[STATE_KEY] ??= {
   installed: false,
@@ -510,7 +652,9 @@ const NON_ASCII = /[^\u0000-\u007f]/;
  */
 function asciiLowerCase(value: string): string {
   if (!NON_ASCII.test(value)) return value.toLowerCase();
-  return value.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+  return value.replace(/[A-Z]/g, (c) =>
+    String.fromCharCode(c.charCodeAt(0) + 32)
+  );
 }
 
 /** An element the HTML case rules apply to. */
@@ -576,15 +720,19 @@ export function installHtmlAttributeCaseInsensitivity(): void {
   if (state.installed) return;
   state.installed = true;
 
-  const proto = (ElementFacade as unknown as { prototype: Record<PropertyKey, unknown> })
-    .prototype;
+  const proto = (
+    ElementFacade as unknown as { prototype: Record<PropertyKey, unknown> }
+  ).prototype;
 
   const getAttributeNode = proto.getAttributeNode as (
     this: AttrElement,
-    name: string,
+    name: string
   ) => AttrNode | null;
 
-  proto.getAttributeNode = function (this: AttrElement, name: string): AttrNode | null {
+  proto.getAttributeNode = function (
+    this: AttrElement,
+    name: string
+  ): AttrNode | null {
     const exact = getAttributeNode.call(this, name);
     if (exact) return exact;
     if (!isHtmlElement(this)) return null;
@@ -599,7 +747,9 @@ export function installHtmlAttributeCaseInsensitivity(): void {
     return mixedCaseIndexOf(this)?.get(lower) ?? null;
   };
 
-  const getAttributeNames = proto.getAttributeNames as (this: AttrElement) => string[];
+  const getAttributeNames = proto.getAttributeNames as (
+    this: AttrElement
+  ) => string[];
 
   proto.getAttributeNames = function (this: AttrElement): string[] {
     const names = getAttributeNames.call(this);
@@ -614,10 +764,14 @@ export function installHtmlAttributeCaseInsensitivity(): void {
   const setAttribute = proto.setAttribute as (
     this: AttrElement,
     name: string,
-    value: string,
+    value: string
   ) => void;
 
-  proto.setAttribute = function (this: AttrElement, name: string, value: string): void {
+  proto.setAttribute = function (
+    this: AttrElement,
+    name: string,
+    value: string
+  ): void {
     try {
       // A browser lowercases the name here, which matters beyond tidiness:
       // linkedom keeps its cached class list in step only for the literal name
@@ -625,7 +779,11 @@ export function installHtmlAttributeCaseInsensitivity(): void {
       // and leave `className` and every class selector on the old one. An
       // existing mixed-case twin is still updated in place rather than
       // duplicated, because linkedom resolves it through getAttributeNode.
-      setAttribute.call(this, isHtmlElement(this) ? asciiLowerCase(name) : name, value);
+      setAttribute.call(
+        this,
+        isHtmlElement(this) ? asciiLowerCase(name) : name,
+        value
+      );
     } finally {
       mixedCaseAttrs.delete(this);
     }
@@ -637,7 +795,7 @@ export function installHtmlAttributeCaseInsensitivity(): void {
     this: AttrElement,
     _namespace: string | null,
     name: string,
-    value: string,
+    value: string
   ): void {
     try {
       setAttribute.call(this, name, value);
@@ -649,7 +807,10 @@ export function installHtmlAttributeCaseInsensitivity(): void {
     }
   };
 
-  const removeAttribute = proto.removeAttribute as (this: AttrElement, name: string) => void;
+  const removeAttribute = proto.removeAttribute as (
+    this: AttrElement,
+    name: string
+  ) => void;
 
   proto.removeAttribute = function (this: AttrElement, name: string): void {
     // linkedom compares names exactly here and does not route through
@@ -658,7 +819,8 @@ export function installHtmlAttributeCaseInsensitivity(): void {
     const stored = this.getAttributeNode(name);
     const target = stored ? stored.name : name;
     try {
-      if (isHtmlElement(this) && isMixedCaseClass(target)) this.classList.clear();
+      if (isHtmlElement(this) && isMixedCaseClass(target))
+        this.classList.clear();
       removeAttribute.call(this, target);
     } finally {
       mixedCaseAttrs.delete(this);
@@ -677,13 +839,17 @@ export function installHtmlAttributeCaseInsensitivity(): void {
   // parsed document, but a cache that silently goes stale if something ever
   // does is a trap.
   for (const method of ["setAttributeNode", "removeAttributeNode"] as const) {
-    const original = proto[method] as (this: AttrElement, attr: AttrNode) => unknown;
+    const original = proto[method] as (
+      this: AttrElement,
+      attr: AttrNode
+    ) => unknown;
     proto[method] = function (this: AttrElement, attr: AttrNode): unknown {
       try {
         return original.call(this, attr);
       } finally {
         mixedCaseAttrs.delete(this);
-        if (isHtmlElement(this) && isMixedCaseClass(attr.name)) resyncClassList(this);
+        if (isHtmlElement(this) && isMixedCaseClass(attr.name))
+          resyncClassList(this);
       }
     };
   }

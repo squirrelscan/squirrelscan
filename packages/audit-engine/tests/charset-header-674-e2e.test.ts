@@ -4,14 +4,18 @@
 // "No charset declaration found", and a header that contradicted the meta was
 // never seen.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -32,13 +36,16 @@ function serve(): string {
     port: 0,
     fetch(req) {
       const { pathname } = new URL(req.url);
-      const [contentType, head] = PAGES[pathname] ?? ["text/html; charset=utf-8", ""];
+      const [contentType, head] = PAGES[pathname] ?? [
+        "text/html; charset=utf-8",
+        "",
+      ];
       const links = Object.keys(PAGES)
         .map((p) => `<a href="${p}">${p}</a>`)
         .join(" ");
       return new Response(
         `<!doctype html><html lang="en"><head>${head}<title>Fixture page</title></head><body><h1>Fixture</h1>${links}</body></html>`,
-        { headers: { "content-type": contentType } },
+        { headers: { "content-type": contentType } }
       );
     },
   });
@@ -70,9 +77,11 @@ async function audit(engine: "v1" | "v2") {
         incremental: false,
         useCacheControl: false,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const storage = crawler.storage as SQLiteStorage;
   const stored = await Effect.runPromise(storage.getPages(crawlId));
   const ran = await Effect.runPromise(
@@ -80,12 +89,23 @@ async function audit(engine: "v1" | "v2") {
       const pre = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
       if (engine === "v1") {
         const siteContext = yield* buildSiteContext(stored);
-        return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, pre.assets);
+        return yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          pre.assets
+        );
       }
       return yield* runStreamingRules(storage, crawlId, CONFIG, pre.assets);
-    }) as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
+    }) as Effect.Effect<
+      { ruleResultsMap: Map<string, { checks: CheckResult[] }> },
+      never,
+      never
+    >
   );
-  const checks = (ran.ruleResultsMap.get("core/charset")?.checks ?? []) as CheckResult[];
+  const checks = (ran.ruleResultsMap.get("core/charset")?.checks ??
+    []) as CheckResult[];
   /** `status: message` of the charset check on the page at `path`. */
   const on = (path: string) => {
     const c = checks.find((x) => x.pageUrl === `${origin}${path}`);
@@ -101,10 +121,12 @@ for (const engine of ["v1", "v2"] as const) {
   describe(`core/charset reads the Content-Type charset (pub#674, ${engine})`, () => {
     test("header-only UTF-8 passes, a conflicting header is reported, no charset still fails", async () => {
       const { on } = await audit(engine);
-      expect(on("/header-only")).toBe("pass: UTF-8 charset declared via header");
+      expect(on("/header-only")).toBe(
+        "pass: UTF-8 charset declared via header"
+      );
       expect(on("/quoted")).toBe("pass: UTF-8 charset declared via header");
       expect(on("/conflict")).toBe(
-        "warn: Conflicting charset declarations: header iso-8859-1, page utf-8",
+        "warn: Conflicting charset declarations: header iso-8859-1, page utf-8"
       );
       expect(on("/none")).toBe("fail: No charset declaration found");
     });
@@ -113,8 +135,14 @@ for (const engine of ["v1", "v2"] as const) {
 
 test("the store keeps the media type and the charset apart", async () => {
   const { storedHeaders } = await audit("v1");
-  expect(storedHeaders("/quoted")).toMatchObject({ contentType: "text/html", contentTypeCharset: "UTF-8" });
-  expect(storedHeaders("/none")).toMatchObject({ contentType: "text/html", contentTypeCharset: null });
+  expect(storedHeaders("/quoted")).toMatchObject({
+    contentType: "text/html",
+    contentTypeCharset: "UTF-8",
+  });
+  expect(storedHeaders("/none")).toMatchObject({
+    contentType: "text/html",
+    contentTypeCharset: null,
+  });
 });
 
 // An incremental crawl that fetches a page whose body has not changed reuses
@@ -125,9 +153,12 @@ test("an unchanged page refetched by an incremental crawl takes the new charset"
   const server = Bun.serve({
     port: 0,
     fetch: () =>
-      new Response("<!doctype html><html><head><title>t</title></head><body>same</body></html>", {
-        headers: { "content-type": contentType },
-      }),
+      new Response(
+        "<!doctype html><html><head><title>t</title></head><body>same</body></html>",
+        {
+          headers: { "content-type": contentType },
+        }
+      ),
   });
   servers.push(server);
   const origin = `http://localhost:${server.port}`;
@@ -149,12 +180,20 @@ test("an unchanged page refetched by an incremental crawl takes the new charset"
           incremental: true,
           useCacheControl: false,
         },
-      }),
+      })
     );
-    const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+    const crawlId = await Effect.runPromise(
+      crawler.start(`${origin}/`, `${origin}/`)
+    );
     return (await Effect.runPromise(storage.getPages(crawlId)))[0]?.headers;
   };
-  expect(await crawl()).toMatchObject({ contentType: "text/html", contentTypeCharset: null });
+  expect(await crawl()).toMatchObject({
+    contentType: "text/html",
+    contentTypeCharset: null,
+  });
   contentType = "text/html; charset=utf-8";
-  expect(await crawl()).toMatchObject({ contentType: "text/html", contentTypeCharset: "utf-8" });
+  expect(await crawl()).toMatchObject({
+    contentType: "text/html",
+    contentTypeCharset: "utf-8",
+  });
 });

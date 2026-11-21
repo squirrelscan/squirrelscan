@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderMarkdown } from "../src/output/markdown";
 
 function report(entityUrl: string): AuditReport {
@@ -40,6 +41,8 @@ describe("Markdown report escaping", () => {
     const value = report("https://example.com");
     value.siteMetadata!.title = "[Acme]\\|Corp\r\nInjected";
     const output = renderMarkdown(value);
-    expect(output).toContain("[\\[Acme\\]\\\\\\|Corp<br>Injected](https://example.com/)");
+    expect(output).toContain(
+      "[\\[Acme\\]\\\\\\|Corp<br>Injected](https://example.com/)"
+    );
   });
 });

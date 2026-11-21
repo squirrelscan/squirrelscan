@@ -14,9 +14,15 @@
 // customers (a pricing / plans / enterprise / trust page, or a "contact sales"
 // / "book a demo" link) before it warns; without one it skips.
 
-import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  ParsedPage,
+} from "../types";
 
 // URL-path patterns for a dedicated sub-processor / data-processing page.
 const SUBPROCESSOR_PATH_PATTERNS = [
@@ -64,7 +70,9 @@ export function isCommercialPath(path: string): boolean {
  * enterprise, trust center, contact sales, book a demo). Shared by the page-time
  * collector and the legacy fallback so both paths agree.
  */
-export function hasCommercialOfferLink(doc: NonNullable<ParsedPage["document"]>): boolean {
+export function hasCommercialOfferLink(
+  doc: NonNullable<ParsedPage["document"]>
+): boolean {
   for (const link of doc.querySelectorAll("a[href]")) {
     const href = link.getAttribute("href") || "";
     let path = href;
@@ -105,7 +113,8 @@ export const subprocessorDisclosureRule: Rule = {
   meta: {
     id: "legal/subprocessor-disclosure",
     name: "Sub-processor Disclosure",
-    description: "Checks for a sub-processor / data-processing (DPA) disclosure page or link",
+    description:
+      "Checks for a sub-processor / data-processing (DPA) disclosure page or link",
     solution:
       "Under GDPR Art. 28, processors must disclose the sub-processors they engage and offer a Data Processing Agreement (DPA). Publish a /subprocessors page listing each third party that handles customer personal data (purpose, location), keep it current, and link a DPA from your legal/trust pages. B2B SaaS and fintech buyers expect this during security review.",
     category: "legal",
@@ -121,7 +130,12 @@ export const subprocessorDisclosureRule: Rule = {
     // null) used to fire this warning. Offline / no-metadata / low-confidence → runs.
     appliesWhen: {
       siteTypes: ["saas", "web_app", "corporate"],
-      businessCategories: ["software_technology", "fintech", "banking", "it_services"],
+      businessCategories: [
+        "software_technology",
+        "fintech",
+        "banking",
+        "it_services",
+      ],
     },
   },
 
@@ -178,13 +192,19 @@ export const subprocessorDisclosureRule: Rule = {
     // with no pricing, plans, enterprise or trust surface (a pre-launch product,
     // a waitlist page) has no customers whose data it processes yet.
     if (!disclosureUrl) {
-      let commercial = pages.some((page) => isCommercialPath(getPathname(page.url)));
+      let commercial = pages.some((page) =>
+        isCommercialPath(getPathname(page.url))
+      );
       if (!commercial) {
         if (ctx.collectedSignals) {
-          commercial = ctx.collectedSignals.pages.some((rec) => rec.commercialOffer);
+          commercial = ctx.collectedSignals.pages.some(
+            (rec) => rec.commercialOffer
+          );
         } else {
           commercial = pages.some(
-            (page) => !!page.parsed.document && hasCommercialOfferLink(page.parsed.document)
+            (page) =>
+              !!page.parsed.document &&
+              hasCommercialOfferLink(page.parsed.document)
           );
         }
       }

@@ -56,7 +56,9 @@ export interface ResolveStartRedirectOptions {
 function parseHttp(url: string): URL | null {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed : null;
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed
+      : null;
   } catch {
     return null;
   }
@@ -84,10 +86,11 @@ function visitKey(url: URL): string {
  */
 export async function resolveStartRedirect(
   url: string,
-  options: ResolveStartRedirectOptions = {},
+  options: ResolveStartRedirectOptions = {}
 ): Promise<SeedRedirectResolution> {
   const start = parseHttp(url);
-  if (!start) return { kind: "none", originalUrl: url, finalUrl: url, chain: [] };
+  if (!start)
+    return { kind: "none", originalUrl: url, finalUrl: url, chain: [] };
 
   const policy: EgressPolicy = {
     // The narrow classifier: this is a grant, so a special-use literal the policy callers call non-public (NAT64, 6to4) is not allowed
@@ -109,7 +112,7 @@ export async function resolveStartRedirect(
   const hopTimeout = options.timeoutMs ?? HOP_TIMEOUT_MS;
   const deadline = Math.min(
     Date.now() + TOTAL_BUDGET_MS,
-    options.deadlineAt ?? Number.POSITIVE_INFINITY,
+    options.deadlineAt ?? Number.POSITIVE_INFINITY
   );
   const headers = {
     "user-agent": options.userAgent || FALLBACK_USER_AGENT,
@@ -128,7 +131,7 @@ export async function resolveStartRedirect(
   const done = (
     final: URL | string,
     kind?: "loop" | "too-many" | "refused",
-    refusal?: string,
+    refusal?: string
   ): SeedRedirectResolution => {
     const finalUrl = typeof final === "string" ? final : final.href;
     const finalParsed = typeof final === "string" ? parseHttp(final) : final;
@@ -145,7 +148,10 @@ export async function resolveStartRedirect(
       kind: resolved,
       originalUrl: url,
       finalUrl: redactUrl(finalUrl),
-      chain: chain.map((hop) => ({ url: redactUrl(hop.url), status: hop.status })),
+      chain: chain.map((hop) => ({
+        url: redactUrl(hop.url),
+        status: hop.status,
+      })),
       ...(refusal ? { refusal } : {}),
     };
   };
@@ -154,7 +160,10 @@ export async function resolveStartRedirect(
     const remaining = deadline - Date.now();
     if (remaining <= 0) return done(current);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), Math.min(hopTimeout, remaining));
+    const timer = setTimeout(
+      () => controller.abort(),
+      Math.min(hopTimeout, remaining)
+    );
     let response: Response;
     try {
       response = await send(current.href, {
@@ -175,7 +184,9 @@ export async function resolveStartRedirect(
     response.body?.cancel().catch(() => {});
 
     const location =
-      response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+      response.status >= 300 && response.status < 400
+        ? response.headers.get("location")
+        : null;
     chain.push({ url: current.href, status: response.status });
     if (!location) return done(current);
 

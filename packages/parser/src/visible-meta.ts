@@ -14,10 +14,11 @@
 // guards below scope extraction to article/entry/post containers and ignore
 // known org-level markers.
 
+import type { Document, Element } from "linkedom";
+
 import { getAttrCI } from "@squirrelscan/utils";
 
 import { CLASS_SPLIT } from "./dom";
-import type { Document, Element } from "linkedom";
 
 /** Visible (non-schema) author + date signals extracted from the DOM. */
 export interface VisibleMeta {
@@ -79,7 +80,8 @@ const NON_BYLINE_CONTEXT =
   /\b(testimonial|testimonials|comment|comments|commentlist|respond|widget|sidebar)\b/i;
 
 // Text that signals org-level / boilerplate metadata, not a real byline.
-const ORG_AUTHOR_NOISE = /\b(admin|administrator|webmaster|editorial team|staff)\b/i;
+const ORG_AUTHOR_NOISE =
+  /\b(admin|administrator|webmaster|editorial team|staff)\b/i;
 
 // Generic role labels that are only org-noise when they stand *alone* as the
 // whole byline (a WP "Editor"-role user with no full name). Matched exactly so
@@ -92,7 +94,10 @@ const EXACT_ROLE_NOISE = /^(editor|editorial)$/i;
 const MAX_AUTHOR_LEN = 80;
 
 function classTokens(el: Element): string[] {
-  return (getAttrCI(el, "class") ?? "").toLowerCase().split(CLASS_SPLIT).filter(Boolean);
+  return (getAttrCI(el, "class") ?? "")
+    .toLowerCase()
+    .split(CLASS_SPLIT)
+    .filter(Boolean);
 }
 
 /**
@@ -190,9 +195,7 @@ function dateFromElement(el: Element): string | null {
 function findDateByItemprop(doc: Document, prop: string): string | null {
   let els: Element[];
   try {
-    els = Array.from(
-      doc.querySelectorAll(`[itemprop='${prop}']`)
-    ) as Element[];
+    els = Array.from(doc.querySelectorAll(`[itemprop='${prop}']`)) as Element[];
   } catch {
     return null;
   }
@@ -205,7 +208,10 @@ function findDateByItemprop(doc: Document, prop: string): string | null {
 }
 
 /** Find a date by `<time>` class (e.g. `entry-date published`, `updated`). */
-function findDateByTimeClass(doc: Document, classNames: string[]): string | null {
+function findDateByTimeClass(
+  doc: Document,
+  classNames: string[]
+): string | null {
   let times: Element[];
   try {
     times = Array.from(doc.querySelectorAll("time")) as Element[];

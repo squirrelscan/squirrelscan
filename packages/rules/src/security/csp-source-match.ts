@@ -3,7 +3,13 @@
 // resources, host/scheme/port/path sources, 'self', 'none' and 'strict-dynamic'.
 
 /** The fetch directives a page's markup and a vendor's runtime hosts map onto. */
-export type CspFetchKind = "script" | "style" | "frame" | "img" | "font" | "connect";
+export type CspFetchKind =
+  | "script"
+  | "style"
+  | "frame"
+  | "img"
+  | "font"
+  | "connect";
 
 /** Directives consulted for each kind, most specific first (CSP3 fallback list). */
 export const CSP_FALLBACK: Record<CspFetchKind, readonly string[]> = {
@@ -23,13 +29,19 @@ export type CspPolicy = Map<string, string[]>;
  * several policies joined arrive comma-separated, and every one of them has to
  * allow a resource. The first occurrence of a directive wins, as in a browser.
  */
-export function parseCspPolicies(header: string, commaSeparated = true): CspPolicy[] {
+export function parseCspPolicies(
+  header: string,
+  commaSeparated = true
+): CspPolicy[] {
   const policies: CspPolicy[] = [];
   // A meta tag holds exactly one policy, so only a header is split on commas.
   for (const raw of commaSeparated ? header.split(",") : [header]) {
     const policy: CspPolicy = new Map();
     for (const part of raw.split(";")) {
-      const tokens = part.trim().split(/[\t\n\f\r ]+/).filter(Boolean);
+      const tokens = part
+        .trim()
+        .split(/[\t\n\f\r ]+/)
+        .filter(Boolean);
       const name = tokens.shift()?.toLowerCase();
       if (!name || policy.has(name)) continue;
       policy.set(name, tokens);
@@ -40,7 +52,10 @@ export function parseCspPolicies(header: string, commaSeparated = true): CspPoli
 }
 
 /** The directive that governs `kind` in `policy`, or undefined when none applies. */
-export function governingDirective(policy: CspPolicy, kind: CspFetchKind): string | undefined {
+export function governingDirective(
+  policy: CspPolicy,
+  kind: CspFetchKind
+): string | undefined {
   return CSP_FALLBACK[kind].find((name) => policy.has(name));
 }
 
@@ -54,7 +69,11 @@ export interface ResourceContext {
 }
 
 function defaultPort(protocol: string): string {
-  return protocol === "https:" || protocol === "wss:" ? "443" : protocol === "http:" || protocol === "ws:" ? "80" : "";
+  return protocol === "https:" || protocol === "wss:"
+    ? "443"
+    : protocol === "http:" || protocol === "ws:"
+      ? "80"
+      : "";
 }
 
 function portOf(url: URL): string {
@@ -66,7 +85,8 @@ function schemeMatches(source: string, resource: string): boolean {
   if (source === resource) return true;
   return (
     (source === "http" && resource === "https") ||
-    (source === "ws" && (resource === "wss" || resource === "https" || resource === "http")) ||
+    (source === "ws" &&
+      (resource === "wss" || resource === "https" || resource === "http")) ||
     (source === "wss" && resource === "https")
   );
 }
@@ -74,7 +94,10 @@ function schemeMatches(source: string, resource: string): boolean {
 const HOST_SOURCE_RE =
   /^(?:([a-z][a-z0-9+.-]*):\/\/)?(\*|(?:\*\.)?[a-z0-9_]+(?:[.-][a-z0-9_]+)*)\.?(?::(\*|\d+))?(\/[^?#]*)?$/i;
 
-function pathMatches(sourcePath: string | undefined, resourcePath: string): boolean {
+function pathMatches(
+  sourcePath: string | undefined,
+  resourcePath: string
+): boolean {
   if (!sourcePath) return true;
   const decode = (p: string) => {
     try {
@@ -89,7 +112,11 @@ function pathMatches(sourcePath: string | undefined, resourcePath: string): bool
 }
 
 /** Whether one source expression allows `resource`. `'self'` and host sources only. */
-function sourceMatches(token: string, resource: URL, ctx: ResourceContext): boolean {
+function sourceMatches(
+  token: string,
+  resource: URL,
+  ctx: ResourceContext
+): boolean {
   const lower = token.toLowerCase();
   if (lower === "'self'") {
     const page = ctx.page;
@@ -103,7 +130,8 @@ function sourceMatches(token: string, resource: URL, ctx: ResourceContext): bool
 
   // A scheme-source: `https:` allows any https URL, `http:` allows http and https.
   const schemeOnly = /^([a-z][a-z0-9+.-]*):$/.exec(lower);
-  if (schemeOnly) return schemeMatches(schemeOnly[1]!, resource.protocol.slice(0, -1));
+  if (schemeOnly)
+    return schemeMatches(schemeOnly[1]!, resource.protocol.slice(0, -1));
 
   const m = HOST_SOURCE_RE.exec(token);
   if (!m) return false;
@@ -115,7 +143,8 @@ function sourceMatches(token: string, resource: URL, ctx: ResourceContext): bool
   } else if (host !== "*" || port || path) {
     // No scheme: the page's own scheme, or https when the page is http. A bare
     // `*` takes any network scheme, which for http(s) resources is all of them.
-    if (!schemeMatches(ctx.page.protocol.slice(0, -1), resourceScheme)) return false;
+    if (!schemeMatches(ctx.page.protocol.slice(0, -1), resourceScheme))
+      return false;
   }
 
   const wanted = host!.toLowerCase();
@@ -134,7 +163,10 @@ function sourceMatches(token: string, resource: URL, ctx: ResourceContext): bool
     // any port
   } else if (port) {
     if (port !== portOf(resource)) return false;
-  } else if (resource.port && resource.port !== defaultPort(resource.protocol)) {
+  } else if (
+    resource.port &&
+    resource.port !== defaultPort(resource.protocol)
+  ) {
     return false;
   }
 
@@ -162,27 +194,38 @@ export function sourceListAllows(
   url: URL,
   kind: CspFetchKind,
   ctx: ResourceContext,
-  opts: MatchOptions = {},
+  opts: MatchOptions = {}
 ): boolean | undefined {
   const lowered = sources.map((s) => s.toLowerCase());
-  if (kind === "script" && lowered.includes("'strict-dynamic'")) return undefined;
+  if (kind === "script" && lowered.includes("'strict-dynamic'"))
+    return undefined;
   // A hash source can allow an external file whose `integrity` matches; the
   // hash is not checked here, so the verdict is undecidable rather than a block.
-  if (opts.integrity && lowered.some((s) => /^'sha(?:256|384|512)-/.test(s))) return undefined;
-  if (lowered.length === 0 || (lowered.length === 1 && lowered[0] === "'none'")) return false;
+  if (opts.integrity && lowered.some((s) => /^'sha(?:256|384|512)-/.test(s)))
+    return undefined;
+  if (lowered.length === 0 || (lowered.length === 1 && lowered[0] === "'none'"))
+    return false;
 
   if (opts.nonce) {
     const wanted = `'nonce-${opts.nonce}'`;
     if (sources.includes(wanted)) return true;
   }
 
-  const target = ctx.upgradeInsecure && url.protocol === "http:" && ctx.page.protocol === "https:"
-    ? new URL(url.href.replace(/^http:/, "https:"))
-    : url;
-  if (sources.some((token) => sourceMatches(token, target, { ...ctx, hostOnly: opts.hostOnly }))) {
+  const target =
+    ctx.upgradeInsecure &&
+    url.protocol === "http:" &&
+    ctx.page.protocol === "https:"
+      ? new URL(url.href.replace(/^http:/, "https:"))
+      : url;
+  if (
+    sources.some((token) =>
+      sourceMatches(token, target, { ...ctx, hostOnly: opts.hostOnly })
+    )
+  ) {
     return true;
   }
-  if (opts.mayCarryNonce && lowered.some((s) => s.startsWith("'nonce-"))) return undefined;
+  if (opts.mayCarryNonce && lowered.some((s) => s.startsWith("'nonce-")))
+    return undefined;
   return false;
 }
 
@@ -195,14 +238,23 @@ export function policiesAllow(
   url: URL,
   kind: CspFetchKind,
   page: URL,
-  opts: MatchOptions = {},
+  opts: MatchOptions = {}
 ): { allowed: boolean | undefined; directive?: string } {
   let undecided = false;
   for (const policy of policies) {
     const directive = governingDirective(policy, kind);
     if (!directive) continue;
-    const ctx: ResourceContext = { page, upgradeInsecure: policy.has("upgrade-insecure-requests") };
-    const verdict = sourceListAllows(policy.get(directive)!, url, kind, ctx, opts);
+    const ctx: ResourceContext = {
+      page,
+      upgradeInsecure: policy.has("upgrade-insecure-requests"),
+    };
+    const verdict = sourceListAllows(
+      policy.get(directive)!,
+      url,
+      kind,
+      ctx,
+      opts
+    );
     if (verdict === false) return { allowed: false, directive };
     if (verdict === undefined) undecided = true;
   }

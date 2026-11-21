@@ -1,11 +1,12 @@
 // #1270 and #1276: no rule may throw on a page with no markup, and none may
 // build a selector from a page-controlled id, `for`, `role` or `name`.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { ariaCommandNameRule } from "../src/a11y/aria-command-name";
 import { ariaInputFieldNameRule } from "../src/a11y/aria-input-field-name";
@@ -16,9 +17,8 @@ import { ariaToggleFieldNameRule } from "../src/a11y/aria-toggle-field-name";
 import { formFieldMultipleLabelsRule } from "../src/a11y/form-field-multiple-labels";
 import { formLabelsRule } from "../src/a11y/form-labels";
 import { selectNameRule } from "../src/a11y/select-name";
-import { formCaptchaRule } from "../src/security/form-captcha";
 import { RuleRunner } from "../src/runner";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
+import { formCaptchaRule } from "../src/security/form-captcha";
 
 const URL_ = "https://example.com/";
 
@@ -32,11 +32,21 @@ function runRule(rule: Rule, html: string) {
 }
 
 describe("#1270: no rule throws on a page without markup", () => {
-  const BODIES = ["", "   ", "<!-- c -->", "plain text", '{"json":1}', "<!doctype html>"];
+  const BODIES = [
+    "",
+    "   ",
+    "<!-- c -->",
+    "plain text",
+    '{"json":1}',
+    "<!doctype html>",
+  ];
   for (const html of BODIES) {
     test(`every rule on ${JSON.stringify(html)}`, async () => {
       const runner = new RuleRunner({
-        config: { rule_options: {}, rules: { enable: ["*"], disable: [] } } as never,
+        config: {
+          rule_options: {},
+          rules: { enable: ["*"], disable: [] },
+        } as never,
       });
       const result = await runner.runPageRules({
         url: URL_,
@@ -45,7 +55,9 @@ describe("#1270: no rule throws on a page without markup", () => {
         loadTime: 0,
         headers: { "content-type": "text/html" },
       });
-      const errors = result.checks.filter((c) => c.message?.startsWith("Rule error:"));
+      const errors = result.checks.filter((c) =>
+        c.message?.startsWith("Rule error:")
+      );
       expect(errors.map((c) => `${c.name}: ${c.message}`)).toEqual([]);
     });
   }
@@ -62,27 +74,46 @@ describe("#1276: hostile ids and roles do not break the selector rules", () => {
     const esc = id.replace(/"/g, "&quot;");
     test(`label for=${JSON.stringify(id)} still associates`, async () => {
       const labelled = (type: string, extra = "") =>
-        pageWith(`<label for="${esc}">Name</label><input type="${type}" id="${esc}"${extra}>`);
-      for (const rule of [formLabelsRule, formFieldMultipleLabelsRule, ariaInputFieldNameRule, selectNameRule]) {
+        pageWith(
+          `<label for="${esc}">Name</label><input type="${type}" id="${esc}"${extra}>`
+        );
+      for (const rule of [
+        formLabelsRule,
+        formFieldMultipleLabelsRule,
+        ariaInputFieldNameRule,
+        selectNameRule,
+      ]) {
         expect(() => runRule(rule, labelled("text"))).not.toThrow();
       }
       // The label names the field, so the name rules stay quiet.
       const named = (await runRule(formLabelsRule, labelled("text"))).checks;
-      expect(named.every((c) => c.status !== "fail" && c.status !== "warn")).toBe(true);
-      const roleNamed = (await runRule(
-        ariaInputFieldNameRule,
-        pageWith(`<label for="${esc}">Name</label><div role="textbox" id="${esc}" tabindex="0"></div>`)
-      )).checks;
+      expect(
+        named.every((c) => c.status !== "fail" && c.status !== "warn")
+      ).toBe(true);
+      const roleNamed = (
+        await runRule(
+          ariaInputFieldNameRule,
+          pageWith(
+            `<label for="${esc}">Name</label><div role="textbox" id="${esc}" tabindex="0"></div>`
+          )
+        )
+      ).checks;
       expect(roleNamed.every((c) => c.status !== "fail")).toBe(true);
-      const sel = (await runRule(
-        selectNameRule,
-        pageWith(`<label for="${esc}">Pick</label><select id="${esc}"><option>a</option></select>`)
-      )).checks;
+      const sel = (
+        await runRule(
+          selectNameRule,
+          pageWith(
+            `<label for="${esc}">Pick</label><select id="${esc}"><option>a</option></select>`
+          )
+        )
+      ).checks;
       expect(sel.every((c) => c.status !== "fail")).toBe(true);
     });
 
     test(`two labels for ${JSON.stringify(id)} are counted`, async () => {
-      const html = pageWith(`<label for="${esc}">A</label><label for="${esc}">B</label><input type="text" id="${esc}">`);
+      const html = pageWith(
+        `<label for="${esc}">A</label><label for="${esc}">B</label><input type="text" id="${esc}">`
+      );
       const checks = (await runRule(formFieldMultipleLabelsRule, html)).checks;
       expect(checks.some((c) => c.status === "warn")).toBe(true);
     });
@@ -107,9 +138,13 @@ describe("#1276: hostile ids and roles do not break the selector rules", () => {
   }
 
   test("a label for the right id is not confused with a similar one", async () => {
-    const html = pageWith(`<label for="a b">L</label><input type="text" id="a">`);
+    const html = pageWith(
+      `<label for="a b">L</label><input type="text" id="a">`
+    );
     const checks = (await runRule(formLabelsRule, html)).checks;
-    expect(checks.some((c) => c.status === "fail" || c.status === "warn")).toBe(true);
+    expect(checks.some((c) => c.status === "fail" || c.status === "warn")).toBe(
+      true
+    );
   });
 });
 
@@ -129,7 +164,8 @@ const CONSTANT_SELECTORS: Array<{ file: string; snippet: string }> = [
   { file: "security/mixed-content.ts", snippet: "`${selector}[${attribute}]`" },
 ];
 
-const SELECTOR_CALL = /\b(querySelectorAll|querySelector|closest|matches|querySelectorAllOutsideNoscript)\(/g;
+const SELECTOR_CALL =
+  /\b(querySelectorAll|querySelector|closest|matches|querySelectorAllOutsideNoscript)\(/g;
 
 /** The text of the call's first argument, from just after `(` to the top-level `,` or the closing `)`. */
 function firstArgument(source: string, open: number): string {
@@ -166,7 +202,9 @@ describe("#1276 guard", () => {
     for (const match of source.matchAll(SELECTOR_CALL)) {
       let arg = firstArgument(source, match.index! + match[0].length).trim();
       if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
-        for (const a of source.matchAll(/\b([A-Za-z_$][\w$]*)\s*=\s*(`[^`]*`)/g)) {
+        for (const a of source.matchAll(
+          /\b([A-Za-z_$][\w$]*)\s*=\s*(`[^`]*`)/g
+        )) {
           if (a[1] === arg) found.push(a[2]!);
         }
         arg = "";
@@ -182,7 +220,12 @@ describe("#1276 guard", () => {
       const rel = file.slice(SRC.length + 1);
       for (const arg of selectorArguments(readFileSync(file, "utf8"))) {
         if (!arg.includes("${")) continue;
-        if (CONSTANT_SELECTORS.some((c) => c.file === rel && arg.includes(c.snippet))) continue;
+        if (
+          CONSTANT_SELECTORS.some(
+            (c) => c.file === rel && arg.includes(c.snippet)
+          )
+        )
+          continue;
         offenders.push(`${rel}: ${arg.replace(/\s+/g, " ").slice(0, 80)}`);
       }
     }
@@ -191,10 +234,22 @@ describe("#1276 guard", () => {
 
   test("the guard sees multi-line calls, variables and #/. selectors", () => {
     expect(
-      selectorArguments("doc.querySelector(\n  `label[for='${id}']`\n)").some((a) => a.includes("${"))
+      selectorArguments("doc.querySelector(\n  `label[for='${id}']`\n)").some(
+        (a) => a.includes("${")
+      )
     ).toBe(true);
-    expect(selectorArguments("const sel = `#${id}`;\ndoc.querySelector(sel);").some((a) => a.includes("${"))).toBe(true);
-    expect(selectorArguments("el.closest(`.${cls}`)").some((a) => a.includes("${"))).toBe(true);
-    expect(selectorArguments('doc.querySelectorAll("a[href]")').some((a) => a.includes("${"))).toBe(false);
+    expect(
+      selectorArguments("const sel = `#${id}`;\ndoc.querySelector(sel);").some(
+        (a) => a.includes("${")
+      )
+    ).toBe(true);
+    expect(
+      selectorArguments("el.closest(`.${cls}`)").some((a) => a.includes("${"))
+    ).toBe(true);
+    expect(
+      selectorArguments('doc.querySelectorAll("a[href]")').some((a) =>
+        a.includes("${")
+      )
+    ).toBe(false);
   });
 });

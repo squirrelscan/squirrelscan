@@ -6,18 +6,19 @@
 // links/orphan-pages runs over the SAME fixtures throughout, so any drift in the
 // two rules' division of labour fails here rather than in production.
 
-import { describe, expect, test } from "bun:test";
-
-import { noContextualInboundRule } from "../src/links/no-contextual-inbound";
-import { orphanPagesRule } from "../src/links/orphan-pages";
-import { weakInternalLinksRule } from "../src/links/weak-internal-links";
-import type { CheckResult, ParsedPage, Rule, RuleContext } from "../src/types";
 import {
   CRAWL_CAPPED_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   NOT_CHECKED_SKIP_REASONS,
   type LinkData,
 } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+
+import type { CheckResult, ParsedPage, Rule, RuleContext } from "../src/types";
+
+import { noContextualInboundRule } from "../src/links/no-contextual-inbound";
+import { orphanPagesRule } from "../src/links/orphan-pages";
+import { weakInternalLinksRule } from "../src/links/weak-internal-links";
 
 const BASE = "https://example.com/";
 
@@ -41,7 +42,10 @@ interface PageSpec {
   finalUrl?: string;
 }
 
-function ctx(pages: PageSpec[], options: Record<string, unknown> = {}): RuleContext {
+function ctx(
+  pages: PageSpec[],
+  options: Record<string, unknown> = {}
+): RuleContext {
   return {
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
@@ -85,7 +89,9 @@ describe("links/no-contextual-inbound — the acceptance fixtures", () => {
     expect(ids(result)).toEqual(["https://example.com/pricing"]);
     expect(result.details).toEqual({ total: 1 });
     expect(result.value).toBe("/pricing");
-    expect(result.message).toBe("1 page(s) are linked only from sitewide chrome");
+    expect(result.message).toBe(
+      "1 page(s) are linked only from sitewide chrome"
+    );
   });
 
   test("…and links/orphan-pages does NOT report it (the blind spot)", async () => {
@@ -93,7 +99,9 @@ describe("links/no-contextual-inbound — the acceptance fixtures", () => {
     const orphans = await check(orphanPagesRule, ctx(FOOTER_ONLY));
     expect(orphans.status).toBe("pass");
     // Nor does weak-internal-links: its raw count is 4, not 1.
-    expect((await check(weakInternalLinksRule, ctx(FOOTER_ONLY))).status).toBe("pass");
+    expect((await check(weakInternalLinksRule, ctx(FOOTER_ONLY))).status).toBe(
+      "pass"
+    );
   });
 
   test("a page linked once from body copy does not warn", async () => {
@@ -107,10 +115,14 @@ describe("links/no-contextual-inbound — the acceptance fixtures", () => {
 
     const result = await check(noContextualInboundRule, ctx(pages));
     expect(result.status).toBe("pass");
-    expect(result.message).toBe("All pages have at least one contextual inbound link");
+    expect(result.message).toBe(
+      "All pages have at least one contextual inbound link"
+    );
 
     // It IS an orphan though — that page belongs to orphan-pages, not to us.
-    expect(ids(await check(orphanPagesRule, ctx(pages)))).toContain("https://example.com/deep");
+    expect(ids(await check(orphanPagesRule, ctx(pages)))).toContain(
+      "https://example.com/deep"
+    );
   });
 });
 
@@ -121,12 +133,16 @@ describe("links/no-contextual-inbound — scoping", () => {
       { url: "https://example.com/a", links: [chrome(BASE), body("/b")] },
       { url: "https://example.com/b", links: [chrome(BASE), body("/a")] },
     ];
-    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe("pass");
+    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe(
+      "pass"
+    );
   });
 
   test("excludePatterns are honoured, same as links/orphan-pages", async () => {
     const excluded = ctx(FOOTER_ONLY, { excludePatterns: ["/pricing"] });
-    expect((await check(noContextualInboundRule, excluded)).status).toBe("pass");
+    expect((await check(noContextualInboundRule, excluded)).status).toBe(
+      "pass"
+    );
   });
 
   test("a chrome-only page BELOW the orphan threshold is left to orphan-pages", async () => {
@@ -137,8 +153,12 @@ describe("links/no-contextual-inbound — scoping", () => {
       { url: "https://example.com/pricing", links: [] },
     ];
 
-    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe("pass");
-    expect(ids(await check(orphanPagesRule, ctx(pages)))).toContain("https://example.com/pricing");
+    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe(
+      "pass"
+    );
+    expect(ids(await check(orphanPagesRule, ctx(pages)))).toContain(
+      "https://example.com/pricing"
+    );
   });
 
   test("minInboundLinks moves the handoff point in step with orphan-pages", async () => {
@@ -150,25 +170,38 @@ describe("links/no-contextual-inbound — scoping", () => {
     // At a threshold of 1, /pricing (raw 1) is no longer an orphan — so it becomes
     // ours. Neither rule may drop it.
     const opts = { minInboundLinks: 1 };
-    expect((await check(orphanPagesRule, ctx(pages, opts))).status).toBe("pass");
-    expect(ids(await check(noContextualInboundRule, ctx(pages, opts)))).toEqual([
-      "https://example.com/pricing",
-    ]);
+    expect((await check(orphanPagesRule, ctx(pages, opts))).status).toBe(
+      "pass"
+    );
+    expect(ids(await check(noContextualInboundRule, ctx(pages, opts)))).toEqual(
+      ["https://example.com/pricing"]
+    );
   });
 
   test("nofollow chrome links do not count on either side of the comparison", async () => {
     // /pricing's only inbound links are nofollowed chrome → raw 0 → an orphan,
     // not our case.
     const pages: PageSpec[] = [
-      { url: BASE, links: [body("/a"), { ...chrome("/pricing"), isNofollow: true }] },
-      { url: "https://example.com/a", links: [body(BASE), { ...chrome("/pricing"), isNofollow: true }] },
+      {
+        url: BASE,
+        links: [body("/a"), { ...chrome("/pricing"), isNofollow: true }],
+      },
+      {
+        url: "https://example.com/a",
+        links: [body(BASE), { ...chrome("/pricing"), isNofollow: true }],
+      },
       { url: "https://example.com/pricing", links: [] },
     ];
-    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe("pass");
+    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe(
+      "pass"
+    );
   });
 
   test("a crawl with <2 pages is skipped", async () => {
-    const result = await check(noContextualInboundRule, ctx([{ url: BASE, links: [] }]));
+    const result = await check(
+      noContextualInboundRule,
+      ctx([{ url: BASE, links: [] }])
+    );
     expect(result.status).toBe("skipped");
   });
 
@@ -179,7 +212,9 @@ describe("links/no-contextual-inbound — scoping", () => {
       { url: "https://example.com/pricing", links: [] },
     ];
     // Degrades to the pre-#109 behaviour: no site-wide false alarm.
-    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe("pass");
+    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe(
+      "pass"
+    );
   });
 
   test("the reported sample is capped at 5 while details.total stays exact", async () => {
@@ -189,7 +224,10 @@ describe("links/no-contextual-inbound — scoping", () => {
     const chromeLinks = targets.map((t) => chrome(t));
     const pages: PageSpec[] = [
       { url: BASE, links: chromeLinks },
-      ...targets.map((t) => ({ url: `https://example.com${t}`, links: chromeLinks })),
+      ...targets.map((t) => ({
+        url: `https://example.com${t}`,
+        links: chromeLinks,
+      })),
     ];
 
     const result = await check(noContextualInboundRule, ctx(pages));
@@ -208,19 +246,28 @@ describe("links/no-contextual-inbound — a capped crawl", () => {
   }
 
   test("skips when the crawl stopped at its page cap", async () => {
-    for (const rule of [noContextualInboundRule, orphanPagesRule, weakInternalLinksRule]) {
+    for (const rule of [
+      noContextualInboundRule,
+      orphanPagesRule,
+      weakInternalLinksRule,
+    ]) {
       const result = await check(rule, capped(4, 4));
       expect(result.status).toBe("skipped");
       expect(result.skipReason).toBe(CRAWL_CAPPED_SKIP_REASON);
       expect(result.items).toBeUndefined();
       if (rule !== weakInternalLinksRule) {
-        expect(result.observation).toMatchObject({ mode: "crawl", applicability: "unknown" });
+        expect(result.observation).toMatchObject({
+          mode: "crawl",
+          applicability: "unknown",
+        });
       }
     }
   });
 
   test("the reason is a not-checked one, with the text published reports carry (#1144)", () => {
-    expect(CRAWL_CAPPED_SKIP_REASON).toBe("Crawl capped before the frontier was exhausted");
+    expect(CRAWL_CAPPED_SKIP_REASON).toBe(
+      "Crawl capped before the frontier was exhausted"
+    );
     expect(NOT_CHECKED_SKIP_REASONS.has(CRAWL_CAPPED_SKIP_REASON)).toBe(true);
   });
 
@@ -252,7 +299,9 @@ describe("the page the crawl started on is never flagged (pub#796)", () => {
 
   test("no-contextual-inbound: control flags the landing page; with entryUrls it does not", async () => {
     expect(ids(await check(noContextualInboundRule, ctx(pages)))).toContain(EN);
-    expect(ids(await check(noContextualInboundRule, withEntry(ctx(pages))))).not.toContain(EN);
+    expect(
+      ids(await check(noContextualInboundRule, withEntry(ctx(pages))))
+    ).not.toContain(EN);
   });
 
   test("weak-internal-links: a landing page linked once is not weak once it is the entry", async () => {
@@ -261,7 +310,9 @@ describe("the page the crawl started on is never flagged (pub#796)", () => {
       { url: "https://example.com/en/a", links: [body("/en/")] },
     ];
     expect(ids(await check(weakInternalLinksRule, ctx(once)))).toContain(EN);
-    expect(ids(await check(weakInternalLinksRule, withEntry(ctx(once))))).not.toContain(EN);
+    expect(
+      ids(await check(weakInternalLinksRule, withEntry(ctx(once))))
+    ).not.toContain(EN);
   });
 
   test("orphan-pages: an unlinked landing page is not an orphan once it is the entry", async () => {
@@ -271,7 +322,9 @@ describe("the page the crawl started on is never flagged (pub#796)", () => {
       { url: "https://example.com/en/b", links: [body("/en/a")] },
     ];
     expect(ids(await check(orphanPagesRule, ctx(unlinked)))).toContain(EN);
-    expect(ids(await check(orphanPagesRule, withEntry(ctx(unlinked))))).not.toContain(EN);
+    expect(
+      ids(await check(orphanPagesRule, withEntry(ctx(unlinked))))
+    ).not.toContain(EN);
   });
 });
 
@@ -334,7 +387,9 @@ describe("links/no-contextual-inbound — link sections", () => {
       },
     ]);
     // The message and the sampled value are as they were.
-    expect(result.message).toBe("1 page(s) are linked only from sitewide chrome");
+    expect(result.message).toBe(
+      "1 page(s) are linked only from sitewide chrome"
+    );
     expect(result.value).toBe("/pricing");
   });
 
@@ -358,23 +413,33 @@ describe("links/no-contextual-inbound — link sections", () => {
 
   test("leaves the items bare when no inbound link has a section", async () => {
     // The exact fixture and the exact assertion the crawls before link sections had.
-    expect((await check(noContextualInboundRule, ctx(FOOTER_ONLY))).items).toEqual([
-      { id: PRICING },
-    ]);
+    expect(
+      (await check(noContextualInboundRule, ctx(FOOTER_ONLY))).items
+    ).toEqual([{ id: PRICING }]);
     // `unknown` is no answer either.
     const unknown: PageSpec[] = FOOTER_ONLY.map((p) => ({
       ...p,
-      links: p.links.map((l) => (l.isChrome ? { ...l, section: "unknown" as const } : l)),
+      links: p.links.map((l) =>
+        l.isChrome ? { ...l, section: "unknown" as const } : l
+      ),
     }));
-    expect((await check(noContextualInboundRule, ctx(unknown))).items).toEqual([{ id: PRICING }]);
+    expect((await check(noContextualInboundRule, ctx(unknown))).items).toEqual([
+      { id: PRICING },
+    ]);
   });
 
   test("more than three sections read as the first three and a count", async () => {
     const pages: PageSpec[] = [
       { url: BASE, links: [body("/a"), footer("/pricing")] },
       { url: "https://example.com/a", links: [nav("/pricing")] },
-      { url: "https://example.com/b", links: [{ ...chrome("/pricing"), section: "sidebar" }] },
-      { url: "https://example.com/c", links: [{ ...chrome("/pricing"), section: "header" }] },
+      {
+        url: "https://example.com/b",
+        links: [{ ...chrome("/pricing"), section: "sidebar" }],
+      },
+      {
+        url: "https://example.com/c",
+        links: [{ ...chrome("/pricing"), section: "header" }],
+      },
       { url: PRICING, links: [] },
     ];
     const result = await check(noContextualInboundRule, ctx(pages));
@@ -388,11 +453,16 @@ describe("links/no-contextual-inbound — link sections", () => {
     const pages: PageSpec[] = [
       { url: BASE, links: [body("/a"), footer("/pricing")] },
       { url: "https://example.com/a", links: [nav("/pricing")] },
-      { url: "https://example.com/b", links: [{ ...chrome("/pricing"), section: "breadcrumbs" }] },
+      {
+        url: "https://example.com/b",
+        links: [{ ...chrome("/pricing"), section: "breadcrumbs" }],
+      },
       { url: PRICING, links: [] },
     ];
 
-    expect((await check(noContextualInboundRule, ctx(pages))).items?.[0]?.label).toBe(
+    expect(
+      (await check(noContextualInboundRule, ctx(pages))).items?.[0]?.label
+    ).toBe(
       `${PRICING}, linked only from the breadcrumbs, the footer and the navigation`
     );
   });
@@ -410,8 +480,14 @@ describe("links/no-contextual-inbound — link sections", () => {
     test("names the chrome sections, then counts the content links apart", async () => {
       const pages: PageSpec[] = [
         { url: BASE, links: [body("/a"), footer("/blog"), nav("/blog")] },
-        { url: "https://example.com/a", links: [footer("/blog"), nav("/blog"), templateLink("/blog")] },
-        { url: "https://example.com/b", links: [footer("/blog"), templateLink("/blog")] },
+        {
+          url: "https://example.com/a",
+          links: [footer("/blog"), nav("/blog"), templateLink("/blog")],
+        },
+        {
+          url: "https://example.com/b",
+          links: [footer("/blog"), templateLink("/blog")],
+        },
         { url: BLOG, links: [{ ...chrome("/blog"), section: "breadcrumbs" }] },
       ];
       const result = await check(noContextualInboundRule, ctx(pages));
@@ -420,7 +496,9 @@ describe("links/no-contextual-inbound — link sections", () => {
         {
           id: BLOG,
           label: `${BLOG}, linked only from the footer, the navigation and the breadcrumbs, and 2 template links inside the page content`,
-          meta: { sections: { footer: 3, navigation: 2, breadcrumbs: 1, content: 2 } },
+          meta: {
+            sections: { footer: 3, navigation: 2, breadcrumbs: 1, content: 2 },
+          },
         },
       ]);
     });
@@ -428,11 +506,16 @@ describe("links/no-contextual-inbound — link sections", () => {
     test("a single template link reads in the singular", async () => {
       const pages: PageSpec[] = [
         { url: BASE, links: [body("/a"), footer("/blog")] },
-        { url: "https://example.com/a", links: [footer("/blog"), templateLink("/blog")] },
+        {
+          url: "https://example.com/a",
+          links: [footer("/blog"), templateLink("/blog")],
+        },
         { url: BLOG, links: [] },
       ];
 
-      expect((await check(noContextualInboundRule, ctx(pages))).items?.[0]?.label).toBe(
+      expect(
+        (await check(noContextualInboundRule, ctx(pages))).items?.[0]?.label
+      ).toBe(
         `${BLOG}, linked only from the footer, and 1 template link inside the page content`
       );
     });
@@ -443,21 +526,29 @@ describe("links/no-contextual-inbound — link sections", () => {
         { url: "https://example.com/a", links: [templateLink("/blog")] },
         { url: BLOG, links: [] },
       ];
-      const label = (await check(noContextualInboundRule, ctx(pages))).items?.[0]?.label;
+      const label = (await check(noContextualInboundRule, ctx(pages)))
+        .items?.[0]?.label;
 
-      expect(label).toBe(`${BLOG}, linked only by 2 template links inside the page content`);
+      expect(label).toBe(
+        `${BLOG}, linked only by 2 template links inside the page content`
+      );
       expect(label).not.toMatch(/from [^,]*the page content/);
     });
 
     test("with some inbound links unplaced the label drops 'only' but keeps the split", async () => {
       const pages: PageSpec[] = [
         { url: BASE, links: [body("/a"), footer("/blog")] },
-        { url: "https://example.com/a", links: [chrome("/blog"), templateLink("/blog")] },
+        {
+          url: "https://example.com/a",
+          links: [chrome("/blog"), templateLink("/blog")],
+        },
         { url: "https://example.com/b", links: [footer("/blog")] },
         { url: BLOG, links: [] },
       ];
 
-      expect((await check(noContextualInboundRule, ctx(pages))).items?.[0]?.label).toBe(
+      expect(
+        (await check(noContextualInboundRule, ctx(pages))).items?.[0]?.label
+      ).toBe(
         `${BLOG}, linked from the footer, and 1 template link inside the page content`
       );
     });
@@ -467,7 +558,10 @@ describe("links/no-contextual-inbound — link sections", () => {
     const legacy = await check(noContextualInboundRule, ctx(SECTIONED));
     const viaQuery = await check(
       noContextualInboundRule,
-      streaming(SECTIONED, () => new Map([[PRICING, { footer: 3, navigation: 1 }]]))
+      streaming(
+        SECTIONED,
+        () => new Map([[PRICING, { footer: 3, navigation: 1 }]])
+      )
     );
 
     expect(viaQuery.items).toEqual(legacy.items);
@@ -508,14 +602,24 @@ describe("links/no-contextual-inbound: legal pages", () => {
     ];
   }
 
-  test.each(LEGAL_PATHS)("%s linked only from the footer is not reported", async (path) => {
-    const result = await check(noContextualInboundRule, ctx(footerOnly(path)));
-    expect(result.status).toBe("pass");
-    expect(ids(result)).toEqual([]);
-  });
+  test.each(LEGAL_PATHS)(
+    "%s linked only from the footer is not reported",
+    async (path) => {
+      const result = await check(
+        noContextualInboundRule,
+        ctx(footerOnly(path))
+      );
+      expect(result.status).toBe("pass");
+      expect(ids(result)).toEqual([]);
+    }
+  );
 
   test("the reporter's repro: three footer-only legal pages report nothing", async () => {
-    const footer = [chrome("/impressum"), chrome("/datenschutz"), chrome("/agb")];
+    const footer = [
+      chrome("/impressum"),
+      chrome("/datenschutz"),
+      chrome("/agb"),
+    ];
     const pages: PageSpec[] = [
       { url: BASE, links: [body("/about"), ...footer] },
       { url: "https://example.com/about", links: [...footer] },
@@ -523,17 +627,25 @@ describe("links/no-contextual-inbound: legal pages", () => {
       { url: "https://example.com/datenschutz", links: [...footer] },
       { url: "https://example.com/agb", links: [...footer] },
     ];
-    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe("pass");
+    expect((await check(noContextualInboundRule, ctx(pages))).status).toBe(
+      "pass"
+    );
   });
 
   test("a non-legal page linked only from the footer is still reported", async () => {
-    const result = await check(noContextualInboundRule, ctx(footerOnly("/pricing")));
+    const result = await check(
+      noContextualInboundRule,
+      ctx(footerOnly("/pricing"))
+    );
     expect(result.status).toBe("warn");
     expect(ids(result)).toEqual(["https://example.com/pricing"]);
   });
 
   test("a slug that merely contains a legal word is still reported", async () => {
-    const result = await check(noContextualInboundRule, ctx(footerOnly("/legalese-guide")));
+    const result = await check(
+      noContextualInboundRule,
+      ctx(footerOnly("/legalese-guide"))
+    );
     expect(ids(result)).toEqual(["https://example.com/legalese-guide"]);
   });
 });
@@ -550,7 +662,9 @@ describe("links/no-contextual-inbound: only auditable pages (#1760)", () => {
   test("a 404 target linked only from the footer is not reported", async () => {
     const c = await check(
       noContextualInboundRule,
-      ctx(withTarget({ url: "https://example.com/gone", links: [], status: 404 }))
+      ctx(
+        withTarget({ url: "https://example.com/gone", links: [], status: 404 })
+      )
     );
     expect(c.status).toBe("pass");
     expect(ids(c)).toEqual([]);
@@ -559,7 +673,9 @@ describe("links/no-contextual-inbound: only auditable pages (#1760)", () => {
   test("a 410 target linked only from the footer is not reported", async () => {
     const c = await check(
       noContextualInboundRule,
-      ctx(withTarget({ url: "https://example.com/gone", links: [], status: 410 }))
+      ctx(
+        withTarget({ url: "https://example.com/gone", links: [], status: 410 })
+      )
     );
     expect(c.status).toBe("pass");
   });
@@ -567,7 +683,9 @@ describe("links/no-contextual-inbound: only auditable pages (#1760)", () => {
   test("a 500 target linked only from the footer is not reported", async () => {
     const c = await check(
       noContextualInboundRule,
-      ctx(withTarget({ url: "https://example.com/gone", links: [], status: 500 }))
+      ctx(
+        withTarget({ url: "https://example.com/gone", links: [], status: 500 })
+      )
     );
     expect(c.status).toBe("pass");
   });
@@ -575,7 +693,9 @@ describe("links/no-contextual-inbound: only auditable pages (#1760)", () => {
   test("a real page linked only from the footer still warns", async () => {
     const c = await check(
       noContextualInboundRule,
-      ctx(withTarget({ url: "https://example.com/gone", links: [], status: 200 }))
+      ctx(
+        withTarget({ url: "https://example.com/gone", links: [], status: 200 })
+      )
     );
     expect(c.status).toBe("warn");
     expect(ids(c)).toEqual(["https://example.com/gone"]);
@@ -586,16 +706,26 @@ describe("links/no-contextual-inbound: only auditable pages (#1760)", () => {
     const withBody: PageSpec[] = [
       { url: BASE, links: [body("/a"), body("/new"), chrome("/gone")] },
       { url: "https://example.com/a", links: [body("/new"), chrome("/gone")] },
-      { url: "https://example.com/gone", finalUrl: "https://example.com/new", links: [] },
+      {
+        url: "https://example.com/gone",
+        finalUrl: "https://example.com/new",
+        links: [],
+      },
       { url: "https://example.com/new", links: [] },
     ];
-    expect((await check(noContextualInboundRule, ctx(withBody))).status).toBe("pass");
+    expect((await check(noContextualInboundRule, ctx(withBody))).status).toBe(
+      "pass"
+    );
 
     // Linked from the footer only, through the redirect: reported once, at /new.
     const footerOnly: PageSpec[] = [
       { url: BASE, links: [body("/a"), chrome("/gone")] },
       { url: "https://example.com/a", links: [body("/"), chrome("/gone")] },
-      { url: "https://example.com/gone", finalUrl: "https://example.com/new", links: [] },
+      {
+        url: "https://example.com/gone",
+        finalUrl: "https://example.com/new",
+        links: [],
+      },
       { url: "https://example.com/new", links: [] },
     ];
     expect(ids(await check(noContextualInboundRule, ctx(footerOnly)))).toEqual([
@@ -606,7 +736,10 @@ describe("links/no-contextual-inbound: only auditable pages (#1760)", () => {
   test("a chrome-only URL that was not fetched is not reported; the check says it could not judge it", async () => {
     const pages: PageSpec[] = [
       { url: BASE, links: [body("/a"), body("/b"), chrome("/unfetched")] },
-      { url: "https://example.com/a", links: [body("/b"), chrome("/unfetched")] },
+      {
+        url: "https://example.com/a",
+        links: [body("/b"), chrome("/unfetched")],
+      },
       { url: "https://example.com/b", links: [body("/a")] },
     ];
     const result = await noContextualInboundRule.run(ctx(pages));
@@ -648,7 +781,8 @@ describe("links/no-contextual-inbound: fail-safe lookup (repo#1669)", () => {
           ["https://example.com/pricing", 4],
         ]),
       // Desynced: /pricing is absent. It must read as contextual, not chrome-only.
-      contextualIncomingLinkCounts: () => new Map([["https://example.com/a", 3]]),
+      contextualIncomingLinkCounts: () =>
+        new Map([["https://example.com/a", 3]]),
     } as unknown as RuleContext["siteQuery"];
     const result = await check(noContextualInboundRule, c);
     expect(result.status).toBe("pass");

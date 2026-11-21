@@ -25,10 +25,15 @@
 // `buildScoringResultsFromMerged` preserves this count and adds carried-clean on
 // top.
 
-import type { CheckItem, CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
+import type {
+  CheckItem,
+  CheckResult,
+  PageFindingRecord,
+} from "@squirrelscan/core-contracts";
+import type { RuleRunResult } from "@squirrelscan/rules/types";
+
 import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import { unpackSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
-import type { RuleRunResult } from "@squirrelscan/rules/types";
 
 import type { SkippedPassCounts } from "./stream-findings";
 
@@ -38,7 +43,10 @@ export interface ReconstructCompleteInput {
    * the set of rules that ran, and site-scope rules' checks. Page-scope rules'
    * checks are REPLACED by the complete reconstruction from `ingestedFindings`.
    */
-  ruleResults: Record<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }>;
+  ruleResults: Record<
+    string,
+    { meta: RuleRunResult["meta"]; checks: CheckResult[] }
+  >;
   /** Complete per-(page,rule,check,locator) findings streamed into the store. */
   ingestedFindings: PageFindingRecord[];
   /**
@@ -91,7 +99,9 @@ interface ParsedPayload {
  * `i` (older payloads, or a payload dropped to null at clamp) sort to the tail
  * while a stable sort keeps their relative load order. */
 function emissionIndex(p: ParsedPayload): number {
-  return typeof p.i === "number" && Number.isFinite(p.i) ? p.i : Number.MAX_SAFE_INTEGER;
+  return typeof p.i === "number" && Number.isFinite(p.i)
+    ? p.i
+    : Number.MAX_SAFE_INTEGER;
 }
 
 function parsePayload(payload: string | null): ParsedPayload {
@@ -129,7 +139,8 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
   }
 
   const groups: PageFindingRecord[][] = [];
-  for (const byCheck of byPage.values()) for (const group of byCheck.values()) groups.push(group);
+  for (const byCheck of byPage.values())
+    for (const group of byCheck.values()) groups.push(group);
 
   const checks: CheckResult[] = [];
   for (const group of groups) {
@@ -145,7 +156,8 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
     const parsed = group.map((f) => parsePayload(f.payload));
     const payload = parsed[0]!;
     const itemIdx: number[] = [];
-    for (let k = 0; k < group.length; k++) if (group[k]!.locator !== "") itemIdx.push(k);
+    for (let k = 0; k < group.length; k++)
+      if (group[k]!.locator !== "") itemIdx.push(k);
 
     // (#1881) An item row's message/value/expected describe the ITEM; the parent
     // check's page-level trio was stashed in the payload, so restore it here and
@@ -163,7 +175,8 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
     // When `m` is present the row's own value/expected are null by construction,
     // so `v`/`e` being absent means the source check carried none.
     const aggregate = parsed.find((p) => typeof p.m === "string");
-    const message = typeof aggregate?.m === "string" ? aggregate.m : first.message;
+    const message =
+      typeof aggregate?.m === "string" ? aggregate.m : first.message;
     const value = aggregate ? (aggregate.v ?? null) : first.value;
     const expected = aggregate ? (aggregate.e ?? null) : first.expected;
     const check: CheckResult = {
@@ -182,7 +195,9 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
       // emission index (`i`) flattenChecks stamped into each item's payload.
       // Array.sort is stable, so item findings missing `i` keep their load order.
       const order = [...itemIdx];
-      order.sort((a, b) => emissionIndex(parsed[a]!) - emissionIndex(parsed[b]!));
+      order.sort(
+        (a, b) => emissionIndex(parsed[a]!) - emissionIndex(parsed[b]!)
+      );
       const items: CheckItem[] = [];
       for (const idx of order) {
         const item = parsed[idx]!.items?.[0];
@@ -208,7 +223,9 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
       // says the evidence never fit, `sibling-row` alone says it went missing.
       const markers = parsed
         .map((entry) => entry.componentEvidence)
-        .filter((marker): marker is NonNullable<typeof marker> => Boolean(marker));
+        .filter((marker): marker is NonNullable<typeof marker> =>
+          Boolean(marker)
+        );
       const componentEvidence =
         markers.find((marker) => marker.reason !== "sibling-row") ?? markers[0];
       if (componentEvidence) check.componentEvidence = componentEvidence;
@@ -218,17 +235,22 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
     // rest hold markers, and a marker surviving alone is how a lost owner stays
     // visible instead of looking like a check that never had evidence.
     const siteResourceOccurrences = parsed
-      .map((entry) => unpackSiteResourceOccurrences(entry.siteResourceOccurrences))
+      .map((entry) =>
+        unpackSiteResourceOccurrences(entry.siteResourceOccurrences)
+      )
       .find((entry) => entry !== undefined && entry.length > 0);
     if (siteResourceOccurrences) {
       check.siteResourceOccurrences = siteResourceOccurrences;
     } else {
       const markers = parsed
         .map((entry) => entry.siteResourceEvidence)
-        .filter((marker): marker is NonNullable<typeof marker> => Boolean(marker));
+        .filter((marker): marker is NonNullable<typeof marker> =>
+          Boolean(marker)
+        );
       const siteResourceEvidence =
         markers.find((marker) => marker.reason !== "sibling-row") ?? markers[0];
-      if (siteResourceEvidence) check.siteResourceEvidence = siteResourceEvidence;
+      if (siteResourceEvidence)
+        check.siteResourceEvidence = siteResourceEvidence;
     }
 
     checks.push(check);
@@ -248,7 +270,7 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
  * pages arrive in the loader's `normalizedUrl` order.
  */
 export function reconstructPageRuleChecks(
-  findings: readonly PageFindingRecord[],
+  findings: readonly PageFindingRecord[]
 ): Map<string, CheckResult[]> {
   const byRule = new Map<string, PageFindingRecord[]>();
   for (const f of findings) {
@@ -257,7 +279,8 @@ export function reconstructPageRuleChecks(
     else byRule.set(f.ruleId, [f]);
   }
   const out = new Map<string, CheckResult[]>();
-  for (const [ruleId, rows] of byRule) out.set(ruleId, reconstructRuleChecks(rows));
+  for (const [ruleId, rows] of byRule)
+    out.set(ruleId, reconstructRuleChecks(rows));
   return out;
 }
 
@@ -270,9 +293,10 @@ export function reconstructPageRuleChecks(
  * denominator matches the sampled path without materializing pass checks.
  */
 export function reconstructCompleteResults(
-  input: ReconstructCompleteInput,
+  input: ReconstructCompleteInput
 ): Map<string, RuleRunResult> {
-  const { ruleResults, ingestedFindings, crawledUrls, skippedPassCounts } = input;
+  const { ruleResults, ingestedFindings, crawledUrls, skippedPassCounts } =
+    input;
 
   // Group findings by ruleId once.
   const findingsByRule = new Map<string, PageFindingRecord[]>();

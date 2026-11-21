@@ -41,7 +41,9 @@ export interface ComponentShape {
  * 7 times). Only `locatorFromRoot` genuinely differs per element, so it stays on
  * the occurrence and the rungs are hoisted here.
  */
-export type PackedSubtreeLadder = Array<Omit<SubtreeCandidate, "locatorFromRoot">>;
+export type PackedSubtreeLadder = Array<
+  Omit<SubtreeCandidate, "locatorFromRoot">
+>;
 
 /** One observation, minus the shape it shares with its siblings. */
 export interface PackedComponentOccurrence {
@@ -91,7 +93,7 @@ function shapeKey(occurrence: ComponentOccurrence): string {
  * array (the CLI JSON's `occurrenceRefs` do), so packing must never reorder.
  */
 export function packComponentOccurrences(
-  occurrences: readonly ComponentOccurrence[],
+  occurrences: readonly ComponentOccurrence[]
 ): PackedComponentEvidence {
   const shapes: ComponentShape[] = [];
   const indexByKey = new Map<string, number>();
@@ -115,18 +117,20 @@ export function packComponentOccurrences(
     let ladderLocators: string[] | undefined;
     const candidates = occurrence.subtreeCandidates;
     if (candidates && candidates.length > 0) {
-      const rungs = candidates.map(({ level, skeletonSignature, textShareOfRegion, rootHint }) => ({
-        level,
-        skeletonSignature,
-        textShareOfRegion,
-        ...(rootHint ? { rootHint } : {}),
-      }));
+      const rungs = candidates.map(
+        ({ level, skeletonSignature, textShareOfRegion, rootHint }) => ({
+          level,
+          skeletonSignature,
+          textShareOfRegion,
+          ...(rootHint ? { rootHint } : {}),
+        })
+      );
       const ladderKey = rungs
         .map(
           (rung) =>
             `${rung.level}\u0001${rung.skeletonSignature}\u0001${rung.textShareOfRegion}\u0001${
               rung.rootHint ? JSON.stringify(rung.rootHint) : ""
-            }`,
+            }`
         )
         .join("\u0000");
       let ladderIndex = ladderIndexByKey.get(ladderKey);
@@ -145,7 +149,9 @@ export function packComponentOccurrences(
       provenance: occurrence.provenance,
       groupable: occurrence.groupable,
       confidence: occurrence.confidence,
-      ...(occurrence.uncertainReason ? { uncertainReason: occurrence.uncertainReason } : {}),
+      ...(occurrence.uncertainReason
+        ? { uncertainReason: occurrence.uncertainReason }
+        : {}),
       element: occurrence.element,
       defect: occurrence.defect,
       ...(ladder === undefined ? {} : { ladder, ladderLocators }),
@@ -163,14 +169,17 @@ export function packComponentOccurrences(
 function isPacked(value: unknown): value is PackedComponentEvidence {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<PackedComponentEvidence>;
-  if (typeof candidate.v === "number" && !READABLE_FORMATS.has(candidate.v)) return false;
-  return Array.isArray(candidate.shapes) && Array.isArray(candidate.occurrences);
+  if (typeof candidate.v === "number" && !READABLE_FORMATS.has(candidate.v))
+    return false;
+  return (
+    Array.isArray(candidate.shapes) && Array.isArray(candidate.occurrences)
+  );
 }
 
 /** Rejoin a hoisted ladder with this occurrence's own locators. */
 function candidatesFor(
   packed: PackedComponentOccurrence,
-  ladders: PackedSubtreeLadder[],
+  ladders: PackedSubtreeLadder[]
 ): { subtreeCandidates: SubtreeCandidate[] } | undefined {
   if (packed.ladder === undefined) return undefined;
   const rungs = ladders[packed.ladder];
@@ -192,7 +201,9 @@ function candidatesFor(
  * `undefined`/is skipped rather than throwing: evidence is additive, and a
  * malformed blob must never take the surrounding finding down with it.
  */
-export function unpackComponentOccurrences(value: unknown): ComponentOccurrence[] | undefined {
+export function unpackComponentOccurrences(
+  value: unknown
+): ComponentOccurrence[] | undefined {
   if (value === null || value === undefined) return undefined;
 
   // Legacy / un-hoisted: already complete occurrences.
@@ -215,7 +226,9 @@ export function unpackComponentOccurrences(value: unknown): ComponentOccurrence[
       provenance: packed.provenance,
       groupable: packed.groupable,
       confidence: packed.confidence,
-      ...(packed.uncertainReason ? { uncertainReason: packed.uncertainReason } : {}),
+      ...(packed.uncertainReason
+        ? { uncertainReason: packed.uncertainReason }
+        : {}),
       region: shape.region,
       family: shape.family,
       variant: shape.variant,

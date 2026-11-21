@@ -1,27 +1,23 @@
-
 // SQLite storage implementation for the crawler
 // Best for medium to large sites (1000+ pages)
 // Uses bun:sqlite for native SQLite bindings
 
-import type { Database } from "bun:sqlite";
-import { restrictToOwner } from "./file-mode";
-import { enableWal, openSqlite } from "./sqlite-open";
-import { createHash, randomUUID } from "node:crypto";
-import { Effect } from "effect";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import {
-  packComponentOccurrences,
-  unpackComponentOccurrences,
-} from "@squirrelscan/core-contracts/component-evidence";
+import type { Database } from "bun:sqlite";
+
 import {
   FRONTIER_STATUS_TRANSITIONS,
   isCacheHitReason,
   parseUnverifiedReason,
 } from "@squirrelscan/core-contracts";
+import {
+  packComponentOccurrences,
+  unpackComponentOccurrences,
+} from "@squirrelscan/core-contracts/component-evidence";
 import { urlHostKey } from "@squirrelscan/utils/url";
+import { Effect } from "effect";
+import { createHash, randomUUID } from "node:crypto";
 
-import { CRAWL_STATUS_GUARD_SQL, crawlStatusAllowedFrom } from "./crawl-status-write";
 import type {
   CrawlStorage,
   CrawlMetadata,
@@ -69,6 +65,12 @@ import {
   type LeaseEnv,
 } from "./crawl-liveness";
 import {
+  CRAWL_STATUS_GUARD_SQL,
+  crawlStatusAllowedFrom,
+} from "./crawl-status-write";
+import { restrictToOwner } from "./file-mode";
+import { enableWal, openSqlite } from "./sqlite-open";
+import {
   ABANDONED_IDLE_MS,
   INTERRUPTED_REPORT_IDLE_MS,
   INTERRUPTED_REPORT_LEGACY_IDLE_MS,
@@ -79,7 +81,12 @@ import {
 /** A body that is an HTML document, not a script. */
 function looksLikeHtml(body: string): boolean {
   const head = body.slice(0, 256).trimStart().toLowerCase();
-  return head.startsWith("<!doctype html") || head.startsWith("<html") || head.startsWith("<head") || head.startsWith("<body");
+  return (
+    head.startsWith("<!doctype html") ||
+    head.startsWith("<html") ||
+    head.startsWith("<head") ||
+    head.startsWith("<body")
+  );
 }
 
 /** One fetched script handed to {@link SQLiteStorage.storeCrawlScripts}. */
@@ -178,8 +185,13 @@ export const MAX_STORED_EDGES_PER_SOURCE = 1000;
 /** Decode a stored `refs` column: a bare array, or `{keys, total}` once capped. */
 function decodeStoredRefs(raw: string): { keys: string[]; total: number } {
   const parsed: unknown = JSON.parse(raw);
-  if (Array.isArray(parsed)) return { keys: parsed as string[], total: parsed.length };
-  if (parsed && typeof parsed === "object" && Array.isArray((parsed as { keys?: unknown }).keys)) {
+  if (Array.isArray(parsed))
+    return { keys: parsed as string[], total: parsed.length };
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    Array.isArray((parsed as { keys?: unknown }).keys)
+  ) {
     const { keys, total } = parsed as { keys: string[]; total?: unknown };
     return { keys, total: typeof total === "number" ? total : keys.length };
   }
@@ -797,9 +809,8 @@ const SITEMAPS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
 // has now bitten `pages` and `sitemaps` in turn, so the column goes on the list
 // at the same time it goes in the migration. Any new ALTER-added `robots_txt`
 // column MUST be listed here.
-const ROBOTS_TXT_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
-  { name: "error", type: "TEXT" },
-];
+const ROBOTS_TXT_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> =
+  [{ name: "error", type: "TEXT" }];
 
 // Same guard for `links` and `sitemap_url_statuses`. Migration 24 added
 // `rate_limited` to both; a DB stamped past 24 by a build that numbered its own
@@ -814,9 +825,10 @@ const LINKS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "unverified_reason", type: "TEXT" },
 ];
 
-const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
-  { name: "rate_limited", type: "INTEGER" },
-];
+const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{
+  name: string;
+  type: string;
+}> = [{ name: "rate_limited", type: "INTEGER" }];
 
 // Same guard for `crawls`. Migration 25 added `retired_at`; a DB stamped past 25
 // by a build that numbered its own migration 25 would skip it forever. The
@@ -851,7 +863,10 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
 // `saveEntityMap` writes them, so a DB stamped past 31 without them would fail
 // every entity map write. That write is caught and logged rather than failing
 // the audit, which would leave `squirrel entities` reading the previous map.
-const ENTITY_EDGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+const ENTITY_EDGES_ALTER_COLUMNS: ReadonlyArray<{
+  name: string;
+  type: string;
+}> = [
   { name: "pages", type: "TEXT" },
   { name: "more_pages", type: "INTEGER" },
 ];
@@ -859,7 +874,10 @@ const ENTITY_EDGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> 
 // Same guard for `resource_sizes` (#470). Migration 32 added the three header
 // columns and `saveResourceSizes` writes them, so a DB stamped past 32 without
 // them would throw on every resource write, after the rules had run.
-const RESOURCE_SIZES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+const RESOURCE_SIZES_ALTER_COLUMNS: ReadonlyArray<{
+  name: string;
+  type: string;
+}> = [
   { name: "natural_width", type: "INTEGER" },
   { name: "natural_height", type: "INTEGER" },
   { name: "animated", type: "INTEGER" },
@@ -868,7 +886,10 @@ const RESOURCE_SIZES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }
 // Same guard for `page_features` (#489). Migration 33 added
 // `hreflang_alternates` and every page-features write names it, so a DB stamped
 // past 33 without it would fail the streamed rule loop's first upsert.
-const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{
+  name: string;
+  type: string;
+}> = [
   { name: "hreflang_alternates", type: "TEXT" },
   { name: "reading_level", type: "INTEGER" },
   { name: "terminology_variants", type: "TEXT" },
@@ -883,7 +904,10 @@ const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }>
 // audit stores no checks at all, while `SELECT *` reads map by key and would
 // merely yield `undefined`, a silent return to exactly the evidence-less report
 // that #2307 exists to fix. On the list at the same time as the migration.
-const RULE_RESULTS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+const RULE_RESULTS_ALTER_COLUMNS: ReadonlyArray<{
+  name: string;
+  type: string;
+}> = [
   { name: "component_occurrences", type: "TEXT" },
   { name: "component_evidence", type: "TEXT" },
   { name: "site_resource_occurrences", type: "TEXT" },
@@ -894,7 +918,10 @@ const RULE_RESULTS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> 
 // Same guard for `markdown_response`. Every setMarkdownProbe INSERT names the
 // columns migrations 17 and 48 added (repo#1322), so a DB stamped past either by a
 // build numbering its own migration would fail the markdown probe write.
-const MARKDOWN_RESPONSE_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+const MARKDOWN_RESPONSE_ALTER_COLUMNS: ReadonlyArray<{
+  name: string;
+  type: string;
+}> = [
   { name: "negotiated_vary", type: "TEXT" },
   { name: "markdown_tokens_header", type: "TEXT" },
   { name: "original_tokens_header", type: "TEXT" },
@@ -909,9 +936,8 @@ const MARKDOWN_RESPONSE_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: strin
 // Same guard for `site_pages`. Every upsertSitePages INSERT names the column
 // migration 49 added (pub#2099), so a DB stamped past 49 without it would fail
 // every smart-audit page write.
-const SITE_PAGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
-  { name: "not_evaluated", type: "TEXT" },
-];
+const SITE_PAGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> =
+  [{ name: "not_evaluated", type: "TEXT" }];
 
 /**
  * (pub#2099) A `site_pages.not_evaluated` cell read back. NULL (a row written
@@ -934,9 +960,14 @@ function parseNotEvaluated(value: unknown): string[] | null {
 
 // A nullable 0/1 column read back as an optional boolean: NULL (a row written
 // before the column existed) stays absent, so it reads as unknown, not false.
-function answeredFlag<K extends string>(key: K, value: unknown): Partial<Record<K, boolean>> {
+function answeredFlag<K extends string>(
+  key: K,
+  value: unknown
+): Partial<Record<K, boolean>> {
   if (value === null || value === undefined) return {};
-  return { [key]: value === 1 || value === true } as Partial<Record<K, boolean>>;
+  return { [key]: value === 1 || value === true } as Partial<
+    Record<K, boolean>
+  >;
 }
 
 const SCHEMA = `
@@ -1540,9 +1571,12 @@ CREATE INDEX IF NOT EXISTS idx_page_features_type
 // wrong end of the trade to optimise.
 function gzipped(payload: string): Uint8Array<ArrayBuffer> {
   const out = Bun.gzipSync(Buffer.from(payload), { level: 1 });
-  return new Uint8Array(out.buffer as ArrayBuffer, out.byteOffset, out.byteLength);
+  return new Uint8Array(
+    out.buffer as ArrayBuffer,
+    out.byteOffset,
+    out.byteLength
+  );
 }
-
 
 // Conservative hardcoded compaction bounds (#197). No squirrel.toml surface in
 // v1, these are the only defaults `compactFindings` uses unless a test overrides.
@@ -1755,7 +1789,10 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("sitemaps", SITEMAPS_ALTER_COLUMNS);
     this.reconcileColumns("robots_txt", ROBOTS_TXT_ALTER_COLUMNS);
     this.reconcileColumns("links", LINKS_ALTER_COLUMNS);
-    this.reconcileColumns("sitemap_url_statuses", SITEMAP_URL_STATUSES_ALTER_COLUMNS);
+    this.reconcileColumns(
+      "sitemap_url_statuses",
+      SITEMAP_URL_STATUSES_ALTER_COLUMNS
+    );
     this.reconcileColumns("crawls", CRAWLS_ALTER_COLUMNS);
     this.reconcileColumns("entity_edges", ENTITY_EDGES_ALTER_COLUMNS);
     this.reconcileColumns("resource_sizes", RESOURCE_SIZES_ALTER_COLUMNS);
@@ -1823,9 +1860,11 @@ export class SQLiteStorage implements CrawlStorage {
   ): void {
     const db = this.getDb();
     const existing = new Set(
-      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
-        (c) => c.name
-      )
+      (
+        db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+          name: string;
+        }>
+      ).map((c) => c.name)
     );
     // No table yet (shouldn't happen, SCHEMA creates it first) → nothing to
     // reconcile; a fresh CREATE TABLE already has every column.
@@ -1986,7 +2025,9 @@ export class SQLiteStorage implements CrawlStorage {
           // A write the table does not allow changes nothing, the other columns it
           // carried included.
           const allowedFrom =
-            updates.status !== undefined ? crawlStatusAllowedFrom(updates.status) : null;
+            updates.status !== undefined
+              ? crawlStatusAllowedFrom(updates.status)
+              : null;
           const stmt = db.query(
             `UPDATE crawls SET ${sets.join(", ")} WHERE id = ? AND ${CRAWL_STATUS_GUARD_SQL}`
           );
@@ -2227,8 +2268,12 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const row = this.getDb()
-          .query("SELECT parsed_data FROM pages WHERE crawl_id = ? AND normalized_url = ?")
-          .get(crawlId, normalizedUrl) as { parsed_data: string | null } | undefined;
+          .query(
+            "SELECT parsed_data FROM pages WHERE crawl_id = ? AND normalized_url = ?"
+          )
+          .get(crawlId, normalizedUrl) as
+          | { parsed_data: string | null }
+          | undefined;
         return row?.parsed_data ?? null;
       },
       catch: (e) => StorageError.read(e),
@@ -2397,7 +2442,13 @@ export class SQLiteStorage implements CrawlStorage {
           }
         }
         // Chunks are each sorted; sort the whole so the order holds across them.
-        return out.sort((a, b) => (a.normalizedUrl < b.normalizedUrl ? -1 : a.normalizedUrl > b.normalizedUrl ? 1 : 0));
+        return out.sort((a, b) =>
+          a.normalizedUrl < b.normalizedUrl
+            ? -1
+            : a.normalizedUrl > b.normalizedUrl
+              ? 1
+              : 0
+        );
       },
       catch: (e) => StorageError.read(e),
     });
@@ -2423,7 +2474,9 @@ export class SQLiteStorage implements CrawlStorage {
    * this set that no entity row can ever name, and a 404's markup is not part
    * of the site's graph at all.
    */
-  getCrawlPageUrls(crawlId: string): Effect.Effect<string[], StorageError, never> {
+  getCrawlPageUrls(
+    crawlId: string
+  ): Effect.Effect<string[], StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -2564,7 +2617,9 @@ export class SQLiteStorage implements CrawlStorage {
    * the rules phase, so without this the resumed crawl's own puts could evict
    * them first. Returns how many bodies were still there.
    */
-  retainPageBodies(crawlId: string): Effect.Effect<number, StorageError, never> {
+  retainPageBodies(
+    crawlId: string
+  ): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
         const store = this.contentStore;
@@ -2634,13 +2689,27 @@ export class SQLiteStorage implements CrawlStorage {
             if (script.fetchSkipReason) {
               // Referenced but never requested (the fetch hit its memory or time
               // bound): no size, no body, and the reason is the whole record.
-              insert.run(crawlId, script.url, null, null, "skipped", script.fetchSkipReason, JSON.stringify(script.sourcePages), null);
+              insert.run(
+                crawlId,
+                script.url,
+                null,
+                null,
+                "skipped",
+                script.fetchSkipReason,
+                JSON.stringify(script.sourcePages),
+                null
+              );
               summary.skipped++;
               summary.skippedByReason[script.fetchSkipReason] =
                 (summary.skippedByReason[script.fetchSkipReason] ?? 0) + 1;
               continue;
             }
-            if (script.status === null || script.status < 200 || script.status >= 300) continue;
+            if (
+              script.status === null ||
+              script.status < 200 ||
+              script.status >= 300
+            )
+              continue;
             const size =
               script.content !== null
                 ? Buffer.byteLength(script.content)
@@ -2648,9 +2717,19 @@ export class SQLiteStorage implements CrawlStorage {
             if (size === null) continue;
             const pages = JSON.stringify(script.sourcePages);
             const skip = (reason: StoredScriptSkipReason): void => {
-              insert.run(crawlId, script.url, null, size, "skipped", reason, pages, script.finalUrl ?? null);
+              insert.run(
+                crawlId,
+                script.url,
+                null,
+                size,
+                "skipped",
+                reason,
+                pages,
+                script.finalUrl ?? null
+              );
               summary.skipped++;
-              summary.skippedByReason[reason] = (summary.skippedByReason[reason] ?? 0) + 1;
+              summary.skippedByReason[reason] =
+                (summary.skippedByReason[reason] ?? 0) + 1;
             };
             if (size > limits.maxBytes) {
               skip("too-large");
@@ -2665,7 +2744,9 @@ export class SQLiteStorage implements CrawlStorage {
               skip("not-javascript");
               continue;
             }
-            const hash = createHash("sha256").update(script.content).digest("hex");
+            const hash = createHash("sha256")
+              .update(script.content)
+              .digest("hex");
             if (!seen.has(hash)) {
               if (distinctBytes + size > limits.totalBytes) {
                 skip("total-cap");
@@ -2682,11 +2763,29 @@ export class SQLiteStorage implements CrawlStorage {
               distinctBytes += size;
               summary.distinct++;
               summary.distinctBytes = distinctBytes;
-              insert.run(crawlId, script.url, stored, size, "stored", null, pages, script.finalUrl ?? null);
+              insert.run(
+                crawlId,
+                script.url,
+                stored,
+                size,
+                "stored",
+                null,
+                pages,
+                script.finalUrl ?? null
+              );
               summary.stored++;
               continue;
             }
-            insert.run(crawlId, script.url, hash, size, "stored", null, pages, script.finalUrl ?? null);
+            insert.run(
+              crawlId,
+              script.url,
+              hash,
+              size,
+              "stored",
+              null,
+              pages,
+              script.finalUrl ?? null
+            );
             summary.stored++;
           }
           if (fetch) {
@@ -2734,7 +2833,8 @@ export class SQLiteStorage implements CrawlStorage {
             contentHash: row.content_hash,
             sizeBytes: row.size_bytes,
             status: row.status === "stored" ? "stored" : "skipped",
-            skipReason: (row.skip_reason as StoredScriptSkipReason | null) ?? null,
+            skipReason:
+              (row.skip_reason as StoredScriptSkipReason | null) ?? null,
             sourcePages: JSON.parse(row.source_pages) as string[],
             finalUrl: row.final_url,
             evicted:
@@ -2765,9 +2865,14 @@ export class SQLiteStorage implements CrawlStorage {
           .prepare(
             "SELECT fetch_limit, dropped_by_limit FROM crawl_scripts_summary WHERE crawl_id = ?"
           )
-          .get(crawlId) as { fetch_limit: number | null; dropped_by_limit: number } | undefined;
+          .get(crawlId) as
+          | { fetch_limit: number | null; dropped_by_limit: number }
+          | undefined;
         return row
-          ? { fetchLimit: row.fetch_limit, droppedByLimit: row.dropped_by_limit }
+          ? {
+              fetchLimit: row.fetch_limit,
+              droppedByLimit: row.dropped_by_limit,
+            }
           : null;
       },
       catch: (e) => StorageError.read(e),
@@ -2860,7 +2965,12 @@ export class SQLiteStorage implements CrawlStorage {
     const contentHash = row.content_hash as string;
     // An empty inline string is a captured zero-byte response, not a missing
     // body. Only a null column means the body may live in the content store.
-    if (opts?.body !== false && html === null && contentHash && this.contentStore) {
+    if (
+      opts?.body !== false &&
+      html === null &&
+      contentHash &&
+      this.contentStore
+    ) {
       html = this.contentStore.getString(contentHash);
     }
 
@@ -3070,11 +3180,15 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getRobotsDisallowedCount(crawlId: string): Effect.Effect<number, StorageError, never> {
+  getRobotsDisallowedCount(
+    crawlId: string
+  ): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () => {
         const row = this.getDb()
-          .query("SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'skipped' AND reason = 'robots_disallowed'")
+          .query(
+            "SELECT COUNT(*) as count FROM frontier WHERE crawl_id = ? AND status = 'skipped' AND reason = 'robots_disallowed'"
+          )
           .get(crawlId) as { count: number };
         return row.count;
       },
@@ -3139,7 +3253,14 @@ export class SQLiteStorage implements CrawlStorage {
             WHERE crawl_id = ? AND normalized_url = ? AND instr(?, ',' || status || ',') > 0
           `
                 )
-                .run(status, reason, fetchedAt, crawlId, normalizedUrl, allowedFrom)
+                .run(
+                  status,
+                  reason,
+                  fetchedAt,
+                  crawlId,
+                  normalizedUrl,
+                  allowedFrom
+                )
             : db
                 .query(
                   `
@@ -3258,8 +3379,12 @@ export class SQLiteStorage implements CrawlStorage {
         db.prepare("DELETE FROM sitemaps WHERE crawl_id = ?").run(crawlId);
         db.prepare("DELETE FROM robots_txt WHERE crawl_id = ?").run(crawlId);
         db.prepare("DELETE FROM llms_txt WHERE crawl_id = ?").run(crawlId);
-        db.prepare("DELETE FROM markdown_response WHERE crawl_id = ?").run(crawlId);
-        db.prepare("DELETE FROM agent_well_known WHERE crawl_id = ?").run(crawlId);
+        db.prepare("DELETE FROM markdown_response WHERE crawl_id = ?").run(
+          crawlId
+        );
+        db.prepare("DELETE FROM agent_well_known WHERE crawl_id = ?").run(
+          crawlId
+        );
         db.prepare("DELETE FROM agent_access WHERE crawl_id = ?").run(crawlId);
         db.prepare("DELETE FROM agent_rsl WHERE crawl_id = ?").run(crawlId);
         // NOTE: pages intentionally NOT cleared - used for conditional GET cache
@@ -3739,7 +3864,10 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  setLlmsTxt(crawlId: string, llms: LlmsTxtRecord): Effect.Effect<void, StorageError, never> {
+  setLlmsTxt(
+    crawlId: string,
+    llms: LlmsTxtRecord
+  ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3764,7 +3892,9 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getLlmsTxt(crawlId: string): Effect.Effect<LlmsTxtRecord | null, StorageError, never> {
+  getLlmsTxt(
+    crawlId: string
+  ): Effect.Effect<LlmsTxtRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3817,8 +3947,16 @@ export class SQLiteStorage implements CrawlStorage {
           probe.negotiatedStatus ?? null,
           probe.strictNegotiatedStatus ?? null,
           probe.strictNegotiatedContentType ?? null,
-          probe.strictNegotiationAnswered === undefined ? null : probe.strictNegotiationAnswered ? 1 : 0,
-          probe.mdVariantAnswered === undefined ? null : probe.mdVariantAnswered ? 1 : 0,
+          probe.strictNegotiationAnswered === undefined
+            ? null
+            : probe.strictNegotiationAnswered
+              ? 1
+              : 0,
+          probe.mdVariantAnswered === undefined
+            ? null
+            : probe.mdVariantAnswered
+              ? 1
+              : 0,
           probe.fetchedAt
         );
       },
@@ -3832,7 +3970,9 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare("SELECT * FROM markdown_response WHERE crawl_id = ?");
+        const stmt = db.prepare(
+          "SELECT * FROM markdown_response WHERE crawl_id = ?"
+        );
         const row = stmt.get(crawlId) as Record<string, unknown> | undefined;
         if (!row) return null;
         return {
@@ -3845,15 +3985,25 @@ export class SQLiteStorage implements CrawlStorage {
           // Columns added in schema v17, undefined (not null) on rows persisted
           // before this migration ran, since `row.x` is `undefined` for a column
           // SQLite has no value for yet vs. a column that exists and is NULL.
-          negotiatedVary: (row.negotiated_vary as string | null | undefined) ?? null,
-          markdownTokensHeader: (row.markdown_tokens_header as string | null | undefined) ?? null,
-          originalTokensHeader: (row.original_tokens_header as string | null | undefined) ?? null,
-          alternateMarkdownUrl: (row.alternate_markdown_url as string | null | undefined) ?? null,
-          negotiatedStatus: (row.negotiated_status as number | null | undefined) ?? null,
-          strictNegotiatedStatus: (row.strict_negotiated_status as number | null | undefined) ?? null,
+          negotiatedVary:
+            (row.negotiated_vary as string | null | undefined) ?? null,
+          markdownTokensHeader:
+            (row.markdown_tokens_header as string | null | undefined) ?? null,
+          originalTokensHeader:
+            (row.original_tokens_header as string | null | undefined) ?? null,
+          alternateMarkdownUrl:
+            (row.alternate_markdown_url as string | null | undefined) ?? null,
+          negotiatedStatus:
+            (row.negotiated_status as number | null | undefined) ?? null,
+          strictNegotiatedStatus:
+            (row.strict_negotiated_status as number | null | undefined) ?? null,
           strictNegotiatedContentType:
-            (row.strict_negotiated_content_type as string | null | undefined) ?? null,
-          ...answeredFlag("strictNegotiationAnswered", row.strict_negotiation_answered),
+            (row.strict_negotiated_content_type as string | null | undefined) ??
+            null,
+          ...answeredFlag(
+            "strictNegotiationAnswered",
+            row.strict_negotiation_answered
+          ),
           ...answeredFlag("mdVariantAnswered", row.md_variant_answered),
           fetchedAt: row.fetched_at as number,
         };
@@ -3886,11 +4036,16 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare("SELECT * FROM agent_well_known WHERE crawl_id = ?");
+        const stmt = db.prepare(
+          "SELECT * FROM agent_well_known WHERE crawl_id = ?"
+        );
         const row = stmt.get(crawlId) as Record<string, unknown> | undefined;
         if (!row) return null;
         return {
-          probes: this.safeJsonParse<WellKnownProbeRecord["probes"]>(row.probes as string, []),
+          probes: this.safeJsonParse<WellKnownProbeRecord["probes"]>(
+            row.probes as string,
+            []
+          ),
           fetchedAt: row.fetched_at as number,
         };
       },
@@ -3922,11 +4077,16 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        const stmt = db.prepare("SELECT * FROM agent_access WHERE crawl_id = ?");
+        const stmt = db.prepare(
+          "SELECT * FROM agent_access WHERE crawl_id = ?"
+        );
         const row = stmt.get(crawlId) as Record<string, unknown> | undefined;
         if (!row) return null;
         return {
-          probes: this.safeJsonParse<AgentAccessRecord["probes"]>(row.probes as string, []),
+          probes: this.safeJsonParse<AgentAccessRecord["probes"]>(
+            row.probes as string,
+            []
+          ),
           fetchedAt: row.fetched_at as number,
         };
       },
@@ -3935,7 +4095,10 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   // AX: robots.txt-derived RSL licensing fetch.
-  setRsl(crawlId: string, rsl: RslRecord): Effect.Effect<void, StorageError, never> {
+  setRsl(
+    crawlId: string,
+    rsl: RslRecord
+  ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3956,7 +4119,9 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  getRsl(crawlId: string): Effect.Effect<RslRecord | null, StorageError, never> {
+  getRsl(
+    crawlId: string
+  ): Effect.Effect<RslRecord | null, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
@@ -3964,10 +4129,16 @@ export class SQLiteStorage implements CrawlStorage {
         const row = stmt.get(crawlId) as Record<string, unknown> | undefined;
         if (!row) return null;
         return {
-          licenseUrls: this.safeJsonParse<string[]>(row.license_urls as string, []),
+          licenseUrls: this.safeJsonParse<string[]>(
+            row.license_urls as string,
+            []
+          ),
           robotsHasLicense: (row.robots_has_license as number) === 1,
           linkHeaderPresent: (row.link_header_present as number) === 1,
-          documents: this.safeJsonParse<RslRecord["documents"]>(row.documents as string, []),
+          documents: this.safeJsonParse<RslRecord["documents"]>(
+            row.documents as string,
+            []
+          ),
           fetchedAt: row.fetched_at as number,
         };
       },
@@ -4297,16 +4468,22 @@ export class SQLiteStorage implements CrawlStorage {
               check.pages ? JSON.stringify(check.pages) : null,
               check.skipReason || null,
               check.componentOccurrences?.length
-                ? JSON.stringify(packComponentOccurrences(check.componentOccurrences))
+                ? JSON.stringify(
+                    packComponentOccurrences(check.componentOccurrences)
+                  )
                 : null,
-              check.componentEvidence ? JSON.stringify(check.componentEvidence) : null,
+              check.componentEvidence
+                ? JSON.stringify(check.componentEvidence)
+                : null,
               // Stored unpacked: unlike component occurrences, which repeat six
               // 128-bit digests per row, a resource occurrence is four short
               // strings, so a shape table would cost more than it saves.
               check.siteResourceOccurrences?.length
                 ? JSON.stringify(check.siteResourceOccurrences)
                 : null,
-              check.siteResourceEvidence ? JSON.stringify(check.siteResourceEvidence) : null,
+              check.siteResourceEvidence
+                ? JSON.stringify(check.siteResourceEvidence)
+                : null,
               check.observation ? JSON.stringify(check.observation) : null,
               timestamp
             );
@@ -4399,9 +4576,15 @@ export class SQLiteStorage implements CrawlStorage {
                WHERE cache_key IN (${placeholders})
                GROUP BY cache_key`
             )
-            .all(...chunk) as Array<{ cache_key: string; payload: Uint8Array<ArrayBuffer> }>;
+            .all(...chunk) as Array<{
+            cache_key: string;
+            payload: Uint8Array<ArrayBuffer>;
+          }>;
           for (const row of rows) {
-            out.set(row.cache_key, Buffer.from(Bun.gunzipSync(row.payload)).toString("utf8"));
+            out.set(
+              row.cache_key,
+              Buffer.from(Bun.gunzipSync(row.payload)).toString("utf8")
+            );
           }
         }
         return out;
@@ -4420,7 +4603,11 @@ export class SQLiteStorage implements CrawlStorage {
    */
   savePageRuleCacheBatch(
     crawlId: string,
-    entries: ReadonlyArray<{ normalizedUrl: string; cacheKey: string; payload: string }>
+    entries: ReadonlyArray<{
+      normalizedUrl: string;
+      cacheKey: string;
+      payload: string;
+    }>
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -4520,10 +4707,18 @@ export class SQLiteStorage implements CrawlStorage {
         `);
 
         const transaction = db.transaction(() => {
-          db.prepare("DELETE FROM entity_map_pages WHERE crawl_id = ?").run(crawlId);
-          db.prepare("DELETE FROM entity_map_runs WHERE crawl_id = ?").run(crawlId);
-          db.prepare("DELETE FROM entity_occurrences WHERE crawl_id = ?").run(crawlId);
-          db.prepare("DELETE FROM entity_edges WHERE crawl_id = ?").run(crawlId);
+          db.prepare("DELETE FROM entity_map_pages WHERE crawl_id = ?").run(
+            crawlId
+          );
+          db.prepare("DELETE FROM entity_map_runs WHERE crawl_id = ?").run(
+            crawlId
+          );
+          db.prepare("DELETE FROM entity_occurrences WHERE crawl_id = ?").run(
+            crawlId
+          );
+          db.prepare("DELETE FROM entity_edges WHERE crawl_id = ?").run(
+            crawlId
+          );
           db.prepare("DELETE FROM entities WHERE crawl_id = ?").run(crawlId);
 
           for (const node of map.nodes) {
@@ -4565,7 +4760,8 @@ export class SQLiteStorage implements CrawlStorage {
             VALUES (?, ?, ?, ?)
           `);
           for (const page of map.pages ?? []) {
-            if (page.entityCount === 0 && page.references.length === 0) continue;
+            if (page.entityCount === 0 && page.references.length === 0)
+              continue;
             const sorted =
               page.references.length > MAX_STORED_PAGE_REFS
                 ? [...page.references].sort()
@@ -4749,7 +4945,8 @@ export class SQLiteStorage implements CrawlStorage {
             target: row.target,
             dangling: row.dangling === 1,
             occurrences: row.occurrences,
-            pages: row.pages === null ? null : (JSON.parse(row.pages) as string[]),
+            pages:
+              row.pages === null ? null : (JSON.parse(row.pages) as string[]),
             morePages: row.more_pages ?? 0,
           })),
           occurrences: occurrenceRows.map((row) => ({
@@ -4848,9 +5045,13 @@ export class SQLiteStorage implements CrawlStorage {
                   check.pages ? JSON.stringify(check.pages) : null,
                   check.skipReason || null,
                   check.componentOccurrences?.length
-                    ? JSON.stringify(packComponentOccurrences(check.componentOccurrences))
+                    ? JSON.stringify(
+                        packComponentOccurrences(check.componentOccurrences)
+                      )
                     : null,
-                  check.componentEvidence ? JSON.stringify(check.componentEvidence) : null,
+                  check.componentEvidence
+                    ? JSON.stringify(check.componentEvidence)
+                    : null,
                   check.siteResourceOccurrences?.length
                     ? JSON.stringify(check.siteResourceOccurrences)
                     : null,
@@ -5088,7 +5289,9 @@ export class SQLiteStorage implements CrawlStorage {
    * under the empty page url and are not counted. One indexed GROUP BY, no checks
    * materialized.
    */
-  getRuleCountsByPage(crawlId: string): Effect.Effect<Map<string, number>, StorageError, never> {
+  getRuleCountsByPage(
+    crawlId: string
+  ): Effect.Effect<Map<string, number>, StorageError, never> {
     return Effect.try({
       try: () => {
         const rows = this.getDb()
@@ -5109,17 +5312,38 @@ export class SQLiteStorage implements CrawlStorage {
    */
   getUnstoredFrontierEntries(
     crawlId: string,
-    limit: number,
-  ): Effect.Effect<{ entries: Array<{ url: string; status: "failed" | "skipped"; reason: string | null }>; total: number }, StorageError, never> {
+    limit: number
+  ): Effect.Effect<
+    {
+      entries: Array<{
+        url: string;
+        status: "failed" | "skipped";
+        reason: string | null;
+      }>;
+      total: number;
+    },
+    StorageError,
+    never
+  > {
     return Effect.try({
       try: () => {
         const db = this.getDb();
         const unstored =
           "FROM frontier f WHERE f.crawl_id = ? AND f.status IN ('failed', 'skipped') AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.crawl_id = f.crawl_id AND p.normalized_url = f.normalized_url)";
         const rows = db
-          .prepare(`SELECT f.normalized_url AS url, f.status AS status, f.reason AS reason ${unstored} ORDER BY (f.status = 'skipped'), f.enqueued_at, f.normalized_url LIMIT ?`)
-          .all(crawlId, Math.max(0, Math.floor(limit))) as Array<{ url: string; status: "failed" | "skipped"; reason: string | null }>;
-        const total = (db.prepare(`SELECT COUNT(*) AS n ${unstored}`).get(crawlId) as { n: number }).n;
+          .prepare(
+            `SELECT f.normalized_url AS url, f.status AS status, f.reason AS reason ${unstored} ORDER BY (f.status = 'skipped'), f.enqueued_at, f.normalized_url LIMIT ?`
+          )
+          .all(crawlId, Math.max(0, Math.floor(limit))) as Array<{
+          url: string;
+          status: "failed" | "skipped";
+          reason: string | null;
+        }>;
+        const total = (
+          db.prepare(`SELECT COUNT(*) AS n ${unstored}`).get(crawlId) as {
+            n: number;
+          }
+        ).n;
         return { entries: rows, total };
       },
       catch: (e) => StorageError.read(e),
@@ -5218,12 +5442,16 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /** How many rule_results rows a crawl has: one indexed COUNT, no row materialized (repo#2352). */
-  countRuleResults(crawlId: string): Effect.Effect<number, StorageError, never> {
+  countRuleResults(
+    crawlId: string
+  ): Effect.Effect<number, StorageError, never> {
     return Effect.try({
       try: () =>
         (
           this.getDb()
-            .prepare("SELECT COUNT(*) AS n FROM rule_results WHERE crawl_id = ?")
+            .prepare(
+              "SELECT COUNT(*) AS n FROM rule_results WHERE crawl_id = ?"
+            )
             .get(crawlId) as { n: number }
         ).n,
       catch: (e) => StorageError.read(e),
@@ -5239,7 +5467,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   forEachRuleResultGroup(
     crawlId: string,
-    visit: (ruleId: string, checks: CheckResult[]) => void,
+    visit: (ruleId: string, checks: CheckResult[]) => void
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -5254,7 +5482,9 @@ export class SQLiteStorage implements CrawlStorage {
         let current: string | undefined;
         let checks: CheckResult[] = [];
         for (const row of db
-          .prepare("SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY rule_id, id")
+          .prepare(
+            "SELECT * FROM rule_results WHERE crawl_id = ? ORDER BY rule_id, id"
+          )
           .iterate(crawlId) as Iterable<Record<string, unknown>>) {
           const ruleId = row.rule_id as string;
           if (current !== undefined && ruleId !== current) {
@@ -5303,7 +5533,10 @@ export class SQLiteStorage implements CrawlStorage {
               const items = JSON.parse(row.items) as unknown;
               if (Array.isArray(items)) {
                 for (const item of items) {
-                  const entry = item as { id?: unknown; sourcePages?: unknown } | null;
+                  const entry = item as {
+                    id?: unknown;
+                    sourcePages?: unknown;
+                  } | null;
                   // A duplicate group names its pages in `sourcePages` (its id is the title);
                   // an orphan names the page as its id.
                   if (Array.isArray(entry?.sourcePages)) {
@@ -5311,7 +5544,10 @@ export class SQLiteStorage implements CrawlStorage {
                       if (typeof page === "string") urls.add(page);
                     }
                   }
-                  if (typeof entry?.id === "string" && /^https?:\/\//.test(entry.id)) {
+                  if (
+                    typeof entry?.id === "string" &&
+                    /^https?:\/\//.test(entry.id)
+                  ) {
                     urls.add(entry.id);
                   }
                 }
@@ -5340,7 +5576,7 @@ export class SQLiteStorage implements CrawlStorage {
    * mutate checks. */
   private rowToCheckResult(
     row: Record<string, unknown>,
-    intern: (s: string) => string = (s) => s,
+    intern: (s: string) => string = (s) => s
   ): CheckResult {
     const pageUrl = row.page_url as string;
     const check: CheckResult = {
@@ -5367,12 +5603,12 @@ export class SQLiteStorage implements CrawlStorage {
     // Reads BOTH the hoisted form and a plain occurrence array (see the codec).
     if (row.component_occurrences) {
       check.componentOccurrences = unpackComponentOccurrences(
-        JSON.parse(row.component_occurrences as string),
+        JSON.parse(row.component_occurrences as string)
       );
     }
     if (row.component_evidence) {
       check.componentEvidence = JSON.parse(
-        row.component_evidence as string,
+        row.component_evidence as string
       ) as CheckResult["componentEvidence"];
     }
     // #2341, same contract: absent on rows written before the v31 column,
@@ -5380,18 +5616,20 @@ export class SQLiteStorage implements CrawlStorage {
     // "recorded nothing" and a legacy audit renders as it always did.
     if (row.site_resource_occurrences) {
       check.siteResourceOccurrences = JSON.parse(
-        row.site_resource_occurrences as string,
+        row.site_resource_occurrences as string
       ) as CheckResult["siteResourceOccurrences"];
     }
     if (row.site_resource_evidence) {
       check.siteResourceEvidence = JSON.parse(
-        row.site_resource_evidence as string,
+        row.site_resource_evidence as string
       ) as CheckResult["siteResourceEvidence"];
     }
     // repo#2302: absent on rows written before the v42 column, so a legacy
     // audit's report leaves the field out exactly as it always did.
     if (row.observation) {
-      check.observation = JSON.parse(row.observation as string) as CheckResult["observation"];
+      check.observation = JSON.parse(
+        row.observation as string
+      ) as CheckResult["observation"];
     }
     return check;
   }
@@ -5546,9 +5784,7 @@ export class SQLiteStorage implements CrawlStorage {
              WHERE ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}
              ORDER BY started_at DESC, rowid DESC`
           )
-          .all() as Array<
-          { id: string; started_at: number } & LeaseCrawlRow
-        >;
+          .all() as Array<{ id: string; started_at: number } & LeaseCrawlRow>;
         // A crawl whose owner is demonstrably alive is building its report right
         // now, however long ago it last touched a page.
         return rows
@@ -5607,7 +5843,10 @@ export class SQLiteStorage implements CrawlStorage {
                 `SELECT id, heartbeat_at, owner_pid, owner_host FROM crawls WHERE ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}`
               )
               .all() as Array<
-              { id: string } & Pick<LeaseCrawlRow, "heartbeat_at" | "owner_pid" | "owner_host">
+              { id: string } & Pick<
+                LeaseCrawlRow,
+                "heartbeat_at" | "owner_pid" | "owner_host"
+              >
             >
           )
             .filter((row) => !isLeaseLive(row, this.leaseEnv))
@@ -5628,7 +5867,8 @@ export class SQLiteStorage implements CrawlStorage {
    */
   static readonly SUPERSEDED_REPAIR_SQL = {
     probe: "SELECT 1 FROM maintenance_marks WHERE name = 'superseded-pages'",
-    cursor: "SELECT done_at AS at FROM maintenance_marks WHERE name = 'superseded-pages-cursor'",
+    cursor:
+      "SELECT done_at AS at FROM maintenance_marks WHERE name = 'superseded-pages-cursor'",
     chunkUpper: `SELECT MAX(rid) AS upper FROM (
                    SELECT p.rowid AS rid FROM pages p
                    WHERE p.rowid > ?
@@ -5805,9 +6045,13 @@ export class SQLiteStorage implements CrawlStorage {
             ...(row.owner_pid != null || row.owner_host != null
               ? {
                   ownerPid:
-                    typeof row.owner_pid === "number" ? row.owner_pid : undefined,
+                    typeof row.owner_pid === "number"
+                      ? row.owner_pid
+                      : undefined,
                   ownerHost:
-                    typeof row.owner_host === "string" ? row.owner_host : undefined,
+                    typeof row.owner_host === "string"
+                      ? row.owner_host
+                      : undefined,
                   heartbeatAt:
                     typeof row.heartbeat_at === "number"
                       ? row.heartbeat_at
@@ -5942,7 +6186,11 @@ export class SQLiteStorage implements CrawlStorage {
    * real number.
    */
   previewRetireCrawls(crawlIds: string[]): Effect.Effect<
-    { rowsByTable: Record<string, number>; supersededPages: number; totalRows: number },
+    {
+      rowsByTable: Record<string, number>;
+      supersededPages: number;
+      totalRows: number;
+    },
     StorageError,
     never
   > {
@@ -6021,9 +6269,7 @@ export class SQLiteStorage implements CrawlStorage {
    */
   private unfinishedCrawlRows(ids?: string[]): UnfinishedCrawlRow[] {
     const now = this.leaseEnv.now();
-    const where = ids
-      ? `AND id IN (${ids.map(() => "?").join(", ")})`
-      : "";
+    const where = ids ? `AND id IN (${ids.map(() => "?").join(", ")})` : "";
     return this.getDb()
       .prepare(
         `SELECT id, status, started_at, heartbeat_at, owner_pid, owner_host,
@@ -6158,13 +6404,18 @@ export class SQLiteStorage implements CrawlStorage {
                       `SELECT id, heartbeat_at, owner_pid, owner_host FROM crawls WHERE id IN (${marks(building.length)}) AND ${SQLiteStorage.interruptedReportSql(this.leaseEnv.now())}`
                     )
                     .all(...building) as Array<
-                    { id: string } & Pick<LeaseCrawlRow, "heartbeat_at" | "owner_pid" | "owner_host">
+                    { id: string } & Pick<
+                      LeaseCrawlRow,
+                      "heartbeat_at" | "owner_pid" | "owner_host"
+                    >
                   >
                 )
                   .filter((row) => !isLeaseLive(row, this.leaseEnv))
                   .map((c) => c.id)
           );
-          const liveBuilding = new Set(building.filter((id) => !stillInterrupted.has(id)));
+          const liveBuilding = new Set(
+            building.filter((id) => !stillInterrupted.has(id))
+          );
           // Re-decided HERE, inside the transaction, from the rows as they are
           // now (a heartbeat may have landed since the listing). The pid probe
           // is a synchronous syscall, so it is legal in this transaction.
@@ -6813,11 +7064,17 @@ export class SQLiteStorage implements CrawlStorage {
       row.templateFp,
       row.secretHits ?? null,
       row.metaNoindex ? 1 : 0,
-      row.indexableReasons.length > 0 ? JSON.stringify(row.indexableReasons) : null,
-      row.richResultTypes.length > 0 ? JSON.stringify(row.richResultTypes) : null,
+      row.indexableReasons.length > 0
+        ? JSON.stringify(row.indexableReasons)
+        : null,
+      row.richResultTypes.length > 0
+        ? JSON.stringify(row.richResultTypes)
+        : null,
       row.napName,
       row.napPhones.length > 0 ? JSON.stringify(row.napPhones) : null,
-      row.napPhoneFormats.length > 0 ? JSON.stringify(row.napPhoneFormats) : null,
+      row.napPhoneFormats.length > 0
+        ? JSON.stringify(row.napPhoneFormats)
+        : null,
       row.napAddress,
       row.napAddressFormat,
       row.napTelLink ? 1 : 0,
@@ -6828,7 +7085,9 @@ export class SQLiteStorage implements CrawlStorage {
       row.reportScalars ? JSON.stringify(row.reportScalars) : null,
       // Optional-chained: a rule-cache payload stored before #489 replays a
       // features object without the field, and stores as "no alternates".
-      row.hreflangAlternates?.length ? JSON.stringify(row.hreflangAlternates) : null,
+      row.hreflangAlternates?.length
+        ? JSON.stringify(row.hreflangAlternates)
+        : null,
       row.readingLevel ?? null,
       // Bounded by the variant table; an empty map stores as null, like no alternates.
       row.terminologyVariants && Object.keys(row.terminologyVariants).length > 0
@@ -7092,7 +7351,12 @@ export class SQLiteStorage implements CrawlStorage {
     valueExpr: string,
     maxGroups: number,
     maxUrlsPerGroup: number
-  ): Array<{ key: string; sample: string | null; urls: string[]; count: number }> {
+  ): Array<{
+    key: string;
+    sample: string | null;
+    urls: string[];
+    count: number;
+  }> {
     const db = this.getDb();
     const stmt = db.prepare(`
       SELECT hash, sample, cnt, normalized_url FROM (
@@ -7198,17 +7462,29 @@ export class SQLiteStorage implements CrawlStorage {
       themeColor: (row.theme_color as string | null) ?? null,
       ogImage: (row.og_image as string | null) ?? null,
       reportScalars: row.report_scalars
-        ? this.safeJsonParse(row.report_scalars as string, null as PageReportScalars | null)
+        ? this.safeJsonParse(
+            row.report_scalars as string,
+            null as PageReportScalars | null
+          )
         : null,
       hreflangAlternates: row.hreflang_alternates
-        ? this.safeJsonParse(row.hreflang_alternates as string, null as HreflangAlternate[] | null)
+        ? this.safeJsonParse(
+            row.hreflang_alternates as string,
+            null as HreflangAlternate[] | null
+          )
         : null,
       readingLevel: (row.reading_level as number | null) ?? null,
       terminologyVariants: row.terminology_variants
-        ? this.safeJsonParse(row.terminology_variants as string, null as Record<string, number> | null)
+        ? this.safeJsonParse(
+            row.terminology_variants as string,
+            null as Record<string, number> | null
+          )
         : null,
       navLinkSet: row.nav_link_set
-        ? this.safeJsonParse(row.nav_link_set as string, null as NavLinkSet | null)
+        ? this.safeJsonParse(
+            row.nav_link_set as string,
+            null as NavLinkSet | null
+          )
         : null,
       contentSimhash: (row.content_simhash as string | null) ?? null,
     };

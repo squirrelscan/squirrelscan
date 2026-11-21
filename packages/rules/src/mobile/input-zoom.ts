@@ -14,11 +14,12 @@
 
 import type { Element } from "linkedom";
 
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { parseRules } from "../content/hidden-text";
 import { skipComment, skipString, stepBlocks } from "../shared/css-tokens";
-import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 /** iOS Safari zooms a focused field below this size. */
 const MIN_FIELD_PX = 16;
@@ -117,7 +118,7 @@ const FONT_SHORTHAND = new RegExp(
     String.raw`((?:\d+(?:\.\d+)?|\.\d+)(?:px|pt|rem|em|%)|xx-small|x-small|small|medium|large|x-large|xx-large|xxx-large|smaller|larger)` +
     String.raw`(?:\s*\/\s*(?:normal|(?:\d+(?:\.\d+)?|\.\d+)(?:px|pt|rem|em|%)?))?` +
     String.raw`\s+${FONT_FAMILY}(?:\s*,\s*${FONT_FAMILY})*$`,
-  "i",
+  "i"
 );
 
 interface Declaration {
@@ -216,7 +217,10 @@ export function fontShorthandSize(value: string): string | null {
  * this read does not follow. A comment reads as a space, as it separates
  * tokens in a browser: `1`, a comment, then `2px` is not `12px`.
  */
-function readDeclarations(css: string): { decls: Declaration[]; nested: boolean } {
+function readDeclarations(css: string): {
+  decls: Declaration[];
+  nested: boolean;
+} {
   const decls: Declaration[] = [];
   let nested = false;
   let chunk = "";
@@ -274,7 +278,9 @@ function readDeclarations(css: string): { decls: Declaration[]; nested: boolean 
  * grammar this rule reads, and `all`, come back as values that read as not
  * plain.
  */
-function blockSize(decls: Declaration[]): { size: string; important: boolean } | null {
+function blockSize(
+  decls: Declaration[]
+): { size: string; important: boolean } | null {
   let plain: string | null = null;
   let important: string | null = null;
   for (const d of decls) {
@@ -300,7 +306,8 @@ function hidesElement(decls: Declaration[]): boolean {
   return decls.some(
     (d) =>
       (d.prop === "display" && d.value === "none") ||
-      (d.prop === "visibility" && (d.value === "hidden" || d.value === "collapse")),
+      (d.prop === "visibility" &&
+        (d.value === "hidden" || d.value === "collapse"))
   );
 }
 
@@ -310,7 +317,10 @@ function hidesElement(decls: Declaration[]): boolean {
  * `var()`, `calc()`, `inherit` and the like on things a static read does not
  * know.
  */
-export function sizeToPx(value: string, rootPx: number | null): number | "relative-unit" {
+export function sizeToPx(
+  value: string,
+  rootPx: number | null
+): number | "relative-unit" {
   const v = value.trim().toLowerCase();
   if (Object.hasOwn(SIZE_KEYWORDS, v)) return SIZE_KEYWORDS[v]!;
   const match = v.match(/^((?:\d+(?:\.\d+)?|\.\d+))(px|pt|rem)$/);
@@ -324,7 +334,7 @@ export function sizeToPx(value: string, rootPx: number | null): number | "relati
 /** Whether a selector can style the field itself (pseudo-elements style a part of it). */
 function stylesTheElement(selector: string): boolean {
   return !/::|:(?:before|after|first-line|first-letter|-ms-input-placeholder|-moz-placeholder)\b/i.test(
-    selector,
+    selector
   );
 }
 
@@ -352,9 +362,10 @@ function prepareSelector(text: string): Prepared {
   // Relaxing a state inside `:not()` would invert it, so such a `:not()` is
   // dropped instead, which only widens the selector.
   const widened = text.replace(/:not\(([^()]*)\)/gi, (whole, inner: string) =>
-    HAS_UNRUNNABLE_PSEUDO.test(inner) ? ":is(*)" : whole,
+    HAS_UNRUNNABLE_PSEUDO.test(inner) ? ":is(*)" : whole
   );
-  const unrunnable = /:not\(/i.test(widened) && HAS_UNRUNNABLE_PSEUDO.test(widened);
+  const unrunnable =
+    /:not\(/i.test(widened) && HAS_UNRUNNABLE_PSEUDO.test(widened);
   const run = widened.replace(UNRUNNABLE_PSEUDO, ":is(*)");
   return { text, run, relaxed: run !== text, unrunnable };
 }
@@ -363,7 +374,10 @@ function prepareSelector(text: string): Prepared {
  * Whether a selector matches the element: "unsupported" when it might, but
  * only in a state or through a selector the engine cannot run.
  */
-function matchSelector(el: Element, selector: Prepared): boolean | "unsupported" {
+function matchSelector(
+  el: Element,
+  selector: Prepared
+): boolean | "unsupported" {
   if (selector.unrunnable) return "unsupported";
   let hit: boolean;
   try {
@@ -391,7 +405,8 @@ function spend(budget: Budget): boolean {
 /** How many ancestors the element has, counting up to `cap + 1` at most. */
 function depthOf(el: Element, cap: number): number {
   let depth = 0;
-  for (let n = el.parentElement; n && depth <= cap; n = n.parentElement) depth++;
+  for (let n = el.parentElement; n && depth <= cap; n = n.parentElement)
+    depth++;
   return depth;
 }
 
@@ -411,7 +426,7 @@ function isTextEntry(el: Element): boolean {
  */
 function canFocus(
   field: Element,
-  styleHides: Map<Element, boolean | "unknown">,
+  styleHides: Map<Element, boolean | "unknown">
 ): boolean | "unknown" {
   if (field.hasAttribute("disabled")) return false;
   let inSummary = false;
@@ -423,7 +438,8 @@ function canFocus(
     )
       return false;
     const tag = n.tagName.toLowerCase();
-    if (n !== field && tag === "fieldset" && n.hasAttribute("disabled")) return false;
+    if (n !== field && tag === "fieldset" && n.hasAttribute("disabled"))
+      return false;
     if (tag === "template" || tag === "noscript") return false;
     if (tag === "dialog" && !n.hasAttribute("open")) return false;
     if (tag === "summary") inSummary = true;
@@ -436,8 +452,12 @@ function canFocus(
       const style = n.getAttribute("style") || "";
       // Too long to read cheaply: the field is not read. Its own style is
       // left to the cascade, which does the same.
-      if (style.length > MAX_INLINE_STYLE_CHARS) hides = n === field ? false : "unknown";
-      else hides = /display|visibility/i.test(style) && hidesElement(readDeclarations(style).decls);
+      if (style.length > MAX_INLINE_STYLE_CHARS)
+        hides = n === field ? false : "unknown";
+      else
+        hides =
+          /display|visibility/i.test(style) &&
+          hidesElement(readDeclarations(style).decls);
       styleHides.set(n, hides);
     }
     if (hides === "unknown") return "unknown";
@@ -461,7 +481,9 @@ function describeField(el: Element): string {
 
 /** Cuts page-controlled text quoted in an item to {@link MAX_LABEL_CHARS}. */
 function clip(text: string): string {
-  return text.length > MAX_LABEL_CHARS ? `${text.slice(0, MAX_LABEL_CHARS)}…` : text;
+  return text.length > MAX_LABEL_CHARS
+    ? `${text.slice(0, MAX_LABEL_CHARS)}…`
+    : text;
 }
 
 function formatPx(px: number): string {
@@ -534,7 +556,12 @@ type Cascaded = { value: string; source: string } | { unread: Unread } | null;
  * `!important` inline size, then `!important` rules, then the inline size,
  * then plain rules. Null when nothing sizes it.
  */
-function cascade(el: Element, rules: SizeRule[], unseenCss: boolean, budget: Budget): Cascaded {
+function cascade(
+  el: Element,
+  rules: SizeRule[],
+  unseenCss: boolean,
+  budget: Budget
+): Cascaded {
   const matched: Array<{ rule: SizeRule; selector: Prepared }> = [];
   for (const rule of rules) {
     for (const selector of rule.selectors) {
@@ -553,16 +580,23 @@ function cascade(el: Element, rules: SizeRule[], unseenCss: boolean, budget: Bud
   const inline = blockSize(readDeclarations(styleAttr).decls);
   if (inline?.important) return { value: inline.size, source: "inline style" };
   const important = matched.filter((m) => m.rule.important);
-  const winners = important.length > 0 ? important : inline !== null ? [] : matched;
+  const winners =
+    important.length > 0 ? important : inline !== null ? [] : matched;
   if (winners.length === 0)
-    return inline === null ? null : { value: inline.size, source: "inline style" };
+    return inline === null
+      ? null
+      : { value: inline.size, source: "inline style" };
   // A rule the audit cannot see may come later in the cascade.
   if (unseenCss) return { unread: "unseen-css" };
   // A media query can set the phone-width size, which is the one that matters.
   if (winners.some((m) => m.rule.conditional)) return { unread: "conditional" };
   // Without specificity, rules that disagree cannot be ordered.
-  if (new Set(winners.map((m) => m.rule.size)).size > 1) return { unread: "conflict" };
-  return { value: winners[0]!.rule.size, source: `<style>: ${clip(winners[0]!.selector.text)}` };
+  if (new Set(winners.map((m) => m.rule.size)).size > 1)
+    return { unread: "conflict" };
+  return {
+    value: winners[0]!.rule.size,
+    source: `<style>: ${clip(winners[0]!.selector.text)}`,
+  };
 }
 
 /** The root size `rem` resolves against, or null when the page does not pin it down. */
@@ -570,7 +604,7 @@ function resolveRoot(
   root: Element | null,
   rules: SizeRule[],
   unseenCss: boolean,
-  budget: Budget,
+  budget: Budget
 ): number | null {
   // An external stylesheet may set the root (`html { font-size: 62.5% }`).
   if (unseenCss) return null;
@@ -578,7 +612,9 @@ function resolveRoot(
   const c = cascade(root, rules, false, budget);
   if (c === null) return DEFAULT_ROOT_PX;
   if ("unread" in c) return null;
-  const relative = c.value.trim().match(/^((?:\d+(?:\.\d+)?|\.\d+))(rem|em|%)$/);
+  const relative = c.value
+    .trim()
+    .match(/^((?:\d+(?:\.\d+)?|\.\d+))(rem|em|%)$/);
   if (relative)
     return (
       Number.parseFloat(relative[1]!) *
@@ -603,7 +639,7 @@ function underHideRule(
   el: Element,
   hideSelectors: Prepared[],
   memo: Map<Element, boolean>,
-  budget: Budget,
+  budget: Budget
 ): boolean {
   const chain: Element[] = [];
   let n: Element | null = el;
@@ -632,7 +668,7 @@ function judgeField(
   styles: { sizeRules: SizeRule[]; hideSelectors: Prepared[] },
   rootPx: number | null,
   unseenCss: boolean,
-  work: Budget & { hidden: Map<Element, boolean> },
+  work: Budget & { hidden: Map<Element, boolean> }
 ): FieldVerdict {
   const budget = work;
   // A `<style>` rule may hide the field, or a wrapper around it, so it is
@@ -660,7 +696,9 @@ function judgeField(
 /** Whether the viewport tag blocks zoom, the usual workaround for this zoom. */
 function viewportBlocksZoom(ctx: RuleContext): boolean {
   const content =
-    ctx.parsed.document?.querySelector('meta[name="viewport"]')?.getAttribute("content") || "";
+    ctx.parsed.document
+      ?.querySelector('meta[name="viewport"]')
+      ?.getAttribute("content") || "";
   return (
     /user-scalable\s*=\s*(?:no|0)\b/i.test(content) ||
     /maximum-scale\s*=\s*1(?:\.0+)?(?![0-9])/i.test(content)
@@ -699,7 +737,8 @@ export const inputZoomRule: Rule = {
       if (!isTextEntry(el)) continue;
       scanned++;
       const unchecked = scanned > MAX_SCANNED_FIELDS;
-      const tooDeep = !unchecked && depthOf(el, MAX_FIELD_DEPTH) > MAX_FIELD_DEPTH;
+      const tooDeep =
+        !unchecked && depthOf(el, MAX_FIELD_DEPTH) > MAX_FIELD_DEPTH;
       const focus = unchecked || tooDeep ? "unknown" : canFocus(el, styleHides);
       if (focus === false) continue;
       if (focus === "unknown" || fields.length >= MAX_FIELDS) overCap++;
@@ -724,7 +763,8 @@ export const inputZoomRule: Rule = {
         break;
       }
       const media = (el.getAttribute("media") || "").trim().toLowerCase();
-      if (media === "print" || el.closest("noscript, template") !== null) continue;
+      if (media === "print" || el.closest("noscript, template") !== null)
+        continue;
       blocks.push({
         text: el.textContent || "",
         conditional: media !== "" && media !== "all" && media !== "screen",
@@ -735,8 +775,9 @@ export const inputZoomRule: Rule = {
     // A stylesheet linked (or preloaded as a style and switched on by script)
     // or imported may size the fields or the root, and outrank `<style>` rules.
     const hasExternalCss =
-      doc.querySelector('link[rel~="stylesheet" i], link[rel~="preload" i][as="style" i]') !==
-        null || blocks.some((b) => /@import\b/i.test(b.text));
+      doc.querySelector(
+        'link[rel~="stylesheet" i], link[rel~="preload" i][as="style" i]'
+      ) !== null || blocks.some((b) => /@import\b/i.test(b.text));
     const unseenCss = hasExternalCss || styles.nested;
 
     const budget = {
@@ -782,7 +823,9 @@ export const inputZoomRule: Rule = {
           fields: total,
           under16px: small.length,
           notRead: unread,
-          ...(small.length > MAX_ITEMS ? { additional: small.length - MAX_ITEMS } : {}),
+          ...(small.length > MAX_ITEMS
+            ? { additional: small.length - MAX_ITEMS }
+            : {}),
         },
       });
     } else if (unread > 0) {
@@ -790,7 +833,12 @@ export const inputZoomRule: Rule = {
         name: "input-zoom",
         status: "info",
         message: `No form field read is under 16px.${notRead}`,
-        details: { fields: total, under16px: 0, notRead: unread, inconclusive: true },
+        details: {
+          fields: total,
+          under16px: 0,
+          notRead: unread,
+          inconclusive: true,
+        },
       });
     } else {
       checks.push({

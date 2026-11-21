@@ -1,12 +1,12 @@
 // images/offscreen-lazy - Offscreen images lazy loading
 
-import { z } from "zod";
-
-import { elementSelector } from "../element-path";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { initialViewportFlags } from "@squirrelscan/utils/image-loading";
+import { z } from "zod";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { elementSelector } from "../element-path";
 
 export const optionsSchema = z.object({
   above_fold_count: z
@@ -44,7 +44,9 @@ function itemFor(img: Element): { id: string; snippet?: string } {
   if (fallback) return { id: filenameOf(fallback) };
   const tag = (img.outerHTML || "<img>").replace(/\s+/g, " ");
   const snippet =
-    tag.length > SNIPPET_MAX_CHARS ? `${tag.slice(0, SNIPPET_MAX_CHARS - 1)}…` : tag;
+    tag.length > SNIPPET_MAX_CHARS
+      ? `${tag.slice(0, SNIPPET_MAX_CHARS - 1)}…`
+      : tag;
   return { id: elementSelector(img), snippet };
 }
 
@@ -94,7 +96,9 @@ export const offscreenLazyRule: Rule = {
       })),
       opts.above_fold_count
     );
-    const belowFoldImages = imagesArray.filter((_, index) => !inViewport[index]);
+    const belowFoldImages = imagesArray.filter(
+      (_, index) => !inViewport[index]
+    );
 
     if (belowFoldImages.length === 0) {
       checks.push({
@@ -139,7 +143,9 @@ export const offscreenLazyRule: Rule = {
           aboveFoldCount: opts.above_fold_count,
           belowFoldBasis:
             "images after the first above_fold_count content images in document order; no viewport is measured in an HTTP-only audit",
-          ...(missingLazy.length > 10 ? { additional: missingLazy.length - 10 } : {}),
+          ...(missingLazy.length > 10
+            ? { additional: missingLazy.length - 10 }
+            : {}),
         },
       });
     }

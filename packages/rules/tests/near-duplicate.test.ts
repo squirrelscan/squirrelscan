@@ -2,12 +2,22 @@
 // Pages are real parsePage HTML with nav, header and footer chrome. Every cluster case runs through
 // BOTH paths (legacy ctx.site.pages, streaming siteQuery + collectedSignals) where it matters.
 
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
+import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../src/types";
 
-import { duplicateContentRule, fingerprintForPage } from "../src/content/duplicate-content";
+import {
+  duplicateContentRule,
+  fingerprintForPage,
+} from "../src/content/duplicate-content";
 import {
   buildNearDuplicate,
   MAX_URLS_PER_CLUSTER,
@@ -21,10 +31,8 @@ import {
   pageContentSimhash,
   simhashDistance,
 } from "../src/content/near-duplicate";
-import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { seoDoorwayRule } from "../src/integrity/seo-doorway";
 import { noindexSource } from "../src/shared/noindex";
-import type { RuleContext } from "../src/types";
 
 // ---- deterministic, varied English -------------------------------------------------------
 
@@ -133,7 +141,9 @@ function sentence(next: () => number): string {
 /** Paragraphs for a topic seed: 8 paragraphs of 7 varied sentences, about 600 words. */
 function paragraphs(seed: number): string[] {
   const next = lcg(seed);
-  return Array.from({ length: 8 }, () => Array.from({ length: 7 }, () => sentence(next)).join(" "));
+  return Array.from({ length: 8 }, () =>
+    Array.from({ length: 7 }, () => sentence(next)).join(" ")
+  );
 }
 
 interface Variant {
@@ -154,14 +164,15 @@ function mainText(seed: number, v: Variant = {}): string {
     paras[0] = `Our team serves ${v.city} and the surrounding area every week. ${paras[0]}`;
     paras[7] = `${paras[7]} Call today to book a visit in ${v.city}.`;
   }
-  if (v.date) paras[2] = `${paras[2]} This guide was last reviewed on ${v.date}.`;
+  if (v.date)
+    paras[2] = `${paras[2]} This guide was last reviewed on ${v.date}.`;
   return paras.map((p) => `<p>${p}</p>`).join("\n");
 }
 
 function chrome(label: string): { nav: string; footer: string } {
   const links = Array.from(
     { length: 12 },
-    (_, i) => `<a href="/${label}/${i}">Menu ${label} item ${i}</a>`,
+    (_, i) => `<a href="/${label}/${i}">Menu ${label} item ${i}</a>`
   );
   return {
     nav: `<header><nav>${links.join(" ")}</nav></header>`,
@@ -192,7 +203,8 @@ function html(s: Spec): string {
 }
 
 const parsedOf = (s: Spec) => parsePage(html(s), u(s.path));
-const hashOf = (s: Spec) => pageContentSimhash(parsedOf(s).document, u(s.path), s.finalUrl);
+const hashOf = (s: Spec) =>
+  pageContentSimhash(parsedOf(s).document, u(s.path), s.finalUrl);
 
 const baseCtx = {
   page: { url: u("/"), html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -246,7 +258,11 @@ function streamingCtx(specs: Spec[]): RuleContext {
       robotsNoindex: noindexSource(parsed, undefined) !== null,
       canonical: parsed.meta.canonical ?? null,
       hreflangAlternates: parsed.hreflangAlternates ?? null,
-      contentSimhash: pageContentSimhash(parsed.document, u(s.path), s.finalUrl),
+      contentSimhash: pageContentSimhash(
+        parsed.document,
+        u(s.path),
+        s.finalUrl
+      ),
     } as unknown as PageFeatureRow;
   });
   return {
@@ -258,8 +274,12 @@ function streamingCtx(specs: Spec[]): RuleContext {
         (s) =>
           ({
             url: u(s.path),
-            contentFingerprint: fingerprintForPage(parsedOf(s).document, u(s.path), s.finalUrl),
-          }) as never,
+            contentFingerprint: fingerprintForPage(
+              parsedOf(s).document,
+              u(s.path),
+              s.finalUrl
+            ),
+          }) as never
       ),
     },
   };
@@ -274,7 +294,9 @@ async function check(ctx: RuleContext): Promise<CheckResult> {
 /** Both paths, deep-equal on the whole RuleResult. */
 async function both(specs: Spec[]): Promise<CheckResult> {
   const legacy = await Promise.resolve(nearDuplicateRule.run(legacyCtx(specs)));
-  const streaming = await Promise.resolve(nearDuplicateRule.run(streamingCtx(specs)));
+  const streaming = await Promise.resolve(
+    nearDuplicateRule.run(streamingCtx(specs))
+  );
   expect(streaming).toEqual(legacy);
   return legacy.checks[0]!;
 }
@@ -323,12 +345,15 @@ describe("pageContentSimhash", () => {
     const a = hashOf({ path: "/a", main: mainText(1, { city: "Ashford" }) })!;
     measured.city = simhashDistance(
       a,
-      hashOf({ path: "/b", main: mainText(1, { city: "Bristol" }) })!,
+      hashOf({ path: "/b", main: mainText(1, { city: "Bristol" }) })!
     );
-    const d1 = hashOf({ path: "/a", main: mainText(1, { date: "3 March 2025" }) })!;
+    const d1 = hashOf({
+      path: "/a",
+      main: mainText(1, { date: "3 March 2025" }),
+    })!;
     measured.date = simhashDistance(
       d1,
-      hashOf({ path: "/b", main: mainText(1, { date: "19 October 2026" }) })!,
+      hashOf({ path: "/b", main: mainText(1, { date: "19 October 2026" }) })!
     );
     const p0 = hashOf(base)!;
     // One short sentence swapped: the realistic small edit.
@@ -336,11 +361,12 @@ describe("pageContentSimhash", () => {
       "A different note appears here about the quarterly accounts and the new parking rules.";
     measured.sentence = simhashDistance(
       p0,
-      hashOf({ path: "/b", main: mainText(1, { replaceSentence: note }) })!,
+      hashOf({ path: "/b", main: mainText(1, { replaceSentence: note }) })!
     );
     console.log("near-duplicate measured distances", JSON.stringify(measured));
     expect(measured.city).toBeGreaterThan(0);
-    for (const d of Object.values(measured)) expect(d).toBeLessThanOrEqual(NEAR_DUP_MAX_DISTANCE);
+    for (const d of Object.values(measured))
+      expect(d).toBeLessThanOrEqual(NEAR_DUP_MAX_DISTANCE);
   });
 
   test("a whole rewritten paragraph is beyond the threshold (the documented limit)", () => {
@@ -348,7 +374,7 @@ describe("pageContentSimhash", () => {
       "A different note appears here about the quarterly accounts and the new parking rules. It was written once for this page alone. Opening hours change over the holiday period, so check the notice board before you travel. Volunteers are always welcome at the Saturday workshop, whatever their experience.";
     const d = simhashDistance(
       hashOf({ path: "/a", main: mainText(1) })!,
-      hashOf({ path: "/b", main: mainText(1, { replaceParagraph: para }) })!,
+      hashOf({ path: "/b", main: mainText(1, { replaceParagraph: para }) })!
     );
     console.log("near-duplicate whole paragraph distance", d);
     expect(d).toBeGreaterThan(NEAR_DUP_MAX_DISTANCE);
@@ -361,17 +387,22 @@ describe("pageContentSimhash", () => {
         distances.push(
           simhashDistance(
             hashOf({ path: "/a", main: mainText(100 + i) })!,
-            hashOf({ path: "/b", main: mainText(100 + j) })!,
-          ),
+            hashOf({ path: "/b", main: mainText(100 + j) })!
+          )
         );
       }
     }
-    console.log("near-duplicate unrelated min distance", Math.min(...distances));
+    console.log(
+      "near-duplicate unrelated min distance",
+      Math.min(...distances)
+    );
     for (const d of distances) expect(d).toBeGreaterThan(NEAR_DUP_MAX_DISTANCE);
   });
 
   test("chrome-only difference is distance 0", () => {
-    expect(hashOf({ ...base, chromeLabel: "one" })).toBe(hashOf({ ...base, chromeLabel: "two" })!);
+    expect(hashOf({ ...base, chromeLabel: "one" })).toBe(
+      hashOf({ ...base, chromeLabel: "two" })!
+    );
   });
 
   test("a page with no <main> reads the body minus chrome", () => {
@@ -379,9 +410,11 @@ describe("pageContentSimhash", () => {
     const c = chrome("x");
     const noMain = parsePage(
       `<html><body>${c.nav}<div>${text}</div>${c.footer}</body></html>`,
-      u("/n"),
+      u("/n")
     );
-    expect(pageContentSimhash(noMain.document, u("/n"), null)).toBe(hashOf(base)!);
+    expect(pageContentSimhash(noMain.document, u("/n"), null)).toBe(
+      hashOf(base)!
+    );
   });
 
   test("chrome inside <main> (nav, aside, form, role, aria-hidden) is not hashed", () => {
@@ -416,13 +449,16 @@ describe("pageContentSimhash", () => {
   });
 
   test("a huge page is bounded", () => {
-    const words = Array.from({ length: NEAR_DUP_MAX_TOKENS * 3 }, (_, i) => `word${i}`).join(" ");
+    const words = Array.from(
+      { length: NEAR_DUP_MAX_TOKENS * 3 },
+      (_, i) => `word${i}`
+    ).join(" ");
     const start = performance.now();
     const h = hashOf({ path: "/huge", main: `<p>${words}</p>` });
     expect(h).toMatch(/^[0-9a-f]{16}$/);
     // Only the first NEAR_DUP_MAX_TOKENS tokens count: text after them does not move the hash.
     const tail = Array.from({ length: NEAR_DUP_MAX_TOKENS * 3 }, (_, i) =>
-      i < NEAR_DUP_MAX_TOKENS ? `word${i}` : `other${i}`,
+      i < NEAR_DUP_MAX_TOKENS ? `word${i}` : `other${i}`
     ).join(" ");
     expect(hashOf({ path: "/huge2", main: `<p>${tail}</p>` })).toBe(h!);
     expect(performance.now() - start).toBeLessThan(3000);
@@ -440,12 +476,20 @@ describe("content/near-duplicate", () => {
     ];
     const res = await both([...distinct(10), ...trio]);
     expect(res.status).toBe("warn");
-    expect(res.message).toBe("1 near-duplicate cluster(s) found across 3 pages");
+    expect(res.message).toBe(
+      "1 near-duplicate cluster(s) found across 3 pages"
+    );
     expect(res.items).toHaveLength(1);
     expect(res.items![0]!.sourcePages).toEqual(trio.map((s) => u(s.path)));
     expect(res.items![0]!.id).toBe(u("/guide/ashford"));
-    expect(res.items![0]!.label).toBe("3 pages have nearly identical main text");
-    expect(res.items![0]!.meta).toMatchObject({ pageCount: 3, distinctTexts: 3, exactCopies: 0 });
+    expect(res.items![0]!.label).toBe(
+      "3 pages have nearly identical main text"
+    );
+    expect(res.items![0]!.meta).toMatchObject({
+      pageCount: 3,
+      distinctTexts: 3,
+      exactCopies: 0,
+    });
   });
 
   test("fail: 12 location pages cluster at doorway scale", async () => {
@@ -454,7 +498,11 @@ describe("content/near-duplicate", () => {
     expect(res.status).toBe("fail");
     expect(res.items).toHaveLength(1);
     expect(res.items![0]!.sourcePages).toHaveLength(12);
-    expect(res.details).toMatchObject({ totalClusters: 1, totalPages: 12, comparedPages: 22 });
+    expect(res.details).toMatchObject({
+      totalClusters: 1,
+      totalPages: 12,
+      comparedPages: 22,
+    });
   });
 
   test("pass: distinct pages sharing identical heavy chrome are not clustered", async () => {
@@ -475,10 +523,15 @@ describe("content/near-duplicate", () => {
     }));
     const res = await both(short);
     expect(res.status).toBe("skipped");
-    expect(res.message).toBe("Fewer than 2 pages have enough main text to compare");
+    expect(res.message).toBe(
+      "Fewer than 2 pages have enough main text to compare"
+    );
     const withLong = await both([...short, ...distinct(3)]);
     expect(withLong.status).toBe("pass");
-    expect(withLong.details).toMatchObject({ excluded: { unhashed: 12 }, comparedPages: 3 });
+    expect(withLong.details).toMatchObject({
+      excluded: { unhashed: 12 },
+      comparedPages: 3,
+    });
   });
 
   test("pass: pages built from one sentence template with different slot words do not cluster", async () => {
@@ -544,9 +597,12 @@ describe("content/near-duplicate", () => {
       const sentences = Array.from(
         { length: 45 },
         () =>
-          `The ${pick(adjectives)} ${pick(nouns)} ${pick(verbs)} ${pick(topics)} for everyday use.`,
+          `The ${pick(adjectives)} ${pick(nouns)} ${pick(verbs)} ${pick(topics)} for everyday use.`
       );
-      return { path: `/templated/${page}`, main: `<p>${sentences.join(" ")}</p>` };
+      return {
+        path: `/templated/${page}`,
+        main: `<p>${sentences.join(" ")}</p>`,
+      };
     });
     expect(hashOf(specs[0]!)).not.toBeNull();
     const res = await both(specs);
@@ -558,7 +614,7 @@ describe("content/near-duplicate", () => {
     const res = await both([...distinct(4), ...locations(3)]);
     expect(res.status).toBe("skipped");
     expect(res.message).toBe(
-      "Only 7 page(s) crawled; 10 needed to compare pages for near-duplicate content",
+      "Only 7 page(s) crawled; 10 needed to compare pages for near-duplicate content"
     );
   });
 
@@ -590,7 +646,8 @@ describe("content/near-duplicate", () => {
     }
     // Two copies one bit apart that sort after the cap.
     const twin = word() + word();
-    const flipped = twin.slice(0, 15) + (parseInt(twin[15]!, 16) ^ 1).toString(16);
+    const flipped =
+      twin.slice(0, 15) + (parseInt(twin[15]!, 16) ^ 1).toString(16);
     for (const [path, simhash] of [
       ["/zz-1", twin],
       ["/zz-2", flipped],
@@ -619,9 +676,14 @@ describe("content/near-duplicate", () => {
     ];
     const res = await both(specs);
     expect(res.status).toBe("pass");
-    const dup = await Promise.resolve(duplicateContentRule.run(legacyCtx(specs)));
+    const dup = await Promise.resolve(
+      duplicateContentRule.run(legacyCtx(specs))
+    );
     expect(dup.checks[0]!.status).toBe("warn");
-    expect(dup.checks[0]!.items![0]!.sourcePages).toEqual([u("/copy-a"), u("/copy-b")]);
+    expect(dup.checks[0]!.items![0]!.sourcePages).toEqual([
+      u("/copy-a"),
+      u("/copy-b"),
+    ]);
   });
 
   test("two exact copies plus a near variant: one cluster, exact copies counted", async () => {
@@ -633,13 +695,26 @@ describe("content/near-duplicate", () => {
     ];
     const res = await both(specs);
     expect(res.status).toBe("warn");
-    expect(res.items![0]!.sourcePages).toEqual([u("/copy-a"), u("/copy-b"), u("/variant")]);
+    expect(res.items![0]!.sourcePages).toEqual([
+      u("/copy-a"),
+      u("/copy-b"),
+      u("/variant"),
+    ]);
     expect(res.items![0]!.label).toBe(
-      "3 pages have nearly identical main text (2 are exact copies, also reported by content/duplicate-content)",
+      "3 pages have nearly identical main text (2 are exact copies, also reported by content/duplicate-content)"
     );
-    expect(res.items![0]!.meta).toMatchObject({ pageCount: 3, distinctTexts: 2, exactCopies: 2 });
-    const dup = await Promise.resolve(duplicateContentRule.run(legacyCtx(specs)));
-    expect(dup.checks[0]!.items![0]!.sourcePages).toEqual([u("/copy-a"), u("/copy-b")]);
+    expect(res.items![0]!.meta).toMatchObject({
+      pageCount: 3,
+      distinctTexts: 2,
+      exactCopies: 2,
+    });
+    const dup = await Promise.resolve(
+      duplicateContentRule.run(legacyCtx(specs))
+    );
+    expect(dup.checks[0]!.items![0]!.sourcePages).toEqual([
+      u("/copy-a"),
+      u("/copy-b"),
+    ]);
   });
 
   test("a cluster whose pages all point to one canonical is not reported", async () => {
@@ -667,7 +742,9 @@ describe("content/near-duplicate", () => {
     ];
     const res = await both(specs);
     expect(res.status).toBe("pass");
-    expect(res.details).toMatchObject({ excluded: { noindex: 1, notOk: 1, pagination: 1 } });
+    expect(res.details).toMatchObject({
+      excluded: { noindex: 1, notOk: 1, pagination: 1 },
+    });
   });
 
   test("lists at most MAX_URLS_PER_CLUSTER urls and counts the rest", async () => {
@@ -677,12 +754,19 @@ describe("content/near-duplicate", () => {
     }));
     const res = await both([...distinct(3), ...many]);
     expect(res.items![0]!.sourcePages).toHaveLength(MAX_URLS_PER_CLUSTER);
-    expect(res.items![0]!.meta).toMatchObject({ pageCount: 25, listedUrls: 20, omittedUrls: 5 });
+    expect(res.items![0]!.meta).toMatchObject({
+      pageCount: 25,
+      listedUrls: 20,
+      omittedUrls: 5,
+    });
   });
 
   test("a legacy page without a document is not hashed and not a candidate", async () => {
     const ctx = legacyCtx(distinct(11));
-    ctx.site!.pages[0]!.parsed = { ...ctx.site!.pages[0]!.parsed, document: undefined } as never;
+    ctx.site!.pages[0]!.parsed = {
+      ...ctx.site!.pages[0]!.parsed,
+      document: undefined,
+    } as never;
     const res = await check(ctx);
     expect(res.status).toBe("pass");
     expect(res.details).toMatchObject({ excluded: { unhashed: 1 } });
@@ -711,7 +795,7 @@ describe("content/near-duplicate and integrity/seo-doorway", () => {
           },
           parsed,
           options: {},
-        }),
+        })
       );
       expect(out.checks.filter((c) => c.status !== "pass")).toEqual([]);
     }
@@ -731,7 +815,10 @@ describe("both paths", () => {
     const specs: Spec[] = [
       ...distinct(10),
       ...locations(12),
-      { path: "/plumbers/ashford-copy", main: mainText(7, { city: "Ashford" }) },
+      {
+        path: "/plumbers/ashford-copy",
+        main: mainText(7, { city: "Ashford" }),
+      },
       ...["x", "y"].map((c) => ({
         path: `/other/${c}`,
         main: mainText(9, { city: c }),
@@ -749,7 +836,9 @@ describe("both paths", () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       const a = seed;
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return a.toString(16).padStart(8, "0") + seed.toString(16).padStart(8, "0");
+      return (
+        a.toString(16).padStart(8, "0") + seed.toString(16).padStart(8, "0")
+      );
     };
     const rows = Array.from({ length: 4000 }, (_, i) => ({
       normalizedUrl: u(`/p/${i}`),

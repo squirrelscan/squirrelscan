@@ -8,8 +8,9 @@
 import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { labelContentNameMismatchRule } from "../src/a11y/label-content-name-mismatch";
 import type { CheckResult, RuleContext } from "../src/types";
+
+import { labelContentNameMismatchRule } from "../src/a11y/label-content-name-mismatch";
 
 function run(body: string, head = ""): CheckResult[] {
   const html = `<!doctype html><html lang="de"><head><title>t</title>${head}</head><body><main>${body}</main></body></html>`;
@@ -20,11 +21,13 @@ function run(body: string, head = ""): CheckResult[] {
     options: {},
   } as unknown as RuleContext;
   const result = labelContentNameMismatchRule.run(ctx);
-  if (result instanceof Promise) throw new Error("label-content-name-mismatch is async");
+  if (result instanceof Promise)
+    throw new Error("label-content-name-mismatch is async");
   return result.checks;
 }
 
-const failing = (checks: CheckResult[]) => checks.find((c) => c.status === "fail");
+const failing = (checks: CheckResult[]) =>
+  checks.find((c) => c.status === "fail");
 
 describe("symbol-only visible text is not a label (#1645)", () => {
   for (const glyph of ["✕", "×", "✖", "☰", "›", "🛒", "...", "x​".slice(1)]) {
@@ -35,7 +38,9 @@ describe("symbol-only visible text is not a label (#1645)", () => {
   }
 
   test("a glyph beside real text still compares the whole visible text", () => {
-    const checks = run('<button aria-label="Gutschein kopieren">✕ HORROR15</button>');
+    const checks = run(
+      '<button aria-label="Gutschein kopieren">✕ HORROR15</button>'
+    );
     expect(failing(checks)?.items?.length).toBe(1);
   });
 
@@ -45,10 +50,16 @@ describe("symbol-only visible text is not a label (#1645)", () => {
   });
 
   test("positive control: real visible text with an unrelated aria-label fails", () => {
-    const checks = run('<button aria-label="Gutschein kopieren">HORROR15</button>');
+    const checks = run(
+      '<button aria-label="Gutschein kopieren">HORROR15</button>'
+    );
     const fail = failing(checks);
-    expect(fail?.message).toBe("1 element(s) where visible text doesn't match accessible name");
-    expect(fail?.items?.[0]?.id).toBe('button: visible="horror15" vs aria-label="gutschein kopieren"');
+    expect(fail?.message).toBe(
+      "1 element(s) where visible text doesn't match accessible name"
+    );
+    expect(fail?.items?.[0]?.id).toBe(
+      'button: visible="horror15" vs aria-label="gutschein kopieren"'
+    );
   });
 
   test("a page with only a glyph control passes", () => {
@@ -75,7 +86,9 @@ describe("controls that are not rendered are skipped (#1645)", () => {
   });
 
   test("the glyph button in a display:none ancestor passes too", () => {
-    const checks = run('<div style="display:none"><button aria-label="Schließen">✕</button></div>');
+    const checks = run(
+      '<div style="display:none"><button aria-label="Schließen">✕</button></div>'
+    );
     expect(failing(checks)).toBeUndefined();
   });
 
@@ -90,7 +103,9 @@ describe("controls that are not rendered are skipped (#1645)", () => {
       "<style>.promo:hover{display:none}</style>"
     );
     expect(failing(checks)).toBeUndefined();
-    const row = checks.find((c) => c.name === "label-content-name-mismatch-unconfirmed");
+    const row = checks.find(
+      (c) => c.name === "label-content-name-mismatch-unconfirmed"
+    );
     expect(row?.status).toBe("warn");
     expect(row?.items?.length).toBe(1);
   });

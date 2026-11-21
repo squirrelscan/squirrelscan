@@ -1024,10 +1024,10 @@ export const ENTITY_TABLE_ROW_CAP = 25;
 
 /** The viewer's JavaScript, with its compile-time constants substituted. */
 export function entityViewerScript(): string {
-  return SCRIPT.replace("__GRAPH_NODE_CAP__", String(ENTITY_GRAPH_NODE_CAP)).replace(
-    "__TABLE_LIMIT__",
-    String(ENTITY_TABLE_ROW_CAP),
-  );
+  return SCRIPT.replace(
+    "__GRAPH_NODE_CAP__",
+    String(ENTITY_GRAPH_NODE_CAP)
+  ).replace("__TABLE_LIMIT__", String(ENTITY_TABLE_ROW_CAP));
 }
 
 /**

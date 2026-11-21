@@ -55,7 +55,14 @@ import {
 } from "@squirrelscan/utils/public-egress";
 
 import type { ProbeBudget } from "../probe-budget";
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
+
 import { isThrottledOrChallenged } from "./probe-http";
 
 const CHECK = "supabase-rls";
@@ -80,14 +87,16 @@ const MAX_SCAN_CHARS = 4 * 1024 * 1024;
 const PROJECT_URL_RE =
   /https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)([a-z0-9]{20})\.supabase\.(co|in)(?![a-z0-9-])/g;
 const REF_RE = /^[a-z0-9]{20}$/;
-const JWT_RE = /\beyJ[A-Za-z0-9_-]{10,2000}\.eyJ[A-Za-z0-9_-]{10,4000}\.[A-Za-z0-9_-]{10,1000}/g;
+const JWT_RE =
+  /\beyJ[A-Za-z0-9_-]{10,2000}\.eyJ[A-Za-z0-9_-]{10,4000}\.[A-Za-z0-9_-]{10,1000}/g;
 const PUBLISHABLE_RE = /\bsb_publishable_[A-Za-z0-9_-]{20,200}/g;
 // supabase-js query chains keep their method names when minified:
 // `.from("profiles").select("*")`. Requiring the chain keeps `Array.from("abc")`
 // and `Buffer.from("...")` out.
 const FROM_CHAIN_RE =
   /\.from\(\s*(["'`])([A-Za-z_][A-Za-z0-9_]{0,62})\1\s*\)\s*\.\s*(?:select|insert|update|upsert|delete)\s*\(/g;
-const REST_PATH_RE = /\/rest\/v1\/([A-Za-z_][A-Za-z0-9_]{0,62})(?![A-Za-z0-9_])/g;
+const REST_PATH_RE =
+  /\/rest\/v1\/([A-Za-z_][A-Za-z0-9_]{0,62})(?![A-Za-z0-9_])/g;
 const TABLE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 /** PostgREST paths under /rest/v1 that are not tables. */
 const NOT_TABLES = new Set(["rpc"]);
@@ -132,7 +141,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 /** A Supabase key the JWT is, or null: an unexpired anon key names its project. */
 export function readSupabaseJwt(
   token: string,
-  nowSeconds: number,
+  nowSeconds: number
 ): { role: "anon"; ref: string } | { role: "privileged" } | null {
   const payload = decodeJwtPayload(token);
   if (!payload || payload.iss !== "supabase") return null;
@@ -160,7 +169,7 @@ export function compareNames(a: string, b: string): number {
  */
 export function discoverSupabase(
   sources: ReadonlyArray<{ url: string; content: string }>,
-  nowSeconds: number = Math.floor(Date.now() / 1000),
+  nowSeconds: number = Math.floor(Date.now() / 1000)
 ): SupabaseDiscovery {
   const projects = new Map<string, SupabaseProject>();
   const hostByRef = new Map<string, string>();
@@ -198,7 +207,10 @@ export function discoverSupabase(
       if (!projects.has(read.ref)) {
         projects.set(read.ref, {
           ref: read.ref,
-          host: refsHere.get(read.ref) ?? hostByRef.get(read.ref) ?? `${read.ref}.supabase.co`,
+          host:
+            refsHere.get(read.ref) ??
+            hostByRef.get(read.ref) ??
+            `${read.ref}.supabase.co`,
           key: m[0],
           keyKind: "anon-jwt",
           keySource: source.url,
@@ -239,13 +251,15 @@ export function discoverSupabase(
  * the first MAX_TABLES_PER_PROJECT in name order.
  */
 export function tableTargets(codeTables: readonly string[]): string[] {
-  return [...new Set(codeTables)].sort(compareNames).slice(0, MAX_TABLES_PER_PROJECT);
+  return [...new Set(codeTables)]
+    .sort(compareNames)
+    .slice(0, MAX_TABLES_PER_PROJECT);
 }
 
 /** The exact URL and init of one table probe. Exported so tests can pin what is sent. */
 export function buildTableProbe(
   project: SupabaseProject,
-  table: string,
+  table: string
 ): { url: string; init: RequestInit } {
   if (!REF_RE.test(project.ref) || !TABLE_NAME_RE.test(table))
     throw new Error("refused: not a project ref or table");
@@ -257,7 +271,8 @@ export function buildTableProbe(
     "User-Agent": SQUIRRELSCAN_USER_AGENT,
     apikey: project.key,
   };
-  if (project.keyKind === "anon-jwt") headers.Authorization = `Bearer ${project.key}`;
+  if (project.keyKind === "anon-jwt")
+    headers.Authorization = `Bearer ${project.key}`;
   return {
     url: `https://${host}/rest/v1/${table}`,
     init: { method: "HEAD", credentials: "omit", redirect: "manual", headers },
@@ -295,9 +310,10 @@ const CONTENT_RANGE_RE = /^\s*(?:\d+-\d+|\*)\s*\/\s*(\d{1,15}|\*)\s*$/;
 export function classifyTableResponse(
   status: number,
   contentRange: string | null,
-  headers: Headers | null = null,
+  headers: Headers | null = null
 ): TableVerdict {
-  if (isThrottledOrChallenged({ status, headers, text: "" })) return { kind: "throttled", status };
+  if (isThrottledOrChallenged({ status, headers, text: "" }))
+    return { kind: "throttled", status };
   // An HTML 401, 403 or 404 is a page from something in front of the API (a
   // WAF block page without cf-mitigated, a proxy's error page), not PostgREST's
   // answer, and a HEAD has no body to tell which. Not checked. A JSON content
@@ -323,7 +339,7 @@ async function probeTable(
   budget: ProbeBudget,
   project: SupabaseProject,
   table: string,
-  egress: EgressPolicy,
+  egress: EgressPolicy
 ): Promise<TableVerdict> {
   if (!budget.allows("loud")) return { kind: "not-sent" };
   const { url, init } = buildTableProbe(project, table);
@@ -339,8 +355,15 @@ async function probeTable(
     // Pinned to the address the egress guard vetted. Only the status and one
     // header are read; the body, if a server sends one to a HEAD, is never
     // touched, and aborting `done` below releases the connection.
-    const res = await egressGuardedSend((u, i) => fetch(u, i), egress)(url, { ...init, signal });
-    return classifyTableResponse(res.status, res.headers.get("content-range"), res.headers);
+    const res = await egressGuardedSend((u, i) => fetch(u, i), egress)(url, {
+      ...init,
+      signal,
+    });
+    return classifyTableResponse(
+      res.status,
+      res.headers.get("content-range"),
+      res.headers
+    );
   } catch {
     // A network error, a timeout, or a refusal by the egress guard (nothing was sent).
     return { kind: "errored" };
@@ -363,7 +386,8 @@ function sourcesOf(ctx: RuleContext): Array<{ url: string; content: string }> {
       const text = el.textContent ?? "";
       if (text.length > 0) inline.push(text);
     }
-    if (inline.length > 0) out.push({ url: page.url, content: inline.join("\n") });
+    if (inline.length > 0)
+      out.push({ url: page.url, content: inline.join("\n") });
   }
   return out;
 }
@@ -432,7 +456,10 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
 
     async run(ctx: RuleContext): Promise<RuleResult> {
       const checks: CheckResult[] = [];
-      const discovery = discoverSupabase(sourcesOf(ctx), Math.floor(now() / 1000));
+      const discovery = discoverSupabase(
+        sourcesOf(ctx),
+        Math.floor(now() / 1000)
+      );
       const discovered = {
         projects: discovery.projects.map((p) => p.host),
         projectsSkipped: discovery.projectsSkipped,
@@ -445,7 +472,8 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           name: CHECK,
           status: "skipped",
           skipReason: "not-applicable",
-          message: "No Supabase project with a public anon key was found in the site's scripts",
+          message:
+            "No Supabase project with a public anon key was found in the site's scripts",
           details: discovered,
         });
         return { checks };
@@ -531,7 +559,8 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           }
           sentTotal++;
           result.probed++;
-          if (verdict.kind === "exposed") result.exposed.push({ table: target, rows: verdict.rows });
+          if (verdict.kind === "exposed")
+            result.exposed.push({ table: target, rows: verdict.rows });
           else if (verdict.kind === "protected") result.protectedCount++;
           else if (verdict.kind === "empty") result.empty++;
           else if (verdict.kind === "missing") result.missing++;
@@ -548,13 +577,15 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       // Tables the run never reached: past the per-project or per-run cap,
       // after a stop, or in a project past MAX_PROJECTS. None of them got an
       // answer. discovery.tables is deduped, so it is every table the code names.
-      const planned = (discovery.projects.length + discovery.projectsSkipped) * discovery.tables.length;
+      const planned =
+        (discovery.projects.length + discovery.projectsSkipped) *
+        discovery.tables.length;
       const unanswered = planned - sentTotal;
       // A definite answer: exposed, protected, zero rows or missing. Everything
       // else planned (never sent, errored, not judgeable, throttled) is unchecked.
       const tablesChecked = results.reduce(
         (n, r) => n + r.exposed.length + r.protectedCount + r.empty + r.missing,
-        0,
+        0
       );
       const tablesUnchecked = planned - tablesChecked;
       // Left out by a cap in the projects that were probed: past the per-run
@@ -586,22 +617,30 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       };
 
       const budgetSize =
-        budget.budgetMs % 1000 === 0 ? `${budget.budgetMs / 1000} s` : `${budget.budgetMs} ms`;
+        budget.budgetMs % 1000 === 0
+          ? `${budget.budgetMs / 1000} s`
+          : `${budget.budgetMs} ms`;
       const budgetCap = `the shared probe time budget of ${budgetSize} for all probing rules ran out`;
       const errored = results.reduce((n, r) => n + r.errored, 0);
       const notChecked = results.reduce((n, r) => n + r.notChecked, 0);
       const why: string[] = [];
       if (throttled)
         why.push(
-          "the Supabase project throttled the probes (HTTP 429) or answered with a bot challenge, so no further request was sent",
+          "the Supabase project throttled the probes (HTTP 429) or answered with a bot challenge, so no further request was sent"
         );
       if (budgetStopped) why.push(budgetCap);
-      if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
+      if (errored > 0)
+        why.push(`${errored} probe(s) failed with a network error or timeout`);
       if (notChecked > 0)
-        why.push(`${notChecked} answer(s) had no status and row count squirrel can judge`);
-      if (capped + discovery.projectsSkipped * targets.length > 0 || discovery.tables.length > targets.length)
         why.push(
-          `the per-audit cap of ${MAX_TABLE_PROBES} table probes, ${MAX_TABLES_PER_PROJECT} tables per project and ${MAX_PROJECTS} projects was reached`,
+          `${notChecked} answer(s) had no status and row count squirrel can judge`
+        );
+      if (
+        capped + discovery.projectsSkipped * targets.length > 0 ||
+        discovery.tables.length > targets.length
+      )
+        why.push(
+          `the per-audit cap of ${MAX_TABLE_PROBES} table probes, ${MAX_TABLES_PER_PROJECT} tables per project and ${MAX_PROJECTS} projects was reached`
         );
       const counts = `${tablesChecked} of ${planned} table probe(s) got a definite answer and ${tablesUnchecked} were left unchecked`;
 
@@ -660,7 +699,11 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         });
         return { checks };
       }
-      if (errored + notChecked === sentTotal && !throttled && unanswered === 0) {
+      if (
+        errored + notChecked === sentTotal &&
+        !throttled &&
+        unanswered === 0
+      ) {
         checks.push({
           name: CHECK,
           status: "skipped",

@@ -1,13 +1,13 @@
 // a11y/aria-required-parent - Required parent for ARIA roles
 // Based on WAI-ARIA 1.2 specification for required parent roles
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { requiredParentByRole } from "./aria-data";
 import { elementsWithAttribute } from "../shared/attribute-lookup";
+import { requiredParentByRole } from "./aria-data";
 
 /**
  * Get implicit ARIA role from HTML element
@@ -183,8 +183,15 @@ const CHILDREN_PRESENTATIONAL_TAGS = new Set(["meter", "progress"]);
  */
 function isPresentationalDescendant(element: Element): boolean {
   if (isFocusable(element)) return false;
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-    const role = getAttrCI(parent, "role")?.trim().toLowerCase().split(/\s+/)[0];
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  ) {
+    const role = getAttrCI(parent, "role")
+      ?.trim()
+      .toLowerCase()
+      .split(/\s+/)[0];
     const presentational = role
       ? CHILDREN_PRESENTATIONAL_ROLES.has(role)
       : CHILDREN_PRESENTATIONAL_TAGS.has(parent.tagName.toLowerCase());

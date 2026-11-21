@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildRobotsTxt, buildSitemapXml, renderPageHtml } from "../src/html-render";
+import {
+  buildRobotsTxt,
+  buildSitemapXml,
+  renderPageHtml,
+} from "../src/html-render";
 import { generateSiteModel } from "../src/page-model";
 
 describe("renderPageHtml", () => {
@@ -12,7 +16,9 @@ describe("renderPageHtml", () => {
     expect(html).toContain(`<title>${page.title}</title>`);
     expect(html).toContain(`content="${page.description}"`);
     expect(html).toContain(`<h1>${page.h1}</h1>`);
-    expect(html).toContain(`<link rel="canonical" href="http://example.test${page.path}">`);
+    expect(html).toContain(
+      `<link rel="canonical" href="http://example.test${page.path}">`
+    );
   });
 
   test("emits a noindex meta tag only when the page model says noindex", () => {
@@ -22,12 +28,16 @@ describe("renderPageHtml", () => {
       issues: { noindexInSitemap: { count: 5 } },
     });
     const noindexPage = model.pages.find((p) => p.noindex)!;
-    const cleanPage = model.pages.find((p) => !p.noindex && p.templateId !== "redirect-hop")!;
+    const cleanPage = model.pages.find(
+      (p) => !p.noindex && p.templateId !== "redirect-hop"
+    )!;
 
     expect(renderPageHtml(noindexPage, "http://example.test")).toContain(
-      '<meta name="robots" content="noindex">',
+      '<meta name="robots" content="noindex">'
     );
-    expect(renderPageHtml(cleanPage, "http://example.test")).not.toContain('name="robots"');
+    expect(renderPageHtml(cleanPage, "http://example.test")).not.toContain(
+      'name="robots"'
+    );
   });
 
   test("escapes HTML-significant characters in title/description", () => {
@@ -52,11 +62,18 @@ describe("renderPageHtml", () => {
   });
 
   test("different templates render structurally distinct markup", () => {
-    const model = generateSiteModel({ seed: "render-templates", pageCount: 50, templateCount: 4 });
+    const model = generateSiteModel({
+      seed: "render-templates",
+      pageCount: 50,
+      templateCount: 4,
+    });
     const byTemplate = new Map<string, string>();
     for (const page of model.pages) {
       if (!byTemplate.has(page.templateId)) {
-        byTemplate.set(page.templateId, renderPageHtml(page, "http://example.test"));
+        byTemplate.set(
+          page.templateId,
+          renderPageHtml(page, "http://example.test")
+        );
       }
     }
     const bodies = [...byTemplate.entries()];

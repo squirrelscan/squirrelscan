@@ -1,11 +1,11 @@
 // schema/entity-local-business-per-page — a LocalBusiness redeclared everywhere.
 
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import {
   LOCAL_BUSINESS_MIN_PAGES,
   isLocalBusinessPerPageNode,
 } from "@squirrelscan/core-contracts/entity-map-findings";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
@@ -88,7 +88,9 @@ export const entityLocalBusinessPerPageRule: Rule = {
       };
     }
 
-    const { items, hidden } = cappedItems(offenders.map((node) => entityItem(node)));
+    const { items, hidden } = cappedItems(
+      offenders.map((node) => entityItem(node))
+    );
     const worst = offenders[0]!;
 
     return {
@@ -97,7 +99,9 @@ export const entityLocalBusinessPerPageRule: Rule = {
           name: CHECK,
           status: "warn",
           message: `${entityLabel(worst)} is declared in full on ${pageTotal(worst)} of ${pagesCrawled} crawled pages${moreSuffix(hidden, "businesses")}`,
-          value: clipValue(`${Math.round((pageTotal(worst) / pagesCrawled) * 100)}% of crawled pages`),
+          value: clipValue(
+            `${Math.round((pageTotal(worst) / pagesCrawled) * 100)}% of crawled pages`
+          ),
           expected: "declared once with an @id, referenced elsewhere",
           items,
         },

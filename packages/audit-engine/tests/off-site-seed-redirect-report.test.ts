@@ -4,17 +4,16 @@
 // redirect stays visible without ever moving the base. Both assembly paths (v1
 // and the bounded v2) must agree.
 
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { SQLiteStorage } from "@squirrelscan/crawler";
-
+import { generateReportFromStorage } from "../src/adapter";
 import {
   buildV2Report,
   emptyRuleExecutionResult,
   type StreamingReportInput,
 } from "../src/report-stream";
-import { generateReportFromStorage } from "../src/adapter";
 
 const EMPTY_STATS = {
   pagesTotal: 0,
@@ -47,10 +46,14 @@ async function reportsFor(crawl: { baseUrl: string; seedUrl?: string }) {
         config: {} as never,
         stats: EMPTY_STATS,
       });
-      const v1 = yield* generateReportFromStorage(storage, crawlId, emptyRuleExecutionResult());
+      const v1 = yield* generateReportFromStorage(
+        storage,
+        crawlId,
+        emptyRuleExecutionResult()
+      );
       const v2 = yield* buildV2Report(storage, crawlId, streamingInput());
       return { v1, v2 };
-    }),
+    })
   );
 }
 

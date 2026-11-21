@@ -11,7 +11,10 @@ import { stripNoscriptMarkup } from "./dom";
  * Anything inside `<noscript>` is ignored: a browser with scripting on reads it
  * as text, so a refresh or script there never fires (#437).
  */
-export function findClientRedirects(rawHtml: string, baseUrl: string): string | null {
+export function findClientRedirects(
+  rawHtml: string,
+  baseUrl: string
+): string | null {
   const html = stripNoscriptMarkup(rawHtml);
 
   // 1. Check for meta refresh
@@ -39,10 +42,12 @@ function findMetaRefresh(html: string, baseUrl: string): string | null {
     if (!content) continue;
 
     const separator = content.indexOf(";");
-    if (separator < 0 || !isAsciiDigits(content.slice(0, separator).trim())) continue;
+    if (separator < 0 || !isAsciiDigits(content.slice(0, separator).trim()))
+      continue;
     const directive = content.slice(separator + 1);
     const equals = directive.indexOf("=");
-    if (equals < 0 || directive.slice(0, equals).trim().toLowerCase() !== "url") continue;
+    if (equals < 0 || directive.slice(0, equals).trim().toLowerCase() !== "url")
+      continue;
     const target = directive.slice(equals + 1).trim();
     if (!target) continue;
     try {
@@ -53,7 +58,8 @@ function findMetaRefresh(html: string, baseUrl: string): string | null {
       // findJavaScriptRedirect already restricts to http/https/relative; mirror
       // that here. Relative targets resolve against the http(s) baseUrl, so they
       // stay allowed.
-      if (resolved.protocol !== "http:" && resolved.protocol !== "https:") continue;
+      if (resolved.protocol !== "http:" && resolved.protocol !== "https:")
+        continue;
       return resolved.toString();
     } catch {
       // Invalid URL, continue to the next tag.
@@ -117,21 +123,29 @@ function findStartTags(html: string, tagName: string): string[] {
 
 function getAttribute(tag: string, attributeName: string): string | null {
   let cursor = 1;
-  while (cursor < tag.length && !/\s/.test(tag[cursor]) && tag[cursor] !== ">") cursor++;
+  while (cursor < tag.length && !/\s/.test(tag[cursor]) && tag[cursor] !== ">")
+    cursor++;
   while (cursor < tag.length) {
     while (/\s/.test(tag[cursor] ?? "")) cursor++;
-    if (tag[cursor] === ">" || tag[cursor] === "/" || cursor >= tag.length) break;
+    if (tag[cursor] === ">" || tag[cursor] === "/" || cursor >= tag.length)
+      break;
     const nameStart = cursor;
     while (cursor < tag.length && !/[\s=>/]/.test(tag[cursor])) cursor++;
     const name = tag.slice(nameStart, cursor).toLowerCase();
     while (/\s/.test(tag[cursor] ?? "")) cursor++;
     if (tag[cursor] !== "=") {
-      while (cursor < tag.length && !/\s/.test(tag[cursor]) && tag[cursor] !== ">") cursor++;
+      while (
+        cursor < tag.length &&
+        !/\s/.test(tag[cursor]) &&
+        tag[cursor] !== ">"
+      )
+        cursor++;
       continue;
     }
     cursor++;
     while (/\s/.test(tag[cursor] ?? "")) cursor++;
-    const quote = tag[cursor] === '"' || tag[cursor] === "'" ? tag[cursor++] : null;
+    const quote =
+      tag[cursor] === '"' || tag[cursor] === "'" ? tag[cursor++] : null;
     const valueStart = cursor;
     if (quote) {
       while (cursor < tag.length && tag[cursor] !== quote) cursor++;

@@ -3,9 +3,8 @@
 // only attributed on its own markers: Sucuri never on a Vercel or GitHub Pages
 // site, and Vercel BotID (Kasada underneath) is a technology, never a block.
 
-import { describe, expect, test } from "bun:test";
-
 import { inspectWafChallengePage } from "@squirrelscan/waf-detect";
+import { describe, expect, test } from "bun:test";
 
 import { detectReportTechnologies } from "../src/technologies";
 
@@ -14,7 +13,7 @@ const CONTENT = `<!doctype html><html><head><title>Home</title></head><body><h1>
 function ids(
   headers: Record<string, string>,
   html = CONTENT,
-  scripts: { url: string }[] = [],
+  scripts: { url: string }[] = []
 ): string[] {
   return detectReportTechnologies({
     url: "https://example.com/",
@@ -26,7 +25,9 @@ function ids(
 
 describe("a provider behind a 200 content page is still a technology", () => {
   test("Akamai from its request id header", () => {
-    expect(ids({ "x-akamai-request-id": "0.1", server: "TLB" })).toContain("waf-akamai");
+    expect(ids({ "x-akamai-request-id": "0.1", server: "TLB" })).toContain(
+      "waf-akamai"
+    );
   });
 
   test("DataDome from its header", () => {
@@ -35,7 +36,10 @@ describe("a provider behind a 200 content page is still a technology", () => {
 
   test("Imperva from its info header and cookies", () => {
     expect(
-      ids({ "x-iinfo": "1-1-1 NNNN CT", "set-cookie": "visid_incap_1=; incap_ses_1_1=" }),
+      ids({
+        "x-iinfo": "1-1-1 NNNN CT",
+        "set-cookie": "visid_incap_1=; incap_ses_1_1=",
+      })
     ).toContain("imperva-incapsula");
   });
 
@@ -50,7 +54,9 @@ describe("a provider behind a 200 content page is still a technology", () => {
 
   test("Cloudflare from the JavaScript Detections page", () => {
     const jsd = `${CONTENT}<script>var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js'</script>`;
-    expect(ids({ server: "cloudflare", "cf-ray": "0-SYD" }, jsd)).toContain("waf-cloudflare");
+    expect(ids({ server: "cloudflare", "cf-ray": "0-SYD" }, jsd)).toContain(
+      "waf-cloudflare"
+    );
   });
 });
 
@@ -71,7 +77,9 @@ describe("a provider is one technology, not a fingerprint and a waf- twin", () =
 
 describe("F5 BIG-IP", () => {
   test("from its persistence cookie or Server header", () => {
-    expect(ids({ "set-cookie": "BIGipServerpool_web=\nTS0123=" })).toContain("f5-big-ip");
+    expect(ids({ "set-cookie": "BIGipServerpool_web=\nTS0123=" })).toContain(
+      "f5-big-ip"
+    );
     expect(ids({ server: "BigIP" })).toContain("f5-big-ip");
   });
 
@@ -83,7 +91,9 @@ describe("F5 BIG-IP", () => {
 
 describe("the other providers from their documented signals", () => {
   test("HUMAN from its cookie, AWS WAF from its action header and token cookie", () => {
-    expect(ids({ "set-cookie": "_pxvid=; _px3=" })).toContain("human-perimeterx");
+    expect(ids({ "set-cookie": "_pxvid=; _px3=" })).toContain(
+      "human-perimeterx"
+    );
     expect(ids({ "x-amzn-waf-action": "challenge" })).toContain("waf-aws-waf");
     expect(ids({ "set-cookie": "aws-waf-token=" })).toContain("waf-aws-waf");
   });
@@ -110,8 +120,11 @@ describe("Vercel BotID", () => {
 
   test("is never a block when the response is 200 content", () => {
     expect(
-      inspectWafChallengePage({ status: 200, headers: { server: "Vercel", raw: headers }, html })
-        .detected,
+      inspectWafChallengePage({
+        status: 200,
+        headers: { server: "Vercel", raw: headers },
+        html,
+      }).detected
     ).toBe(false);
   });
 });
@@ -124,9 +137,11 @@ describe("Sucuri is only attributed on Sucuri's own markers", () => {
         "x-vercel-id": "sfo1::TEST",
         "x-vercel-cache": "HIT",
         "set-cookie": "authjs.csrf-token=",
-      }),
+      })
     ).not.toContain("sucuri-firewall");
-    expect(ids({ server: "Vercel", "x-vercel-id": "sfo1::TEST" })).not.toContain("waf-sucuri");
+    expect(
+      ids({ server: "Vercel", "x-vercel-id": "sfo1::TEST" })
+    ).not.toContain("waf-sucuri");
   });
 
   test("not on a GitHub Pages site", () => {

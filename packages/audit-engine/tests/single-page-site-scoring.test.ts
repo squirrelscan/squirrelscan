@@ -1,10 +1,10 @@
 // crawl/single-page-site is informational: the health score and every category
 // score are identical with and without its finding (pub#1209).
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { crawl, type RuleRunResult } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import { calculateHealthScore } from "../src/scoring";
 
@@ -57,7 +57,9 @@ const finding: RuleRunResult = {
 } as RuleRunResult;
 
 const score = (extra: RuleRunResult[]) =>
-  calculateHealthScore({ results: new Map([...anchors, ...extra].map((r) => [r.meta.id, r])) });
+  calculateHealthScore({
+    results: new Map([...anchors, ...extra].map((r) => [r.meta.id, r])),
+  });
 
 describe("crawl/single-page-site scoring", () => {
   test("is declared advisory", () => {
@@ -73,7 +75,10 @@ describe("crawl/single-page-site scoring", () => {
   });
 
   test("a run that did not fire (no checks) is identical too", () => {
-    const empty = { meta: singlePageSiteRule.meta, checks: [] } as unknown as RuleRunResult;
+    const empty = {
+      meta: singlePageSiteRule.meta,
+      checks: [],
+    } as unknown as RuleRunResult;
     expect(score([empty])).toEqual(score([]));
   });
 });

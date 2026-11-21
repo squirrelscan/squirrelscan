@@ -10,24 +10,27 @@
 // Now they skip with `skipReason: "scan-truncated"`, and the signal lists the page
 // as not evaluated, so the prior carries.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import type { RuleContext } from "@squirrelscan/rules/types";
+
 import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { parsePage } from "@squirrelscan/parser";
 import { loadAllRules } from "@squirrelscan/rules";
 import { foldOverflowChecks } from "@squirrelscan/rules/fold";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
-import type { RuleContext } from "@squirrelscan/rules/types";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import { findingKey } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_501";
@@ -37,7 +40,10 @@ const OTHER = "https://www.acme-shop.com/small";
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -46,7 +52,10 @@ class MemStore implements SmartAuditStore {
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
     for (const f of findings) {
-      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+      this.findings.set(
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+        { ...f }
+      );
     }
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
@@ -77,7 +86,9 @@ const doc = (body: string) =>
   `<!doctype html><html lang="en"><head><title>t</title></head><body>${body}</body></html>`;
 
 /** Past hidden-text's 20,000-element walk, with nothing hidden anywhere. */
-const BIG_HIDDEN = doc(Array.from({ length: 20_100 }, (_, i) => `<p>row ${i}</p>`).join(""));
+const BIG_HIDDEN = doc(
+  Array.from({ length: 20_100 }, (_, i) => `<p>row ${i}</p>`).join("")
+);
 /** Past dev-leakage's 500,000-character copy cap, with no development host. */
 const BIG_COPY = doc(`<p>${"plain production copy. ".repeat(23_000)}</p>`);
 const SMALL = doc("<p>A small page with nothing wrong on it.</p>");
@@ -101,7 +112,12 @@ const CASES: Case[] = [
       message: "1 hidden element(s) containing 80 characters of text",
       pageUrl: PAGE,
       items: [{ id: "div#keywords", label: "div#keywords — display: none" }],
-      details: { hiddenElements: 1, hiddenLinks: 0, hiddenChars: 80, scanTruncated: false },
+      details: {
+        hiddenElements: 1,
+        hiddenLinks: 0,
+        hiddenChars: 80,
+        scanTruncated: false,
+      },
     },
   },
   {
@@ -111,10 +127,13 @@ const CASES: Case[] = [
     prior: {
       name: "dev-leakage",
       status: "warn",
-      message: "1 development host reference(s) on a production page (localhost): example localhost:3000",
+      message:
+        "1 development host reference(s) on a production page (localhost): example localhost:3000",
       pageUrl: PAGE,
       value: 1,
-      items: [{ id: "localhost", label: "localhost", snippet: "localhost:3000" }],
+      items: [
+        { id: "localhost", label: "localhost", snippet: "localhost:3000" },
+      ],
       details: { kinds: [], scanTruncated: false },
     },
   },
@@ -128,7 +147,10 @@ const metaOf = (ruleId: string) => ({ ...rules.get(ruleId)!.meta });
  */
 async function priorAfterRerun(c: Case, run2: Record<string, CheckResult[]>) {
   const store = new MemStore();
-  const publish = async (crawlId: string, byPage: Record<string, CheckResult[]>) => {
+  const publish = async (
+    crawlId: string,
+    byPage: Record<string, CheckResult[]>
+  ) => {
     const checks = Object.values(byPage).flat();
     const ruleResults = { [c.ruleId]: { meta: metaOf(c.ruleId), checks } };
     const crawled = Object.keys(byPage);
@@ -147,14 +169,17 @@ async function priorAfterRerun(c: Case, run2: Record<string, CheckResult[]>) {
   });
   await publish("audit_2", run2);
   const [row] = [...store.findings.values()].filter(
-    (f) => f.normalizedUrl === normalizePageUrl(PAGE) && f.ruleId === c.ruleId,
+    (f) => f.normalizedUrl === normalizePageUrl(PAGE) && f.ruleId === c.ruleId
   );
   return row!;
 }
 
 describe("the other caps reach the same skip (pub#501)", () => {
   test("hidden-text: the stylesheet index's rule budget", () => {
-    const css = Array.from({ length: 4_100 }, (_, i) => `.c${i} { color: #123; }`).join("\n");
+    const css = Array.from(
+      { length: 4_100 },
+      (_, i) => `.c${i} { color: #123; }`
+    ).join("\n");
     const html = `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body><p>ok</p></body></html>`;
     const [check] = runRule("content/hidden-text", PAGE, html);
     expect(check!.status).toBe("skipped");
@@ -162,7 +187,10 @@ describe("the other caps reach the same skip (pub#501)", () => {
   });
 
   test("dev-leakage: the href and src value cap", () => {
-    const links = Array.from({ length: 2_100 }, (_, i) => `<a href="/p/${i}">p${i}</a>`).join("");
+    const links = Array.from(
+      { length: 2_100 },
+      (_, i) => `<a href="/p/${i}">p${i}</a>`
+    ).join("");
     const [check] = runRule("content/dev-leakage", PAGE, doc(links));
     expect(check!.status).toBe("skipped");
     expect(check!.skipReason).toBe(SCAN_TRUNCATED_SKIP_REASON);
@@ -171,8 +199,13 @@ describe("the other caps reach the same skip (pub#501)", () => {
   test("a folded aggregate of the skip still leaves its pages not evaluated", () => {
     // Many capped pages fold into one aggregate with `pages[]`; its own foldKey
     // keeps it apart from the rule's other skips.
-    const pages = Array.from({ length: 3 }, (_, i) => `https://www.acme-shop.com/big/${i}`);
-    const skips = pages.map((url) => ({ ...runRule("content/hidden-text", url, BIG_HIDDEN)[0]! }));
+    const pages = Array.from(
+      { length: 3 },
+      (_, i) => `https://www.acme-shop.com/big/${i}`
+    );
+    const skips = pages.map((url) => ({
+      ...runRule("content/hidden-text", url, BIG_HIDDEN)[0]!,
+    }));
     const noBody: CheckResult = {
       name: "hidden-text",
       status: "skipped",
@@ -186,11 +219,18 @@ describe("the other caps reach the same skip (pub#501)", () => {
       maxPagesPerCheck: 1000,
       maxSourcePagesPerItem: 100,
     });
-    const aggregate = folded.find((c) => c.skipReason === SCAN_TRUNCATED_SKIP_REASON)!;
+    const aggregate = folded.find(
+      (c) => c.skipReason === SCAN_TRUNCATED_SKIP_REASON
+    )!;
     expect(aggregate.details?.aggregated).toBe(true);
     expect(aggregate.pages).toHaveLength(3);
-    const signal = buildResolutionSignal({ "content/hidden-text": { checks: folded } }, pages)!;
-    expect(signal.notEvaluated?.["content/hidden-text|hidden-text"]).toHaveLength(3);
+    const signal = buildResolutionSignal(
+      { "content/hidden-text": { checks: folded } },
+      pages
+    )!;
+    expect(
+      signal.notEvaluated?.["content/hidden-text|hidden-text"]
+    ).toHaveLength(3);
   });
 });
 
@@ -211,8 +251,14 @@ for (const c of CASES) {
     });
 
     test("the signal lists the page as not evaluated", () => {
-      const checks = [...runRule(c.ruleId, PAGE, c.bigHtml), ...runRule(c.ruleId, OTHER, SMALL)];
-      const signal = buildResolutionSignal({ [c.ruleId]: { checks } }, [PAGE, OTHER])!;
+      const checks = [
+        ...runRule(c.ruleId, PAGE, c.bigHtml),
+        ...runRule(c.ruleId, OTHER, SMALL),
+      ];
+      const signal = buildResolutionSignal({ [c.ruleId]: { checks } }, [
+        PAGE,
+        OTHER,
+      ])!;
       const key = `${c.ruleId}|${c.checkName}`;
       expect(signal.failing[key]).toEqual([]);
       expect(signal.notEvaluated?.[key]).toHaveLength(1);
@@ -230,7 +276,9 @@ for (const c of CASES) {
     test("it carries when no other page evaluated the check either", async () => {
       // With no evaluated page anywhere, the key would be missing from the
       // signal, and a missing key falls back to resolving on a crawled page.
-      const row = await priorAfterRerun(c, { [PAGE]: runRule(c.ruleId, PAGE, c.bigHtml) });
+      const row = await priorAfterRerun(c, {
+        [PAGE]: runRule(c.ruleId, PAGE, c.bigHtml),
+      });
       expect(row.state).toBe("open");
       expect(row.provenance).toBe("carried");
     });
@@ -245,4 +293,7 @@ for (const c of CASES) {
   });
 }
 
-describeSitePagesContract("scan-truncated-carry.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "scan-truncated-carry.test.ts MemStore",
+  () => new MemStore()
+);

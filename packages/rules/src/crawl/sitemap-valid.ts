@@ -1,6 +1,7 @@
 // crawl/sitemap-valid - Sitemap validation
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
+
 import {
   SITEMAP_NOT_CHECKED_ERROR,
   SITEMAP_OFF_SITE_SKIPPED_ERROR,
@@ -19,9 +20,11 @@ const MAX_CHILDREN_PER_INDEX = 50000;
  * The W3C Datetime forms the sitemap protocol allows for `<lastmod>`: a year, a
  * month, a day, or a datetime with a `T` and a zone (`Z` or `+hh:mm`).
  */
-const W3C_DATETIME = /^\d{4}(?:-\d{2}(?:-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?)?)?$/;
+const W3C_DATETIME =
+  /^\d{4}(?:-\d{2}(?:-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?)?)?$/;
 /** A W3C datetime with the zone left off, which the protocol does not allow. */
-const W3C_DATETIME_NO_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
+const W3C_DATETIME_NO_ZONE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 
 /**
  * How a `<lastmod>` falls short of the protocol (#781), or null when it does
@@ -65,7 +68,7 @@ export const sitemapValidRule: Rule = {
         (f) =>
           f.source === "robots.txt" &&
           f.error !== SITEMAP_NOT_CHECKED_ERROR &&
-          f.error !== SITEMAP_OFF_SITE_SKIPPED_ERROR,
+          f.error !== SITEMAP_OFF_SITE_SKIPPED_ERROR
       ) ?? [];
 
     if (failedFromRobots.length > 0) {
@@ -93,7 +96,8 @@ export const sitemapValidRule: Rule = {
         checks.push({
           name: "sitemap-valid",
           status: "info",
-          message: "Sitemap discovery did not complete, so no sitemap was validated",
+          message:
+            "Sitemap discovery did not complete, so no sitemap was validated",
           value: "Not all candidate locations were reached",
         });
         return { checks };
@@ -125,7 +129,9 @@ export const sitemapValidRule: Rule = {
       // have their own protocol limit: 50,000 child sitemaps.
       if (sitemap.type === "index") {
         if (sitemap.childSitemaps.length > MAX_CHILDREN_PER_INDEX) {
-          oversizedSitemaps.push(`${sitemap.url} (${sitemap.childSitemaps.length} child sitemaps)`);
+          oversizedSitemaps.push(
+            `${sitemap.url} (${sitemap.childSitemaps.length} child sitemaps)`
+          );
         }
       } else if (sitemap.urlCount > MAX_URLS_PER_SITEMAP) {
         oversizedSitemaps.push(`${sitemap.url} (${sitemap.urlCount} URLs)`);
@@ -206,7 +212,10 @@ export const sitemapValidRule: Rule = {
     // Check for orphan pages (in sitemap but not crawled). Count plus sample,
     // with the exact count from before the engine's array cap (repo#2320).
     if (sitemaps.orphanPages.length > 0) {
-      const total = Math.max(sitemaps.orphanPagesTotal ?? 0, sitemaps.orphanPages.length);
+      const total = Math.max(
+        sitemaps.orphanPagesTotal ?? 0,
+        sitemaps.orphanPages.length
+      );
       const { items, truncation } = sampleUrlItems(
         sitemaps.orphanPages.map((url) => ({ id: url })),
         total

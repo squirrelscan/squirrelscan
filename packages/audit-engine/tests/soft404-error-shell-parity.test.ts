@@ -8,13 +8,20 @@
 // is what is observed: a selected page carries a verdict on its retained parse,
 // an unselected one carries none.
 
+import type { Config } from "@squirrelscan/config";
+import type {
+  PageRecord,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "@squirrelscan/core-contracts";
+
+import { hasErrorShellMarker, parsePage } from "@squirrelscan/parser";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import { hasErrorShellMarker, parsePage } from "@squirrelscan/parser";
-import type { Config } from "@squirrelscan/config";
-import type { PageRecord, ResponseHeaders, SecurityHeaders } from "@squirrelscan/core-contracts";
 
 import {
   buildSiteContext,
@@ -78,7 +85,11 @@ const SECURITY = {
   xRobotsTag: null,
 } as SecurityHeaders;
 
-function htmlPage(url: string, html: string, parsedData: string | null = null): PageRecord {
+function htmlPage(
+  url: string,
+  html: string,
+  parsedData: string | null = null
+): PageRecord {
   return {
     url,
     normalizedUrl: url,
@@ -102,49 +113,69 @@ function htmlPage(url: string, html: string, parsedData: string | null = null): 
 async function crawl() {
   const model = generateSiteModel({ seed: 21, pageCount: 20 });
   const made = await writeCrawlToStorage(model, ":memory:");
-  await run(made.storage.upsertPage(made.crawlId, htmlPage(SHELL_URL, SHELL_HTML)));
-  await run(made.storage.upsertPage(made.crawlId, htmlPage(CONTROL_URL, CONTROL_HTML)));
+  await run(
+    made.storage.upsertPage(made.crawlId, htmlPage(SHELL_URL, SHELL_HTML))
+  );
+  await run(
+    made.storage.upsertPage(made.crawlId, htmlPage(CONTROL_URL, CONTROL_HTML))
+  );
   return made;
 }
 
 const T = 30_000;
 
 describe("error-shell soft-404 candidates, v1 and streaming (#235)", () => {
-  test("both engines select the error-shell page and not the unmarked control", async () => {
-    const { storage, crawlId } = await crawl();
+  test(
+    "both engines select the error-shell page and not the unmarked control",
+    async () => {
+      const { storage, crawlId } = await crawl();
 
-    const v1 = await run(
-      runRulesOnStorage(
-        storage,
-        crawlId,
-        await run(buildSiteContext(await run(storage.getPages(crawlId)))),
-        CONFIG,
-        ASSETS,
-      ),
-    );
-    const v2 = await run(
-      runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 4 }),
-    );
+      const v1 = await run(
+        runRulesOnStorage(
+          storage,
+          crawlId,
+          await run(buildSiteContext(await run(storage.getPages(crawlId)))),
+          CONFIG,
+          ASSETS
+        )
+      );
+      const v2 = await run(
+        runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, {
+          batchSize: 4,
+        })
+      );
 
-    for (const result of [v1, v2]) {
-      expect(result.parsedPages.get(SHELL_URL)?.soft404Confirmation).toBe("unconfirmed");
-      expect(result.parsedPages.get(CONTROL_URL)?.soft404Confirmation).toBeUndefined();
-    }
+      for (const result of [v1, v2]) {
+        expect(result.parsedPages.get(SHELL_URL)?.soft404Confirmation).toBe(
+          "unconfirmed"
+        );
+        expect(
+          result.parsedPages.get(CONTROL_URL)?.soft404Confirmation
+        ).toBeUndefined();
+      }
 
-    await run(storage.close());
-  }, T);
+      await run(storage.close());
+    },
+    T
+  );
 
-  test("the signal is a scalar on the retained parse, with no DOM kept", async () => {
-    const { storage, crawlId } = await crawl();
-    const v2 = await run(
-      runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, { batchSize: 4 }),
-    );
-    const shell = v2.parsedPages.get(SHELL_URL);
-    expect(shell?.document).toBeNull();
-    expect(shell?.errorShell).toBe(true);
-    expect(v2.parsedPages.get(CONTROL_URL)?.errorShell).toBe(false);
-    await run(storage.close());
-  }, T);
+  test(
+    "the signal is a scalar on the retained parse, with no DOM kept",
+    async () => {
+      const { storage, crawlId } = await crawl();
+      const v2 = await run(
+        runStreamingRules(storage, crawlId, CONFIG, ASSETS, undefined, {
+          batchSize: 4,
+        })
+      );
+      const shell = v2.parsedPages.get(SHELL_URL);
+      expect(shell?.document).toBeNull();
+      expect(shell?.errorShell).toBe(true);
+      expect(v2.parsedPages.get(CONTROL_URL)?.errorShell).toBe(false);
+      await run(storage.close());
+    },
+    T
+  );
 });
 
 describe("errorShell on the parse", () => {
@@ -157,21 +188,29 @@ describe("errorShell on the parse", () => {
 
   test("a parse stored before the field existed is recomputed from the live document", async () => {
     // What an older crawl's parsedData looks like: no errorShell key at all.
-    const stored = JSON.parse(JSON.stringify(parseHtmlForRules(SHELL_HTML, SHELL_URL)));
+    const stored = JSON.parse(
+      JSON.stringify(parseHtmlForRules(SHELL_HTML, SHELL_URL))
+    );
     delete stored.errorShell;
     delete stored.document;
     const [entry] = await run(
-      buildSiteContext([htmlPage(SHELL_URL, SHELL_HTML, JSON.stringify(stored))]),
+      buildSiteContext([
+        htmlPage(SHELL_URL, SHELL_HTML, JSON.stringify(stored)),
+      ])
     );
     expect(entry?.parsed?.errorShell).toBe(true);
     expect(hasErrorShellMarker(entry?.parsed?.document)).toBe(true);
   });
 
   test("a stored value is kept as stored", async () => {
-    const stored = JSON.parse(JSON.stringify(parseHtmlForRules(CONTROL_HTML, CONTROL_URL)));
+    const stored = JSON.parse(
+      JSON.stringify(parseHtmlForRules(CONTROL_HTML, CONTROL_URL))
+    );
     delete stored.document;
     const [entry] = await run(
-      buildSiteContext([htmlPage(CONTROL_URL, CONTROL_HTML, JSON.stringify(stored))]),
+      buildSiteContext([
+        htmlPage(CONTROL_URL, CONTROL_HTML, JSON.stringify(stored)),
+      ])
     );
     expect(entry?.parsed?.errorShell).toBe(false);
   });

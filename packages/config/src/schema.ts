@@ -2,10 +2,17 @@
 // Shared across CLI, cloud runner, and any other consumer.
 // TOML loading and file discovery are NOT here — those are CLI adapters.
 
-import { AUDIT_LEVELS, parseAuditLevel } from "@squirrelscan/core-contracts/audit-levels";
+import {
+  AUDIT_LEVELS,
+  parseAuditLevel,
+} from "@squirrelscan/core-contracts/audit-levels";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { APPROVABLE_PROBE_PATHS } from "@squirrelscan/core-contracts/storage";
-import { isValidHeaderHost, isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
+import {
+  isValidHeaderHost,
+  isValidHeaderName,
+  isValidHeaderValue,
+} from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
 import { parseByteSize } from "./byte-size";
@@ -45,8 +52,9 @@ export const CrawlerConfigSchema = z.object({
   // quick; anything else fails validation with the list of levels.
   coverage: z
     .preprocess(
-      (value) => (typeof value === "string" ? (parseAuditLevel(value) ?? value) : value),
-      z.enum(COVERAGE_MODES),
+      (value) =>
+        typeof value === "string" ? (parseAuditLevel(value) ?? value) : value,
+      z.enum(COVERAGE_MODES)
     )
     .optional(),
   delay_ms: z.number().default(100),
@@ -64,10 +72,13 @@ export const CrawlerConfigSchema = z.object({
   // Reject control chars in names/values — replayed onto outbound requests (#532).
   headers: z
     .record(
-      z.string().max(255).refine(isValidHeaderName, { message: "Invalid header name" }),
+      z
+        .string()
+        .max(255)
+        .refine(isValidHeaderName, { message: "Invalid header name" }),
       z.string().max(8192).refine(isValidHeaderValue, {
         message: "Header value contains control characters (CR/LF/NUL)",
-      }),
+      })
     )
     .refine((h) => Object.keys(h).length <= 50, {
       message: "Too many custom headers (max 50)",
@@ -86,7 +97,7 @@ export const CrawlerConfigSchema = z.object({
       z.string().min(1).max(255).refine(isValidHeaderHost, {
         message:
           "header_hosts entries are host names, optionally with an http:// or https:// prefix: no wildcard, userinfo, empty label or trailing dot",
-      }),
+      })
     )
     .max(50)
     .default([]),
@@ -97,7 +108,9 @@ export const CrawlerConfigSchema = z.object({
   concurrency: z.number().default(DEFAULT_CRAWLER_CONCURRENCY),
   // Single-host bump (#265): per-host caps gate throughput; robots crawl-delay
   // overrides this only when respect_robots is true (#790), capped at 2s.
-  per_host_concurrency: z.number().default(DEFAULT_CRAWLER_PER_HOST_CONCURRENCY),
+  per_host_concurrency: z
+    .number()
+    .default(DEFAULT_CRAWLER_PER_HOST_CONCURRENCY),
   per_host_delay_ms: z.number().default(DEFAULT_CRAWLER_PER_HOST_DELAY_MS),
   // Rate-limit backoff ceiling (#1829). Bounds BOTH a single wait and the
   // cumulative wait for one URL/host, so an origin that answers 429 forever
@@ -136,7 +149,7 @@ export const CrawlerConfigSchema = z.object({
     .array(
       z.string().refine((path) => APPROVABLE_PROBE_PATHS.includes(path), {
         message: `discovery_probe_paths entries must each be a probe path, exactly as written: ${APPROVABLE_PROBE_PATHS.join(", ")}`,
-      }),
+      })
     )
     .max(APPROVABLE_PROBE_PATHS.length)
     .optional(),
@@ -263,9 +276,16 @@ export const ClassifierConfigSchema = z.object({
 // (a Vite or Next.js app with an empty HTML shell) is still found. Unset =
 // the default (8 MB per bundle in the local scan, 64 KB in the payload to the cloud
 // detection service); 0 turns bundle matching off.
-export const TechDetectConfigSchema = z.object({
-  bundle_bytes: z.number().int().min(0).max(SERVICE_LIMITS.techDetectMaxBundleBytes).optional(),
-}).strict();
+export const TechDetectConfigSchema = z
+  .object({
+    bundle_bytes: z
+      .number()
+      .int()
+      .min(0)
+      .max(SERVICE_LIMITS.techDetectMaxBundleBytes)
+      .optional(),
+  })
+  .strict();
 
 export const OutputConfigSchema = z.object({
   format: z.enum(["json", "html", "console"]).default("console"),
@@ -316,7 +336,7 @@ export const StorageConfigSchema = z.object({
         .min(0, { message: "keep_audits must be 0 or more" }),
     ])
     .transform((value) =>
-      typeof value === "boolean" ? (value ? DEFAULT_KEEP_AUDITS : 0) : value,
+      typeof value === "boolean" ? (value ? DEFAULT_KEEP_AUDITS : 0) : value
     )
     .default(DEFAULT_KEEP_AUDITS),
   /**
@@ -369,7 +389,9 @@ export const StorageConfigSchema = z.object({
    * counts once). Past it scripts are recorded as skipped. Unset = a quarter of
    * the content store cap (`content_store_max_bytes`).
    */
-  store_scripts_total_bytes: byteSizeField("store_scripts_total_bytes").optional(),
+  store_scripts_total_bytes: byteSizeField(
+    "store_scripts_total_bytes"
+  ).optional(),
   /**
    * Most first-party scripts one audit fetches when `store_scripts` is on, 1 to
    * 500. The audit's own checks fetch at least 10, a tenth of the pages, at
@@ -481,9 +503,7 @@ export const IntelConfigSchema = z.object({
   /** Daily-pull feed cache TTL in hours. Default 24 (once per day). */
   feed_ttl_hours: z.number().int().min(1).default(24),
   /** Per-provider config keyed by provider id (safe-browsing, urlhaus, …). */
-  providers: z
-    .record(z.string(), IntelProviderConfigSchema)
-    .default({}),
+  providers: z.record(z.string(), IntelProviderConfigSchema).default({}),
 });
 
 // Differential cloaking probe (integrity Phase 3, #118) — opt-in, bounded. When
@@ -507,7 +527,7 @@ export const CloakingProbeConfigSchema = z.object({
   googlebot_user_agent: z
     .string()
     .default(
-      "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+      "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
     ),
 });
 
@@ -529,10 +549,10 @@ export const Soft404ConfirmConfigSchema = z.object({
 // and the soft-404 confirmation pass (#1177); threat-intel lives under [intel].
 export const IntegrityConfigSchema = z.object({
   cloaking_probe: CloakingProbeConfigSchema.default(
-    CloakingProbeConfigSchema.parse({}),
+    CloakingProbeConfigSchema.parse({})
   ),
   soft404_confirm: Soft404ConfirmConfigSchema.default(
-    Soft404ConfirmConfigSchema.parse({}),
+    Soft404ConfirmConfigSchema.parse({})
   ),
 });
 
@@ -599,7 +619,9 @@ export const ConfigSchema = z.object({
   // disable_discovery_probes: unset means the context default, and code that
   // builds a Config by hand does not have to learn it.
   security: SecurityConfigSchema.optional(),
-  rule_options: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
+  rule_options: z
+    .record(z.string(), z.record(z.string(), z.unknown()))
+    .default({}),
   /**
    * `[[ignore]]` waivers (#1262): findings a rule reports that are right in
    * general but not actionable here, dropped by the engine without disabling the

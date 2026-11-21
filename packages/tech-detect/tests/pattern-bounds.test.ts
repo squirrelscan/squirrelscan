@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+
+import type { TechDetectInput } from "../src/types";
+
 import { detectTechnologies } from "../src/detect";
 import { ALL_FINGERPRINTS } from "../src/fingerprints";
-import type { TechDetectInput } from "../src/types";
 
 // A pattern with an unbounded run after a repeatable literal (`<link[^>]+href=`,
 // `<script\b[^>]*\sdata-main`, `x=.*y`) is quadratic on a page that repeats the
@@ -49,7 +51,9 @@ describe("every pattern is bounded on hostile input", () => {
       for (const d of fp.detectors) {
         if (!("pattern" in d)) continue;
         const source = d.pattern.source;
-        const prefixes = new Set(source.split("|").map(literalPrefix).concat(literalPrefix(source)));
+        const prefixes = new Set(
+          source.split("|").map(literalPrefix).concat(literalPrefix(source))
+        );
         for (const prefix of prefixes) {
           if (prefix.length < 2) continue;
           for (const sep of ["", " ", '"']) {
@@ -57,7 +61,10 @@ describe("every pattern is bounded on hostile input", () => {
             const start = performance.now();
             d.pattern.test(html);
             const ms = performance.now() - start;
-            if (ms > BUDGET_MS) slow.push(`${fp.id} ${d.type} ${Math.round(ms)}ms ${source.slice(0, 60)}`);
+            if (ms > BUDGET_MS)
+              slow.push(
+                `${fp.id} ${d.type} ${Math.round(ms)}ms ${source.slice(0, 60)}`
+              );
           }
         }
       }
@@ -84,11 +91,17 @@ describe("every pattern is bounded on hostile input", () => {
     const slow: string[] = [];
     for (const fp of ALL_FINGERPRINTS) {
       for (const opener of openers) {
-        const input: TechDetectInput = { url: "https://example.com/", headers: {}, html: repeated(opener), meta: { x: "y" } };
+        const input: TechDetectInput = {
+          url: "https://example.com/",
+          headers: {},
+          html: repeated(opener),
+          meta: { x: "y" },
+        };
         const start = performance.now();
         detectTechnologies(input, [fp]);
         const ms = performance.now() - start;
-        if (ms > BUDGET_MS) slow.push(`${fp.id} ${JSON.stringify(opener)} ${Math.round(ms)}ms`);
+        if (ms > BUDGET_MS)
+          slow.push(`${fp.id} ${JSON.stringify(opener)} ${Math.round(ms)}ms`);
       }
     }
     expect(slow).toEqual([]);
@@ -97,17 +110,42 @@ describe("every pattern is bounded on hostile input", () => {
 
 describe("bounded patterns still match real markup", () => {
   const ids = (html: string, scripts?: Array<{ url: string }>): string[] =>
-    detectTechnologies({ url: "https://example.com/", headers: {}, html, scripts }).map((t) => t.id);
+    detectTechnologies({
+      url: "https://example.com/",
+      headers: {},
+      html,
+      scripts,
+    }).map((t) => t.id);
 
   test("link and script attribute patterns", () => {
-    expect(ids(`<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1/css/bulma.min.css">`)).toContain("bulma");
-    expect(ids(`<link href="/assets/css/foundation.css" rel="stylesheet">`)).toContain("foundation-sites");
-    expect(ids(`<link rel="stylesheet" type="text/css" href="/css/semantic.min.css">`)).toContain("semantic-ui");
-    expect(ids(`<link href="css/materialize.css" rel="stylesheet">`)).toContain("materialize-css");
-    expect(ids(`<link rel="stylesheet" href="https://cdnjs.cloudflare.com/x/animate.min.css">`)).toContain("animate-css");
-    expect(ids(`<script data-main="js/main" src="js/require.js"></script>`)).toContain("requirejs");
+    expect(
+      ids(
+        `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1/css/bulma.min.css">`
+      )
+    ).toContain("bulma");
+    expect(
+      ids(`<link href="/assets/css/foundation.css" rel="stylesheet">`)
+    ).toContain("foundation-sites");
+    expect(
+      ids(
+        `<link rel="stylesheet" type="text/css" href="/css/semantic.min.css">`
+      )
+    ).toContain("semantic-ui");
+    expect(ids(`<link href="css/materialize.css" rel="stylesheet">`)).toContain(
+      "materialize-css"
+    );
+    expect(
+      ids(
+        `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/x/animate.min.css">`
+      )
+    ).toContain("animate-css");
+    expect(
+      ids(`<script data-main="js/main" src="js/require.js"></script>`)
+    ).toContain("requirejs");
     // html-minifier removeTagWhitespace output: no space between attributes.
-    expect(ids(`<link rel="stylesheet"href="/css/bulma.min.css">`)).toContain("bulma");
+    expect(ids(`<link rel="stylesheet"href="/css/bulma.min.css">`)).toContain(
+      "bulma"
+    );
   });
 
   test("analytics, privacy and widget patterns", () => {
@@ -116,14 +154,22 @@ describe("bounded patterns still match real markup", () => {
     const fathom = `<script src="https://cdn.usefathom.com/script.js" data-site="ABCDEFGH" defer></script>`;
     expect(ids(fathom)).toContain("fathom");
     const fb = "https://connect.facebook.net/en_US/fbevents.js";
-    expect(ids(`<script src="${fb}"></script>`, [{ url: fb }])).toContain("facebook-pixel");
+    expect(ids(`<script src="${fb}"></script>`, [{ url: fb }])).toContain(
+      "facebook-pixel"
+    );
     const rs = "https://cdn.rudderlabs.com/v1.1/rudder-analytics.min.js";
     expect(ids("", [{ url: rs }])).toContain("rudderstack");
     const didomi = "https://sdk.privacy-center.org/abc123/loader.js";
     expect(ids("", [{ url: didomi }])).toContain("didomi");
-    expect(ids("", [{ url: "https://nexus.ensighten.com/acme/prod/Bootstrap.js" }])).toContain("ensighten");
-    expect(ids("", [{ url: "https://staticw2.yotpo.com/APPKEY/widget.js" }])).toContain("yotpo");
-    expect(ids("", [{ url: "https://x.example/ruxitagentjs_ICA7NVfqrux_10279.js" }])).toContain("dynatrace-rum");
+    expect(
+      ids("", [{ url: "https://nexus.ensighten.com/acme/prod/Bootstrap.js" }])
+    ).toContain("ensighten");
+    expect(
+      ids("", [{ url: "https://staticw2.yotpo.com/APPKEY/widget.js" }])
+    ).toContain("yotpo");
+    expect(
+      ids("", [{ url: "https://x.example/ruxitagentjs_ICA7NVfqrux_10279.js" }])
+    ).toContain("dynatrace-rum");
     const uw = `<script data-account="AbC123" src="https://cdn.userway.org/widget.js"></script>`;
     expect(ids(uw)).toContain("userway");
   });
@@ -133,13 +179,17 @@ describe("Klaviyo loader pattern bounds (#1457 review)", () => {
   test("repeated script lines stay linear", () => {
     const klaviyo = ALL_FINGERPRINTS.find((fp) => fp.id === "klaviyo");
     const loader = klaviyo?.detectors.find(
-      (detector) => "pattern" in detector && detector.pattern.source.includes("\\.src\\s*=\\s*"),
+      (detector) =>
+        "pattern" in detector &&
+        detector.pattern.source.includes("\\.src\\s*=\\s*")
     );
     expect(loader && "pattern" in loader).toBe(true);
     if (!loader || !("pattern" in loader)) return;
 
     for (const unit of ["<script>\n", "<script>a.b.c.d.e.f.g.h\n"]) {
-      const markup = unit.repeat(Math.ceil(2_000_000 / unit.length)).slice(0, 2_000_000);
+      const markup = unit
+        .repeat(Math.ceil(2_000_000 / unit.length))
+        .slice(0, 2_000_000);
       const start = performance.now();
       loader.pattern.test(markup);
       expect(performance.now() - start).toBeLessThan(400);

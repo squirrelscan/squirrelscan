@@ -9,17 +9,18 @@
 // inline `style` attributes only: hiding by a `<style>` block is not read yet
 // (pub#678), so those fixtures still fail.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { ariaCommandNameRule } from "../src/a11y/aria-command-name";
 import { ariaDialogNameRule } from "../src/a11y/aria-dialog-name";
 import { ariaInputFieldNameRule } from "../src/a11y/aria-input-field-name";
 import { ariaLabelsRule } from "../src/a11y/aria-labels";
 import { formLabelsRule } from "../src/a11y/form-labels";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 async function run(rule: Rule, body: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
@@ -33,7 +34,10 @@ async function run(rule: Rule, body: string): Promise<CheckResult[]> {
   return (await rule.run(ctx)).checks as CheckResult[];
 }
 
-const statuses = async (rule: Rule, body: string): Promise<Record<string, string>> =>
+const statuses = async (
+  rule: Rule,
+  body: string
+): Promise<Record<string, string>> =>
   Object.fromEntries((await run(rule, body)).map((c) => [c.name, c.status]));
 
 /** The issue's fixtures (pub#671). */
@@ -67,7 +71,7 @@ for (const { rule, check } of RULES) {
       ["an inline display:none", `<div style="display:none">${BAD}</div>`],
     ] as const) {
       test(`${name} on an ancestor: not reported`, async () => {
-        const result = (await statuses(rule, body));
+        const result = await statuses(rule, body);
         expect(Object.values(result)).not.toContain("fail");
         expect(Object.values(result)).not.toContain("warn");
         expect(result[check]).toBe("pass");
@@ -79,7 +83,9 @@ for (const { rule, check } of RULES) {
         `<div style="display:var(--d)">${BAD}</div>`,
         `<link rel="stylesheet" href="/site.css"><div style="visibility:hidden">${BAD}</div>`,
       ]) {
-        expect(await statuses(rule, body)).toEqual({ [`${check}-unconfirmed`]: "warn" });
+        expect(await statuses(rule, body)).toEqual({
+          [`${check}-unconfirmed`]: "warn",
+        });
       }
     });
 
@@ -89,19 +95,24 @@ for (const { rule, check } of RULES) {
         `<style>.closed{visibility:hidden}</style><div class="closed">${BAD}</div>`,
         `<div style="visibility:hidden">${BAD}</div>`,
       ]) {
-        const result = (await statuses(rule, body));
+        const result = await statuses(rule, body);
         expect(Object.values(result)).not.toContain("fail");
         expect(Object.values(result)).not.toContain("warn");
       }
       // With an external stylesheet it is unconfirmed, not a failure.
       expect(
-        (await statuses(rule, `<link rel="stylesheet" href="/x.css"><style>.closed{display:none}</style><div class="closed">${BAD}</div>`)),
+        await statuses(
+          rule,
+          `<link rel="stylesheet" href="/x.css"><style>.closed{display:none}</style><div class="closed">${BAD}</div>`
+        )
       ).toEqual({ [`${check}-unconfirmed`]: "warn" });
     });
 
     test("off-screen and transparent controls are not treated as hidden", async () => {
       for (const style of ["position:absolute;left:-9999px", "opacity:0"]) {
-        expect((await statuses(rule, `<div style="${style}">${BAD}</div>`))[check]).toBe("fail");
+        expect(
+          (await statuses(rule, `<div style="${style}">${BAD}</div>`))[check]
+        ).toBe("fail");
       }
     });
   });
@@ -109,23 +120,35 @@ for (const { rule, check } of RULES) {
 
 describe("details and messages", () => {
   test("a hidden unnamed control is counted, and the pass says it covers the accessibility tree", async () => {
-    const [checked] = (await run(ariaInputFieldNameRule, `<div hidden><input type="text"></div>`));
+    const [checked] = await run(
+      ariaInputFieldNameRule,
+      `<div hidden><input type="text"></div>`
+    );
     expect(checked).toMatchObject({
       name: "aria-input-field-name",
       status: "pass",
-      message: "All input fields in the accessibility tree have accessible names",
+      message:
+        "All input fields in the accessibility tree have accessible names",
       details: { hiddenWithoutName: 1 },
     });
   });
 
   test("a hidden and a visible unnamed field: only the visible one fails", async () => {
     expect(
-      (await run(formLabelsRule, '<div hidden><input name="zoom"></div><input name="email">')),
-    ).toEqual([expect.objectContaining({ status: "fail", items: [{ id: "email" }] })]);
+      await run(
+        formLabelsRule,
+        '<div hidden><input name="zoom"></div><input name="email">'
+      )
+    ).toEqual([
+      expect.objectContaining({ status: "fail", items: [{ id: "email" }] }),
+    ]);
   });
 
   test("unconfirmed items say why", async () => {
-    const rows = (await run(ariaCommandNameRule, '<div style="display:var(--d)"><button class="zoom-in"></button></div>'));
+    const rows = await run(
+      ariaCommandNameRule,
+      '<div style="display:var(--d)"><button class="zoom-in"></button></div>'
+    );
     expect(rows).toEqual([
       expect.objectContaining({
         name: "aria-command-name-unconfirmed",
@@ -142,12 +165,19 @@ describe("a11y/aria-dialog-name: the reporter's closed modal (pub#671)", () => {
   test("a role=dialog modal marked aria-hidden while closed is not reported", async () => {
     const modal =
       '<div class="modal fade" id="configurator-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="configurator-modal-title"><div class="modal-dialog"><div class="modal-content"></div></div></div>';
-    expect(await statuses(ariaDialogNameRule, modal)).toEqual({ "aria-dialog-name": "pass" });
+    expect(await statuses(ariaDialogNameRule, modal)).toEqual({
+      "aria-dialog-name": "pass",
+    });
   });
 
   test("a native <dialog> is checked closed or open, since script opens it; hidden another way it is out", async () => {
-    for (const body of ["<dialog>Body</dialog>", "<dialog open>Body</dialog>"]) {
-      expect(await statuses(ariaDialogNameRule, body)).toEqual({ "dialog-name": "warn" });
+    for (const body of [
+      "<dialog>Body</dialog>",
+      "<dialog open>Body</dialog>",
+    ]) {
+      expect(await statuses(ariaDialogNameRule, body)).toEqual({
+        "dialog-name": "warn",
+      });
     }
     for (const body of [
       "<div hidden><dialog>Body</dialog></div>",
@@ -156,31 +186,40 @@ describe("a11y/aria-dialog-name: the reporter's closed modal (pub#671)", () => {
       // A role=dialog inside a closed native dialog is out of the tree.
       '<dialog aria-label="Shell"><div role="dialog">Body</div></dialog>',
     ]) {
-      const result = (await statuses(ariaDialogNameRule, body));
+      const result = await statuses(ariaDialogNameRule, body);
       expect(Object.values(result)).not.toContain("fail");
       expect(Object.values(result)).not.toContain("warn");
     }
   });
 
   test("a native <dialog> with an explicit dialog role is checked closed too, on the ARIA path", async () => {
-    expect(await statuses(ariaDialogNameRule, '<dialog role="dialog">Body</dialog>')).toEqual({
+    expect(
+      await statuses(ariaDialogNameRule, '<dialog role="dialog">Body</dialog>')
+    ).toEqual({
       "aria-dialog-name": "fail",
     });
-    expect(await statuses(ariaDialogNameRule, '<div hidden><dialog role="dialog">Body</dialog></div>')).toEqual({
+    expect(
+      await statuses(
+        ariaDialogNameRule,
+        '<div hidden><dialog role="dialog">Body</dialog></div>'
+      )
+    ).toEqual({
       "aria-dialog-name": "pass",
     });
   });
 
   test("an item keeps its ordinal id when an earlier same-named dialog is hidden", async () => {
-    const rows = (await run(
+    const rows = await run(
       ariaDialogNameRule,
-      '<div role="dialog" class="drawer" hidden></div><div role="dialog" class="drawer"></div>',
-    ));
+      '<div role="dialog" class="drawer" hidden></div><div role="dialog" class="drawer"></div>'
+    );
     expect(rows).toEqual([
       expect.objectContaining({
         name: "aria-dialog-name",
         status: "fail",
-        items: [expect.objectContaining({ id: 'div[role="dialog"].drawer (2)' })],
+        items: [
+          expect.objectContaining({ id: 'div[role="dialog"].drawer (2)' }),
+        ],
       }),
     ]);
   });

@@ -89,14 +89,17 @@ const FIELD_GROUPS: Array<[string, string[]]> = [
   ["og", ["og"]],
   ["twitter", ["twitter"]],
   ["contactLinks", ["contactLinks"]],
-  ["visible*", ["visibleAuthor", "visibleDatePublished", "visibleDateModified"]],
+  [
+    "visible*",
+    ["visibleAuthor", "visibleDatePublished", "visibleDateModified"],
+  ],
   ["pageType", ["pageType"]],
 ];
 
 console.log(
   `db=${DB.split("/").pop()} pages=${pages}  universe holds ` +
     `${((after - before) / 1024 / 1024).toFixed(0)} MB ` +
-    `(${Math.round((after - before) / pages / 1024)} KB/page, uncorrected for the harness floor)\n`,
+    `(${Math.round((after - before) / pages / 1024)} KB/page, uncorrected for the harness floor)\n`
 );
 
 let prev = after;
@@ -115,7 +118,7 @@ rows.sort((a, b) => b[1] - a[1]);
 for (const [field, bytes] of rows) {
   console.log(
     `  ${field.padEnd(16)} ${`${(bytes / 1024 / 1024).toFixed(1)} MB`.padStart(9)} ` +
-      `${`${Math.round(bytes / pages / 1024)} KB/page`.padStart(14)}`,
+      `${`${Math.round(bytes / pages / 1024)} KB/page`.padStart(14)}`
   );
 }
 await run(storage.close());

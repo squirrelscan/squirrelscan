@@ -5,11 +5,11 @@
 // every request: the action URLs get none, the missing page gets one HEAD, and
 // no probe request carries the audit's custom headers or any credentials.
 
+import type { Config } from "@squirrelscan/config";
+
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { Config } from "@squirrelscan/config";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 
 import { probeLinkTargets } from "../src/link-target-probe";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -64,20 +64,33 @@ function serveSite(): { origin: string; seen: Seen[] } {
         new Response(body, { headers: { "content-type": type } });
       switch (url.pathname) {
         case "/":
-          return ok(html(`${ACTION_LINKS.join(" ")} <a href="/missing-page">Old post</a>`));
+          return ok(
+            html(
+              `${ACTION_LINKS.join(" ")} <a href="/missing-page">Old post</a>`
+            )
+          );
         case "/sitemap.xml":
           return ok(
             `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${url.origin}/</loc></url></urlset>`,
-            "application/xml",
+            "application/xml"
           );
         case "/robots.txt":
-          return ok(`User-agent: *\nAllow: /\nSitemap: ${url.origin}/sitemap.xml\n`, "text/plain");
+          return ok(
+            `User-agent: *\nAllow: /\nSitemap: ${url.origin}/sitemap.xml\n`,
+            "text/plain"
+          );
         // An innocent-looking link that redirects to an action: the probe
         // stops at the redirect and never follows it.
         case "/old-settings":
-          return new Response(null, { status: 302, headers: { location: "/logout" } });
+          return new Response(null, {
+            status: 302,
+            headers: { location: "/logout" },
+          });
       }
-      return new Response(html("Not found"), { status: 404, headers: { "content-type": "text/html" } });
+      return new Response(html("Not found"), {
+        status: 404,
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   servers.push(server);
@@ -101,20 +114,33 @@ async function auditQuick() {
         useCacheControl: false,
         disableLinkDiscovery: true,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${site.origin}/`, `${site.origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${site.origin}/`, `${site.origin}/`)
+  );
   const crawlEnd = site.seen.length;
   const config = {
     rule_options: {},
     rules: { enable: ["links/broken-links"] },
     // A custom-header audit: the header may carry auth, so the probe must
     // never send it.
-    crawler: { max_pages: 10, exclude: [], headers: { "X-Site-Auth": "secret-value" } },
-    external_links: { enabled: false, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
+    crawler: {
+      max_pages: 10,
+      exclude: [],
+      headers: { "X-Site-Auth": "secret-value" },
+    },
+    external_links: {
+      enabled: false,
+      concurrency: 1,
+      timeout_ms: 5_000,
+      cache_ttl_days: 1,
+    },
     internal_links: { enabled: true },
   } as unknown as Config;
-  const preRules = await Effect.runPromise(runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}));
+  const preRules = await Effect.runPromise(
+    runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {})
+  );
   return { ...site, crawlEnd, assets: preRules.assets };
 }
 
@@ -124,7 +150,10 @@ describe("the internal link probe never changes state (repo#2729)", () => {
     const probes = seen.slice(crawlEnd);
 
     for (const path of ACTION_PATHS) {
-      expect(seen.filter((r) => r.path === path), path).toEqual([]);
+      expect(
+        seen.filter((r) => r.path === path),
+        path
+      ).toEqual([]);
     }
 
     const missing = probes.filter((r) => r.path === "/missing-page");
@@ -136,11 +165,14 @@ describe("the internal link probe never changes state (repo#2729)", () => {
     }
 
     // The redirecting link was asked once (HEAD) and reported as its 302.
-    expect(probes.filter((r) => r.path === "/old-settings").map((r) => r.method)).toEqual([
-      "HEAD",
-    ]);
+    expect(
+      probes.filter((r) => r.path === "/old-settings").map((r) => r.method)
+    ).toEqual(["HEAD"]);
     const byPath = new Map(
-      (assets.linkTargetStatuses ?? []).map((s) => [new URL(s.url).pathname, s.status]),
+      (assets.linkTargetStatuses ?? []).map((s) => [
+        new URL(s.url).pathname,
+        s.status,
+      ])
     );
     expect(byPath.get("/missing-page")).toBe(404);
     expect(byPath.get("/old-settings")).toBe(302);
@@ -163,7 +195,8 @@ describe("probeLinkTargets", () => {
     userAgent: "squirrel-test",
     timeoutMs: 5_000,
     concurrency: 1,
-    mayRequest: (url: string) => new URL(url).host === "example.com" && !url.includes("logout"),
+    mayRequest: (url: string) =>
+      new URL(url).host === "example.com" && !url.includes("logout"),
   };
 
   test("GET only when HEAD answers 405 or 501, as a one-byte range", async () => {
@@ -174,43 +207,58 @@ describe("probeLinkTargets", () => {
     });
     const { results } = await Effect.runPromise(
       probeLinkTargets(
-        ["https://example.com/a", "https://example.com/b", "https://example.com/c", "https://example.com/d"],
-        { ...base, send: site.send },
-      ),
+        [
+          "https://example.com/a",
+          "https://example.com/b",
+          "https://example.com/c",
+          "https://example.com/d",
+        ],
+        { ...base, send: site.send }
+      )
     );
     expect(results.map((r) => r.status)).toEqual([206, 200, 500, 404]);
-    expect(site.calls.map((c) => `${c.method} ${new URL(c.url).pathname}`)).toEqual([
-      "HEAD /a",
-      "GET /a",
-      "HEAD /b",
-      "GET /b",
-      "HEAD /c",
-      "HEAD /d",
-    ]);
+    expect(
+      site.calls.map((c) => `${c.method} ${new URL(c.url).pathname}`)
+    ).toEqual(["HEAD /a", "GET /a", "HEAD /b", "GET /b", "HEAD /c", "HEAD /d"]);
     const get = site.calls.find((c) => c.method === "GET")!;
     expect(new Headers(get.init.headers).get("range")).toBe("bytes=0-0");
   });
 
   test("sends only User-Agent and Accept, never credentials", async () => {
     const site = fakeSite({ "/a": () => new Response(null, { status: 200 }) });
-    await Effect.runPromise(probeLinkTargets(["https://example.com/a"], { ...base, send: site.send }));
+    await Effect.runPromise(
+      probeLinkTargets(["https://example.com/a"], { ...base, send: site.send })
+    );
     const [call] = site.calls;
-    expect([...new Headers(call!.init.headers).keys()].sort()).toEqual(["accept", "user-agent"]);
+    expect([...new Headers(call!.init.headers).keys()].sort()).toEqual([
+      "accept",
+      "user-agent",
+    ]);
     expect(call!.init.credentials).toBe("omit");
     expect(call!.init.redirect).toBe("manual");
   });
 
   test("follows a redirect only while every hop may be requested", async () => {
     const site = fakeSite({
-      "/moved": () => new Response(null, { status: 301, headers: { location: "/gone" } }),
-      "/out": () => new Response(null, { status: 302, headers: { location: "https://other.example/x" } }),
-      "/to-action": () => new Response(null, { status: 302, headers: { location: "/logout" } }),
+      "/moved": () =>
+        new Response(null, { status: 301, headers: { location: "/gone" } }),
+      "/out": () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://other.example/x" },
+        }),
+      "/to-action": () =>
+        new Response(null, { status: 302, headers: { location: "/logout" } }),
     });
     const { results } = await Effect.runPromise(
       probeLinkTargets(
-        ["https://example.com/moved", "https://example.com/out", "https://example.com/to-action"],
-        { ...base, send: site.send },
-      ),
+        [
+          "https://example.com/moved",
+          "https://example.com/out",
+          "https://example.com/to-action",
+        ],
+        { ...base, send: site.send }
+      )
     );
     expect(results.map((r) => r.status)).toEqual([404, 302, 302]);
     expect(site.calls.map((c) => c.url)).toEqual([
@@ -232,7 +280,7 @@ describe("probeLinkTargets", () => {
         ...base,
         controlUrl: "https://example.com/",
         send: site.send,
-      }),
+      })
     );
     expect(probe.headUnreliable).toBe(true);
     expect(probe.results.map((r) => [r.status, r.error])).toEqual([
@@ -244,17 +292,25 @@ describe("probeLinkTargets", () => {
   });
 
   test("the control is the audited URL: asked even where the filters skip it, and no answer trusts nothing less", async () => {
-    const site = fakeSite({ "/cart": () => new Response(null, { status: 200 }) });
-    const skipsCart = { ...base, mayRequest: (url: string) => !url.includes("cart") };
+    const site = fakeSite({
+      "/cart": () => new Response(null, { status: 200 }),
+    });
+    const skipsCart = {
+      ...base,
+      mayRequest: (url: string) => !url.includes("cart"),
+    };
     const asked = await Effect.runPromise(
       probeLinkTargets(["https://example.com/gone"], {
         ...skipsCart,
         controlUrl: "https://example.com/cart",
         send: site.send,
-      }),
+      })
     );
     expect(asked.headUnreliable).toBe(false);
-    expect(site.calls.map((c) => new URL(c.url).pathname)).toEqual(["/cart", "/gone"]);
+    expect(site.calls.map((c) => new URL(c.url).pathname)).toEqual([
+      "/cart",
+      "/gone",
+    ]);
     expect(asked.results[0]?.status).toBe(404);
 
     const failing = async (url: string, init: RequestInit) => {
@@ -266,7 +322,7 @@ describe("probeLinkTargets", () => {
         ...base,
         controlUrl: "https://example.com/",
         send: failing,
-      }),
+      })
     );
     expect(unknown.headUnreliable).toBe(false);
     expect(unknown.results[0]?.status).toBe(404);
@@ -279,7 +335,7 @@ describe("probeLinkTargets", () => {
         ...base,
         controlUrl: "https://example.com/",
         send: site.send,
-      }),
+      })
     );
     expect(probe.headUnreliable).toBe(false);
     expect(probe.results[0]?.status).toBe(404);
@@ -290,7 +346,10 @@ describe("probeLinkTargets", () => {
     const {
       results: [result],
     } = await Effect.runPromise(
-      probeLinkTargets(["https://example.com/logout"], { ...base, send: site.send }),
+      probeLinkTargets(["https://example.com/logout"], {
+        ...base,
+        send: site.send,
+      })
     );
     expect(result).toMatchObject({ status: null, error: "not requested" });
     expect(site.calls).toEqual([]);

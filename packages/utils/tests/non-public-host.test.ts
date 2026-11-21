@@ -121,7 +121,10 @@ describe("nonPublicHostLabel", () => {
     ["http://[64:ff9b:1::a00:1]/", "[64:ff9b:1::a00:1]"],
     ["http://[2002:a00:1::]/", "[2002:a00:1::]"], // 6to4 for 10.0.0.1
     ["http://[2002:7f00:1::1]/", "[2002:7f00:1::1]"], // 6to4 for loopback
-    ["http://[2001:0:4136:e378:8000:63bf:80ff:fffe]/", "[2001:0:4136:e378:8000:63bf:80ff:fffe]"], // Teredo
+    [
+      "http://[2001:0:4136:e378:8000:63bf:80ff:fffe]/",
+      "[2001:0:4136:e378:8000:63bf:80ff:fffe]",
+    ], // Teredo
     ["http://[fec0::1]/", "[fec0::1]"], // site-local
     ["http://[2001:db8::1]/", "[2001:db8::1]"], // documentation
     ["http://[3fff::1]/", "[3fff::1]"],
@@ -140,17 +143,36 @@ describe("nonPublicHostLabel", () => {
   });
 
   test("the narrow label (the grant) does not name them: a start URL there is not allowed private-network egress", () => {
-    for (const url of ["http://[64:ff9b::a00:1]/", "http://[2002:a00:1::]/", "http://[2001::1]/", "http://203.0.113.10/", "http://[fec0::1]/", "http://224.0.0.1/"]) {
-      expect([url, privateNetworkHostLabel(url), isPrivateNetworkUrl(url)]).toEqual([url, null, false]);
+    for (const url of [
+      "http://[64:ff9b::a00:1]/",
+      "http://[2002:a00:1::]/",
+      "http://[2001::1]/",
+      "http://203.0.113.10/",
+      "http://[fec0::1]/",
+      "http://224.0.0.1/",
+    ]) {
+      expect([
+        url,
+        privateNetworkHostLabel(url),
+        isPrivateNetworkUrl(url),
+      ]).toEqual([url, null, false]);
     }
     // and it keeps what it always named
-    for (const url of ["http://localhost:3000", "http://10.0.0.5/", "http://[::1]:5173/", "http://box.local/", "http://169.254.169.254/"]) {
+    for (const url of [
+      "http://localhost:3000",
+      "http://10.0.0.5/",
+      "http://[::1]:5173/",
+      "http://box.local/",
+      "http://169.254.169.254/",
+    ]) {
       expect([url, privateNetworkHostLabel(url) !== null]).toEqual([url, true]);
     }
   });
 
   test("uppercase does not evade the name rules", () => {
-    expect(nonPublicHostLabel("http://METADATA.GOOGLE.INTERNAL/")).not.toBeNull();
+    expect(
+      nonPublicHostLabel("http://METADATA.GOOGLE.INTERNAL/")
+    ).not.toBeNull();
     expect(nonPublicHostLabel("http://Box.Local/")).not.toBeNull();
     expect(nonPublicHostLabel("http://LOCALHOST:3000/")).not.toBeNull();
   });
@@ -194,13 +216,18 @@ describe("nonPublicHostLabel", () => {
 });
 
 describe("isNonPublicHostname", () => {
-  test.each(["test", "example", "invalid", "localdomain", "home", "onion", "alt"])(
-    "%s and its subdomains are non-public",
-    (zone) => {
-      expect(isNonPublicHostname(zone)).toBe(true);
-      expect(isNonPublicHostname(`service.${zone}`)).toBe(true);
-    },
-  );
+  test.each([
+    "test",
+    "example",
+    "invalid",
+    "localdomain",
+    "home",
+    "onion",
+    "alt",
+  ])("%s and its subdomains are non-public", (zone) => {
+    expect(isNonPublicHostname(zone)).toBe(true);
+    expect(isNonPublicHostname(`service.${zone}`)).toBe(true);
+  });
 
   test("the reserved zones ignore case and trailing dots", () => {
     expect(isNonPublicHostname("MyApp.TEST.")).toBe(true);

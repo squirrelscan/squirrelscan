@@ -109,7 +109,12 @@ export const BUSINESS_CATEGORIES = [
 export type BusinessCategory = (typeof BUSINESS_CATEGORIES)[number];
 
 /** Geographic reach of the site's intended audience — drives jurisdiction rules. */
-export const AUDIENCE_SCOPES = ["global", "national", "regional", "local"] as const;
+export const AUDIENCE_SCOPES = [
+  "global",
+  "national",
+  "regional",
+  "local",
+] as const;
 export type AudienceScope = (typeof AUDIENCE_SCOPES)[number];
 
 /** Recognized social platforms for social-presence validation. */

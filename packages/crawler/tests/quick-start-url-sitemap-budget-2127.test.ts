@@ -5,10 +5,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+import type {
+  RedirectChain,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "../src/storage/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
-import type { RedirectChain, ResponseHeaders, SecurityHeaders } from "../src/storage/types";
 
 const ORIGIN = "https://example.com";
 
@@ -67,7 +72,9 @@ function buildFetcher(site: Site, fetched: string[]): CrawlFetcher {
       const body = page?.body ?? "";
       yield* applyStatusGuards(url, status, new Headers(), body);
       const finalUrl = page?.redirectTo ?? url;
-      const destinationBody = page?.redirectTo ? (site[page.redirectTo]?.body ?? "") : body;
+      const destinationBody = page?.redirectTo
+        ? (site[page.redirectTo]?.body ?? "")
+        : body;
       return {
         url,
         finalUrl,
@@ -75,7 +82,11 @@ function buildFetcher(site: Site, fetched: string[]): CrawlFetcher {
         loadTime: 1,
         ttfb: 1,
         downloadTime: 1,
-        headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html", setCookie: null },
+        headers: {
+          ...EMPTY_RESPONSE_HEADERS,
+          contentType: "text/html",
+          setCookie: null,
+        },
         securityHeaders: EMPTY_SECURITY_HEADERS,
         contentType: "text/html",
         body: destinationBody,
@@ -90,8 +101,13 @@ const page = (...paths: string[]): string =>
 
 /** A 20 page site: / links to /p/1 .. /p/19, and /redir redirects to /p/5. */
 function bigSite(): Site {
-  const site: Site = { [`${ORIGIN}/`]: { body: page(...Array.from({ length: 19 }, (_, i) => `/p/${i + 1}`)) } };
-  for (let i = 1; i <= 19; i++) site[`${ORIGIN}/p/${i}`] = { body: page("/p/1", "/p/2") };
+  const site: Site = {
+    [`${ORIGIN}/`]: {
+      body: page(...Array.from({ length: 19 }, (_, i) => `/p/${i + 1}`)),
+    },
+  };
+  for (let i = 1; i <= 19; i++)
+    site[`${ORIGIN}/p/${i}`] = { body: page("/p/1", "/p/2") };
   site[`${ORIGIN}/redir`] = { redirectTo: `${ORIGIN}/p/5` };
   site[`${ORIGIN}/redir-away`] = { redirectTo: `${ORIGIN}/p/6` };
   return site;
@@ -120,16 +136,28 @@ interface Result {
   fetched: string[];
   /** Every URL requested through global fetch (robots.txt, sitemaps, probes). */
   other: string[];
-  frontier: Array<{ url: string; status: string; reason?: string; parent?: string }>;
+  frontier: Array<{
+    url: string;
+    status: string;
+    reason?: string;
+    parent?: string;
+  }>;
   stats: Record<string, unknown>;
 }
 
-async function run(config: Partial<CrawlerConfig>, site: Site, other: string[]): Promise<Result> {
+async function run(
+  config: Partial<CrawlerConfig>,
+  site: Site,
+  other: string[]
+): Promise<Result> {
   const fetched: string[] = [];
   const fetcher = buildFetcher(site, fetched);
   return Effect.runPromise(
     Effect.gen(function* () {
-      const crawler = yield* createCrawler({ fetcher, config: { ...BASE_CONFIG, ...config } });
+      const crawler = yield* createCrawler({
+        fetcher,
+        config: { ...BASE_CONFIG, ...config },
+      });
       const crawlId = yield* crawler.start(ORIGIN);
       const entries = yield* crawler.storage.getAllFrontierEntries(crawlId);
       const crawl = yield* crawler.storage.getCrawl(crawlId);
@@ -144,22 +172,22 @@ async function run(config: Partial<CrawlerConfig>, site: Site, other: string[]):
         })),
         stats: (crawl?.stats ?? {}) as Record<string, unknown>,
       };
-    }),
+    })
   );
 }
-
 
 const MAX_PAGES = 10;
 const SITEMAP_SIZE = 40;
 
 const SITEMAP_XML = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${ORIGIN}/</loc><priority>0.1</priority></url>${Array.from(
   { length: SITEMAP_SIZE },
-  (_, i) => `<url><loc>${ORIGIN}/p/${i + 1}</loc><priority>1.0</priority></url>`,
+  (_, i) => `<url><loc>${ORIGIN}/p/${i + 1}</loc><priority>1.0</priority></url>`
 ).join("")}</urlset>`;
 
 function sitemapSite(): Site {
   const site: Site = { [`${ORIGIN}/`]: { body: page() } };
-  for (let i = 1; i <= SITEMAP_SIZE; i++) site[`${ORIGIN}/p/${i}`] = { body: page() };
+  for (let i = 1; i <= SITEMAP_SIZE; i++)
+    site[`${ORIGIN}/p/${i}`] = { body: page() };
   return site;
 }
 
@@ -176,11 +204,19 @@ describe("quick crawl start URL under a large sitemap (#2127)", () => {
             ? input.toString()
             : (input as Request).url;
       const body =
-        url === `${ORIGIN}/robots.txt` ? ROBOTS : url === `${ORIGIN}/sitemap.xml` ? SITEMAP_XML : "";
+        url === `${ORIGIN}/robots.txt`
+          ? ROBOTS
+          : url === `${ORIGIN}/sitemap.xml`
+            ? SITEMAP_XML
+            : "";
       const ok = body !== "";
       const res = new Response(body, {
         status: ok ? 200 : 404,
-        headers: { "content-type": url.endsWith(".xml") ? "application/xml" : "text/plain" },
+        headers: {
+          "content-type": url.endsWith(".xml")
+            ? "application/xml"
+            : "text/plain",
+        },
       });
       Object.defineProperty(res, "url", { value: url, configurable: true });
       return Promise.resolve(res);

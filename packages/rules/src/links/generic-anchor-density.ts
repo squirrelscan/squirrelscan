@@ -16,8 +16,12 @@
 
 import { z } from "zod";
 
-import { countGenericAnchors, type GenericAnchorCount } from "../shared/generic-anchor-phrases";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import {
+  countGenericAnchors,
+  type GenericAnchorCount,
+} from "../shared/generic-anchor-phrases";
 
 const CHECK = "generic-anchor-density";
 const MAX_WORST = 10;
@@ -51,7 +55,11 @@ function evaluate(
   }
 
   const ratio = generic / total;
-  const details = { genericAnchors: generic, totalAnchors: total, ratio: Math.round(ratio * 1000) / 1000 };
+  const details = {
+    genericAnchors: generic,
+    totalAnchors: total,
+    ratio: Math.round(ratio * 1000) / 1000,
+  };
   if (ratio < warnRatio) {
     return {
       name: CHECK,
@@ -61,7 +69,10 @@ function evaluate(
     };
   }
 
-  offenders.sort((a, b) => b.generic - a.generic || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+  offenders.sort(
+    (a, b) =>
+      b.generic - a.generic || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)
+  );
   const worst = offenders.slice(0, MAX_WORST);
   return {
     name: CHECK,
@@ -92,7 +103,11 @@ export const genericAnchorDensityRule: Rule = {
     // Check names by outcome class (#1741).
     checks: [
       { name: "generic-anchor-density", outcome: "problem" },
-      { name: "generic-anchor-density", outcome: "clean", clears: ["generic-anchor-density"] },
+      {
+        name: "generic-anchor-density",
+        outcome: "clean",
+        clears: ["generic-anchor-density"],
+      },
       { name: "generic-anchor-density", outcome: "skipped" },
     ],
     optionsSchema: z.object({
@@ -101,7 +116,9 @@ export const genericAnchorDensityRule: Rule = {
         .int()
         .min(1)
         .default(30)
-        .describe("Fewest internal content anchors needed to judge the ratio; below it the rule is skipped"),
+        .describe(
+          "Fewest internal content anchors needed to judge the ratio; below it the rule is skipped"
+        ),
       warnRatio: z
         .number()
         .min(0)
@@ -130,7 +147,8 @@ export const genericAnchorDensityRule: Rule = {
             {
               name: CHECK,
               status: "skipped",
-              message: "Per-page generic anchor counts are not available for this crawl",
+              message:
+                "Per-page generic anchor counts are not available for this crawl",
             },
           ],
         };

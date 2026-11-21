@@ -2,9 +2,10 @@
 // unreachable host) is listed as "Not checked" in every format, never left out so the
 // rule reads as clean.
 
+import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
-import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import type { AuditReport } from "../src/types";
 
 import { notCheckedLines, notCheckedRules } from "../src/not-checked";
 import { renderHtml } from "../src/output/html";
@@ -13,7 +14,6 @@ import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
-import type { AuditReport } from "../src/types";
 
 const MESSAGE =
   "TLS certificate not checked: the proxy 127.0.0.1:3128 refused CONNECT to 93.184.216.34:443 with status 403";
@@ -62,7 +62,9 @@ describe("security/tls-certificate not checked (#1259)", () => {
       message: MESSAGE,
     });
     expect(rule?.hint).toContain("CONNECT");
-    expect(notCheckedLines(report())[0]).toStartWith("Not checked: TLS Certificate.");
+    expect(notCheckedLines(report())[0]).toStartWith(
+      "Not checked: TLS Certificate."
+    );
   });
 
   test("the JSON report lists it under notChecked", () => {
@@ -85,13 +87,18 @@ describe("security/tls-certificate not checked (#1259)", () => {
       String(renderXml(report() as never)),
     ]) {
       expect(out).toContain('<not-checked count="1">');
-      expect(out).toContain('check="tls-certificate" reason="tls-certificate-not-checked"');
+      expect(out).toContain(
+        'check="tls-certificate" reason="tls-certificate-not-checked"'
+      );
       expect(out).toContain("TLS certificate not checked");
     }
   });
 
   test("the text and markdown reports show the same line", () => {
-    for (const out of [renderText(report() as never), renderMarkdown(report() as never)]) {
+    for (const out of [
+      renderText(report() as never),
+      renderMarkdown(report() as never),
+    ]) {
       expect(String(out)).toContain("TLS certificate not checked");
     }
   });

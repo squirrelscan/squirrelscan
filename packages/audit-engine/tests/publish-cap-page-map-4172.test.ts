@@ -2,10 +2,10 @@
 // re-projected to its bound, stamped when it cannot be, and dropped (stamped) before any issue
 // class is reduced.
 
-import { describe, expect, test } from "bun:test";
-
 import type { PageMap } from "@squirrelscan/core-contracts/page-map";
+
 import { buildPageMap } from "@squirrelscan/report/page-map-publish";
+import { describe, expect, test } from "bun:test";
 
 import { capReportForPublish, type CappableReport } from "../src/publish-cap";
 
@@ -59,7 +59,9 @@ describe("capReportForPublish pageMap", () => {
   });
 
   test("an unprojectable map is left out and stamped", () => {
-    const out = capReportForPublish(base({ format: "broken", pages: null } as unknown as PageMap));
+    const out = capReportForPublish(
+      base({ format: "broken", pages: null } as unknown as PageMap)
+    );
     expect(out.pageMap).toBeUndefined();
     expect(out.detail.pageMapFailed).toBe(true);
   });

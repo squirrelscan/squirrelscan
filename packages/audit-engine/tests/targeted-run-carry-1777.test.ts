@@ -3,11 +3,14 @@
 // `targeted-run` and a skip is not evidence of a fix. The same page after a run where the rule really ran and
 // found nothing resolves, so the carry is the skip's doing and not a merge that never resolves.
 
-import { describe, expect, test } from "bun:test";
+import type {
+  CheckResult,
+  PageFindingRecord,
+} from "@squirrelscan/core-contracts";
 
-import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
 import { TARGETED_RUN_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import { computeMerge, createNotEvaluatedCollector } from "../src/merge-core";
 
@@ -39,10 +42,15 @@ const prior = (url: string): PageFindingRecord => ({
 const targetedSkip: CheckResult = {
   name: RULE,
   status: "skipped",
-  message: "Skipped: this run audited only the URLs it was given, not the whole site",
+  message:
+    "Skipped: this run audited only the URLs it was given, not the whole site",
   skipReason: TARGETED_RUN_SKIP_REASON,
 };
-const clean: CheckResult = { name: "broken-links", status: "pass", message: "No broken internal links detected" };
+const clean: CheckResult = {
+  name: "broken-links",
+  status: "pass",
+  message: "No broken internal links detected",
+};
 
 function stateAfter(rows: CheckResult[]) {
   const collector = createNotEvaluatedCollector(normalizePageUrl);

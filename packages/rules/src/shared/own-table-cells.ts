@@ -14,7 +14,6 @@
 // what the rules queried before; the walk decides which table and row own them.
 import type { ChildrenParent } from "./attribute-lookup";
 
-
 export interface OwnRow {
   row: Element;
   /** The row's own `th` and `td` cells, in document order. */
@@ -38,8 +37,16 @@ export function ownTableCells(doc: Document): Map<Element, OwnTable> {
   const isRow = new Set<Element>(doc.querySelectorAll("tr"));
   const isCell = new Set<Element>(doc.querySelectorAll("th, td"));
 
-  const stack: Array<{ el: Element; table: OwnTable | null; row: OwnRow | null }> = [];
-  const pushChildren = (parent: ChildrenParent, table: OwnTable | null, row: OwnRow | null) => {
+  const stack: Array<{
+    el: Element;
+    table: OwnTable | null;
+    row: OwnRow | null;
+  }> = [];
+  const pushChildren = (
+    parent: ChildrenParent,
+    table: OwnTable | null,
+    row: OwnRow | null
+  ) => {
     const children = parent.children;
     for (let i = children.length - 1; i >= 0; i--) {
       stack.push({ el: children[i] as Element, table, row });

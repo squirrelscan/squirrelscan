@@ -1,5 +1,12 @@
-import { logger, profileRules } from "./logger";
+import type {
+  CheckResult,
+  EntityMap,
+  IntelContext,
+  SiteMetadata,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 // Rule runner - executes rules with context
+import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
 
 import {
   PRIVATE_TARGET_SKIP_REASON,
@@ -12,15 +19,10 @@ import { stripShadowIdScopes } from "@squirrelscan/parser/dom";
 import { mapWithConcurrency } from "@squirrelscan/utils";
 import { nonPublicHostLabel } from "@squirrelscan/utils/non-public-host";
 
-import type {
-  CheckResult,
-  EntityMap,
-  IntelContext,
-  SiteMetadata,
-  SiteQuery,
-} from "@squirrelscan/core-contracts";
-
-
+import type { CloudResultStore } from "./cloud";
+import type { CollectedSiteSignals } from "./collected-signals";
+import type { EndpointSurface } from "./endpoint-surface";
+import type { ProbeBudget } from "./probe-budget";
 import type {
   PageData,
   ParsedPage,
@@ -31,15 +33,16 @@ import type {
   SiteData,
 } from "./types";
 
-import type { CloudResultStore } from "./cloud";
-import type { CollectedSiteSignals } from "./collected-signals";
-import type { EndpointSurface } from "./endpoint-surface";
-import type { ProbeBudget } from "./probe-budget";
-import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
 import { ruleApplies } from "./applicability";
 import { filterRules } from "./filter";
+import {
+  IgnoreTable,
+  isIgnorable,
+  stripItemSelectors,
+  type IgnoreEntry,
+} from "./ignore";
 import { loadAllRules, type RuleNamespace } from "./loader";
-import { describeRuleOptionIssues } from "./rule-options-check";
+import { logger, profileRules } from "./logger";
 import {
   RULE_TIME_BUDGET_MS,
   RuleTimeoutError,
@@ -47,7 +50,7 @@ import {
   SITE_RULE_BUDGET_CAP_MS,
   siteRuleBudgetMs,
 } from "./rule-budget";
-import { IgnoreTable, isIgnorable, stripItemSelectors, type IgnoreEntry } from "./ignore";
+import { describeRuleOptionIssues } from "./rule-options-check";
 import { dedupeCrossRuleFindings } from "./security/endpoint-dedupe";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
 import { pageTypeRuleSkip, skippablePageType } from "./shared/page-type";
@@ -164,7 +167,9 @@ export interface RunnerOptions extends RunnerScope {
 const DEFAULT_RULE_CONCURRENCY = 8;
 
 /** Site rules that report the absence of a root resource, beyond the discovery-probe readers. */
-const ROOT_RESOURCE_RULES: ReadonlySet<string> = new Set(["crawl/sitemap-exists"]);
+const ROOT_RESOURCE_RULES: ReadonlySet<string> = new Set([
+  "crawl/sitemap-exists",
+]);
 
 /**
  * Site rules that still run in a targeted run (#1777, #1778): they can be judged from the listed pages alone.
@@ -188,7 +193,10 @@ export const SITE_RULES_ON_TARGETED_RUN: ReadonlySet<string> = new Set([
 
 /** Whether a rule's findings are about root resources (a discovery probe or the sitemap). */
 function judgesRootResource(rule: Rule): boolean {
-  return (rule.meta.discoveryProbes?.length ?? 0) > 0 || ROOT_RESOURCE_RULES.has(rule.meta.id);
+  return (
+    (rule.meta.discoveryProbes?.length ?? 0) > 0 ||
+    ROOT_RESOURCE_RULES.has(rule.meta.id)
+  );
 }
 
 /**
@@ -202,9 +210,14 @@ function judgesRootResource(rule: Rule): boolean {
  */
 function fetchedNoPages(site: SiteData | undefined): boolean {
   const limits = site?.crawlLimits;
-  if (!site || !limits || limits.pagesCrawled !== 0 || limits.maxPages <= 0) return false;
+  if (!site || !limits || limits.pagesCrawled !== 0 || limits.maxPages <= 0)
+    return false;
   const robots = site.robotsTxt;
-  const failedFetch = robots !== null && robots !== undefined && !robots.exists && robots.errors.length > 0;
+  const failedFetch =
+    robots !== null &&
+    robots !== undefined &&
+    !robots.exists &&
+    robots.errors.length > 0;
   return (site.refusedFetches?.length ?? 0) > 0 || failedFetch;
 }
 
@@ -264,24 +277,33 @@ const contentViews = new WeakMap<SiteData, SiteData>();
 
 /** `siteData` without its redirect sources: what every rule that reads pages as content sees. */
 function contentView(siteData: SiteData | undefined): SiteData | undefined {
-  if (!siteData || !siteData.pages.some((p) => p.redirectSource)) return siteData;
+  if (!siteData || !siteData.pages.some((p) => p.redirectSource))
+    return siteData;
   let view = contentViews.get(siteData);
   if (!view) {
-    view = { ...siteData, pages: siteData.pages.filter((p) => !p.redirectSource) };
+    view = {
+      ...siteData,
+      pages: siteData.pages.filter((p) => !p.redirectSource),
+    };
     contentViews.set(siteData, view);
   }
   return view;
 }
 
 /** Page rules that still run on a redirecting URL, to report its hops. */
-export const REDIRECT_SOURCE_RULE_IDS: ReadonlySet<string> = new Set(["crawl/canonical-chain"]);
+export const REDIRECT_SOURCE_RULE_IDS: ReadonlySet<string> = new Set([
+  "crawl/canonical-chain",
+]);
 
 export interface SiteRunResult {
   checks: CheckResult[];
   ruleResults: Map<string, RuleRunResult>;
 }
 // Get rule options from config, with defaults from rule schema
-function getRuleOptions(rule: Rule, config: RulesConfig): Record<string, unknown> {
+function getRuleOptions(
+  rule: Rule,
+  config: RulesConfig
+): Record<string, unknown> {
   const ruleConfig = config.rule_options[rule.meta.id] ?? {};
 
   // If rule has options schema, parse with defaults. A value of the wrong type
@@ -289,7 +311,9 @@ function getRuleOptions(rule: Rule, config: RulesConfig): Record<string, unknown
   if (rule.meta.optionsSchema) {
     const parsed = rule.meta.optionsSchema.safeParse(ruleConfig);
     if (!parsed.success) {
-      throw new Error(describeRuleOptionIssues(rule.meta.id, parsed.error.issues).join("; "));
+      throw new Error(
+        describeRuleOptionIssues(rule.meta.id, parsed.error.issues).join("; ")
+      );
     }
     return parsed.data;
   }
@@ -433,7 +457,14 @@ export class RuleRunner {
   // info row. Per-AUDIT state like `timedOutPageRules`, cleared with it.
   private readonly erroredPageRules = new Map<
     string,
-    { pages: number; meta: Rule["meta"]; name: string; category: string; error: string; site: boolean }
+    {
+      pages: number;
+      meta: Rule["meta"];
+      name: string;
+      category: string;
+      error: string;
+      site: boolean;
+    }
   >();
   // Per-run state — captured once at construction, immutable for the
   // lifetime of this runner instance. Each audit gets its own RuleRunner, so
@@ -467,7 +498,8 @@ export class RuleRunner {
       options.ruleTimeBudgetMs ??
       options.config.rules?.time_budget_ms ??
       RULE_TIME_BUDGET_MS;
-    this.siteRuleBudgetCapMs = options.siteRuleBudgetCapMs ?? SITE_RULE_BUDGET_CAP_MS;
+    this.siteRuleBudgetCapMs =
+      options.siteRuleBudgetCapMs ?? SITE_RULE_BUDGET_CAP_MS;
 
     // Load all rules (plus any caller-supplied namespaces — plugins / tests)
     this.rules = loadAllRules({
@@ -479,7 +511,8 @@ export class RuleRunner {
         const rule = this.rules.get(ruleId);
         return rule ? isIgnorable(rule.meta) : true;
       },
-      messageCountsItems: (ruleId) => this.rules.get(ruleId)?.meta.messageCountsItems === true,
+      messageCountsItems: (ruleId) =>
+        this.rules.get(ruleId)?.meta.messageCountsItems === true,
       onTimeout: (message, entry) => {
         logger.warn("ignore entry timed out", { message, entry: entry + 1 });
         options.onIgnoreTimeout?.(entry);
@@ -527,7 +560,11 @@ export class RuleRunner {
    * order is part of the identity — reordering the rule set reorders the flat
    * per-page check list, which the report renders.
    */
-  pageRuleSignature(): Array<{ id: string; options: Record<string, unknown>; ignore?: string }> {
+  pageRuleSignature(): Array<{
+    id: string;
+    options: Record<string, unknown>;
+    ignore?: string;
+  }> {
     return this.getEnabledRules()
       .filter((rule) => rule.meta.scope === "page")
       .map((rule) => {
@@ -587,7 +624,14 @@ export class RuleRunner {
     scopeForLog?: "site",
     fanned?: CheckResult[]
   ): RuleRunResult | Promise<RuleRunResult> {
-    const out = this.runOneRuleUnfiltered(rule, ctx, siteMetadata, budgetMs, scopeForLog, fanned);
+    const out = this.runOneRuleUnfiltered(
+      rule,
+      ctx,
+      siteMetadata,
+      budgetMs,
+      scopeForLog,
+      fanned
+    );
     // `[[ignore]]` (#1262): the one place every rule's result passes, fanned template
     // verdicts included (they were cloned from a sibling page, so the filter judges
     // THIS page). Before the result is counted, tallied or scored. The element path a rule
@@ -634,7 +678,10 @@ export class RuleRunner {
       rule.meta.scope === "site" &&
       ctx.site?.targetedRun === true &&
       !SITE_RULES_ON_TARGETED_RUN.has(rule.meta.id) &&
-      !(rule.meta.comparisonSet === "listed-pages" && ctx.site.comparisonRun === true)
+      !(
+        rule.meta.comparisonSet === "listed-pages" &&
+        ctx.site.comparisonRun === true
+      )
     ) {
       return {
         meta: rule.meta,
@@ -656,14 +703,19 @@ export class RuleRunner {
     // Unread-page gate (#1570): a page whose markup could not be parsed is audited as an empty document, so every rule that reads the
     // markup would report what the page was never seen to have (no title, no H1, no viewport, thin content). They are not evaluated,
     // never findings; `crawl/html-size` still warns `html-parse` on the page, and the rules that judge only the response still run.
-    if (rule.meta.scope === "page" && !RUNS_ON_UNREAD_PAGE.has(rule.meta.id) && auditedEmpty(ctx.parsed)) {
+    if (
+      rule.meta.scope === "page" &&
+      !RUNS_ON_UNREAD_PAGE.has(rule.meta.id) &&
+      auditedEmpty(ctx.parsed)
+    ) {
       return {
         meta: rule.meta,
         checks: [
           {
             name: rule.meta.id,
             status: "skipped",
-            message: "Not evaluated: the page's markup could not be parsed, so it was audited as an empty document (see the html-parse warning on crawl/html-size)",
+            message:
+              "Not evaluated: the page's markup could not be parsed, so it was audited as an empty document (see the html-parse warning on crawl/html-size)",
             skipReason: UNREAD_PAGE_SKIP_REASON,
             details: { foldKey: UNREAD_PAGE_SKIP_REASON },
           },
@@ -675,14 +727,19 @@ export class RuleRunner {
     // content with a 2xx status, so one broken error template can't spray
     // per-page legal/quality warnings. Scoped to page rules — a site rule sees
     // the first page's parsed state, which must not gate a whole-site check.
-    if (rule.meta.scope === "page" && rule.meta.skipOnSoft404 && ctx.parsed?.isSoft404) {
+    if (
+      rule.meta.scope === "page" &&
+      rule.meta.skipOnSoft404 &&
+      ctx.parsed?.isSoft404
+    ) {
       return {
         meta: rule.meta,
         checks: [
           {
             name: rule.meta.id,
             status: "skipped",
-            message: "Skipped: page serves 404 content with HTTP 200 (soft 404)",
+            message:
+              "Skipped: page serves 404 content with HTTP 200 (soft 404)",
             skipReason: "soft-404",
           },
         ],
@@ -693,7 +750,11 @@ export class RuleRunner {
     // keeps out of the index, on a site known to be indexed (not a staging or
     // preview host, where these rules are the point). Decided per page like the
     // soft-404 gate, so it also comes before a fanned verdict.
-    if (rule.meta.scope === "page" && rule.meta.skipOnNoindex && skipsNoindexPages(ctx.site)) {
+    if (
+      rule.meta.scope === "page" &&
+      rule.meta.skipOnNoindex &&
+      skipsNoindexPages(ctx.site)
+    ) {
       const source = noindexSource(ctx.parsed, ctx.page.headers);
       if (source) {
         return {
@@ -730,14 +791,19 @@ export class RuleRunner {
     // that fetched no page of the site never saw the site answer at all: it is
     // down or walled, and a 500 or a challenge on /sitemap.xml says nothing
     // about whether a sitemap exists. Skipped, never a finding.
-    if (rule.meta.scope === "site" && judgesRootResource(rule) && fetchedNoPages(ctx.site)) {
+    if (
+      rule.meta.scope === "site" &&
+      judgesRootResource(rule) &&
+      fetchedNoPages(ctx.site)
+    ) {
       return {
         meta: rule.meta,
         checks: [
           {
             name: rule.meta.id,
             status: "skipped",
-            message: "Skipped: no page of the site was fetched, so its root files were not judged",
+            message:
+              "Skipped: no page of the site was fetched, so its root files were not judged",
             skipReason: "no-pages-fetched",
           },
         ],
@@ -750,7 +816,10 @@ export class RuleRunner {
     if (rule.meta.scope === "page" && !this.ignoreTable.empty) {
       const waived = this.ignoreTable.pageWaiver(rule.meta.id, ctx.page.url);
       if (waived !== null) {
-        return { meta: rule.meta, checks: [this.ignoreTable.waivedPageCheck(rule.meta.id, waived)] };
+        return {
+          meta: rule.meta,
+          checks: [this.ignoreTable.waivedPageCheck(rule.meta.id, waived)],
+        };
       }
     }
 
@@ -818,10 +887,13 @@ export class RuleRunner {
           budgetMs: e.budgetMs,
           ...(e.elapsedMs !== undefined ? { elapsedMs: e.elapsedMs } : {}),
         };
-        const earlier = scopeForLog ? undefined : this.timedOutPageRules.get(rule.meta.id);
+        const earlier = scopeForLog
+          ? undefined
+          : this.timedOutPageRules.get(rule.meta.id);
         if (earlier) {
           earlier.details.pages++;
-          earlier.maxElapsedMs = Math.max(earlier.maxElapsedMs ?? 0, e.elapsedMs ?? 0) || undefined;
+          earlier.maxElapsedMs =
+            Math.max(earlier.maxElapsedMs ?? 0, e.elapsedMs ?? 0) || undefined;
           return [
             {
               name,
@@ -859,14 +931,24 @@ export class RuleRunner {
       // that carries, never resolves) and `details.errored`, so no consumer reads it
       // as a page failure. The message is clipped: it can quote page content.
       const error = e instanceof Error ? e.message : String(e);
-      const clipped = error.length > MAX_RULE_ERROR_CHARS ? `${error.slice(0, MAX_RULE_ERROR_CHARS)}...` : error;
+      const clipped =
+        error.length > MAX_RULE_ERROR_CHARS
+          ? `${error.slice(0, MAX_RULE_ERROR_CHARS)}...`
+          : error;
       const name = `${rule.meta.id}-error`;
       // Every row of the rule carries the FIRST error and the same details, so the per-page
       // rows are identical but for their page and the report folds them into one check that
       // lists the pages; the count and the error live on the one `<rule>-errors` row.
       let entry = this.erroredPageRules.get(rule.meta.id);
       if (!entry) {
-        entry = { pages: 0, meta: rule.meta, name: rule.meta.name, category: rule.meta.category, error: clipped, site: !!scopeForLog };
+        entry = {
+          pages: 0,
+          meta: rule.meta,
+          name: rule.meta.name,
+          category: rule.meta.category,
+          error: clipped,
+          site: !!scopeForLog,
+        };
         this.erroredPageRules.set(rule.meta.id, entry);
       }
       entry.pages += 1;
@@ -968,7 +1050,9 @@ export class RuleRunner {
             cloudResults,
             intel,
             probe,
-            ...(this.ignoreTable.wantsSelectors(rule.meta.id) ? { wantsItemSelectors: true } : {}),
+            ...(this.ignoreTable.wantsSelectors(rule.meta.id)
+              ? { wantsItemSelectors: true }
+              : {}),
             options: getRuleOptions(rule, this.config),
           };
           // The substitution happens INSIDE this loop rather than by splicing
@@ -1018,7 +1102,8 @@ export class RuleRunner {
         // Filter to site-scope rules only
         const only = options?.only;
         const siteRules = this.getEnabledRules().filter(
-          (r) => r.meta.scope === "site" && (only === undefined || only(r.meta.id))
+          (r) =>
+            r.meta.scope === "site" && (only === undefined || only(r.meta.id))
         );
         const enabledIds = new Set(this.enabledRuleIds);
         const ruleEnabled = (ruleId: string): boolean => enabledIds.has(ruleId);
@@ -1068,7 +1153,9 @@ export class RuleRunner {
             const ctx: RuleContext = {
               page: sitePage,
               parsed: siteParsed,
-              site: REDIRECT_AWARE_SITE_RULE_IDS.has(rule.meta.id) ? siteData : contentView(siteData),
+              site: REDIRECT_AWARE_SITE_RULE_IDS.has(rule.meta.id)
+                ? siteData
+                : contentView(siteData),
               siteQuery,
               collectedSignals,
               endpointSurface,
@@ -1100,7 +1187,9 @@ export class RuleRunner {
         // stored or scored, so a dropped finding leaves no trace, and after every
         // rule settled, so it holds whatever order they ran in and however each
         // ended (thrown, timed out).
-        const deduped = dedupeCrossRuleFindings(new Map(siteRules.map((rule, i) => [rule.meta.id, results[i]])));
+        const deduped = dedupeCrossRuleFindings(
+          new Map(siteRules.map((rule, i) => [rule.meta.id, results[i]]))
+        );
         for (const [id, result] of deduped) {
           results[siteRules.findIndex((rule) => rule.meta.id === id)] = result;
         }
@@ -1114,11 +1203,15 @@ export class RuleRunner {
           // A rule's own timeout is a skip too, and says nothing about the rule being
           // gated off, so it does not count as one here.
           const gatedOff = result.checks.every(
-            (c) => c.status === "skipped" && c.skipReason !== RULE_TIMED_OUT_SKIP_REASON
+            (c) =>
+              c.status === "skipped" &&
+              c.skipReason !== RULE_TIMED_OUT_SKIP_REASON
           );
           if (timeouts && !gatedOff) {
             const meta = siteRules[i].meta;
-            const budgetMs = (timeouts[0]?.details as { budgetMs?: number } | undefined)?.budgetMs ?? 0;
+            const budgetMs =
+              (timeouts[0]?.details as { budgetMs?: number } | undefined)
+                ?.budgetMs ?? 0;
             result = {
               ...result,
               checks: [
@@ -1130,7 +1223,14 @@ export class RuleRunner {
                   meta.category,
                   budgetMs,
                   timeouts.length,
-                  Math.max(0, ...timeouts.map((c) => (c.details as { elapsedMs?: number } | undefined)?.elapsedMs ?? 0))
+                  Math.max(
+                    0,
+                    ...timeouts.map(
+                      (c) =>
+                        (c.details as { elapsedMs?: number } | undefined)
+                          ?.elapsedMs ?? 0
+                    )
+                  )
                 ),
               ],
             };
@@ -1147,21 +1247,38 @@ export class RuleRunner {
         // `checks` never reached either. It merges into that rule's per-page results
         // as one site-scope check.
         for (const [ruleId, t] of this.timedOutPageRules) {
-          const summary = timeoutSummaryCheck(ruleId, t.name, t.category, t.budgetMs, t.details.pages, t.maxElapsedMs);
+          const summary = timeoutSummaryCheck(
+            ruleId,
+            t.name,
+            t.category,
+            t.budgetMs,
+            t.details.pages,
+            t.maxElapsedMs
+          );
           allChecks.push(summary);
           const existing = ruleResults.get(ruleId);
           ruleResults.set(
             ruleId,
-            existing ? { ...existing, checks: [...existing.checks, summary] } : { meta: t.meta, checks: [summary] }
+            existing
+              ? { ...existing, checks: [...existing.checks, summary] }
+              : { meta: t.meta, checks: [summary] }
           );
         }
         for (const [ruleId, t] of this.erroredPageRules) {
-          const summary = errorSummaryCheck(ruleId, t.name, t.pages, t.error, t.site);
+          const summary = errorSummaryCheck(
+            ruleId,
+            t.name,
+            t.pages,
+            t.error,
+            t.site
+          );
           allChecks.push(summary);
           const existing = ruleResults.get(ruleId);
           ruleResults.set(
             ruleId,
-            existing ? { ...existing, checks: [...existing.checks, summary] } : { meta: t.meta, checks: [summary] }
+            existing
+              ? { ...existing, checks: [...existing.checks, summary] }
+              : { meta: t.meta, checks: [summary] }
           );
         }
         this.resetAudit();
@@ -1195,14 +1312,25 @@ const MAX_RULE_ERROR_CHARS = 200;
  * The `<rule>-errors` info check (#1291): how many pages a rule that threw did
  * not evaluate, and its first error. The one row the report shows for the rule.
  */
-function errorSummaryCheck(ruleId: string, name: string, pages: number, error: string, site = false): CheckResult {
+function errorSummaryCheck(
+  ruleId: string,
+  name: string,
+  pages: number,
+  error: string,
+  site = false
+): CheckResult {
   return {
     name: `${ruleId}-errors`,
     status: "info" as const,
     message: site
       ? `${name}: threw an error and was not evaluated for the site (first error: ${error}). This is a defect in squirrelscan, not a problem with your site`
       : `${name}: threw an error on ${pages} page${pages === 1 ? "" : "s"} and was not evaluated there (first error: ${error}). This is a defect in squirrelscan, not a problem with your pages`,
-    details: { errored: true, ruleId, ...(site ? { site: true } : { pagesNotChecked: pages }), error },
+    details: {
+      errored: true,
+      ruleId,
+      ...(site ? { site: true } : { pagesNotChecked: pages }),
+      error,
+    },
   };
 }
 
@@ -1264,7 +1392,9 @@ function collectedTimeoutChecks(
           timedOut: true,
           ruleId,
           budgetMs,
-          ...(elapsedMs?.[ruleId] !== undefined ? { elapsedMs: elapsedMs[ruleId] } : {}),
+          ...(elapsedMs?.[ruleId] !== undefined
+            ? { elapsedMs: elapsedMs[ruleId] }
+            : {}),
         },
       });
     }

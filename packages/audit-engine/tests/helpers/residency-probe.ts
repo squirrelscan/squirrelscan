@@ -17,13 +17,17 @@
 // passed with the `ruleResultsMap` merge put back). A fresh process has no other
 // file's stack history to inherit.
 
-import { heapStats } from "bun:jsc";
-import { Effect } from "effect";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+import type {
+  PageData,
+  RuleMeta,
+  RuleRunner,
+  SiteData,
+} from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
-
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import type { PageData, RuleMeta, RuleRunner, SiteData } from "@squirrelscan/rules";
+import { heapStats } from "bun:jsc";
+import { Effect } from "effect";
 
 import { streamPageRules, type PageResultSink } from "../../src/streaming";
 
@@ -47,7 +51,8 @@ function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
 const META: RuleMeta = {
   id: "synthetic/quotes-the-page",
   name: "Quotes the page",
-  description: "Emits a finding whose payload is cut from the page, as real rules do.",
+  description:
+    "Emits a finding whose payload is cut from the page, as real rules do.",
   category: "core",
   scope: "page",
   severity: "warning",
@@ -59,7 +64,12 @@ const META: RuleMeta = {
  * (same shape the flatness + golden tests use).
  */
 function siteData(): SiteData {
-  return { baseUrl: "http://synthetic.example.com", pages: [], robotsTxt: null, sitemaps: null };
+  return {
+    baseUrl: "http://synthetic.example.com",
+    pages: [],
+    robotsTxt: null,
+    sitemaps: null,
+  };
 }
 
 /**
@@ -71,13 +81,18 @@ function siteData(): SiteData {
 function quotingRunner(): RuleRunner {
   return {
     async runPageRules(page: PageData) {
-      const quote = page.html.slice(0, Math.floor(page.html.length * QUOTE_FRACTION));
+      const quote = page.html.slice(
+        0,
+        Math.floor(page.html.length * QUOTE_FRACTION)
+      );
       const check: CheckResult = {
         name: META.name,
         status: "warn",
         message: `Found ${quote.length} bytes worth quoting`,
         value: quote,
-        items: [{ id: `${page.url}#quote`, label: quote.slice(0, quote.length >> 1) }],
+        items: [
+          { id: `${page.url}#quote`, label: quote.slice(0, quote.length >> 1) },
+        ],
       };
       return {
         checks: [check],
@@ -124,7 +139,7 @@ async function measure(dbPath: string, retain: boolean): Promise<Residency> {
       // onto its cluster would decouple what is retained from the pages that
       // produced it.
       templateFanout: false,
-    }),
+    })
   );
   const after = liveHeapBytes();
 

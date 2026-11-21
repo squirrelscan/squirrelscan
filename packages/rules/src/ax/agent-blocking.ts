@@ -4,8 +4,15 @@
 // opt-in, every probeable AI token, #3788). Every AI probe is a UA probe: a
 // spoofed User-Agent, not the real bot (no vendor source IP, no signature).
 
-import type { AgentAccessData, AgentAccessProbe } from "@squirrelscan/core-contracts";
-import { AGENT_ACCESS_BOTS, DEFAULT_AGENT_ACCESS_BOT_IDS } from "@squirrelscan/core-contracts/storage";
+import type {
+  AgentAccessData,
+  AgentAccessProbe,
+} from "@squirrelscan/core-contracts";
+
+import {
+  AGENT_ACCESS_BOTS,
+  DEFAULT_AGENT_ACCESS_BOT_IDS,
+} from "@squirrelscan/core-contracts/storage";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -28,14 +35,20 @@ type Verdict =
   | { kind: "inconclusive"; reason: string }
   | { kind: "not-checked" };
 
-function classifyProbe(probe: AgentAccessProbe, browserBodySize: number): Verdict {
+function classifyProbe(
+  probe: AgentAccessProbe,
+  browserBodySize: number
+): Verdict {
   if (!wasSent(probe)) return { kind: "not-checked" };
   // Pay-per-crawl is a deliberate wall, not access-blocking — leave it to ax/pay-per-crawl.
   if (probe.paymentRequired || probe.status === 402) {
     return { kind: "payment", signal: probe.paymentSignal };
   }
   if (probe.challenged) {
-    return { kind: "blocked", reason: `bot challenge (${probe.challengeSignal ?? "challenge"})` };
+    return {
+      kind: "blocked",
+      reason: `bot challenge (${probe.challengeSignal ?? "challenge"})`,
+    };
   }
   if (probe.status === 401 || probe.status === 403) {
     return { kind: "blocked", reason: `HTTP ${probe.status}` };
@@ -46,7 +59,11 @@ function classifyProbe(probe: AgentAccessProbe, browserBodySize: number): Verdic
   if (probe.status === 0) {
     return { kind: "inconclusive", reason: probe.error ?? "network error" };
   }
-  if (is2xx(probe.status) && browserBodySize > 0 && probe.bodySize < browserBodySize * SOFT_BLOCK_BODY_RATIO) {
+  if (
+    is2xx(probe.status) &&
+    browserBodySize > 0 &&
+    probe.bodySize < browserBodySize * SOFT_BLOCK_BODY_RATIO
+  ) {
     return {
       kind: "soft-block",
       ratioPct: Math.round((probe.bodySize / browserBodySize) * 100),
@@ -56,7 +73,7 @@ function classifyProbe(probe: AgentAccessProbe, browserBodySize: number): Verdic
 }
 
 const BOT_BY_ID = new Map<string, (typeof AGENT_ACCESS_BOTS)[number]>(
-  AGENT_ACCESS_BOTS.map((b) => [b.id, b]),
+  AGENT_ACCESS_BOTS.map((b) => [b.id, b])
 );
 
 function labelFor(userAgent: AgentAccessProbe["userAgent"]): string {
@@ -90,7 +107,8 @@ export const agentBlockingRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const agentAccess: AgentAccessData | null | undefined = ctx.site?.agentAccess;
+    const agentAccess: AgentAccessData | null | undefined =
+      ctx.site?.agentAccess;
 
     // Prefetch didn't run → behave as if the rule wasn't there.
     if (!agentAccess || agentAccess.probes.length === 0) {
@@ -105,7 +123,9 @@ export const agentBlockingRule: Rule = {
     }
 
     const browser = agentAccess.probes.find((p) => p.userAgent === "browser");
-    const aiProbes = agentAccess.probes.filter((p) => p.userAgent !== "browser");
+    const aiProbes = agentAccess.probes.filter(
+      (p) => p.userAgent !== "browser"
+    );
 
     if (browser && !wasSent(browser)) {
       checks.push({
@@ -136,7 +156,10 @@ export const agentBlockingRule: Rule = {
       const probeName = `${label} UA probe`;
       const isUserAction = BOT_BY_ID.get(probe.userAgent)?.userAction === true;
       const verdict = classifyProbe(probe, browser.bodySize);
-      const evidence = { status: probe.status, xRobotsTag: probe.xRobotsTag ?? null };
+      const evidence = {
+        status: probe.status,
+        xRobotsTag: probe.xRobotsTag ?? null,
+      };
 
       switch (verdict.kind) {
         case "ok":
@@ -158,7 +181,11 @@ export const agentBlockingRule: Rule = {
             status: "info",
             message: `${probeName} hit a pay-per-crawl wall${verdict.signal ? ` (${verdict.signal})` : ""}: reported by ax/pay-per-crawl, not a block`,
             value: label,
-            details: { userAgent: probe.userAgent, paymentSignal: verdict.signal, ...evidence },
+            details: {
+              userAgent: probe.userAgent,
+              paymentSignal: verdict.signal,
+              ...evidence,
+            },
           });
           break;
         case "inconclusive":
@@ -167,7 +194,11 @@ export const agentBlockingRule: Rule = {
             status: "info",
             message: `${probeName} was inconclusive (${verdict.reason})`,
             value: label,
-            details: { userAgent: probe.userAgent, ...evidence, error: probe.error },
+            details: {
+              userAgent: probe.userAgent,
+              ...evidence,
+              error: probe.error,
+            },
           });
           break;
         case "soft-block":
@@ -235,7 +266,10 @@ export const agentBlockingRule: Rule = {
     // The mode is read off the probes themselves (a bot outside the default pair was
     // probed), so it survives any storage round trip without a flag of its own.
     const allTokens = aiProbes.some(
-      (p) => !(DEFAULT_AGENT_ACCESS_BOT_IDS as readonly string[]).includes(p.userAgent),
+      (p) =>
+        !(DEFAULT_AGENT_ACCESS_BOT_IDS as readonly string[]).includes(
+          p.userAgent
+        )
     );
     if (allTokens) {
       const entries = aiProbes.map((p) => ({
@@ -252,7 +286,10 @@ export const agentBlockingRule: Rule = {
         status: "info",
         message: `Probed ${entries.length} AI user agents (UA probe, not the real bots): ${matched} matched the browser`,
         value: `${matched}/${entries.length}`,
-        details: { probes: entries, browserXRobotsTag: browser.xRobotsTag ?? null },
+        details: {
+          probes: entries,
+          browserXRobotsTag: browser.xRobotsTag ?? null,
+        },
       });
     }
 

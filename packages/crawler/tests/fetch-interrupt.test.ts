@@ -34,8 +34,8 @@ describe("standard fetch interruptibility (#405)", () => {
       const result = await Effect.runPromise(
         fetchPage("https://example.com", FETCH_OPTIONS).pipe(
           Effect.timeout(Duration.millis(200)),
-          Effect.either,
-        ),
+          Effect.either
+        )
       );
       const elapsed = Date.now() - start;
 

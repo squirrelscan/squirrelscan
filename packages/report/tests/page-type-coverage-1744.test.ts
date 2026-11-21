@@ -2,12 +2,13 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { AuditReport } from "../src/types";
+
 import { pageTypeCoverageLine, scanScopePageTypes } from "../src/coverage";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
-import type { AuditReport } from "../src/types";
 
 function report(pageTypes?: unknown): AuditReport {
   return {
@@ -37,12 +38,14 @@ const capped = [
 describe("page type coverage line", () => {
   test("a capped crawl names each type as audited of known, and folds unknown into other", () => {
     expect(pageTypeCoverageLine(report(capped))).toBe(
-      "Page types audited: 1 of 36 product pages, 12 of 12 article pages, 2 of 3 other pages.",
+      "Page types audited: 1 of 36 product pages, 12 of 12 article pages, 2 of 3 other pages."
     );
   });
 
   test("a complete crawl prints equal counts", () => {
-    const line = pageTypeCoverageLine(report([{ type: "product", discovered: 4, audited: 4 }]));
+    const line = pageTypeCoverageLine(
+      report([{ type: "product", discovered: 4, audited: 4 }])
+    );
     expect(line).toBe("Page types audited: 4 of 4 product pages.");
   });
 
@@ -57,7 +60,7 @@ describe("page type coverage line", () => {
         { type: "faq", discovered: "9", audited: 1 },
         { type: "event", discovered: 2, audited: 5 },
         null,
-      ]),
+      ])
     );
     expect(rows).toEqual([{ type: "event", discovered: 5, audited: 5 }]);
   });
@@ -69,11 +72,13 @@ describe("every format that prints the scan prints the per-type counts", () => {
   });
   test("llm", () => {
     expect(renderLlm(report(capped), { version: "1.0.0" })).toContain(
-      '<page-type name="product" discovered="36" audited="1"/>',
+      '<page-type name="product" discovered="36" audited="1"/>'
     );
   });
   test("xml", () => {
-    expect(renderXml(report(capped))).toContain('<page-type name="product" discovered="36" audited="1"/>');
+    expect(renderXml(report(capped))).toContain(
+      '<page-type name="product" discovered="36" audited="1"/>'
+    );
   });
   test("json", () => {
     expect(JSON.parse(renderJson(report(capped))).meta.pageTypes[0]).toEqual({

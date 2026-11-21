@@ -1,9 +1,12 @@
 // classifySitemapReadState: complete / partial / unreadable (#1651). A common-location 404 is not a
 // failure; a failed robots.txt entry, a cap, a deadline or a missing index child is.
 
-import { describe, expect, test } from "bun:test";
+import type {
+  SitemapData,
+  SitemapFetchFailure,
+} from "@squirrelscan/core-contracts";
 
-import type { SitemapData, SitemapFetchFailure } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
 
 import { classifySitemapReadState } from "../src/sitemaps";
 
@@ -21,7 +24,10 @@ function sitemap(path: string, over: Partial<SitemapData> = {}): SitemapData {
   };
 }
 
-function failure(path: string, source: SitemapFetchFailure["source"]): SitemapFetchFailure {
+function failure(
+  path: string,
+  source: SitemapFetchFailure["source"]
+): SitemapFetchFailure {
   return { url: `${BASE}${path}`, source, error: "HTTP 500" };
 }
 
@@ -34,14 +40,19 @@ describe("classifySitemapReadState", () => {
         all: [root],
         failed: [failure("/sitemap_index.xml", "common")],
         truncated: false,
-      }),
+      })
     ).toBe("complete");
   });
 
   test("a cap or deadline (truncated) is partial", () => {
     const root = sitemap("/sitemap.xml");
     expect(
-      classifySitemapReadState({ discovered: [root], all: [root], failed: [], truncated: true }),
+      classifySitemapReadState({
+        discovered: [root],
+        all: [root],
+        failed: [],
+        truncated: true,
+      })
     ).toBe("partial");
   });
 
@@ -57,7 +68,7 @@ describe("classifySitemapReadState", () => {
         all: [index, child],
         failed: [],
         truncated: false,
-      }),
+      })
     ).toBe("partial");
   });
 
@@ -67,7 +78,12 @@ describe("classifySitemapReadState", () => {
       childSitemaps: ["https://cdn.example.net/products.xml"],
     });
     expect(
-      classifySitemapReadState({ discovered: [index], all: [index], failed: [], truncated: false }),
+      classifySitemapReadState({
+        discovered: [index],
+        all: [index],
+        failed: [],
+        truncated: false,
+      })
     ).toBe("complete");
   });
 
@@ -79,7 +95,7 @@ describe("classifySitemapReadState", () => {
         all: [root],
         failed: [failure("/declared.xml", "robots.txt")],
         truncated: false,
-      }),
+      })
     ).toBe("partial");
   });
 
@@ -90,7 +106,7 @@ describe("classifySitemapReadState", () => {
         all: [],
         failed: [failure("/declared.xml", "robots.txt")],
         truncated: false,
-      }),
+      })
     ).toBe("unreadable");
   });
 
@@ -101,13 +117,18 @@ describe("classifySitemapReadState", () => {
         all: [],
         failed: [failure("/sitemap.xml", "common")],
         truncated: false,
-      }),
+      })
     ).toBeNull();
   });
 
   test("a walk that stopped before reading anything is unreadable, not absent", () => {
-    expect(classifySitemapReadState({ discovered: [], all: [], failed: [], truncated: true })).toBe(
-      "unreadable",
-    );
+    expect(
+      classifySitemapReadState({
+        discovered: [],
+        all: [],
+        failed: [],
+        truncated: true,
+      })
+    ).toBe("unreadable");
   });
 });

@@ -3,17 +3,24 @@
 // shape it pins; the time budgets are generous (the bad shapes took seconds to
 // minutes), so a loaded machine does not fail them but a quadratic walk does.
 
-import { describe, expect, test } from "bun:test";
-import { parseHTML } from "@squirrelscan/parser/dom";
 import type { Element } from "linkedom";
 
-import { ComponentOccurrenceCache, componentOccurrence } from "../src/shared/component-occurrence";
+import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import {
+  ComponentOccurrenceCache,
+  componentOccurrence,
+} from "../src/shared/component-occurrence";
 
 function parse(body: string) {
   return parseHTML(`<html><body>${body}</body></html>`).document;
 }
 
-function occurrenceOf(element: Element, cache = new ComponentOccurrenceCache()) {
+function occurrenceOf(
+  element: Element,
+  cache = new ComponentOccurrenceCache()
+) {
   return componentOccurrence(
     {
       pageUrl: "https://example.test/p",
@@ -22,7 +29,7 @@ function occurrenceOf(element: Element, cache = new ComponentOccurrenceCache()) 
       kind: "link-text-generic",
       values: { nameSource: "text", normalizedText: "read more" },
     },
-    cache,
+    cache
   );
 }
 
@@ -47,15 +54,17 @@ describe("the output on ordinary pages is unchanged", () => {
   test("slots, nesting and reasons", () => {
     const document = parse(HTML);
     const cache = new ComponentOccurrenceCache();
-    const rows = ([...document.querySelectorAll("a")] as Element[]).map((element) => {
-      const occurrence = occurrenceOf(element, cache);
-      return [
-        occurrence.element.locator,
-        occurrence.region.role,
-        occurrence.region.nestedIn,
-        occurrence.uncertainReason ?? "groupable",
-      ];
-    });
+    const rows = ([...document.querySelectorAll("a")] as Element[]).map(
+      (element) => {
+        const occurrence = occurrenceOf(element, cache);
+        return [
+          occurrence.element.locator,
+          occurrence.region.role,
+          occurrence.region.nestedIn,
+          occurrence.uncertainReason ?? "groupable",
+        ];
+      }
+    );
     expect(rows).toEqual([
       ["navigation:1>nav>a:1", "navigation", "none", "groupable"],
       ["footer:1>footer>a:1", "footer", "article", "content-nested"],
@@ -72,7 +81,8 @@ describe("the output on ordinary pages is unchanged", () => {
   test("one landmark pass serves every faulty element of a page", () => {
     const document = parse(HTML);
     const cache = new ComponentOccurrenceCache();
-    for (const element of [...document.querySelectorAll("a")] as Element[]) occurrenceOf(element, cache);
+    for (const element of [...document.querySelectorAll("a")] as Element[])
+      occurrenceOf(element, cache);
     expect(cache.landmarkIndexBuilds).toBe(1);
   });
 });
@@ -80,10 +90,13 @@ describe("the output on ordinary pages is unchanged", () => {
 describe("hint text is bounded before it is matched", () => {
   /** The ladder's hint for the `<div>` that holds the faulty link, in a page with no landmark. */
   function hintOf(attributes: string, inner = "") {
-    const document = parse(`<div ${attributes}>${inner}<a href="/x">Read more</a></div>`);
+    const document = parse(
+      `<div ${attributes}>${inner}<a href="/x">Read more</a></div>`
+    );
     const link = document.querySelector("a") as unknown as Element;
     const occurrence = occurrenceOf(link);
-    return occurrence.subtreeCandidates?.find((candidate) => candidate.rootHint)?.rootHint;
+    return occurrence.subtreeCandidates?.find((candidate) => candidate.rootHint)
+      ?.rootHint;
   }
 
   test("a 200,000-character aria-label with no @ costs a bounded match", () => {
@@ -102,10 +115,16 @@ describe("hint text is bounded before it is matched", () => {
   });
 
   test("sensitive text is still dropped, and nothing past the tested window is emitted", () => {
-    expect(hintOf(`aria-label="mail bob@example.com"`)?.ariaLabel).toBeUndefined();
+    expect(
+      hintOf(`aria-label="mail bob@example.com"`)?.ariaLabel
+    ).toBeUndefined();
     expect(hintOf(`aria-label="call 555 123 4567"`)?.ariaLabel).toBeUndefined();
-    expect(hintOf(`aria-label="see https://example.test/secret"`)?.ariaLabel).toBeUndefined();
-    expect(hintOf(`aria-label="token abcdef123456"`)?.ariaLabel).toBeUndefined();
+    expect(
+      hintOf(`aria-label="see https://example.test/secret"`)?.ariaLabel
+    ).toBeUndefined();
+    expect(
+      hintOf(`aria-label="token abcdef123456"`)?.ariaLabel
+    ).toBeUndefined();
     // Past 256 characters the text is not read for sensitive shapes, but only the first
     // 59 characters can ever be emitted, so the address cannot leave the rule.
     const far = `${"b".repeat(300)} bob@example.com`;
@@ -124,14 +143,20 @@ describe("landmark slots come from one pass over the page", () => {
     const out: string[] = [];
     for (let n = 0; n < count; n += 1) {
       const tags: string[] = [];
-      for (let level = 0, rest = n; level < depth; level += 1, rest = Math.floor(rest / ROLES.length)) {
+      for (
+        let level = 0, rest = n;
+        level < depth;
+        level += 1, rest = Math.floor(rest / ROLES.length)
+      ) {
         tags.push(ROLES[rest % ROLES.length]!);
       }
       out.push(
-        `${tags.map((t) => `<${t}>`).join("")}<a href="/p${n}">Read more</a>${[...tags]
+        `${tags.map((t) => `<${t}>`).join("")}<a href="/p${n}">Read more</a>${[
+          ...tags,
+        ]
           .reverse()
           .map((t) => `</${t}>`)
-          .join("")}`,
+          .join("")}`
       );
     }
     return out.join("");
@@ -142,24 +167,36 @@ describe("landmark slots come from one pass over the page", () => {
     const links = [...document.querySelectorAll("a")] as Element[];
     expect(links).toHaveLength(4096);
     const cache = new ComponentOccurrenceCache();
-    const { value, ms } = timed(() => links.map((link) => occurrenceOf(link, cache)));
+    const { value, ms } = timed(() =>
+      links.map((link) => occurrenceOf(link, cache))
+    );
     expect(ms).toBeLessThan(5000);
     expect(cache.landmarkIndexBuilds).toBe(1);
     // Every chain is its own context, so every innermost landmark is the first of its kind.
-    expect(new Set(value.map((o) => o.element.locator.split(">")[0])).size).toBe(4);
-    expect(value.every((o) => o.element.locator.split(">")[0]!.endsWith(":1"))).toBe(true);
+    expect(
+      new Set(value.map((o) => o.element.locator.split(">")[0])).size
+    ).toBe(4);
+    expect(
+      value.every((o) => o.element.locator.split(">")[0]!.endsWith(":1"))
+    ).toBe(true);
   });
 
   test("a chain of 3,000 nested landmarks, each holding a faulty link", () => {
-    const tags = Array.from({ length: 3000 }, (_, i) => (i % 2 ? "nav" : "footer"));
-    const html = `${tags.map((t) => `<${t}><a href="/p">Read more</a>`).join("")}${[...tags]
+    const tags = Array.from({ length: 3000 }, (_, i) =>
+      i % 2 ? "nav" : "footer"
+    );
+    const html = `${tags.map((t) => `<${t}><a href="/p">Read more</a>`).join("")}${[
+      ...tags,
+    ]
       .reverse()
       .map((t) => `</${t}>`)
       .join("")}`;
     const document = parse(html);
     const links = [...document.querySelectorAll("a")] as Element[];
     const cache = new ComponentOccurrenceCache();
-    const { value, ms } = timed(() => links.map((link) => occurrenceOf(link, cache)));
+    const { value, ms } = timed(() =>
+      links.map((link) => occurrenceOf(link, cache))
+    );
     expect(ms).toBeLessThan(5000);
     // Real chrome nests a few levels. Shallow ones are judged as before...
     expect(value[0]!.groupable).toBe(true);
@@ -173,11 +210,11 @@ describe("landmark slots come from one pass over the page", () => {
 
   test("two landmarks in one context are numbered in document order", () => {
     const document = parse(
-      `<nav><a href="/a">Read more</a></nav><header><nav><a href="/b">Read more</a></nav></header><nav><a href="/c">Read more</a></nav>`,
+      `<nav><a href="/a">Read more</a></nav><header><nav><a href="/b">Read more</a></nav></header><nav><a href="/c">Read more</a></nav>`
     );
     const cache = new ComponentOccurrenceCache();
     const slots = ([...document.querySelectorAll("a")] as Element[]).map(
-      (link) => occurrenceOf(link, cache).element.locator.split(">")[0],
+      (link) => occurrenceOf(link, cache).element.locator.split(">")[0]
     );
     expect(slots).toEqual(["navigation:1", "navigation:1", "navigation:2"]);
   });
@@ -189,7 +226,9 @@ describe("a very deep page is walked in bounded steps", () => {
   const close = "</div>".repeat(DEPTH);
 
   test("a footer above a 20,000-level div chain", () => {
-    const document = parse(`<footer>${open}<a href="/x">Read more</a>${close}</footer>`);
+    const document = parse(
+      `<footer>${open}<a href="/x">Read more</a>${close}</footer>`
+    );
     const link = document.querySelector("a") as unknown as Element;
     const { value, ms } = timed(() => occurrenceOf(link));
     expect(ms).toBeLessThan(3000);
@@ -202,7 +241,9 @@ describe("a very deep page is walked in bounded steps", () => {
   });
 
   test("a footer below a 20,000-level div chain", () => {
-    const document = parse(`${open}<footer><a href="/x">Read more</a></footer>${close}`);
+    const document = parse(
+      `${open}<footer><a href="/x">Read more</a></footer>${close}`
+    );
     const link = document.querySelector("a") as unknown as Element;
     const { value, ms } = timed(() => occurrenceOf(link));
     expect(ms).toBeLessThan(3000);
@@ -220,11 +261,16 @@ describe("a very deep page is walked in bounded steps", () => {
   });
 
   test("many faulty links at the bottom of the chain share its ancestry", () => {
-    const links = Array.from({ length: 300 }, (_, i) => `<a href="/p${i}">Read more</a>`).join("");
+    const links = Array.from(
+      { length: 300 },
+      (_, i) => `<a href="/p${i}">Read more</a>`
+    ).join("");
     const document = parse(`<footer>${open}${links}${close}</footer>`);
     const elements = [...document.querySelectorAll("a")] as Element[];
     const cache = new ComponentOccurrenceCache();
-    const { value, ms } = timed(() => elements.map((element) => occurrenceOf(element, cache)));
+    const { value, ms } = timed(() =>
+      elements.map((element) => occurrenceOf(element, cache))
+    );
     expect(ms).toBeLessThan(3000);
     expect(new Set(value.map((o) => o.element.locator)).size).toBe(300);
   });
@@ -242,7 +288,7 @@ describe("a page's evidence work is bounded by a budget, not by how its elements
 
   test("a chain of 5,000 divs inside main, a faulty link at every level", () => {
     const { value, ms } = build(
-      `<main>${"<div><a href='/x'>Read more</a>".repeat(DEPTH)}${"</div>".repeat(DEPTH)}</main>`,
+      `<main>${"<div><a href='/x'>Read more</a>".repeat(DEPTH)}${"</div>".repeat(DEPTH)}</main>`
     );
     expect(ms).toBeLessThan(5000);
     expect(value).toHaveLength(DEPTH);
@@ -255,7 +301,7 @@ describe("a page's evidence work is bounded by a budget, not by how its elements
 
   test("5,000 anchors nested in each other, no landmark", () => {
     const { value, ms } = build(
-      `${"<a href='/x'>".repeat(DEPTH)}Read more${"</a>".repeat(DEPTH)}`,
+      `${"<a href='/x'>".repeat(DEPTH)}Read more${"</a>".repeat(DEPTH)}`
     );
     expect(ms).toBeLessThan(5000);
     expect(value).toHaveLength(DEPTH);
@@ -265,9 +311,12 @@ describe("a page's evidence work is bounded by a budget, not by how its elements
   test("an ordinary page never reaches the budget", () => {
     const cards = Array.from(
       { length: 2000 },
-      (_, i) => `<li class="card"><div><a href="/p${i}">Read more</a></div></li>`,
+      (_, i) =>
+        `<li class="card"><div><a href="/p${i}">Read more</a></div></li>`
     ).join("");
-    const { value } = build(`<main><ul>${cards}</ul></main><footer><a href="/f">Read more</a></footer>`);
+    const { value } = build(
+      `<main><ul>${cards}</ul></main><footer><a href="/f">Read more</a></footer>`
+    );
     // Region-main cards keep their ladders, and the footer is judged as a component.
     expect(value[0]!.subtreeCandidates?.length ?? 0).toBeGreaterThan(0);
     expect(value[1999]!.subtreeCandidates?.length ?? 0).toBeGreaterThan(0);

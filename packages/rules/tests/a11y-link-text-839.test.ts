@@ -5,18 +5,22 @@
 // leave them alone in any language, however the text is cased, punctuated or spaced, while
 // "click here" and its kin are still reported.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
-import { GENERIC_LINK_TEXT, isGenericLinkText, linkTextRule } from "../src/a11y/link-text";
+import {
+  GENERIC_LINK_TEXT,
+  isGenericLinkText,
+  linkTextRule,
+} from "../src/a11y/link-text";
 import {
   CONVENTIONAL_LABEL_LANGUAGES,
   CONVENTIONAL_LINK_LABELS,
   isConventionalLinkLabel,
   normalizeLinkLabel,
 } from "../src/shared/conventional-link-labels";
-import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
 async function run(body: string): Promise<CheckResult[]> {
   const html = `<!DOCTYPE html><html><head><title>t</title></head><body>${body}</body></html>`;
@@ -86,7 +90,9 @@ describe("normalizeLinkLabel", () => {
     const hostile = "x" + "!".repeat(250) + "x";
     const started = performance.now();
     expect(isConventionalLinkLabel(hostile)).toBe(false);
-    expect(normalizeLinkLabel("x" + "!".repeat(200_000) + "x")).toHaveLength(200_002);
+    expect(normalizeLinkLabel("x" + "!".repeat(200_000) + "x")).toHaveLength(
+      200_002
+    );
     expect(performance.now() - started).toBeLessThan(500);
     expect(isConventionalLinkLabel("Terms" + ".".repeat(75))).toBe(true);
     expect(isConventionalLinkLabel("Terms" + ".".repeat(76))).toBe(true);
@@ -102,10 +108,24 @@ describe("normalizeLinkLabel", () => {
 
 describe("the conventional label set", () => {
   test("covers the eleven languages the issue asks for, kind by kind", () => {
-    expect([...CONVENTIONAL_LABEL_LANGUAGES]).toEqual(["en", "es", "fr", "de", "pt", "it", "nl", "ja", "zh", "ko", "ru"]);
+    expect([...CONVENTIONAL_LABEL_LANGUAGES]).toEqual([
+      "en",
+      "es",
+      "fr",
+      "de",
+      "pt",
+      "it",
+      "nl",
+      "ja",
+      "zh",
+      "ko",
+      "ru",
+    ]);
     for (const kind of ["account", "legal"] as const) {
       for (const language of CONVENTIONAL_LABEL_LANGUAGES) {
-        expect(CONVENTIONAL_LINK_LABELS[kind][language].length).toBeGreaterThan(5);
+        expect(CONVENTIONAL_LINK_LABELS[kind][language].length).toBeGreaterThan(
+          5
+        );
       }
     }
   });
@@ -117,7 +137,14 @@ describe("the conventional label set", () => {
   });
 
   test("the account labels left the generic list; subscribe and join stay", () => {
-    for (const phrase of ["sign up", "signup", "register", "login", "log in", "sign in"]) {
+    for (const phrase of [
+      "sign up",
+      "signup",
+      "register",
+      "login",
+      "log in",
+      "sign in",
+    ]) {
       expect(GENERIC_LINK_TEXT).not.toContain(phrase);
     }
     expect(GENERIC_LINK_TEXT).toContain("subscribe");
@@ -128,33 +155,180 @@ describe("the conventional label set", () => {
   // One row per language. `account` and `legal` list labels that must be exempt, written the way
   // a page writes them (cased, accented or punctuated), so the table tests normalisation too.
   const PER_LANGUAGE: Array<[string, string[], string[]]> = [
-    ["en", ["Sign in", "SIGN UP", "Log out", "Register", "My account", "Sign out"], ["Terms of Service", "Privacy Policy", "Legal notice", "DMCA", "Cookies", "Accessibility", "Sitemap", "Contact us", "About", "Help", "FAQ", "Careers", "Imprint"]],
-    ["es", ["Iniciar sesión", "Iniciar sesion", "Registrarse", "Cerrar sesión", "Mi cuenta"], ["Términos y condiciones", "Política de privacidad", "Aviso legal", "Contacto", "Preguntas frecuentes"]],
-    ["fr", ["Connexion", "Se connecter", "S'inscrire", "S’inscrire", "Déconnexion", "Mon compte"], ["Mentions légales", "Politique de confidentialité", "Conditions générales", "Contactez-nous", "À propos"]],
-    ["de", ["Anmelden", "Einloggen", "Registrieren", "Abmelden", "Mein Konto"], ["Impressum", "Datenschutz", "Datenschutzerklärung", "Datenschutzerklaerung", "AGB", "Nutzungsbedingungen", "Kontakt", "Über uns", "Ueber uns"]],
-    ["pt", ["Entrar", "Registar", "Cadastre-se", "Sair", "Minha conta"], ["Termos de Uso", "Política de Privacidade", "Aviso legal", "Contato", "Sobre nós"]],
-    ["it", ["Accedi", "Registrati", "Esci", "Il mio account"], ["Termini e condizioni", "Informativa sulla privacy", "Note legali", "Contatti", "Chi siamo"]],
-    ["nl", ["Inloggen", "Registreren", "Uitloggen", "Mijn account"], ["Algemene voorwaarden", "Privacybeleid", "Cookiebeleid", "Contact", "Over ons"]],
-    ["ja", ["ログイン", "新規登録", "ログアウト", "会員登録"], ["利用規約", "プライバシーポリシー", "特定商取引法に基づく表記", "お問い合わせ", "会社概要"]],
-    ["zh", ["登录", "注册", "退出", "登入", "註冊"], ["服务条款", "服務條款", "隐私政策", "隱私政策", "联系我们", "關於我們"]],
-    ["ko", ["로그인", "회원가입", "로그아웃"], ["이용약관", "개인정보처리방침", "문의하기", "회사소개"]],
-    ["ru", ["Войти", "Регистрация", "Выйти", "Личный кабинет"], ["Условия использования", "Политика конфиденциальности", "Контакты", "О нас"]],
+    [
+      "en",
+      ["Sign in", "SIGN UP", "Log out", "Register", "My account", "Sign out"],
+      [
+        "Terms of Service",
+        "Privacy Policy",
+        "Legal notice",
+        "DMCA",
+        "Cookies",
+        "Accessibility",
+        "Sitemap",
+        "Contact us",
+        "About",
+        "Help",
+        "FAQ",
+        "Careers",
+        "Imprint",
+      ],
+    ],
+    [
+      "es",
+      [
+        "Iniciar sesión",
+        "Iniciar sesion",
+        "Registrarse",
+        "Cerrar sesión",
+        "Mi cuenta",
+      ],
+      [
+        "Términos y condiciones",
+        "Política de privacidad",
+        "Aviso legal",
+        "Contacto",
+        "Preguntas frecuentes",
+      ],
+    ],
+    [
+      "fr",
+      [
+        "Connexion",
+        "Se connecter",
+        "S'inscrire",
+        "S’inscrire",
+        "Déconnexion",
+        "Mon compte",
+      ],
+      [
+        "Mentions légales",
+        "Politique de confidentialité",
+        "Conditions générales",
+        "Contactez-nous",
+        "À propos",
+      ],
+    ],
+    [
+      "de",
+      ["Anmelden", "Einloggen", "Registrieren", "Abmelden", "Mein Konto"],
+      [
+        "Impressum",
+        "Datenschutz",
+        "Datenschutzerklärung",
+        "Datenschutzerklaerung",
+        "AGB",
+        "Nutzungsbedingungen",
+        "Kontakt",
+        "Über uns",
+        "Ueber uns",
+      ],
+    ],
+    [
+      "pt",
+      ["Entrar", "Registar", "Cadastre-se", "Sair", "Minha conta"],
+      [
+        "Termos de Uso",
+        "Política de Privacidade",
+        "Aviso legal",
+        "Contato",
+        "Sobre nós",
+      ],
+    ],
+    [
+      "it",
+      ["Accedi", "Registrati", "Esci", "Il mio account"],
+      [
+        "Termini e condizioni",
+        "Informativa sulla privacy",
+        "Note legali",
+        "Contatti",
+        "Chi siamo",
+      ],
+    ],
+    [
+      "nl",
+      ["Inloggen", "Registreren", "Uitloggen", "Mijn account"],
+      [
+        "Algemene voorwaarden",
+        "Privacybeleid",
+        "Cookiebeleid",
+        "Contact",
+        "Over ons",
+      ],
+    ],
+    [
+      "ja",
+      ["ログイン", "新規登録", "ログアウト", "会員登録"],
+      [
+        "利用規約",
+        "プライバシーポリシー",
+        "特定商取引法に基づく表記",
+        "お問い合わせ",
+        "会社概要",
+      ],
+    ],
+    [
+      "zh",
+      ["登录", "注册", "退出", "登入", "註冊"],
+      ["服务条款", "服務條款", "隐私政策", "隱私政策", "联系我们", "關於我們"],
+    ],
+    [
+      "ko",
+      ["로그인", "회원가입", "로그아웃"],
+      ["이용약관", "개인정보처리방침", "문의하기", "회사소개"],
+    ],
+    [
+      "ru",
+      ["Войти", "Регистрация", "Выйти", "Личный кабинет"],
+      [
+        "Условия использования",
+        "Политика конфиденциальности",
+        "Контакты",
+        "О нас",
+      ],
+    ],
   ];
 
-  test.each(PER_LANGUAGE)("%s: account and legal labels are conventional", (_language, account, legal) => {
-    for (const label of [...account, ...legal]) {
-      expect(isConventionalLinkLabel(label)).toBe(true);
+  test.each(PER_LANGUAGE)(
+    "%s: account and legal labels are conventional",
+    (_language, account, legal) => {
+      for (const label of [...account, ...legal]) {
+        expect(isConventionalLinkLabel(label)).toBe(true);
+      }
     }
-  });
+  );
 
   test("variants: case, punctuation, non-breaking space, full width, arrows", () => {
-    for (const label of ["sign in", "SIGN IN", "Sign in.", "Sign in!", "Sign in", "Sign-in", "Sign in →", "Ｓｉｇｎ　ｉｎ", "SignIn", "sign-up", "Log-out", "T&C", "Terms & Conditions", "ログイン。"]) {
+    for (const label of [
+      "sign in",
+      "SIGN IN",
+      "Sign in.",
+      "Sign in!",
+      "Sign in",
+      "Sign-in",
+      "Sign in →",
+      "Ｓｉｇｎ　ｉｎ",
+      "SignIn",
+      "sign-up",
+      "Log-out",
+      "T&C",
+      "Terms & Conditions",
+      "ログイン。",
+    ]) {
       expect(isConventionalLinkLabel(label)).toBe(true);
     }
   });
 
   test("it matches the whole text, never a substring", () => {
-    for (const label of ["Sign in to your account to continue", "Terms and a bit more", "Click here to sign in", "Please log in", "Contact", "contact-form-help-center-faq-and-more"]) {
+    for (const label of [
+      "Sign in to your account to continue",
+      "Terms and a bit more",
+      "Click here to sign in",
+      "Please log in",
+      "Contact",
+      "contact-form-help-center-faq-and-more",
+    ]) {
       // The last one is a single word run: only exact entries match.
       expect(isConventionalLinkLabel(label)).toBe(label === "Contact");
     }
@@ -163,28 +337,98 @@ describe("the conventional label set", () => {
 
 describe("a11y/link-text", () => {
   test("sign in, sign up and the other account labels are no longer reported", async () => {
-    const labels = ["Sign in", "Signup", "Sign up", "Log in", "Login", "Log out", "Logout", "Sign out", "Register", "My account", "SIGN IN", "Sign in.", "Sign up"];
-    const checks = (await run(links(...labels)));
-    expect(checks.map((c) => [c.name, c.status])).toEqual([["link-text", "pass"]]);
+    const labels = [
+      "Sign in",
+      "Signup",
+      "Sign up",
+      "Log in",
+      "Login",
+      "Log out",
+      "Logout",
+      "Sign out",
+      "Register",
+      "My account",
+      "SIGN IN",
+      "Sign in.",
+      "Sign up",
+    ];
+    const checks = await run(links(...labels));
+    expect(checks.map((c) => [c.name, c.status])).toEqual([
+      ["link-text", "pass"],
+    ]);
   });
 
   test("legal and utility labels are not reported", async () => {
-    const labels = ["Terms", "Terms of Service", "Terms and Conditions", "Privacy", "Privacy Policy", "Legal", "Legal notice", "Imprint", "DMCA", "Cookies", "Cookie policy", "Accessibility", "Sitemap", "Contact", "About", "Help", "FAQ", "Careers"];
-    expect((await run(links(...labels))).map((c) => c.name)).toEqual(["link-text"]);
+    const labels = [
+      "Terms",
+      "Terms of Service",
+      "Terms and Conditions",
+      "Privacy",
+      "Privacy Policy",
+      "Legal",
+      "Legal notice",
+      "Imprint",
+      "DMCA",
+      "Cookies",
+      "Cookie policy",
+      "Accessibility",
+      "Sitemap",
+      "Contact",
+      "About",
+      "Help",
+      "FAQ",
+      "Careers",
+    ];
+    expect((await run(links(...labels))).map((c) => c.name)).toEqual([
+      "link-text",
+    ]);
   });
 
   test("labels in other languages are not reported", async () => {
-    const labels = ["Anmelden", "Impressum", "Datenschutz", "Iniciar sesión", "Aviso legal", "Connexion", "Mentions légales", "ログイン", "利用規約", "登录", "联系我们", "로그인", "이용약관", "Войти", "Контакты"];
-    expect((await run(links(...labels))).map((c) => c.name)).toEqual(["link-text"]);
+    const labels = [
+      "Anmelden",
+      "Impressum",
+      "Datenschutz",
+      "Iniciar sesión",
+      "Aviso legal",
+      "Connexion",
+      "Mentions légales",
+      "ログイン",
+      "利用規約",
+      "登录",
+      "联系我们",
+      "로그인",
+      "이용약관",
+      "Войти",
+      "Контакты",
+    ];
+    expect((await run(links(...labels))).map((c) => c.name)).toEqual([
+      "link-text",
+    ]);
   });
 
   test("click here and its kin are still reported", async () => {
-    const labels = ["click here", "read more", "learn more", "here", "more", "link", "this", "go", "continue"];
-    expect((await generic(links(...labels))).sort()).toEqual([...labels].sort());
+    const labels = [
+      "click here",
+      "read more",
+      "learn more",
+      "here",
+      "more",
+      "link",
+      "this",
+      "go",
+      "continue",
+    ];
+    expect((await generic(links(...labels))).sort()).toEqual(
+      [...labels].sort()
+    );
   });
 
   test("subscribe and join are still reported", async () => {
-    expect((await generic(links("Subscribe", "Join"))).sort()).toEqual(["join", "subscribe"]);
+    expect((await generic(links("Subscribe", "Join"))).sort()).toEqual([
+      "join",
+      "subscribe",
+    ]);
   });
 
   test("a mixed page reports only the generic links", async () => {
@@ -203,7 +447,9 @@ describe("a11y/link-text", () => {
   });
 
   test("an accessible name that is conventional wins over visible generic text", async () => {
-    expect(await generic(`<a href="/login" aria-label="Log in">here</a>`)).toEqual([]);
+    expect(
+      await generic(`<a href="/login" aria-label="Log in">here</a>`)
+    ).toEqual([]);
   });
 
   test("isGenericLinkText: a conventional label is checked first, whatever the list holds", () => {
@@ -225,7 +471,7 @@ describe("a11y/link-text", () => {
   });
 
   test("empty links are still reported", async () => {
-    const checks = (await run(`<a href="/x"></a>${links("Sign in")}`));
+    const checks = await run(`<a href="/x"></a>${links("Sign in")}`);
     expect(checks.map((c) => c.name)).toEqual(["link-text-empty"]);
   });
 });

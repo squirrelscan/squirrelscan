@@ -2,11 +2,21 @@
 // behaviour. With one: a hit never requests, a miss fetches and stores, and the
 // capped read and the tarpit budget still apply.
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { Effect } from "effect";
 
 import { createFetchBudget } from "../src/fetch-budget";
-import { fetchScriptContents, type ScriptContentCache } from "../src/script-fetcher";
+import {
+  fetchScriptContents,
+  type ScriptContentCache,
+} from "../src/script-fetcher";
 
 let server: ReturnType<typeof Bun.serve>;
 let base: string;
@@ -20,16 +30,27 @@ function entry(body: string): string {
     body,
     contentType: "application/javascript",
     contentEncoding: null,
-    cacheHeaders: { cacheControl: null, expires: null, date: null, etag: null, lastModified: null },
+    cacheHeaders: {
+      cacheControl: null,
+      expires: null,
+      date: null,
+      etag: null,
+      lastModified: null,
+    },
     responseMs: 5,
   });
 }
 
-const storedBody = (raw: string | undefined) => (raw === undefined ? undefined : (JSON.parse(raw) as { body: string }).body);
+const storedBody = (raw: string | undefined) =>
+  raw === undefined ? undefined : (JSON.parse(raw) as { body: string }).body;
 
 function memoryCache(): ScriptContentCache & { map: Map<string, string> } {
   const map = new Map<string, string>();
-  return { map, get: (url) => map.get(url) ?? null, put: (url, b) => void map.set(url, b) };
+  return {
+    map,
+    get: (url) => map.get(url) ?? null,
+    put: (url, b) => void map.set(url, b),
+  };
 }
 
 beforeAll(() => {
@@ -37,7 +58,9 @@ beforeAll(() => {
     port: 0,
     fetch(request) {
       hits.push(new URL(request.url).pathname);
-      return new Response(body, { headers: { "content-type": "application/javascript" } });
+      return new Response(body, {
+        headers: { "content-type": "application/javascript" },
+      });
     },
   });
   base = `http://127.0.0.1:${server.port}`;
@@ -85,13 +108,19 @@ describe("script content cache (repo#1415)", () => {
       async fetch() {
         hits.push("gz");
         await Bun.sleep(15);
-        return new Response(Bun.gzipSync(new TextEncoder().encode("var g=1;")), { headers });
+        return new Response(
+          Bun.gzipSync(new TextEncoder().encode("var g=1;")),
+          { headers }
+        );
       },
     });
     try {
       const contentCache = memoryCache();
       const url = `http://127.0.0.1:${gz.port}/g.js`;
-      const once = async () => (await Effect.runPromise(fetchScriptContents([url], { contentCache })))[0]!;
+      const once = async () =>
+        (
+          await Effect.runPromise(fetchScriptContents([url], { contentCache }))
+        )[0]!;
       const first = await once();
       const second = await once();
       expect(hits).toEqual(["gz"]);
@@ -116,10 +145,15 @@ describe("script content cache (repo#1415)", () => {
   test("an entry that is not a valid envelope (a bare body, a corrupt row) is a miss and is rewritten", async () => {
     const contentCache = memoryCache();
     contentCache.map.set(`${base}/a.js`, "var old=1;");
-    contentCache.map.set(`${base}/b.js`, JSON.stringify({ v: 1, body: "var old=1;" }));
+    contentCache.map.set(
+      `${base}/b.js`,
+      JSON.stringify({ v: 1, body: "var old=1;" })
+    );
     const results = await run({ contentCache });
     expect(hits).toEqual(["/a.js", "/b.js"]);
-    expect(results.every((r) => !r.fromCache && r.content === "var a=1;")).toBe(true);
+    expect(results.every((r) => !r.fromCache && r.content === "var a=1;")).toBe(
+      true
+    );
     expect(storedBody(contentCache.map.get(`${base}/a.js`))).toBe("var a=1;");
     expect(storedBody(contentCache.map.get(`${base}/b.js`))).toBe("var a=1;");
   });
@@ -137,9 +171,16 @@ describe("script content cache (repo#1415)", () => {
 
   test("failed fetches are not cached", async () => {
     const contentCache = memoryCache();
-    const bad = Bun.serve({ port: 0, fetch: () => new Response("nope", { status: 404 }) });
+    const bad = Bun.serve({
+      port: 0,
+      fetch: () => new Response("nope", { status: 404 }),
+    });
     try {
-      await Effect.runPromise(fetchScriptContents([`http://127.0.0.1:${bad.port}/x.js`], { contentCache }));
+      await Effect.runPromise(
+        fetchScriptContents([`http://127.0.0.1:${bad.port}/x.js`], {
+          contentCache,
+        })
+      );
       expect(contentCache.map.size).toBe(0);
     } finally {
       bad.stop(true);
@@ -169,7 +210,9 @@ describe("script content cache (repo#1415)", () => {
       port: 0,
       async fetch() {
         await Bun.sleep(40);
-        return new Response("var a=1;", { headers: { "content-type": "application/javascript" } });
+        return new Response("var a=1;", {
+          headers: { "content-type": "application/javascript" },
+        });
       },
     });
     try {
@@ -177,9 +220,18 @@ describe("script content cache (repo#1415)", () => {
       const list = Array.from({ length: 10 }, (_, i) => `${slowBase}/t${i}.js`);
       const contentCache = memoryCache();
       contentCache.put(list[9]!, entry("var cached=1;"));
-      const budget = createFetchBudget({ tarpitLatencyMs: 10, tarpitStrikes: 2 });
+      const budget = createFetchBudget({
+        tarpitLatencyMs: 10,
+        tarpitStrikes: 2,
+      });
       const results = await Effect.runPromise(
-        fetchScriptContents(list, { concurrency: 1, fetchAll: true, maxScripts: 10, budget, contentCache }),
+        fetchScriptContents(list, {
+          concurrency: 1,
+          fetchAll: true,
+          maxScripts: 10,
+          budget,
+          contentCache,
+        })
       );
       expect(budget.summary().skipped).toBeGreaterThan(0);
       expect(results[9]?.fromCache).toBe(true);
@@ -200,7 +252,9 @@ describe("script content cache (repo#1415)", () => {
     };
     const results = await run({ contentCache });
     expect(hits).toHaveLength(2);
-    expect(results.every((r) => r.error === null && r.content === "var a=1;")).toBe(true);
+    expect(
+      results.every((r) => r.error === null && r.content === "var a=1;")
+    ).toBe(true);
   });
 
   test("a script that redirects and sends SourceMap is not cached, so a second run keeps both", async () => {
@@ -209,16 +263,21 @@ describe("script content cache (repo#1415)", () => {
       fetch(request) {
         const path = new URL(request.url).pathname;
         hits.push(path);
-        if (path === "/old.js") return Response.redirect(new URL("/new.js", request.url).href, 301);
+        if (path === "/old.js")
+          return Response.redirect(new URL("/new.js", request.url).href, 301);
         return new Response("var m=1;", {
-          headers: { "content-type": "application/javascript", SourceMap: "/new.js.map" },
+          headers: {
+            "content-type": "application/javascript",
+            SourceMap: "/new.js.map",
+          },
         });
       },
     });
     try {
       const contentCache = memoryCache();
       const url = `http://127.0.0.1:${meta.port}/old.js`;
-      const once = () => Effect.runPromise(fetchScriptContents([url], { contentCache }));
+      const once = () =>
+        Effect.runPromise(fetchScriptContents([url], { contentCache }));
       const first = await once();
       const second = await once();
       expect(contentCache.map.size).toBe(0);
@@ -239,14 +298,19 @@ describe("script content cache (repo#1415)", () => {
       port: 0,
       fetch: () =>
         new Response("var s=1;", {
-          headers: { "content-type": "application/javascript", "X-SourceMap": "/s.js.map" },
+          headers: {
+            "content-type": "application/javascript",
+            "X-SourceMap": "/s.js.map",
+          },
         }),
     });
     try {
       const contentCache = memoryCache();
       const url = `http://127.0.0.1:${sm.port}/s.js`;
       await Effect.runPromise(fetchScriptContents([url], { contentCache }));
-      const second = await Effect.runPromise(fetchScriptContents([url], { contentCache }));
+      const second = await Effect.runPromise(
+        fetchScriptContents([url], { contentCache })
+      );
       expect(contentCache.map.size).toBe(0);
       expect(second[0]?.sourceMapHeader).toBe("/s.js.map");
     } finally {
@@ -258,15 +322,20 @@ describe("script content cache (repo#1415)", () => {
     const rd = Bun.serve({
       port: 0,
       fetch(request) {
-        if (new URL(request.url).pathname === "/old.js") return Response.redirect(new URL("/new.js", request.url).href, 302);
-        return new Response("var r=1;", { headers: { "content-type": "application/javascript" } });
+        if (new URL(request.url).pathname === "/old.js")
+          return Response.redirect(new URL("/new.js", request.url).href, 302);
+        return new Response("var r=1;", {
+          headers: { "content-type": "application/javascript" },
+        });
       },
     });
     try {
       const contentCache = memoryCache();
       const url = `http://127.0.0.1:${rd.port}/old.js`;
       await Effect.runPromise(fetchScriptContents([url], { contentCache }));
-      const second = await Effect.runPromise(fetchScriptContents([url], { contentCache }));
+      const second = await Effect.runPromise(
+        fetchScriptContents([url], { contentCache })
+      );
       expect(contentCache.map.size).toBe(0);
       expect(second[0]?.finalUrl).toBe(`http://127.0.0.1:${rd.port}/new.js`);
     } finally {

@@ -30,14 +30,19 @@ export interface WcagChecklistRule {
  *   check on any page, a `not_applicable` outcome, did run);
  * - `no-rule`: no rule is mapped to it.
  */
-export type WcagChecklistStatus = "finding" | "no-finding" | "not-run" | "no-rule";
+export type WcagChecklistStatus =
+  | "finding"
+  | "no-finding"
+  | "not-run"
+  | "no-rule";
 
-export const WCAG_CHECKLIST_STATUS_LABELS: Record<WcagChecklistStatus, string> = {
-  finding: "Rules found an issue",
-  "no-finding": "Rules found no issue",
-  "not-run": "Rules did not run",
-  "no-rule": "No rule covers it",
-};
+export const WCAG_CHECKLIST_STATUS_LABELS: Record<WcagChecklistStatus, string> =
+  {
+    finding: "Rules found an issue",
+    "no-finding": "Rules found no issue",
+    "not-run": "Rules did not run",
+    "no-rule": "No rule covers it",
+  };
 
 export const WCAG_CHECKLIST_DISCLAIMER =
   "Automated checks cover only part of WCAG. This checklist lists what the audit rules found for each WCAG 2.2 Level A and AA success criterion; it is not a conformance claim or an accessibility statement. A criterion where the rules found no issue can still fail in ways they cannot see, and passing every automated check does not mean a site conforms to WCAG. Every criterion still needs a manual check, including with assistive technology.";
@@ -65,7 +70,12 @@ export interface WcagChecklistRow {
 }
 
 /** The WCAG 2.2 Level A and AA criteria, in document order. */
-function checklistCriteria(): { sc: string; title: string; level: WcagLevel; version: WcagVersion }[] {
+function checklistCriteria(): {
+  sc: string;
+  title: string;
+  level: WcagLevel;
+  version: WcagVersion;
+}[] {
   return Object.entries(WCAG_CRITERIA)
     .filter(([, entry]) => entry.level !== "AAA")
     .map(([sc, entry]) => ({ sc, ...entry }));
@@ -74,7 +84,7 @@ function checklistCriteria(): { sc: string; title: string; level: WcagLevel; ver
 /** One row per WCAG 2.2 A/AA criterion, with what the rules mapped to it found on this audit. */
 export function buildWcagChecklist(
   report: Pick<AuditReport, "ruleResults">,
-  rules: Iterable<WcagChecklistRule>,
+  rules: Iterable<WcagChecklistRule>
 ): WcagChecklistRow[] {
   const byCriterion = new Map<string, string[]>();
   for (const rule of rules) {
@@ -102,7 +112,12 @@ export function buildWcagChecklist(
         continue;
       }
       ran.push(ruleId);
-      if (checks.some((check) => check.status === "warn" || check.status === "fail")) findings.push(ruleId);
+      if (
+        checks.some(
+          (check) => check.status === "warn" || check.status === "fail"
+        )
+      )
+        findings.push(ruleId);
     }
     const status: WcagChecklistStatus =
       mapped.length === 0
@@ -116,7 +131,9 @@ export function buildWcagChecklist(
   });
 }
 
-export function wcagChecklistCounts(rows: readonly WcagChecklistRow[]): Record<WcagChecklistStatus, number> {
+export function wcagChecklistCounts(
+  rows: readonly WcagChecklistRow[]
+): Record<WcagChecklistStatus, number> {
   const counts: Record<WcagChecklistStatus, number> = {
     finding: 0,
     "no-finding": 0,
@@ -135,13 +152,18 @@ function cell(value: string): string {
 }
 
 /** Whether any rule declares a WCAG criterion: with none, every row would read "No rule covers it". */
-export function hasWcagDeclarations(rules: Iterable<WcagChecklistRule>): boolean {
+export function hasWcagDeclarations(
+  rules: Iterable<WcagChecklistRule>
+): boolean {
   for (const rule of rules) if ((rule.wcag?.length ?? 0) > 0) return true;
   return false;
 }
 
 /** The checklist as markdown lines, disclaimer first. Brand-neutral, so white-label reports keep it. */
-export function wcagChecklistMarkdownLines(rows: readonly WcagChecklistRow[], headingLevel = 2): string[] {
+export function wcagChecklistMarkdownLines(
+  rows: readonly WcagChecklistRow[],
+  headingLevel = 2
+): string[] {
   const h = "#".repeat(headingLevel);
   const counts = wcagChecklistCounts(rows);
   const lines: string[] = [
@@ -157,11 +179,11 @@ export function wcagChecklistMarkdownLines(rows: readonly WcagChecklistRow[], he
   lines.push(
     "",
     "| Criterion | Level | What the rules found | Rules that ran | Rules that did not run | Rules with findings | Manual check |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| --- | --- | --- | --- | --- | --- | --- |"
   );
   for (const row of rows) {
     lines.push(
-      `| ${row.sc} ${cell(row.title)} | ${row.level} | ${WCAG_CHECKLIST_STATUS_LABELS[row.status]} | ${cell(row.rules.join(", ") || "none")} | ${cell(row.notRun.join(", ") || "none")} | ${cell(row.findings.join(", ") || "none")} | [ ] ${MANUAL_CHECK} |`,
+      `| ${row.sc} ${cell(row.title)} | ${row.level} | ${WCAG_CHECKLIST_STATUS_LABELS[row.status]} | ${cell(row.rules.join(", ") || "none")} | ${cell(row.notRun.join(", ") || "none")} | ${cell(row.findings.join(", ") || "none")} | [ ] ${MANUAL_CHECK} |`
     );
   }
   lines.push("");
@@ -204,13 +226,15 @@ export function wcagChecklistCsv(rows: readonly WcagChecklistRow[]): string {
         "",
       ]
         .map(csvField)
-        .join(","),
+        .join(",")
     );
   }
   return `${out.join("\n")}\n`;
 }
 
 /** The checklist as a standalone markdown document for a review pass. */
-export function wcagChecklistMarkdown(rows: readonly WcagChecklistRow[]): string {
+export function wcagChecklistMarkdown(
+  rows: readonly WcagChecklistRow[]
+): string {
   return `${wcagChecklistMarkdownLines(rows, 1).join("\n")}\n`;
 }

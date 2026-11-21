@@ -15,13 +15,14 @@ import {
   type RefusedFetch,
   type WafBlockedPage,
 } from "@squirrelscan/core-contracts";
-import { wafBlockedSteps } from "./waf-blocked";
 import {
   AUDIT_FAILURE_CAUSE,
   AUDIT_FAILURE_NEXT_STEP,
   classifyAuditFailureReasonText,
   isAuditFailureReasonCode,
 } from "@squirrelscan/core-contracts/failure-reason";
+
+import { wafBlockedSteps } from "./waf-blocked";
 
 export interface AuditFailureNotice {
   /** Which failure shape — drives the destructive-vs-muted framing. */
@@ -67,7 +68,7 @@ export function getAuditFailureNotice(
    * open the crawl to us, which neither the rate-limit nor the generic block
    * copy says.
    */
-  wafSeed?: WafBlockedPage,
+  wafSeed?: WafBlockedPage
 ): AuditFailureNotice | null {
   if (!isAuditFailed(status)) return null;
 
@@ -90,7 +91,8 @@ export function getAuditFailureNotice(
   }
 
   if (status === "blocked" && rateLimited && rateLimited.pages > 0) {
-    const hosts = rateLimited.hosts.length > 0 ? rateLimited.hosts.join(", ") : "the host";
+    const hosts =
+      rateLimited.hosts.length > 0 ? rateLimited.hosts.join(", ") : "the host";
     return {
       tone: "blocked",
       heading: "Your site rate limited the audit",
@@ -129,7 +131,10 @@ export function getAuditFailureNotice(
     return {
       tone: "failed",
       heading: "We couldn't audit your site",
-      body: [AUDIT_FAILURE_CAUSE[reasonCode], AUDIT_FAILURE_NEXT_STEP[reasonCode]],
+      body: [
+        AUDIT_FAILURE_CAUSE[reasonCode],
+        AUDIT_FAILURE_NEXT_STEP[reasonCode],
+      ],
       steps: [],
       cliIntro: "Or run it locally:",
       cliCommand,
@@ -174,7 +179,7 @@ export function undecodableFetchLines(report: {
   undecodableFetches?: readonly { url: string; contentEncoding: string }[];
 }): string[] {
   return (report.undecodableFetches ?? []).map(
-    (f) => `${f.url} (content-encoding: ${f.contentEncoding})`,
+    (f) => `${f.url} (content-encoding: ${f.contentEncoding})`
   );
 }
 
@@ -184,6 +189,8 @@ export function undecodableFetchLines(report: {
  * so every renderer names the same refusals the same way; the caller escapes
  * for its own format.
  */
-export function refusedFetchLines(report: { refusedFetches?: readonly RefusedFetch[] }): string[] {
+export function refusedFetchLines(report: {
+  refusedFetches?: readonly RefusedFetch[];
+}): string[] {
   return summarizeRefusedFetches(report.refusedFetches ?? []);
 }

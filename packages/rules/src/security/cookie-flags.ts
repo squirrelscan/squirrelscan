@@ -1,6 +1,7 @@
 // security/cookie-flags - Secure/HttpOnly/SameSite on Set-Cookie response headers
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { platformCookie } from "./platform-cookies";
 
 interface ParsedCookie {
@@ -39,7 +40,9 @@ function parseCookieDirective(directive: string): ParsedCookie {
 
   for (const attr of parts.slice(1)) {
     const eq = attr.indexOf("=");
-    const attrName = (eq === -1 ? attr : attr.slice(0, eq)).trim().toLowerCase();
+    const attrName = (eq === -1 ? attr : attr.slice(0, eq))
+      .trim()
+      .toLowerCase();
     const attrValue = eq === -1 ? "" : attr.slice(eq + 1).trim();
     if (attrName === "secure") secure = true;
     else if (attrName === "httponly") httpOnly = true;
@@ -53,7 +56,8 @@ export const cookieFlagsRule: Rule = {
   meta: {
     id: "security/cookie-flags",
     name: "Cookie Flags",
-    description: "Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes",
+    description:
+      "Checks Set-Cookie response headers for Secure, HttpOnly, and SameSite attributes",
     solution:
       "Cookies set by your server should carry the flags appropriate to their purpose. Secure stops a cookie from ever being sent over plain HTTP, so it can't be intercepted on a downgraded connection. HttpOnly stops client-side JavaScript from reading it, closing off a common XSS cookie-theft path, omit it only for cookies your own frontend genuinely needs to read. SameSite=Lax or SameSite=Strict blocks the cookie from being sent on cross-site requests, mitigating CSRF; if you need SameSite=None for a legitimate cross-site use case (e.g. an embedded widget), it must be paired with Secure or browsers will reject the cookie outright.",
     category: "security",
@@ -95,7 +99,7 @@ export const cookieFlagsRule: Rule = {
     // a real functional break, not just hygiene, so it's a fail regardless of
     // the other flags.
     const brokenSameSiteNone = cookies.filter(
-      (c) => c.sameSite?.toLowerCase() === "none" && !c.secure,
+      (c) => c.sameSite?.toLowerCase() === "none" && !c.secure
     );
     if (brokenSameSiteNone.length > 0) {
       checks.push({
@@ -128,8 +132,12 @@ export const cookieFlagsRule: Rule = {
     const noHttpOnly = cookies.filter((c) => !c.httpOnly);
     const exempt = noHttpOnly.filter((c) => platformCookie(c.name));
     const missingHttpOnly = noHttpOnly.filter((c) => !platformCookie(c.name));
-    const platformOwned = exempt.filter((c) => platformCookie(c.name)!.kind === "platform");
-    const csrfOwned = exempt.filter((c) => platformCookie(c.name)!.kind === "csrf");
+    const platformOwned = exempt.filter(
+      (c) => platformCookie(c.name)!.kind === "platform"
+    );
+    const csrfOwned = exempt.filter(
+      (c) => platformCookie(c.name)!.kind === "csrf"
+    );
     if (platformOwned.length > 0) {
       const entries = platformOwned.map((c) => platformCookie(c.name)!);
       const platforms = [...new Set(entries.map((e) => e.platform))];
@@ -142,7 +150,9 @@ export const cookieFlagsRule: Rule = {
       });
     }
     if (csrfOwned.length > 0) {
-      const entries = [...new Set(csrfOwned.map((c) => platformCookie(c.name)!))];
+      const entries = [
+        ...new Set(csrfOwned.map((c) => platformCookie(c.name)!)),
+      ];
       checks.push({
         name: "cookie-httponly-csrf",
         status: "info",

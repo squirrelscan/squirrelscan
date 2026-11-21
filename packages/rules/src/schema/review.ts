@@ -1,8 +1,12 @@
 // schema/review - Review and AggregateRating schema validation
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import {
+  flattenJsonLdNodes,
+  indexJsonLdIds,
+  resolveJsonLdRef,
+} from "@squirrelscan/utils";
 
-import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const reviewSchemaRule: Rule = {
   meta: {
@@ -44,7 +48,8 @@ export const reviewSchemaRule: Rule = {
     // pub#817: `review` and `aggregateRating` may reference their nodes by
     // `@id`, anywhere on the page.
     const ids = indexJsonLdIds(pageNodes, ctx.page.url);
-    const resolve = (value: unknown) => resolveJsonLdRef(value, ids, ctx.page.url);
+    const resolve = (value: unknown) =>
+      resolveJsonLdRef(value, ids, ctx.page.url);
 
     for (const schema of pageNodes) {
       // Look for aggregateRating in any schema

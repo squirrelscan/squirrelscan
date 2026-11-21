@@ -29,7 +29,10 @@ function response(url: string, redirectTo?: string): FetchResponse {
     url,
     finalUrl,
     status: 200,
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "max-age=3600" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "max-age=3600",
+    },
     body: SITE[finalUrl] ?? html(),
     timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
     redirectChain: {
@@ -58,7 +61,10 @@ function fetcherFor(fetched: string[]): DocumentFetcher {
     capabilities: { jsRendering: false, cookies: false, screenshot: false },
     async fetch(req) {
       fetched.push(req.url);
-      return response(req.url, req.url === `${ORIGIN}/old` ? `${ORIGIN}/new` : undefined);
+      return response(
+        req.url,
+        req.url === `${ORIGIN}/old` ? `${ORIGIN}/new` : undefined
+      );
     },
   };
 }
@@ -91,7 +97,10 @@ const baseConfig = {
   maxPages: 50,
 };
 
-async function createCrawlRecord(storage: CrawlStorage, config: Record<string, unknown>): Promise<string> {
+async function createCrawlRecord(
+  storage: CrawlStorage,
+  config: Record<string, unknown>
+): Promise<string> {
   return Effect.runPromise(
     storage.createCrawl({
       baseUrl: ORIGIN,
@@ -101,7 +110,7 @@ async function createCrawlRecord(storage: CrawlStorage, config: Record<string, u
       status: "paused",
       config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
-    }),
+    })
   );
 }
 
@@ -116,7 +125,7 @@ async function seed(storage: CrawlStorage, crawlId: string, path: string) {
       source: "carried",
       enqueuedAt: Date.now(),
       retryCount: 0,
-    }),
+    })
   );
 }
 
@@ -128,10 +137,15 @@ describe("a cached redirect in a targeted run (#1777)", () => {
     const crawlId1 = await createCrawlRecord(storage, cfg1);
     await seed(storage, crawlId1, "/old");
     const crawler1 = await Effect.runPromise(
-      createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([]) }, storage }),
+      createCrawler({
+        config: { ...cfg1, documentFetcher: fetcherFor([]) },
+        storage,
+      })
     );
     await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
-    const full = await Effect.runPromise(storage.getAllFrontierEntries(crawlId1));
+    const full = await Effect.runPromise(
+      storage.getAllFrontierEntries(crawlId1)
+    );
     // Sanity: the full audit did queue the destination.
     expect(full.map((e) => e.normalizedUrl)).toContain(`${ORIGIN}/new`);
 
@@ -147,10 +161,15 @@ describe("a cached redirect in a targeted run (#1777)", () => {
     const crawlId2 = await createCrawlRecord(storage, cfg2);
     await seed(storage, crawlId2, "/old");
     const crawler2 = await Effect.runPromise(
-      createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched) }, storage }),
+      createCrawler({
+        config: { ...cfg2, documentFetcher: fetcherFor(fetched) },
+        storage,
+      })
     );
     await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
-    const entries = await Effect.runPromise(storage.getAllFrontierEntries(crawlId2));
+    const entries = await Effect.runPromise(
+      storage.getAllFrontierEntries(crawlId2)
+    );
     const stats = await Effect.runPromise(storage.getStats(crawlId2));
     await Effect.runPromise(storage.close());
 

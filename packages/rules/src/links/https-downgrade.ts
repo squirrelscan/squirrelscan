@@ -1,8 +1,8 @@
 // links/https-downgrade - HTTPS to HTTP downgrade detection
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import {
   addSection,
@@ -62,7 +62,8 @@ export const httpsDowngradeRule: Rule = {
       // the items stay bare.
       const placed = new Map<string, SectionCounts>();
       for (const link of ctx.parsed.links ?? []) {
-        if (link.url.startsWith("http://")) addSection(placed, link.url, link.section);
+        if (link.url.startsWith("http://"))
+          addSection(placed, link.url, link.section);
       }
       const resolve = (href: string): string | undefined => {
         try {

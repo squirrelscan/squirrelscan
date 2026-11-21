@@ -6,7 +6,10 @@
 
 import type { LinkData } from "@squirrelscan/core-contracts";
 
-import { isConventionalLinkLabel, normalizeLinkLabel } from "./conventional-link-labels";
+import {
+  isConventionalLinkLabel,
+  normalizeLinkLabel,
+} from "./conventional-link-labels";
 
 export const CORE_GENERIC_ANCHORS: readonly string[] = [
   "click here",
@@ -42,11 +45,14 @@ export interface GenericAnchorCount {
  * would swamp the editorial ratio). `isChrome === undefined` (an old crawl) counts as content.
  * Both the legacy and the streaming path call this on the same `LinkData`, so they agree.
  */
-export function countGenericAnchors(links: readonly LinkData[]): GenericAnchorCount {
+export function countGenericAnchors(
+  links: readonly LinkData[]
+): GenericAnchorCount {
   let generic = 0;
   let total = 0;
   for (const link of links) {
-    if (!link.isInternal || !link.url || link.isNofollow || link.isChrome) continue;
+    if (!link.isInternal || !link.url || link.isNofollow || link.isChrome)
+      continue;
     if (link.url.startsWith("#")) continue;
     const text = (link.text ?? "").trim();
     if (!text) continue;

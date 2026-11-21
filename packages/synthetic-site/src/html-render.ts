@@ -101,10 +101,12 @@ export function renderPageHtml(page: PageModel, origin: string): string {
   const linksHtml = page.outgoingLinks
     .map(
       (href) =>
-        `<a href="${escapeHtml(absoluteHref(href, origin))}">${escapeHtml(linkText(href))}</a>`,
+        `<a href="${escapeHtml(absoluteHref(href, origin))}">${escapeHtml(linkText(href))}</a>`
     )
     .join("\n");
-  const robotsMeta = page.noindex ? '<meta name="robots" content="noindex">' : "";
+  const robotsMeta = page.noindex
+    ? '<meta name="robots" content="noindex">'
+    : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -133,7 +135,10 @@ export function buildRobotsTxt(origin: string): string {
   return `User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`;
 }
 
-export function buildSitemapXml(sitemapPaths: string[], origin: string): string {
+export function buildSitemapXml(
+  sitemapPaths: string[],
+  origin: string
+): string {
   const urls = sitemapPaths
     .map((path) => `  <url><loc>${escapeHtml(`${origin}${path}`)}</loc></url>`)
     .join("\n");

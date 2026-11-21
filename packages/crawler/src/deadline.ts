@@ -5,7 +5,10 @@ import {
   PROBE_NOT_ATTEMPTED_ERROR,
   PROBE_STOPPED_ERROR,
 } from "@squirrelscan/core-contracts/storage";
-import { egressGuardedSend, type EgressPolicy } from "@squirrelscan/utils/public-egress";
+import {
+  egressGuardedSend,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
@@ -34,7 +37,7 @@ import type { RefusalLog } from "./refusals";
 export async function withRequestDeadline<T>(
   timeoutMs: number,
   perform: (signal: AbortSignal) => Promise<Response>,
-  use: (response: Response) => Promise<T>,
+  use: (response: Response) => Promise<T>
 ): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -66,13 +69,20 @@ export function safeFetchWithDeadline<T>(
   timeoutMs: number,
   use: (response: Response) => Promise<T>,
   egress?: EgressPolicy,
-  shouldFollow?: (from: string, to: string) => boolean,
+  shouldFollow?: (from: string, to: string) => boolean
 ): Promise<T> {
-  const send = egress ? egressGuardedSend(fetchUndecoded, egress) : fetchUndecoded;
+  const send = egress
+    ? egressGuardedSend(fetchUndecoded, egress)
+    : fetchUndecoded;
   return withRequestDeadline(
     timeoutMs,
     async (signal) => {
-      const result = await safeRedirectFetch(url, { ...options, signal }, send, shouldFollow);
+      const result = await safeRedirectFetch(
+        url,
+        { ...options, signal },
+        send,
+        shouldFollow
+      );
       if (result.unfollowed !== undefined) {
         // The 3xx says nothing about the approved path itself, so the probe records no answer.
         await result.response.body?.cancel().catch(() => {});
@@ -80,7 +90,7 @@ export function safeFetchWithDeadline<T>(
       }
       return result.response;
     },
-    use,
+    use
   );
 }
 
@@ -157,7 +167,7 @@ export interface PhaseBudget {
  */
 export function optionalProbeTimeoutMs(
   budget: PhaseBudget | undefined,
-  requestTimeoutMs: number,
+  requestTimeoutMs: number
 ): number | null {
   if (budget?.refusals?.blocked) return null;
   return budgetedTimeoutMs(budget, requestTimeoutMs);
@@ -165,7 +175,9 @@ export function optionalProbeTimeoutMs(
 
 /** The `error` a skipped optional probe records: stopped by a block, else the budget. */
 export function skippedProbeError(budget: PhaseBudget | undefined): string {
-  return budget?.refusals?.blocked ? PROBE_STOPPED_ERROR : BUDGET_EXHAUSTED_ERROR;
+  return budget?.refusals?.blocked
+    ? PROBE_STOPPED_ERROR
+    : BUDGET_EXHAUSTED_ERROR;
 }
 
 /**
@@ -180,7 +192,7 @@ export function createPhaseBudget(
   totalMs: number,
   startedAt: number = Date.now(),
   refusals?: RefusalLog,
-  egress?: EgressPolicy,
+  egress?: EgressPolicy
 ): PhaseBudget {
   return {
     deadlineAt: startedAt + Math.max(0, totalMs),
@@ -207,7 +219,7 @@ export function budgetRemainingMs(budget: PhaseBudget | undefined): number {
  */
 export function budgetedTimeoutMs(
   budget: PhaseBudget | undefined,
-  requestTimeoutMs: number,
+  requestTimeoutMs: number
 ): number | null {
   const remaining = budgetRemainingMs(budget);
   if (remaining <= 0) return null;

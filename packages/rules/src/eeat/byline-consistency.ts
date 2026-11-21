@@ -44,8 +44,16 @@
 // before it is emitted, so the output is byte-identical by construction and
 // independent of crawl order (same shape as content/duplicate-title, #1021/#1022).
 
-import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage, SiteData } from "../types";
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
+
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  ParsedPage,
+  SiteData,
+} from "../types";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
@@ -209,7 +217,8 @@ function judge(rollup: BylineRollup, sitePageCount: number): BylineVerdict {
 
   norms.sort(
     (a, b) =>
-      compare(a.pageType, b.pageType) || SIGNALS.indexOf(a.signal) - SIGNALS.indexOf(b.signal),
+      compare(a.pageType, b.pageType) ||
+      SIGNALS.indexOf(a.signal) - SIGNALS.indexOf(b.signal)
   );
   return { kind: "judged", norms, judgedPages: judged.size };
 }
@@ -223,7 +232,10 @@ function skip(message: string): CheckResult {
 }
 
 /** The rule's full output for one rollup. ONE builder, both paths. */
-function buildChecks(rollup: BylineRollup, sitePageCount: number): CheckResult[] {
+function buildChecks(
+  rollup: BylineRollup,
+  sitePageCount: number
+): CheckResult[] {
   const verdict = judge(rollup, sitePageCount);
   if (verdict.kind === "skip") return [skip(verdict.message)];
 
@@ -267,20 +279,22 @@ function buildChecks(rollup: BylineRollup, sitePageCount: number): CheckResult[]
       (a, b) =>
         b.deviants.length - a.deviants.length ||
         compare(a.pageType, b.pageType) ||
-        SIGNALS.indexOf(a.signal) - SIGNALS.indexOf(b.signal),
+        SIGNALS.indexOf(a.signal) - SIGNALS.indexOf(b.signal)
     );
 
-  const items: CheckItem[] = broken.slice(0, BYLINE_NORM_MAX_ITEMS).map((n) => ({
-    id: `${n.pageType}:${n.signal}`,
-    label: `${n.deviants.length} of ${n.pages} ${n.pageType} page(s) have no ${signalNoun(n.signal)}, which ${n.present} (${pct(n.share)}%) of ${n.pageType} pages carry`,
-    sourcePages: n.deviants.slice(0, BYLINE_NORM_MAX_URLS),
-    meta: {
-      pageType: n.pageType,
-      signal: n.signal,
-      convention: n.share,
-      pageCount: n.deviants.length,
-    },
-  }));
+  const items: CheckItem[] = broken
+    .slice(0, BYLINE_NORM_MAX_ITEMS)
+    .map((n) => ({
+      id: `${n.pageType}:${n.signal}`,
+      label: `${n.deviants.length} of ${n.pages} ${n.pageType} page(s) have no ${signalNoun(n.signal)}, which ${n.present} (${pct(n.share)}%) of ${n.pageType} pages carry`,
+      sourcePages: n.deviants.slice(0, BYLINE_NORM_MAX_URLS),
+      meta: {
+        pageType: n.pageType,
+        signal: n.signal,
+        convention: n.share,
+        pageCount: n.deviants.length,
+      },
+    }));
 
   details.brokenConventions = broken.length;
 
@@ -300,7 +314,7 @@ function buildChecks(rollup: BylineRollup, sitePageCount: number): CheckResult[]
 /** The legacy record for one `site.pages` entry, derived as page_features does. */
 function legacyRecord(
   site: SiteData | undefined,
-  page: SiteData["pages"][number],
+  page: SiteData["pages"][number]
 ): BylinePageRecord {
   const parsed: ParsedPage | undefined = page.parsed;
   return {
@@ -308,14 +322,17 @@ function legacyRecord(
     status: page.statusCode,
     pageType: parsed?.pageType ?? null,
     visibleAuthor: parsed?.visibleAuthor != null,
-    visibleDate: parsed?.visibleDatePublished != null || parsed?.visibleDateModified != null,
+    visibleDate:
+      parsed?.visibleDatePublished != null ||
+      parsed?.visibleDateModified != null,
     excluded: excludesNoindexPage(site, parsed, page.headers),
   };
 }
 
 function legacyRollup(site: SiteData | undefined): BylineRollup {
   const rollup = emptyRollup();
-  for (const page of site?.pages ?? []) accumulatePage(rollup, legacyRecord(site, page));
+  for (const page of site?.pages ?? [])
+    accumulatePage(rollup, legacyRecord(site, page));
   return rollup;
 }
 
@@ -325,9 +342,12 @@ function legacyRollup(site: SiteData | undefined): BylineRollup {
  * pages to this rule, so a page is reported once (#1364).
  */
 export function bylineConsistencyDeviants(
-  site: SiteData | undefined,
+  site: SiteData | undefined
 ): Record<BylineSignal, Set<string>> {
-  const out: Record<BylineSignal, Set<string>> = { author: new Set(), date: new Set() };
+  const out: Record<BylineSignal, Set<string>> = {
+    author: new Set(),
+    date: new Set(),
+  };
   const pages = site?.pages;
   if (!pages || pages.length === 0) return out;
   const verdict = judge(legacyRollup(site), pages.length);
@@ -351,7 +371,10 @@ export function defersToBylineConsistency(ctx: RuleContext): boolean {
  * Streaming path: read the presence flags off the page_features cursor. Only urls
  * stay resident, the same bounded scalars content/duplicate-title holds.
  */
-async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
+async function runViaSiteQuery(
+  siteQuery: SiteQuery,
+  skipNoindex: boolean
+): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {

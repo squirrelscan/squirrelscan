@@ -1,7 +1,11 @@
 // Redirect chain detection and analysis
 // Follows redirects and identifies chains, loops, and issues
 
-import type { CheckResult, RedirectChain, RedirectHop } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  RedirectChain,
+  RedirectHop,
+} from "@squirrelscan/core-contracts";
 
 import { HTTP_PROBE_LIMITS } from "@squirrelscan/utils/constants";
 import {
@@ -13,6 +17,7 @@ import {
 } from "@squirrelscan/utils/public-egress";
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+
 import { requestAsync } from "../tools";
 
 /**
@@ -41,14 +46,15 @@ function redirectEgress(url: string, resolve: ResolveHost): EgressPolicy {
     allowPrivateNetwork: true,
     pin: false,
     resolve: memoizeResolveHost(resolve),
-    trustTarget: (target) => host !== "" && target.hostname.toLowerCase() === host,
+    trustTarget: (target) =>
+      host !== "" && target.hostname.toLowerCase() === host,
   };
 }
 
 export async function followRedirects(
   url: string,
   /** Test seam: DNS for the hops that leave the probed host. */
-  resolve: ResolveHost = resolveHostAddresses,
+  resolve: ResolveHost = resolveHostAddresses
 ): Promise<RedirectChain> {
   const egress = redirectEgress(url, resolve);
   const hops: RedirectHop[] = [];
@@ -73,7 +79,7 @@ export async function followRedirects(
     const controller = new AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),
-      HTTP_PROBE_LIMITS.FOLLOW_TIMEOUT_MS,
+      HTTP_PROBE_LIMITS.FOLLOW_TIMEOUT_MS
     );
 
     try {
@@ -125,7 +131,11 @@ export async function followRedirects(
         // repo#2830: nor to a link-local or metadata address. Fails closed: a
         // hop off the probed host whose lookup fails or times out is not
         // followed either (the probed host itself is never looked up).
-        if (await egressRefuses(nextUrl, egress, controller.signal).catch(() => true)) {
+        if (
+          await egressRefuses(nextUrl, egress, controller.signal).catch(
+            () => true
+          )
+        ) {
           endsInError = true;
           break;
         }
@@ -144,7 +154,9 @@ export async function followRedirects(
       // #1829: a throttled endpoint is unverified, not broken. Checked before
       // the >= 400 test, which 429/430 would otherwise satisfy and turn into a
       // hard "redirect chain ends in error" failure.
-      if (isRateLimitedResponse(statusCode, response.headers.get("retry-after"))) {
+      if (
+        isRateLimitedResponse(statusCode, response.headers.get("retry-after"))
+      ) {
         endsRateLimited = true;
         break;
       }

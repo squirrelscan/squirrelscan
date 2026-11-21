@@ -3,11 +3,16 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { createFindingSink, type LeakedSecret, PAGE_FINDINGS_CAP } from "../../src/security/leaked-secrets";
+import {
+  createFindingSink,
+  type LeakedSecret,
+  PAGE_FINDINGS_CAP,
+} from "../../src/security/leaked-secrets";
 
 type Tier = 0 | 1 | 2 | 3;
 const fake = (tier: Tier, name: string): LeakedSecret => ({
-  type: tier === 0 ? "Stripe Live Key" : tier === 3 ? "Public Key" : "Some Pattern",
+  type:
+    tier === 0 ? "Stripe Live Key" : tier === 3 ? "Public Key" : "Some Pattern",
   value: `${tier}-${name}`,
   confidence: tier === 3 ? "info" : tier === 2 ? "medium" : "high",
   publicByDesign: false,
@@ -15,7 +20,11 @@ const fake = (tier: Tier, name: string): LeakedSecret => ({
   length: 8,
   offset: 0,
 });
-const publicKey = (name: string): LeakedSecret => ({ ...fake(3, name), type: "Stripe Publishable Key", publicByDesign: true });
+const publicKey = (name: string): LeakedSecret => ({
+  ...fake(3, name),
+  type: "Stripe Publishable Key",
+  publicByDesign: true,
+});
 
 describe("the page sink's own bookkeeping is bounded (probes of the per-page cap)", () => {
   test("one value found 50,000 times leaves no residue", () => {
@@ -28,7 +37,12 @@ describe("the page sink's own bookkeeping is bounded (probes of the per-page cap
 
   test("a value that flips tier on every copy leaves no residue", () => {
     const sink = createFindingSink();
-    for (let i = 0; i < 50_000; i++) sink.add({ ...fake(i % 2 === 0 ? 1 : 2, "flip"), value: "flip", type: "Generic X" });
+    for (let i = 0; i < 50_000; i++)
+      sink.add({
+        ...fake(i % 2 === 0 ? 1 : 2, "flip"),
+        value: "flip",
+        type: "Generic X",
+      });
     expect(sink.result()).toHaveLength(1);
     expect(sink.retained()).toBeLessThan(200);
   });
@@ -52,9 +66,17 @@ describe("the page sink's own bookkeeping is bounded (probes of the per-page cap
 
   test("generic findings that churn in and out of the cap leave no residue", () => {
     const sink = createFindingSink(100);
-    for (let i = 0; i < 20_000; i++) sink.add({ ...fake(2, String(i)), type: "Generic Secret", value: `secret":"v${i}"` });
-    for (let i = 0; i < 20_000; i++) sink.add({ ...fake(0, String(i)), value: `crit-${i}` });
-    expect(sink.result().filter((s) => s.value.startsWith("crit-"))).toHaveLength(100);
+    for (let i = 0; i < 20_000; i++)
+      sink.add({
+        ...fake(2, String(i)),
+        type: "Generic Secret",
+        value: `secret":"v${i}"`,
+      });
+    for (let i = 0; i < 20_000; i++)
+      sink.add({ ...fake(0, String(i)), value: `crit-${i}` });
+    expect(
+      sink.result().filter((s) => s.value.startsWith("crit-"))
+    ).toHaveLength(100);
     expect(sink.retained()).toBeLessThan(100 * 12);
   });
 
@@ -66,4 +88,3 @@ describe("the page sink's own bookkeeping is bounded (probes of the per-page cap
     expect(sink.omitted()).toBe(5_000 - 50 + 1);
   });
 });
-

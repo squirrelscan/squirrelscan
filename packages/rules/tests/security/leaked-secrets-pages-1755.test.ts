@@ -1,21 +1,29 @@
 // security/leaked-secrets: a finding names the pages it sits on, through the streaming engine path (#1755).
 // Site rules get collected signals and no DOM there. Values are built from parts: no secret-shaped literal is committed.
 
-import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { RuleContext } from "../../src/types";
 
 import { buildCollectedPageSignal } from "../../src/collected-signals";
 import { leakedSecretsRule } from "../../src/security/leaked-secrets";
-import type { RuleContext } from "../../src/types";
 
 const BASE = "https://shop.example.test";
 const KEY = `${["sk", "live"].join("_")}_${"aB3dE5gH7jK9mN1pQ3rS5tU7"}`;
 const SCRIPT = `${BASE}/_fault/shop-config.js`;
 
 const signal = (url: string, html: string) =>
-  buildCollectedPageSignal({ url, parsed: parsePage(html, url), rendered: false });
+  buildCollectedPageSignal({
+    url,
+    parsed: parsePage(html, url),
+    rendered: false,
+  });
 
-async function run(pages: ReturnType<typeof signal>[], scripts: { url: string; content: string; sourcePages: string[] }[]) {
+async function run(
+  pages: ReturnType<typeof signal>[],
+  scripts: { url: string; content: string; sourcePages: string[] }[]
+) {
   const ctx = {
     site: {
       baseUrl: BASE,
@@ -39,10 +47,22 @@ describe("leaked-secrets names the pages (#1755)", () => {
   const other = `${BASE}/products/almond-butter`;
 
   test("an external script finding lists every page that loads the script", async () => {
-    const checks = (await run(
-      [signal(loader, `<html><body><script src="${SCRIPT}"></script></body></html>`), signal(other, "<html><body>x</body></html>")],
-      [{ url: SCRIPT, content: `window.cfg={key:"${KEY}"};`, sourcePages: [loader] }],
-    ));
+    const checks = await run(
+      [
+        signal(
+          loader,
+          `<html><body><script src="${SCRIPT}"></script></body></html>`
+        ),
+        signal(other, "<html><body>x</body></html>"),
+      ],
+      [
+        {
+          url: SCRIPT,
+          content: `window.cfg={key:"${KEY}"};`,
+          sourcePages: [loader],
+        },
+      ]
+    );
     const crit = checks.find((c) => c.name === "leaked-secrets-critical")!;
     expect(crit.items).toHaveLength(1);
     expect(crit.items![0]!.id).toMatch(/^Stripe Live Key: sk_liv\*+5tU7$/);
@@ -51,28 +71,56 @@ describe("leaked-secrets names the pages (#1755)", () => {
   });
 
   test("the inline copy on the loading page is reported with its page as its own occurrence", async () => {
-    const checks = (await run(
-      [signal(loader, `<html><body><script>window.__SHOP_CONFIG__={"k":"${KEY}"};</script></body></html>`)],
-      [{ url: SCRIPT, content: `window.cfg={key:"${KEY}"};`, sourcePages: [loader, other] }],
-    ));
+    const checks = await run(
+      [
+        signal(
+          loader,
+          `<html><body><script>window.__SHOP_CONFIG__={"k":"${KEY}"};</script></body></html>`
+        ),
+      ],
+      [
+        {
+          url: SCRIPT,
+          content: `window.cfg={key:"${KEY}"};`,
+          sourcePages: [loader, other],
+        },
+      ]
+    );
     const crit = checks.find((c) => c.name === "leaked-secrets-critical")!;
     expect(crit.items).toHaveLength(1);
     const item = crit.items![0]!;
     expect(item.sourcePages).toEqual([loader, other]);
-    const occ = item.meta!.occurrences as { location: string; page?: string; script?: string }[];
-    expect(occ.some((o) => o.location.startsWith("inline-script") && o.page === loader)).toBe(true);
-    expect(occ.some((o) => o.location === "external-script" && o.script === SCRIPT)).toBe(true);
+    const occ = item.meta!.occurrences as {
+      location: string;
+      page?: string;
+      script?: string;
+    }[];
+    expect(
+      occ.some(
+        (o) => o.location.startsWith("inline-script") && o.page === loader
+      )
+    ).toBe(true);
+    expect(
+      occ.some((o) => o.location === "external-script" && o.script === SCRIPT)
+    ).toBe(true);
   });
 
   test("no raw value appears anywhere in the result", async () => {
-    const checks = (await run(
-      [signal(loader, `<html><body><script>var a="${KEY}";</script></body></html>`)],
-      [{ url: SCRIPT, content: `var b="${KEY}";`, sourcePages: [loader] }],
-    ));
+    const checks = await run(
+      [
+        signal(
+          loader,
+          `<html><body><script>var a="${KEY}";</script></body></html>`
+        ),
+      ],
+      [{ url: SCRIPT, content: `var b="${KEY}";`, sourcePages: [loader] }]
+    );
     expect(JSON.stringify(checks)).not.toContain(KEY);
   });
 
   test("the rule is not named after environment variables", () => {
-    expect(leakedSecretsRule.meta.name.toLowerCase()).not.toContain("environment");
+    expect(leakedSecretsRule.meta.name.toLowerCase()).not.toContain(
+      "environment"
+    );
   });
 });

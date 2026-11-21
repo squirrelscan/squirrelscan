@@ -34,6 +34,9 @@ describe("createTlsProbe requireProxy (#3922)", () => {
       resolve: async () => ["169.254.169.254"],
     });
     const result = await probe({ hostname: "example.com" });
-    expect(result).toMatchObject({ kind: "unreachable", code: "EGRESS_REFUSED" });
+    expect(result).toMatchObject({
+      kind: "unreachable",
+      code: "EGRESS_REFUSED",
+    });
   });
 });

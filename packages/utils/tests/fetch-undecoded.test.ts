@@ -2,7 +2,14 @@
 // read or not, so a byte cap on the reader never bounded a compression bomb
 // (squirrelscan/repo#2717). fetchUndecoded turns that decoding off and
 // readBodyCapped undoes the coding itself, no further than the cap.
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import {
   brotliCompressSync,
   constants,
@@ -14,6 +21,7 @@ import {
   zstdCompressSync,
 } from "node:zlib";
 
+import { headersForRedirect } from "../src/headers";
 import {
   ACCEPT_ENCODING,
   ContentDecodingError,
@@ -22,20 +30,23 @@ import {
   isDecompressionError,
   readBodyCapped,
 } from "../src/response-body";
-import { headersForRedirect } from "../src/headers";
 import { safeRedirectFetch } from "../src/safe-fetch";
 
 const GIB = 1024 * 1024 * 1024;
 const HTML = `<!doctype html><html><head><title>decoded</title></head><body>${"<p>squirrel</p>".repeat(200)}</body></html>`;
 
 /** `total` bytes of spaces through a streaming compressor, never held whole. */
-async function bomb(compressor: NodeJS.ReadWriteStream, total: number): Promise<Buffer<ArrayBuffer>> {
+async function bomb(
+  compressor: NodeJS.ReadWriteStream,
+  total: number
+): Promise<Buffer<ArrayBuffer>> {
   const out: Buffer[] = [];
   compressor.on("data", (chunk: Buffer) => out.push(chunk));
   const ended = new Promise((resolve) => compressor.on("end", resolve));
   const chunk = Buffer.alloc(16 * 1024 * 1024, 0x20);
   for (let sent = 0; sent < total; sent += chunk.byteLength) {
-    if (!compressor.write(chunk)) await new Promise((resolve) => compressor.once("drain", resolve));
+    if (!compressor.write(chunk))
+      await new Promise((resolve) => compressor.once("drain", resolve));
   }
   compressor.end();
   await ended;
@@ -49,13 +60,15 @@ let server: ReturnType<typeof Bun.serve>;
 let origin: string;
 
 const encoded = (body: BodyInit, coding: string): Response =>
-  new Response(body, { headers: { "content-type": "text/html", "content-encoding": coding } });
+  new Response(body, {
+    headers: { "content-type": "text/html", "content-encoding": coding },
+  });
 
 beforeAll(async () => {
   gzipBomb = await bomb(createGzip({ level: 6 }), GIB);
   brBomb = await bomb(
     createBrotliCompress({ params: { [constants.BROTLI_PARAM_QUALITY]: 1 } }),
-    GIB,
+    GIB
   );
   server = Bun.serve({
     port: 0,
@@ -85,27 +98,63 @@ beforeAll(async () => {
           return encoded(gzipSync(gzipSync(HTML)), "gzip, gzip");
         case "/gzip-junk":
           return encoded(
-            Buffer.concat([gzipSync(HTML), Buffer.from("\n<!-- appended -->\n")]),
-            "gzip",
+            Buffer.concat([
+              gzipSync(HTML),
+              Buffer.from("\n<!-- appended -->\n"),
+            ]),
+            "gzip"
           );
         case "/gzip-padded":
-          return encoded(Buffer.concat([gzipSync(HTML), Buffer.alloc(16)]), "gzip");
+          return encoded(
+            Buffer.concat([gzipSync(HTML), Buffer.alloc(16)]),
+            "gzip"
+          );
         case "/gzip-members":
-          return encoded(Buffer.concat([gzipSync(HTML), gzipSync("<p>second member</p>")]), "gzip");
+          return encoded(
+            Buffer.concat([gzipSync(HTML), gzipSync("<p>second member</p>")]),
+            "gzip"
+          );
         case "/gzip-named": {
           // FEXTRA, FNAME and FCOMMENT set: the header is not 10 bytes long.
           const header = Buffer.concat([
-            Buffer.from([0x1f, 0x8b, 8, 0x04 | 0x08 | 0x10, 0, 0, 0, 0, 0, 3, 2, 0, 0xab, 0xcd]),
+            Buffer.from([
+              0x1f,
+              0x8b,
+              8,
+              0x04 | 0x08 | 0x10,
+              0,
+              0,
+              0,
+              0,
+              0,
+              3,
+              2,
+              0,
+              0xab,
+              0xcd,
+            ]),
             Buffer.from("index.html\0a comment\0"),
           ]);
-          return encoded(Buffer.concat([header, gzipSync(HTML).subarray(10)]), "gzip");
+          return encoded(
+            Buffer.concat([header, gzipSync(HTML).subarray(10)]),
+            "gzip"
+          );
         }
         case "/br-junk":
-          return encoded(Buffer.concat([brotliCompressSync(HTML), Buffer.from("junk")]), "br");
+          return encoded(
+            Buffer.concat([brotliCompressSync(HTML), Buffer.from("junk")]),
+            "br"
+          );
         case "/deflate-junk":
-          return encoded(Buffer.concat([deflateSync(HTML), Buffer.from("junk")]), "deflate");
+          return encoded(
+            Buffer.concat([deflateSync(HTML), Buffer.from("junk")]),
+            "deflate"
+          );
         case "/zstd-junk":
-          return encoded(Buffer.concat([zstdCompressSync(HTML), Buffer.from("junk")]), "zstd");
+          return encoded(
+            Buffer.concat([zstdCompressSync(HTML), Buffer.from("junk")]),
+            "zstd"
+          );
         case "/empty":
           return encoded(new Uint8Array(0), "gzip");
         case "/liar":
@@ -128,13 +177,19 @@ beforeAll(async () => {
                 controller.enqueue(whole.subarray(0, 20));
               },
             }),
-            { headers: { "content-encoding": "gzip" } },
+            { headers: { "content-encoding": "gzip" } }
           );
         }
         case "/hop-1":
-          return new Response(null, { status: 302, headers: { location: "/hop-2" } });
+          return new Response(null, {
+            status: 302,
+            headers: { location: "/hop-2" },
+          });
         case "/hop-2":
-          return new Response(null, { status: 301, headers: { location: "/gzip" } });
+          return new Response(null, {
+            status: 301,
+            headers: { location: "/gzip" },
+          });
         default:
           return new Response("not found", { status: 404 });
       }
@@ -173,7 +228,7 @@ describe("fetchUndecoded", () => {
         inits.push(init ?? {});
         return real(input, init);
       },
-      { preconnect: real.preconnect },
+      { preconnect: real.preconnect }
     );
     try {
       await (await fetchUndecoded(`${origin}/gzip`)).body?.cancel();
@@ -187,16 +242,31 @@ describe("fetchUndecoded", () => {
   });
 
   test("keeps the caller's own Accept-Encoding", async () => {
-    const res = await fetchUndecoded(`${origin}/gzip`, { headers: { "Accept-Encoding": "gzip" } });
+    const res = await fetchUndecoded(`${origin}/gzip`, {
+      headers: { "Accept-Encoding": "gzip" },
+    });
     await res.body?.cancel();
     expect(requestHeaders[0]?.get("accept-encoding")).toBe("gzip");
   });
 });
 
 describe("readBodyCapped over fetchUndecoded", () => {
-  for (const path of ["/gzip", "/x-gzip", "/upper", "/deflate", "/deflate-raw", "/br", "/zstd"]) {
+  for (const path of [
+    "/gzip",
+    "/x-gzip",
+    "/upper",
+    "/deflate",
+    "/deflate-raw",
+    "/br",
+    "/zstd",
+  ]) {
     test(`decodes ${path}`, async () => {
-      expect(await readBodyCapped(await fetchUndecoded(`${origin}${path}`), 1_000_000)).toBe(HTML);
+      expect(
+        await readBodyCapped(
+          await fetchUndecoded(`${origin}${path}`),
+          1_000_000
+        )
+      ).toBe(HTML);
     });
   }
 
@@ -212,31 +282,48 @@ describe("readBodyCapped over fetchUndecoded", () => {
     "/zstd-junk",
   ]) {
     test(`reads ${path} up to the end of its stream`, async () => {
-      expect(await readBodyCapped(await fetchUndecoded(`${origin}${path}`), 1_000_000)).toBe(HTML);
+      expect(
+        await readBodyCapped(
+          await fetchUndecoded(`${origin}${path}`),
+          1_000_000
+        )
+      ).toBe(HTML);
     });
   }
 
   for (const path of ["/identity", "/unknown"]) {
     test(`reads ${path} as it arrived`, async () => {
-      expect(await readBodyCapped(await fetchUndecoded(`${origin}${path}`), 1_000_000)).toBe(HTML);
+      expect(
+        await readBodyCapped(
+          await fetchUndecoded(`${origin}${path}`),
+          1_000_000
+        )
+      ).toBe(HTML);
     });
   }
 
   test("passes stacked codings through untouched, as Bun's own decoding does", async () => {
     const raw = new TextDecoder().decode(gzipSync(gzipSync(HTML)));
-    expect(await readBodyCapped(await fetchUndecoded(`${origin}/stacked`), 1_000_000)).toBe(raw);
+    expect(
+      await readBodyCapped(await fetchUndecoded(`${origin}/stacked`), 1_000_000)
+    ).toBe(raw);
   });
 
   test("reads an empty encoded body as empty", async () => {
-    expect(await readBodyCapped(await fetchUndecoded(`${origin}/empty`), 1_000)).toBe("");
+    expect(
+      await readBodyCapped(await fetchUndecoded(`${origin}/empty`), 1_000)
+    ).toBe("");
   });
 
   for (const path of ["/liar", "/truncated"]) {
     test(`a body that does not decode (${path}) is a decompression error`, async () => {
-      const read = readBodyCapped(await fetchUndecoded(`${origin}${path}`), 1_000_000);
+      const read = readBodyCapped(
+        await fetchUndecoded(`${origin}${path}`),
+        1_000_000
+      );
       const error = await read.then(
         () => null,
-        (e: unknown) => e,
+        (e: unknown) => e
       );
       expect(error).toBeInstanceOf(ContentDecodingError);
       expect(isDecompressionError(error)).toBe(true);
@@ -246,11 +333,13 @@ describe("readBodyCapped over fetchUndecoded", () => {
 
   test("a deadline firing mid-body is still an abort, not a decode failure", async () => {
     const controller = new AbortController();
-    const res = await fetchUndecoded(`${origin}/stall`, { signal: controller.signal });
+    const res = await fetchUndecoded(`${origin}/stall`, {
+      signal: controller.signal,
+    });
     setTimeout(() => controller.abort(), 50);
     const error = await readBodyCapped(res, 1_000_000).then(
       () => null,
-      (e: unknown) => e,
+      (e: unknown) => e
     );
     expect((error as Error).name).toBe("AbortError");
   });
@@ -263,7 +352,10 @@ describe("readBodyCapped over fetchUndecoded", () => {
       const cap = 1024 * 1024;
       let text = "";
       const growth = await peakRssGrowth(async () => {
-        text = await readBodyCapped(await fetchUndecoded(`${origin}${path}`), cap);
+        text = await readBodyCapped(
+          await fetchUndecoded(`${origin}${path}`),
+          cap
+        );
       });
       expect(text.length).toBe(cap);
       expect(text.trim()).toBe("");
@@ -276,7 +368,9 @@ describe("readBodyCapped over fetchUndecoded", () => {
 
 describe("decodedBody", () => {
   test("cancelling a read in flight ends it and releases the body", async () => {
-    const reader = decodedBody(await fetchUndecoded(`${origin}/stall`))!.getReader();
+    const reader = decodedBody(
+      await fetchUndecoded(`${origin}/stall`)
+    )!.getReader();
     const read = reader.read();
     await reader.cancel("enough");
     expect((await read).done).toBe(true);
@@ -304,7 +398,7 @@ describe("redirects", () => {
     const next = headersForRedirect(
       { "Accept-Encoding": "gzip", "X-Api-Key": "secret" },
       "https://a.example/",
-      "https://b.example/",
+      "https://b.example/"
     );
     // Dropped, the hop would ask for the default codings, which a caller like
     // the sitemap reader does not decode.
@@ -316,10 +410,14 @@ describe("redirects", () => {
 describe("safeRedirectFetch", () => {
   test("sends every hop through the given fetch", async () => {
     const hops: string[] = [];
-    const { response, finalUrl } = await safeRedirectFetch(`${origin}/hop-1`, {}, (url, init) => {
-      hops.push(new URL(url).pathname);
-      return fetchUndecoded(url, init);
-    });
+    const { response, finalUrl } = await safeRedirectFetch(
+      `${origin}/hop-1`,
+      {},
+      (url, init) => {
+        hops.push(new URL(url).pathname);
+        return fetchUndecoded(url, init);
+      }
+    );
     expect(hops).toEqual(["/hop-1", "/hop-2", "/gzip"]);
     expect(finalUrl).toBe(`${origin}/gzip`);
     expect(await readBodyCapped(response, 1_000_000)).toBe(HTML);

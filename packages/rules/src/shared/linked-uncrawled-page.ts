@@ -67,7 +67,7 @@ function sameSiteUrl(href: string, pageUrl: string): string | null {
  */
 export function findLinkedUncrawledPage(
   site: Pick<SiteData, "pages" | "linkTargetStatuses">,
-  matcher: LinkTargetMatcher,
+  matcher: LinkTargetMatcher
 ): LinkedUncrawledPage | null {
   const crawled = new Set<string>();
   for (const page of site.pages) {
@@ -76,13 +76,14 @@ export function findLinkedUncrawledPage(
   }
 
   const find = (
-    accepts: (link: { url: string; text: string }, resolved: string) => boolean,
+    accepts: (link: { url: string; text: string }, resolved: string) => boolean
   ): { url: string; linkedFrom: string } | null => {
     for (const page of site.pages) {
       for (const link of page.parsed?.links ?? []) {
         const resolved = sameSiteUrl(link.url, page.url);
         if (!resolved || crawled.has(normalizeUrl(resolved))) continue;
-        if (accepts(link, resolved)) return { url: resolved, linkedFrom: page.url };
+        if (accepts(link, resolved))
+          return { url: resolved, linkedFrom: page.url };
       }
     }
     return null;
@@ -98,8 +99,11 @@ export function findLinkedUncrawledPage(
   if (!hit) return null;
 
   const key = normalizeUrl(hit.url);
-  const probe = (site.linkTargetStatuses ?? []).find((p) => normalizeUrl(p.url) === key);
-  const probedStatus = typeof probe?.status === "number" && probe.status > 0 ? probe.status : null;
+  const probe = (site.linkTargetStatuses ?? []).find(
+    (p) => normalizeUrl(p.url) === key
+  );
+  const probedStatus =
+    typeof probe?.status === "number" && probe.status > 0 ? probe.status : null;
   // A 401/403 is a bot wall or an auth wall refusing a status-only request, and
   // a 429/430 is throttling: neither says the page is missing (see links/broken-links).
   const broken =
@@ -121,11 +125,13 @@ export function findLinkedUncrawledPage(
 export function linkedUncrawledCheck(
   name: string,
   label: string,
-  target: LinkedUncrawledPage,
+  target: LinkedUncrawledPage
 ): CheckResult {
   const details = {
     linkedFrom: target.linkedFrom,
-    ...(target.probedStatus !== null ? { probedStatus: target.probedStatus } : {}),
+    ...(target.probedStatus !== null
+      ? { probedStatus: target.probedStatus }
+      : {}),
   };
   if (target.broken) {
     return {

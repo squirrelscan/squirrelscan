@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { scanScopeLine, scanScopeUnfetched } from "../src/coverage";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
@@ -13,7 +14,10 @@ import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
 
-function report(scanScope: AuditReport["scanScope"], overrides: Partial<AuditReport> = {}) {
+function report(
+  scanScope: AuditReport["scanScope"],
+  overrides: Partial<AuditReport> = {}
+) {
   return {
     baseUrl: "https://example.com",
     timestamp: "2026-10-23T00:00:00.000Z",
@@ -44,8 +48,20 @@ describe("scanScopeUnfetched", () => {
   test("a whole non-negative count, or 0 for anything a stored report could hold", () => {
     expect(scanScopeUnfetched(capped)).toBe(531);
     expect(scanScopeUnfetched(report(undefined))).toBe(0);
-    for (const bad of [-1, 2.7, Number.NaN, Number.POSITIVE_INFINITY, "531", null]) {
-      const r = report({ origin: "cli", pagesCrawled: 1, capped: false, unfetched: bad as never });
+    for (const bad of [
+      -1,
+      2.7,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      "531",
+      null,
+    ]) {
+      const r = report({
+        origin: "cli",
+        pagesCrawled: 1,
+        capped: false,
+        unfetched: bad as never,
+      });
       expect(scanScopeUnfetched(r)).toBe(0);
     }
   });
@@ -54,14 +70,19 @@ describe("scanScopeUnfetched", () => {
 describe("scan line", () => {
   test("adds the queued count after the page limit", () => {
     expect(scanScopeLine(capped)).toBe(
-      "Scan: 200 pages crawled from squirrelscan cloud (page limit 200 reached; 531 more discovered but not fetched).",
+      "Scan: 200 pages crawled from squirrelscan cloud (page limit 200 reached; 531 more discovered but not fetched)."
     );
   });
 
   test("a run with no limit still says it", () => {
-    const r = report({ origin: "cli", pagesCrawled: 12, capped: false, unfetched: 3 });
+    const r = report({
+      origin: "cli",
+      pagesCrawled: 12,
+      capped: false,
+      unfetched: 3,
+    });
     expect(scanScopeLine(r)).toBe(
-      "Scan: 12 pages crawled from the CLI (3 more discovered but not fetched).",
+      "Scan: 12 pages crawled from the CLI (3 more discovered but not fetched)."
     );
   });
 
@@ -75,14 +96,16 @@ describe("scan line", () => {
         unfetched,
       });
       expect(scanScopeLine(r)).toBe(
-        "Scan: 200 pages crawled from squirrelscan cloud (page limit 200 reached).",
+        "Scan: 200 pages crawled from squirrelscan cloud (page limit 200 reached)."
       );
     }
   });
 
   test("text and markdown carry it", () => {
     expect(renderText(capped)).toContain("531 more discovered but not fetched");
-    expect(renderMarkdown(capped)).toContain("531 more discovered but not fetched");
+    expect(renderMarkdown(capped)).toContain(
+      "531 more discovered but not fetched"
+    );
   });
 
   test("a rate-limited run says it once, on the rate-limit line that already counts them", () => {
@@ -92,7 +115,7 @@ describe("scan line", () => {
       rateLimited: { pages: 5, hosts: ["example.com"], unfetched: 536 },
     };
     expect(scanScopeLine(throttled)).toBe(
-      "Scan: 200 pages crawled from squirrelscan cloud (page limit 200 reached).",
+      "Scan: 200 pages crawled from squirrelscan cloud (page limit 200 reached)."
     );
     const text = renderText(throttled);
     expect(text).toContain("536 more discovered but not fetched");
@@ -103,10 +126,15 @@ describe("scan line", () => {
 describe("machine-readable formats", () => {
   test("llm and xml put it on scan-scope, only when there is one", () => {
     expect(renderLlm(capped)).toContain(
-      '<scan-scope origin="cloud" crawled="200" max-pages="200" capped="true" unfetched="531"/>',
+      '<scan-scope origin="cloud" crawled="200" max-pages="200" capped="true" unfetched="531"/>'
     );
     expect(renderXml(capped)).toContain('capped="true" unfetched="531"/>');
-    const none = report({ origin: "cloud", maxPages: 200, pagesCrawled: 200, capped: true });
+    const none = report({
+      origin: "cloud",
+      maxPages: 200,
+      pagesCrawled: 200,
+      capped: true,
+    });
     expect(renderLlm(none)).not.toContain("unfetched=");
     expect(renderXml(none)).not.toContain("unfetched=");
   });
@@ -124,7 +152,12 @@ describe("machine-readable formats", () => {
 
   test("json meta carries it, only when there is one", () => {
     expect(JSON.parse(renderJson(capped)).meta.unfetched).toBe(531);
-    const none = report({ origin: "cloud", maxPages: 200, pagesCrawled: 200, capped: true });
+    const none = report({
+      origin: "cloud",
+      maxPages: 200,
+      pagesCrawled: 200,
+      capped: true,
+    });
     expect("unfetched" in JSON.parse(renderJson(none)).meta).toBe(false);
   });
 
@@ -138,7 +171,9 @@ describe("machine-readable formats", () => {
     });
 
     expect(renderText(forged)).not.toContain("more discovered but not fetched");
-    expect(renderMarkdown(forged)).not.toContain("more discovered but not fetched");
+    expect(renderMarkdown(forged)).not.toContain(
+      "more discovered but not fetched"
+    );
     expect(renderLlm(forged)).not.toContain('unfetched="');
     expect(renderXml(forged)).not.toContain('unfetched="');
     expect("unfetched" in JSON.parse(renderJson(forged)).meta).toBe(false);
@@ -166,8 +201,8 @@ describe("report page", () => {
           stopReason: "time",
           unfetched: 40,
         },
-        { totalPages: 87 },
-      ),
+        { totalPages: 87 }
+      )
     );
     expect(out).toContain("Scanned 87 of 127+ discovered pages");
   });
@@ -177,10 +212,19 @@ describe("report page", () => {
     // would count them twice.
     const site = (unfetched: number) =>
       html(
-        report({ origin: "cli", maxPages: 20, pagesCrawled: 20, capped: true, unfetched }, {
-          totalPages: 20,
-          sitemaps: { totalUrls: 78, missingPages: [] },
-        } as Partial<AuditReport>),
+        report(
+          {
+            origin: "cli",
+            maxPages: 20,
+            pagesCrawled: 20,
+            capped: true,
+            unfetched,
+          },
+          {
+            totalPages: 20,
+            sitemaps: { totalUrls: 78, missingPages: [] },
+          } as Partial<AuditReport>
+        )
       );
     // Only sitemap URLs left queued: the sitemap's count stands.
     expect(site(58)).toContain("Scanned 20 of 78+ discovered pages");
@@ -192,15 +236,22 @@ describe("report page", () => {
     const out = html(
       report(
         { origin: "cli", maxPages: 500, pagesCrawled: 200, capped: false },
-        { totalPages: 200 },
-      ),
+        { totalPages: 200 }
+      )
     );
     expect(out).toContain("Scanned 200 of 200 discovered pages");
     expect(out).not.toContain("200+");
   });
 
   test("a capped crawl that knows of nothing more prints no floor mark", () => {
-    const out = html(report({ origin: "cloud", maxPages: 200, pagesCrawled: 200, capped: true }));
+    const out = html(
+      report({
+        origin: "cloud",
+        maxPages: 200,
+        pagesCrawled: 200,
+        capped: true,
+      })
+    );
     expect(out).toContain("Scanned 200 of 200 discovered pages");
     expect(out).not.toContain("left 0 queued");
     expect(out).not.toContain(' queued"');
@@ -212,9 +263,15 @@ describe("report page", () => {
   const smart = (unfetched?: number) =>
     html(
       report(
-        { origin: "cloud", maxPages: 200, pagesCrawled: 200, capped: true, unfetched },
-        { coverage: { auditedPages: 200, knownPages: 300, carriedFindings: 5 } },
-      ),
+        {
+          origin: "cloud",
+          maxPages: 200,
+          pagesCrawled: 200,
+          capped: true,
+          unfetched,
+        },
+        { coverage: { auditedPages: 200, knownPages: 300, carriedFindings: 5 } }
+      )
     );
 
   test("queued URLs on a smart audit are not called carried", () => {

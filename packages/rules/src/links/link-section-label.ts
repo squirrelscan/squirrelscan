@@ -12,13 +12,19 @@ import {
 export type SectionCounts = LinkSectionCounts;
 
 /** Add one link's section to the counts; unknown and missing add nothing. */
-export function countSection(counts: SectionCounts, section: LinkSection | undefined): void {
+export function countSection(
+  counts: SectionCounts,
+  section: LinkSection | undefined
+): void {
   if (!section || section === "unknown") return;
   counts[section] = (counts[section] ?? 0) + 1;
 }
 
 /** Per source page of one target, in the order the pages were met: its links there and their sections. */
-export type SourceTally = Map<string, { links: number; sections: SectionCounts }>;
+export type SourceTally = Map<
+  string,
+  { links: number; sections: SectionCounts }
+>;
 
 /** Count `links` links (one by default) from `page`; unknown and missing sections add links and no section. */
 export function tallySource(
@@ -30,7 +36,8 @@ export function tallySource(
   let entry = tally.get(page);
   if (!entry) tally.set(page, (entry = { links: 0, sections: {} }));
   entry.links += links;
-  if (section && section !== "unknown") entry.sections[section] = (entry.sections[section] ?? 0) + links;
+  if (section && section !== "unknown")
+    entry.sections[section] = (entry.sections[section] ?? 0) + links;
 }
 
 /**
@@ -49,20 +56,26 @@ export function tallyFields(tally: SourceTally): {
   const sources: CheckItemSource[] = [];
   for (const [page, entry] of tally) {
     mergeSections(sections, entry.sections);
-    for (const section of Object.keys(entry.sections) as (keyof SectionCounts)[]) {
+    for (const section of Object.keys(
+      entry.sections
+    ) as (keyof SectionCounts)[]) {
       regions[section] = (regions[section] ?? 0) + 1;
     }
     sources.push({
       page,
       links: entry.links,
-      ...(Object.keys(entry.sections).length > 0 ? { sections: entry.sections } : {}),
+      ...(Object.keys(entry.sections).length > 0
+        ? { sections: entry.sections }
+        : {}),
     });
   }
   return { sourcePages: [...tally.keys()], sources, sections, regions };
 }
 
 /** `{ regions }` for an item, or nothing when no page placed it in a section (pub#846). */
-export function regionsField(regions: SectionCounts | undefined): { regions?: SectionCounts } {
+export function regionsField(regions: SectionCounts | undefined): {
+  regions?: SectionCounts;
+} {
   return regions && Object.keys(regions).length > 0 ? { regions } : {};
 }
 
@@ -82,13 +95,18 @@ export function pageRegionsField(
 }
 
 /** "label, linked in the footer": the label with where its links sit; the label alone when no section is known. */
-export function withSection(label: string, counts: SectionCounts | undefined): string {
+export function withSection(
+  label: string,
+  counts: SectionCounts | undefined
+): string {
   const phrase = counts ? linkSectionPhrase(counts) : "";
   return phrase ? `${label}, linked ${phrase}` : label;
 }
 
 /** `{ sections }` for an item's `meta`, or nothing when no section is known. */
-export function sectionMeta(counts: SectionCounts | undefined): { sections?: SectionCounts } {
+export function sectionMeta(counts: SectionCounts | undefined): {
+  sections?: SectionCounts;
+} {
   return counts && Object.keys(counts).length > 0 ? { sections: counts } : {};
 }
 
@@ -114,7 +132,8 @@ export function mergeSections(into: SectionCounts, from: SectionCounts): void {
 /** "the footer, the navigation and the breadcrumbs": up to three names, then "and N more". */
 function nameList(names: string[]): string {
   if (names.length <= 1) return names.join("");
-  if (names.length <= 3) return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  if (names.length <= 3)
+    return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   return `${names.slice(0, 3).join(", ")} and ${names.length - 3} more`;
 }
 
@@ -132,7 +151,10 @@ function nameList(names: string[]): string {
  * the page content". `complete` is true when every counted inbound link had a section; without it
  * the phrase drops "only". "" when there is nothing to say.
  */
-export function chromeSectionPhrase(counts: SectionCounts, complete: boolean): string {
+export function chromeSectionPhrase(
+  counts: SectionCounts,
+  complete: boolean
+): string {
   const named = (Object.keys(counts) as (keyof SectionCounts)[])
     .filter((section) => section !== "content" && (counts[section] ?? 0) > 0)
     .sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b));
@@ -163,7 +185,10 @@ export interface ChromeReach {
   /** Distinct source pages with the link in at least one chrome section. */
   pages: number;
   /** Pages per chrome section, most pages first. */
-  sections: Array<{ section: (typeof SITEWIDE_SECTIONS)[number]; pages: number }>;
+  sections: Array<{
+    section: (typeof SITEWIDE_SECTIONS)[number];
+    pages: number;
+  }>;
 }
 
 export function chromeReach(sources: readonly CheckItemSource[]): ChromeReach {
@@ -201,11 +226,15 @@ export function isSitewide(reach: ChromeReach, crawledPages: number): boolean {
  * "2 broken internal links in the site-wide header and footer, each on at least 49 pages". `kind` is "internal"
  * or "external". Counts only the links of this check.
  */
-export function sitewideMessageHead(kind: "internal" | "external", reaches: readonly ChromeReach[]): string {
+export function sitewideMessageHead(
+  kind: "internal" | "external",
+  reaches: readonly ChromeReach[]
+): string {
   const n = reaches.length;
   const totals = new Map<(typeof SITEWIDE_SECTIONS)[number], number>();
   for (const reach of reaches) {
-    for (const { section, pages } of reach.sections) totals.set(section, (totals.get(section) ?? 0) + pages);
+    for (const { section, pages } of reach.sections)
+      totals.set(section, (totals.get(section) ?? 0) + pages);
   }
   const places = [...totals]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -232,7 +261,11 @@ export function chromeSectionOf(link: {
   sectionSource?: string;
   sectionConfidence?: number;
 }): LinkSection | undefined {
-  if (link.sectionSource === "model" && (link.sectionConfidence ?? 0) < CHROME_MIN_CONFIDENCE) return undefined;
+  if (
+    link.sectionSource === "model" &&
+    (link.sectionConfidence ?? 0) < CHROME_MIN_CONFIDENCE
+  )
+    return undefined;
   return link.section;
 }
 

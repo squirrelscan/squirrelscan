@@ -26,12 +26,12 @@
 // "6 images on 3 pages load from upload.wikimedia.org". The message carries no host or
 // count, so one defect keeps one identity across pages.
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { z } from "zod";
 
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { isLoopbackHost, registrableDomain } from "../content/dev-leakage";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /**
  * Image CDNs and site-builder or object storage a site uses on purpose. A host
@@ -194,7 +194,9 @@ export const optionsSchema = z.object({
   check_social_images: z
     .boolean()
     .default(true)
-    .describe("Also report an og:image or twitter:image hosted on another site (info)"),
+    .describe(
+      "Also report an og:image or twitter:image hosted on another site (info)"
+    ),
 });
 
 function hostMatches(host: string, entry: string): boolean {
@@ -216,9 +218,13 @@ function normalizeEntry(entry: string): string {
 }
 
 /** The host and path of an image URL resolved against `base`, or null for a URL that is no network image. */
-function parseImage(raw: string, base: string): { host: string; path: string } | null {
+function parseImage(
+  raw: string,
+  base: string
+): { host: string; path: string } | null {
   const value = raw.trim();
-  if (value.length === 0 || /^(?:data|blob|about|javascript):/i.test(value)) return null;
+  if (value.length === 0 || /^(?:data|blob|about|javascript):/i.test(value))
+    return null;
   try {
     const url = new URL(value, base);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
@@ -248,7 +254,9 @@ function backgroundUrls(style: string): string[] {
   const out: string[] = [];
   for (const decl of style.split(";")) {
     if (!/^\s*background(?:-image)?\s*:/i.test(decl)) continue;
-    for (const m of decl.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s'"]*))\s*\)/gi)) {
+    for (const m of decl.matchAll(
+      /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s'"]*))\s*\)/gi
+    )) {
       const url = m[1] ?? m[2] ?? m[3];
       if (url) out.push(url);
     }
@@ -275,10 +283,20 @@ function connectedHosts(doc: Document, base: string): Set<string> {
     const host = imageHost(raw, base);
     if (host) hosts.add(host);
   };
-  for (const el of doc.querySelectorAll("script[src]")) add(el.getAttribute("src"));
+  for (const el of doc.querySelectorAll("script[src]"))
+    add(el.getAttribute("src"));
   for (const el of doc.querySelectorAll("link[href]")) {
     const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
-    if (rel.some((r) => r === "stylesheet" || r === "preconnect" || r === "dns-prefetch" || r === "preload" || r === "modulepreload")) {
+    if (
+      rel.some(
+        (r) =>
+          r === "stylesheet" ||
+          r === "preconnect" ||
+          r === "dns-prefetch" ||
+          r === "preload" ||
+          r === "modulepreload"
+      )
+    ) {
       add(el.getAttribute("href"));
     }
   }
@@ -312,11 +330,21 @@ export const hotlinkedRule: Rule = {
     if (!pageHost) return { checks: [] };
     // A page on localhost or a loopback address is a dev server: every image host is "another site".
     if (isLoopbackHost(pageHost)) {
-      return { checks: [{ name: "hotlinked-images", status: "skipped", message: "Page is served from a local address" }] };
+      return {
+        checks: [
+          {
+            name: "hotlinked-images",
+            status: "skipped",
+            message: "Page is served from a local address",
+          },
+        ],
+      };
     }
     // Image URLs resolve against `<base href>` when the page sets one.
     let base = pageUrl;
-    const baseHref = (doc as unknown as Document).querySelector("base[href]")?.getAttribute("href");
+    const baseHref = (doc as unknown as Document)
+      .querySelector("base[href]")
+      ?.getAttribute("href");
     if (baseHref) {
       try {
         base = new URL(baseHref, pageUrl).href;
@@ -328,15 +356,28 @@ export const hotlinkedRule: Rule = {
     const firstParty = new Set<string>([registrableDomain(pageHost)]);
     const baseHost = imageHost(ctx.site?.baseUrl ?? "", pageUrl);
     if (baseHost) firstParty.add(registrableDomain(baseHost));
-    const allowed = opts.allowed_hosts.map(normalizeEntry).filter((e) => e.length > 0);
+    const allowed = opts.allowed_hosts
+      .map(normalizeEntry)
+      .filter((e) => e.length > 0);
     const connected = connectedHosts(doc as unknown as Document, base);
 
     /** Whether a host is a third-party host the page has no listed reason to load images from. */
     const isHotlinkHost = (host: string, path = "/"): boolean => {
       if (firstParty.has(registrableDomain(host))) return false;
-      if (matchesAny(host, KNOWN_IMAGE_HOSTS) || matchesAny(host, allowed)) return false;
-      if (matchesAny(host, AVATAR_HOSTS) || matchesAny(host, BADGE_HOSTS) || matchesAny(host, TRACKING_HOSTS)) return false;
-      if (TRACKING_PIXEL_PATHS.some(([h, re]) => hostMatches(host, h) && re.test(path))) return false;
+      if (matchesAny(host, KNOWN_IMAGE_HOSTS) || matchesAny(host, allowed))
+        return false;
+      if (
+        matchesAny(host, AVATAR_HOSTS) ||
+        matchesAny(host, BADGE_HOSTS) ||
+        matchesAny(host, TRACKING_HOSTS)
+      )
+        return false;
+      if (
+        TRACKING_PIXEL_PATHS.some(
+          ([h, re]) => hostMatches(host, h) && re.test(path)
+        )
+      )
+        return false;
       if (connected.has(host)) return false;
       return true;
     };
@@ -349,7 +390,8 @@ export const hotlinkedRule: Rule = {
       // A badge, widget or seal is served live by the other site on purpose.
       if (BADGE_WORDS.test(image.path) || BADGE_WORDS.test(alt)) return true;
       contentImages++;
-      if (isHotlinkHost(image.host, image.path)) perHost.set(image.host, (perHost.get(image.host) ?? 0) + 1);
+      if (isHotlinkHost(image.host, image.path))
+        perHost.set(image.host, (perHost.get(image.host) ?? 0) + 1);
       return true;
     };
 
@@ -370,7 +412,10 @@ export const hotlinkedRule: Rule = {
         if (note(raw, img.getAttribute("alt") ?? "")) break;
       }
     }
-    for (const source of querySelectorAllOutsideNoscript(doc, "picture source")) {
+    for (const source of querySelectorAllOutsideNoscript(
+      doc,
+      "picture source"
+    )) {
       const first = srcsetUrls(source.getAttribute("srcset") ?? "")[0];
       if (first) note(first);
     }
@@ -382,7 +427,9 @@ export const hotlinkedRule: Rule = {
     }
 
     if (perHost.size > 0) {
-      const hosts = [...perHost.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      const hosts = [...perHost.entries()].sort(
+        (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+      );
       const total = hosts.reduce((n, [, c]) => n + c, 0);
       checks.push({
         name: "hotlinked-images",
@@ -395,7 +442,9 @@ export const hotlinkedRule: Rule = {
           label: `${count} image${count === 1 ? "" : "s"}`,
           meta: { images: count },
         })),
-        ...(hosts.length > MAX_ITEMS ? { details: { additional: hosts.length - MAX_ITEMS } } : {}),
+        ...(hosts.length > MAX_ITEMS
+          ? { details: { additional: hosts.length - MAX_ITEMS } }
+          : {}),
       });
     } else if (contentImages > 0) {
       checks.push({
@@ -414,20 +463,26 @@ export const hotlinkedRule: Rule = {
       const hotlinked: Array<{ id: string; label: string }> = [];
       for (const [name, raw] of shared) {
         const image = raw ? parseImage(raw, base) : null;
-        if (image && isHotlinkHost(image.host, image.path)) hotlinked.push({ id: image.host, label: name });
+        if (image && isHotlinkHost(image.host, image.path))
+          hotlinked.push({ id: image.host, label: name });
       }
       if (hotlinked.length > 0) {
         checks.push({
           name: "hotlinked-share-image",
           status: "info",
-          message: "A share image (og:image or twitter:image) loads from another site's server",
+          message:
+            "A share image (og:image or twitter:image) loads from another site's server",
           items: hotlinked,
         });
       }
     }
 
     if (checks.length === 0) {
-      checks.push({ name: "hotlinked-images", status: "info", message: "No content images found" });
+      checks.push({
+        name: "hotlinked-images",
+        status: "info",
+        message: "No content images found",
+      });
     }
     return { checks };
   },

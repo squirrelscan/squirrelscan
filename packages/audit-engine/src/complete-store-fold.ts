@@ -42,10 +42,21 @@
 // with the touched pages in cursor order. {@link aggregateUntouchedCarried} is the
 // reference the store's twin is measured against.
 
-import type { CheckResult, CheckTallies, PageFindingRecord } from "@squirrelscan/core-contracts";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { DEFAULT_FOLD_LIMITS, foldGroupKey, foldOverflowChecks } from "@squirrelscan/rules/fold";
+import type {
+  CheckResult,
+  CheckTallies,
+  PageFindingRecord,
+} from "@squirrelscan/core-contracts";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
+
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import {
+  DEFAULT_FOLD_LIMITS,
+  foldGroupKey,
+  foldOverflowChecks,
+} from "@squirrelscan/rules/fold";
+
+import type { SkippedPassCounts } from "./stream-findings";
 
 import { isRunLocalRuleErrorFinding } from "./merge-core";
 import { reconstructPageRuleChecks } from "./reconstruct";
@@ -61,7 +72,6 @@ import {
   type PageUrlSet,
   type RuleTally,
 } from "./scoring";
-import type { SkippedPassCounts } from "./stream-findings";
 
 /**
  * This audit's complete findings, delivered a page at a time. A yielded array may
@@ -79,7 +89,10 @@ export interface CompleteStoreTallyInput {
    * scored verbatim; findings never carry them). Page-scope rules' checks are
    * ignored here: they are superseded by the complete findings.
    */
-  ruleResults: Record<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }>;
+  ruleResults: Record<
+    string,
+    { meta: RuleRunResult["meta"]; checks: CheckResult[] }
+  >;
   /** Complete per-(page,rule,check,locator) findings, page at a time. */
   findingPages: FindingPageSource;
   /**
@@ -300,7 +313,10 @@ export interface CompleteStoreTallyFold {
    * through {@link addUntouched}. It only claims the rule's tally slot and report
    * class in the position the page would have, so map order matches the full fold.
    */
-  retainUntouchedSample(normalizedUrl: string, carried: readonly CarriedFinding[]): void;
+  retainUntouchedSample(
+    normalizedUrl: string,
+    carried: readonly CarriedFinding[]
+  ): void;
   /**
    * (pub#497) The untouched pages' contribution, computed by the store. Call ONCE,
    * after the last page and sample, before {@link foldShellRules}.
@@ -364,7 +380,9 @@ export function createCompleteStoreTallyFold(
   const crawledTotal = (): number =>
     Math.max(
       crawledUrls.size,
-      Number.isSafeInteger(crawledCount) ? Math.min(Math.max(crawledCount!, 0), REPORT_LIMITS.maxPages) : 0,
+      Number.isSafeInteger(crawledCount)
+        ? Math.min(Math.max(crawledCount!, 0), REPORT_LIMITS.maxPages)
+        : 0
     );
 
   const tallies = new Map<string, RuleTally>();
@@ -378,11 +396,13 @@ export function createCompleteStoreTallyFold(
     }
     return entry;
   };
-  const advisory = (meta: RuleRunResult["meta"]): boolean => meta.severity === "info";
+  const advisory = (meta: RuleRunResult["meta"]): boolean =>
+    meta.severity === "info";
   // (repo#3348) The shell's rules first, in the shell's order, as the sampled
   // path's tallies walk them: the scorer sums in map order.
   if (freshTallies) {
-    for (const [ruleId, r] of Object.entries(ruleResults)) entryFor(ruleId, r.meta);
+    for (const [ruleId, r] of Object.entries(ruleResults))
+      entryFor(ruleId, r.meta);
   }
 
   // Pages this run has a finding on, per rule — the fresh-clean denominator's
@@ -410,8 +430,12 @@ export function createCompleteStoreTallyFold(
     let k = perPageMemo.get(ruleId);
     if (k === undefined) {
       k = carriedChecksPerPageFor(
-        { completeStore: true, completeTallies: freshTallies, perPageTallies: {} },
-        ruleId,
+        {
+          completeStore: true,
+          completeTallies: freshTallies,
+          perPageTallies: {},
+        },
+        ruleId
       );
       perPageMemo.set(ruleId, k);
     }
@@ -422,12 +446,20 @@ export function createCompleteStoreTallyFold(
   // (#1876) The report's carried sample, taken from the SAME replayed checks the
   // tally consumes — building it here rather than in a second pass is what stops a
   // carried finding's stored payload being JSON-parsed twice.
-  const carriedReport = retainCarriedChecks ? new Map<string, CarriedRuleReport>() : undefined;
+  const carriedReport = retainCarriedChecks
+    ? new Map<string, CarriedRuleReport>()
+    : undefined;
 
-  const foldPage: CompleteStoreTallyFold["foldPage"] = (normalizedUrl, fresh, carried) => {
+  const foldPage: CompleteStoreTallyFold["foldPage"] = (
+    normalizedUrl,
+    fresh,
+    carried
+  ) => {
     // (repo#3348) With the tallies, this run's findings are already counted there.
     const freshByRule =
-      !freshTallies && fresh.length > 0 ? reconstructPageRuleChecks(fresh) : undefined;
+      !freshTallies && fresh.length > 0
+        ? reconstructPageRuleChecks(fresh)
+        : undefined;
     // Carried findings for this page, grouped per rule. Bounded by ONE page.
     let carriedByRule: Map<string, CarriedFinding[]> | undefined;
     for (const f of carried) {
@@ -444,11 +476,19 @@ export function createCompleteStoreTallyFold(
       for (const ruleId of carriedByRule.keys()) {
         carriedRuleIds.add(ruleId);
         if (isCarriedPage) {
-          carriedDirtyPagesByRule.set(ruleId, (carriedDirtyPagesByRule.get(ruleId) ?? 0) + 1);
+          carriedDirtyPagesByRule.set(
+            ruleId,
+            (carriedDirtyPagesByRule.get(ruleId) ?? 0) + 1
+          );
           const k = checksPerPage(ruleId);
           if (k > 1) {
-            const names = new Set(carriedByRule.get(ruleId)!.map((f) => f.checkName)).size;
-            carriedDirtyPassesByRule.set(ruleId, (carriedDirtyPassesByRule.get(ruleId) ?? 0) + k - names);
+            const names = new Set(
+              carriedByRule.get(ruleId)!.map((f) => f.checkName)
+            ).size;
+            carriedDirtyPassesByRule.set(
+              ruleId,
+              (carriedDirtyPassesByRule.get(ruleId) ?? 0) + k - names
+            );
           }
         }
       }
@@ -463,7 +503,8 @@ export function createCompleteStoreTallyFold(
     const isRemoved = removedUrls?.has(normalizedUrl) ?? false;
 
     const ruleIds = new Set<string>(freshByRule?.keys() ?? []);
-    if (carriedByRule) for (const ruleId of carriedByRule.keys()) ruleIds.add(ruleId);
+    if (carriedByRule)
+      for (const ruleId of carriedByRule.keys()) ruleIds.add(ruleId);
 
     for (const ruleId of ruleIds) {
       const meta = metaOf(ruleId);
@@ -473,12 +514,17 @@ export function createCompleteStoreTallyFold(
       if (meta?.scope !== "page") continue;
       const freshChecks = isRemoved ? undefined : freshByRule?.get(ruleId);
       const carriedForRule = carriedByRule?.get(ruleId);
-      const carriedChecks = carriedForRule?.map((f) => carriedFindingToCheck(f, normalizedUrl));
+      const carriedChecks = carriedForRule?.map((f) =>
+        carriedFindingToCheck(f, normalizedUrl)
+      );
       if (carriedChecks) markCarriedContinuations(carriedChecks);
       if (requireAggregatableCarried && carriedChecks && carriedForRule) {
-        carriedForRule.forEach((f, i) => assertAggregatable(f.payload, carriedChecks[i]!, normalizedUrl));
+        carriedForRule.forEach((f, i) =>
+          assertAggregatable(f.payload, carriedChecks[i]!, normalizedUrl)
+        );
       }
-      if (carriedReport && carriedChecks) retainCarried(carriedReport, ruleId, carriedChecks);
+      if (carriedReport && carriedChecks)
+        retainCarried(carriedReport, ruleId, carriedChecks);
       // (repo#3348) With the tallies, a carry on a crawled page is one its check
       // did not evaluate there (the caller leaves out the ones the tallies count),
       // so it scores beside them.
@@ -493,30 +539,32 @@ export function createCompleteStoreTallyFold(
     }
   };
 
-  const retainUntouchedSample: CompleteStoreTallyFold["retainUntouchedSample"] = (
-    normalizedUrl,
-    carried
-  ) => {
-    // The same rule filter and grouping as `foldPage`, so the rules the page
-    // claims, and the order it claims them in, are the ones a full fold of the
-    // page would have.
-    const byRule = new Map<string, CarriedFinding[]>();
-    for (const f of carried) {
-      if (metaOf(f.ruleId)?.scope !== "page") continue;
-      const list = byRule.get(f.ruleId);
-      if (list) list.push(f);
-      else byRule.set(f.ruleId, [f]);
-    }
-    for (const [ruleId, findings] of byRule) {
-      carriedRuleIds.add(ruleId);
-      // Claims the tally's slot where the page's first carried check would have:
-      // the tally map's order is the order the scorer walks it in.
-      entryFor(ruleId, metaOf(ruleId)!);
-      const checks = findings.map((f) => carriedFindingToCheck(f, normalizedUrl));
-      findings.forEach((f, i) => assertAggregatable(f.payload, checks[i]!, normalizedUrl));
-      if (carriedReport) retainCarried(carriedReport, ruleId, checks, false);
-    }
-  };
+  const retainUntouchedSample: CompleteStoreTallyFold["retainUntouchedSample"] =
+    (normalizedUrl, carried) => {
+      // The same rule filter and grouping as `foldPage`, so the rules the page
+      // claims, and the order it claims them in, are the ones a full fold of the
+      // page would have.
+      const byRule = new Map<string, CarriedFinding[]>();
+      for (const f of carried) {
+        if (metaOf(f.ruleId)?.scope !== "page") continue;
+        const list = byRule.get(f.ruleId);
+        if (list) list.push(f);
+        else byRule.set(f.ruleId, [f]);
+      }
+      for (const [ruleId, findings] of byRule) {
+        carriedRuleIds.add(ruleId);
+        // Claims the tally's slot where the page's first carried check would have:
+        // the tally map's order is the order the scorer walks it in.
+        entryFor(ruleId, metaOf(ruleId)!);
+        const checks = findings.map((f) =>
+          carriedFindingToCheck(f, normalizedUrl)
+        );
+        findings.forEach((f, i) =>
+          assertAggregatable(f.payload, checks[i]!, normalizedUrl)
+        );
+        if (carriedReport) retainCarried(carriedReport, ruleId, checks, false);
+      }
+    };
 
   const addUntouched: CompleteStoreTallyFold["addUntouched"] = (aggregate) => {
     for (const r of aggregate.rules) {
@@ -569,7 +617,9 @@ export function createCompleteStoreTallyFold(
       // exactly while the total stays safe. Past that they need not, and nine
       // million rows of one class would be the only way there.
       if (counts.total + c.occurrences > Number.MAX_SAFE_INTEGER) {
-        throw new Error(`untouched carried class ${c.ruleId} ${c.checkName} totals past the safe integer range`);
+        throw new Error(
+          `untouched carried class ${c.ruleId} ${c.checkName} totals past the safe integer range`
+        );
       }
       counts.total += c.occurrences;
       counts.members += c.members;
@@ -586,7 +636,9 @@ export function createCompleteStoreTallyFold(
     for (const [ruleId, entry] of carriedReport) {
       for (const counts of entry.classes.values()) {
         if (counts.members < counts.retainedMembers) {
-          throw new Error(`untouched carried totals for ${ruleId} miss rows the sample holds`);
+          throw new Error(
+            `untouched carried totals for ${ruleId} miss rows the sample holds`
+          );
         }
       }
     }
@@ -597,9 +649,11 @@ export function createCompleteStoreTallyFold(
    *  CheckResults, so a partial re-audit of a large site cannot materialize
    *  (page-scope rules × carried pages) objects. */
   const cleanCarriedPasses = (ruleId: string): number => {
-    const clean = carriedPageUrls.size - (carriedDirtyPagesByRule.get(ruleId) ?? 0);
+    const clean =
+      carriedPageUrls.size - (carriedDirtyPagesByRule.get(ruleId) ?? 0);
     const k = checksPerPage(ruleId);
-    const passes = k <= 1 ? clean : k * clean + (carriedDirtyPassesByRule.get(ruleId) ?? 0);
+    const passes =
+      k <= 1 ? clean : k * clean + (carriedDirtyPassesByRule.get(ruleId) ?? 0);
     // (pub#2099) No pass for a check a carried page's last crawl did not evaluate.
     // The record never names a check the page holds a row for, so it comes off
     // whole, the page's rows unread (an untouched page is only an aggregate here).
@@ -615,7 +669,12 @@ export function createCompleteStoreTallyFold(
         const { tally } = entryFor(ruleId, r.meta);
         addTally(tally, freshTally(freshTallies[ruleId]));
         if (r.meta.scope === "page") {
-          addChecksToTally(tally, [], advisory(r.meta), cleanCarriedPasses(ruleId));
+          addChecksToTally(
+            tally,
+            [],
+            advisory(r.meta),
+            cleanCarriedPasses(ruleId)
+          );
         }
       }
       return;
@@ -625,7 +684,12 @@ export function createCompleteStoreTallyFold(
         // Site-scope rule: findings never carry these (flattenChecks skips
         // no-pageUrl checks), so it is scored from the shell's checks verbatim —
         // the same ones reconstructCompleteResults passes through.
-        addChecksToTally(entryFor(ruleId, r.meta).tally, r.checks, advisory(r.meta), 0);
+        addChecksToTally(
+          entryFor(ruleId, r.meta).tally,
+          r.checks,
+          advisory(r.meta),
+          0
+        );
         continue;
       }
       const entry = entryFor(ruleId, r.meta);
@@ -661,7 +725,12 @@ export function createCompleteStoreTallyFold(
       if (ruleResults[ruleId]) continue; // already handled by foldShellRules
       const meta = metaOf(ruleId);
       if (meta?.scope !== "page") continue;
-      addChecksToTally(entryFor(ruleId, meta).tally, [], advisory(meta), cleanCarriedPasses(ruleId));
+      addChecksToTally(
+        entryFor(ruleId, meta).tally,
+        [],
+        advisory(meta),
+        cleanCarriedPasses(ruleId)
+      );
     }
     return tallies;
   };
@@ -671,17 +740,25 @@ export function createCompleteStoreTallyFold(
   let collapsed: Map<string, readonly CheckResult[]> | undefined;
   const carriedUnion: CompleteStoreTallyFold["carriedUnion"] = () => {
     const checksByRule = (collapsed ??= collapseCarriedReport(
-      carriedReport ?? new Map<string, CarriedRuleReport>(),
+      carriedReport ?? new Map<string, CarriedRuleReport>()
     ));
     return {
       ruleIds: () => carriedRuleIds,
       checksFor: (ruleId) => checksByRule.get(ruleId) ?? EMPTY_CHECKS,
-      dirtyCarriedPageCount: (ruleId) => carriedDirtyPagesByRule.get(ruleId) ?? 0,
+      dirtyCarriedPageCount: (ruleId) =>
+        carriedDirtyPagesByRule.get(ruleId) ?? 0,
       carriedPasses: cleanCarriedPasses,
     };
   };
 
-  return { foldPage, retainUntouchedSample, addUntouched, foldShellRules, finish, carriedUnion };
+  return {
+    foldPage,
+    retainUntouchedSample,
+    addUntouched,
+    foldShellRules,
+    finish,
+    carriedUnion,
+  };
 }
 
 const EMPTY_CHECKS: readonly CheckResult[] = [];
@@ -757,7 +834,9 @@ interface CarriedClassCounts {
 /** What a check contributes to an occurrence total: its own count, or itself. */
 function occurrencesOf(check: CheckResult): number {
   const own = check.details?.occurrences;
-  return typeof own === "number" && Number.isFinite(own) && own > 0 ? Math.floor(own) : 1;
+  return typeof own === "number" && Number.isFinite(own) && own > 0
+    ? Math.floor(own)
+    : 1;
 }
 
 interface CarriedRuleReport {
@@ -789,7 +868,11 @@ function countClassMember(
   counts.members += 1;
   if (firstOnPage) counts.pages += 1;
   const ownFloor = check.details?.pagesTruncated;
-  if (typeof ownFloor === "number" && Number.isFinite(ownFloor) && ownFloor > counts.pagesFloor) {
+  if (
+    typeof ownFloor === "number" &&
+    Number.isFinite(ownFloor) &&
+    ownFloor > counts.pagesFloor
+  ) {
     counts.pagesFloor = Math.floor(ownFloor);
   }
   if (check.provenance !== "carried") counts.allCarried = false;
@@ -840,7 +923,10 @@ function retainCarried(
     // the whole class would vanish from the report while its findings stayed open
     // in the store. The bound becomes max(budget, distinct issue classes), and the
     // classes of one rule are its distinct check names.
-    if (counts.retainedMembers > 0 && entry.checks.length >= CARRIED_REPORT_SAMPLE_PER_RULE) {
+    if (
+      counts.retainedMembers > 0 &&
+      entry.checks.length >= CARRIED_REPORT_SAMPLE_PER_RULE
+    ) {
       continue;
     }
     entry.checks.push(check);
@@ -874,7 +960,7 @@ function retainCarried(
  *     over the pre-warm budget.
  */
 function collapseCarriedReport(
-  report: Map<string, CarriedRuleReport>,
+  report: Map<string, CarriedRuleReport>
 ): Map<string, readonly CheckResult[]> {
   const out = new Map<string, readonly CheckResult[]>();
   for (const [ruleId, entry] of report) {
@@ -912,7 +998,8 @@ function collapseCarriedReport(
       ...DEFAULT_FOLD_LIMITS,
       maxChecks: entry.classes.size,
     });
-    for (const aggregate of folded) reconcileCarriedAggregate(aggregate, entry.classes);
+    for (const aggregate of folded)
+      reconcileCarriedAggregate(aggregate, entry.classes);
     out.set(ruleId, folded);
   }
   return out;
@@ -956,10 +1043,11 @@ function reconcileCarriedAggregate(
     aggregate.details = { ...(aggregate.details ?? {}), aggregated: true };
     const occurrences = occurrencesOf(aggregate);
     if (occurrences > 1) {
-      aggregate.message = `${aggregate.message} (+${occurrences - 1} more pages)`.slice(
-        0,
-        REPORT_LIMITS.maxMediumString
-      );
+      aggregate.message =
+        `${aggregate.message} (+${occurrences - 1} more pages)`.slice(
+          0,
+          REPORT_LIMITS.maxMediumString
+        );
     }
   }
 
@@ -970,7 +1058,8 @@ function reconcileCarriedAggregate(
   }
   if (counts.allCarried) {
     aggregate.provenance = "carried";
-    if (counts.lastSeenAt !== undefined) aggregate.lastSeenAt = counts.lastSeenAt;
+    if (counts.lastSeenAt !== undefined)
+      aggregate.lastSeenAt = counts.lastSeenAt;
     return;
   }
   delete aggregate.provenance;
@@ -1043,7 +1132,9 @@ const EMPTY_ROWS: readonly PageFindingRecord[] = [];
  * one name on a page. Each count is held to the safe integer range only so that
  * no sum of them can reach Infinity and turn the score into NaN.
  */
-export function freshTally(byName: CheckTallies[string] | undefined): IssueTally {
+export function freshTally(
+  byName: CheckTallies[string] | undefined
+): IssueTally {
   const tally = emptyTally();
   if (!byName) return tally;
   const count = (n: unknown): number =>
@@ -1069,7 +1160,9 @@ export function freshTally(byName: CheckTallies[string] | undefined): IssueTally
  * was credited before. No page count goes in: a body's own list of crawled pages
  * can be clipped, the tallies cannot.
  */
-export function checksPerPageFromTallies(byName: CheckTallies[string] | undefined): number {
+export function checksPerPageFromTallies(
+  byName: CheckTallies[string] | undefined
+): number {
   if (!byName) return 1;
   let total = 0;
   let busiest = 0;
@@ -1094,10 +1187,13 @@ export function carriedChecksPerPageFor(
     completeTallies: CheckTallies | undefined;
     perPageTallies: CheckTallies;
   },
-  ruleId: string,
+  ruleId: string
 ): number {
-  if (!tallies.completeStore) return checksPerPageFromTallies(tallies.perPageTallies[ruleId]);
-  return tallies.completeTallies ? checksPerPageFromTallies(tallies.completeTallies[ruleId]) : 1;
+  if (!tallies.completeStore)
+    return checksPerPageFromTallies(tallies.perPageTallies[ruleId]);
+  return tallies.completeTallies
+    ? checksPerPageFromTallies(tallies.completeTallies[ruleId])
+    : 1;
 }
 
 /** Split a batch of findings into per-page groups, preserving arrival order. */
@@ -1157,10 +1253,16 @@ function payloadItemsAggregatable(payload: string | null | undefined): boolean {
 
 function aggregatableCheck(check: CheckResult): boolean {
   const occurrences = check.details?.occurrences;
-  return !(typeof occurrences === "number" && occurrences >= UNTOUCHED_MAX_OCCURRENCES);
+  return !(
+    typeof occurrences === "number" && occurrences >= UNTOUCHED_MAX_OCCURRENCES
+  );
 }
 
-function assertAggregatable(payload: string | null | undefined, check: CheckResult, normalizedUrl: string): void {
+function assertAggregatable(
+  payload: string | null | undefined,
+  check: CheckResult,
+  normalizedUrl: string
+): void {
   if (!payloadItemsAggregatable(payload) || !aggregatableCheck(check)) {
     throw new Error(
       `carried finding on ${normalizedUrl} is outside the untouched aggregate's exact domain; the store must stream every page`
@@ -1226,7 +1328,13 @@ export function aggregateUntouchedCarried(
   const rules = new Map<string, UntouchedRuleTotals>();
   const classes = new Map<
     string,
-    { totals: Omit<UntouchedClassTotals, "occurrences" | "members" | "pages" | "pagesFloor" | "lastSeenAt">; counts: CarriedClassCounts }
+    {
+      totals: Omit<
+        UntouchedClassTotals,
+        "occurrences" | "members" | "pages" | "pagesFloor" | "lastSeenAt"
+      >;
+      counts: CarriedClassCounts;
+    }
   >();
   /** Rows seen per rule so far: the sample takes the first CAP of them. */
   const seenPerRule = new Map<string, number>();
@@ -1255,16 +1363,30 @@ export function aggregateUntouchedCarried(
 
     const sampled = new Set<number>();
     for (const [ruleId, indices] of byRule) {
-      const findings = indices.map((i) => untouchedCarriedFinding(rows[i]!, neverRendered));
-      const checks = findings.map((f) => carriedFindingToCheck(f, page.normalizedUrl));
+      const findings = indices.map((i) =>
+        untouchedCarriedFinding(rows[i]!, neverRendered)
+      );
+      const checks = findings.map((f) =>
+        carriedFindingToCheck(f, page.normalizedUrl)
+      );
       markCarriedContinuations(checks);
-      findings.forEach((f, i) => assertAggregatable(f.payload, checks[i]!, page.normalizedUrl));
+      findings.forEach((f, i) =>
+        assertAggregatable(f.payload, checks[i]!, page.normalizedUrl)
+      );
 
       const tally = emptyTally();
       addChecksToTally(tally, checks, false, 0);
       let totals = rules.get(ruleId);
       if (!totals) {
-        totals = { ruleId, failed: 0, failUnits: 0, warnings: 0, warnUnits: 0, activePages: 0, activeChecks: 0 };
+        totals = {
+          ruleId,
+          failed: 0,
+          failUnits: 0,
+          warnings: 0,
+          warnUnits: 0,
+          activePages: 0,
+          activeChecks: 0,
+        };
         rules.set(ruleId, totals);
       }
       totals.failed += tally.failed;
@@ -1273,7 +1395,8 @@ export function aggregateUntouchedCarried(
       totals.warnUnits += tally.warnUnits;
       if (page.active) {
         totals.activePages += 1;
-        totals.activeChecks = (totals.activeChecks ?? 0) + new Set(checks.map((c) => c.name)).size;
+        totals.activeChecks =
+          (totals.activeChecks ?? 0) + new Set(checks.map((c) => c.name)).size;
       }
 
       const pageClasses = new Set<string>();
@@ -1289,7 +1412,8 @@ export function aggregateUntouchedCarried(
               ruleId,
               checkName: check.name,
               status: check.status === "fail" ? "fail" : "warn",
-              provenance: check.provenance === "unrendered" ? "unrendered" : "carried",
+              provenance:
+                check.provenance === "unrendered" ? "unrendered" : "carried",
               foldKey: typeof foldKey === "string" ? foldKey : "",
             },
             counts: emptyClassCounts(),
@@ -1301,7 +1425,8 @@ export function aggregateUntouchedCarried(
 
         const seen = seenPerRule.get(ruleId) ?? 0;
         seenPerRule.set(ruleId, seen + 1);
-        if (seen < CARRIED_REPORT_SAMPLE_PER_RULE || firstOfClass) sampled.add(indices[k]!);
+        if (seen < CARRIED_REPORT_SAMPLE_PER_RULE || firstOfClass)
+          sampled.add(indices[k]!);
       }
     }
 
@@ -1325,7 +1450,9 @@ export function aggregateUntouchedCarried(
         members: counts.members,
         pages: counts.pages,
         pagesFloor: counts.pagesFloor,
-        ...(counts.lastSeenAt !== undefined ? { lastSeenAt: counts.lastSeenAt } : {}),
+        ...(counts.lastSeenAt !== undefined
+          ? { lastSeenAt: counts.lastSeenAt }
+          : {}),
       })),
     },
     sample,

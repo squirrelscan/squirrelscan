@@ -8,11 +8,16 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+import type {
+  RedirectChain,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "../src/storage/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
 import { isInScope } from "../src/frontier";
-import type { RedirectChain, ResponseHeaders, SecurityHeaders } from "../src/storage/types";
 
 const ORIGIN = "https://example.com";
 const THIRD = "https://third.example.net";
@@ -21,16 +26,24 @@ describe("isInScope: include narrows within host scope (#347)", () => {
   const base = { baseUrl: ORIGIN, exclude: [] as string[] };
 
   test("a path-only include does not admit a third-party host", () => {
-    const d = isInScope(`${THIRD}/blog/post`, { ...base, include: ["/blog/*"] });
+    const d = isInScope(`${THIRD}/blog/post`, {
+      ...base,
+      include: ["/blog/*"],
+    });
     expect(d).toEqual({ allowed: false, reason: "cross_domain" });
   });
 
   test("`/*` no longer means follow every link anywhere", () => {
-    expect(isInScope(`${THIRD}/anything`, { ...base, include: ["/*"] }).allowed).toBe(false);
+    expect(
+      isInScope(`${THIRD}/anything`, { ...base, include: ["/*"] }).allowed
+    ).toBe(false);
   });
 
   test("negative control: the same path on the base host is admitted", () => {
-    expect(isInScope(`${ORIGIN}/blog/post`, { ...base, include: ["/blog/*"] }).allowed).toBe(true);
+    expect(
+      isInScope(`${ORIGIN}/blog/post`, { ...base, include: ["/blog/*"] })
+        .allowed
+    ).toBe(true);
   });
 
   test("a path outside the include list is still not_included", () => {
@@ -39,29 +52,45 @@ describe("isInScope: include narrows within host scope (#347)", () => {
   });
 
   test("the www host of an apex base stays in scope under a path-only include", () => {
-    const d = isInScope("https://www.example.com/blog/a", { ...base, include: ["/blog/*"] });
+    const d = isInScope("https://www.example.com/blog/a", {
+      ...base,
+      include: ["/blog/*"],
+    });
     expect(d.allowed).toBe(true);
   });
 
   test("an absolute-URL include still reaches the host it names", () => {
-    const d = isInScope(`${THIRD}/docs/a`, { ...base, include: [`${THIRD}/docs/*`] });
+    const d = isInScope(`${THIRD}/docs/a`, {
+      ...base,
+      include: [`${THIRD}/docs/*`],
+    });
     expect(d.allowed).toBe(true);
   });
 
   test("an absolute-URL include admits only what it matches", () => {
-    const d = isInScope(`${THIRD}/other`, { ...base, include: [`${THIRD}/docs/*`] });
+    const d = isInScope(`${THIRD}/other`, {
+      ...base,
+      include: [`${THIRD}/docs/*`],
+    });
     expect(d).toEqual({ allowed: false, reason: "not_included" });
   });
 
   test("allowedDomains is honoured alongside a path-only include", () => {
-    const opts = { ...base, include: ["/blog/*"], allowedDomains: ["example.net"] };
+    const opts = {
+      ...base,
+      include: ["/blog/*"],
+      allowedDomains: ["example.net"],
+    };
     // Inside allowedDomains and matching the include: admitted.
     expect(isInScope(`${THIRD}/blog/post`, opts).allowed).toBe(true);
     // Matching the include but outside allowedDomains: refused.
     const d = isInScope("https://elsewhere.test/blog/post", opts);
     expect(d).toEqual({ allowed: false, reason: "cross_domain" });
     // Inside allowedDomains but outside the include: still narrowed.
-    expect(isInScope(`${THIRD}/about`, opts)).toEqual({ allowed: false, reason: "not_included" });
+    expect(isInScope(`${THIRD}/about`, opts)).toEqual({
+      allowed: false,
+      reason: "not_included",
+    });
   });
 
   test("an absolute include is vetoed by an allowedDomains that does not list its host", () => {
@@ -78,7 +107,10 @@ describe("isInScope: include narrows within host scope (#347)", () => {
   });
 
   test("negative control: no allowedDomains, the same absolute include is admitted", () => {
-    const d = isInScope(`${THIRD}/docs/a`, { ...base, include: [`${THIRD}/docs/*`] });
+    const d = isInScope(`${THIRD}/docs/a`, {
+      ...base,
+      include: [`${THIRD}/docs/*`],
+    });
     expect(d).toEqual({ allowed: true });
     const empty = isInScope(`${THIRD}/docs/a`, {
       ...base,
@@ -100,7 +132,9 @@ describe("isInScope: include narrows within host scope (#347)", () => {
   test("a mixed list: a URL both a path-only and an absolute pattern match", () => {
     const include = ["/blog/*", `${THIRD}/blog/*`];
     // No allowedDomains: the absolute pattern is the explicit consent.
-    expect(isInScope(`${THIRD}/blog/post`, { ...base, include }).allowed).toBe(true);
+    expect(isInScope(`${THIRD}/blog/post`, { ...base, include }).allowed).toBe(
+      true
+    );
     // allowedDomains that omits the host vetoes it, naming the absolute pattern.
     const vetoed = isInScope(`${THIRD}/blog/post`, {
       ...base,
@@ -194,7 +228,11 @@ function buildFetcher(fetched: string[]): CrawlFetcher {
         loadTime: 1,
         ttfb: 1,
         downloadTime: 1,
-        headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html", setCookie: null },
+        headers: {
+          ...EMPTY_RESPONSE_HEADERS,
+          contentType: "text/html",
+          setCookie: null,
+        },
         securityHeaders: EMPTY_SECURITY_HEADERS,
         contentType: "text/html",
         body,
@@ -223,15 +261,19 @@ async function runCrawl(config: Partial<CrawlerConfig>): Promise<string[]> {
   return (await runCrawlWithWarnings(config)).fetched;
 }
 
-async function runCrawlWithWarnings(
-  config: Partial<CrawlerConfig>,
-): Promise<{ fetched: string[]; warnings: { code: string; message: string }[] }> {
+async function runCrawlWithWarnings(config: Partial<CrawlerConfig>): Promise<{
+  fetched: string[];
+  warnings: { code: string; message: string }[];
+}> {
   const fetched: string[] = [];
   const warnings: { code: string; message: string }[] = [];
   const fetcher = buildFetcher(fetched);
   await Effect.runPromise(
     Effect.gen(function* () {
-      const crawler = yield* createCrawler({ fetcher, config: { ...BASE_CONFIG, ...config } });
+      const crawler = yield* createCrawler({
+        fetcher,
+        config: { ...BASE_CONFIG, ...config },
+      });
       // Subscribed before start(), or the warning is published to nobody.
       const collector = yield* Stream.runForEach(
         crawler.events.pipe(Stream.takeUntil((e) => e.type === "completed")),
@@ -240,12 +282,12 @@ async function runCrawlWithWarnings(
             if (event.type === "warning") {
               warnings.push({ code: event.code, message: event.message });
             }
-          }),
+          })
       ).pipe(Effect.fork);
       yield* Effect.yieldNow();
       yield* crawler.start(ORIGIN);
       yield* Fiber.join(collector);
-    }),
+    })
   );
   return { fetched, warnings };
 }
@@ -266,8 +308,14 @@ describe("crawl with a path-only include (#347)", () => {
             : (input as Request).url;
       const res =
         url === `${ORIGIN}/sitemap.xml`
-          ? new Response(SITEMAP, { status: 200, headers: { "content-type": "application/xml" } })
-          : new Response("", { status: 404, headers: { "content-type": "text/plain" } });
+          ? new Response(SITEMAP, {
+              status: 200,
+              headers: { "content-type": "application/xml" },
+            })
+          : new Response("", {
+              status: 404,
+              headers: { "content-type": "text/plain" },
+            });
       Object.defineProperty(res, "url", { value: url, configurable: true });
       return Promise.resolve(res);
     }) as typeof globalThis.fetch;
@@ -290,7 +338,9 @@ describe("crawl with a path-only include (#347)", () => {
   });
 
   test("an absolute-URL include still reaches the third-party host it names", async () => {
-    const fetched = await runCrawl({ include: ["/", "/blog/*", `${THIRD}/blog/*`] });
+    const fetched = await runCrawl({
+      include: ["/", "/blog/*", `${THIRD}/blog/*`],
+    });
     expect(fetched).toContain(`${THIRD}/blog/theirs`);
   });
 
@@ -302,7 +352,9 @@ describe("crawl with a path-only include (#347)", () => {
     });
     expect(fetched).toContain(`${ORIGIN}/blog/own`);
     expect(fetched).not.toContain(`${THIRD}/blog/theirs`);
-    const vetoes = warnings.filter((w) => w.code === "include-vetoed-by-allowed-domains");
+    const vetoes = warnings.filter(
+      (w) => w.code === "include-vetoed-by-allowed-domains"
+    );
     expect(vetoes).toHaveLength(1);
     expect(vetoes[0]?.message).toContain(`${THIRD}/blog/*`);
     expect(vetoes[0]?.message).toContain("third.example.net");
@@ -313,7 +365,9 @@ describe("crawl with a path-only include (#347)", () => {
       include: ["/", "/blog/*", `${THIRD}/blog/*`],
     });
     expect(fetched).toContain(`${THIRD}/blog/theirs`);
-    expect(warnings.filter((w) => w.code === "include-vetoed-by-allowed-domains")).toEqual([]);
+    expect(
+      warnings.filter((w) => w.code === "include-vetoed-by-allowed-domains")
+    ).toEqual([]);
   });
 
   test("allowedDomains admits the third-party host under the same include", async () => {
@@ -332,38 +386,56 @@ describe("isInScope: allowedDomains keeps the audited port", () => {
 
   test("another port on an allowed host is out of scope", () => {
     const allowedDomains = ["example.com"];
-    expect(isInScope("http://example.com:6379/", { ...scope, allowedDomains })).toEqual({
+    expect(
+      isInScope("http://example.com:6379/", { ...scope, allowedDomains })
+    ).toEqual({
       allowed: false,
       reason: "cross_domain",
     });
-    expect(isInScope("https://example.com:8443/x", { ...scope, allowedDomains }).allowed).toBe(
-      false,
-    );
+    expect(
+      isInScope("https://example.com:8443/x", { ...scope, allowedDomains })
+        .allowed
+    ).toBe(false);
     // The default ports stay: an http link to the https site is the same site.
-    expect(isInScope("https://www.example.com/", { ...scope, allowedDomains }).allowed).toBe(true);
-    expect(isInScope("http://example.com/a", { ...scope, allowedDomains }).allowed).toBe(true);
+    expect(
+      isInScope("https://www.example.com/", { ...scope, allowedDomains })
+        .allowed
+    ).toBe(true);
+    expect(
+      isInScope("http://example.com/a", { ...scope, allowedDomains }).allowed
+    ).toBe(true);
     // A default port named on the other scheme is not a default port.
-    expect(isInScope("http://example.com:443/", { ...scope, allowedDomains }).allowed).toBe(false);
+    expect(
+      isInScope("http://example.com:443/", { ...scope, allowedDomains }).allowed
+    ).toBe(false);
     // An absolute include cannot widen it: the allowlist is a hard allowlist.
     expect(
       isInScope("https://example.com:8443/x", {
         ...scope,
         include: ["https://example.com:8443/*"],
         allowedDomains,
-      }).allowed,
+      }).allowed
     ).toBe(false);
   });
 
   test("a site on its own port keeps that port, and only that one", () => {
-    const own = { ...scope, baseUrl: "https://example.com:8443/", allowedDomains: ["example.com"] };
+    const own = {
+      ...scope,
+      baseUrl: "https://example.com:8443/",
+      allowedDomains: ["example.com"],
+    };
     expect(isInScope("https://example.com:8443/a", own).allowed).toBe(true);
     expect(isInScope("https://example.com/a", own).allowed).toBe(false);
   });
 
   test("no change without allowedDomains, where host:port already decides", () => {
-    expect(isInScope("http://example.com:6379/", { ...scope, allowedDomains: [] }).allowed).toBe(
-      false,
-    );
-    expect(isInScope("https://example.com/b", { ...scope, allowedDomains: [] }).allowed).toBe(true);
+    expect(
+      isInScope("http://example.com:6379/", { ...scope, allowedDomains: [] })
+        .allowed
+    ).toBe(false);
+    expect(
+      isInScope("https://example.com/b", { ...scope, allowedDomains: [] })
+        .allowed
+    ).toBe(true);
   });
 });

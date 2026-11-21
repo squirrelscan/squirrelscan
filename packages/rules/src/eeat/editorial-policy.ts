@@ -1,9 +1,9 @@
 // eeat/editorial-policy - Editorial and content policy pages
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const editorialPolicyRule: Rule = {
   meta: {
@@ -20,7 +20,9 @@ export const editorialPolicyRule: Rule = {
     // Editorial / fact-checking policies are an authority signal for news and
     // content publishers; noise for SaaS / ecommerce / portfolios. Gate to
     // editorial site types. Offline / no-metadata runs as today.
-    appliesWhen: { siteTypes: ["news", "blog", "healthcare_provider", "education"] },
+    appliesWhen: {
+      siteTypes: ["news", "blog", "healthcare_provider", "education"],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {

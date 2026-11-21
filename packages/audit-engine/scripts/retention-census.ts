@@ -49,7 +49,10 @@ function benchConfig(): Config {
     external_links: { ...base.external_links, enabled: false },
     integrity: {
       ...base.integrity,
-      soft404_confirm: { ...(base.integrity?.soft404_confirm ?? {}), enabled: false },
+      soft404_confirm: {
+        ...(base.integrity?.soft404_confirm ?? {}),
+        enabled: false,
+      },
     },
   } as Config;
 }
@@ -58,19 +61,21 @@ function benchConfig(): Config {
 function sizeOf(value: unknown): number {
   const seen = new WeakSet<object>();
   try {
-    return JSON.stringify(value, (key, v) => {
-      // A linkedom Document would serialize the whole tree; it is also exactly
-      // what this pipeline is supposed to have dropped, so report its presence
-      // rather than its size.
-      if (key === "document") return v == null ? null : "<LIVE DOCUMENT>";
-      if (typeof v === "object" && v !== null) {
-        if (seen.has(v as object)) return "<cycle>";
-        seen.add(v as object);
-        if (v instanceof Map) return Object.fromEntries(v);
-        if (v instanceof Set) return [...v];
-      }
-      return v;
-    })?.length ?? 0;
+    return (
+      JSON.stringify(value, (key, v) => {
+        // A linkedom Document would serialize the whole tree; it is also exactly
+        // what this pipeline is supposed to have dropped, so report its presence
+        // rather than its size.
+        if (key === "document") return v == null ? null : "<LIVE DOCUMENT>";
+        if (typeof v === "object" && v !== null) {
+          if (seen.has(v as object)) return "<cycle>";
+          seen.add(v as object);
+          if (v instanceof Map) return Object.fromEntries(v);
+          if (v instanceof Set) return [...v];
+        }
+        return v;
+      })?.length ?? 0
+    );
   } catch {
     return -1;
   }
@@ -87,9 +92,16 @@ async function main(): Promise<void> {
   const pageCount = await run(storage.getPageCount(crawlId));
 
   const result = await run(
-    runStreamingRules(storage, crawlId, benchConfig(), EMPTY_ASSETS, undefined, {
-      batchSize: BATCH,
-    }),
+    runStreamingRules(
+      storage,
+      crawlId,
+      benchConfig(),
+      EMPTY_ASSETS,
+      undefined,
+      {
+        batchSize: BATCH,
+      }
+    )
   );
 
   // Every structure the streamed rules pass hands back or holds open. `parsedPages`
@@ -106,35 +118,49 @@ async function main(): Promise<void> {
   ];
 
   console.log(`db=${DB} pages=${pageCount} batch=${BATCH}`);
-  console.log(`${"structure".padEnd(38)} ${"total".padStart(10)} ${"per page".padStart(10)}`);
+  console.log(
+    `${"structure".padEnd(38)} ${"total".padStart(10)} ${"per page".padStart(10)}`
+  );
   let total = 0;
   for (const [name, value] of rows) {
     const bytes = sizeOf(value);
     total += Math.max(0, bytes);
     console.log(
-      `${name.padEnd(38)} ${`${(bytes / MB).toFixed(1)} MB`.padStart(10)} ${`${Math.round(bytes / pageCount)} B`.padStart(10)}`,
+      `${name.padEnd(38)} ${`${(bytes / MB).toFixed(1)} MB`.padStart(10)} ${`${Math.round(bytes / pageCount)} B`.padStart(10)}`
     );
   }
   console.log(
-    `${"TOTAL".padEnd(38)} ${`${(total / MB).toFixed(1)} MB`.padStart(10)} ${`${Math.round(total / pageCount)} B`.padStart(10)}`,
+    `${"TOTAL".padEnd(38)} ${`${(total / MB).toFixed(1)} MB`.padStart(10)} ${`${Math.round(total / pageCount)} B`.padStart(10)}`
   );
 
   // Break the universe down: which FIELD of a retained ParsedPage is the weight.
   const parsed = [...result.parsedPages.values()];
-  const fields = ["content", "links", "images", "schemas", "headings", "schema", "meta", "og"];
+  const fields = [
+    "content",
+    "links",
+    "images",
+    "schemas",
+    "headings",
+    "schema",
+    "meta",
+    "og",
+  ];
   console.log(`\nretained ParsedPage, by field (${parsed.length} pages):`);
   for (const f of fields) {
     const bytes = parsed.reduce(
       (n, p) => n + sizeOf((p as unknown as Record<string, unknown>)[f]),
-      0,
+      0
     );
     console.log(
-      `  ${f.padEnd(14)} ${`${(bytes / MB).toFixed(1)} MB`.padStart(10)} ${`${Math.round(bytes / parsed.length)} B/page`.padStart(14)}`,
+      `  ${f.padEnd(14)} ${`${(bytes / MB).toFixed(1)} MB`.padStart(10)} ${`${Math.round(bytes / parsed.length)} B/page`.padStart(14)}`
     );
   }
-  const textBytes = parsed.reduce((n, p) => n + (p.content?.textContent?.length ?? 0), 0);
+  const textBytes = parsed.reduce(
+    (n, p) => n + (p.content?.textContent?.length ?? 0),
+    0
+  );
   console.log(
-    `  ${"of which textContent".padEnd(14)} ${`${(textBytes / MB).toFixed(1)} MB`.padStart(10)} ${`${Math.round(textBytes / parsed.length)} B/page`.padStart(14)}`,
+    `  ${"of which textContent".padEnd(14)} ${`${(textBytes / MB).toFixed(1)} MB`.padStart(10)} ${`${Math.round(textBytes / parsed.length)} B/page`.padStart(14)}`
   );
   const liveDocs = parsed.filter((p) => p.document != null).length;
   console.log(`  live documents retained: ${liveDocs} (must be 0)`);

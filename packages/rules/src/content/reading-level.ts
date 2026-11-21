@@ -1,6 +1,7 @@
 // content/reading-level - Content readability score
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { getProseTextExcludingCode } from "./text-content";
 
 export interface ReadabilityStats {
@@ -36,16 +37,20 @@ export function readabilityStats(body: Element): ReadabilityStats | null {
   // Flesch Reading Ease: 206.835 - 1.015 * (words/sentences) - 84.6 * (syllables/words)
   const avgSentenceLength = words.length / sentences.length;
   const avgSyllablesPerWord = totalSyllables / words.length;
-  const fleschScore = 206.835 - 1.015 * avgSentenceLength - 84.6 * avgSyllablesPerWord;
+  const fleschScore =
+    206.835 - 1.015 * avgSentenceLength - 84.6 * avgSyllablesPerWord;
   const roundedScore = Math.round(Math.max(0, Math.min(100, fleschScore)));
   // Flesch-Kincaid Grade Level: 0.39 * (words/sentences) + 11.8 * (syllables/words) - 15.59
-  const gradeLevel = 0.39 * avgSentenceLength + 11.8 * avgSyllablesPerWord - 15.59;
+  const gradeLevel =
+    0.39 * avgSentenceLength + 11.8 * avgSyllablesPerWord - 15.59;
   const roundedGrade = Math.round(Math.max(0, gradeLevel) * 10) / 10;
   return { fleschScore, roundedScore, roundedGrade, avgSentenceLength };
 }
 
 /** The stored reading level of a parsed page (Flesch ease 0..100), or null when it has no judgeable body. */
-export function pageReadingLevel(parsed: { document?: Document | null } | null | undefined): number | null {
+export function pageReadingLevel(
+  parsed: { document?: Document | null } | null | undefined
+): number | null {
   const body = parsed?.document?.querySelector("body");
   if (!body) return null;
   return readabilityStats(body)?.roundedScore ?? null;
@@ -92,7 +97,8 @@ export const readingLevelRule: Rule = {
       });
       return { checks };
     }
-    const { fleschScore, roundedScore, roundedGrade, avgSentenceLength } = stats;
+    const { fleschScore, roundedScore, roundedGrade, avgSentenceLength } =
+      stats;
 
     let readabilityLabel: string;
     if (fleschScore >= 70) {

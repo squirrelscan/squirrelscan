@@ -5,15 +5,19 @@
 // cap before they're ever fetched. Driven through the real crawler.start(),
 // same harness shape as carried-seed-crawl.test.ts.
 
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import type { CrawlerConfig } from "../src/core/types";
+import type {
+  RedirectChain,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "../src/storage/types";
 
 import { createCrawler } from "../src/core/crawler";
-import type { CrawlerConfig } from "../src/core/types";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
-import type { RedirectChain, ResponseHeaders, SecurityHeaders } from "../src/storage/types";
 
 const ORIGIN = "https://example.com";
 
@@ -123,7 +127,10 @@ describe("frontier URL length cap (#1229)", () => {
           : input instanceof URL
             ? input.toString()
             : (input as Request).url;
-      const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
+      const res = new Response("", {
+        status: 404,
+        headers: { "content-type": "text/plain" },
+      });
       Object.defineProperty(res, "url", { value: url, configurable: true });
       return Promise.resolve(res);
     }) as typeof globalThis.fetch;
@@ -165,7 +172,7 @@ describe("frontier URL length cap (#1229)", () => {
         expect(skipped?.reason).toBe("url_too_long");
 
         return id;
-      }),
+      })
     );
 
     expect(crawlId).toBeTruthy();
@@ -188,11 +195,13 @@ describe("frontier URL length cap (#1229)", () => {
         expect(fetched).not.toContain(oversizeOrigin);
 
         const entries = yield* crawler.storage.getAllFrontierEntries(id);
-        const skipped = entries.find((e) => e.normalizedUrl === `${oversizeOrigin}/`);
+        const skipped = entries.find(
+          (e) => e.normalizedUrl === `${oversizeOrigin}/`
+        );
         expect(skipped).toBeDefined();
         expect(skipped?.status).toBe("skipped");
         expect(skipped?.reason).toBe("url_too_long");
-      }),
+      })
     );
   });
 });

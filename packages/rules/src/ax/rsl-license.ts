@@ -29,16 +29,22 @@ export const rslLicenseRule: Rule = {
     const rsl = ctx.site?.rsl;
 
     if (!rsl) {
-      checks.push(notCheckedCheck("rsl-license", "RSL licensing", undefined, "no-result"));
+      checks.push(
+        notCheckedCheck("rsl-license", "RSL licensing", undefined, "no-result")
+      );
       return { checks };
     }
 
-    const hasSignal = rsl.robotsHasLicense || rsl.linkHeaderPresent || rsl.licenseUrls.length > 0;
+    const hasSignal =
+      rsl.robotsHasLicense ||
+      rsl.linkHeaderPresent ||
+      rsl.licenseUrls.length > 0;
     if (!hasSignal) {
       checks.push({
         name: "rsl-license-present",
         status: "info",
-        message: "No machine-readable licensing declared (no robots.txt License: directive or Link: rel=license)",
+        message:
+          "No machine-readable licensing declared (no robots.txt License: directive or Link: rel=license)",
         value: "absent",
       });
       return { checks };
@@ -58,17 +64,24 @@ export const rslLicenseRule: Rule = {
       },
     });
 
-    const validDocs = rsl.documents.filter((d) => d.status === 200 && d.xmlValid && d.looksRsl);
+    const validDocs = rsl.documents.filter(
+      (d) => d.status === 200 && d.xmlValid && d.looksRsl
+    );
     // A document the crawl never REQUESTED proves nothing about the reference.
     // Note how narrow this is: a URL we actually tried and could not fetch stays
     // a broken reference (that is the defect this rule exists to surface), and
     // only the never-attempted case degrades to unknown. Both look like
     // `status: 0`, so the recorded reason is the only discriminator.
     const notAttempted = rsl.documents.filter(
-      (d) => d.status === 0 && d.error !== null && PROBE_NOT_SENT_ERRORS.includes(d.error),
+      (d) =>
+        d.status === 0 &&
+        d.error !== null &&
+        PROBE_NOT_SENT_ERRORS.includes(d.error)
     );
     const brokenDocs = rsl.documents.filter(
-      (d) => !notAttempted.includes(d) && !(d.status === 200 && d.xmlValid && d.looksRsl),
+      (d) =>
+        !notAttempted.includes(d) &&
+        !(d.status === 200 && d.xmlValid && d.looksRsl)
     );
 
     if (validDocs.length > 0) {
@@ -94,7 +107,10 @@ export const rslLicenseRule: Rule = {
           notAttempted.length === 1 ? "" : "s"
         })`,
         value: "unknown",
-        items: notAttempted.map((d) => ({ id: d.url, label: `${d.url}, not checked` })),
+        items: notAttempted.map((d) => ({
+          id: d.url,
+          label: `${d.url}, not checked`,
+        })),
         details: { notCheckedUrls: notAttempted.map((d) => d.url) },
       });
       return { checks };

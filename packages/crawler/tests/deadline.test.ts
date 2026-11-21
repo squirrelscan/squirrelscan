@@ -38,7 +38,7 @@ describe("withRequestDeadline (#1699)", () => {
           signal = s;
           return fetch(`http://localhost:${server.port}/`, { signal: s });
         },
-        (response) => response.text(),
+        (response) => response.text()
       );
       await expect(read).rejects.toThrow();
       const elapsed = Date.now() - startedAt;
@@ -57,7 +57,8 @@ describe("withRequestDeadline (#1699)", () => {
   test("a normal response is read in full, and the request is released only once `use` returns", async () => {
     const server = Bun.serve({
       port: 0,
-      fetch: () => new Response("hello", { headers: { "content-type": "text/plain" } }),
+      fetch: () =>
+        new Response("hello", { headers: { "content-type": "text/plain" } }),
     });
     let signal: AbortSignal | undefined;
     let abortedWhileReading: boolean | undefined;
@@ -72,7 +73,7 @@ describe("withRequestDeadline (#1699)", () => {
           const text = await response.text();
           abortedWhileReading = signal?.aborted;
           return text;
-        },
+        }
       );
       expect(body).toBe("hello");
       expect(abortedWhileReading).toBe(false);
@@ -93,9 +94,11 @@ describe("withRequestDeadline (#1699)", () => {
       await withRequestDeadline(
         DEADLINE_MS,
         async () => new Response("hello"),
-        (response) => response.text(),
+        (response) => response.text()
       );
-      const call = armed.mock.calls.findIndex((args) => args[1] === DEADLINE_MS);
+      const call = armed.mock.calls.findIndex(
+        (args) => args[1] === DEADLINE_MS
+      );
       expect(call).toBeGreaterThanOrEqual(0);
       const timer = armed.mock.results[call]?.value;
       expect(cleared).toHaveBeenCalledWith(timer);
@@ -109,7 +112,8 @@ describe("withRequestDeadline (#1699)", () => {
     const server = Bun.serve({
       port: 0,
       idleTimeout: 0,
-      fetch: () => new Response("body", { headers: { "content-type": "text/plain" } }),
+      fetch: () =>
+        new Response("body", { headers: { "content-type": "text/plain" } }),
     });
     try {
       // The deadline aborts the REQUEST, which is what unblocks a stalled body
@@ -117,16 +121,18 @@ describe("withRequestDeadline (#1699)", () => {
       // asserts is that the signal has not been disarmed by the time `use` runs.
       const aborted = await withRequestDeadline(
         200,
-        (signal) => fetch(`http://localhost:${server.port}/`, { signal }).then((r) => {
-          // Stash the signal the way a real consumer would observe it.
-          (r as Response & { signal?: AbortSignal }).signal = signal;
-          return r;
-        }),
+        (signal) =>
+          fetch(`http://localhost:${server.port}/`, { signal }).then((r) => {
+            // Stash the signal the way a real consumer would observe it.
+            (r as Response & { signal?: AbortSignal }).signal = signal;
+            return r;
+          }),
         async (response) => {
-          const signal = (response as Response & { signal?: AbortSignal }).signal;
+          const signal = (response as Response & { signal?: AbortSignal })
+            .signal;
           await Bun.sleep(500);
           return signal?.aborted ?? false;
-        },
+        }
       );
       expect(aborted).toBe(true);
     } finally {
@@ -144,7 +150,7 @@ describe("safeFetchWithDeadline (#1699)", () => {
         `http://localhost:${server.port}/`,
         { headers: { "User-Agent": "squirrel-test" } },
         DEADLINE_MS,
-        (response) => response.text(),
+        (response) => response.text()
       );
       await expect(read).rejects.toThrow();
       const elapsed = Date.now() - startedAt;

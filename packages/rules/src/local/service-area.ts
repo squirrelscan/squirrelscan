@@ -1,8 +1,8 @@
 // local/service-area - Service area page detection
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const serviceAreaRule: Rule = {
   meta: {

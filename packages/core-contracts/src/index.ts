@@ -75,11 +75,20 @@ export type {
   EntityMcpFindingsResult,
 } from "./entity-mcp";
 
+import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
 // Import storage types needed locally by interfaces in this file
 import type { CacheFreshness } from "./cache-stats";
+import type { EntityMap } from "./entity-map";
+import type { AuditStatusReasonCode } from "./failure-reason";
 import type { IgnoreSummary } from "./ignore";
+import type { JavascriptShipped } from "./javascript-shipped";
+import type { ReportCapTier } from "./limits";
+import type { PageMap } from "./page-map";
+import type { RefusedFetch } from "./refused-fetch";
+import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import type { SeedRedirectHop, SeedRedirectRecord } from "./seed-redirect";
 import type { SeedVerification } from "./seed-verification";
+import type { SiteMetadata } from "./site-metadata";
 import type {
   AgentAccessProbe,
   CacheHitReason,
@@ -91,18 +100,10 @@ import type {
   SecurityHeaders,
   WellKnownProbe,
 } from "./storage";
-import type { SiteMetadata } from "./site-metadata";
-import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
-import { SKIP_REASON_CLASSES } from "./rule-outcome";
-import type { AuditStatusReasonCode } from "./failure-reason";
-import type { RefusedFetch } from "./refused-fetch";
 import type { UndecodableFetch } from "./storage";
 import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
-import type { EntityMap } from "./entity-map";
-import type { PageMap } from "./page-map";
-import type { JavascriptShipped } from "./javascript-shipped";
-import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
-import type { ReportCapTier } from "./limits";
+
+import { SKIP_REASON_CLASSES } from "./rule-outcome";
 
 export interface CheckItem {
   id: string;
@@ -232,7 +233,11 @@ export interface ComponentOccurrence {
    * Why an occurrence is `uncertain`, so a degraded observation is never a
    * silent one. Absent exactly when `confidence` is "observed".
    */
-  uncertainReason?: "no-region" | "content-nested" | "region-main" | "structure-truncated";
+  uncertainReason?:
+    | "no-region"
+    | "content-nested"
+    | "region-main"
+    | "structure-truncated";
   region: {
     role: "footer" | "header" | "navigation" | "main" | "unknown";
     nestedIn: "article" | "main" | "none" | "unknown";
@@ -395,7 +400,8 @@ export const PRIVATE_TARGET_SKIP_REASON = "private-target";
  * An evaluation gap, not a pass: the external links on the pages were never
  * requested, so "no broken external links" would be a claim nothing tested.
  */
-export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checked";
+export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON =
+  "external-links-not-checked";
 
 /**
  * `skipReason` of a site-scope rule in a targeted run (#1777: `--target-url`, `targetUrls`). The run fetched
@@ -434,7 +440,8 @@ export const EXTERNAL_LINK_HOST_UNRESOLVED_ERROR = "domain does not exist";
  * (`.invalid`, `.test`, `.example`). A verdict without a lookup, in the cloud link checker's wording for an
  * invalid link, and a confirmed broken link for every visitor.
  */
-export const EXTERNAL_LINK_INVALID_SUFFIX_ERROR = "invalid link: no such domain suffix";
+export const EXTERNAL_LINK_INVALID_SUFFIX_ERROR =
+  "invalid link: no such domain suffix";
 
 /**
  * `skipReason` of `links/broken-links` when the crawl did not follow links
@@ -492,7 +499,8 @@ export const EXTERNAL_LINKS_OVER_CAP_SKIP_REASON = "external-links-over-cap";
  * selected to check but did not get answers for before the check's time budget
  * ran out (repo#2613). Set by a caller that gives the check a budget (the cloud).
  */
-export const EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON = "external-links-out-of-time";
+export const EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON =
+  "external-links-out-of-time";
 
 /**
  * `skipReason` of the inbound-link rules (`links/orphan-pages`,
@@ -502,7 +510,8 @@ export const EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON = "external-links-out-of-tim
  * Prose rather than an id: published reports already carry this exact text
  * (#1144).
  */
-export const CRAWL_CAPPED_SKIP_REASON = "Crawl capped before the frontier was exhausted";
+export const CRAWL_CAPPED_SKIP_REASON =
+  "Crawl capped before the frontier was exhausted";
 
 /**
  * `skipReason` of `crawl/server-errors` when the crawl gave up on some pages (a timeout, a refused
@@ -539,7 +548,8 @@ export const CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON =
  * not a pass: no certificate was read, so "no certificate problem" would be a
  * claim nothing tested.
  */
-export const TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON = "tls-certificate-not-checked";
+export const TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON =
+  "tls-certificate-not-checked";
 
 /**
  * `skipReason` of a rule whose discovery probe gave no verdict (#1794), so a consumer that resolves findings by
@@ -552,10 +562,12 @@ export const TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON = "tls-certificate-not-chec
  * - `discovery-probe-redirect-not-followed`: the request was redirected off its approved path.
  * A probe that got an answer, a 404 included, is a verdict and is never one of these.
  */
-export const DISCOVERY_PROBE_NOT_APPROVED_SKIP_REASON = "discovery-probe-not-approved";
+export const DISCOVERY_PROBE_NOT_APPROVED_SKIP_REASON =
+  "discovery-probe-not-approved";
 export const DISCOVERY_PROBE_NOT_SENT_SKIP_REASON = "discovery-probe-not-sent";
 export const DISCOVERY_PROBE_REFUSED_SKIP_REASON = "discovery-probe-refused";
-export const DISCOVERY_PROBE_NO_ANSWER_SKIP_REASON = "discovery-probe-no-answer";
+export const DISCOVERY_PROBE_NO_ANSWER_SKIP_REASON =
+  "discovery-probe-no-answer";
 export const DISCOVERY_PROBE_REDIRECT_NOT_FOLLOWED_SKIP_REASON =
   "discovery-probe-redirect-not-followed";
 export const DISCOVERY_PROBE_SKIP_REASONS = [
@@ -565,14 +577,16 @@ export const DISCOVERY_PROBE_SKIP_REASONS = [
   DISCOVERY_PROBE_NO_ANSWER_SKIP_REASON,
   DISCOVERY_PROBE_REDIRECT_NOT_FOLLOWED_SKIP_REASON,
 ] as const;
-export type DiscoveryProbeSkipReason = (typeof DISCOVERY_PROBE_SKIP_REASONS)[number];
+export type DiscoveryProbeSkipReason =
+  (typeof DISCOVERY_PROBE_SKIP_REASONS)[number];
 
 /** Whether `reason` is one of {@link DISCOVERY_PROBE_SKIP_REASONS}. */
 export function isDiscoveryProbeSkipReason(
-  reason: string | undefined,
+  reason: string | undefined
 ): reason is DiscoveryProbeSkipReason {
   return (
-    reason !== undefined && (DISCOVERY_PROBE_SKIP_REASONS as readonly string[]).includes(reason)
+    reason !== undefined &&
+    (DISCOVERY_PROBE_SKIP_REASONS as readonly string[]).includes(reason)
   );
 }
 
@@ -582,7 +596,9 @@ export function isDiscoveryProbeSkipReason(
  * looking clean (repo#2729), and which never resolve an open finding.
  */
 export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set(
-  Object.keys(SKIP_REASON_CLASSES).filter((reason) => SKIP_REASON_CLASSES[reason]!.notChecked),
+  Object.keys(SKIP_REASON_CLASSES).filter(
+    (reason) => SKIP_REASON_CLASSES[reason]!.notChecked
+  )
 );
 
 import type { WcagCriterion, WcagLevel } from "./wcag";
@@ -643,7 +659,10 @@ export function normalizeCategoryCode(code: string): string {
  */
 export function deriveBlockingSubcategory(ruleId: string): string | undefined {
   if (ruleId === "adblock/privacy-blocked") return "privacy";
-  if (ruleId === "adblock/blocked-links" || ruleId === "adblock/element-hiding") {
+  if (
+    ruleId === "adblock/blocked-links" ||
+    ruleId === "adblock/element-hiding"
+  ) {
     return "ad";
   }
   return undefined;
@@ -749,7 +768,7 @@ export type AuditStatus = "completed" | "failed" | "blocked" | "partial";
  * "completed" row (#489).
  */
 export function auditStatusToLifecycle(
-  status: AuditStatus | null | undefined,
+  status: AuditStatus | null | undefined
 ): "completed" | "failed" {
   return isAuditFailed(status) ? "failed" : "completed";
 }
@@ -798,7 +817,9 @@ export const UNSTORED_PAGE_REASONS = [
   "unreadable-body",
   "request-failed",
 ] as const;
-export type UnstoredPageReason = (typeof UNSTORED_PAGE_REASONS)[number] | `http-${number}`;
+export type UnstoredPageReason =
+  | (typeof UNSTORED_PAGE_REASONS)[number]
+  | `http-${number}`;
 
 /** A URL the crawl requested but could not store a page for (#1396), listed by `--include-pages`. */
 /** A URL that redirected, in the `--include-pages` JSON `redirects` list (#1762). */
@@ -1445,7 +1466,10 @@ export interface LinkTargetSets {
  * off, rate limited, refused, not requested).
  */
 export const LINK_TARGET_SET_RULES: Readonly<
-  Record<string, { broken: string; sitewide: string; unverified: readonly string[] }>
+  Record<
+    string,
+    { broken: string; sitewide: string; unverified: readonly string[] }
+  >
 > = {
   "links/broken-links": {
     broken: "broken-links",
@@ -1748,7 +1772,10 @@ export type LockedRuleReason = (typeof LOCKED_RULE_REASONS)[number];
 
 /** Whether `value` is one of {@link LOCKED_RULE_REASONS}. */
 export function isLockedRuleReason(value: unknown): value is LockedRuleReason {
-  return typeof value === "string" && (LOCKED_RULE_REASONS as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (LOCKED_RULE_REASONS as readonly string[]).includes(value)
+  );
 }
 
 /** A cloud-/Pro-gated rule that was not run — shown locked in the report upsell. */
@@ -2012,7 +2039,12 @@ export interface ReportHost {
     address: string;
   };
   /** Time to open a TCP connection to the host, in ms. Not an ICMP ping and not a page load time. */
-  latency?: { ms: number; measure: "tcp-connect"; address: string; port: number };
+  latency?: {
+    ms: number;
+    measure: "tcp-connect";
+    address: string;
+    port: number;
+  };
   /** Month of the bundled DB-IP Lite snapshot the country came from (CC BY 4.0, DB-IP.com). */
   geoipSnapshot?: string;
   /**
@@ -2427,8 +2459,16 @@ export interface AuditHistorySite {
 export interface AuditHistoryStore {
   upsertSnapshot(userId: string, snapshot: AuditHistorySnapshot): Promise<void>;
   listSites(userId: string, limit?: number): Promise<AuditHistorySite[]>;
-  listHistory(userId: string, siteKey: string, limit?: number): Promise<AuditHistorySnapshot[]>;
-  computeDelta(userId: string, siteKey: string, runId: string): Promise<AuditHistoryDelta | null>;
+  listHistory(
+    userId: string,
+    siteKey: string,
+    limit?: number
+  ): Promise<AuditHistorySnapshot[]>;
+  computeDelta(
+    userId: string,
+    siteKey: string,
+    runId: string
+  ): Promise<AuditHistoryDelta | null>;
 }
 
 export type ArtifactKind = "page" | "script" | "link-index" | "image-index";
@@ -2460,11 +2500,18 @@ export interface PageArtifactRecord {
 
 export interface ArtifactStore {
   putPageArtifact(record: PageArtifactRecord): Promise<ArtifactRef>;
-  getPageArtifactByUrl(normalizedUrl: string): Promise<PageArtifactRecord | null>;
+  getPageArtifactByUrl(
+    normalizedUrl: string
+  ): Promise<PageArtifactRecord | null>;
   getPageArtifactByRef(ref: ArtifactRef): Promise<PageArtifactRecord | null>;
 }
 
-export type CrawlFrontierStatus = "pending" | "processing" | "done" | "failed" | "skipped";
+export type CrawlFrontierStatus =
+  | "pending"
+  | "processing"
+  | "done"
+  | "failed"
+  | "skipped";
 
 export interface CrawlFrontierEntry {
   normalizedUrl: string;
@@ -2492,17 +2539,28 @@ export interface CrawlStateSnapshot {
 export interface CrawlStateStore {
   createCrawl(snapshot: CrawlStateSnapshot): Promise<void>;
   upsertFrontier(crawlId: string, entry: CrawlFrontierEntry): Promise<void>;
-  reserveNextFrontier(crawlId: string, limit: number): Promise<CrawlFrontierEntry[]>;
+  reserveNextFrontier(
+    crawlId: string,
+    limit: number
+  ): Promise<CrawlFrontierEntry[]>;
   completeFrontier(crawlId: string, normalizedUrl: string): Promise<void>;
-  failFrontier(crawlId: string, normalizedUrl: string, reason: string): Promise<void>;
+  failFrontier(
+    crawlId: string,
+    normalizedUrl: string,
+    reason: string
+  ): Promise<void>;
   updateStats(
     crawlId: string,
     patch: Partial<
       Pick<
         CrawlStateSnapshot,
-        "pagesFetched" | "pagesFailed" | "pagesSkipped" | "status" | "completedAt"
+        | "pagesFetched"
+        | "pagesFailed"
+        | "pagesSkipped"
+        | "status"
+        | "completedAt"
       >
-    >,
+    >
   ): Promise<void>;
   getCrawl(crawlId: string): Promise<CrawlStateSnapshot | null>;
 }
@@ -2724,7 +2782,9 @@ export type LinkSection =
   | "newsletter_signup";
 
 /** Links per section, unknown left out. Keys appear only when the count is above zero. */
-export type LinkSectionCounts = Partial<Record<Exclude<LinkSection, "unknown">, number>>;
+export type LinkSectionCounts = Partial<
+  Record<Exclude<LinkSection, "unknown">, number>
+>;
 
 /** Where an answer came from: the page's markup (`rules`) or the page classifier's model. */
 export type ClassifierSource = "rules" | "model";
@@ -3157,7 +3217,9 @@ export type WebsiteSortOrder = "asc" | "desc";
 export type AuditSource = "cli" | "cloud" | "scheduled" | "github";
 
 /** Map a raw `agent_runs.trigger` value to a user-facing audit source. */
-export function triggerToAuditSource(trigger: string | null | undefined): AuditSource {
+export function triggerToAuditSource(
+  trigger: string | null | undefined
+): AuditSource {
   switch (trigger) {
     case "cli":
       return "cli";
@@ -3195,11 +3257,8 @@ export type AgentRunStatus =
  * holding a raw status string can `.has()` without a cast; the `Set<AgentRunStatus>`
  * literal still rejects typos at the definition.
  */
-export const TERMINAL_AGENT_RUN_STATUSES: ReadonlySet<string> = new Set<AgentRunStatus>([
-  "completed",
-  "failed",
-  "cancelled",
-]);
+export const TERMINAL_AGENT_RUN_STATUSES: ReadonlySet<string> =
+  new Set<AgentRunStatus>(["completed", "failed", "cancelled"]);
 
 /**
  * The phases of an audit a person watching it sees, in the order a run goes through them. The CLI's
@@ -3234,7 +3293,9 @@ export const PUBLISH_STAGE_RAW_PHASES: ReadonlySet<string> = new Set([
  * (`complete` included) collapse into `publishing`, `crawl` is `crawling`, any other known phase is
  * itself, and a name this version does not know is null.
  */
-export function visiblePhaseOf(raw: string | null | undefined): RunPhase | null {
+export function visiblePhaseOf(
+  raw: string | null | undefined
+): RunPhase | null {
   if (typeof raw !== "string") return null;
   if (PUBLISH_STAGE_RAW_PHASES.has(raw)) return "publishing";
   if (raw === "crawl") return "crawling";
@@ -3249,11 +3310,17 @@ export const RUN_NOTICES = ["memory_pressure", "crawl_scope"] as const;
 export type RunNotice = (typeof RUN_NOTICES)[number];
 
 export function isRunPhase(value: unknown): value is RunPhase {
-  return typeof value === "string" && (RUN_PHASES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (RUN_PHASES as readonly string[]).includes(value)
+  );
 }
 
 export function isRunNotice(value: unknown): value is RunNotice {
-  return typeof value === "string" && (RUN_NOTICES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (RUN_NOTICES as readonly string[]).includes(value)
+  );
 }
 
 /**
@@ -3263,7 +3330,7 @@ export function isRunNotice(value: unknown): value is RunNotice {
  */
 export function nextVisiblePhase(
   current: RunPhase | null,
-  incoming: string | null | undefined,
+  incoming: string | null | undefined
 ): RunPhase | null {
   return isRunPhase(incoming) ? incoming : current;
 }
@@ -3295,7 +3362,13 @@ export interface RunSyncDelta {
  * before Team went flat; it is not self-serve and ranks with `team`. `business` is the tier above Team,
  * not self-serve (unlisted) until it is switched on.
  */
-export type PlanId = "free" | "starter" | "team" | "team_legacy" | "business" | "enterprise";
+export type PlanId =
+  | "free"
+  | "starter"
+  | "team"
+  | "team_legacy"
+  | "business"
+  | "enterprise";
 export type OrgRole = "owner" | "admin" | "editor" | "viewer" | "billing";
 
 /** Stripe subscription billing interval. Annual prepays 12 months at the

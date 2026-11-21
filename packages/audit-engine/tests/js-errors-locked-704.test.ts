@@ -1,8 +1,7 @@
 // reliability/js-errors is cloud-only (#704): a local or --http audit lists it among the cloud checks that didn't run.
 
-import { describe, expect, test } from "bun:test";
-
 import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import { computeLockedRules } from "../src/publish-meta";
 

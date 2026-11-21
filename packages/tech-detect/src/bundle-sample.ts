@@ -63,7 +63,10 @@ let specs: HintSpec[] | null = null;
 const openerCompletes: RegExp[] = [];
 for (const fp of ALL_FINGERPRINTS) {
   for (const d of fp.detectors) {
-    if (d.type === "script-content" && d.inCode) openerCompletes.push(new RegExp(d.pattern.source, `${d.pattern.flags.replace(/[gy]/g, "")}y`));
+    if (d.type === "script-content" && d.inCode)
+      openerCompletes.push(
+        new RegExp(d.pattern.source, `${d.pattern.flags.replace(/[gy]/g, "")}y`)
+      );
   }
 }
 
@@ -77,7 +80,14 @@ for (const fp of ALL_FINGERPRINTS) {
 function hintSpecs(): HintSpec[] {
   if (specs) return specs;
   const map = new Map<string, HintSpec>();
-  const add = (text: string, ci: boolean, re: RegExp, declared: boolean, inCode: boolean, stringValue = false): void => {
+  const add = (
+    text: string,
+    ci: boolean,
+    re: RegExp,
+    declared: boolean,
+    inCode: boolean,
+    stringValue = false
+  ): void => {
     const key = `${ci ? "i" : "s"}:${text}`;
     const flags = re.flags.replace(/[gy]/g, "");
     const own: HintPattern = {
@@ -96,12 +106,23 @@ function hintSpecs(): HintSpec[] {
       if (d.type !== "script-content") continue;
       const inCode = d.inCode === true;
       // A string-value detector accepts a match inside a string, so its window is judged by the plain pattern.
-      if (d.hint) add(d.hint, false, d.pattern, true, inCode && d.stringValue === undefined, d.stringValue !== undefined);
+      if (d.hint)
+        add(
+          d.hint,
+          false,
+          d.pattern,
+          true,
+          inCode && d.stringValue === undefined,
+          d.stringValue !== undefined
+        );
       // The `also` pattern is matched anywhere in the body, strings included: not gated to code.
-      if (d.also) for (const h of d.also.hints) add(h, false, d.also.pattern, true, false);
+      if (d.also)
+        for (const h of d.also.hints)
+          add(h, false, d.also.pattern, true, false);
       if (!d.hint) {
         const derived = deriveHints(d.pattern);
-        for (const text of derived.hints) add(text, derived.caseInsensitive, d.pattern, false, inCode);
+        for (const text of derived.hints)
+          add(text, derived.caseInsensitive, d.pattern, false, inCode);
       }
     }
   }
@@ -121,7 +142,9 @@ export function bundleHints(): string[] {
 }
 
 /** Spans sorted and merged where they touch or overlap. */
-function mergeSpans(spans: ReadonlyArray<[number, number]>): Array<[number, number]> {
+function mergeSpans(
+  spans: ReadonlyArray<[number, number]>
+): Array<[number, number]> {
   const sorted = [...spans].sort((a, b) => a[0] - b[0]);
   const merged: Array<[number, number]> = [];
   for (const span of sorted) {
@@ -135,7 +158,8 @@ function mergeSpans(spans: ReadonlyArray<[number, number]>): Array<[number, numb
 /** Chars the spans take once merged, each with its separator and room for an opener. */
 function mergedCost(spans: ReadonlyArray<[number, number]>): number {
   let total = 0;
-  for (const [start, end] of mergeSpans(spans)) total += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
+  for (const [start, end] of mergeSpans(spans))
+    total += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
   return total;
 }
 
@@ -159,7 +183,11 @@ function mergedCost(spans: ReadonlyArray<[number, number]>): number {
  * that head is therefore omitted.
  * Empty when the body fits in the head.
  */
-export function sampleBundleExtras(content: string, headChars: number, maxChars: number): string {
+export function sampleBundleExtras(
+  content: string,
+  headChars: number,
+  maxChars: number
+): string {
   return createBundleSampler(content, headChars).sample(maxChars, false);
 }
 
@@ -197,10 +225,19 @@ export interface SourceSpan {
 export function createBundleSampler(
   content: string,
   headChars: number,
-  scanChars: number = MAX_SCAN_CHARS,
+  scanChars: number = MAX_SCAN_CHARS
 ): BundleSampler {
-  if (content.length <= headChars) return { sample: () => "", firstSourceChar: () => null, lastSpans: () => [] };
-  const limit = Math.min(content.length, MAX_SCAN_CHARS, Math.max(scanChars, headChars));
+  if (content.length <= headChars)
+    return {
+      sample: () => "",
+      firstSourceChar: () => null,
+      lastSpans: () => [],
+    };
+  const limit = Math.min(
+    content.length,
+    MAX_SCAN_CHARS,
+    Math.max(scanChars, headChars)
+  );
   const { skips } = scanJs(content.slice(0, limit));
   /** The string, regex literal or comment that holds `p` (`start < p <= end`), or null in code. */
   const spanAt = (p: number): { open: number; close: number } | null => {
@@ -218,18 +255,25 @@ export function createBundleSampler(
    */
   const openerOf = (open: number): string => {
     const first = content.charAt(open);
-    return first === "/" && /[/*]/.test(content.charAt(open + 1)) ? content.slice(open, open + 2) : first;
+    return first === "/" && /[/*]/.test(content.charAt(open + 1))
+      ? content.slice(open, open + 2)
+      : first;
   };
   const cutAt = (p: number): { pos: number; opener: string } => {
     const span = spanAt(p);
     if (!span) return { pos: p, opener: "" };
-    if (span.close + 1 - p <= MAX_STRING_CARRY) return { pos: span.close + 1, opener: "" };
+    if (span.close + 1 - p <= MAX_STRING_CARRY)
+      return { pos: span.close + 1, opener: "" };
     const opener = openerOf(span.open);
     // a regex literal cannot be reopened mid-way (a `/` inside a class): skip past it as before
     if (opener === "/") return { pos: span.close + 1, opener: "" };
     // never cut between a backslash and the character it escapes: that character would read unescaped
     let slashes = 0;
-    while (p - 1 - slashes > span.open && content.charAt(p - 1 - slashes) === "\\") slashes++;
+    while (
+      p - 1 - slashes > span.open &&
+      content.charAt(p - 1 - slashes) === "\\"
+    )
+      slashes++;
     return { pos: slashes % 2 === 1 ? p - 1 : p, opener };
   };
   /**
@@ -238,12 +282,16 @@ export function createBundleSampler(
    * at it with text that sits inside the string: the cut is moved on, past an escape pair whole,
    * until no such pattern matches at the opener; null when none of the next few starts is clean.
    */
-  const settle = (cut: { pos: number; opener: string }, to: number): { pos: number; opener: string } | null => {
+  const settle = (
+    cut: { pos: number; opener: string },
+    to: number
+  ): { pos: number; opener: string } | null => {
     if (!cut.opener) return cut;
     let pos = cut.pos;
     for (let tries = 0; tries < 16; tries++) {
       const probe = cut.opener + content.slice(pos, to);
-      if (!openerCompletes.some((re) => ((re.lastIndex = 0), re.test(probe)))) return { pos, opener: cut.opener };
+      if (!openerCompletes.some((re) => ((re.lastIndex = 0), re.test(probe))))
+        return { pos, opener: cut.opener };
       pos += content.charAt(pos) === "\\" ? 2 : 1;
     }
     return null;
@@ -300,19 +348,28 @@ export function createBundleSampler(
   // that uses the hint matches it, so a placeholder or an unrelated mention of the literal costs
   // nothing and takes no budget from a real match.
   let heldWindowCost = 0;
-  type HintWindows = Array<{ windows: Array<[number, number]>; declared: boolean }>;
+  type HintWindows = Array<{
+    windows: Array<[number, number]>;
+    declared: boolean;
+  }>;
   let computed: HintWindows | undefined;
   const hintWindows = (): HintWindows => {
     if (computed) return computed;
     const perHint: HintWindows = [];
-    const ordered = [...hintSpecs()].sort((x, y) => Number(y.declared) - Number(x.declared));
+    const ordered = [...hintSpecs()].sort(
+      (x, y) => Number(y.declared) - Number(x.declared)
+    );
     for (const spec of ordered) {
       const haystack = spec.ci ? lowerContent() : searched;
       if (haystack === null) continue;
       const seen = new Set<string>();
       const windows: Array<[number, number]> = [];
       let from = floor;
-      for (let n = 0; n < MAX_HIT_SCANS_PER_HINT && windows.length < MAX_KEPT_PER_HINT; n++) {
+      for (
+        let n = 0;
+        n < MAX_HIT_SCANS_PER_HINT && windows.length < MAX_KEPT_PER_HINT;
+        n++
+      ) {
         const at = haystack.indexOf(spec.text, from);
         if (at === -1 || at >= limit) break;
         from = at + spec.text.length;
@@ -331,11 +388,18 @@ export function createBundleSampler(
           if (cut.opener === "/") continue;
           if (cut.opener) {
             let k = 0;
-            while (cut.pos - 1 - k > span.open && content.charAt(cut.pos - 1 - k) === "\\") k++;
+            while (
+              cut.pos - 1 - k > span.open &&
+              content.charAt(cut.pos - 1 - k) === "\\"
+            )
+              k++;
             if (k % 2 === 1) cut = { pos: cut.pos - 1, opener: cut.opener };
           }
         }
-        const settled = settle(cut, Math.min(limit, at + spec.text.length + WINDOW_AFTER));
+        const settled = settle(
+          cut,
+          Math.min(limit, at + spec.text.length + WINDOW_AFTER)
+        );
         if (!settled) continue;
         cut = settled;
         let start = cut.pos;
@@ -374,7 +438,8 @@ export function createBundleSampler(
         if (cut.opener) openers.set(start, cut.opener);
         windows.push([start, end]);
       }
-      if (windows.length > 0) perHint.push({ windows, declared: spec.declared });
+      if (windows.length > 0)
+        perHint.push({ windows, declared: spec.declared });
     }
     computed = perHint;
     return perHint;
@@ -388,51 +453,71 @@ export function createBundleSampler(
   // budget before a declared hint's second window, and its first can be a lookalike.
   let sampledSpans: SourceSpan[] = [];
   const render = (spans: ReadonlyArray<[number, number]>): string => {
-    sampledSpans = spans.map(([start, end]) => ({ start, end, opener: openers.get(start) ?? "" }));
-    return sampledSpans.map((span) => span.opener + content.slice(span.start, span.end)).join(SEGMENT_SEPARATOR);
+    sampledSpans = spans.map(([start, end]) => ({
+      start,
+      end,
+      opener: openers.get(start) ?? "",
+    }));
+    return sampledSpans
+      .map((span) => span.opener + content.slice(span.start, span.end))
+      .join(SEGMENT_SEPARATOR);
   };
   return {
     sample(maxChars, windowsOnly) {
-    if (maxChars <= 0) {
-      sampledSpans = [];
-      return "";
-    }
-    const perHint = hintWindows();
-    // The windows a windows-only call chose are kept by a later call: the tail only takes what is left.
-    const baseBudget = maxChars - Math.min(TAIL_RESERVE_CHARS, Math.floor(maxChars / 4));
-    const windowBudget = windowsOnly ? baseBudget : Math.max(baseBudget, heldWindowCost);
-    const chosen: Array<[number, number]> = [];
-    const take = (window: [number, number] | undefined): void => {
-      if (window && mergedCost([...chosen, window]) <= windowBudget) chosen.push(window);
-    };
-    for (let round = 0; round < DECLARED_FIRST_WINDOWS; round++) {
-      for (const { windows, declared } of perHint) if (declared) take(windows[round]);
-    }
-    for (let round = 0; round < MAX_KEPT_PER_HINT; round++) {
-      for (const { windows, declared } of perHint) {
-        if (!declared || round >= DECLARED_FIRST_WINDOWS) take(windows[round]);
+      if (maxChars <= 0) {
+        sampledSpans = [];
+        return "";
       }
-    }
-    const merged = mergeSpans(chosen);
-    if (windowsOnly) {
-      heldWindowCost = mergedCost(merged);
-      return render(merged);
-    }
-    let used = 0;
-    for (const [start, end] of merged) used += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
-    // The tail takes what the windows left. It is one more span merged with them, so a window it
-    // overlaps is not sent twice and nothing between the windows and the tail is dropped: when the
-    // rest of the file fits in the room, the whole rest is kept, as before #1420.
-    const tailRoom = maxChars - used - (merged.length > 0 ? SEGMENT_SEPARATOR.length : 0) - OPENER_SLACK;
-    let spans = merged;
-    if (tailRoom > 0 && limit === content.length) {
-      const cut = settle(cutAt(Math.max(content.length - tailRoom, headChars)), content.length);
-      if (cut && cut.pos < content.length) {
-        if (cut.opener) openers.set(cut.pos, cut.opener);
-        spans = mergeSpans([...merged, [cut.pos, content.length]]);
+      const perHint = hintWindows();
+      // The windows a windows-only call chose are kept by a later call: the tail only takes what is left.
+      const baseBudget =
+        maxChars - Math.min(TAIL_RESERVE_CHARS, Math.floor(maxChars / 4));
+      const windowBudget = windowsOnly
+        ? baseBudget
+        : Math.max(baseBudget, heldWindowCost);
+      const chosen: Array<[number, number]> = [];
+      const take = (window: [number, number] | undefined): void => {
+        if (window && mergedCost([...chosen, window]) <= windowBudget)
+          chosen.push(window);
+      };
+      for (let round = 0; round < DECLARED_FIRST_WINDOWS; round++) {
+        for (const { windows, declared } of perHint)
+          if (declared) take(windows[round]);
       }
-    }
-    return render(spans);
+      for (let round = 0; round < MAX_KEPT_PER_HINT; round++) {
+        for (const { windows, declared } of perHint) {
+          if (!declared || round >= DECLARED_FIRST_WINDOWS)
+            take(windows[round]);
+        }
+      }
+      const merged = mergeSpans(chosen);
+      if (windowsOnly) {
+        heldWindowCost = mergedCost(merged);
+        return render(merged);
+      }
+      let used = 0;
+      for (const [start, end] of merged)
+        used += end - start + SEGMENT_SEPARATOR.length + OPENER_SLACK;
+      // The tail takes what the windows left. It is one more span merged with them, so a window it
+      // overlaps is not sent twice and nothing between the windows and the tail is dropped: when the
+      // rest of the file fits in the room, the whole rest is kept, as before #1420.
+      const tailRoom =
+        maxChars -
+        used -
+        (merged.length > 0 ? SEGMENT_SEPARATOR.length : 0) -
+        OPENER_SLACK;
+      let spans = merged;
+      if (tailRoom > 0 && limit === content.length) {
+        const cut = settle(
+          cutAt(Math.max(content.length - tailRoom, headChars)),
+          content.length
+        );
+        if (cut && cut.pos < content.length) {
+          if (cut.opener) openers.set(cut.pos, cut.opener);
+          spans = mergeSpans([...merged, [cut.pos, content.length]]);
+        }
+      }
+      return render(spans);
     },
     firstSourceChar: () => sampledSpans[0]?.start ?? null,
     lastSpans: () => sampledSpans,

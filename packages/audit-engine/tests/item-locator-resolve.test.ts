@@ -13,8 +13,6 @@
 // publish clip, an unfolded aggregate) keeps carrying, because there a missing
 // item is not proof it is gone.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
@@ -22,12 +20,14 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import type { RuleContext } from "@squirrelscan/rules/types";
+
 import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 import { parsePage } from "@squirrelscan/parser";
 import { loadAllRules } from "@squirrelscan/rules";
 import { foldOverflowChecks } from "@squirrelscan/rules/fold";
-import type { RuleContext } from "@squirrelscan/rules/types";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import {
   computeMerge,
@@ -39,7 +39,10 @@ import {
   SCAN_BUDGET_CHECKS,
   type MergeResolutionInput,
 } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_474";
@@ -60,7 +63,10 @@ const meta = {
   weight: 5,
 };
 
-function dialogCheck(ids: string[], details?: Record<string, unknown>): CheckResult {
+function dialogCheck(
+  ids: string[],
+  details?: Record<string, unknown>
+): CheckResult {
   return {
     name: CHECK,
     status: "warn",
@@ -96,7 +102,9 @@ function mergeRenamed(opts: {
   completeItemChecks?: Set<string>;
   freshChecks?: CheckResult[];
 }) {
-  const freshChecks = opts.freshChecks ?? [dialogCheck(["dialog.newsletter-popup"])];
+  const freshChecks = opts.freshChecks ?? [
+    dialogCheck(["dialog.newsletter-popup"]),
+  ];
   return computeMerge({
     siteKey: SITE,
     crawlId: "audit_2",
@@ -129,7 +137,9 @@ describe("computeMerge: a renamed locator on a still-failing page (pub#474)", ()
   test("without the resolution signal (local merge) the old locator resolves", () => {
     const merged = mergeRenamed({});
     expect(ghost(merged.persisted)?.state).toBe("resolved");
-    expect(merged.findings.map((f) => f.locator)).toEqual(["dialog.newsletter-popup"]);
+    expect(merged.findings.map((f) => f.locator)).toEqual([
+      "dialog.newsletter-popup",
+    ]);
   });
 
   test("with the signal and a complete fresh list, the old locator resolves", () => {
@@ -140,7 +150,9 @@ describe("computeMerge: a renamed locator on a still-failing page (pub#474)", ()
     const old = ghost(merged.persisted)!;
     expect(old.state).toBe("resolved");
     expect(old.lastSeenCrawlId).toBe("audit_2");
-    expect(merged.findings.map((f) => f.locator)).toEqual(["dialog.newsletter-popup"]);
+    expect(merged.findings.map((f) => f.locator)).toEqual([
+      "dialog.newsletter-popup",
+    ]);
   });
 
   test("with the signal and a capped fresh list, the old locator still carries", () => {
@@ -160,7 +172,9 @@ describe("computeMerge: a renamed locator on a still-failing page (pub#474)", ()
   test("a complete list for ANOTHER page does not resolve this page's item", () => {
     const merged = mergeRenamed({
       resolution: stillFailing,
-      completeItemChecks: new Set([pageCheckKey(normalizePageUrl(OTHER), RULE, CHECK)]),
+      completeItemChecks: new Set([
+        pageCheckKey(normalizePageUrl(OTHER), RULE, CHECK),
+      ]),
     });
     expect(ghost(merged.persisted)?.state).toBe("open");
   });
@@ -179,7 +193,9 @@ describe("computeMerge: a renamed locator on a still-failing page (pub#474)", ()
     const merged = mergeRenamed({
       resolution: {
         ...stillFailing,
-        notEvaluatedByCheck: new Map([[KEY, new Set([resolutionUrlHash(URL)])]]),
+        notEvaluatedByCheck: new Map([
+          [KEY, new Set([resolutionUrlHash(URL)])],
+        ]),
       },
       completeItemChecks: new Set([pageCheckKey(URL, RULE, CHECK)]),
     });
@@ -192,25 +208,38 @@ describe("computeMerge: a renamed locator on a still-failing page (pub#474)", ()
 describe("itemListComplete", () => {
   test("items with no remainder are complete", () => {
     expect(itemListComplete(RULE, dialogCheck(["a", "b"]))).toBe(true);
-    expect(itemListComplete(RULE, dialogCheck(["a"], { additional: 0 }))).toBe(true);
+    expect(itemListComplete(RULE, dialogCheck(["a"], { additional: 0 }))).toBe(
+      true
+    );
   });
 
   test("a recorded remainder, even a malformed one, is not", () => {
-    expect(itemListComplete(RULE, dialogCheck(["a"], { additional: 3 }))).toBe(false);
-    expect(itemListComplete(RULE, dialogCheck(["a"], { additional: "3" }))).toBe(false);
+    expect(itemListComplete(RULE, dialogCheck(["a"], { additional: 3 }))).toBe(
+      false
+    );
+    expect(
+      itemListComplete(RULE, dialogCheck(["a"], { additional: "3" }))
+    ).toBe(false);
   });
 
   test("an aggregate or a check without items is not", () => {
-    expect(itemListComplete(RULE, dialogCheck(["a"], { aggregated: true }))).toBe(false);
     expect(
-      itemListComplete(RULE, { name: CHECK, status: "warn", message: "m", pageUrl: PAGE }),
+      itemListComplete(RULE, dialogCheck(["a"], { aggregated: true }))
+    ).toBe(false);
+    expect(
+      itemListComplete(RULE, {
+        name: CHECK,
+        status: "warn",
+        message: "m",
+        pageUrl: PAGE,
+      })
     ).toBe(false);
   });
 
   test("a real capped rule (a11y/tabindex, 12 elements) is not complete", () => {
     const body = Array.from(
       { length: 12 },
-      (_, i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`,
+      (_, i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`
     ).join("");
     const html = `<!doctype html><html lang="en"><head><title>t</title></head><body>${body}</body></html>`;
     const ctx = {
@@ -226,7 +255,9 @@ describe("itemListComplete", () => {
   });
 
   test("a rule that stopped at a scan budget is not complete", () => {
-    expect(itemListComplete(RULE, dialogCheck(["a"], { scanTruncated: true }))).toBe(false);
+    expect(
+      itemListComplete(RULE, dialogCheck(["a"], { scanTruncated: true }))
+    ).toBe(false);
   });
 
   test("a budgeted check is complete only when it says it finished the scan", () => {
@@ -239,10 +270,16 @@ describe("itemListComplete", () => {
       ...(details ? { details } : {}),
     });
     // An older publisher sends no marker at all: its walk may have stopped early.
-    expect(itemListComplete("content/hidden-text", hidden({ hiddenElements: 1 }))).toBe(false);
+    expect(
+      itemListComplete("content/hidden-text", hidden({ hiddenElements: 1 }))
+    ).toBe(false);
     expect(itemListComplete("content/hidden-text", hidden())).toBe(false);
-    expect(itemListComplete("content/hidden-text", hidden({ scanTruncated: true }))).toBe(false);
-    expect(itemListComplete("content/hidden-text", hidden({ scanTruncated: false }))).toBe(true);
+    expect(
+      itemListComplete("content/hidden-text", hidden({ scanTruncated: true }))
+    ).toBe(false);
+    expect(
+      itemListComplete("content/hidden-text", hidden({ scanTruncated: false }))
+    ).toBe(true);
   });
 
   test("a bare list at a cap an older release did not record is not complete", () => {
@@ -252,7 +289,9 @@ describe("itemListComplete", () => {
       status: "warn",
       message: `${n} element(s) with positive tabindex`,
       pageUrl: PAGE,
-      items: Array.from({ length: n }, (_, i) => ({ id: `button#b${i} (tabindex=${i + 1})` })),
+      items: Array.from({ length: n }, (_, i) => ({
+        id: `button#b${i} (tabindex=${i + 1})`,
+      })),
     });
     expect(itemListComplete("a11y/tabindex", bare(10))).toBe(false);
     expect(itemListComplete("a11y/tabindex", bare(9))).toBe(true);
@@ -262,7 +301,10 @@ describe("itemListComplete", () => {
 
   test("every legacy cap and budgeted check names a real rule", () => {
     const rules = loadAllRules();
-    for (const key of [...LEGACY_SILENT_ITEM_CAPS.keys(), ...SCAN_BUDGET_CHECKS]) {
+    for (const key of [
+      ...LEGACY_SILENT_ITEM_CAPS.keys(),
+      ...SCAN_BUDGET_CHECKS,
+    ]) {
       const ruleId = key.slice(0, key.indexOf("|"));
       expect(rules.has(ruleId)).toBe(true);
     }
@@ -275,7 +317,10 @@ class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
 
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -284,7 +329,10 @@ class MemStore implements SmartAuditStore {
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
     for (const f of findings) {
-      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+      this.findings.set(
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+        { ...f }
+      );
     }
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
@@ -300,13 +348,17 @@ class MemStore implements SmartAuditStore {
 const h = (url: string) => resolutionUrlHash(normalizePageUrl(url));
 const statuses = [PAGE, OTHER].map((url) => ({ url, status: 200 }));
 
-async function publishTwice(run2Checks: CheckResult[]): Promise<Map<string, PageFindingRecord>> {
+async function publishTwice(
+  run2Checks: CheckResult[]
+): Promise<Map<string, PageFindingRecord>> {
   const store = new MemStore();
   await runCloudSmartAudits({
     store,
     siteKey: SITE,
     crawlId: "audit_1",
-    ruleResults: { [RULE]: { meta, checks: [dialogCheck(["dialog", "dialog.cart"])] } },
+    ruleResults: {
+      [RULE]: { meta, checks: [dialogCheck(["dialog", "dialog.cart"])] },
+    },
     pageStatuses: statuses,
   });
   const signal: ResolutionSignal = {
@@ -347,13 +399,19 @@ describe("runCloudSmartAudits: a still-failing page's unlisted item (pub#474)", 
   });
 
   test("a page rebuilt from a folded aggregate carries (its list is the fold's attribution)", async () => {
-    const other: CheckResult = { ...dialogCheck(["dialog.promo"]), pageUrl: OTHER };
-    const folded = foldOverflowChecks([dialogCheck(["dialog.newsletter-popup"]), other], {
-      maxChecks: 1,
-      maxItemsPerCheck: 1000,
-      maxPagesPerCheck: 1000,
-      maxSourcePagesPerItem: 100,
-    });
+    const other: CheckResult = {
+      ...dialogCheck(["dialog.promo"]),
+      pageUrl: OTHER,
+    };
+    const folded = foldOverflowChecks(
+      [dialogCheck(["dialog.newsletter-popup"]), other],
+      {
+        maxChecks: 1,
+        maxItemsPerCheck: 1000,
+        maxPagesPerCheck: 1000,
+        maxSourcePagesPerItem: 100,
+      }
+    );
     expect(folded).toHaveLength(1);
     expect(folded[0]!.details?.aggregated).toBe(true);
     const rows = await publishTwice(folded);
@@ -379,10 +437,18 @@ describe("runCloudSmartAudits: a still-failing page's unlisted item (pub#474)", 
       message: "shared (+4 more pages)",
       pages: [OTHER],
       items: [{ id: "dialog.cart", sourcePages: [OTHER] }],
-      details: { aggregated: true, occurrences: 5, pagesTruncated: 5, foldKey: "shared" },
+      details: {
+        aggregated: true,
+        occurrences: 5,
+        pagesTruncated: 5,
+        foldKey: "shared",
+      },
     };
     const rows = await publishTwice([
-      { ...dialogCheck(["dialog.newsletter-popup"]), details: { foldKey: "local" } },
+      {
+        ...dialogCheck(["dialog.newsletter-popup"]),
+        details: { foldKey: "local" },
+      },
       aggregate,
     ]);
     expect(rows.get("dialog")?.state).toBe("open");
@@ -399,4 +465,7 @@ describe("runCloudSmartAudits: a still-failing page's unlisted item (pub#474)", 
   });
 });
 
-describeSitePagesContract("item-locator-resolve.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "item-locator-resolve.test.ts MemStore",
+  () => new MemStore()
+);

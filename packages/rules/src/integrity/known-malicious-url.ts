@@ -56,7 +56,11 @@ export const knownMaliciousUrlRule: Rule = {
     // Check names by outcome class (#1741).
     checks: [
       { name: "known-malicious-url", outcome: "problem" },
-      { name: "known-malicious-url", outcome: "clean", clears: ["known-malicious-url"] },
+      {
+        name: "known-malicious-url",
+        outcome: "clean",
+        clears: ["known-malicious-url"],
+      },
       { name: "known-malicious-url", outcome: "skipped" },
     ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
@@ -85,7 +89,9 @@ export const knownMaliciousUrlRule: Rule = {
       if (!verdict.listed) continue;
 
       const providers = verdict.sources.map((s) => s.provider);
-      const threats = [...new Set(verdict.sources.map((s) => s.threat).filter(Boolean))];
+      const threats = [
+        ...new Set(verdict.sources.map((s) => s.threat).filter(Boolean)),
+      ];
       const isOwnSite = candidate.origin === "site";
       checks.push({
         name: "known-malicious-url",

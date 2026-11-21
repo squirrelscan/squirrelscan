@@ -1,66 +1,36 @@
 // Plain text report output
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
-import { isAuditFailed } from "@squirrelscan/core-contracts";
-import type { AuditReport, CheckResult } from "../types";
-import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
-import { cacheFreshnessLines, cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
-import { javascriptHeaviestPagesLine, javascriptShippedLine } from "../javascript-shipped";
-import { refusedFetchLines, undecodableFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
-import { getScoreGrade } from "../scoring";
-import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_TEXT_WRAP_WIDTH } from "../constants";
-import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
-import {
-  ruleSiteResourceCoverage,
-  siteResourceFixLine,
-  withSiteResourceCoverage,
-} from "../site-resource-presentation";
 
-import { uncoveredItems } from "../component-presentation";
-import { formatSiteWideItem, siteWideContext, siteWideItem } from "../site-wide-items";
-import {
-  groupIssuesByCategory,
-  flattenIssuesBySeverity,
-  passedRuleScope,
-  reportPassedRules,
-} from "../grouping";
-import { affectedPages, itemsNotListed, itemsNotListedLine } from "../affected-pages";
-import {
-  affectedPagesSuffix,
-  itemSourceView,
-  moreSourcePages,
-  sourceRowText,
-} from "../item-sources";
-import {
-  checkPagesScopedAway,
-  checkScopeLine,
-  itemLabel,
-  regionScopeLine,
-} from "../region-scope";
-import {
-  ENTITY_CONSOLE_LIMIT,
-  ENTITY_EMPTY_MESSAGE,
-  entityLabel,
-  entityPageTotal,
-  entitySummaryLine,
-  primaryEntities,
-} from "../entities";
-import {
-  structureChromeLine,
-  structureDegradedLine,
-  structureNumber,
-  structurePageTypesLine,
-  structureRows,
-  structureTotalsLine,
-} from "../structure";
-import { hostRows } from "../host";
-import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary } from "../technologies";
-import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
-import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
+import { isAuditFailed } from "@squirrelscan/core-contracts";
+import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
+import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { wcagLabel } from "@squirrelscan/core-contracts/wcag";
-import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
+
+import type { AuditReport, CheckResult } from "../types";
+
+import {
+  affectedPages,
+  itemsNotListed,
+  itemsNotListedLine,
+} from "../affected-pages";
 import { agentSignalLines } from "../agent-signals";
+import {
+  cacheFreshnessLines,
+  cacheReasonsLabel,
+  cacheStatsSummaryLine,
+} from "../cache-stats";
+import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
+import {
+  fixRollupLine,
+  fixUnits,
+  ruleFixCoverage,
+} from "../component-presentation";
+import { uncoveredItems } from "../component-presentation";
+import {
+  REPORT_SOURCE_PAGES_PREVIEW,
+  REPORT_TEXT_WRAP_WIDTH,
+} from "../constants";
 import {
   carriedTag,
   coverageLine,
@@ -74,14 +44,93 @@ import {
   startRedirectLine,
 } from "../coverage";
 import { partialAuditLine } from "../coverage";
-import { ignoredLine, ignoredNoteLines } from "../ignored";
-import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
-import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
-import { privateTargetLine } from "../private-target";
-import { scoreAdjustmentNoteFor } from "../score-adjustment";
+import {
+  EDITOR_SUMMARY_NOTE,
+  editorSummaryView,
+  priorityEffortLabel,
+} from "../editor-summary";
+import {
+  ENTITY_CONSOLE_LIMIT,
+  ENTITY_EMPTY_MESSAGE,
+  entityLabel,
+  entityPageTotal,
+  entitySummaryLine,
+  primaryEntities,
+} from "../entities";
+import {
+  refusedFetchLines,
+  undecodableFetchLines,
+  reportFailureReasonCode,
+} from "../failure-notice";
+import {
+  groupIssuesByCategory,
+  flattenIssuesBySeverity,
+  passedRuleScope,
+  reportPassedRules,
+} from "../grouping";
+import { hostRows } from "../host";
+import { ignoredLine, ignoredNoteLines } from "../ignored";
+import {
+  affectedPagesSuffix,
+  itemSourceView,
+  moreSourcePages,
+  sourceRowText,
+} from "../item-sources";
+import {
+  javascriptHeaviestPagesLine,
+  javascriptShippedLine,
+} from "../javascript-shipped";
+import {
+  LOCKED_REASON_LABELS,
+  lockedRuleView,
+  lockedRulesMessage,
+} from "../locked-rules";
 import { notCheckedDetailLines } from "../not-checked";
-import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
+import { privateTargetLine } from "../private-target";
+import {
+  checkPagesScopedAway,
+  checkScopeLine,
+  itemLabel,
+  regionScopeLine,
+} from "../region-scope";
+import { scoreAdjustmentNoteFor } from "../score-adjustment";
+import { getScoreGrade } from "../scoring";
+import {
+  SITE_PROFILE_NOTE,
+  siteProfileFlags,
+  siteProfileRows,
+} from "../site-metadata";
+import {
+  ruleSiteResourceCoverage,
+  siteResourceFixLine,
+  withSiteResourceCoverage,
+} from "../site-resource-presentation";
+import {
+  formatSiteWideItem,
+  siteWideContext,
+  siteWideItem,
+} from "../site-wide-items";
+import {
+  structureChromeLine,
+  structureDegradedLine,
+  structureNumber,
+  structurePageTypesLine,
+  structureRows,
+  structureTotalsLine,
+} from "../structure";
+import {
+  groupTechnologies,
+  isLocalOnlyTech,
+  TECH_LOCAL_MARK,
+  techChangeSummary,
+} from "../technologies";
+import { wrapText } from "../utils";
+import {
+  wafBlockedPagesLines,
+  wafBlockedSeedCopy,
+  wafSuspectLines,
+} from "../waf-blocked";
 
 export interface TextRenderOptions {
   /** Roll up groups that are one repair (default true). */
@@ -111,7 +160,7 @@ function formatHealthScoreText(report: AuditReport): string {
   lines.push(
     score.overall === null
       ? "Health Score: N/A (no auditable pages)"
-      : `Health Score: ${score.overall}/100 (${getScoreGrade(score.overall)})`,
+      : `Health Score: ${score.overall}/100 (${getScoreGrade(score.overall)})`
   );
   lines.push("");
   const adjustmentNote = scoreAdjustmentNoteFor(score);
@@ -122,12 +171,17 @@ function formatHealthScoreText(report: AuditReport): string {
     lines.push("Group Breakdown:");
     lines.push("-".repeat(50));
     for (const g of groups) {
-      const bar = "█".repeat(Math.floor(g.score / 10)) + "░".repeat(10 - Math.floor(g.score / 10));
+      const bar =
+        "█".repeat(Math.floor(g.score / 10)) +
+        "░".repeat(10 - Math.floor(g.score / 10));
       // Name derives from the group CODE (not the stored name) so renames
       // apply to already-stored reports.
       lines.push(`${getGroupName(g.group).padEnd(20)} ${bar} ${g.score}%`);
-      lines.push(`  Passed: ${g.passed} | Warnings: ${g.warnings} | Failed: ${g.failed}`);
-      if (g.group === "ai") for (const l of agentSignalLines(report)) lines.push(`  ${l}`);
+      lines.push(
+        `  Passed: ${g.passed} | Warnings: ${g.warnings} | Failed: ${g.failed}`
+      );
+      if (g.group === "ai")
+        for (const l of agentSignalLines(report)) lines.push(`  ${l}`);
     }
     lines.push("");
   }
@@ -136,18 +190,20 @@ function formatHealthScoreText(report: AuditReport): string {
     lines.push("-".repeat(50));
     for (const cat of score.categories) {
       const bar =
-        "█".repeat(Math.floor(cat.score / 10)) + "░".repeat(10 - Math.floor(cat.score / 10));
+        "█".repeat(Math.floor(cat.score / 10)) +
+        "░".repeat(10 - Math.floor(cat.score / 10));
       lines.push(`${cat.name.padEnd(20)} ${bar} ${cat.score}%`);
-      lines.push(`  Passed: ${cat.passed} | Warnings: ${cat.warnings} | Failed: ${cat.failed}`);
+      lines.push(
+        `  Passed: ${cat.passed} | Warnings: ${cat.warnings} | Failed: ${cat.failed}`
+      );
     }
     lines.push("");
   }
   lines.push(
-    `Total: ${score.passedCount} passed, ${score.warningCount} warnings, ${score.errorCount} errors`,
+    `Total: ${score.passedCount} passed, ${score.warningCount} warnings, ${score.errorCount} errors`
   );
   return lines.join("\n");
 }
-
 
 /**
  * Host list for a rate-limit line: names up to two, then counts the rest.
@@ -161,9 +217,10 @@ function formatRateLimitedHosts(hosts: string[]): string {
 
 /** Plain-language cause for an `omitted` component-evidence marker. */
 function componentEvidenceReason(
-  reason: NonNullable<CheckResult["componentEvidence"]>["reason"],
+  reason: NonNullable<CheckResult["componentEvidence"]>["reason"]
 ): string {
-  if (reason === "payload-limit") return "they exceeded the stored finding payload limit.";
+  if (reason === "payload-limit")
+    return "they exceeded the stored finding payload limit.";
   if (reason === "page-sample-limit") {
     return "their pages fall outside this rule's recorded page sample.";
   }
@@ -176,7 +233,7 @@ function scanDetailLines(report: AuditReport): string[] {
   // #1829: coverage the crawl lost to throttling.
   if (report.rateLimited && report.rateLimited.pages > 0) {
     out.push(
-      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`,
+      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`
     );
   }
   // #1418: the seed redirected off its own site and was not followed, so the URL at the top is not
@@ -190,7 +247,8 @@ function scanDetailLines(report: AuditReport): string[] {
   // #1262: findings the config's [[ignore]] entries waived, and entries that matched nothing.
   const ignored = ignoredLine(report);
   if (ignored) out.push(stripControlChars(ignored));
-  for (const line of ignoredNoteLines(report)) out.push(stripControlChars(line));
+  for (const line of ignoredNoteLines(report))
+    out.push(stripControlChars(line));
   const partial = partialAuditLine(report);
   if (partial) out.push(stripControlChars(partial));
   const scope = scanScopeLine(report);
@@ -218,7 +276,10 @@ function scanDetailLines(report: AuditReport): string[] {
  * REPORT DETAIL: what this audit did not check (so a skipped check never reads as clean), the page
  * structure, then the scope and coverage notes. Writes nothing when there is none of it.
  */
-function writeReportDetail(report: AuditReport, write: (line?: string) => void): void {
+function writeReportDetail(
+  report: AuditReport,
+  write: (line?: string) => void
+): void {
   const notChecked = notCheckedDetailLines(report);
   const scan = scanDetailLines(report);
   const structure = report.structure;
@@ -240,11 +301,16 @@ function writeReportDetail(report: AuditReport, write: (line?: string) => void):
     }
     const rows = structureRows(structure);
     if (rows.length > 0) {
-      const width = Math.max("Section".length, ...rows.map((r) => r.section.length));
-      write(`${"Section".padEnd(width)}  ${"Pages".padStart(7)}  ${"Links".padStart(8)}`);
+      const width = Math.max(
+        "Section".length,
+        ...rows.map((r) => r.section.length)
+      );
+      write(
+        `${"Section".padEnd(width)}  ${"Pages".padStart(7)}  ${"Links".padStart(8)}`
+      );
       for (const row of rows) {
         write(
-          `${row.section.padEnd(width)}  ${structureNumber(row.pages).padStart(7)}  ${structureNumber(row.links).padStart(8)}`,
+          `${row.section.padEnd(width)}  ${structureNumber(row.pages).padStart(7)}  ${structureNumber(row.links).padStart(8)}`
         );
       }
       write("");
@@ -264,7 +330,10 @@ function writeReportDetail(report: AuditReport, write: (line?: string) => void):
   }
 }
 
-export function renderText(report: AuditReport, options?: TextRenderOptions): string {
+export function renderText(
+  report: AuditReport,
+  options?: TextRenderOptions
+): string {
   const lines: string[] = [];
   const siteWide = siteWideContext(report, options?.siteWideCollapse !== false);
   const version = options?.version ?? "";
@@ -275,7 +344,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
 
   // White-label drops the "squirrelscan" title in favour of the org name (or a
   // neutral "Audit Report") so the text export carries no squirrelscan branding.
-  const titleBase = whiteLabel ? (options?.branding?.orgName ?? "Audit Report") : "squirrelscan";
+  const titleBase = whiteLabel
+    ? (options?.branding?.orgName ?? "Audit Report")
+    : "squirrelscan";
   write(`${titleBase}${version ? ` v${version}` : ""}`);
   write("=".repeat(60));
   write(`Auditing: ${report.baseUrl}`);
@@ -312,7 +383,8 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     for (const [i, p] of es.priorities.entries()) {
       write(`${i + 1}. ${p.title} [${priorityEffortLabel(p.effort)}]`);
       for (const text of [p.why, p.action].filter(Boolean)) {
-        for (const line of wrapText(text, REPORT_TEXT_WRAP_WIDTH - 3)) write(`   ${line}`);
+        for (const line of wrapText(text, REPORT_TEXT_WRAP_WIDTH - 3))
+          write(`   ${line}`);
       }
       write("");
     }
@@ -339,17 +411,17 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       // nothing for a throttle, and slowing down does nothing for a WAF. The
       // copy has to match the cause or it sends the reader to the wrong place.
       write(
-        `${formatRateLimitedHosts(report.rateLimited!.hosts)} rate limited the crawler (429/430) before any pages could be read, so nothing was audited.`,
+        `${formatRateLimitedHosts(report.rateLimited!.hosts)} rate limited the crawler (429/430) before any pages could be read, so nothing was audited.`
       );
       write(
-        "To get a full audit: crawl the site more slowly with `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in squirrel.toml, raise `max_backoff_ms` to wait longer, or retry when the host is less busy.",
+        "To get a full audit: crawl the site more slowly with `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in squirrel.toml, raise `max_backoff_ms` to wait longer, or retry when the host is less busy."
       );
     } else if (blocked) {
       write(
-        "Your site refused the crawler before any pages could be read (403/429 from bot protection, a firewall, an auth wall, or rate limiting). This is a block on your side, not a squirrelscan outage.",
+        "Your site refused the crawler before any pages could be read (403/429 from bot protection, a firewall, an auth wall, or rate limiting). This is a block on your side, not a squirrelscan outage."
       );
       write(
-        "To get a full audit: allowlist the squirrelscan crawler, turn off bot fight mode for the audit, or run it from a trusted network.",
+        "To get a full audit: allowlist the squirrelscan crawler, turn off bot fight mode for the audit, or run it from a trusted network."
       );
     } else {
       // #1822: the reason names the class (DNS, TLS, connection, timeout, a
@@ -421,12 +493,16 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   if (report.host) {
     write("HOST");
     write("-".repeat(40));
-    for (const row of hostRows(report.host)) write(`${row.label.padEnd(15)} ${row.value}`);
+    for (const row of hostRows(report.host))
+      write(`${row.label.padEnd(15)} ${row.value}`);
     write("");
   }
 
   // Technologies — report-only (no logos possible in plain text; emoji + name).
-  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
+  if (
+    report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
+  ) {
     const tech = report.technologies;
     write("TECHNOLOGIES");
     write("-".repeat(40));
@@ -436,7 +512,10 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("");
     for (const group of groupTechnologies(tech.items)) {
       const names = group.items
-        .map((t) => `${t.name}${t.version ? ` v${t.version}` : ""}${isLocalOnlyTech(t) ? ` ${TECH_LOCAL_MARK}` : ""}`)
+        .map(
+          (t) =>
+            `${t.name}${t.version ? ` v${t.version}` : ""}${isLocalOnlyTech(t) ? ` ${TECH_LOCAL_MARK}` : ""}`
+        )
         .join(", ");
       write(`${group.emoji} ${group.label}: ${names}`);
     }
@@ -475,7 +554,10 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("");
   }
 
-  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
+  const categoryIssues = groupIssuesByCategory(
+    report.ruleResults,
+    report.checkTallies
+  );
   // Severity → category → weight (#1536): one global order, so everything you
   // must fix sits above everything you might. Categories are labeled per rule
   // rather than used as headings, since a category now spans severity sections.
@@ -493,7 +575,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       if (rule.severity !== lastSeverity) {
         lastSeverity = rule.severity;
         lastCategory = undefined;
-        write(`=== ${severityLabel(rule.severity, { plural: true }).toUpperCase()} ===`);
+        write(
+          `=== ${severityLabel(rule.severity, { plural: true }).toUpperCase()} ===`
+        );
         write("");
       }
       if (rule.categoryCode !== lastCategory) {
@@ -509,7 +593,8 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       }
       write(`  [${severityLabel(rule.severity)}] ${rule.id} - ${rule.name}`);
       if (rule.description) write(`  Description: ${rule.description}`);
-      for (const c of rule.wcag ?? []) write(`  WCAG: ${wcagLabel(c)} (WCAG ${c.version})`);
+      for (const c of rule.wcag ?? [])
+        write(`  WCAG: ${wcagLabel(c)} (WCAG ${c.version})`);
       if (rule.solution) {
         const wrapped = wrapText(rule.solution, REPORT_TEXT_WRAP_WIDTH);
         write(`  Solution: ${wrapped[0]}`);
@@ -517,11 +602,18 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       }
       // #2341: resource units first, then component units, over one coverage.
       const siteResources = ruleSiteResourceCoverage(rule);
-      const coverage = withSiteResourceCoverage(ruleFixCoverage(rule), siteResources, rule);
+      const coverage = withSiteResourceCoverage(
+        ruleFixCoverage(rule),
+        siteResources,
+        rule
+      );
       for (const group of siteResources.groups) {
         write(`    ${siteResourceFixLine(group, 5, pathOnly)}`);
       }
-      for (const rollup of fixUnits(coverage.groups, options?.componentRollup !== false)) {
+      for (const rollup of fixUnits(
+        coverage.groups,
+        options?.componentRollup !== false
+      )) {
         // One actionable line per REPAIR, not per faulty element in a block.
         write(`    ${fixRollupLine(rollup, 5, pathOnly)}`);
       }
@@ -533,10 +625,12 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
         const { sample, count, hasMore } = affectedPages(check);
         const countStr = affectedPagesSuffix(check, count);
         const icon = check.status === "fail" ? "X" : "!";
-        write(`    [${icon}] ${check.name}: ${check.message}${countStr}${carriedTag(check)}`);
+        write(
+          `    [${icon}] ${check.name}: ${check.message}${countStr}${carriedTag(check)}`
+        );
         if (check.componentEvidence?.state === "omitted") {
           write(
-            `        Component fix evidence unavailable for ${check.componentEvidence.occurrenceCount} occurrence(s): ${componentEvidenceReason(check.componentEvidence.reason)}`,
+            `        Component fix evidence unavailable for ${check.componentEvidence.occurrenceCount} occurrence(s): ${componentEvidenceReason(check.componentEvidence.reason)}`
           );
         }
 
@@ -554,9 +648,14 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
         const checkScope = checkScopeLine(check, count, report.structure);
         if (checkScope) {
           write(`        ${checkScope}`);
-        } else if (uncovered.length > 0 && !checkPagesScopedAway(check, count, report.structure)) {
+        } else if (
+          uncovered.length > 0 &&
+          !checkPagesScopedAway(check, count, report.structure)
+        ) {
           if (coverage.mode === "partial") {
-            write(`        Not attributed to a shared component (${uncovered.length}):`);
+            write(
+              `        Not attributed to a shared component (${uncovered.length}):`
+            );
           }
           for (const page of uncovered) write(`        -> ${pathOnly(page)}`);
           if (coverage.mode === "none" && hasMore) {
@@ -589,12 +688,17 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
             if (view.scope) write(`            ${regionScopeLine(view.scope)}`);
             const shown = view.rows.slice(0, REPORT_SOURCE_PAGES_PREVIEW);
             for (const row of shown) {
-              write(`            from: ${sourceRowText(pathOnly(row.page), row.detail)}`);
+              write(
+                `            from: ${sourceRowText(pathOnly(row.page), row.detail)}`
+              );
             }
             const hidden = Math.max(0, view.total - shown.length);
             if (hidden > 0) write(`            ${moreSourcePages(hidden)}`);
           }
-          if (left > 0) write(`        ... and ${left.toLocaleString("en-US")} more items not listed`);
+          if (left > 0)
+            write(
+              `        ... and ${left.toLocaleString("en-US")} more items not listed`
+            );
         } else if (left > 0) {
           write(`        ${itemsNotListedLine(left)}`);
         }
@@ -610,7 +714,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
 
   const passedRules = reportPassedRules(report, options?.includePassed);
   if (passedRules.length > 0) {
-    write(`PASSED (${passedRules.length} rule${passedRules.length === 1 ? "" : "s"})`);
+    write(
+      `PASSED (${passedRules.length} rule${passedRules.length === 1 ? "" : "s"})`
+    );
     write("-".repeat(40));
     let lastCategory: string | undefined;
     for (const rule of passedRules) {
@@ -661,11 +767,14 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     if (locked) {
       write("CHECKS NOT RUN");
       write("-".repeat(40));
-      for (const line of wrapText(locked.action, REPORT_TEXT_WRAP_WIDTH)) write(line);
+      for (const line of wrapText(locked.action, REPORT_TEXT_WRAP_WIDTH))
+        write(line);
       if (locked.cta) write(`${locked.cta.label}: ${locked.cta.url}`);
       write("");
       for (const rule of locked.rules.map(lockedRuleView)) {
-        write(`  ${rule.id}, ${rule.name}${rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : ""}`);
+        write(
+          `  ${rule.id}, ${rule.name}${rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : ""}`
+        );
       }
       write("");
     }
@@ -675,13 +784,19 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   writeReportDetail(report, write);
 
   write("=".repeat(60));
-  write(`${report.passed} passed, ${report.warnings} warnings, ${report.failed} failed`);
+  write(
+    `${report.passed} passed, ${report.warnings} warnings, ${report.failed} failed`
+  );
   // White-label drops the squirrelscan "Generated by" credit line, and shows
   // the org's own footer text and website in its place.
   if (!whiteLabel) write("Generated by squirrelscan.com");
   else {
     if (options?.branding?.footerText) {
-      for (const line of wrapText(options.branding.footerText, REPORT_TEXT_WRAP_WIDTH)) write(line);
+      for (const line of wrapText(
+        options.branding.footerText,
+        REPORT_TEXT_WRAP_WIDTH
+      ))
+        write(line);
     }
     const website = options?.branding?.websiteUrl;
     if (website && /^https:\/\//i.test(website)) write(website);

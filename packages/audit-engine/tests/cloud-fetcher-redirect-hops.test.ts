@@ -4,17 +4,21 @@
 // returned 200 did not redirect, so nothing downstream can tell an invented
 // chain from a real one.
 
-import { describe, expect, test } from "bun:test";
-
 import type { RenderResultItem } from "@squirrelscan/core-contracts";
+
 import { withObservedHopStatuses } from "@squirrelscan/fetchers";
+import { describe, expect, test } from "bun:test";
 
 import { mapRenderItemToResponse } from "../src/cloud-fetcher";
 
 const TIMING = { startedAt: 0, responseAt: 1, finishedAt: 2 };
 
 const map = (item: RenderResultItem, requestUrl: string) =>
-  mapRenderItemToResponse({ ...item, html: item.html ?? "" }, requestUrl, TIMING);
+  mapRenderItemToResponse(
+    { ...item, html: item.html ?? "" },
+    requestUrl,
+    TIMING
+  );
 
 describe("mapRenderItemToResponse — redirect hops", () => {
   test("a landing-page-only chain never claims a 200 first hop", () => {
@@ -26,7 +30,7 @@ describe("mapRenderItemToResponse — redirect hops", () => {
         html: "<html></html>",
         redirectChain: [{ url: "https://example.com/o-mnie/", status: 200 }],
       },
-      "https://example.com/o-mnie",
+      "https://example.com/o-mnie"
     );
 
     const hops = response.redirectChain!.hops;
@@ -49,7 +53,7 @@ describe("mapRenderItemToResponse — redirect hops", () => {
         status: 200,
         redirectChain: [{ url: "https://example.com/b/", status: 200 }],
       },
-      "https://example.com/a",
+      "https://example.com/a"
     );
 
     for (const hop of response.redirectChain!.hops.slice(0, -1)) {
@@ -61,7 +65,7 @@ describe("mapRenderItemToResponse — redirect hops", () => {
   test("a page that did not redirect keeps its real status on its single hop", () => {
     const response = map(
       { url: "https://example.com/", status: 200, html: "<html></html>" },
-      "https://example.com/",
+      "https://example.com/"
     );
 
     expect(response.redirectChain!.hops).toEqual([
@@ -72,7 +76,10 @@ describe("mapRenderItemToResponse — redirect hops", () => {
   });
 
   test("an error status is still reported on the page's own hop", () => {
-    const response = map({ url: "https://example.com/gone", status: 404 }, "https://example.com/gone");
+    const response = map(
+      { url: "https://example.com/gone", status: 404 },
+      "https://example.com/gone"
+    );
 
     expect(response.status).toBe(404);
     expect(response.redirectChain!.hops[0]!.statusCode).toBe(404);
@@ -91,7 +98,7 @@ describe("mapRenderItemToResponse — redirect hops", () => {
           { url: "https://example.com/new/", status: 200 },
         ],
       },
-      "https://example.com/old",
+      "https://example.com/old"
     );
 
     expect(response.redirectChain!.hops).toEqual([
@@ -114,7 +121,7 @@ describe("mapRenderItemToResponse — redirect hops", () => {
           { url: "https://example.com/o-mnie/", status: 200 },
         ],
       },
-      "https://example.com/o-mnie",
+      "https://example.com/o-mnie"
     );
 
     expect(response.redirectChain!.hops).toEqual([
@@ -126,9 +133,13 @@ describe("mapRenderItemToResponse — redirect hops", () => {
   test("a client-side hop keeps its 200 — that document really did return 200", () => {
     expect(
       withObservedHopStatuses([
-        { url: "https://example.com/old/", statusCode: 200, type: "javascript" },
+        {
+          url: "https://example.com/old/",
+          statusCode: 200,
+          type: "javascript",
+        },
         { url: "https://example.com/new/", statusCode: 200, type: "http" },
-      ]),
+      ])
     ).toEqual([
       { url: "https://example.com/old/", statusCode: 200, type: "javascript" },
       { url: "https://example.com/new/", statusCode: 200, type: "http" },
@@ -145,7 +156,7 @@ describe("mapRenderItemToResponse — redirect hops", () => {
           { url: "https://example.com/b/", status: 200 },
         ],
       },
-      "https://example.com/a",
+      "https://example.com/a"
     );
 
     expect(response.redirectChain!.hops[0]!.statusCode).toBe(308);
@@ -158,7 +169,7 @@ describe("mapRenderItemToResponse — redirect hops", () => {
         status: 200,
         redirectChain: [{ url: "https://example.com/", status: 200 }],
       },
-      "http://example.com/",
+      "http://example.com/"
     );
 
     expect(response.redirectChain!.httpToHttps).toBe(true);

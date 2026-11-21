@@ -2,16 +2,25 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { brokenLinksRule } from "../src/links/broken-links";
 import type { RuleContext } from "../src/types";
+
+import { brokenLinksRule } from "../src/links/broken-links";
 
 const BASE = "https://example.com";
 
 type L = { url: string; section?: string };
 
-function ctx(pages: { url: string; status: number; links: L[] }[]): RuleContext {
+function ctx(
+  pages: { url: string; status: number; links: L[] }[]
+): RuleContext {
   return {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {},
     site: {
       baseUrl: BASE,
@@ -38,39 +47,62 @@ const gone = `${BASE}/gone`;
 
 describe("links/broken-links: section", () => {
   test("label and meta say where the broken link sat", async () => {
-    const { checks } = (await brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx([
-        { url: `${BASE}/`, status: 200, links: [{ url: gone, section: "footer" }] },
-        { url: `${BASE}/a`, status: 200, links: [{ url: gone, section: "footer" }] },
-        { url: `${BASE}/b`, status: 200, links: [{ url: gone, section: "content" }] },
+        {
+          url: `${BASE}/`,
+          status: 200,
+          links: [{ url: gone, section: "footer" }],
+        },
+        {
+          url: `${BASE}/a`,
+          status: 200,
+          links: [{ url: gone, section: "footer" }],
+        },
+        {
+          url: `${BASE}/b`,
+          status: 200,
+          links: [{ url: gone, section: "content" }],
+        },
         { url: gone, status: 404, links: [] },
-      ]),
-    ));
+      ])
+    );
     const item = checks.find((c) => c.name === "broken-links")!.items![0]!;
-    expect(item.label).toBe(`${gone} (404), linked in the footer and the page content`);
-    expect(item.meta).toMatchObject({ statusCode: 404, sections: { footer: 2, content: 1 } });
+    expect(item.label).toBe(
+      `${gone} (404), linked in the footer and the page content`
+    );
+    expect(item.meta).toMatchObject({
+      statusCode: 404,
+      sections: { footer: 2, content: 1 },
+    });
   });
 
   test("an old crawl with no section keeps the plain label", async () => {
-    const { checks } = (await brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx([
         { url: `${BASE}/`, status: 200, links: [{ url: gone }] },
         { url: gone, status: 404, links: [] },
-      ]),
-    ));
+      ])
+    );
     const item = checks.find((c) => c.name === "broken-links")!.items![0]!;
     expect(item.label).toBe(`${gone} (404)`);
     expect(item.meta).not.toHaveProperty("sections");
   });
 
   test("links of unknown placement add no phrase", async () => {
-    const { checks } = (await brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx([
-        { url: `${BASE}/`, status: 200, links: [{ url: gone, section: "unknown" }] },
+        {
+          url: `${BASE}/`,
+          status: 200,
+          links: [{ url: gone, section: "unknown" }],
+        },
         { url: gone, status: 404, links: [] },
-      ]),
-    ));
-    expect(checks.find((c) => c.name === "broken-links")!.items![0]!.label).toBe(`${gone} (404)`);
+      ])
+    );
+    expect(
+      checks.find((c) => c.name === "broken-links")!.items![0]!.label
+    ).toBe(`${gone} (404)`);
   });
 
   // The section purposes the page classifier names where the markup is silent.
@@ -87,12 +119,12 @@ describe("links/broken-links: section", () => {
 
   for (const [section, phrase] of PURPOSES) {
     test(`a link in ${section} reads "linked in ${phrase}"`, async () => {
-      const { checks } = (await brokenLinksRule.run(
+      const { checks } = await brokenLinksRule.run(
         ctx([
           { url: `${BASE}/`, status: 200, links: [{ url: gone, section }] },
           { url: gone, status: 404, links: [] },
-        ]),
-      ));
+        ])
+      );
       const item = checks.find((c) => c.name === "broken-links")!.items![0]!;
       expect(item.label).toBe(`${gone} (404), linked in ${phrase}`);
       expect(item.meta).toMatchObject({ sections: { [section]: 1 } });
@@ -100,16 +132,34 @@ describe("links/broken-links: section", () => {
   }
 
   test("markup and model sections mix, most common first, two named then a count", async () => {
-    const { checks } = (await brokenLinksRule.run(
+    const { checks } = await brokenLinksRule.run(
       ctx([
-        { url: `${BASE}/`, status: 200, links: [{ url: gone, section: "footer" }] },
-        { url: `${BASE}/a`, status: 200, links: [{ url: gone, section: "footer" }] },
-        { url: `${BASE}/b`, status: 200, links: [{ url: gone, section: "pagination" }] },
-        { url: `${BASE}/c`, status: 200, links: [{ url: gone, section: "social_share" }] },
+        {
+          url: `${BASE}/`,
+          status: 200,
+          links: [{ url: gone, section: "footer" }],
+        },
+        {
+          url: `${BASE}/a`,
+          status: 200,
+          links: [{ url: gone, section: "footer" }],
+        },
+        {
+          url: `${BASE}/b`,
+          status: 200,
+          links: [{ url: gone, section: "pagination" }],
+        },
+        {
+          url: `${BASE}/c`,
+          status: 200,
+          links: [{ url: gone, section: "social_share" }],
+        },
         { url: gone, status: 404, links: [] },
-      ]),
-    ));
+      ])
+    );
     const item = checks.find((c) => c.name === "broken-links")!.items![0]!;
-    expect(item.label).toBe(`${gone} (404), linked in the footer, the pagination and 1 more`);
+    expect(item.label).toBe(
+      `${gone} (404), linked in the footer, the pagination and 1 more`
+    );
   });
 });

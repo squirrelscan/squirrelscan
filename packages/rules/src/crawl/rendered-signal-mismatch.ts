@@ -6,6 +6,7 @@
 // compares the head signals, from the same cloud render, so it adds no charge beyond the page's audit.
 
 import type { RenderResultItem } from "@squirrelscan/core-contracts";
+
 import { extractH1, extractMeta, parseDocument } from "@squirrelscan/parser";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -30,7 +31,10 @@ function shown(text: string | null): string | null {
  * default port already gone (the URL parser), no fragment, and no trailing slash on a non-root
  * path. Null when it is empty or unparseable: such a value is compared as its trimmed text.
  */
-export function canonicalKey(href: string | null, pageUrl: string): string | null {
+export function canonicalKey(
+  href: string | null,
+  pageUrl: string
+): string | null {
   const raw = href?.trim();
   if (!raw) return null;
   try {
@@ -127,17 +131,21 @@ export const renderedSignalMismatchRule: Rule = {
       return {
         checks: skipped(
           "The crawl browser-rendered this page, so its raw and rendered HTML are identical: run a raw (non-rendered) audit to compare them",
-          "Raw-vs-rendered signal comparison skipped",
+          "Raw-vs-rendered signal comparison skipped"
         ),
       };
     }
 
-    const envelope = readCloudResult<RenderResultItem>(ctx.cloudResults, "render", ctx.page.url);
+    const envelope = readCloudResult<RenderResultItem>(
+      ctx.cloudResults,
+      "render",
+      ctx.page.url
+    );
     if (!envelope || envelope.status === "skipped") {
       return {
         checks: skipped(
           humanizeCloudSkip(envelope?.skipReason ?? "not-prefetched"),
-          "Raw-vs-rendered signal comparison skipped",
+          "Raw-vs-rendered signal comparison skipped"
         ),
       };
     }
@@ -146,7 +154,7 @@ export const renderedSignalMismatchRule: Rule = {
       return {
         checks: skipped(
           humanizeCloudSkip("render-failed"),
-          "No rendered HTML returned for this page",
+          "No rendered HTML returned for this page"
         ),
       };
     }
@@ -160,7 +168,8 @@ export const renderedSignalMismatchRule: Rule = {
     // The raw side's robots tags: every one of them, from the crawl's document, or the raw HTML
     // parsed again when the document was released (a large crawl drops it as it goes), or, with
     // neither, the first tag the crawl kept.
-    const rawDoc = raw.document ?? (ctx.page.html ? parseDocument(ctx.page.html) : null);
+    const rawDoc =
+      raw.document ?? (ctx.page.html ? parseDocument(ctx.page.html) : null);
     const rawDirectives = rawDoc
       ? collectRobotsDirectives(rawDoc)
       : raw.meta.robots !== null
@@ -224,8 +233,12 @@ export const renderedSignalMismatchRule: Rule = {
     const noindexDetails = {
       raw: rawNoindex,
       rendered: renderedNoindex,
-      rawRobots: shown(rawDirectives.length > 0 ? rawDirectives.join(" | ") : null),
-      renderedRobots: shown(renderedDirectives.length > 0 ? renderedDirectives.join(" | ") : null),
+      rawRobots: shown(
+        rawDirectives.length > 0 ? rawDirectives.join(" | ") : null
+      ),
+      renderedRobots: shown(
+        renderedDirectives.length > 0 ? renderedDirectives.join(" | ") : null
+      ),
     };
     if (rawNoindex !== renderedNoindex) {
       checks.push({
@@ -235,13 +248,17 @@ export const renderedSignalMismatchRule: Rule = {
           ? "noindex is in the raw HTML and JavaScript removes it: crawlers that read the raw HTML will not index this page"
           : "JavaScript adds noindex: a crawler that reads the raw HTML sees an indexable page, one that renders it does not",
         pageUrl: url,
-        details: { ...noindexDetails, carriedBy: rawNoindex ? "raw" : "rendered" },
+        details: {
+          ...noindexDetails,
+          carriedBy: rawNoindex ? "raw" : "rendered",
+        },
       });
     } else {
       checks.push({
         name: NOINDEX,
         status: "pass",
-        message: "The robots noindex is the same before and after JavaScript runs",
+        message:
+          "The robots noindex is the same before and after JavaScript runs",
         details: noindexDetails,
       });
     }

@@ -8,7 +8,12 @@
 // `billing_first_name` and `billing-first-name` all reduce to the same list.
 
 /** The five field families this module can identify. */
-export type FieldPurposeGroup = "name" | "email" | "tel" | "address" | "payment";
+export type FieldPurposeGroup =
+  | "name"
+  | "email"
+  | "tel"
+  | "address"
+  | "payment";
 
 export interface FieldPurpose {
   /** The WHATWG autofill token this field should carry. */
@@ -159,11 +164,7 @@ const PURPOSES: PurposeEntry[] = [
     alternatives: [],
     group: "name",
     label: "full name",
-    seqs: [
-      ["full", "name"],
-      ["fullname"],
-      ["your", "name"],
-    ],
+    seqs: [["full", "name"], ["fullname"], ["your", "name"]],
   },
   {
     token: "address-line2",
@@ -284,7 +285,12 @@ const INPUT_TYPE_HINTS: Array<{ type: ExpectedInputType; seqs: string[][] }> = [
  * locale digit grouping, exposes a spinner, and drops the value entirely when
  * the string is not a valid float. They are digit strings, not numbers.
  */
-const NUMBER_HOSTILE_TOKENS = new Set(["postal-code", "tel", "cc-number", "cc-csc"]);
+const NUMBER_HOSTILE_TOKENS = new Set([
+  "postal-code",
+  "tel",
+  "cc-number",
+  "cc-csc",
+]);
 
 /** WHATWG autofill field names (the token that follows any section/mode prefix). */
 const AUTOFILL_TOKENS = new Set([
@@ -348,7 +354,11 @@ const ADDRESS_MODES = new Set(["shipping", "billing"]);
 const CONTACT_MODES = new Set(["home", "work", "mobile", "fax", "pager"]);
 
 /** `webauthn` only trails a credential field name; anywhere else it is invalid. */
-const WEBAUTHN_TOKENS = new Set(["username", "new-password", "current-password"]);
+const WEBAUTHN_TOKENS = new Set([
+  "username",
+  "new-password",
+  "current-password",
+]);
 
 /** Input types that never carry a personal-data purpose or a text keyboard. */
 const NON_DATA_INPUT_TYPES = new Set([
@@ -441,7 +451,8 @@ export function isDataField(el: Element): boolean {
   if (tag !== "input" && tag !== "select" && tag !== "textarea") return false;
   if (tag === "input" && NON_DATA_INPUT_TYPES.has(inputType(el))) return false;
   if (el.hasAttribute("disabled")) return false;
-  if (el.closest("[hidden]") || el.closest('[aria-hidden="true"]')) return false;
+  if (el.closest("[hidden]") || el.closest('[aria-hidden="true"]'))
+    return false;
   return true;
 }
 
@@ -478,7 +489,10 @@ export function fieldSnippet(el: Element, max = 200): string {
 }
 
 /** The evident autofill purpose of a field, or null when it is not identifiable. */
-export function inferFieldPurpose(el: Element, labels: LabelIndex): FieldPurpose | null {
+export function inferFieldPurpose(
+  el: Element,
+  labels: LabelIndex
+): FieldPurpose | null {
   const evidence = purposeEvidence(el, labels);
   if (evidence.length === 0) return null;
   // Evidence-major: the strongest evidence decides, and PURPOSES order only
@@ -503,7 +517,10 @@ export function inferFieldPurpose(el: Element, labels: LabelIndex): FieldPurpose
 }
 
 /** The `type` a field's evident purpose calls for, or null when text is fine. */
-export function inferExpectedInputType(el: Element, labels: LabelIndex): ExpectedInputType | null {
+export function inferExpectedInputType(
+  el: Element,
+  labels: LabelIndex
+): ExpectedInputType | null {
   // Evidence-major for the same reason as inferFieldPurpose.
   for (const segments of purposeEvidence(el, labels).map(segmentsOf)) {
     for (const hint of INPUT_TYPE_HINTS) {
@@ -540,7 +557,12 @@ export function parseAutocomplete(raw: string): AutocompleteParse {
 
   let i = 0;
   const section = parts[i];
-  if (section && section.startsWith("section-") && section.length > "section-".length) i++;
+  if (
+    section &&
+    section.startsWith("section-") &&
+    section.length > "section-".length
+  )
+    i++;
   const addressMode = parts[i];
   if (addressMode && ADDRESS_MODES.has(addressMode)) i++;
   const contactMode = parts[i];
@@ -567,5 +589,7 @@ export function formSelector(form: Element, index: number): string {
 
 /** Every user-editable data control inside a form, in document order. */
 export function formDataFields(form: Element): Element[] {
-  return [...form.querySelectorAll("input, select, textarea")].filter(isDataField);
+  return [...form.querySelectorAll("input, select, textarea")].filter(
+    isDataField
+  );
 }

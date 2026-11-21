@@ -8,10 +8,20 @@
 // reads the same markup as `schema/product`. Feed and checkout-manifest detection is advisory: those
 // checks are `info` and never reach the score.
 
+import { flattenJsonLdNodes } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import {
+  filledAny,
+  offersOf,
+  priceFilled,
+  productAndVariants,
+  PRODUCT_TYPES,
+  values,
+  type Resolve,
+} from "../schema/product-evidence";
 import {
   collectNestedNodes,
   hasType,
@@ -22,16 +32,6 @@ import {
   readRdfa,
   type StructuredNode,
 } from "../shared/structured-nodes";
-import {
-  filledAny,
-  offersOf,
-  priceFilled,
-  productAndVariants,
-  PRODUCT_TYPES,
-  values,
-  type Resolve,
-} from "../schema/product-evidence";
-import { flattenJsonLdNodes } from "@squirrelscan/utils";
 
 export const OFFER_FIELDS = [
   "price",
@@ -52,7 +52,16 @@ const FIELD_LABELS: Record<OfferField, string> = {
   identifier: "product identifier (GTIN, MPN or SKU)",
 };
 
-const IDENTIFIER_PROPS = ["gtin", "gtin8", "gtin12", "gtin13", "gtin14", "mpn", "sku", "productID"];
+const IDENTIFIER_PROPS = [
+  "gtin",
+  "gtin8",
+  "gtin12",
+  "gtin13",
+  "gtin14",
+  "mpn",
+  "sku",
+  "productID",
+];
 
 export type FieldState = "present" | "absent" | "unknown";
 
@@ -60,7 +69,9 @@ function currencyFilled(offer: StructuredNode, resolve: Resolve): boolean {
   if (isFilled(offer["priceCurrency"])) return true;
   return values(offer, "priceSpecification", resolve).some(
     (spec) =>
-      !!spec && typeof spec === "object" && isFilled((spec as StructuredNode)["priceCurrency"]),
+      !!spec &&
+      typeof spec === "object" &&
+      isFilled((spec as StructuredNode)["priceCurrency"])
   );
 }
 
@@ -69,15 +80,16 @@ function returnsFilled(
   members: StructuredNode[],
   offers: StructuredNode[],
   allNodes: StructuredNode[],
-  resolve: Resolve,
+  resolve: Resolve
 ): boolean {
   for (const node of [...offers, ...members]) {
-    if (filledAny(values(node, "hasMerchantReturnPolicy", resolve))) return true;
+    if (filledAny(values(node, "hasMerchantReturnPolicy", resolve)))
+      return true;
   }
   return allNodes.some(
     (n) =>
       (hasType(n, "MerchantReturnPolicy") && isFilled(n)) ||
-      filledAny(values(n, "hasMerchantReturnPolicy", resolve)),
+      filledAny(values(n, "hasMerchantReturnPolicy", resolve))
   );
 }
 
@@ -85,23 +97,29 @@ function returnsFilled(
 export function offerFieldStates(
   product: StructuredNode,
   allNodes: StructuredNode[],
-  resolve: Resolve,
+  resolve: Resolve
 ): Record<OfferField, FieldState> {
   const members = productAndVariants(product, resolve);
   const offers = members.flatMap((m) => offersOf(m, resolve));
   const some = (test: (o: StructuredNode) => boolean): FieldState =>
     offers.some(test) ? "present" : "absent";
-  const hasProp = (prop: string) => (o: StructuredNode) => filledAny(values(o, prop, resolve));
+  const hasProp = (prop: string) => (o: StructuredNode) =>
+    filledAny(values(o, prop, resolve));
   return {
     price: some((o) => priceFilled(o, resolve)),
     currency: some((o) => currencyFilled(o, resolve)),
     availability: some(hasProp("availability")),
     shipping:
-      some(hasProp("shippingDetails")) === "present" || allNodes.some(hasProp("shippingDetails"))
+      some(hasProp("shippingDetails")) === "present" ||
+      allNodes.some(hasProp("shippingDetails"))
         ? "present"
         : "absent",
-    returns: returnsFilled(members, offers, allNodes, resolve) ? "present" : "absent",
-    identifier: members.some((m) => IDENTIFIER_PROPS.some((p) => isFilled(m[p])))
+    returns: returnsFilled(members, offers, allNodes, resolve)
+      ? "present"
+      : "absent",
+    identifier: members.some((m) =>
+      IDENTIFIER_PROPS.some((p) => isFilled(m[p]))
+    )
       ? "present"
       : "absent",
   };
@@ -126,18 +144,29 @@ function pathOf(href: string): string | null {
 }
 
 /** Manifest and feed URLs this page links to. Bounded scan, no network. */
-export function findCommerceLinks(doc: Document): { manifests: string[]; feeds: string[] } {
+export function findCommerceLinks(doc: Document): {
+  manifests: string[];
+  feeds: string[];
+} {
   const manifests = new Set<string>();
   const feeds = new Set<string>();
-  const els = Array.from(doc.querySelectorAll("link[href], a[href]")).slice(0, MAX_LINK_ELEMENTS);
+  const els = Array.from(doc.querySelectorAll("link[href], a[href]")).slice(
+    0,
+    MAX_LINK_ELEMENTS
+  );
   for (const el of els) {
     const href = el.getAttribute("href") ?? "";
     const path = pathOf(href);
     if (!path) continue;
-    if (MANIFEST_PATH.test(path)) manifests.add(href.trim().slice(0, MAX_HREF_CHARS));
-    else if (FEED_PATH.test(path)) feeds.add(href.trim().slice(0, MAX_HREF_CHARS));
+    if (MANIFEST_PATH.test(path))
+      manifests.add(href.trim().slice(0, MAX_HREF_CHARS));
+    else if (FEED_PATH.test(path))
+      feeds.add(href.trim().slice(0, MAX_HREF_CHARS));
   }
-  return { manifests: [...manifests].slice(0, 10), feeds: [...feeds].slice(0, 10) };
+  return {
+    manifests: [...manifests].slice(0, 10),
+    feeds: [...feeds].slice(0, 10),
+  };
 }
 
 export const commerceReadinessRule: Rule = {
@@ -164,7 +193,11 @@ export const commerceReadinessRule: Rule = {
     // a skip to resolution and never clears a stored finding.
     checks: [
       { name: "offer-completeness", outcome: "problem" },
-      { name: "offer-completeness", outcome: "clean", clears: ["offer-completeness"] },
+      {
+        name: "offer-completeness",
+        outcome: "clean",
+        clears: ["offer-completeness"],
+      },
       { name: "offer-completeness", outcome: "skipped" },
       { name: "commerce-feed", outcome: "problem" },
       { name: "commerce-manifest", outcome: "problem" },
@@ -199,11 +232,15 @@ export const commerceReadinessRule: Rule = {
     let primary: StructuredNode | null = null;
     // JSON-LD blocks with text that yielded no node: they may be a Product that stopped parsing.
     let unreadJsonLd = 0;
-    for (const script of Array.from(doc.querySelectorAll('script[type="application/ld+json"]'))) {
+    for (const script of Array.from(
+      doc.querySelectorAll('script[type="application/ld+json"]')
+    )) {
       const nodes = flattenJsonLdNodes(script.textContent || "");
-      if (nodes.length === 0 && (script.textContent ?? "").trim() !== "") unreadJsonLd++;
+      if (nodes.length === 0 && (script.textContent ?? "").trim() !== "")
+        unreadJsonLd++;
       jsonLd.push(...nodes);
-      if (!primary) primary = nodes.find((n) => hasType(n, ...PRODUCT_TYPES)) ?? null;
+      if (!primary)
+        primary = nodes.find((n) => hasType(n, ...PRODUCT_TYPES)) ?? null;
     }
     const micro = readMicrodata(doc);
     const rdfa = readRdfa(doc);
@@ -240,7 +277,10 @@ export const commerceReadinessRule: Rule = {
     const states = offerFieldStates(candidate, withNested, resolve);
 
     // An absent field is only proven absent from a complete, supported read.
-    const readable = htmlReadState(ctx) === "complete" && !micro.unsupported && !rdfa.unsupported;
+    const readable =
+      htmlReadState(ctx) === "complete" &&
+      !micro.unsupported &&
+      !rdfa.unsupported;
     const missing = OFFER_FIELDS.filter((f) => states[f] === "absent");
 
     if (missing.length === 0) {

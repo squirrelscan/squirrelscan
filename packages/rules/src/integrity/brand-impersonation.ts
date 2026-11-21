@@ -32,7 +32,11 @@ export const brandImpersonationRule: Rule = {
     // Check names by outcome class (#1741).
     checks: [
       { name: "brand-impersonation", outcome: "problem" },
-      { name: "brand-impersonation", outcome: "clean", clears: ["brand-impersonation"] },
+      {
+        name: "brand-impersonation",
+        outcome: "clean",
+        clears: ["brand-impersonation"],
+      },
       { name: "brand-impersonation", outcome: "skipped" },
     ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
@@ -56,15 +60,26 @@ export const brandImpersonationRule: Rule = {
     if (!hit) {
       // A scan cut by its work bounds cannot say "clean": say what was left unread (#784).
       const notes = integrityScanNotes(ctx);
-      if (notes.controlsUnread || notes.templatesUnread || notes.hiddenCssTruncated) {
+      if (
+        notes.controlsUnread ||
+        notes.templatesUnread ||
+        notes.hiddenCssTruncated
+      ) {
         const parts: string[] = [];
         if (notes.controlsUnread) {
-          parts.push(`${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full`);
+          parts.push(
+            `${notes.controlsUnread} sign-in control${notes.controlsUnread === 1 ? "" : "s"} could not be read in full`
+          );
         }
         if (notes.templatesUnread) {
-          parts.push(`${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? " was" : "s were"} past the template limit and not read`);
+          parts.push(
+            `${notes.templatesUnread} <template> element${notes.templatesUnread === 1 ? " was" : "s were"} past the template limit and not read`
+          );
         }
-        if (notes.hiddenCssTruncated) parts.push("a CSS rule too large to read may hide text in a sign-in label");
+        if (notes.hiddenCssTruncated)
+          parts.push(
+            "a CSS rule too large to read may hide text in a sign-in label"
+          );
         checks.push({
           name: "brand-impersonation",
           status: "info",

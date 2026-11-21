@@ -93,7 +93,8 @@ function toDisplayString(value: unknown): string | null {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   if (isObject(value)) {
     const wrapped = value["@value"];
     if (typeof wrapped === "string" || typeof wrapped === "number") {
@@ -101,7 +102,8 @@ function toDisplayString(value: unknown): string | null {
     }
     for (const key of ["url", "contentUrl", "@id", "name"]) {
       const nested = value[key];
-      if (typeof nested === "string" && nested.trim().length > 0) return nested.trim();
+      if (typeof nested === "string" && nested.trim().length > 0)
+        return nested.trim();
     }
   }
   return null;
@@ -171,7 +173,10 @@ function trimTrailingSlashes(path: string): string {
 function normalizeUrlish(value: string, pageUrl: string): string {
   try {
     const url = new URL(value.trim(), pageUrl);
-    const path = url.pathname.length > 1 ? trimTrailingSlashes(url.pathname) : url.pathname;
+    const path =
+      url.pathname.length > 1
+        ? trimTrailingSlashes(url.pathname)
+        : url.pathname;
     return `${url.protocol}//${url.host.toLowerCase()}${path}${url.search}`;
   } catch {
     return normalizeText(value);
@@ -214,7 +219,10 @@ function readTypes(node: JsonObject): string[] {
 }
 
 /** The nine consistency properties, normalised. */
-function readProperties(node: JsonObject, pageUrl: string): EntityMapProperties {
+function readProperties(
+  node: JsonObject,
+  pageUrl: string
+): EntityMapProperties {
   const properties: EntityMapProperties = {};
 
   const name = toDisplayString(node.name) ?? toDisplayString(node.headline);
@@ -226,7 +234,9 @@ function readProperties(node: JsonObject, pageUrl: string): EntityMapProperties 
   const logo = toStringList(node.logo)[0];
   if (logo) properties.logo = resolveId(logo, pageUrl);
 
-  const image = toStringList(node.image).map((entry) => resolveId(entry, pageUrl));
+  const image = toStringList(node.image).map((entry) =>
+    resolveId(entry, pageUrl)
+  );
   if (image.length > 0) properties.image = image;
 
   // `sameAs` is a set, not a sequence: sort it so two pages listing the same
@@ -257,7 +267,10 @@ function readProperties(node: JsonObject, pageUrl: string): EntityMapProperties 
 }
 
 /** The string written into a conflict entry for one property value. */
-function propertyValueText(properties: EntityMapProperties, key: string): string | null {
+function propertyValueText(
+  properties: EntityMapProperties,
+  key: string
+): string | null {
   const value = (properties as Record<string, unknown>)[key];
   if (value === undefined) return null;
   if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : null;
@@ -394,7 +407,7 @@ export function createEntityMapBuilder(): EntityMapBuilder {
 export function buildEntityMap(
   pages: EntityMapPageInput[],
   siteUrl: string,
-  options: BuildEntityMapOptions = {},
+  options: BuildEntityMapOptions = {}
 ): EntityMap {
   const builder = createEntityMapBuilder();
   for (const page of pages) builder.addPage(page.url, page.raw);
@@ -412,7 +425,7 @@ function registerNode(
   nodes: Map<string, NodeAccumulator>,
   candidates: EdgeCandidate[],
   counter: { index: number },
-  depth: number,
+  depth: number
 ): string | null {
   const types = readTypes(raw);
   if (types.length === 0) return null;
@@ -455,7 +468,8 @@ function registerNode(
   accumulator.pages.add(pageUrl);
   for (const type of types) {
     const seen = accumulator.typeOrigin.get(type);
-    if (!seen || originBefore(origin, seen)) accumulator.typeOrigin.set(type, origin);
+    if (!seen || originBefore(origin, seen))
+      accumulator.typeOrigin.set(type, origin);
   }
   // The node's `types` is the UNION across occurrences, which is what a
   // consumer wants and which also erases the fact that two pages disagreed.
@@ -485,7 +499,7 @@ function registerNode(
 function recordTypeSet(
   accumulator: NodeAccumulator,
   types: string[],
-  origin: Origin,
+  origin: Origin
 ): void {
   if (types.length === 0) return;
   // JSON.stringify of the sorted set, not a delimiter join: `@type` is a
@@ -511,13 +525,15 @@ function recordTypeSet(
 function recordLegalIdentifiers(
   accumulator: NodeAccumulator,
   raw: JsonObject,
-  origin: Origin,
+  origin: Origin
 ): void {
   for (const key of ENTITY_LEGAL_IDENTIFIER_KEYS) {
     const pairs = toStringList(raw[key]).map((entry) => ({
       shown: entry.slice(0, LEGAL_IDENTIFIER_DISPLAY_MAX),
       compared:
-        key === "legalName" ? normalizeText(entry) : entry.toLowerCase().replace(/[\s.-]+/g, ""),
+        key === "legalName"
+          ? normalizeText(entry)
+          : entry.toLowerCase().replace(/[\s.-]+/g, ""),
     }));
     const byCompared = new Map<string, string>();
     for (const pair of pairs) {
@@ -542,7 +558,8 @@ function recordLegalIdentifiers(
     if (values.has(text)) {
       const slot = `${key}\u0000${text}`;
       const kept = accumulator.shown.get(slot);
-      if (kept === undefined || compareStrings(shown, kept) < 0) accumulator.shown.set(slot, shown);
+      if (kept === undefined || compareStrings(shown, kept) < 0)
+        accumulator.shown.set(slot, shown);
     }
     if (values.size >= MAX_CONFLICT_VALUES) {
       const prefix = `${key}\u0000`;
@@ -579,16 +596,26 @@ function signatureToken(token: string): string {
  * (an object with no name, url or sameAs is unique to its page, so it never agrees), a bare string
  * by its normalised text.
  */
-function identityTarget(entry: unknown, pageUrl: string, index: number): string | null {
+function identityTarget(
+  entry: unknown,
+  pageUrl: string,
+  index: number
+): string | null {
   if (typeof entry === "string") {
     const text = normalizeText(entry);
     return text === "" ? null : `text:${signatureToken(text)}`;
   }
   if (!isObject(entry)) return null;
   const rawId = typeof entry["@id"] === "string" ? entry["@id"] : null;
-  if (rawId && !isBlankNodeId(rawId)) return `id:${signatureToken(resolveId(rawId, pageUrl))}`;
+  if (rawId && !isBlankNodeId(rawId))
+    return `id:${signatureToken(resolveId(rawId, pageUrl))}`;
   return signatureToken(
-    syntheticKey(readTypes(entry), readProperties(entry, pageUrl), pageUrl, index),
+    syntheticKey(
+      readTypes(entry),
+      readProperties(entry, pageUrl),
+      pageUrl,
+      index
+    )
   );
 }
 
@@ -597,7 +624,11 @@ function identityTarget(entry: unknown, pageUrl: string, index: number): string 
  * with its sorted targets, or `(none)`. Bare strings count, which the edge list never sees, and a
  * predicate present on some pages only makes two texts. See `ENTITY_IDENTITY_GUARD_PROPERTY`.
  */
-function identitySignature(raw: JsonObject, pageUrl: string, index: number): string {
+function identitySignature(
+  raw: JsonObject,
+  pageUrl: string,
+  index: number
+): string {
   const parts: string[] = [];
   for (const predicate of ENTITY_IDENTITY_PREDICATES) {
     const targets = new Set<string>();
@@ -605,19 +636,24 @@ function identitySignature(raw: JsonObject, pageUrl: string, index: number): str
       const target = identityTarget(entry, pageUrl, index);
       if (target) targets.add(target);
     }
-    if (targets.size > 0) parts.push(`${predicate}=${[...targets].sort(compareStrings).join(", ")}`);
+    if (targets.size > 0)
+      parts.push(
+        `${predicate}=${[...targets].sort(compareStrings).join(", ")}`
+      );
   }
   if (parts.length === 0) return "(none)";
   const text = parts.join("; ");
   // Bounded as a whole as well as per token: a long member list must not make one huge signature.
-  return text.length <= SIGNATURE_MAX ? text : `${text.slice(0, SIGNATURE_MAX - 20)}#${fnv1a(text)}`;
+  return text.length <= SIGNATURE_MAX
+    ? text
+    : `${text.slice(0, SIGNATURE_MAX - 20)}#${fnv1a(text)}`;
 }
 
 function recordIdentitySignature(
   accumulator: NodeAccumulator,
   raw: JsonObject,
   origin: Origin,
-  index: number,
+  index: number
 ): void {
   let values = accumulator.values.get(ENTITY_IDENTITY_GUARD_PROPERTY);
   if (!values) {
@@ -645,7 +681,7 @@ function recordIdentitySignature(
 function recordValue(
   values: Map<string, Set<string>>,
   text: string,
-  page: string,
+  page: string
 ): void {
   const existing = values.get(text);
   if (existing) {
@@ -658,7 +694,8 @@ function recordValue(
   }
   // Full. Evict the highest-sorted value, but only if this one sorts below it.
   let highest = text;
-  for (const key of values.keys()) if (compareStrings(key, highest) > 0) highest = key;
+  for (const key of values.keys())
+    if (compareStrings(key, highest) > 0) highest = key;
   if (highest === text) return;
   values.delete(highest);
   values.set(text, new Set([page]));
@@ -673,7 +710,7 @@ function recordValue(
 function mergeProperties(
   accumulator: NodeAccumulator,
   properties: EntityMapProperties,
-  origin: Origin,
+  origin: Origin
 ): void {
   for (const key of ENTITY_MAP_PROPERTY_KEYS) {
     const text = propertyValueText(properties, key);
@@ -706,7 +743,7 @@ function collectEdges(
   nodes: Map<string, NodeAccumulator>,
   candidates: EdgeCandidate[],
   counter: { index: number },
-  depth: number,
+  depth: number
 ): void {
   for (const predicate of ENTITY_MAP_PREDICATES) {
     const value = raw[predicate];
@@ -718,7 +755,11 @@ function collectEdges(
       // crumb that carries only a position and a name names no entity at all
       // and is dropped.
       let target: unknown = entry;
-      if (predicate === "itemListElement" && isObject(entry) && readTypes(entry).includes("ListItem")) {
+      if (
+        predicate === "itemListElement" &&
+        isObject(entry) &&
+        readTypes(entry).includes("ListItem")
+      ) {
         if (entry.item === undefined) continue;
         target = entry.item;
       }
@@ -733,7 +774,7 @@ function collectEdges(
           nodes,
           candidates,
           counter,
-          depth,
+          depth
         );
       }
     }
@@ -749,7 +790,7 @@ function pushEdge(
   nodes: Map<string, NodeAccumulator>,
   candidates: EdgeCandidate[],
   counter: { index: number },
-  depth: number,
+  depth: number
 ): void {
   if (isObject(value)) {
     if (readTypes(value).length > 0) {
@@ -762,10 +803,16 @@ function pushEdge(
         nodes,
         candidates,
         counter,
-        depth + 1,
+        depth + 1
       );
       if (targetKey) {
-        candidates.push({ source: sourceKey, predicate, target: targetKey, kind: "node", page: pageUrl });
+        candidates.push({
+          source: sourceKey,
+          predicate,
+          target: targetKey,
+          kind: "node",
+          page: pageUrl,
+        });
       }
       return;
     }
@@ -815,16 +862,19 @@ function syntheticKey(
   types: string[],
   properties: EntityMapProperties,
   pageUrl: string,
-  index: number,
+  index: number
 ): string {
   // The SORTED set, not `types[0]`: schema.org puts no meaning on `@type`
   // order, so `["Organization","LocalBusiness"]` and the reverse are the same
   // entity and must not split into two nodes.
   const typeKey = [...new Set(types)].sort(compareStrings).join("+") || "Thing";
-  if (properties.name) return `syn:${typeKey}|name:${normalizeText(properties.name)}`;
-  if (properties.url) return `syn:${typeKey}|url:${normalizeUrlish(properties.url, pageUrl)}`;
+  if (properties.name)
+    return `syn:${typeKey}|name:${normalizeText(properties.name)}`;
+  if (properties.url)
+    return `syn:${typeKey}|url:${normalizeUrlish(properties.url, pageUrl)}`;
   const sameAs = properties.sameAs?.[0];
-  if (sameAs) return `syn:${typeKey}|sameAs:${normalizeUrlish(sameAs, pageUrl)}`;
+  if (sameAs)
+    return `syn:${typeKey}|sameAs:${normalizeUrlish(sameAs, pageUrl)}`;
   return `anon:${pageUrl}#${index}`;
 }
 
@@ -835,7 +885,10 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function capPages(pages: Set<string>, cap: number): { pages: string[]; morePages: number } {
+function capPages(
+  pages: Set<string>,
+  cap: number
+): { pages: string[]; morePages: number } {
   const sorted = [...pages].sort(compareStrings);
   return {
     pages: sorted.slice(0, cap),
@@ -848,7 +901,7 @@ function assemble(
   pageAccumulators: Map<string, PageAccumulator>,
   candidates: EdgeCandidate[],
   siteUrl: string,
-  options: BuildEntityMapOptions,
+  options: BuildEntityMapOptions
 ): EntityMap {
   // Pass 2: a candidate can only be classified once every declared key is known.
   const edges = new Map<string, EdgeAccumulator>();
@@ -860,7 +913,11 @@ function assemble(
     // JSON.stringify of the parts, not a delimiter join: source, predicate
     // and target are all site-controlled strings, so any separator can appear
     // inside one and make two different edges share a key.
-    const dedupeKey = JSON.stringify([candidate.source, candidate.predicate, candidate.target]);
+    const dedupeKey = JSON.stringify([
+      candidate.source,
+      candidate.predicate,
+      candidate.target,
+    ]);
     let edge = edges.get(dedupeKey);
     if (!edge) {
       edge = {
@@ -877,7 +934,8 @@ function assemble(
     edge.pages.add(candidate.page);
 
     const page = pageAccumulators.get(candidate.page);
-    if (page && !page.declares.has(candidate.target)) page.references.add(candidate.target);
+    if (page && !page.declares.has(candidate.target))
+      page.references.add(candidate.target);
   }
 
   const outputEdges: EntityMapEdge[] = [];
@@ -902,7 +960,7 @@ function assemble(
     (a, b) =>
       compareStrings(a.source, b.source) ||
       compareStrings(a.target, b.target) ||
-      compareStrings(a.predicate, b.predicate),
+      compareStrings(a.predicate, b.predicate)
   );
 
   const outputNodes: EntityMapNode[] = [];
@@ -912,7 +970,9 @@ function assemble(
   let nodesWithoutIdCount = 0;
   let conflictCount = 0;
 
-  for (const accumulator of [...nodes.values()].sort((a, b) => compareStrings(a.key, b.key))) {
+  for (const accumulator of [...nodes.values()].sort((a, b) =>
+    compareStrings(a.key, b.key)
+  )) {
     if (accumulator.id) nodesWithStableId += 1;
     // Origin order, so the union is the same list regardless of page order.
     const types = [...accumulator.typeOrigin.entries()]
@@ -921,11 +981,14 @@ function assemble(
           ? compareStrings(a[1].page, b[1].page)
           : a[1].index !== b[1].index
             ? a[1].index - b[1].index
-            : compareStrings(a[0], b[0]),
+            : compareStrings(a[0], b[0])
       )
       .map(([type]) => type);
     for (const type of types) {
-      typeCounts.set(type, (typeCounts.get(type) ?? 0) + accumulator.occurrences);
+      typeCounts.set(
+        type,
+        (typeCounts.get(type) ?? 0) + accumulator.occurrences
+      );
     }
 
     const conflicts: EntityMapConflict[] = [];
@@ -938,8 +1001,12 @@ function assemble(
     ]) {
       const values = accumulator.values.get(property);
       if (!values || values.size < 2) continue;
-      const entries = [...values.entries()].sort((a, b) => compareStrings(a[0], b[0]));
-      const legal = (ENTITY_LEGAL_IDENTIFIER_KEYS as readonly string[]).includes(property);
+      const entries = [...values.entries()].sort((a, b) =>
+        compareStrings(a[0], b[0])
+      );
+      const legal = (
+        ENTITY_LEGAL_IDENTIFIER_KEYS as readonly string[]
+      ).includes(property);
       conflicts.push({
         property,
         values: entries.map(([value, pages]) => {
@@ -948,7 +1015,11 @@ function assemble(
           const shown = legal
             ? (accumulator.shown.get(`${property}\u0000${value}`) ?? value)
             : value;
-          return { value: shown, pages: capped.pages, morePages: capped.morePages };
+          return {
+            value: shown,
+            pages: capped.pages,
+            morePages: capped.morePages,
+          };
         }),
       });
     }
@@ -956,7 +1027,11 @@ function assemble(
     // The identity guard rides along only on a node that already has a `url` conflict: its one
     // reader decides whether that conflict is a localized alias, so anywhere else it is noise.
     const guard = accumulator.values.get(ENTITY_IDENTITY_GUARD_PROPERTY);
-    if (guard && guard.size >= 2 && conflicts.some((conflict) => conflict.property === "url")) {
+    if (
+      guard &&
+      guard.size >= 2 &&
+      conflicts.some((conflict) => conflict.property === "url")
+    ) {
       conflicts.push({
         property: ENTITY_IDENTITY_GUARD_PROPERTY,
         values: [...guard.entries()]
@@ -968,7 +1043,10 @@ function assemble(
       });
     }
 
-    const { pages, morePages } = capPages(accumulator.pages, ENTITY_MAP_PAGES_CAP);
+    const { pages, morePages } = capPages(
+      accumulator.pages,
+      ENTITY_MAP_PAGES_CAP
+    );
     const name = accumulator.properties.name ?? null;
     const pageLocal = isPageLocalEntity(types[0] ?? "Thing", name);
 
@@ -976,7 +1054,8 @@ function assemble(
     if (conflicts.length > 0) conflictCount += 1;
     // A one-page entity with no `@id` is normal; one repeated across pages with
     // nothing to reconcile it by is the finding the map exists for.
-    if (!accumulator.id && pages.length + morePages > 1) nodesWithoutIdCount += 1;
+    if (!accumulator.id && pages.length + morePages > 1)
+      nodesWithoutIdCount += 1;
 
     outputNodes.push({
       key: accumulator.key,
@@ -1003,7 +1082,9 @@ function assemble(
     }));
 
   const danglingCount = outputEdges.filter((edge) => edge.dangling).length;
-  const pagesWithoutEntities = outputPages.filter((page) => page.entityCount === 0).length;
+  const pagesWithoutEntities = outputPages.filter(
+    (page) => page.entityCount === 0
+  ).length;
 
   return {
     format: ENTITY_MAP_FORMAT,
@@ -1017,7 +1098,8 @@ function assemble(
       pagesTotal: outputPages.length,
       pagesWithoutEntities,
       nodesWithStableId,
-      stableIdShare: outputNodes.length === 0 ? 0 : nodesWithStableId / outputNodes.length,
+      stableIdShare:
+        outputNodes.length === 0 ? 0 : nodesWithStableId / outputNodes.length,
       pageLocalCount,
       nodesWithoutIdCount,
       conflictCount,
@@ -1025,7 +1107,7 @@ function assemble(
       // possible. `Object.fromEntries` uses CreateDataProperty and keeps it as
       // an own property instead of hitting the inherited setter.
       countsByType: Object.fromEntries(
-        [...typeCounts.entries()].sort((a, b) => compareStrings(a[0], b[0])),
+        [...typeCounts.entries()].sort((a, b) => compareStrings(a[0], b[0]))
       ),
     },
     nodes: outputNodes,

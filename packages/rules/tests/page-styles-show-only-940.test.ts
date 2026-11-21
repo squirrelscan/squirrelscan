@@ -5,14 +5,15 @@
 // `visibility:hidden`), and there the answer stays "unknown", never "hidden".
 // Chromium verdicts for these shapes are rows in static-hidden-chromium.json.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { buttonNameRule } from "../src/a11y/button-name";
 import { createStaticVisibility } from "../src/shared/static-hidden";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 async function statuses(html: string): Promise<Record<string, string>> {
   const url = "https://example.com/";
@@ -28,34 +29,38 @@ async function statuses(html: string): Promise<Record<string, string>> {
 function state(body: string): string {
   const { document } = parsePage(
     `<!doctype html><html><head></head><body>${body}</body></html>`,
-    "https://example.com/",
+    "https://example.com/"
   ) as unknown as { document: Document };
   const el = document.getElementById("t") as Element;
   return createStaticVisibility({ ariaHidden: true }).visibility(el).state;
 }
 
-const LIGHTBOX = ".wp-lightbox-container button{align-items:center;display:flex;height:20px}";
-const IMAGE = ".wp-block-image>a,.wp-block-image>figure>a{display:inline-block}";
+const LIGHTBOX =
+  ".wp-lightbox-container button{align-items:center;display:flex;height:20px}";
+const IMAGE =
+  ".wp-block-image>a,.wp-block-image>figure>a{display:inline-block}";
 
 describe("a show-only rule on an element nothing else hides", () => {
   test("WordPress lightbox button: an unnamed button fails, not unconfirmed", async () => {
     expect(
-      (await statuses(
-        `<!doctype html><html lang="en"><head><title>t</title><style>${LIGHTBOX}</style></head><body><main><div class="wp-lightbox-container"><button></button></div></main></body></html>`,
-      )),
+      await statuses(
+        `<!doctype html><html lang="en"><head><title>t</title><style>${LIGHTBOX}</style></head><body><main><div class="wp-lightbox-container"><button></button></div></main></body></html>`
+      )
     ).toEqual({ "button-name": "fail" });
   });
 
   test("WordPress image link rule and a plain link are shown", () => {
     expect(
       state(
-        `<style>${IMAGE}</style><figure class="wp-block-image"><a id="t" href="#">x</a></figure>`,
-      ),
+        `<style>${IMAGE}</style><figure class="wp-block-image"><a id="t" href="#">x</a></figure>`
+      )
     ).toBe("shown");
   });
 
   test("an unrelated button on a page that carries both WP rules is shown", () => {
-    expect(state(`<style>${IMAGE}${LIGHTBOX}</style><button id="t"></button>`)).toBe("shown");
+    expect(
+      state(`<style>${IMAGE}${LIGHTBOX}</style><button id="t"></button>`)
+    ).toBe("shown");
   });
 });
 
@@ -75,9 +80,9 @@ describe("a show-only rule where something else hides the element stays unknown"
 
   test("a hidden unnamed button is unconfirmed, not a pass or a failure", async () => {
     expect(
-      (await statuses(
-        `<!doctype html><html lang="en"><head><title>t</title><style>${LIGHTBOX}</style></head><body><main><div class="wp-lightbox-container"><button hidden></button></div></main></body></html>`,
-      )),
+      await statuses(
+        `<!doctype html><html lang="en"><head><title>t</title><style>${LIGHTBOX}</style></head><body><main><div class="wp-lightbox-container"><button hidden></button></div></main></body></html>`
+      )
     ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 });
@@ -86,32 +91,32 @@ describe("controls: what a show-only rule cannot undo", () => {
   test("inline display:none beats it", () => {
     expect(
       state(
-        '<style>.a>b{display:flex}</style><div class="a"><b id="t" style="display:none"></b></div>',
-      ),
+        '<style>.a>b{display:flex}</style><div class="a"><b id="t" style="display:none"></b></div>'
+      )
     ).toBe("hidden");
   });
 
   test("inline visibility:hidden beats it", () => {
     expect(
       state(
-        '<style>.a>b{visibility:visible}</style><div class="a"><b id="t" style="visibility:hidden"></b></div>',
-      ),
+        '<style>.a>b{visibility:visible}</style><div class="a"><b id="t" style="visibility:hidden"></b></div>'
+      )
     ).toBe("hidden");
   });
 
   test("a display rule does not show a visibility:hidden element", () => {
     expect(
       state(
-        '<style>.a>b{display:flex}</style><div class="a" style="visibility:hidden"><b id="t"></b></div>',
-      ),
+        '<style>.a>b{display:flex}</style><div class="a" style="visibility:hidden"><b id="t"></b></div>'
+      )
     ).toBe("hidden");
   });
 
   test("a rule on a descendant does not show it inside a display:none ancestor", () => {
     expect(
       state(
-        '<style>.a>b{display:flex}</style><div class="a" style="display:none"><b id="t"></b></div>',
-      ),
+        '<style>.a>b{display:flex}</style><div class="a" style="display:none"><b id="t"></b></div>'
+      )
     ).toBe("hidden");
   });
 });
@@ -124,15 +129,17 @@ describe("a rule that could hide keeps its elements unknown", () => {
     "a show and an animation": ".a>b{display:flex;animation:x 1s}",
   })) {
     test(name, () => {
-      expect(state(`<style>${css}</style><div class="a"><b id="t"></b></div>`)).toBe("unknown");
+      expect(
+        state(`<style>${css}</style><div class="a"><b id="t"></b></div>`)
+      ).toBe("unknown");
     });
   }
 
   test("display:flex beside visibility:hidden still hides-possibly for visibility", () => {
     expect(
       state(
-        '<style>.a>b{display:flex;visibility:hidden}</style><div class="a"><b id="t"></b></div>',
-      ),
+        '<style>.a>b{display:flex;visibility:hidden}</style><div class="a"><b id="t"></b></div>'
+      )
     ).toBe("unknown");
   });
 });
@@ -141,7 +148,9 @@ describe("display values that can hide (Chromium: contents hides an input) are n
   for (const value of ["contents", "inherit", "unset"]) {
     test(`display:${value}`, () => {
       expect(
-        state(`<style>.a>input{display:${value}}</style><div class="a"><input id="t"></div>`),
+        state(
+          `<style>.a>input{display:${value}}</style><div class="a"><input id="t"></div>`
+        )
       ).toBe("unknown");
     });
   }
@@ -151,8 +160,8 @@ describe("an !important show rule against a non-important inline display:none", 
   test("stays unknown (Chromium shows it)", () => {
     expect(
       state(
-        '<style>.a>b{display:flex!important}</style><div class="a"><b id="t" style="display:none"></b></div>',
-      ),
+        '<style>.a>b{display:flex!important}</style><div class="a"><b id="t" style="display:none"></b></div>'
+      )
     ).toBe("unknown");
   });
 });

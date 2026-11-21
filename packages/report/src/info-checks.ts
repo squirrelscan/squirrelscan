@@ -42,7 +42,9 @@ export interface InfoCheck {
  * name, with sorted pages so the output is stable across runs. A per-page check
  * contributes its `pageUrl`; an aggregate contributes every page in `pages`.
  */
-export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>): InfoCheck[] {
+export function collectInfoChecks(
+  ruleResults: Record<string, ReportRuleResult>
+): InfoCheck[] {
   const out: InfoCheck[] = [];
   for (const ruleId of Object.keys(ruleResults).sort()) {
     const result = ruleResults[ruleId];
@@ -61,10 +63,19 @@ export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>)
       // The run-level summaries of a rule that timed out or threw (`<rule>-timeouts`,
       // `<rule>-errors`) are not notes about the site: the skipped rows already
       // report them, in `skippedChecks` and `notChecked`.
-      if (check.name === `${ruleId}-errors` || check.name === `${ruleId}-timeouts`) continue;
+      if (
+        check.name === `${ruleId}-errors` ||
+        check.name === `${ruleId}-timeouts`
+      )
+        continue;
       let group = groups.get(check.name);
       if (!group) {
-        group = { message: check.message, pages: new Set(), total: 0, observation: check.observation };
+        group = {
+          message: check.message,
+          pages: new Set(),
+          total: 0,
+          observation: check.observation,
+        };
         groups.set(check.name, group);
       }
       const before = group.pages.size;
@@ -73,9 +84,13 @@ export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>)
       const truncated = check.details?.pagesTruncated;
       const listed = group.pages.size - before;
       group.total +=
-        typeof truncated === "number" && truncated > listed ? Math.floor(truncated) : listed;
+        typeof truncated === "number" && truncated > listed
+          ? Math.floor(truncated)
+          : listed;
     }
-    for (const [check, g] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+    for (const [check, g] of [...groups].sort((a, b) =>
+      a[0].localeCompare(b[0])
+    )) {
       const all = [...g.pages].sort();
       const pages = all.slice(0, INFO_CHECK_PAGES_LIMIT);
       const total = Math.max(g.total, all.length);

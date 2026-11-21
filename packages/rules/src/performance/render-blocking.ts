@@ -1,7 +1,13 @@
 // perf/render-blocking - Render-blocking resources
 
-import { querySelectorAllOutsideNoscript, resolveUrl } from "@squirrelscan/utils";
-import { isSlowBlockingScript, SLOW_BLOCKING_SCRIPT_MS } from "@squirrelscan/utils/constants";
+import {
+  querySelectorAllOutsideNoscript,
+  resolveUrl,
+} from "@squirrelscan/utils";
+import {
+  isSlowBlockingScript,
+  SLOW_BLOCKING_SCRIPT_MS,
+} from "@squirrelscan/utils/constants";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
@@ -16,7 +22,10 @@ function slowBlockingScripts(ctx: RuleContext): CheckResult | null {
   const timed = new Map<string, { ms: number; hostFirst: boolean }>();
   for (const script of scripts) {
     if (script.responseMs === undefined) continue;
-    const entry = { ms: script.responseMs, hostFirst: script.hostFirst === true };
+    const entry = {
+      ms: script.responseMs,
+      hostFirst: script.hostFirst === true,
+    };
     timed.set(script.url, entry);
     if (script.finalUrl) timed.set(script.finalUrl, entry);
   }
@@ -26,7 +35,8 @@ function slowBlockingScripts(ctx: RuleContext): CheckResult | null {
     if (!src || scriptLoading(el) !== "blocking") continue;
     const url = resolveUrl(src, ctx.page.url);
     const entry = url ? timed.get(url) : undefined;
-    if (url && entry && isSlowBlockingScript(entry.ms, entry.hostFirst)) slow.set(url, entry.ms);
+    if (url && entry && isSlowBlockingScript(entry.ms, entry.hostFirst))
+      slow.set(url, entry.ms);
   }
   if (slow.size === 0) return null;
   const ranked = [...slow].sort((a, b) => b[1] - a[1]);
@@ -60,7 +70,11 @@ export const renderBlockingRule: Rule = {
     // Check names by outcome class (#1741).
     checks: [
       { name: "render-blocking", outcome: "problem" },
-      { name: "render-blocking", outcome: "clean", clears: ["render-blocking", "slow-blocking-script"] },
+      {
+        name: "render-blocking",
+        outcome: "clean",
+        clears: ["render-blocking", "slow-blocking-script"],
+      },
       { name: "slow-blocking-script", outcome: "problem" },
     ],
   },

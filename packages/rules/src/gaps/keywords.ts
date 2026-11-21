@@ -16,8 +16,14 @@ const HIGH_VOLUME_WARN_COUNT = 20;
 const MAX_ITEMS = 25;
 
 export const optionsSchema = z.object({
-  country: z.string().optional().describe("ISO country for search data (default US)"),
-  language: z.string().optional().describe("Language code for search data (default en)"),
+  country: z
+    .string()
+    .optional()
+    .describe("ISO country for search data (default US)"),
+  language: z
+    .string()
+    .optional()
+    .describe("Language code for search data (default en)"),
   competitors: z
     .array(z.string())
     .optional()
@@ -44,16 +50,25 @@ export const keywordGapsRule: Rule = {
     // Opt-in only: keyword_gaps costs 25 credits/audit. A concrete rule/category
     // enable pattern can select it, while the default enable: ["*"] cannot.
     optIn: true,
-    cloud: { service: "keyword-gaps", unit: "site", creditFeature: "keyword_gaps" },
+    cloud: {
+      service: "keyword-gaps",
+      unit: "site",
+      creditFeature: "keyword_gaps",
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<KeywordGapsResponse>(ctx.cloudResults, "keyword-gaps");
+    const envelope = readCloudResult<KeywordGapsResponse>(
+      ctx.cloudResults,
+      "keyword-gaps"
+    );
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "keyword-gaps",
         status: "skipped",
@@ -87,7 +102,9 @@ export const keywordGapsRule: Rule = {
       details: { summary },
     });
 
-    const highVolume = gaps.filter((g) => (g.volume ?? 0) >= HIGH_VOLUME_THRESHOLD);
+    const highVolume = gaps.filter(
+      (g) => (g.volume ?? 0) >= HIGH_VOLUME_THRESHOLD
+    );
     if (highVolume.length > HIGH_VOLUME_WARN_COUNT) {
       checks.push({
         name: "keyword-gaps-high-volume",

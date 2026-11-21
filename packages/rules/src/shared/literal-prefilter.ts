@@ -122,7 +122,8 @@ export function buildGramIndex(text: string): GramIndex | null {
   // Size the table to the content: a 5 KB script does not need 128 KB of bitmap,
   // and a smaller table is both cheaper to allocate and no less sound.
   let bytes = 1 << 7; // 2^10 bits
-  while (bytes < GRAM_BYTES && bytes * 8 < text.length * BITS_PER_CHAR) bytes <<= 1;
+  while (bytes < GRAM_BYTES && bytes * 8 < text.length * BITS_PER_CHAR)
+    bytes <<= 1;
   const mask = bytes * 8 - 1;
   const bits = new Uint8Array(bytes);
   let h = 0;
@@ -134,14 +135,21 @@ export function buildGramIndex(text: string): GramIndex | null {
   for (let i = 0; i < GRAM - 1; i++) {
     let c = text.charCodeAt(i);
     if (c >= 65 && c <= 90) c += 32;
-    else if (c > 0x7f && (c === LOWERCASE_ADDS_ASCII_I || c === LOWERCASE_ADDS_ASCII_K)) lowercaseAddsAscii = true;
+    else if (
+      c > 0x7f &&
+      (c === LOWERCASE_ADDS_ASCII_I || c === LOWERCASE_ADDS_ASCII_K)
+    )
+      lowercaseAddsAscii = true;
     h = ((h << SHIFT) ^ c) & WINDOW_MASK;
   }
   for (let i = GRAM - 1; i < n; i++) {
     let c = text.charCodeAt(i);
     if (c >= 65 && c <= 90) {
       c += 32; // fold ASCII case
-    } else if (c > 0x7f && (c === LOWERCASE_ADDS_ASCII_I || c === LOWERCASE_ADDS_ASCII_K)) {
+    } else if (
+      c > 0x7f &&
+      (c === LOWERCASE_ADDS_ASCII_I || c === LOWERCASE_ADDS_ASCII_K)
+    ) {
       lowercaseAddsAscii = true;
     }
     // Four characters of 5 bits each fill the window exactly, so the fifth
@@ -185,7 +193,10 @@ export type MandatoryLiterals = readonly (readonly string[])[];
  * True when the pattern behind `literals` may match the indexed text. An empty
  * `literals` (nothing proven) always returns true.
  */
-export function mayMatch(index: GramIndex | null, literals: MandatoryLiterals): boolean {
+export function mayMatch(
+  index: GramIndex | null,
+  literals: MandatoryLiterals
+): boolean {
   if (!index || literals.length === 0) return true;
   for (const anyOf of literals) {
     let possible = false;
@@ -202,11 +213,56 @@ export function mayMatch(index: GramIndex | null, literals: MandatoryLiterals): 
 
 // ── mandatory-literal extraction ────────────────────────────────────────────
 
-const META = new Set([".", "*", "+", "?", "(", ")", "[", "]", "{", "}", "|", "^", "$", "\\"]);
+const META = new Set([
+  ".",
+  "*",
+  "+",
+  "?",
+  "(",
+  ")",
+  "[",
+  "]",
+  "{",
+  "}",
+  "|",
+  "^",
+  "$",
+  "\\",
+]);
 // Escapes that stand for a literal character rather than a class.
 const LITERAL_ESCAPE = new Set([
-  ".", "*", "+", "?", "(", ")", "[", "]", "{", "}", "|", "^", "$", "\\", "/", "-", "@", "#", "&",
-  "=", ":", ";", ",", "<", ">", "'", '"', "`", "~", "!", "%", "_",
+  ".",
+  "*",
+  "+",
+  "?",
+  "(",
+  ")",
+  "[",
+  "]",
+  "{",
+  "}",
+  "|",
+  "^",
+  "$",
+  "\\",
+  "/",
+  "-",
+  "@",
+  "#",
+  "&",
+  "=",
+  ":",
+  ";",
+  ",",
+  "<",
+  ">",
+  "'",
+  '"',
+  "`",
+  "~",
+  "!",
+  "%",
+  "_",
 ]);
 
 function isAscii(s: string): boolean {
@@ -226,7 +282,10 @@ const UNPARSEABLE = -1;
  * actually contain is exactly the filter answer that deletes a finding — this was
  * a live bug caught by the soundness test, on Angular's `\\["\u0275cmp"\\]`.
  */
-function readEscape(src: string, i: number): { char: string | null; end: number } {
+function readEscape(
+  src: string,
+  i: number
+): { char: string | null; end: number } {
   const n = src[i + 1];
   if (n === undefined) return { char: null, end: i + 1 };
   if (n === "u") {
@@ -252,7 +311,8 @@ function readEscape(src: string, i: number): { char: string | null; end: number 
   // the `[` left `abcd]` behind as literal text no match contains.
   if (n === "c") {
     const x = src[i + 2];
-    const isControlLetter = x !== undefined && ((x >= "a" && x <= "z") || (x >= "A" && x <= "Z"));
+    const isControlLetter =
+      x !== undefined && ((x >= "a" && x <= "z") || (x >= "A" && x <= "Z"));
     return { char: null, end: isControlLetter ? i + 3 : i + 2 };
   }
   if (n === "n") return { char: "\n", end: i + 2 };
@@ -308,7 +368,11 @@ function readQuantifier(
     return { end: src[i + 1] === "?" ? i + 2 : i + 1, min0: true, max1: false };
   }
   if (c === "+") {
-    return { end: src[i + 1] === "?" ? i + 2 : i + 1, min0: false, max1: false };
+    return {
+      end: src[i + 1] === "?" ? i + 2 : i + 1,
+      min0: false,
+      max1: false,
+    };
   }
   if (c === "{") {
     const close = src.indexOf("}", i);
@@ -318,7 +382,12 @@ function readQuantifier(
     const [minText, maxText] = body.split(",");
     const min = Number(minText);
     // `{n}` is exactly n; `{n,}` is unbounded; `{n,m}` is at most m.
-    const max = maxText === undefined ? min : maxText === "" ? Number.POSITIVE_INFINITY : Number(maxText);
+    const max =
+      maxText === undefined
+        ? min
+        : maxText === ""
+          ? Number.POSITIVE_INFINITY
+          : Number(maxText);
     return {
       end: src[close + 1] === "?" ? close + 2 : close + 1,
       min0: min === 0,
@@ -423,7 +492,11 @@ function splitAlternatives(src: string): string[] {
 /** Strip a group's `(?:` / `(?<name>` / `(` prefix, returning the body. */
 function groupBody(inner: string): string | null {
   if (inner.startsWith("?:")) return inner.slice(2);
-  if (inner.startsWith("?<") && !inner.startsWith("?<=") && !inner.startsWith("?<!")) {
+  if (
+    inner.startsWith("?<") &&
+    !inner.startsWith("?<=") &&
+    !inner.startsWith("?<!")
+  ) {
     const close = inner.indexOf(">");
     return close === -1 ? null : inner.slice(close + 1);
   }
@@ -479,7 +552,8 @@ function extractInto(source: string, out: string[][], depth: number): void {
       let best: string[] | null = null;
       for (const set of sub) {
         const weakest = Math.min(...set.map((s) => s.length));
-        if (best === null || weakest > Math.min(...best.map((s) => s.length))) best = set;
+        if (best === null || weakest > Math.min(...best.map((s) => s.length)))
+          best = set;
       }
       if (best === null) return;
       anyOf.push(...best);
@@ -490,7 +564,9 @@ function extractInto(source: string, out: string[][], depth: number): void {
 
   let variants: string[] = [""];
   const flush = () => {
-    const usable = variants.filter((v) => v.length >= MIN_LITERAL_LENGTH && isAscii(v));
+    const usable = variants.filter(
+      (v) => v.length >= MIN_LITERAL_LENGTH && isAscii(v)
+    );
     if (usable.length === variants.length && usable.length > 0) {
       out.push(usable.map((v) => v.toLowerCase()));
     }
@@ -506,7 +582,10 @@ function extractInto(source: string, out: string[][], depth: number): void {
    * known number of characters. Anything that can repeat ends the run: what comes
    * after it is no longer adjacent to what came before.
    */
-  const append = (members: string[], q: { min0: boolean; max1: boolean } | null): void => {
+  const append = (
+    members: string[],
+    q: { min0: boolean; max1: boolean } | null
+  ): void => {
     if (!q || q.max1) {
       // Exactly once, or none-or-once: every possibility is still one run.
       const next = cross(variants, q?.min0 ? ["", ...members] : members);
@@ -582,7 +661,10 @@ function extractInto(source: string, out: string[][], depth: number): void {
         // `/(abcd.efgh)/` proved `abcd.efgh` and denied `abcdXefgh`, which it
         // matches. Groups holding anything else fall through to extractInto,
         // which reads the regex properly.
-        alts && alts.every((a) => a.length > 0 && /^[A-Za-z0-9_@#/:\-]+$/.test(a)) ? alts : null;
+        alts &&
+        alts.every((a) => a.length > 0 && /^[A-Za-z0-9_@#/:\-]+$/.test(a))
+          ? alts
+          : null;
       if (pureLiterals) {
         append(pureLiterals, q);
       } else {

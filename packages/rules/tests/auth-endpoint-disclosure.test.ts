@@ -8,6 +8,8 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import type { CheckResult } from "../src/types";
+
 import {
   AUTH_CONVENTION_PATHS,
   authEndpointDisclosureRule,
@@ -17,7 +19,6 @@ import {
   looksLikePasswordHash,
   MAX_AUTH_ENDPOINTS,
 } from "../src/security/auth-endpoint-disclosure";
-import type { CheckResult } from "../src/types";
 import {
   BASE,
   candidate,
@@ -39,8 +40,10 @@ afterEach(() => {
 
 const ME = `${BASE}/api/me`;
 const BCRYPT = "$2b$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW"; // pragma: allowlist secret
-const DJANGO = "pbkdf2_sha256$600000$q5Zm8uYgHk2x$3Yk1kq9q2uJqGqvJ1o0ZmZbZ4dK8s3n0q1w2e3r4t5y="; // pragma: allowlist secret
-const ARGON2 = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG"; // pragma: allowlist secret
+const DJANGO =
+  "pbkdf2_sha256$600000$q5Zm8uYgHk2x$3Yk1kq9q2uJqGqvJ1o0ZmZbZ4dK8s3n0q1w2e3r4t5y="; // pragma: allowlist secret
+const ARGON2 =
+  "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG"; // pragma: allowlist secret
 const RESET_TOKEN = "f3a1c9d2e8b7a6c5d4e3f2a1b0c9d8e7"; // pragma: allowlist secret
 
 /** A Devise user row serialized whole. */
@@ -72,7 +75,10 @@ const paths = (sent: SentRequest[]) => sent.map((r) => new URL(r.url).pathname);
 describe("security/auth-endpoint-disclosure: activation", () => {
   test("passive or no probe budget: skipped, nothing sent", async () => {
     for (const opts of [{ level: "passive" as const }, { noProbe: true }]) {
-      const { checks, sent } = await run({ [ME]: () => json(DEVISE_ROW) }, opts);
+      const { checks, sent } = await run(
+        { [ME]: () => json(DEVISE_ROW) },
+        opts
+      );
       expect(sent).toHaveLength(0);
       expect(checks).toEqual([
         expect.objectContaining({
@@ -96,7 +102,9 @@ describe("security/auth-endpoint-disclosure: activation", () => {
       expect(r.headers.cookie).toBeUndefined();
       expect(r.headers.authorization).toBeUndefined();
     }
-    expect(checks).toEqual([expect.objectContaining({ name: "auth-endpoint-clean", status: "pass" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({ name: "auth-endpoint-clean", status: "pass" }),
+    ]);
   });
 });
 
@@ -110,8 +118,12 @@ describe("security/auth-endpoint-disclosure: findings", () => {
     expect(fail.name).toBe("auth-endpoint-disclosure");
     expect(fail.message).toContain(ME);
     expect(fail.message).toContain("1 password hash (user.encrypted_password)");
-    expect(fail.message).toContain("1 credential secret (user.reset_password_token)");
-    const byField = Object.fromEntries((fail.items ?? []).map((i) => [i.meta?.field, i.meta?.kind]));
+    expect(fail.message).toContain(
+      "1 credential secret (user.reset_password_token)"
+    );
+    const byField = Object.fromEntries(
+      (fail.items ?? []).map((i) => [i.meta?.field, i.meta?.kind])
+    );
     expect(byField).toEqual({
       "user.encrypted_password": "password-hash",
       "user.reset_password_token": "secret",
@@ -120,7 +132,10 @@ describe("security/auth-endpoint-disclosure: findings", () => {
       "user.current_sign_in_ip": "internal-record",
       "user.last_sign_in_ip": "internal-record",
     });
-    expect(fail.details).toMatchObject({ endpoint: ME, kinds: ["password-hash", "secret", "internal-record"] });
+    expect(fail.details).toMatchObject({
+      endpoint: ME,
+      kinds: ["password-hash", "secret", "internal-record"],
+    });
     const text = JSON.stringify(checks);
     expect(text).not.toContain(BCRYPT);
     expect(text).not.toContain(RESET_TOKEN);
@@ -131,16 +146,22 @@ describe("security/auth-endpoint-disclosure: findings", () => {
 
   test("a hash is found by its format under any key, and a plaintext password by its key", async () => {
     const { checks } = await run({
-      [`${BASE}/api/session`]: () => json({ account: { hash: ARGON2, pwd: "hunter2" } }),
+      [`${BASE}/api/session`]: () =>
+        json({ account: { hash: ARGON2, pwd: "hunter2" } }),
       [`${BASE}/api/user`]: () => json([{ id: 1, password: DJANGO }]),
     });
     const fails = checks.filter((c) => c.status === "fail");
-    expect(fails.map((c) => c.details?.endpoint)).toEqual([`${BASE}/api/session`, `${BASE}/api/user`]);
+    expect(fails.map((c) => c.details?.endpoint)).toEqual([
+      `${BASE}/api/session`,
+      `${BASE}/api/user`,
+    ]);
     expect(fails[0]!.items?.map((i) => [i.meta?.field, i.meta?.kind])).toEqual([
       ["account.hash", "password-hash"],
       ["account.pwd", "password"],
     ]);
-    expect(fails[1]!.items?.map((i) => [i.meta?.field, i.meta?.kind])).toEqual([["[0].password", "password-hash"]]);
+    expect(fails[1]!.items?.map((i) => [i.meta?.field, i.meta?.kind])).toEqual([
+      ["[0].password", "password-hash"],
+    ]);
     expect(JSON.stringify(checks)).not.toContain("hunter2");
   });
 
@@ -148,7 +169,10 @@ describe("security/auth-endpoint-disclosure: findings", () => {
     for (const body of [
       {},
       { user: null },
-      { user: { id: 1, name: "Jo", email: "jo@example.com", image: null }, expires: "2026-12-01" },
+      {
+        user: { id: 1, name: "Jo", email: "jo@example.com", image: null },
+        expires: "2026-12-01",
+      },
       { user: { id: 1, password: null, hasPassword: true, password_hash: "" } },
       { user: { id: 1, password: "********", passwordSet: true } },
       { csrfToken: "abc123", accessToken: null },
@@ -157,7 +181,12 @@ describe("security/auth-endpoint-disclosure: findings", () => {
     ]) {
       const { checks } = await run({ [ME]: () => json(body) });
       expect(checks.filter((c) => c.status === "fail")).toEqual([]);
-      expect(checks).toEqual([expect.objectContaining({ status: "pass", name: "auth-endpoint-clean" })]);
+      expect(checks).toEqual([
+        expect.objectContaining({
+          status: "pass",
+          name: "auth-endpoint-clean",
+        }),
+      ]);
       expect(checks[0]!.message).toContain("1 answered with JSON");
       restore?.();
       restore = undefined;
@@ -165,12 +194,18 @@ describe("security/auth-endpoint-disclosure: findings", () => {
   });
 
   test("non-2xx, HTML, redirects and truncated answers are not flagged", async () => {
-    const big = { user: { encrypted_password: BCRYPT, padding: "x".repeat(300 * 1024) } };
+    const big = {
+      user: { encrypted_password: BCRYPT, padding: "x".repeat(300 * 1024) },
+    };
     const { checks, sent } = await run({
       [ME]: () => json(DEVISE_ROW, 401),
-      [`${BASE}/api/session`]: () => html(`<pre>${JSON.stringify(DEVISE_ROW)}</pre>`, 200),
+      [`${BASE}/api/session`]: () =>
+        html(`<pre>${JSON.stringify(DEVISE_ROW)}</pre>`, 200),
       [`${BASE}/api/auth/session`]: () =>
-        new Response(null, { status: 302, headers: { location: "https://evil.example/api/me" } }),
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://evil.example/api/me" },
+        }),
       [`${BASE}/api/user`]: () => json(big),
     });
     expect(checks.filter((c) => c.status === "fail")).toEqual([]);
@@ -196,11 +231,18 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
           candidate("/api/login/user", { method: "GET" }),
           candidate("/api/password/session", { method: "GET" }),
           candidate("/api/products", { method: "GET" }),
-          candidate("/api/v6/whoami", { method: undefined, discoveredVia: "axios.request" }),
+          candidate("/api/v6/whoami", {
+            method: undefined,
+            discoveredVia: "axios.request",
+          }),
         ]),
       }
     );
-    expect(paths(sent)).toEqual(["/api/v2/me", "/api/v6/whoami", ...AUTH_CONVENTION_PATHS]);
+    expect(paths(sent)).toEqual([
+      "/api/v2/me",
+      "/api/v6/whoami",
+      ...AUTH_CONVENTION_PATHS,
+    ]);
   });
 
   test("the origin is re-checked: a candidate that claims to be same-origin is not trusted", async () => {
@@ -208,9 +250,21 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
       {},
       {
         surface: surface([
-          candidate("https://api.other.example/api/me", { method: "GET", sameOrigin: true, probeEligible: true }),
-          candidate("http://example.com/api/v2/me", { method: "GET", sameOrigin: true, probeEligible: true }),
-          candidate("https://example.com:8443/api/v3/me", { method: "GET", sameOrigin: true, probeEligible: true }),
+          candidate("https://api.other.example/api/me", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
+          candidate("http://example.com/api/v2/me", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
+          candidate("https://example.com:8443/api/v3/me", {
+            method: "GET",
+            sameOrigin: true,
+            probeEligible: true,
+          }),
         ]),
       }
     );
@@ -219,14 +273,23 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
   });
 
   test("a bare /me is probed from a call site, not from a string literal", async () => {
-    const callSite = await run({}, { surface: surface([candidate("/me", { method: "GET" })]) });
+    const callSite = await run(
+      {},
+      { surface: surface([candidate("/me", { method: "GET" })]) }
+    );
     expect(paths(callSite.sent)).toContain("/me");
     restore?.();
     restore = undefined;
     const literal = await run(
       {},
       {
-        surface: surface([candidate("/me", { method: undefined, discoveredVia: "string-literal", source: "static-html" })]),
+        surface: surface([
+          candidate("/me", {
+            method: undefined,
+            discoveredVia: "string-literal",
+            source: "static-html",
+          }),
+        ]),
       }
     );
     expect(paths(literal.sent)).not.toContain("/me");
@@ -243,15 +306,22 @@ describe("security/auth-endpoint-disclosure: what may be probed", () => {
     });
     restore?.();
     restore = undefined;
-    const aggressive = await run({}, { level: "aggressive", robotsTxt: robots(["/api/"]) });
+    const aggressive = await run(
+      {},
+      { level: "aggressive", robotsTxt: robots(["/api/"]) }
+    );
     expect(paths(aggressive.sent)).toEqual([...AUTH_CONVENTION_PATHS]);
   });
 
   test(`at most ${MAX_AUTH_ENDPOINTS} endpoints are probed`, async () => {
-    const many = Array.from({ length: 10 }, (_, i) => candidate(`/api/v${i + 10}/me`, { method: "GET" }));
+    const many = Array.from({ length: 10 }, (_, i) =>
+      candidate(`/api/v${i + 10}/me`, { method: "GET" })
+    );
     const { sent, checks } = await run({}, { surface: surface(many) });
     expect(sent).toHaveLength(MAX_AUTH_ENDPOINTS);
-    expect(checks[0]!.details).toMatchObject({ skippedCap: 10 + AUTH_CONVENTION_PATHS.length - MAX_AUTH_ENDPOINTS });
+    expect(checks[0]!.details).toMatchObject({
+      skippedCap: 10 + AUTH_CONVENTION_PATHS.length - MAX_AUTH_ENDPOINTS,
+    });
   });
 });
 
@@ -266,10 +336,16 @@ describe("security/auth-endpoint-disclosure: incomplete runs", () => {
       },
     });
     restore = stub.restore;
-    const { checks } = await authEndpointDisclosureRule.run(ruleCtx({ budgetMs: 5_000, now }));
+    const { checks } = await authEndpointDisclosureRule.run(
+      ruleCtx({ budgetMs: 5_000, now })
+    );
     expect(stub.sent).toHaveLength(1);
     expect(checks).toEqual([
-      expect.objectContaining({ name: "auth-endpoint-not-checked", status: "skipped", skipReason: "probe-budget" }),
+      expect.objectContaining({
+        name: "auth-endpoint-not-checked",
+        status: "skipped",
+        skipReason: "probe-budget",
+      }),
     ]);
   });
 
@@ -284,16 +360,31 @@ describe("security/auth-endpoint-disclosure: incomplete runs", () => {
         ])
       )
     );
-    expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probe-errors" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({
+        status: "skipped",
+        skipReason: "probe-errors",
+      }),
+    ]);
   });
 });
 
 describe("security/auth-endpoint-disclosure: helpers", () => {
   test("hash formats", () => {
-    for (const h of [BCRYPT, ARGON2, DJANGO, "$6$rounds=5000$saltsalt$" + "a".repeat(86)]) {
+    for (const h of [
+      BCRYPT,
+      ARGON2,
+      DJANGO,
+      "$6$rounds=5000$saltsalt$" + "a".repeat(86),
+    ]) {
       expect(looksLikePasswordHash(h)).toBe(true);
     }
-    for (const s of ["hunter2", "$2b$12$short", "pbkdf2_sha256$x", "a".repeat(64)]) {
+    for (const s of [
+      "hunter2",
+      "$2b$12$short",
+      "pbkdf2_sha256$x",
+      "a".repeat(64),
+    ]) {
       expect(looksLikePasswordHash(s)).toBe(false);
     }
   });
@@ -311,7 +402,9 @@ describe("security/auth-endpoint-disclosure: helpers", () => {
   });
 
   test("findDisclosures is bounded in depth and names nested array paths", () => {
-    expect(findDisclosures({ data: { users: [{}, { password_digest: BCRYPT }] } })).toEqual([
+    expect(
+      findDisclosures({ data: { users: [{}, { password_digest: BCRYPT }] } })
+    ).toEqual([
       { path: "data.users[1].password_digest", kind: "password-hash" },
     ]);
     let deep: unknown = { password: "plain" };

@@ -11,9 +11,10 @@
 // separate fixtures, because the defect was a copied idiom: the value is in
 // proving no rule still carries it.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, Rule, RuleContext } from "../src/types";
 
 import { breadcrumbSchemaRule } from "../src/schema/breadcrumb";
 import { faqSchemaRule } from "../src/schema/faq";
@@ -22,7 +23,6 @@ import { productSchemaRule } from "../src/schema/product";
 import { reviewSchemaRule } from "../src/schema/review";
 import { videoSchemaRule } from "../src/schema/video";
 import { websiteSearchSchemaRule } from "../src/schema/website-search";
-import type { CheckResult, Rule, RuleContext } from "../src/types";
 
 /** One Yoast-style `@graph` carrying every type the seven rules look for. */
 const GRAPH = {
@@ -58,7 +58,12 @@ const GRAPH = {
       "@type": "BreadcrumbList",
       "@id": "https://example.com/widget#breadcrumb",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "Home", item: "https://example.com/" },
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: "https://example.com/",
+        },
         { "@type": "ListItem", position: 2, name: "Widget" },
       ],
     },
@@ -74,7 +79,10 @@ const GRAPH = {
         {
           "@type": "Question",
           name: "Did it before?",
-          acceptedAnswer: { "@type": "Answer", text: "No, and that was issue 317." },
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "No, and that was issue 317.",
+          },
         },
       ],
     },
@@ -91,7 +99,11 @@ const GRAPH = {
         availability: "https://schema.org/InStock",
         url: "https://example.com/widget",
       },
-      aggregateRating: { "@type": "AggregateRating", ratingValue: "4.5", reviewCount: "24" },
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.5",
+        reviewCount: "24",
+      },
       review: {
         "@type": "Review",
         reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
@@ -112,8 +124,8 @@ const GRAPH = {
 };
 
 /** The same nodes, emitted one per script at the top level. */
-const FLAT_SCRIPTS = (GRAPH["@graph"] as Record<string, unknown>[]).map((node) =>
-  JSON.stringify({ "@context": "https://schema.org", ...node })
+const FLAT_SCRIPTS = (GRAPH["@graph"] as Record<string, unknown>[]).map(
+  (node) => JSON.stringify({ "@context": "https://schema.org", ...node })
 );
 
 function html(scripts: string[]): string {
@@ -123,7 +135,10 @@ function html(scripts: string[]): string {
   return `<!doctype html><html><head><title>Widget</title>${tags}</head><body><h1>Widget</h1></body></html>`;
 }
 
-function ctx(pageHtml: string, url = "https://example.com/widget"): RuleContext {
+function ctx(
+  pageHtml: string,
+  url = "https://example.com/widget"
+): RuleContext {
   return {
     page: { url, html: pageHtml, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(pageHtml, url),
@@ -131,7 +146,11 @@ function ctx(pageHtml: string, url = "https://example.com/widget"): RuleContext 
   };
 }
 
-async function checks(rule: Rule, pageHtml: string, url?: string): Promise<CheckResult[]> {
+async function checks(
+  rule: Rule,
+  pageHtml: string,
+  url?: string
+): Promise<CheckResult[]> {
   const result = await Promise.resolve(rule.run(ctx(pageHtml, url)));
   return result.checks;
 }
@@ -140,15 +159,28 @@ async function checks(rule: Rule, pageHtml: string, url?: string): Promise<Check
  * The rules under test, with the check whose presence proves the type was
  * found, and the status that proves it was NOT.
  */
-const CASES: Array<{ rule: Rule; check: string; missingStatus: string; url?: string }> = [
+const CASES: Array<{
+  rule: Rule;
+  check: string;
+  missingStatus: string;
+  url?: string;
+}> = [
   {
     rule: websiteSearchSchemaRule,
     check: "website-schema",
     missingStatus: "info",
     url: "https://example.com/",
   },
-  { rule: organizationSchemaRule, check: "organization-schema", missingStatus: "info" },
-  { rule: breadcrumbSchemaRule, check: "breadcrumb-schema", missingStatus: "info" },
+  {
+    rule: organizationSchemaRule,
+    check: "organization-schema",
+    missingStatus: "info",
+  },
+  {
+    rule: breadcrumbSchemaRule,
+    check: "breadcrumb-schema",
+    missingStatus: "info",
+  },
   { rule: faqSchemaRule, check: "faq-schema", missingStatus: "info" },
   { rule: productSchemaRule, check: "product-schema", missingStatus: "info" },
   { rule: videoSchemaRule, check: "video-schema", missingStatus: "info" },
@@ -203,7 +235,11 @@ describe("@graph-nested JSON-LD is read by every schema rule", () => {
     const broken = html(["{not json", JSON.stringify(GRAPH)]);
     for (const { rule, url } of CASES) {
       const withBroken = await checks(rule, broken, url);
-      const withoutBroken = await checks(rule, html([JSON.stringify(GRAPH)]), url);
+      const withoutBroken = await checks(
+        rule,
+        html([JSON.stringify(GRAPH)]),
+        url
+      );
       expect(withBroken).toEqual(withoutBroken);
     }
   });

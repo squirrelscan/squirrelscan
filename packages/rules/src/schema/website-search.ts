@@ -1,8 +1,12 @@
 // schema/website-search - WebSite with SearchAction schema
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import {
+  flattenJsonLdNodes,
+  indexJsonLdIds,
+  resolveJsonLdRef,
+} from "@squirrelscan/utils";
 
-import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const websiteSearchSchemaRule: Rule = {
   meta: {
@@ -88,9 +92,14 @@ export const websiteSearchSchemaRule: Rule = {
     // pub#869: an action written as a node reference (`{"@id": …}`) is read
     // from the node it names; a dangling one is judged as written.
     const ids = indexJsonLdIds(pageNodes, ctx.page.url);
-    const actions = (Array.isArray(potentialAction) ? potentialAction : [potentialAction])
+    const actions = (
+      Array.isArray(potentialAction) ? potentialAction : [potentialAction]
+    )
       .map((a: unknown) => resolveJsonLdRef(a, ids, ctx.page.url))
-      .filter((a): a is Record<string, unknown> => !!a && typeof a === "object" && !Array.isArray(a));
+      .filter(
+        (a): a is Record<string, unknown> =>
+          !!a && typeof a === "object" && !Array.isArray(a)
+      );
     const searchAction = actions.find((a) => a["@type"] === "SearchAction");
 
     if (!searchAction) {

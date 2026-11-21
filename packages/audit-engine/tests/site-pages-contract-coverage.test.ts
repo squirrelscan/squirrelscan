@@ -13,7 +13,10 @@ import { join, relative } from "node:path";
 import { BenchStore } from "../scripts/bench-store";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
-describeSitePagesContract("scripts/bench-store.ts BenchStore", () => new BenchStore());
+describeSitePagesContract(
+  "scripts/bench-store.ts BenchStore",
+  () => new BenchStore()
+);
 
 const REPO = join(import.meta.dir, "../../..");
 const SELF = "packages/audit-engine/tests/site-pages-contract-coverage.test.ts";
@@ -32,17 +35,21 @@ const IMPLEMENTATION =
  * double runs the contract from its own file instead, beside the store it defines.
  */
 const RUN_ELSEWHERE: Record<string, string> = {
-  "packages/crawler/src/storage/sqlite.ts": "packages/crawler/tests/page-findings-store.test.ts",
+  "packages/crawler/src/storage/sqlite.ts":
+    "packages/crawler/tests/page-findings-store.test.ts",
   "packages/audit-engine/scripts/bench-store.ts": SELF,
 };
 
 function implementations(): string[] {
   const found: string[] = [];
   for (const root of ["packages", "apps"]) {
-    for (const file of new Bun.Glob("**/*.ts").scanSync({ cwd: join(REPO, root) })) {
+    for (const file of new Bun.Glob("**/*.ts").scanSync({
+      cwd: join(REPO, root),
+    })) {
       if (file.includes("node_modules/")) continue;
       const path = `${root}/${file}`;
-      if (IMPLEMENTATION.test(readFileSync(join(REPO, path), "utf8"))) found.push(path);
+      if (IMPLEMENTATION.test(readFileSync(join(REPO, path), "utf8")))
+        found.push(path);
     }
   }
   return found.sort();
@@ -61,13 +68,21 @@ describe("upsertSitePages contract coverage", () => {
   test("every implementation runs describeSitePagesContract", () => {
     const missing = found.filter((path) => {
       const runner = RUN_ELSEWHERE[path] ?? path;
-      return !readFileSync(join(REPO, runner), "utf8").includes("describeSitePagesContract(");
+      return !readFileSync(join(REPO, runner), "utf8").includes(
+        "describeSitePagesContract("
+      );
     });
     expect(missing).toEqual([]);
   });
 
   test("the mapped implementations still exist", () => {
-    for (const path of Object.keys(RUN_ELSEWHERE)) expect(found).toContain(path);
-    expect(relative(REPO, join(import.meta.dir, "site-pages-contract-coverage.test.ts"))).toBe(SELF);
+    for (const path of Object.keys(RUN_ELSEWHERE))
+      expect(found).toContain(path);
+    expect(
+      relative(
+        REPO,
+        join(import.meta.dir, "site-pages-contract-coverage.test.ts")
+      )
+    ).toBe(SELF);
   });
 });

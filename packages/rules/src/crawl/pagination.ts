@@ -1,9 +1,10 @@
 // crawl/pagination - Pagination canonical handling
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { documentUrl } from "../shared/redirect-evidence";
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export const paginationRule: Rule = {
   meta: {
@@ -122,7 +123,7 @@ function sameResource(a: URL, b: URL): boolean {
     JSON.stringify(
       [...new Set(u.searchParams.keys())]
         .sort()
-        .map((key) => [key, u.searchParams.getAll(key)]),
+        .map((key) => [key, u.searchParams.getAll(key)])
     );
   return a.origin === b.origin && path(a) === path(b) && query(a) === query(b);
 }

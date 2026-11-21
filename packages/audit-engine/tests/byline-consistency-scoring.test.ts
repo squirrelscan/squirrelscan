@@ -3,34 +3,43 @@
 // category no more than either per-page rule it can overlap at its own worst (a warning), so it cannot dominate the
 // category score.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckItem, CheckResult } from "@squirrelscan/core-contracts";
-import { loadAllRules } from "@squirrelscan/rules";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
+
+import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import { calculateHealthScore } from "../src/scoring";
 
-const eeatRules = [...loadAllRules().values()].filter((r) => r.meta.category === "eeat");
+const eeatRules = [...loadAllRules().values()].filter(
+  (r) => r.meta.category === "eeat"
+);
 
 function passing(): Map<string, RuleRunResult> {
   const results = new Map<string, RuleRunResult>();
   for (const rule of eeatRules) {
     results.set(rule.meta.id, {
       meta: rule.meta,
-      checks: [{ name: rule.meta.id.split("/")[1]!, status: "pass", message: "ok" }],
+      checks: [
+        { name: rule.meta.id.split("/")[1]!, status: "pass", message: "ok" },
+      ],
     });
   }
   return results;
 }
 
 function eeatScore(results: Map<string, RuleRunResult>): number {
-  const category = calculateHealthScore({ results }).categories.find((c) => c.category === "eeat");
+  const category = calculateHealthScore({ results }).categories.find(
+    (c) => c.category === "eeat"
+  );
   if (!category) throw new Error("no eeat category score");
   return category.score;
 }
 
-function withCheck(ruleId: string, check: CheckResult): Map<string, RuleRunResult> {
+function withCheck(
+  ruleId: string,
+  check: CheckResult
+): Map<string, RuleRunResult> {
   const results = passing();
   const prior = results.get(ruleId);
   if (!prior) throw new Error(`${ruleId} is not an eeat rule`);
@@ -42,7 +51,10 @@ function withCheck(ruleId: string, check: CheckResult): Map<string, RuleRunResul
 const items: CheckItem[] = Array.from({ length: 4 }, (_, i) => ({
   id: `type${i}:author`,
   label: `10 of 40 type${i} page(s) have no visible author byline`,
-  sourcePages: Array.from({ length: 10 }, (_, j) => `https://example.com/t${i}/p${j}`),
+  sourcePages: Array.from(
+    { length: 10 },
+    (_, j) => `https://example.com/t${i}/p${j}`
+  ),
 }));
 
 describe("eeat/byline-consistency: scoring density", () => {
@@ -55,21 +67,21 @@ describe("eeat/byline-consistency: scoring density", () => {
         message: "100 of 400 page(s) break the site's own byline convention",
         value: 100,
         items,
-      }),
+      })
     );
     const author = eeatScore(
       withCheck("eeat/author-byline", {
         name: "author-byline",
         status: "warn",
         message: "Only 20% of content pages have author attribution",
-      }),
+      })
     );
     const dates = eeatScore(
       withCheck("eeat/content-dates", {
         name: "date-published",
         status: "warn",
         message: "Only 20% of content has datePublished",
-      }),
+      })
     );
 
     expect(byline).toBeLessThan(clean);

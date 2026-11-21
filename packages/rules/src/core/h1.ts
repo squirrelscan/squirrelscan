@@ -2,15 +2,17 @@
 
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 
-import { createStaticVisibility } from "../shared/static-hidden";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import { createStaticVisibility } from "../shared/static-hidden";
 
 /** On the details when some H1s are hidden or may be: the audit reads markup, not rendered CSS. */
 const RENDERING_NOTE =
   "visibility is read from the HTML, inline styles and <style> blocks; an HTTP-only audit cannot resolve visibility set by external stylesheets or scripts";
 
 /** The same limit, short enough for the message, which the report groups across pages. */
-const RENDERING_LIMIT = "an HTTP-only audit cannot resolve CSS or script visibility";
+const RENDERING_LIMIT =
+  "an HTTP-only audit cannot resolve CSS or script visibility";
 
 /** How many of the page's H1s are exposed, hidden, or hidden by a style squirrel cannot settle. */
 interface H1Exposure {
@@ -102,12 +104,20 @@ export const h1Rule: Rule = {
             rawCount: seen.raw,
             exposedCount: seen.exposed,
             hiddenCount: seen.hidden,
-            ...(seen.unconfirmed > 0 ? { unconfirmedCount: seen.unconfirmed } : {}),
-            ...(seen.hidden + seen.unconfirmed > 0 ? { note: RENDERING_NOTE } : {}),
+            ...(seen.unconfirmed > 0
+              ? { unconfirmedCount: seen.unconfirmed }
+              : {}),
+            ...(seen.hidden + seen.unconfirmed > 0
+              ? { note: RENDERING_NOTE }
+              : {}),
           }
         : undefined;
 
-      if (!seen || seen.hidden + seen.unconfirmed === 0 || seen.exposed + seen.unconfirmed === 0) {
+      if (
+        !seen ||
+        seen.hidden + seen.unconfirmed === 0 ||
+        seen.exposed + seen.unconfirmed === 0
+      ) {
         // Every H1 is exposed, or every one is hidden: the raw count is the
         // finding, as before.
         checks.push({

@@ -10,17 +10,17 @@
 // The streaming run is given an EMPTY `site.pages`, so passing also proves the
 // streaming branch reads nothing off the resident page array.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type { PageRecord } from "@squirrelscan/core-contracts";
+import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { parsePage } from "@squirrelscan/parser";
 import { extractSiteChromeSignal, loadAllRules } from "@squirrelscan/rules";
-import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
-import type { PageRecord } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
-import { createSiteQuery, extractPageFeatures } from "../src/index";
 import { parseHtmlForRules } from "../src/adapter";
+import { createSiteQuery, extractPageFeatures } from "../src/index";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -63,7 +63,9 @@ function specHtml(spec: Spec): string {
     `<meta name="theme-color" content="${spec.themeColor}">` +
     `<meta property="og:image" content="${spec.ogImage}">` +
     (spec.alternates ?? [])
-      .map((href, i) => `<link rel="alternate" hreflang="l${i}" href="${href}">`)
+      .map(
+        (href, i) => `<link rel="alternate" hreflang="l${i}" href="${href}">`
+      )
       .join("") +
     `${schema}</head><body><p>hi</p></body></html>`
   );
@@ -141,7 +143,9 @@ async function seedAndRun(rule: Rule, fixture: Spec[] = FIXTURE) {
   const built = fixture.map(mkPage);
 
   for (const { page, parsed } of built) {
-    await run(store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed)));
+    await run(
+      store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed))
+    );
   }
 
   const sitePages = [...built]
@@ -201,12 +205,19 @@ describe("dual-path golden — social/asset-divergence (extractor → v21 column
         },
         { dimension: "theme-color", norm: "#0a5c36", pages: 14, agreement: 1 },
         // Only the 12 non-article pages vote here; the two articles are exempt.
-        { dimension: "og-image", norm: DEFAULT_OG, pages: 10, agreement: 10 / 12 },
+        {
+          dimension: "og-image",
+          norm: DEFAULT_OG,
+          pages: 10,
+          agreement: 10 / 12,
+        },
       ],
     });
 
     // One item per diverging axis, both naming the same two pages.
-    expect(check.items?.map((i) => [i.meta?.dimension, i.meta?.value, i.sourcePages])).toEqual([
+    expect(
+      check.items?.map((i) => [i.meta?.dimension, i.meta?.value, i.sourcePages])
+    ).toEqual([
       [
         "favicon",
         "https://example.com/old/favicon.ico",
@@ -232,7 +243,8 @@ describe("dual-path golden: social/asset-divergence hreflang cluster (pub#937)",
   const ENTITY_OG = "https://cdn.example.com/collections/gloves.webp";
   const locales = Array.from(
     { length: 16 },
-    (_, i) => `https://example.com/l${String(i).padStart(2, "0")}/collections/gloves`
+    (_, i) =>
+      `https://example.com/l${String(i).padStart(2, "0")}/collections/gloves`
   );
   const cluster: Spec[] = locales.map((normalizedUrl) => ({
     normalizedUrl,
@@ -260,7 +272,9 @@ describe("dual-path golden: social/asset-divergence hreflang cluster (pub#937)",
       ...cluster.map((spec) => ({ ...spec, alternates: undefined })),
     ]);
     expect(streamed).toEqual(legacy);
-    expect(legacy[0]!.items?.map((i) => i.meta?.dimension)).toEqual(["og-image"]);
+    expect(legacy[0]!.items?.map((i) => i.meta?.dimension)).toEqual([
+      "og-image",
+    ]);
   });
 });
 
@@ -278,8 +292,14 @@ describe("parseHtmlForRules carries the site-chrome assets", () => {
   });
 
   test("both parse paths yield the same chrome signal", () => {
-    const viaAdapter = extractSiteChromeSignal(parseHtmlForRules(HTML, BASE), BASE);
-    const viaParser = extractSiteChromeSignal(parsePage(HTML, BASE) as ParsedPage, BASE);
+    const viaAdapter = extractSiteChromeSignal(
+      parseHtmlForRules(HTML, BASE),
+      BASE
+    );
+    const viaParser = extractSiteChromeSignal(
+      parsePage(HTML, BASE) as ParsedPage,
+      BASE
+    );
 
     expect(viaAdapter).toEqual({
       faviconHref: "https://example.com/favicon.ico",

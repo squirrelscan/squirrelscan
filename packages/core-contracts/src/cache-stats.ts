@@ -169,7 +169,12 @@ const CACHE_HIT_VALUE = /\b(hit|stale|revalidated)\b/i;
  */
 export function staleCacheSignal(
   headers:
-    | Partial<Pick<ResponseHeaders, "age" | "xCache" | "cfCacheStatus" | "xVercelCache">>
+    | Partial<
+        Pick<
+          ResponseHeaders,
+          "age" | "xCache" | "cfCacheStatus" | "xVercelCache"
+        >
+      >
     | null
     | undefined
 ): string | null {

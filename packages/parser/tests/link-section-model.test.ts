@@ -5,7 +5,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { PageClassifierHook } from "../src/classifier-hook";
-import type { LinkPlacement, PlacedLabel } from "../src/extractors/link-section";
+import type {
+  LinkPlacement,
+  PlacedLabel,
+} from "../src/extractors/link-section";
 
 import { extractLinks } from "../src/extractors/links";
 import { parsePage } from "../src/html";
@@ -26,10 +29,13 @@ const model = (label: string, confidence = 0.9): PlacedLabel => ({
 /** A hook whose placer answers from a table keyed by the anchor's text. */
 function hookFor(
   answers: Record<string, Partial<LinkPlacement>>,
-  calls: string[] = [],
+  calls: string[] = []
 ): PageClassifierHook {
   return () => ({
-    classification: { pageType: { label: "article", confidence: 0.8, source: "model" }, degraded: "" },
+    classification: {
+      pageType: { label: "article", confidence: 0.8, source: "model" },
+      degraded: "",
+    },
     placeLink: (element) => {
       const text = element.textContent ?? "";
       calls.push(text);
@@ -67,8 +73,8 @@ describe("link section from the classifier", () => {
           h: { section: model("breadcrumbs") },
           c: { section: model("related_content") },
         },
-        calls,
-      ),
+        calls
+      )
     );
     expect(out.map((l) => [l.text, l.section, l.sectionSource])).toEqual([
       ["f", "footer", undefined],
@@ -82,9 +88,11 @@ describe("link section from the classifier", () => {
     const calls: string[] = [];
     const out = links(
       `<nav aria-label="breadcrumb"><a href="/a">a</a></nav>`,
-      hookFor({ a: { section: model("pagination") } }, calls),
+      hookFor({ a: { section: model("pagination") } }, calls)
     );
-    expect(out.map((l) => [l.text, l.section, l.sectionSource])).toEqual([["a", "breadcrumbs", undefined]]);
+    expect(out.map((l) => [l.text, l.section, l.sectionSource])).toEqual([
+      ["a", "breadcrumbs", undefined],
+    ]);
     expect(calls).toEqual([]);
   });
 
@@ -100,9 +108,11 @@ describe("link section from the classifier", () => {
         x: { region: model("content_block", 0.99) },
         y: { section: model("comments", 0.99) },
         z: { section: { label: "reviews", confidence: 1, source: "rules" } },
-      }),
+      })
     );
-    expect(out.map((l) => [l.text, l.section, l.sectionSource, l.sectionConfidence])).toEqual([
+    expect(
+      out.map((l) => [l.text, l.section, l.sectionSource, l.sectionConfidence])
+    ).toEqual([
       ["p", "pagination", "model", 0.96],
       ["b", "breadcrumbs", "model", 0.9],
       ["r", "related_content", "model", 0.8],
@@ -121,7 +131,7 @@ describe("link section from the classifier", () => {
         b: { region: model("content_block", 0.8) },
         s: { region: model("site_chrome", 0.85) },
         x: { region: model("form", 0.99) },
-      }),
+      })
     );
     expect(out.map((l) => [l.text, l.section])).toEqual([
       ["h", "header"],
@@ -139,11 +149,16 @@ describe("link section from the classifier", () => {
     const out = links(
       `<main><a href="/p">p</a></main><div><a href="/r">r</a></div>`,
       hookFor({
-        p: { region: model("main_content"), section: model("pagination", 0.97) },
+        p: {
+          region: model("main_content"),
+          section: model("pagination", 0.97),
+        },
         r: { section: model("related_content", 0.8) },
-      }),
+      })
     );
-    expect(out.map((l) => [l.text, l.section, l.sectionSource, l.sectionConfidence])).toEqual([
+    expect(
+      out.map((l) => [l.text, l.section, l.sectionSource, l.sectionConfidence])
+    ).toEqual([
       ["p", "pagination", "model", 0.97],
       ["r", "related_content", "model", 0.8],
     ]);
@@ -155,7 +170,7 @@ describe("link section from the classifier", () => {
       hookFor({
         c: { section: model("comments", 0.99) },
         r: { section: model("reviews", 0.99), region: model("content_block") },
-      }),
+      })
     );
     // c stays the markup's content; r has no purpose, so its region answers.
     expect(out.map((l) => [l.text, l.section])).toEqual([
@@ -172,7 +187,7 @@ describe("link section from the classifier", () => {
       hookFor({
         c: { section: { label: "comments", confidence: 1, source: "rules" } },
         r: { section: { label: "reviews", confidence: 1, source: "rules" } },
-      }),
+      })
     );
     expect(out.map((l) => [l.text, l.section])).toEqual([
       ["c", "comments"],
@@ -184,7 +199,11 @@ describe("link section from the classifier", () => {
   test("a rules-source answer from the classifier carries no model provenance", () => {
     const out = links(
       `<div><a href="/a">a</a></div>`,
-      hookFor({ a: { region: { label: "main_content", confidence: 1, source: "rules" } } }),
+      hookFor({
+        a: {
+          region: { label: "main_content", confidence: 1, source: "rules" },
+        },
+      })
     );
     expect(out[0]).toMatchObject({ section: "content" });
     expect("sectionSource" in out[0]!).toBe(false);
@@ -192,18 +211,26 @@ describe("link section from the classifier", () => {
 
   test("a placer that throws leaves the markup answer", () => {
     const hook: PageClassifierHook = () => ({
-      classification: { pageType: { label: "other", confidence: 0, source: "rules" }, degraded: "" },
+      classification: {
+        pageType: { label: "other", confidence: 0, source: "rules" },
+        degraded: "",
+      },
       placeLink: () => {
         throw new Error("boom");
       },
     });
-    expect(links(`<main><a href="/a">a</a></main>`, hook)[0]!.section).toBe("content");
+    expect(links(`<main><a href="/a">a</a></main>`, hook)[0]!.section).toBe(
+      "content"
+    );
   });
 });
 
 describe("a truncated placement fails closed", () => {
   const truncatedHook: PageClassifierHook = () => ({
-    classification: { pageType: { label: "other", confidence: 0, source: "rules" }, degraded: "" },
+    classification: {
+      pageType: { label: "other", confidence: 0, source: "rules" },
+      degraded: "",
+    },
     // What the classifier says for a link in a comment thread nested out of its reach: nothing
     // placed, and a region answer that must not be used.
     placeLink: () => ({
@@ -216,7 +243,7 @@ describe("a truncated placement fails closed", () => {
   test("unknown stays unknown and content becomes unknown, whatever the model said", () => {
     const out = links(
       `<div><a href="/u">u</a></div><main><a href="/c">c</a></main>`,
-      truncatedHook,
+      truncatedHook
     );
     expect(out.map((l) => [l.text, l.section, l.sectionSource])).toEqual([
       ["u", "unknown", undefined],
@@ -225,7 +252,10 @@ describe("a truncated placement fails closed", () => {
   });
 
   test("a landmark the markup names is kept", () => {
-    const out = links(`<nav><a href="/n">n</a></nav><footer><a href="/f">f</a></footer>`, truncatedHook);
+    const out = links(
+      `<nav><a href="/n">n</a></nav><footer><a href="/f">f</a></footer>`,
+      truncatedHook
+    );
     expect(out.map((l) => [l.text, l.section])).toEqual([
       ["n", "navigation"],
       ["f", "footer"],
@@ -236,7 +266,9 @@ describe("a truncated placement fails closed", () => {
 describe("page classification on the parsed page", () => {
   test("is stored when the hook answers and absent when it returns null or throws", () => {
     const classify = hookFor({});
-    expect(parsePage(page(`<p>x</p>`), URL, { classify }).classification).toEqual({
+    expect(
+      parsePage(page(`<p>x</p>`), URL, { classify }).classification
+    ).toEqual({
       pageType: { label: "article", confidence: 0.8, source: "model" },
       degraded: "",
     });
@@ -252,15 +284,16 @@ describe("page classification on the parsed page", () => {
   });
 
   test("it does not replace the schema and URL page type", () => {
-    const parsed = parsePage(page(`<p>x</p>`), "https://example.com/", { classify: hookFor({}) });
+    const parsed = parsePage(page(`<p>x</p>`), "https://example.com/", {
+      classify: hookFor({}),
+    });
     expect(parsed.pageType).toBe("home");
   });
 });
 
 describe("producers agree", () => {
   test("extractLinks with a placer gives the same sections as parsePage", () => {
-    const body =
-      `<footer><a href="/f">f</a></footer><main><a href="/p">p</a></main><div><a href="/b">b</a></div>`;
+    const body = `<footer><a href="/f">f</a></footer><main><a href="/p">p</a></main><div><a href="/b">b</a></div>`;
     const answers = {
       p: { section: model("pagination", 0.95) },
       b: { region: model("content_block", 0.85) },
@@ -276,12 +309,11 @@ describe("producers agree", () => {
       url: URL,
       html: page(body),
     })!.placeLink;
-    const extracted = extractLinks(parseDocument(page(body)), URL, placeLink).map((l) => [
-      l.text,
-      l.section,
-      l.sectionSource,
-      l.sectionConfidence,
-    ]);
+    const extracted = extractLinks(
+      parseDocument(page(body)),
+      URL,
+      placeLink
+    ).map((l) => [l.text, l.section, l.sectionSource, l.sectionConfidence]);
     expect(extracted).toEqual(stored);
   });
 });

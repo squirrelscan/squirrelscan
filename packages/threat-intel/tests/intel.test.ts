@@ -4,15 +4,17 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { IntelConfig, IntelTransport } from "../src/index";
+
 import { buildIntelContext, prefetchIntel } from "../src/intel";
 import { runLookups } from "../src/lookups";
-import type { IntelConfig, IntelTransport } from "../src/index";
 
 function jsonResponse(body: unknown, ok = true): ReturnType<IntelTransport> {
   return Promise.resolve({
     ok,
     status: ok ? 200 : 500,
-    text: () => Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
+    text: () =>
+      Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
     json: () => Promise.resolve(body),
   });
 }
@@ -32,7 +34,9 @@ describe("runLookups — memoized per run", () => {
       const queried = body?.threatInfo?.threatEntries?.[0]?.url ?? url;
       seen.push(queried);
       const malicious = queried.includes("evil");
-      return jsonResponse(malicious ? { matches: [{ threatType: "SOCIAL_ENGINEERING" }] } : {});
+      return jsonResponse(
+        malicious ? { matches: [{ threatType: "SOCIAL_ENGINEERING" }] } : {}
+      );
     };
 
     const verdicts = await runLookups(
@@ -43,13 +47,15 @@ describe("runLookups — memoized per run", () => {
         "https://clean.example/",
       ],
       config,
-      { transport },
+      { transport }
     );
 
     // evil.tk/a (one key after normalization) + clean.example = 2 distinct queries
     expect(seen.length).toBe(2);
     expect(verdicts.get("evil.tk/a")?.listed).toBe(true);
-    expect(verdicts.get("evil.tk/a")?.sources[0]?.provider).toBe("safe-browsing");
+    expect(verdicts.get("evil.tk/a")?.sources[0]?.provider).toBe(
+      "safe-browsing"
+    );
     expect(verdicts.get("clean.example")?.listed).toBe(false);
     expect(verdicts.get("clean.example")?.checked).toBe(true);
   });
@@ -58,7 +64,7 @@ describe("runLookups — memoized per run", () => {
     const verdicts = await runLookups(
       ["https://x.tk/"],
       { enabled: true, feedTtlMs: 1000, providers: {} },
-      { transport: () => jsonResponse({}) },
+      { transport: () => jsonResponse({}) }
     );
     expect(verdicts.size).toBe(0);
   });
@@ -89,7 +95,9 @@ describe("buildIntelContext", () => {
         return jsonResponse("https://feedlisted.tk/x"); // text feed
       }
       if (url.includes("virustotal")) {
-        return jsonResponse({ data: { attributes: { last_analysis_stats: { malicious: 3 } } } });
+        return jsonResponse({
+          data: { attributes: { last_analysis_stats: { malicious: 3 } } },
+        });
       }
       return jsonResponse({});
     };

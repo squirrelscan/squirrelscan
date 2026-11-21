@@ -1,8 +1,7 @@
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 // (#3413) A clipped signal lists only part of the crawl; its count sizes the
 // complete-store denominator (clean = crawled - failing), never shrinks it.
 import { describe, expect, test } from "bun:test";
-
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
 import { foldCompleteStoreTallies } from "../src/complete-store-fold";
 
@@ -18,7 +17,10 @@ const META = {
 
 async function* noPages(): AsyncGenerator<never[]> {}
 
-async function passes(crawled: string[], crawledCount?: number): Promise<number> {
+async function passes(
+  crawled: string[],
+  crawledCount?: number
+): Promise<number> {
   const tallies = await foldCompleteStoreTallies({
     ruleResults: { [META.id]: { meta: META, checks: [] } } as never,
     findingPages: noPages() as never,
@@ -56,7 +58,12 @@ describe("crawledCount sizes the denominator (#3413)", () => {
       foldCompleteStoreTallies({
         ruleResults: {
           "security/csp": {
-            meta: { ...META, id: "security/csp", category: "security", severity: "error" },
+            meta: {
+              ...META,
+              id: "security/csp",
+              category: "security",
+              severity: "error",
+            },
             checks: [],
           },
         } as never,

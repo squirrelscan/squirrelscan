@@ -9,11 +9,13 @@
 // to paging, which an in-memory unit test can't provoke; a larger real-scale run
 // is kept skip-tagged below.)
 
+import { createRunner, type SiteData } from "@squirrelscan/rules";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import { createRunner, type SiteData } from "@squirrelscan/rules";
 
 import { streamPageRules } from "../src/streaming";
 
@@ -25,7 +27,12 @@ const CONFIG = { rule_options: {}, rules: { enable: ["*"] } };
 
 // Page rules read only non-`pages` site fields; a minimal SiteData suffices.
 function siteData(): SiteData {
-  return { baseUrl: "http://synthetic.example.com", pages: [], robotsTxt: null, sitemaps: null };
+  return {
+    baseUrl: "http://synthetic.example.com",
+    pages: [],
+    robotsTxt: null,
+    sitemaps: null,
+  };
 }
 
 function median(xs: number[]): number {
@@ -33,7 +40,10 @@ function median(xs: number[]): number {
   return s[Math.floor(s.length / 2)]!;
 }
 
-async function collectBatchTimings(pageCount: number, batchSize: number): Promise<number[]> {
+async function collectBatchTimings(
+  pageCount: number,
+  batchSize: number
+): Promise<number[]> {
   const model = generateSiteModel({ seed: 21, pageCount });
   const { storage, crawlId } = await writeCrawlToStorage(model, ":memory:");
   const batchMs: number[] = [];
@@ -41,7 +51,7 @@ async function collectBatchTimings(pageCount: number, batchSize: number): Promis
     streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), {
       batchSize,
       hooks: { onBatch: (info) => batchMs.push(info.batchMs) },
-    }),
+    })
   );
   await run(storage.close());
   return batchMs;
@@ -52,7 +62,10 @@ async function collectBatchTimings(pageCount: number, batchSize: number): Promis
 // absorb timing noise; a superlinear loop would blow the last third far past this.
 function assertFlat(batchMs: number[], minBatches: number) {
   expect(batchMs.length).toBeGreaterThanOrEqual(minBatches);
-  const firstThird = batchMs.slice(1, Math.max(2, Math.ceil(batchMs.length / 3)));
+  const firstThird = batchMs.slice(
+    1,
+    Math.max(2, Math.ceil(batchMs.length / 3))
+  );
   const lastThird = batchMs.slice(Math.floor((batchMs.length * 2) / 3));
   const firstMed = median(firstThird);
   const lastMed = median(lastThird);
@@ -60,14 +73,10 @@ function assertFlat(batchMs: number[], minBatches: number) {
 }
 
 describe("streaming page pass — per-batch wall-time flatness", () => {
-  test(
-    "per-batch time stays flat across a 160-page crawl",
-    async () => {
-      const batchMs = await collectBatchTimings(160, 16);
-      assertFlat(batchMs, 9);
-    },
-    30_000,
-  );
+  test("per-batch time stays flat across a 160-page crawl", async () => {
+    const batchMs = await collectBatchTimings(160, 16);
+    assertFlat(batchMs, 9);
+  }, 30_000);
 
   // Real-scale confirmation — slow (thousands of pages). Run manually:
   //   bun test -t "flat across a large crawl" (after removing .skip)

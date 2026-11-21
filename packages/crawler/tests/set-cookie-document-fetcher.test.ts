@@ -8,9 +8,10 @@
 // multi-cookie shape from packages/fetchers and hosted rendering into one
 // corrupted, space-joined cookie. This proves the round-trip preserves every cookie.
 
+import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
+
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { fetchPage } from "../src/fetcher";
 
@@ -52,11 +53,12 @@ describe("fetchWithDocumentFetcher Set-Cookie round-trip (#973)", () => {
   test("preserves every cookie through the Record -> Headers -> Record round-trip", async () => {
     const fetcher = fakeDocumentFetcher({
       "content-type": "text/html",
-      "set-cookie": "session=abc123; Path=/; HttpOnly\nconsent=1; Path=/; Secure",
+      "set-cookie":
+        "session=abc123; Path=/; HttpOnly\nconsent=1; Path=/; Secure",
     });
 
     const result = await Effect.runPromise(
-      fetchPage("https://example.com/", { ...FETCH_OPTIONS_BASE, fetcher }),
+      fetchPage("https://example.com/", { ...FETCH_OPTIONS_BASE, fetcher })
     );
 
     const setCookie = result.headers.setCookie ?? "";
@@ -76,18 +78,22 @@ describe("fetchWithDocumentFetcher Set-Cookie round-trip (#973)", () => {
     });
 
     const result = await Effect.runPromise(
-      fetchPage("https://example.com/", { ...FETCH_OPTIONS_BASE, fetcher }),
+      fetchPage("https://example.com/", { ...FETCH_OPTIONS_BASE, fetcher })
     );
 
     const cookies = (result.headers.setCookie ?? "").split("\n");
     expect(cookies).toHaveLength(3);
-    expect(cookies.map((c) => c.split("=")[0])).toEqual(["session", "csrftoken", "optout"]);
+    expect(cookies.map((c) => c.split("=")[0])).toEqual([
+      "session",
+      "csrftoken",
+      "optout",
+    ]);
   });
 
   test("no Set-Cookie: null, not an empty string", async () => {
     const fetcher = fakeDocumentFetcher({ "content-type": "text/html" });
     const result = await Effect.runPromise(
-      fetchPage("https://example.com/", { ...FETCH_OPTIONS_BASE, fetcher }),
+      fetchPage("https://example.com/", { ...FETCH_OPTIONS_BASE, fetcher })
     );
     expect(result.headers.setCookie).toBeNull();
   });
@@ -98,7 +104,7 @@ describe("fetchWithDocumentFetcher Set-Cookie round-trip (#973)", () => {
       "set-cookie": "a=1",
     });
     const result = await Effect.runPromise(
-      fetchPage("https://example.com/", { ...FETCH_OPTIONS_BASE, fetcher }),
+      fetchPage("https://example.com/", { ...FETCH_OPTIONS_BASE, fetcher })
     );
     expect(result.contentType).toBe("text/html");
     expect(result.headers.setCookie).toBe("a=1");

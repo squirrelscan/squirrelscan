@@ -34,9 +34,13 @@ describe("the three levels", () => {
 
   test("page budgets are the crawler's coverage page limits", () => {
     for (const level of AUDIT_LEVELS) {
-      expect(AUDIT_LEVEL_PRESETS[level].pages).toBe(COVERAGE_PAGE_LIMITS[level]);
+      expect(AUDIT_LEVEL_PRESETS[level].pages).toBe(
+        COVERAGE_PAGE_LIMITS[level]
+      );
     }
-    expect(AUDIT_LEVELS.map((l) => AUDIT_LEVEL_PRESETS[l].pages)).toEqual([25, 100, 500]);
+    expect(AUDIT_LEVELS.map((l) => AUDIT_LEVEL_PRESETS[l].pages)).toEqual([
+      25, 100, 500,
+    ]);
   });
 
   test("pins every attribute of each level", () => {
@@ -74,7 +78,9 @@ describe("the three levels", () => {
   });
 
   test("every level fits under every plan's page ceiling, so plans only bind a custom limit", () => {
-    const smallest = Math.min(...Object.values(PLANS).map((p) => p.maxPagesPerAudit));
+    const smallest = Math.min(
+      ...Object.values(PLANS).map((p) => p.maxPagesPerAudit)
+    );
     for (const level of AUDIT_LEVELS) {
       expect(AUDIT_LEVEL_PRESETS[level].pages).toBeLessThanOrEqual(smallest);
     }
@@ -94,7 +100,9 @@ describe("custom", () => {
   });
 
   test("overrides equal to the level's own values do not make it custom", () => {
-    expect(resolveAuditSettings("surface", { pages: 100, probe: "active" }).level).toBe("surface");
+    expect(
+      resolveAuditSettings("surface", { pages: 100, probe: "active" }).level
+    ).toBe("surface");
   });
 
   test("changing any setting makes it custom and names what changed, in form order", () => {
@@ -107,7 +115,9 @@ describe("custom", () => {
 
   test("levelOfSettings names a preset when settings match one exactly, else custom", () => {
     expect(levelOfSettings({ ...AUDIT_LEVEL_PRESETS.full })).toBe("full");
-    expect(levelOfSettings({ ...AUDIT_LEVEL_PRESETS.full, pages: 499 })).toBe("custom");
+    expect(levelOfSettings({ ...AUDIT_LEVEL_PRESETS.full, pages: 499 })).toBe(
+      "custom"
+    );
   });
 
   test("pages clamp to 1..10,000 and a non-finite value falls back to the default level's", () => {
@@ -117,14 +127,21 @@ describe("custom", () => {
     expect(clampAuditPages(1_000_000)).toBe(10_000);
     expect(clampAuditPages(Number.NaN)).toBe(100);
     expect(clampAuditPages(Number.POSITIVE_INFINITY)).toBe(100);
-    expect(resolveAuditSettings("full", { pages: 99_999 }).settings.pages).toBe(10_000);
+    expect(resolveAuditSettings("full", { pages: 99_999 }).settings.pages).toBe(
+      10_000
+    );
   });
 });
 
 describe("reading a stored snapshot back", () => {
   test("a snapshot round-trips unchanged", () => {
-    const custom = resolveAuditSettings("surface", { pages: 200, render: "off" });
-    expect(parseResolvedAuditSettings(JSON.parse(JSON.stringify(custom)))).toEqual(custom);
+    const custom = resolveAuditSettings("surface", {
+      pages: 200,
+      render: "off",
+    });
+    expect(
+      parseResolvedAuditSettings(JSON.parse(JSON.stringify(custom)))
+    ).toEqual(custom);
     const quick = resolveAuditSettings("quick");
     expect(parseResolvedAuditSettings(quick)).toEqual(quick);
   });
@@ -144,7 +161,15 @@ describe("reading a stored snapshot back", () => {
   });
 
   test("anything that is not a snapshot is null", () => {
-    for (const value of [null, undefined, "surface", 3, [], {}, { basedOn: "deep" }]) {
+    for (const value of [
+      null,
+      undefined,
+      "surface",
+      3,
+      [],
+      {},
+      { basedOn: "deep" },
+    ]) {
       expect(parseResolvedAuditSettings(value)).toBeNull();
     }
   });
@@ -154,7 +179,13 @@ describe("reading a stored snapshot back", () => {
       level: '"/><script>',
       basedOn: "FULL",
       changes: ["pages", "<x>", 7],
-      settings: { pages: Infinity, render: "<img>", probe: "loud", cloudChecks: "yes", externalLinks: false },
+      settings: {
+        pages: Infinity,
+        render: "<img>",
+        probe: "loud",
+        cloudChecks: "yes",
+        externalLinks: false,
+      },
     });
     expect(parsed).toEqual({
       level: "custom",
@@ -167,21 +198,28 @@ describe("reading a stored snapshot back", () => {
 
 describe("setting words", () => {
   test("every setting has a label", () => {
-    expect(Object.keys(AUDIT_SETTING_COPY).sort()).toEqual([...AUDIT_SETTING_KEYS].sort());
-    for (const key of AUDIT_SETTING_KEYS) expect(AUDIT_SETTING_COPY[key].label.length).toBeGreaterThan(0);
+    expect(Object.keys(AUDIT_SETTING_COPY).sort()).toEqual(
+      [...AUDIT_SETTING_KEYS].sort()
+    );
+    for (const key of AUDIT_SETTING_KEYS)
+      expect(AUDIT_SETTING_COPY[key].label.length).toBeGreaterThan(0);
   });
 });
 
 describe("crawl strategy", () => {
   test("each level's strategy maps back to the crawler mode of the same name", () => {
     for (const level of AUDIT_LEVELS) {
-      expect(crawlStrategyCoverageMode(AUDIT_LEVEL_PRESETS[level].crawlStrategy)).toBe(level);
+      expect(
+        crawlStrategyCoverageMode(AUDIT_LEVEL_PRESETS[level].crawlStrategy)
+      ).toBe(level);
     }
   });
 
   test("a custom audit crawls by its strategy, not by the level it started from", () => {
     const custom = resolveAuditSettings("quick", { crawlStrategy: "all" });
-    expect(crawlStrategyCoverageMode(custom.settings.crawlStrategy)).toBe("full");
+    expect(crawlStrategyCoverageMode(custom.settings.crawlStrategy)).toBe(
+      "full"
+    );
   });
 });
 
@@ -210,7 +248,7 @@ describe("effective settings under a plan and a balance", () => {
   test("a plan ceiling lowers a custom page limit and says so", () => {
     const r = effectiveAuditSettings(
       { ...AUDIT_LEVEL_PRESETS.full, pages: 5000 },
-      { planMaxPages: 500 },
+      { planMaxPages: 500 }
     );
     expect(r.settings.pages).toBe(500);
     expect(r.requestedPages).toBe(5000);
@@ -220,7 +258,7 @@ describe("effective settings under a plan and a balance", () => {
   test("a balance that covers fewer pages lowers it further, and the balance is named", () => {
     const r = effectiveAuditSettings(
       { ...AUDIT_LEVEL_PRESETS.full },
-      { planMaxPages: 500, affordablePages: 225 },
+      { planMaxPages: 500, affordablePages: 225 }
     );
     expect(r.settings.pages).toBe(225);
     expect(r.pagesLimitedBy).toBe("balance");
@@ -229,7 +267,7 @@ describe("effective settings under a plan and a balance", () => {
   test("a limit above the request does not limit", () => {
     const r = effectiveAuditSettings(
       { ...AUDIT_LEVEL_PRESETS.surface },
-      { planMaxPages: 500, affordablePages: 400 },
+      { planMaxPages: 500, affordablePages: 400 }
     );
     expect(r.settings.pages).toBe(100);
     expect(r.pagesLimitedBy).toBeNull();
@@ -237,25 +275,37 @@ describe("effective settings under a plan and a balance", () => {
 
   test("a limit never takes the budget below one page", () => {
     expect(
-      effectiveAuditSettings({ ...AUDIT_LEVEL_PRESETS.quick }, { affordablePages: 0 }).settings
-        .pages,
+      effectiveAuditSettings(
+        { ...AUDIT_LEVEL_PRESETS.quick },
+        { affordablePages: 0 }
+      ).settings.pages
     ).toBe(1);
   });
 
   test("a fractional limit rounds down to whole pages", () => {
     const full = { ...AUDIT_LEVEL_PRESETS.full };
-    expect(effectiveAuditSettings(full, { planMaxPages: 120.7 }).settings.pages).toBe(120);
-    expect(effectiveAuditSettings(full, { affordablePages: 2.9 }).settings.pages).toBe(2);
+    expect(
+      effectiveAuditSettings(full, { planMaxPages: 120.7 }).settings.pages
+    ).toBe(120);
+    expect(
+      effectiveAuditSettings(full, { affordablePages: 2.9 }).settings.pages
+    ).toBe(2);
   });
 
   test("a NaN limit limits to one page instead of failing open; an infinite one does not limit", () => {
     const full = { ...AUDIT_LEVEL_PRESETS.full };
-    expect(effectiveAuditSettings(full, { affordablePages: Number.NaN })).toMatchObject({
+    expect(
+      effectiveAuditSettings(full, { affordablePages: Number.NaN })
+    ).toMatchObject({
       settings: { pages: 1 },
       pagesLimitedBy: "balance",
     });
-    expect(effectiveAuditSettings(full, { planMaxPages: Number.NaN }).pagesLimitedBy).toBe("plan");
-    expect(effectiveAuditSettings(full, { affordablePages: Infinity })).toMatchObject({
+    expect(
+      effectiveAuditSettings(full, { planMaxPages: Number.NaN }).pagesLimitedBy
+    ).toBe("plan");
+    expect(
+      effectiveAuditSettings(full, { affordablePages: Infinity })
+    ).toMatchObject({
       settings: { pages: full.pages },
       pagesLimitedBy: null,
     });
@@ -265,7 +315,7 @@ describe("effective settings under a plan and a balance", () => {
 describe("the old cloud depths", () => {
   test("each old name maps to the settings it ran with, so a migration changes nothing", () => {
     const pages = LEGACY_CLOUD_DEPTH_PROFILES.map(
-      (p) => legacyCloudDepthSettings(p).settings.pages,
+      (p) => legacyCloudDepthSettings(p).settings.pages
     );
     expect(pages).toEqual([10, 50, 250, 500]);
     expect(legacyCloudDepthSettings("deep").basedOn).toBe("surface");
@@ -298,7 +348,9 @@ describe("AUDIT_LEVEL_COPY quick summary", () => {
     expect(summary).toContain("25 pages");
     expect(summary).toContain("rendered in the cloud");
     expect(summary).toContain("with internal and external link checks");
-    expect(summary).toContain("Costs credits: 50, plus 2 per page and 1 per external link checked, up to 125");
+    expect(summary).toContain(
+      "Costs credits: 50, plus 2 per page and 1 per external link checked, up to 125"
+    );
     expect(summary).not.toMatch(/no credits|local rules only|free/i);
   });
 
@@ -314,7 +366,9 @@ describe("AUDIT_LEVEL_COPY quick summary", () => {
 
   test("the other levels do not claim that", () => {
     for (const level of ["surface", "full"] as const) {
-      expect(AUDIT_LEVEL_COPY[level].summary).not.toContain("does not follow links");
+      expect(AUDIT_LEVEL_COPY[level].summary).not.toContain(
+        "does not follow links"
+      );
     }
   });
 });
@@ -327,9 +381,13 @@ describe("EXTERNAL_LINKS_DEFAULT_ON", () => {
   });
 
   test("is what Quick and every old cloud depth use; Surface and Full check them always", () => {
-    expect(AUDIT_LEVEL_PRESETS.quick.externalLinks).toBe(EXTERNAL_LINKS_DEFAULT_ON);
+    expect(AUDIT_LEVEL_PRESETS.quick.externalLinks).toBe(
+      EXTERNAL_LINKS_DEFAULT_ON
+    );
     for (const p of LEGACY_CLOUD_DEPTH_PROFILES) {
-      expect(legacyCloudDepthSettings(p).settings.externalLinks).toBe(EXTERNAL_LINKS_DEFAULT_ON);
+      expect(legacyCloudDepthSettings(p).settings.externalLinks).toBe(
+        EXTERNAL_LINKS_DEFAULT_ON
+      );
     }
     expect(AUDIT_LEVEL_PRESETS.surface.externalLinks).toBe(true);
     expect(AUDIT_LEVEL_PRESETS.full.externalLinks).toBe(true);
@@ -339,7 +397,9 @@ describe("EXTERNAL_LINKS_DEFAULT_ON", () => {
 // #1275: an --offline run records the settings that ran, not the level's cloud defaults.
 describe("offlineAuditSettings", () => {
   test("turns off cloud checks, rendering and external links, and says offline", () => {
-    const resolved = offlineAuditSettings(resolveAuditSettings("surface", { pages: 30, probe: "passive" }));
+    const resolved = offlineAuditSettings(
+      resolveAuditSettings("surface", { pages: 30, probe: "passive" })
+    );
     expect(resolved.settings).toEqual({
       pages: 30,
       crawlStrategy: "sampled",
@@ -365,8 +425,12 @@ describe("offlineAuditSettings", () => {
 
   test("the mark survives a stored snapshot read back, and a forged one is not trusted", () => {
     const offline = offlineAuditSettings(resolveAuditSettings("quick"));
-    expect(parseResolvedAuditSettings(JSON.parse(JSON.stringify(offline)))?.offline).toBe(true);
-    expect(parseResolvedAuditSettings({ ...offline, offline: "yes" })?.offline).toBeUndefined();
+    expect(
+      parseResolvedAuditSettings(JSON.parse(JSON.stringify(offline)))?.offline
+    ).toBe(true);
+    expect(
+      parseResolvedAuditSettings({ ...offline, offline: "yes" })?.offline
+    ).toBeUndefined();
   });
 });
 
@@ -386,7 +450,11 @@ describe("targetedAuditSettings (#1777)", () => {
 
   test("survives a read back, and an ordinary snapshot has no marker", () => {
     const ran = targetedAuditSettings(resolveAuditSettings("surface"));
-    expect(parseResolvedAuditSettings(JSON.parse(JSON.stringify(ran)))?.targeted).toBe(true);
-    expect(parseResolvedAuditSettings(resolveAuditSettings("surface"))).not.toHaveProperty("targeted");
+    expect(
+      parseResolvedAuditSettings(JSON.parse(JSON.stringify(ran)))?.targeted
+    ).toBe(true);
+    expect(
+      parseResolvedAuditSettings(resolveAuditSettings("surface"))
+    ).not.toHaveProperty("targeted");
   });
 });

@@ -1,9 +1,12 @@
 // a11y/aria-required-children - Required children for ARIA roles
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import {
+  isInsideNoscript,
+  querySelectorAllOutsideNoscript,
+} from "@squirrelscan/utils";
 
-import { isInsideNoscript, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { requiredChildrenByRole } from "./aria-data";
 import { effectiveRole, explicitRole } from "./implicit-role";
@@ -23,7 +26,10 @@ function hasRequiredRole(el: Element, required: Set<string>): boolean {
 
 /** The elements `el` claims through aria-owns, in id order. */
 function ownedElements(el: Element, doc: Document): Element[] {
-  const ids = (el.getAttribute("aria-owns") ?? "").trim().split(/\s+/).filter(Boolean);
+  const ids = (el.getAttribute("aria-owns") ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   return ids.flatMap((id) => {
     const owned = doc.getElementById(id);
     return owned && !isInsideNoscript(owned) ? [owned] : [];
@@ -37,7 +43,11 @@ function ownedElements(el: Element, doc: Document): Element[] {
  * content is inert text to a browser with scripting on, so it owns nothing
  * and is nothing (#434).
  */
-function ownsRequiredChild(container: Element, doc: Document, required: Set<string>): boolean {
+function ownsRequiredChild(
+  container: Element,
+  doc: Document,
+  required: Set<string>
+): boolean {
   const visited = new Set<Element>([container]);
   const roots: Element[] = [container];
   for (let next = roots.pop(); next; next = roots.pop()) {
@@ -84,7 +94,9 @@ export const ariaRequiredChildrenRule: Rule = {
       requiredChildrenByRole
     )) {
       const required = new Set(childRoles);
-      const elements = withRole.filter((el) => el.getAttribute("role") === parentRole);
+      const elements = withRole.filter(
+        (el) => el.getAttribute("role") === parentRole
+      );
 
       for (const el of elements) {
         // The role is the explicit one or, failing that, the implicit role of

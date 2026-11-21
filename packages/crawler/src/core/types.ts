@@ -1,19 +1,17 @@
 // Core crawler types - events, config, and interfaces
 
-import type { DocumentFetcher } from "@squirrelscan/fetchers";
-import type { Stream, Effect } from "effect";
-
 import type {
   CrawlerEvent,
   DiscoveryProbe,
   RedirectChain,
 } from "@squirrelscan/core-contracts";
-
 import type { AuditLevel } from "@squirrelscan/core-contracts/audit-levels";
-
-import type { CrawlStorage, StorageError } from "../storage/types";
-import type { TlsEvent } from "../fetcher";
+import type { DocumentFetcher } from "@squirrelscan/fetchers";
 import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
+import type { Stream, Effect } from "effect";
+
+import type { TlsEvent } from "../fetcher";
+import type { CrawlStorage, StorageError } from "../storage/types";
 
 // ============================================
 // CRAWLER CONFIG
@@ -371,7 +369,7 @@ export class CrawlerError extends Error {
   constructor(
     readonly code: CrawlerErrorCode,
     message: string,
-    readonly cause?: unknown,
+    readonly cause?: unknown
   ) {
     super(message);
     this.name = "CrawlerError";
@@ -423,12 +421,15 @@ export type CrawlerErrorCode =
 export interface Crawler {
   /** Detect and follow both HTTP and client-side redirects, returning the final URL */
   /** `budget`: no hop starts, and none waits longer than what is left, past its deadline (#1271). */
-  detectRedirects(targetUrl: string, budget?: { readonly deadlineAt: number }): Effect.Effect<string, never, never>;
+  detectRedirects(
+    targetUrl: string,
+    budget?: { readonly deadlineAt: number }
+  ): Effect.Effect<string, never, never>;
 
   /** Start a new crawl from the given base URL (runs synchronously until complete) */
   start(
     baseUrl: string,
-    originalUrl?: string,
+    originalUrl?: string
   ): Effect.Effect<string, CrawlerError | StorageError, never>;
 
   /** Pause the current crawl */
@@ -441,12 +442,14 @@ export interface Crawler {
   stop(): Effect.Effect<void, CrawlerError, never>;
 
   /** Resume a crawl from storage by ID */
-  resumeFromStorage(crawlId: string): Effect.Effect<void, CrawlerError | StorageError, never>;
+  resumeFromStorage(
+    crawlId: string
+  ): Effect.Effect<void, CrawlerError | StorageError, never>;
 
   /** Restart an existing crawl with new config (clears frontier, re-crawls) */
   restartCrawl(
     crawlId: string,
-    newConfig: Partial<CrawlerConfig>,
+    newConfig: Partial<CrawlerConfig>
   ): Effect.Effect<string, CrawlerError | StorageError, never>;
 
   /** Event stream for live updates */
@@ -517,5 +520,9 @@ export interface HostScheduler {
    * caller on a deadline gives up on time and leaves no reservation behind to
    * hold back the requests after it (#409).
    */
-  waitForDelay(host: string, delayMs: number, notAfter?: number): Effect.Effect<void, never, never>;
+  waitForDelay(
+    host: string,
+    delayMs: number,
+    notAfter?: number
+  ): Effect.Effect<void, never, never>;
 }

@@ -23,14 +23,19 @@ describe("linkTargetHash", () => {
   });
 
   test("is the same on every run (a fixed function, not seeded per process)", () => {
-    expect(linkTargetHash("https://example.com/")).toBe(linkTargetHash("https://example.com/"));
+    expect(linkTargetHash("https://example.com/")).toBe(
+      linkTargetHash("https://example.com/")
+    );
     // The FNV-1a 64 offset basis: the hash of nothing.
     expect(linkTargetHash("")).toBe("cbf29ce484222325"); // pragma: allowlist secret
   });
 });
 
 describe("encodeLinkTargetSet and decodeLinkTargetSet", () => {
-  const urls = Array.from({ length: 25 }, (_, i) => `https://example.com/p${i}`);
+  const urls = Array.from(
+    { length: 25 },
+    (_, i) => `https://example.com/p${i}`
+  );
 
   test("round-trip: every target in, nothing else", () => {
     const set = encodeLinkTargetSet(urls);
@@ -38,7 +43,9 @@ describe("encodeLinkTargetSet and decodeLinkTargetSet", () => {
     const decoded = decodeLinkTargetSet(set)!;
     expect(decoded.size).toBe(25);
     for (const url of urls) expect(decoded.has(linkTargetHash(url))).toBe(true);
-    expect(decoded.has(linkTargetHash("https://example.com/other"))).toBe(false);
+    expect(decoded.has(linkTargetHash("https://example.com/other"))).toBe(
+      false
+    );
   });
 
   test("de-duplicates and sorts, so the same targets give the same bytes in any order", () => {
@@ -49,21 +56,40 @@ describe("encodeLinkTargetSet and decodeLinkTargetSet", () => {
   });
 
   test("an empty list is an empty, complete set", () => {
-    expect(encodeLinkTargetSet([])).toEqual({ hashes: "", count: 0, complete: true });
-    expect(decodeLinkTargetSet({ hashes: "", count: 0, complete: true })?.size).toBe(0);
+    expect(encodeLinkTargetSet([])).toEqual({
+      hashes: "",
+      count: 0,
+      complete: true,
+    });
+    expect(
+      decodeLinkTargetSet({ hashes: "", count: 0, complete: true })?.size
+    ).toBe(0);
   });
 
   test("past the cap, or from a partial list, a set is not complete", () => {
-    const many = Array.from({ length: LINK_TARGET_SET_MAX_HASHES + 5 }, (_, i) => `https://e.com/${i}`);
+    const many = Array.from(
+      { length: LINK_TARGET_SET_MAX_HASHES + 5 },
+      (_, i) => `https://e.com/${i}`
+    );
     const capped = encodeLinkTargetSet(many);
-    expect(capped).toMatchObject({ count: LINK_TARGET_SET_MAX_HASHES + 5, complete: false });
+    expect(capped).toMatchObject({
+      count: LINK_TARGET_SET_MAX_HASHES + 5,
+      complete: false,
+    });
     expect(decodeLinkTargetSet(capped)?.size).toBe(LINK_TARGET_SET_MAX_HASHES);
     expect(encodeLinkTargetSet(urls, { partial: true }).complete).toBe(false);
     expect(encodeLinkTargetSet(urls, { maxHashes: 10 }).complete).toBe(false);
   });
 
   test("a value that is not a well-formed set decodes to null", () => {
-    for (const bad of [null, "x", {}, { hashes: 3 }, { hashes: "not base64!" }, { hashes: "AAAA" }]) {
+    for (const bad of [
+      null,
+      "x",
+      {},
+      { hashes: 3 },
+      { hashes: "not base64!" },
+      { hashes: "AAAA" },
+    ]) {
       expect(decodeLinkTargetSet(bad)).toBeNull();
     }
   });

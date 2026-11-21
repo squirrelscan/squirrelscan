@@ -13,9 +13,9 @@
 
 import type { CloakingProbeData } from "@squirrelscan/core-contracts";
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 /** One-line human summary of why a probe diverged on UA. */
 function describeUaDivergence(p: CloakingProbeData): string {
@@ -32,11 +32,13 @@ function describeUaDivergence(p: CloakingProbeData): string {
 function describeTokenGating(p: CloakingProbeData): string {
   const path = getPathname(p.url) || p.url;
   const defOk = p.defaultStatus >= 200 && p.defaultStatus < 300;
-  const qOk = p.queryStatus != null && p.queryStatus >= 200 && p.queryStatus < 300;
+  const qOk =
+    p.queryStatus != null && p.queryStatus >= 200 && p.queryStatus < 300;
   if (defOk !== qOk) {
     return `${path}: response flips to ${p.queryStatus} when a query token is appended (token-gated)`;
   }
-  const sim = p.querySimilarity == null ? 0 : Math.round(p.querySimilarity * 100);
+  const sim =
+    p.querySimilarity == null ? 0 : Math.round(p.querySimilarity * 100);
   return `${path}: content changes (${sim}% similar) when a query token is appended`;
 }
 

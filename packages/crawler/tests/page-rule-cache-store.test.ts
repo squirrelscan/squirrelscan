@@ -6,14 +6,14 @@
 // permanent second copy of every audit.
 
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import type { CrawlMetadata, PageRecord } from "../src/storage/types";
 
 import { SQLiteStorage } from "../src/storage/sqlite";
-import type { CrawlMetadata, PageRecord } from "../src/storage/types";
 
 const STATS = {
   pagesTotal: 0,
@@ -38,16 +38,20 @@ const crawlMeta = (startedAt: number): Omit<CrawlMetadata, "id"> => ({
 const run = <A, E>(e: Effect.Effect<A, E, never>) => Effect.runPromise(e);
 
 function tmpDb(name: string): string {
-  return join(mkdtempSync(join(tmpdir(), "squirrelscan-prc-")), `${name}.sqlite`);
+  return join(
+    mkdtempSync(join(tmpdir(), "squirrelscan-prc-")),
+    `${name}.sqlite`
+  );
 }
 
-async function withStorage<T>(fn: (s: SQLiteStorage, crawlId: string) => Promise<T>): Promise<T> {
+async function withStorage<T>(
+  fn: (s: SQLiteStorage, crawlId: string) => Promise<T>
+): Promise<T> {
   const dir = tmpDb("store");
   const storage = new SQLiteStorage(dir);
   try {
     await run(storage.init());
-    const crawlId = await run(
-      storage.createCrawl(crawlMeta(1_000)));
+    const crawlId = await run(storage.createCrawl(crawlMeta(1_000)));
     return await fn(storage, crawlId);
   } finally {
     await run(storage.close());
@@ -58,7 +62,10 @@ async function withStorage<T>(fn: (s: SQLiteStorage, crawlId: string) => Promise
 describe("page_rule_cache storage", () => {
   test("round-trips a payload through gzip", async () => {
     await withStorage(async (storage, crawlId) => {
-      const payload = JSON.stringify({ ruleResults: [["core/meta-title", []]], big: "x".repeat(5000) });
+      const payload = JSON.stringify({
+        ruleResults: [["core/meta-title", []]],
+        big: "x".repeat(5000),
+      });
       await run(
         storage.savePageRuleCacheBatch(crawlId, [
           { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload },
@@ -84,8 +91,7 @@ describe("page_rule_cache storage", () => {
           { normalizedUrl: "http://x.test/a", cacheKey: "k1", payload },
         ])
       );
-      const secondCrawl = await run(
-        storage.createCrawl(crawlMeta(2_000)));
+      const secondCrawl = await run(storage.createCrawl(crawlMeta(2_000)));
       await run(
         storage.carryForwardPageRuleCache(secondCrawl, [
           { normalizedUrl: "http://x.test/a", cacheKey: "k1" },
@@ -106,7 +112,9 @@ describe("page_rule_cache storage", () => {
           { normalizedUrl: "http://x.test/gone", cacheKey: "never-stored" },
         ])
       );
-      expect((await run(storage.loadPageRuleCache(["never-stored"]))).size).toBe(0);
+      expect(
+        (await run(storage.loadPageRuleCache(["never-stored"]))).size
+      ).toBe(0);
     });
   });
 
@@ -172,7 +180,9 @@ describe("page_rule_cache storage", () => {
         payload: `{"i":${i}}`,
       }));
       await run(storage.savePageRuleCacheBatch(crawlId, entries));
-      const loaded = await run(storage.loadPageRuleCache(entries.map((e) => e.cacheKey)));
+      const loaded = await run(
+        storage.loadPageRuleCache(entries.map((e) => e.cacheKey))
+      );
       expect(loaded.size).toBe(950);
       expect(loaded.get("k949")).toBe('{"i":949}');
     });
@@ -189,7 +199,9 @@ describe("pages.html_hash", () => {
     const blobs = new Map<string, string>();
     const contentStore = {
       put(content: string) {
-        const hash = new Bun.CryptoHasher("sha256").update(content).digest("hex");
+        const hash = new Bun.CryptoHasher("sha256")
+          .update(content)
+          .digest("hex");
         blobs.set(hash, content);
         return hash;
       },
@@ -220,14 +232,18 @@ describe("pages.html_hash", () => {
       securityHeaders: {} as never,
     };
     await run(bare.upsertPage(crawlId, page));
-    expect((await run(bare.getPage(crawlId, page.normalizedUrl)))!.htmlHash).toBeNull();
+    expect(
+      (await run(bare.getPage(crawlId, page.normalizedUrl)))!.htmlHash
+    ).toBeNull();
     await run(bare.close());
 
     const withStore = new SQLiteStorage(dir, contentStore);
     await run(withStore.init());
     await run(withStore.upsertPage(crawlId, page));
     const stored = await run(withStore.getPage(crawlId, page.normalizedUrl));
-    const expected = new Bun.CryptoHasher("sha256").update(page.html!).digest("hex");
+    const expected = new Bun.CryptoHasher("sha256")
+      .update(page.html!)
+      .digest("hex");
     expect(stored!.htmlHash).toBe(expected);
     // Whitespace-only edit: the exact hash moves even though a normalized one
     // would not. This is the property the cache key depends on.

@@ -7,6 +7,7 @@
 // response, not just a synthetic Headers object in isolation.
 
 import { afterEach, describe, expect, it } from "bun:test";
+
 import { createFetchDocumentFetcher } from "./index";
 
 let server: ReturnType<typeof Bun.serve> | undefined;
@@ -25,17 +26,21 @@ describe("headersToRecord Set-Cookie handling (#748/#973)", () => {
         headers.append("Set-Cookie", "session=abc123; Path=/; HttpOnly");
         headers.append(
           "Set-Cookie",
-          "consent=1; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Secure",
+          "consent=1; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Secure"
         );
         return new Response("<!doctype html><title>t</title>", { headers });
       },
     });
     const fetcher = createFetchDocumentFetcher();
-    const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
+    const res = await fetcher.fetch({
+      url: `http://localhost:${server.port}/`,
+    });
     const cookies = (res.headers["set-cookie"] ?? "").split("\n");
     expect(cookies).toHaveLength(2);
     expect(cookies[0]).toBe("session=abc123; Path=/; HttpOnly");
-    expect(cookies[1]).toBe("consent=1; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Secure");
+    expect(cookies[1]).toBe(
+      "consent=1; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Secure"
+    );
   });
 
   it("keeps all three cookies when a page sets three", async () => {
@@ -44,16 +49,25 @@ describe("headersToRecord Set-Cookie handling (#748/#973)", () => {
       fetch() {
         const headers = new Headers({ "Content-Type": "text/html" });
         headers.append("Set-Cookie", "session=abc123; Path=/; HttpOnly");
-        headers.append("Set-Cookie", "csrftoken=xyz789; Path=/; Secure; SameSite=Strict");
+        headers.append(
+          "Set-Cookie",
+          "csrftoken=xyz789; Path=/; Secure; SameSite=Strict"
+        );
         headers.append("Set-Cookie", "optout=1; Path=/; Max-Age=31536000");
         return new Response("<!doctype html><title>t</title>", { headers });
       },
     });
     const fetcher = createFetchDocumentFetcher();
-    const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
+    const res = await fetcher.fetch({
+      url: `http://localhost:${server.port}/`,
+    });
     const cookies = (res.headers["set-cookie"] ?? "").split("\n");
     expect(cookies).toHaveLength(3);
-    expect(cookies.map((c) => c.split("=")[0])).toEqual(["session", "csrftoken", "optout"]);
+    expect(cookies.map((c) => c.split("=")[0])).toEqual([
+      "session",
+      "csrftoken",
+      "optout",
+    ]);
   });
 
   it("still returns the single cookie for the common single-cookie case", async () => {
@@ -61,13 +75,20 @@ describe("headersToRecord Set-Cookie handling (#748/#973)", () => {
       port: 0,
       fetch() {
         const headers = new Headers({ "Content-Type": "text/html" });
-        headers.append("Set-Cookie", "session=abc123; Path=/; HttpOnly; Secure");
+        headers.append(
+          "Set-Cookie",
+          "session=abc123; Path=/; HttpOnly; Secure"
+        );
         return new Response("<!doctype html><title>t</title>", { headers });
       },
     });
     const fetcher = createFetchDocumentFetcher();
-    const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
-    expect(res.headers["set-cookie"]).toBe("session=abc123; Path=/; HttpOnly; Secure");
+    const res = await fetcher.fetch({
+      url: `http://localhost:${server.port}/`,
+    });
+    expect(res.headers["set-cookie"]).toBe(
+      "session=abc123; Path=/; HttpOnly; Secure"
+    );
   });
 
   it("no Set-Cookie header: absent from the record, not an empty string", async () => {
@@ -79,7 +100,9 @@ describe("headersToRecord Set-Cookie handling (#748/#973)", () => {
         }),
     });
     const fetcher = createFetchDocumentFetcher();
-    const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
+    const res = await fetcher.fetch({
+      url: `http://localhost:${server.port}/`,
+    });
     expect(res.headers["set-cookie"]).toBeUndefined();
   });
 
@@ -87,13 +110,18 @@ describe("headersToRecord Set-Cookie handling (#748/#973)", () => {
     server = Bun.serve({
       port: 0,
       fetch() {
-        const headers = new Headers({ "Content-Type": "text/html", "X-Custom": "value" });
+        const headers = new Headers({
+          "Content-Type": "text/html",
+          "X-Custom": "value",
+        });
         headers.append("Set-Cookie", "a=1");
         return new Response("<!doctype html><title>t</title>", { headers });
       },
     });
     const fetcher = createFetchDocumentFetcher();
-    const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
+    const res = await fetcher.fetch({
+      url: `http://localhost:${server.port}/`,
+    });
     expect(res.headers["content-type"]).toContain("text/html");
     expect(res.headers["x-custom"]).toBe("value");
   });

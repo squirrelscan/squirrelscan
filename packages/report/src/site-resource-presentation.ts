@@ -7,11 +7,16 @@
 // dozens would have made the report longer, which is the opposite of the bug —
 // the unit only earns its place by taking the per-page lines' place.
 
-import type { CheckResult, SiteResourceOccurrence } from "@squirrelscan/core-contracts";
-import { checkAffectedPages, ruleAffectedPages } from "./affected-pages";
-import { formatPageSample, type FixCoverage } from "./component-presentation";
+import type {
+  CheckResult,
+  SiteResourceOccurrence,
+} from "@squirrelscan/core-contracts";
+
 import type { GroupedRule } from "./grouping";
 import type { SiteResourceFixGroup } from "./site-resource-fix-groups";
+
+import { checkAffectedPages, ruleAffectedPages } from "./affected-pages";
+import { formatPageSample, type FixCoverage } from "./component-presentation";
 import { siteResourceFixGroups } from "./site-resource-fix-groups";
 
 /** Resource names to print before the rest become a count. */
@@ -24,7 +29,9 @@ export const SITE_RESOURCE_MAX_KEYS = 3;
  * says nothing the per-page check line did not already say, and the issue is
  * explicit that a map seen on one page stays page-scoped. JSON keeps them.
  */
-export function isRenderableSiteResourceGroup(group: SiteResourceFixGroup): boolean {
+export function isRenderableSiteResourceGroup(
+  group: SiteResourceFixGroup
+): boolean {
   return group.affectedPageCount >= 2;
 }
 
@@ -46,10 +53,13 @@ export interface SiteResourceCoverage {
  * have its inline finding silently swallowed by the exposed finding's unit —
  * suppressing a defect nothing else states is strictly worse than repeating one.
  */
-export function ruleSiteResourceCoverage(rule: GroupedRule): SiteResourceCoverage {
+export function ruleSiteResourceCoverage(
+  rule: GroupedRule
+): SiteResourceCoverage {
   const allGroups = siteResourceFixGroups(rule);
   const groups = allGroups.filter(isRenderableSiteResourceGroup);
-  if (groups.length === 0) return { groups: [], allGroups, coveredPages: new Set() };
+  if (groups.length === 0)
+    return { groups: [], allGroups, coveredPages: new Set() };
 
   // Every resource a PRINTED unit speaks for. Coverage is decided per
   // OCCURRENCE, not per page: a page can carry the site-wide bundle and a
@@ -59,7 +69,9 @@ export function ruleSiteResourceCoverage(rule: GroupedRule): SiteResourceCoverag
   const spokenFor = new Set<string>();
   for (const group of groups) {
     for (const key of group.resourceKeys) {
-      spokenFor.add(`${group.checkName}\u0000${group.siteOrigin}\u0000${group.kind}\u0000${key}`);
+      spokenFor.add(
+        `${group.checkName}\u0000${group.siteOrigin}\u0000${group.kind}\u0000${key}`
+      );
     }
   }
 
@@ -67,8 +79,9 @@ export function ruleSiteResourceCoverage(rule: GroupedRule): SiteResourceCoverag
   // it belongs to a printed unit.
   const coveredByCheck = new Map<string, Set<string>>();
   for (const check of rule.checks) {
-    const occurrences = (check as { siteResourceOccurrences?: SiteResourceOccurrence[] })
-      .siteResourceOccurrences;
+    const occurrences = (
+      check as { siteResourceOccurrences?: SiteResourceOccurrence[] }
+    ).siteResourceOccurrences;
     if (!occurrences?.length) continue;
     const unresolved = new Set<string>();
     const seen = new Set<string>();
@@ -83,10 +96,13 @@ export function ruleSiteResourceCoverage(rule: GroupedRule): SiteResourceCoverag
   }
 
   const coveredPages = new Set<string>();
-  for (const page of ruleAffectedPages(rule.checks as unknown as CheckResult[])) {
+  for (const page of ruleAffectedPages(
+    rule.checks as unknown as CheckResult[]
+  )) {
     let claimedByEveryCheck = true;
     for (const check of rule.checks) {
-      if (!checkAffectedPages(check as unknown as CheckResult).has(page)) continue;
+      if (!checkAffectedPages(check as unknown as CheckResult).has(page))
+        continue;
       if (!coveredByCheck.get(check.name)?.has(page)) {
         claimedByEveryCheck = false;
         break;
@@ -109,7 +125,7 @@ export function ruleSiteResourceCoverage(rule: GroupedRule): SiteResourceCoverag
 export function withSiteResourceCoverage(
   coverage: FixCoverage,
   resources: SiteResourceCoverage,
-  rule: GroupedRule,
+  rule: GroupedRule
 ): FixCoverage {
   if (resources.groups.length === 0) return coverage;
   // `mode: "none"` carries no page list of its own, so the remainder has to be
@@ -124,7 +140,8 @@ export function withSiteResourceCoverage(
   // A rule whose pages are unknown stays partial rather than claiming that
   // units accounted for a page set nobody could enumerate — the same guard
   // `ruleFixCoverage` applies.
-  const known = ruleAffectedPages(rule.checks as unknown as CheckResult[]).size > 0;
+  const known =
+    ruleAffectedPages(rule.checks as unknown as CheckResult[]).size > 0;
   return {
     mode: known && uncoveredPages.length === 0 ? "full" : "partial",
     groups: coverage.groups,
@@ -143,7 +160,10 @@ export function resourceName(key: string): string {
 }
 
 /** "source map" / "source maps", by kind and count. */
-function resourceNoun(kind: SiteResourceFixGroup["kind"], count: number): string {
+function resourceNoun(
+  kind: SiteResourceFixGroup["kind"],
+  count: number
+): string {
   if (kind === "source-map") return count === 1 ? "source map" : "source maps";
   return count === 1 ? "resource" : "resources";
 }
@@ -155,11 +175,18 @@ function resourceNoun(kind: SiteResourceFixGroup["kind"], count: number): string
  * the remainder is stated rather than dropped — the truncation this feature
  * exists to remove was an unlabelled one.
  */
-export function describeSiteResourceDefect(group: SiteResourceFixGroup): string {
+export function describeSiteResourceDefect(
+  group: SiteResourceFixGroup
+): string {
   const total = group.resourceKeys.length;
-  const shown = group.resourceKeys.slice(0, SITE_RESOURCE_MAX_KEYS).map(resourceName);
+  const shown = group.resourceKeys
+    .slice(0, SITE_RESOURCE_MAX_KEYS)
+    .map(resourceName);
   const remainder = total - shown.length;
-  const names = remainder > 0 ? `${shown.join(", ")}, +${remainder} more` : shown.join(", ");
+  const names =
+    remainder > 0
+      ? `${shown.join(", ")}, +${remainder} more`
+      : shown.join(", ");
   if (group.kind === "source-map") {
     return `${total} ${resourceNoun(group.kind, total)} exposed by shared bundles (${names})`;
   }
@@ -177,7 +204,7 @@ export function describeSiteResourceDefect(group: SiteResourceFixGroup): string 
 export function siteResourceFixLine(
   group: SiteResourceFixGroup,
   limit: number,
-  format: (page: string) => string,
+  format: (page: string) => string
 ): string {
   const shown = group.affectedPages.slice(0, limit).map(format);
   const pages = formatPageSample({

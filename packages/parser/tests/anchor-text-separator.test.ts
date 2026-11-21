@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { parseHTML } from "../src/dom";
 import {
   anchorText,
   anchorTextResult,
@@ -13,7 +14,6 @@ import {
   MAX_ANCHOR_PARTS,
 } from "../src/extractors/anchor-text";
 import { extractLinks } from "../src/extractors/links";
-import { parseHTML } from "../src/dom";
 import { parsePage } from "../src/html";
 
 const CARD = `<a href="/c"><h3>Carpentry</h3><p>Structural &amp; finish carpentry</p><span>See details</span></a>`;
@@ -25,9 +25,10 @@ function viaExtractLinks(html: string): string[] {
 }
 
 function viaParsePage(html: string): string[] {
-  return parsePage(`<html><body>${html}</body></html>`, "https://example.com/").links.map(
-    (l) => l.text,
-  );
+  return parsePage(
+    `<html><body>${html}</body></html>`,
+    "https://example.com/"
+  ).links.map((l) => l.text);
 }
 
 describe.each([
@@ -39,14 +40,20 @@ describe.each([
   });
 
   test("inline elements add no gap: mid-word and before punctuation", () => {
-    expect(texts(`<a href="/a">Hello <b>world</b>!</a>`)).toEqual(["Hello world!"]);
+    expect(texts(`<a href="/a">Hello <b>world</b>!</a>`)).toEqual([
+      "Hello world!",
+    ]);
     expect(texts(`<a href="/a">Re<b>start</b></a>`)).toEqual(["Restart"]);
-    expect(texts(`<a href="/a"><span>A</span><span>B</span></a>`)).toEqual(["AB"]);
+    expect(texts(`<a href="/a"><span>A</span><span>B</span></a>`)).toEqual([
+      "AB",
+    ]);
   });
 
   test("text that was already separated is unchanged", () => {
     expect(texts(`<a href="/a">  plain  text </a>`)).toEqual(["plain  text"]);
-    expect(texts(`<a href="/a"><div>one</div> <div>two</div></a>`)).toEqual(["one two"]);
+    expect(texts(`<a href="/a"><div>one</div> <div>two</div></a>`)).toEqual([
+      "one two",
+    ]);
   });
 
   test("an image-only anchor is empty", () => {
@@ -58,25 +65,27 @@ test("the DOM function a rule re-reads an anchor with returns the stored text", 
   const html = `<html><body>${CARD}</body></html>`;
   const { document } = parseHTML(html);
   const el = document.querySelector("a")!;
-  expect(anchorText(el)).toBe(parsePage(html, "https://example.com/").links[0]!.text);
+  expect(anchorText(el)).toBe(
+    parsePage(html, "https://example.com/").links[0]!.text
+  );
 });
 
 describe("anchor text edge cases", () => {
   test("script, style, template and noscript text is not link text", () => {
     expect(
       viaParsePage(
-        `<a href="/f"><svg><style>.a{fill:none}</style><title>Icon</title></svg>Fridge<script>var x=1</script><template>t</template><noscript>n</noscript></a>`,
-      ),
+        `<a href="/f"><svg><style>.a{fill:none}</style><title>Icon</title></svg>Fridge<script>var x=1</script><template>t</template><noscript>n</noscript></a>`
+      )
     ).toEqual(["Icon Fridge"]);
-    expect(viaExtractLinks(`<a href="/f"><svg><style>.a{}</style></svg>Fridge</a>`)).toEqual([
-      "Fridge",
-    ]);
+    expect(
+      viaExtractLinks(`<a href="/f"><svg><style>.a{}</style></svg>Fridge</a>`)
+    ).toEqual(["Fridge"]);
   });
 
   test("button, label and select children are separated", () => {
-    expect(viaParsePage(`<a href="/f"><button>Buy</button><label>now</label></a>`)).toEqual([
-      "Buy now",
-    ]);
+    expect(
+      viaParsePage(`<a href="/f"><button>Buy</button><label>now</label></a>`)
+    ).toEqual(["Buy now"]);
   });
 
   test("100,000 nested spans do not overflow the stack", () => {
@@ -86,16 +95,21 @@ describe("anchor text edge cases", () => {
     expect(anchorText(document.querySelector("a")!)).toBe("deep");
     // Through the full parse, error path included: it must not throw.
     expect(() =>
-      parsePage(`<html><body>${html}</body></html>`, "https://example.com/"),
+      parsePage(`<html><body>${html}</body></html>`, "https://example.com/")
     ).not.toThrow();
   }, 60_000);
 
   test("the stored parse marks nofollow, sponsored and ugc links", () => {
     const links = parsePage(
       `<html><body><a href="/a" rel="nofollow">a</a><a href="/b" rel="sponsored noopener">b</a><a href="/c" rel="ugc">c</a><a href="/d">d</a></body></html>`,
-      "https://example.com/",
+      "https://example.com/"
     ).links;
-    expect(links.map((l) => l.isNofollow === true)).toEqual([true, true, true, false]);
+    expect(links.map((l) => l.isNofollow === true)).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ]);
     expect(links[3]!.rel).toBeUndefined();
     expect(links[0]!.rel).toEqual(["nofollow"]);
   });
@@ -120,16 +134,21 @@ describe("anchor text edge cases", () => {
     const html = `<html><body><a href="http://[bad">${"<span>".repeat(depth)}deep${"</span>".repeat(depth)}</a></body></html>`;
     const links = parsePage(html, "https://example.com/").links;
     expect(links).toHaveLength(1);
-    expect(links[0]).toMatchObject({ error: "Invalid URL format", text: "deep" });
+    expect(links[0]).toMatchObject({
+      error: "Invalid URL format",
+      text: "deep",
+    });
   }, 60_000);
 
   test("an inline display:block style is a boundary", () => {
     expect(
       viaParsePage(
-        `<a href="/f"><span style="display:block">Fridge</span><span style="display: flex">repairs</span></a>`,
-      ),
+        `<a href="/f"><span style="display:block">Fridge</span><span style="display: flex">repairs</span></a>`
+      )
     ).toEqual(["Fridge repairs"]);
-    expect(viaParsePage(`<a href="/f">Fridge<br>repairs</a>`)).toEqual(["Fridge repairs"]);
+    expect(viaParsePage(`<a href="/f">Fridge<br>repairs</a>`)).toEqual([
+      "Fridge repairs",
+    ]);
   });
 
   test("text joined from adjacent elements with no boundary is reported as glued", () => {
@@ -137,16 +156,20 @@ describe("anchor text edge cases", () => {
       const { document } = parseHTML(`<html><body>${html}</body></html>`);
       return anchorTextResult(document.querySelector("a")!);
     };
-    expect(glue(`<a href="/f"><span>Fridge</span><span>repairs</span></a>`)).toEqual({
+    expect(
+      glue(`<a href="/f"><span>Fridge</span><span>repairs</span></a>`)
+    ).toEqual({
       text: "Fridgerepairs",
       glued: true,
       parts: ["Fridge", "repairs"],
     });
-    expect(glue(`<a href="/f"><div>Fridge</div><div>repairs</div></a>`).glued).toBe(false);
+    expect(
+      glue(`<a href="/f"><div>Fridge</div><div>repairs</div></a>`).glued
+    ).toBe(false);
     expect(glue(`<a href="/f">plain text</a>`).glued).toBe(false);
     const stored = parsePage(
       `<html><body><a href="/f"><span>Fri</span><span>dge</span></a><a href="/g">x</a></body></html>`,
-      "https://example.com/",
+      "https://example.com/"
     ).links;
     expect(stored[0]!.textGlued).toBe(true);
     expect(stored[1]!.textGlued).toBeUndefined();
@@ -155,7 +178,7 @@ describe("anchor text edge cases", () => {
   test("a glued card stores its pieces for the rule", () => {
     const links = parsePage(
       `<html><body><a href="/brands/lg"><span class="block">LG</span><span class="block">See details</span></a></body></html>`,
-      "https://example.com/",
+      "https://example.com/"
     ).links;
     expect(links[0]).toMatchObject({
       text: "LGSee details",
@@ -170,13 +193,13 @@ describe("anchor text edge cases", () => {
       return anchorTextResult(document.querySelector("a")!);
     };
     const long = glue(
-      `<a href="/b"><span>${"item ".repeat(50)}LG</span><span>See details</span></a>`,
+      `<a href="/b"><span>${"item ".repeat(50)}LG</span><span>See details</span></a>`
     );
     expect(long.parts?.[0]).toHaveLength(MAX_ANCHOR_PART_LENGTH);
     expect(long.parts?.[0]).not.toContain("LG");
     expect(long.parts?.[1]).toBe("See details");
     const many = glue(
-      `<a href="/b">${Array.from({ length: 40 }, (_, i) => `<span>p${i}</span>`).join("")}</a>`,
+      `<a href="/b">${Array.from({ length: 40 }, (_, i) => `<span>p${i}</span>`).join("")}</a>`
     );
     expect(many.parts).toHaveLength(MAX_ANCHOR_PARTS);
   });

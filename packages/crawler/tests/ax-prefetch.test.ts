@@ -1,8 +1,5 @@
 // AX prefetch parsers/validators — pure-function unit tests (no network).
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type {
   AgentAccessRecord,
   MarkdownProbeRecord,
@@ -10,15 +7,18 @@ import type {
   WellKnownProbeRecord,
 } from "@squirrelscan/core-contracts";
 
-import { SQLiteStorage } from "../src/storage/sqlite";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
+
 import { detectChallenge, detectPayment } from "../src/agent-access";
+import { parseAlternateMarkdownLink } from "../src/markdown";
 import {
   extractLinkHeaderLicenseUrls,
   extractRobotsLicenseUrls,
   looksLikeRsl,
   looksLikeXml,
 } from "../src/rsl";
-import { parseAlternateMarkdownLink } from "../src/markdown";
+import { SQLiteStorage } from "../src/storage/sqlite";
 import {
   extractOAuthFields,
   looksLikeHtml,
@@ -31,7 +31,7 @@ describe("parseAlternateMarkdownLink (ax/markdown-response Link-header discovery
   test("matches rel=alternate + type=text/markdown and resolves to absolute", () => {
     const header = '</index.md>; rel="alternate"; type="text/markdown"';
     expect(parseAlternateMarkdownLink(header, "https://example.com/")).toBe(
-      "https://example.com/index.md",
+      "https://example.com/index.md"
     );
   });
 
@@ -39,10 +39,13 @@ describe("parseAlternateMarkdownLink (ax/markdown-response Link-header discovery
     const header =
       '<https://example.com/next>; rel="next", </index.md>; rel="alternate"; type="text/markdown"';
     expect(parseAlternateMarkdownLink(header, "https://example.com/")).toBe(
-      "https://example.com/index.md",
+      "https://example.com/index.md"
     );
     expect(
-      parseAlternateMarkdownLink('<https://example.com/next>; rel="next"', "https://example.com/"),
+      parseAlternateMarkdownLink(
+        '<https://example.com/next>; rel="next"',
+        "https://example.com/"
+      )
     ).toBeNull();
   });
 
@@ -60,7 +63,7 @@ describe("well-known sniffing (SPA-fallback traps)", () => {
 
   test("looksLikeHtml catches doctype + html root, ignoring leading whitespace", () => {
     expect(looksLikeHtml("<!DOCTYPE html><html><head>")).toBe(true);
-    expect(looksLikeHtml("\n  <html lang=\"en\">")).toBe(true);
+    expect(looksLikeHtml('\n  <html lang="en">')).toBe(true);
     expect(looksLikeHtml('{"name":"x"}')).toBe(false);
     expect(looksLikeHtml("# Agents\n")).toBe(false);
   });
@@ -77,7 +80,9 @@ describe("well-known sniffing (SPA-fallback traps)", () => {
 
   test("looksLikeMarkdown detects ATX headings and md links", () => {
     expect(looksLikeMarkdown("# AGENTS\nStuff")).toBe(true);
-    expect(looksLikeMarkdown("See [docs](https://x.dev/docs) for more")).toBe(true);
+    expect(looksLikeMarkdown("See [docs](https://x.dev/docs) for more")).toBe(
+      true
+    );
     expect(looksLikeMarkdown("plain text no structure")).toBe(false);
   });
 
@@ -105,19 +110,30 @@ describe("well-known sniffing (SPA-fallback traps)", () => {
 
 describe("agent-access challenge + payment detection", () => {
   test("detectChallenge flags cf-mitigated header and body markers", () => {
-    expect(detectChallenge(new Headers({ "cf-mitigated": "challenge" }), "")).toBe("cf-mitigated");
-    expect(detectChallenge(new Headers(), "<html><head><title>Just a moment...</title></head></html>")).toBe(
-      "just-a-moment",
-    );
-    expect(detectChallenge(new Headers(), "window.__cf_chl_opt = {}")).toBe("__cf_chl_");
-    expect(detectChallenge(new Headers(), "window._cf_chl_opt={cType:'managed'}")).toBe("__cf_chl_");
+    expect(
+      detectChallenge(new Headers({ "cf-mitigated": "challenge" }), "")
+    ).toBe("cf-mitigated");
     expect(
       detectChallenge(
         new Headers(),
-        "<script>cpo.src='/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?ray=8d1f2a3b4c5d6e7f'</script>",
-      ),
+        "<html><head><title>Just a moment...</title></head></html>"
+      )
+    ).toBe("just-a-moment");
+    expect(detectChallenge(new Headers(), "window.__cf_chl_opt = {}")).toBe(
+      "__cf_chl_"
+    );
+    expect(
+      detectChallenge(new Headers(), "window._cf_chl_opt={cType:'managed'}")
+    ).toBe("__cf_chl_");
+    expect(
+      detectChallenge(
+        new Headers(),
+        "<script>cpo.src='/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?ray=8d1f2a3b4c5d6e7f'</script>"
+      )
     ).toBe("challenge-platform");
-    expect(detectChallenge(new Headers(), "<html><body>welcome</body></html>")).toBeNull();
+    expect(
+      detectChallenge(new Headers(), "<html><body>welcome</body></html>")
+    ).toBeNull();
   });
 
   test("detectChallenge ignores JavaScript Detections and the phrase in page text (#666)", () => {
@@ -126,8 +142,15 @@ describe("agent-access challenge + payment detection", () => {
       "<html><body><p>Shop</p><script>(function(){var d=document.createElement('script');" +
       "d.innerHTML=\"window.__CF$cv$params={r:'8d1f2a3b4c5d6e7f',t:'MTcy'};var a=document.createElement('script');" +
       "a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';\"})();</script></body></html>";
-    expect(detectChallenge(new Headers({ server: "cloudflare" }), jsd)).toBeNull();
-    expect(detectChallenge(new Headers(), "<html><body><p>Just a moment, the oven heats.</p></body></html>")).toBeNull();
+    expect(
+      detectChallenge(new Headers({ server: "cloudflare" }), jsd)
+    ).toBeNull();
+    expect(
+      detectChallenge(
+        new Headers(),
+        "<html><body><p>Just a moment, the oven heats.</p></body></html>"
+      )
+    ).toBeNull();
   });
 
   test("a challenge whose scripts sit past the sample is still caught by its title", () => {
@@ -149,11 +172,15 @@ describe("agent-access challenge + payment detection", () => {
   });
 
   test("detectPayment flags 402 + x402 body and crawler-price header", () => {
-    expect(detectPayment(402, new Headers(), '{"x402Version":1,"accepts":[]}')).toBe("x402-body");
-    expect(detectPayment(200, new Headers({ "crawler-price": "USD 0.01" }), "")).toBe(
-      "crawler-price",
+    expect(
+      detectPayment(402, new Headers(), '{"x402Version":1,"accepts":[]}')
+    ).toBe("x402-body");
+    expect(
+      detectPayment(200, new Headers({ "crawler-price": "USD 0.01" }), "")
+    ).toBe("crawler-price");
+    expect(detectPayment(402, new Headers(), "Payment Required")).toBe(
+      "http-402"
     );
-    expect(detectPayment(402, new Headers(), "Payment Required")).toBe("http-402");
     expect(detectPayment(200, new Headers(), "<html>ok</html>")).toBeNull();
   });
 });
@@ -174,13 +201,17 @@ describe("rsl licensing extraction", () => {
   });
 
   test("extractLinkHeaderLicenseUrls pulls rel=license URLs only", () => {
-    const header = '<https://x.dev/lic.xml>; rel="license", <https://x.dev/next>; rel="next"';
-    expect(extractLinkHeaderLicenseUrls(header)).toEqual(["https://x.dev/lic.xml"]);
+    const header =
+      '<https://x.dev/lic.xml>; rel="license", <https://x.dev/next>; rel="next"';
+    expect(extractLinkHeaderLicenseUrls(header)).toEqual([
+      "https://x.dev/lic.xml",
+    ]);
     expect(extractLinkHeaderLicenseUrls(null)).toEqual([]);
   });
 
   test("looksLikeRsl + looksLikeXml recognise RSL docs and reject HTML", () => {
-    const rsl = '<?xml version="1.0"?><rsl xmlns="https://rslstandard.org/rsl"></rsl>';
+    const rsl =
+      '<?xml version="1.0"?><rsl xmlns="https://rslstandard.org/rsl"></rsl>';
     expect(looksLikeXml(rsl)).toBe(true);
     expect(looksLikeRsl(rsl)).toBe(true);
     expect(looksLikeXml("<!DOCTYPE html><html></html>")).toBe(false);
@@ -193,7 +224,10 @@ describe("AX store round-trip", () => {
     return Effect.runPromise(eff as Effect.Effect<A, never, never>);
   }
 
-  async function freshStore(): Promise<{ store: SQLiteStorage; crawlId: string }> {
+  async function freshStore(): Promise<{
+    store: SQLiteStorage;
+    crawlId: string;
+  }> {
     const store = new SQLiteStorage(":memory:");
     await run(store.init());
     const crawlId = await run(
@@ -229,7 +263,7 @@ describe("AX store round-trip", () => {
           bytesTotal: 0,
           avgLoadTimeMs: 0,
         },
-      }),
+      })
     );
     return { store, crawlId };
   }

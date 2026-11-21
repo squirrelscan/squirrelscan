@@ -81,7 +81,8 @@ const CHALLENGE_TITLE_RE =
   /<title>\s*(Just a moment\.\.\.|Attention Required! \| Cloudflare|Access denied \| [^<]*Cloudflare|DDoS-Guard)\s*<\/title>/i;
 // Markers only a challenge page carries. Not `/cdn-cgi/challenge-platform/`:
 // Cloudflare injects that script into ordinary pages too.
-const CHALLENGE_BODY_RE = /window\._cf_chl_opt|id="cf-browser-verification"|id="challenge-error-text"/i;
+const CHALLENGE_BODY_RE =
+  /window\._cf_chl_opt|id="cf-browser-verification"|id="challenge-error-text"/i;
 
 /**
  * True when the site pushed back instead of answering: rate limited (HTTP 429),
@@ -95,12 +96,17 @@ const CHALLENGE_BODY_RE = /window\._cf_chl_opt|id="cf-browser-verification"|id="
  */
 export function isThrottledOrChallenged(reply: ProbeReply): boolean {
   if (reply.status === 429) return true;
-  if (reply.headers?.get("cf-mitigated")?.toLowerCase() === "challenge") return true;
+  if (reply.headers?.get("cf-mitigated")?.toLowerCase() === "challenge")
+    return true;
   const head = reply.text.slice(0, 64 * 1024);
-  if (CHALLENGE_TITLE_RE.test(head) || CHALLENGE_BODY_RE.test(head)) return true;
+  if (CHALLENGE_TITLE_RE.test(head) || CHALLENGE_BODY_RE.test(head))
+    return true;
   // Markers are read on a 403 only: several ride on every answer from a
   // protected site, so on a 2xx or a 401 they prove nothing.
-  return reply.status === 403 && hasWafChallengeEvidence({ headers: reply.headers, body: head });
+  return (
+    reply.status === 403 &&
+    hasWafChallengeEvidence({ headers: reply.headers, body: head })
+  );
 }
 
 /**
@@ -157,7 +163,10 @@ export function anonymousGetUrl(endpointUrl: string): string {
  * followed. security/unauthenticated-api and security/auth-endpoint-disclosure
  * send this same request, so one answer serves both (squirrelscan#1886).
  */
-export function buildAnonymousGet(endpointUrl: string): { url: string; init: RequestInit } {
+export function buildAnonymousGet(endpointUrl: string): {
+  url: string;
+  init: RequestInit;
+} {
   return {
     url: anonymousGetUrl(endpointUrl),
     init: {
@@ -176,7 +185,10 @@ export function buildAnonymousGet(endpointUrl: string): { url: string; init: Req
 
 // Keyed on the audit's probe budget, so the memo lives exactly as long as one
 // audit's probing and two audits never share an answer.
-const anonymousGets = new WeakMap<ProbeBudget, Map<string, Promise<AnonymousGetOutcome>>>();
+const anonymousGets = new WeakMap<
+  ProbeBudget,
+  Map<string, Promise<AnonymousGetOutcome>>
+>();
 
 /**
  * Send the anonymous GET for `endpointUrl` once per audit. The first caller
@@ -228,7 +240,11 @@ async function fetchAnonymousGet(
   // Aborted once the read is done, so a capped read does not keep pulling an
   // endless answer off the wire until the timeout (see graphql-probe.ts).
   const done = new AbortController();
-  const signal = AbortSignal.any([deadline, AbortSignal.timeout(ANONYMOUS_GET_TIMEOUT_MS), done.signal]);
+  const signal = AbortSignal.any([
+    deadline,
+    AbortSignal.timeout(ANONYMOUS_GET_TIMEOUT_MS),
+    done.signal,
+  ]);
   try {
     // Never `fetch` itself: Bun inflates a Content-Encoding body in full before
     // any capped read (#722).
@@ -245,7 +261,10 @@ async function fetchAnonymousGet(
       },
     };
   } catch (err) {
-    return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
+    return {
+      sent: true,
+      error: err instanceof Error ? err.name || err.message : String(err),
+    };
   } finally {
     done.abort();
   }

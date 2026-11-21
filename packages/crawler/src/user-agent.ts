@@ -9,12 +9,11 @@
 // Fix: draw once per project and persist to project_meta; later runs reuse it.
 // Explicit config still overrides, and `--fresh-ua` re-rolls (and re-persists).
 
-import { Effect } from "effect";
-
 import {
   getRandomUserAgent,
   isModernUserAgentString,
 } from "@squirrelscan/utils/user-agent";
+import { Effect } from "effect";
 
 import type { CrawlStorage } from "./storage/types";
 

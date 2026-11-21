@@ -1,13 +1,16 @@
 // ax/answer-blocks: question headings need a direct answer, data tables and charts need a source (repo#3882).
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
-
-import { answerBlocksRule } from "../src/ax/answer-blocks";
 import type { CheckResult, RuleContext } from "../src/types";
 
-async function run(body: string, url = "https://example.com/blog/post"): Promise<CheckResult[]> {
+import { answerBlocksRule } from "../src/ax/answer-blocks";
+
+async function run(
+  body: string,
+  url = "https://example.com/blog/post"
+): Promise<CheckResult[]> {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Post</title></head><body>${body}</body></html>`;
   const ctx = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
@@ -17,15 +20,16 @@ async function run(body: string, url = "https://example.com/blog/post"): Promise
   return (await answerBlocksRule.run(ctx)).checks;
 }
 
-const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
+const named = (checks: CheckResult[], name: string) =>
+  checks.find((c) => c.name === name);
 
 describe("ax/answer-blocks question headings", () => {
   test("a direct answer passes", async () => {
     const c = named(
       await run(
-        `<article><h1>Guide</h1><h2>What is a sitemap?</h2><p>A sitemap is an XML file that lists the URLs of a site. Crawlers read it to find pages.</p></article>`,
+        `<article><h1>Guide</h1><h2>What is a sitemap?</h2><p>A sitemap is an XML file that lists the URLs of a site. Crawlers read it to find pages.</p></article>`
       ),
-      "answer-blocks",
+      "answer-blocks"
     );
     expect(c?.status).toBe("pass");
   });
@@ -33,9 +37,9 @@ describe("ax/answer-blocks question headings", () => {
   test("a pronoun opener is flagged and listed", async () => {
     const c = named(
       await run(
-        `<h2>What is a sitemap?</h2><p>It is a file. Crawlers read it.</p><h2>Why does it matter?</h2><p>Search engines find pages faster.</p>`,
+        `<h2>What is a sitemap?</h2><p>It is a file. Crawlers read it.</p><h2>Why does it matter?</h2><p>Search engines find pages faster.</p>`
       ),
-      "answer-blocks",
+      "answer-blocks"
     );
     expect(c?.status).toBe("warn");
     expect(c?.items?.map((i) => i.id)).toEqual(["What is a sitemap?"]);
@@ -44,16 +48,20 @@ describe("ax/answer-blocks question headings", () => {
 
   test("a demonstrative used as a determiner is fine", async () => {
     const c = named(
-      await run(`<h2>What is a sitemap?</h2><p>This file lists every URL you want crawled.</p>`),
-      "answer-blocks",
+      await run(
+        `<h2>What is a sitemap?</h2><p>This file lists every URL you want crawled.</p>`
+      ),
+      "answer-blocks"
     );
     expect(c?.status).toBe("pass");
   });
 
   test("a question followed by another heading has no answer", async () => {
     const c = named(
-      await run(`<h2>What is a sitemap?</h2><h2>How do I make one?</h2><p>Use a generator.</p>`),
-      "answer-blocks",
+      await run(
+        `<h2>What is a sitemap?</h2><h2>How do I make one?</h2><p>Use a generator.</p>`
+      ),
+      "answer-blocks"
     );
     expect(c?.status).toBe("warn");
     expect(c?.items).toHaveLength(1);
@@ -62,23 +70,28 @@ describe("ax/answer-blocks question headings", () => {
 
   test("an over-long opening sentence is flagged", async () => {
     const long = Array.from({ length: 70 }, (_, i) => `word${i}`).join(" ");
-    const c = named(await run(`<h2>What is it?</h2><p>${long}.</p>`), "answer-blocks");
+    const c = named(
+      await run(`<h2>What is it?</h2><p>${long}.</p>`),
+      "answer-blocks"
+    );
     expect(c?.items?.[0]?.label).toContain("too long");
   });
 
   test("a list answer and chrome headings are not flagged", async () => {
     const c = named(
       await run(
-        `<h2>Which plans exist?</h2><ul><li>Free</li><li>Pro</li></ul><footer><h3>Questions?</h3></footer>`,
+        `<h2>Which plans exist?</h2><ul><li>Free</li><li>Pro</li></ul><footer><h3>Questions?</h3></footer>`
       ),
-      "answer-blocks",
+      "answer-blocks"
     );
     expect(c?.status).toBe("pass");
     expect(c?.details?.questionHeadings).toBe(1);
   });
 
   test("statements and short headings are not questions", async () => {
-    const checks = await run(`<h2>How we work</h2><p>It is simple.</p><h2>Why?</h2><p>It is.</p>`);
+    const checks = await run(
+      `<h2>How we work</h2><p>It is simple.</p><h2>Why?</h2><p>It is.</p>`
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("skipped");
   });
@@ -86,9 +99,9 @@ describe("ax/answer-blocks question headings", () => {
   test("a heading wrapper reaches the answer next to it", async () => {
     const c = named(
       await run(
-        `<div><div class="q"><h3>How long does it take?</h3></div><p>Most audits finish in under a minute.</p></div>`,
+        `<div><div class="q"><h3>How long does it take?</h3></div><p>Most audits finish in under a minute.</p></div>`
       ),
-      "answer-blocks",
+      "answer-blocks"
     );
     expect(c?.status).toBe("pass");
   });
@@ -114,7 +127,9 @@ describe("ax/answer-blocks sources", () => {
   });
 
   test("a layout table is ignored", async () => {
-    const checks = await run(`<table role="presentation"><tr><td>a</td><td>b</td></tr></table>`);
+    const checks = await run(
+      `<table role="presentation"><tr><td>a</td><td>b</td></tr></table>`
+    );
     expect(checks[0]?.status).toBe("skipped");
   });
 });
@@ -129,7 +144,7 @@ describe("ax/answer-blocks applicability", () => {
 
   test("a product page is skipped", async () => {
     const checks = await run(
-      `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"x"}</script><h2>Does it fit?</h2><p>It does.</p>`,
+      `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"x"}</script><h2>Does it fit?</h2><p>It does.</p>`
     );
     expect(checks[0]?.status).toBe("skipped");
   });

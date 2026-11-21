@@ -4,11 +4,17 @@
 // before any cap applies. Each must turn that decoding off on every hop and
 // still see the decoded body.
 
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { parsePage } from "@squirrelscan/parser";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { Effect } from "effect";
 import { brotliCompressSync, createGzip, gzipSync } from "node:zlib";
-
-import { parsePage } from "@squirrelscan/parser";
 
 import { runCloakingProbe } from "../src/cloaking-probe";
 import { checkExternalLink } from "../src/external-checker";
@@ -34,7 +40,8 @@ async function gzipBomb(): Promise<Buffer> {
   const ended = new Promise((resolve) => gzip.on("end", resolve));
   const chunk = Buffer.alloc(16 * 1024 * 1024, 0x20);
   for (let i = 0; i < 64; i++) {
-    if (!gzip.write(chunk)) await new Promise((resolve) => gzip.once("drain", resolve));
+    if (!gzip.write(chunk))
+      await new Promise((resolve) => gzip.once("drain", resolve));
   }
   gzip.end();
   await ended;
@@ -59,7 +66,10 @@ beforeAll(async () => {
       }
       if (path === "/app.js") {
         return new Response(gzipSync(SCRIPT), {
-          headers: { "content-type": "application/javascript", "content-encoding": "gzip" },
+          headers: {
+            "content-type": "application/javascript",
+            "content-encoding": "gzip",
+          },
         });
       }
       if (path === "/style.css") {
@@ -75,7 +85,9 @@ beforeAll(async () => {
               sent += 16;
             },
           }),
-          { headers: { "content-type": "text/css", "content-encoding": "gzip" } },
+          {
+            headers: { "content-type": "text/css", "content-encoding": "gzip" },
+          }
         );
       }
       if (path === "/huge.css") {
@@ -89,12 +101,17 @@ beforeAll(async () => {
               offset += 64 * 1024;
             },
           }),
-          { headers: { "content-type": "text/css", "content-encoding": "gzip" } },
+          {
+            headers: { "content-type": "text/css", "content-encoding": "gzip" },
+          }
         );
       }
       if (path === "/bomb.js") {
         return new Response(bomb as unknown as BodyInit, {
-          headers: { "content-type": "application/javascript", "content-encoding": "gzip" },
+          headers: {
+            "content-type": "application/javascript",
+            "content-encoding": "gzip",
+          },
         });
       }
       if (path === "/waf") {
@@ -134,7 +151,7 @@ beforeAll(() => {
       });
       return real(input, init);
     },
-    { preconnect: real.preconnect },
+    { preconnect: real.preconnect }
   );
 });
 afterAll(() => {
@@ -146,7 +163,9 @@ afterEach(() => {
 
 describe("engine fetches of site-controlled URLs", () => {
   test("script contents: every redirect hop undecoded, the script read decoded", async () => {
-    const [result] = await Effect.runPromise(fetchScriptContents([`${origin}/moved/app.js`]));
+    const [result] = await Effect.runPromise(
+      fetchScriptContents([`${origin}/moved/app.js`])
+    );
     expect(result?.content).toBe(SCRIPT);
     expect(result?.contentEncoding).toBe("gzip");
     expect(sent.map((s) => s.path)).toEqual(["/moved/app.js", "/app.js"]);
@@ -160,14 +179,20 @@ describe("engine fetches of site-controlled URLs", () => {
     const sampler = setInterval(() => {
       peak = Math.max(peak, process.memoryUsage().rss);
     }, 1);
-    const [result] = await Effect.runPromise(fetchScriptContents([`${origin}/bomb.js`]));
+    const [result] = await Effect.runPromise(
+      fetchScriptContents([`${origin}/bomb.js`])
+    );
     clearInterval(sampler);
     expect(result?.error).toBe("script too large");
-    expect(Math.max(peak, process.memoryUsage().rss) - before).toBeLessThan(256 * 1024 * 1024);
+    expect(Math.max(peak, process.memoryUsage().rss) - before).toBeLessThan(
+      256 * 1024 * 1024
+    );
   });
 
   test("resource sizes: every hop undecoded, the size measured on the decoded body", async () => {
-    const [result] = await Effect.runPromise(checkResourceSizes([`${origin}/moved/style.css`]));
+    const [result] = await Effect.runPromise(
+      checkResourceSizes([`${origin}/moved/style.css`])
+    );
     expect(result?.status).toBe(200);
     expect(result?.contentEncoding).toBe("gzip");
     expect(result?.sizeBytes).toBe(STYLE.length);
@@ -183,18 +208,22 @@ describe("engine fetches of site-controlled URLs", () => {
       peak = Math.max(peak, process.memoryUsage().rss);
     }, 1);
     const [result] = await Effect.runPromise(
-      checkResourceSizes([`${origin}/huge.css`], { timeoutMs: 30_000 }),
+      checkResourceSizes([`${origin}/huge.css`], { timeoutMs: 30_000 })
     );
     clearInterval(sampler);
     expect(result?.sizeBytes).toBe(1024 * 1024 * 1024);
     // Buffered whole, as this read once was, the body alone is 1 GiB.
-    expect(Math.max(peak, process.memoryUsage().rss) - before).toBeLessThan(256 * 1024 * 1024);
+    expect(Math.max(peak, process.memoryUsage().rss) - before).toBeLessThan(
+      256 * 1024 * 1024
+    );
   }, 30_000);
 
   test("external links: HEAD and GET undecoded, a 403 interstitial read decoded", async () => {
     // Loopback fixture: the policy a private site's audit uses.
     const result = await Effect.runPromise(
-      checkExternalLink(`${origin}/waf`, null, { egress: { allowPrivateNetwork: true } }),
+      checkExternalLink(`${origin}/waf`, null, {
+        egress: { allowPrivateNetwork: true },
+      })
     );
     expect(result.wafBlocked).toBe(true);
     expect(result.wafProvider).toBe("cloudflare");
@@ -203,13 +232,16 @@ describe("engine fetches of site-controlled URLs", () => {
   });
 
   test("cloaking probe: both identities fetch undecoded and compare decoded pages", async () => {
-    const [probe] = await runCloakingProbe([{ url: `${origin}/moved/page`, reason: "orphan" }], {
-      maxPages: 1,
-      recentDays: 14,
-      queryVariation: false,
-      googlebotUserAgent: "Googlebot",
-      defaultUserAgent: "squirrel-test",
-    });
+    const [probe] = await runCloakingProbe(
+      [{ url: `${origin}/moved/page`, reason: "orphan" }],
+      {
+        maxPages: 1,
+        recentDays: 14,
+        queryVariation: false,
+        googlebotUserAgent: "Googlebot",
+        defaultUserAgent: "squirrel-test",
+      }
+    );
     expect(probe?.defaultStatus).toBe(200);
     expect(probe?.uaSimilarity).toBe(1);
     expect(probe?.defaultBytes).toBe(PAGE.length);
@@ -220,7 +252,9 @@ describe("engine fetches of site-controlled URLs", () => {
   test("soft-404 confirmation: the re-fetch is undecoded and sees the decoded shell", async () => {
     const url = `${origin}/moved/gone`;
     const pages = [{ url, statusCode: 200, parsed: parsePage(SHELL, url) }];
-    const summary = await confirmSoft404Candidates(pages, { userAgent: "squirrel-test" });
+    const summary = await confirmSoft404Candidates(pages, {
+      userAgent: "squirrel-test",
+    });
     expect(summary.confirmed).toBe(1);
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.every((s) => s.decompress === false)).toBe(true);

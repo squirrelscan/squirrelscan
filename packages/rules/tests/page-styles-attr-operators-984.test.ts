@@ -4,41 +4,44 @@
 // element. Chromium verdicts for the shapes are rows in
 // static-hidden-chromium.json.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { ariaCommandNameRule } from "../src/a11y/aria-command-name";
 import { formLabelsRule } from "../src/a11y/form-labels";
 import { parseSelector } from "../src/shared/page-styles";
 import { createStaticVisibility } from "../src/shared/static-hidden";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 const BODY =
   '<div class="nav"><button type="button"></button></div><form><input type="text" id="q"></form>';
 
 async function statuses(
   rule: Pick<Rule, "run">,
-  css: string,
+  css: string
 ): Promise<Record<string, string>> {
   const url = "https://example.com/";
   const html = `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body><main>${BODY}</main></body></html>`;
-  const checks = (await rule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  })).checks as CheckResult[];
+  const checks = (
+    await rule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    })
+  ).checks as CheckResult[];
   return Object.fromEntries(checks.map((c) => [c.name, c.status]));
 }
 
 function state(css: string, el: string): string {
   const { document } = parsePage(
     `<!doctype html><html><head><style>${css}</style></head><body><div class="o">${el}</div></body></html>`,
-    "https://example.com/",
+    "https://example.com/"
   ) as unknown as { document: Document };
   return createStaticVisibility({ ariaHidden: true }).visibility(
-    document.getElementById("t") as Element,
+    document.getElementById("t") as Element
   ).state;
 }
 
@@ -56,8 +59,9 @@ describe("parseSelector keeps an operator attribute in the subject", () => {
     test(sel, () => {
       const parsed = parseSelector(sel);
       expect(parsed).toMatchObject({ kind: "complex" });
-      const subject = (parsed as { subject: { attrs: Array<{ name: string; op?: string }> } })
-        .subject;
+      const subject = (
+        parsed as { subject: { attrs: Array<{ name: string; op?: string }> } }
+      ).subject;
       expect(subject.attrs).toEqual([expect.objectContaining({ name, op })]);
     });
   }
@@ -67,7 +71,9 @@ describe("parseSelector keeps an operator attribute in the subject", () => {
       kind: "complex",
       subject: { attrs: [{ name: "data-a" }] },
     });
-    expect(parseSelector("[data-a=1]")).toMatchObject({ subject: { attrs: [{ name: "data-a" }] } });
+    expect(parseSelector("[data-a=1]")).toMatchObject({
+      subject: { attrs: [{ name: "data-a" }] },
+    });
   });
 
   test("a namespaced or escaped name narrows nothing", () => {
@@ -87,17 +93,21 @@ describe("the issue's repro table: nothing on the page can match", () => {
     '[id$="-drawer"]{display:none}',
   ]) {
     test(css, async () => {
-      expect(await statuses(ariaCommandNameRule, css)).toEqual({ "aria-command-name": "fail" });
-      expect(await statuses(formLabelsRule, css)).toEqual({ "form-labels": "fail" });
+      expect(await statuses(ariaCommandNameRule, css)).toEqual({
+        "aria-command-name": "fail",
+      });
+      expect(await statuses(formLabelsRule, css)).toEqual({
+        "form-labels": "fail",
+      });
     });
   }
 
   test("the combined selector list with a plain id part", async () => {
     expect(
-      (await statuses(
+      await statuses(
         ariaCommandNameRule,
-        '.is-x #drawer, .is-x [id$="-drawer"]{display:none !important}',
-      )),
+        '.is-x #drawer, .is-x [id$="-drawer"]{display:none !important}'
+      )
     ).toEqual({ "aria-command-name": "fail" });
   });
 });
@@ -111,10 +121,15 @@ describe("an element the operator could match stays unknown", () => {
     "|=": ['.o [data-a|="en"]{display:none}', 'data-a="en-US"'],
     "i flag": ['.o [data-a$="DRAWER" i]{display:none}', 'data-a="cart-drawer"'],
     "plain =": ['.o [data-a="drawer"]{display:none}', 'data-a="drawer"'],
-    "case-insensitive value": ['.o [data-a$="DRAWER"]{display:none}', 'data-a="cart-drawer"'],
+    "case-insensitive value": [
+      '.o [data-a$="DRAWER"]{display:none}',
+      'data-a="cart-drawer"',
+    ],
   };
   for (const [name, [css, attrs]] of Object.entries(cases)) {
-    test(name, () => expect(state(css, `<b id="t" ${attrs}></b>`)).toBe("unknown"));
+    test(name, () =>
+      expect(state(css, `<b id="t" ${attrs}></b>`)).toBe("unknown")
+    );
   }
 });
 
@@ -130,19 +145,26 @@ describe("an element whose value cannot satisfy the operator is shown", () => {
     "no attribute": ['.o [data-a$="x"]{display:none}', ""],
   };
   for (const [name, [css, attrs]] of Object.entries(cases)) {
-    test(name, () => expect(state(css, `<b id="t" ${attrs}></b>`)).toBe("shown"));
+    test(name, () =>
+      expect(state(css, `<b id="t" ${attrs}></b>`)).toBe("shown")
+    );
   }
 });
 
 describe("edge shapes where this DOM differs from a browser's", () => {
   test("aK and ak are separate attributes: either may satisfy the test", () => {
-    expect(state('[ak$="x"]{display:none}', '<b id="t" aK="z" ak="x"></b>')).toBe("unknown");
+    expect(
+      state('[ak$="x"]{display:none}', '<b id="t" aK="z" ak="x"></b>')
+    ).toBe("unknown");
   });
 
   test("a NUL in the value is U+FFFD in a browser: not ruled out", () => {
-    expect(state('[data-a$="\ufffd"]{display:none}', '<b id="t" data-a="\u0000"></b>')).toBe(
-      "unknown",
-    );
+    expect(
+      state(
+        '[data-a$="\ufffd"]{display:none}',
+        '<b id="t" data-a="\u0000"></b>'
+      )
+    ).toBe("unknown");
   });
 });
 
@@ -155,13 +177,21 @@ describe("an unquoted value is not read as a flag", () => {
       subject: { attrs: [{ name: "data-a", value: "b", op: "^=" }] },
     });
     // a bare `b` cannot satisfy `^=bi`: shown.
-    expect(state("[data-a^=bi]{display:none}", '<b id="t" data-a="b"></b>')).toBe("shown");
-    expect(state("[data-a^=b i]{display:none}", '<b id="t" data-a="B"></b>')).toBe("unknown");
+    expect(
+      state("[data-a^=bi]{display:none}", '<b id="t" data-a="b"></b>')
+    ).toBe("shown");
+    expect(
+      state("[data-a^=b i]{display:none}", '<b id="t" data-a="B"></b>')
+    ).toBe("unknown");
   });
 
   test("plain [a=bi] is the value bi", () => {
-    expect(state("[data-a=bi]{display:none}", '<b id="t" data-a="b"></b>')).toBe("shown");
-    expect(state("[data-a=bi]{display:none}", '<b id="t" data-a="bi"></b>')).toBe("hidden");
+    expect(
+      state("[data-a=bi]{display:none}", '<b id="t" data-a="b"></b>')
+    ).toBe("shown");
+    expect(
+      state("[data-a=bi]{display:none}", '<b id="t" data-a="bi"></b>')
+    ).toBe("hidden");
   });
 });
 
@@ -169,7 +199,7 @@ describe("attributes are read from the DOM once per element", () => {
   const readsFor = (css: string): number => {
     const { document } = parsePage(
       `<!doctype html><html><head><style>${css}</style></head><body><div id="t" data-a="x-1" data-b="2"></div></body></html>`,
-      "https://example.com/",
+      "https://example.com/"
     ) as unknown as { document: Document };
     const el = document.getElementById("t") as Element;
     const attributes = el.attributes;
@@ -187,7 +217,8 @@ describe("attributes are read from the DOM once per element", () => {
   test("50 uncertain operator rules read no more than none do, plus one", () => {
     const rules = Array.from(
       { length: 50 },
-      (_, i) => `.s${i} [data-a$="-v${i}"]{display:none !important;visibility:hidden}`,
+      (_, i) =>
+        `.s${i} [data-a$="-v${i}"]{display:none !important;visibility:hidden}`
     ).join("");
     expect(readsFor(rules)).toBeLessThanOrEqual(readsFor("") + 1);
   });

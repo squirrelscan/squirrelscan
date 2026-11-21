@@ -11,14 +11,17 @@
 // The gates below are the invariant, its two round-trips, and the pre-#1881
 // compatibility fallback.
 
+import type {
+  CheckResult,
+  PageFindingRecord,
+} from "@squirrelscan/core-contracts";
+
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-
 import { fingerprint, flattenChecks, itemFindingMessage } from "../src/merge";
-import { carriedFindingToCheck } from "../src/scoring";
 import { reconstructPageRuleChecks } from "../src/reconstruct";
+import { carriedFindingToCheck } from "../src/scoring";
 
 /** The SRI shape that produced the drscholls inflation: the same cross-origin
  * assets on every page, but a page-varying COUNT of them in the check message. */
@@ -38,7 +41,9 @@ function sriCheck(count: number): CheckResult {
 }
 
 /** Turn a FlatFinding into the stored row shape the readers consume. */
-function toRecord(f: ReturnType<typeof flattenChecks>[number]): PageFindingRecord {
+function toRecord(
+  f: ReturnType<typeof flattenChecks>[number]
+): PageFindingRecord {
   return {
     siteKey: "SITE",
     normalizedUrl: f.normalizedUrl,
@@ -67,22 +72,27 @@ describe("#1881 item findings carry their own identity", () => {
     const a = flattenChecks("https://x/a", "security/sri", [sriCheck(26)]);
     const b = flattenChecks("https://x/b", "security/sri", [sriCheck(24)]);
 
-    const pick = (rows: typeof a, locator: string) => rows.find((f) => f.locator === locator)!;
+    const pick = (rows: typeof a, locator: string) =>
+      rows.find((f) => f.locator === locator)!;
     const itemA = pick(a, "https://cdn.shopify.com/extensions/globo-0.js");
     const itemB = pick(b, "https://cdn.shopify.com/extensions/globo-0.js");
 
     expect(itemA.message).toBe(
-      "cross-origin resources without Subresource Integrity: https://cdn.shopify.com/extensions/globo-0.js",
+      "cross-origin resources without Subresource Integrity: https://cdn.shopify.com/extensions/globo-0.js"
     );
     expect(itemA.message).toBe(itemB.message);
-    expect(fingerprint(itemA.status, itemA.message, itemA.value, itemA.expected)).toBe(
-      fingerprint(itemB.status, itemB.message, itemB.value, itemB.expected),
+    expect(
+      fingerprint(itemA.status, itemA.message, itemA.value, itemA.expected)
+    ).toBe(
+      fingerprint(itemB.status, itemB.message, itemB.value, itemB.expected)
     );
 
     // Pre-#1881 this was 24 vs 26 distinct fingerprints across the two pages;
     // now the union is exactly the 26 assets page A carries.
     const fps = new Set(
-      [...a, ...b].map((f) => fingerprint(f.status, f.message, f.value, f.expected)),
+      [...a, ...b].map((f) =>
+        fingerprint(f.status, f.message, f.value, f.expected)
+      )
     );
     expect(fps.size).toBe(26);
   });
@@ -93,7 +103,7 @@ describe("#1881 item findings carry their own identity", () => {
     // message is a function of (page-invariant check text, item id) — the check's
     // WORDING is still an input, only its per-page numbers are removed.
     const rows = [24, 25, 26].flatMap((n, i) =>
-      flattenChecks(`https://x/${i}`, "security/sri", [sriCheck(n)]),
+      flattenChecks(`https://x/${i}`, "security/sri", [sriCheck(n)])
     );
     const byLocator = new Map<string, Set<string>>();
     for (const r of rows) {
@@ -102,15 +112,23 @@ describe("#1881 item findings carry their own identity", () => {
       byLocator.set(r.locator, seen);
     }
     for (const [locator, seen] of byLocator) {
-      expect({ locator, variants: seen.size }).toEqual({ locator, variants: 1 });
+      expect({ locator, variants: seen.size }).toEqual({
+        locator,
+        variants: 1,
+      });
     }
     // The message is a function of (page-invariant check text, item id) — the
     // page's own count never survives into it.
     expect(rows.every((r) => r.message.endsWith(`: ${r.locator}`))).toBe(true);
-    expect(rows.every((r) => !/\d/.test(r.message.slice(0, r.message.length - r.locator.length)))).toBe(
-      true,
+    expect(
+      rows.every(
+        (r) =>
+          !/\d/.test(r.message.slice(0, r.message.length - r.locator.length))
+      )
+    ).toBe(true);
+    expect(rows.every((r) => r.value === null && r.expected === null)).toBe(
+      true
     );
-    expect(rows.every((r) => r.value === null && r.expected === null)).toBe(true);
   });
 
   test("a per-page number in item.label does NOT reach the row identity", () => {
@@ -123,12 +141,16 @@ describe("#1881 item findings carry their own identity", () => {
       message: "1 word(s) may be overused",
       items: [{ id: "everyday", label: `"everyday" (${density}%)` }],
     });
-    const a = flattenChecks("https://x/a", "content/keyword-stuffing", [check("2.3")])[0]!;
-    const b = flattenChecks("https://x/b", "content/keyword-stuffing", [check("4.8")])[0]!;
+    const a = flattenChecks("https://x/a", "content/keyword-stuffing", [
+      check("2.3"),
+    ])[0]!;
+    const b = flattenChecks("https://x/b", "content/keyword-stuffing", [
+      check("4.8"),
+    ])[0]!;
 
     expect(a.message).toBe("word(s) may be overused: everyday");
     expect(fingerprint(a.status, a.message, a.value, a.expected)).toBe(
-      fingerprint(b.status, b.message, b.value, b.expected),
+      fingerprint(b.status, b.message, b.value, b.expected)
     );
     // Not lost — the label is still replayed from the payload.
     expect(JSON.parse(a.payload!).items[0].label).toBe('"everyday" (2.3%)');
@@ -139,23 +161,30 @@ describe("#1881 item findings carry their own identity", () => {
     // makes the message page-invariant, so pin it directly rather than only
     // through flattenChecks.
     const msg = (m: string) =>
-      itemFindingMessage({ name: "c", status: "warn", message: m }, { id: "ID" });
+      itemFindingMessage(
+        { name: "c", status: "warn", message: m },
+        { id: "ID" }
+      );
 
     expect(msg("26 cross-origin resources without Subresource Integrity")).toBe(
-      "cross-origin resources without Subresource Integrity: ID",
+      "cross-origin resources without Subresource Integrity: ID"
     );
     expect(msg("2 cookie(s) missing the Secure flag")).toBe(
-      "cookie(s) missing the Secure flag: ID",
+      "cookie(s) missing the Secure flag: ID"
     );
     // The count varies page to page; the text must not.
-    expect(msg("1 potential source map(s) detected")).toBe(msg("9 potential source map(s) detected"));
-    expect(msg("1,024 image(s) missing width/height")).toBe(msg("7 image(s) missing width/height"));
+    expect(msg("1 potential source map(s) detected")).toBe(
+      msg("9 potential source map(s) detected")
+    );
+    expect(msg("1,024 image(s) missing width/height")).toBe(
+      msg("7 image(s) missing width/height")
+    );
     // A number in the MIDDLE of the wording is neutralised, not dropped.
     expect(msg("Visible text is under 10% of the page HTML")).toBe(
-      "Visible text is under N% of the page HTML: ID",
+      "Visible text is under N% of the page HTML: ID"
     );
     expect(msg("Visible text is under 10% of the page HTML")).toBe(
-      msg("Visible text is under 35% of the page HTML"),
+      msg("Visible text is under 35% of the page HTML")
     );
     // No count at all: unchanged.
     expect(msg("Invalid JSON-LD syntax")).toBe("Invalid JSON-LD syntax: ID");
@@ -189,7 +218,9 @@ describe("#1881 item findings carry their own identity", () => {
     };
     const rows = flattenChecks("https://x/a", "security/sri", [check]);
     for (const r of rows) {
-      expect(r.message.length).toBeLessThanOrEqual(REPORT_LIMITS.maxMediumString);
+      expect(r.message.length).toBeLessThanOrEqual(
+        REPORT_LIMITS.maxMediumString
+      );
       expect(r.message.endsWith(r.locator)).toBe(true);
     }
     expect(rows[0]!.message).not.toBe(rows[1]!.message);
@@ -200,7 +231,7 @@ describe("#1881 item findings carry their own identity", () => {
     const emoji = "\u{1F600}";
     const msg = itemFindingMessage(
       { name: "c", status: "warn", message: `x${emoji.repeat(200)}` },
-      { id: "ID" },
+      { id: "ID" }
     );
     expect(msg.endsWith(": ID")).toBe(true);
     const body = msg.slice(0, -": ID".length);
@@ -217,7 +248,9 @@ describe("#1881 item findings carry their own identity", () => {
       value: "2",
       expected: "0",
     };
-    const [row] = flattenChecks("https://x/a", "security/cookie-flags", [check]);
+    const [row] = flattenChecks("https://x/a", "security/cookie-flags", [
+      check,
+    ]);
     expect(row).toMatchObject({
       locator: "",
       message: "2 cookie(s) missing the Secure flag",
@@ -236,17 +269,24 @@ describe("#1881 item findings carry their own identity", () => {
       items: [{ id: "" }],
     };
     const [row] = flattenChecks("https://x/a", "security/sri", [check]);
-    expect(row!.message).toBe("cross-origin resources without Subresource Integrity");
+    expect(row!.message).toBe(
+      "cross-origin resources without Subresource Integrity"
+    );
     expect(itemFindingMessage(check, { id: "  " })).toBe(row!.message);
     // A message that is nothing but a count reduces to the check name.
-    expect(itemFindingMessage({ name: "sri", status: "warn", message: "26" }, { id: "x" })).toBe(
-      "sri: x",
-    );
+    expect(
+      itemFindingMessage(
+        { name: "sri", status: "warn", message: "26" },
+        { id: "x" }
+      )
+    ).toBe("sri: x");
   });
 
   test("reconstruct restores the parent check's page-level message/value/expected", () => {
     const source = sriCheck(26);
-    const rows = flattenChecks("https://x/a", "security/sri", [source]).map(toRecord);
+    const rows = flattenChecks("https://x/a", "security/sri", [source]).map(
+      toRecord
+    );
     const rebuilt = reconstructPageRuleChecks(rows).get("security/sri")!;
 
     expect(rebuilt.length).toBe(1);
@@ -258,12 +298,16 @@ describe("#1881 item findings carry their own identity", () => {
       expected: "0",
       pageUrl: "https://x/a",
     });
-    expect(rebuilt[0]!.items?.map((i) => i.id)).toEqual(source.items!.map((i) => i.id));
+    expect(rebuilt[0]!.items?.map((i) => i.id)).toEqual(
+      source.items!.map((i) => i.id)
+    );
   });
 
   test("carriedFindingToCheck replays the page-level message, so report grouping does not split", () => {
     const source = sriCheck(26);
-    const rows = flattenChecks("https://x/a", "security/sri", [source]).map(toRecord);
+    const rows = flattenChecks("https://x/a", "security/sri", [source]).map(
+      toRecord
+    );
     const replayed = rows.map((r) =>
       carriedFindingToCheck(
         {
@@ -276,17 +320,19 @@ describe("#1881 item findings carry their own identity", () => {
           expected: r.expected,
           payload: r.payload,
         },
-        r.normalizedUrl,
-      ),
+        r.normalizedUrl
+      )
     );
     // Report grouping keys on (name, status, digit-normalized message); every
     // replayed item check must land in ONE group, as it did pre-#1881.
-    expect(new Set(replayed.map((c) => c.message))).toEqual(new Set([source.message]));
+    expect(new Set(replayed.map((c) => c.message))).toEqual(
+      new Set([source.message])
+    );
     expect(new Set(replayed.map((c) => c.value))).toEqual(new Set(["26"]));
     expect(replayed[0]!.items).toEqual([source.items![0]!]);
   });
 
-  test("an empty-id item still restores its aggregate, even though it lands in a locator-\"\" group", () => {
+  test('an empty-id item still restores its aggregate, even though it lands in a locator-"" group', () => {
     // `m` (not the locator) is the restore marker precisely for this case: an
     // item with id "" flattens to locator "", so a locator-gated restore would
     // leave the reconstructed check holding the ITEM's message.
@@ -298,9 +344,13 @@ describe("#1881 item findings carry their own identity", () => {
       expected: "0",
       items: [{ id: "" }],
     };
-    const rows = flattenChecks("https://x/a", "security/sri", [check]).map(toRecord);
+    const rows = flattenChecks("https://x/a", "security/sri", [check]).map(
+      toRecord
+    );
     expect(rows[0]!.locator).toBe("");
-    expect(reconstructPageRuleChecks(rows).get("security/sri")![0]).toMatchObject({
+    expect(
+      reconstructPageRuleChecks(rows).get("security/sri")![0]
+    ).toMatchObject({
       message: "26 cross-origin resources without Subresource Integrity",
       value: "26",
       expected: "0",
@@ -321,7 +371,9 @@ describe("#1881 item findings carry their own identity", () => {
     const [row] = flattenChecks("https://x/a", "url/slug-keywords", [check]);
     expect(row!.payload).not.toBeNull();
     expect(JSON.parse(row!.payload!).m).toBeUndefined();
-    expect(reconstructPageRuleChecks([toRecord(row!)]).get("url/slug-keywords")![0]).toMatchObject({
+    expect(
+      reconstructPageRuleChecks([toRecord(row!)]).get("url/slug-keywords")![0]
+    ).toMatchObject({
       message: "3 keyword(s) repeated in the slug",
       value: "3",
     });
@@ -341,7 +393,9 @@ describe("#1881 item findings carry their own identity", () => {
       items: [{ id: "https://cdn/x.js" }],
     });
     const flatten = (blob: number) =>
-      flattenChecks("https://x/a", "security/sri", [withBlob("d".repeat(blob))])[0]!;
+      flattenChecks("https://x/a", "security/sri", [
+        withBlob("d".repeat(blob)),
+      ])[0]!;
     // Walk the blob up to the exact boundary where the stash no longer fits.
     const start = REPORT_LIMITS.maxFindingPayload - flatten(0).payload!.length;
     let blob = start;
@@ -351,19 +405,24 @@ describe("#1881 item findings carry their own identity", () => {
       row = flatten(blob);
     }
     const payload = JSON.parse(row.payload!);
-    expect(row.payload!.length).toBeLessThanOrEqual(REPORT_LIMITS.maxFindingPayload);
+    expect(row.payload!.length).toBeLessThanOrEqual(
+      REPORT_LIMITS.maxFindingPayload
+    );
     // Scoring-relevant detail survives; the aggregate is the part that yielded.
     expect(payload.details.additional).toBe(19);
     expect(payload.m).toBeUndefined();
     // And the reader degrades to the row's own columns rather than blanking out.
-    expect(reconstructPageRuleChecks([toRecord(row)]).get("security/sri")![0]).toMatchObject({
-      message: "cross-origin resources without Subresource Integrity: https://cdn/x.js",
+    expect(
+      reconstructPageRuleChecks([toRecord(row)]).get("security/sri")![0]
+    ).toMatchObject({
+      message:
+        "cross-origin resources without Subresource Integrity: https://cdn/x.js",
     });
 
     // One notch smaller and the stash is back — the drop is a cap effect, not a
     // blanket behaviour change.
     expect(JSON.parse(flatten(blob - 4).payload!).m).toBe(
-      "26 cross-origin resources without Subresource Integrity",
+      "26 cross-origin resources without Subresource Integrity"
     );
 
     // The budget only ever removes the STASH. It must never trim items/details
@@ -373,7 +432,9 @@ describe("#1881 item findings carry their own identity", () => {
     // ingest's job.
     const overCap = flatten(REPORT_LIMITS.maxFindingPayload * 2);
     const kept = JSON.parse(overCap.payload!);
-    expect(overCap.payload!.length).toBeGreaterThan(REPORT_LIMITS.maxFindingPayload);
+    expect(overCap.payload!.length).toBeGreaterThan(
+      REPORT_LIMITS.maxFindingPayload
+    );
     expect(kept.m).toBeUndefined();
     expect(kept.details.additional).toBe(19);
     expect(kept.details.blob.length).toBe(REPORT_LIMITS.maxFindingPayload * 2);
@@ -390,17 +451,27 @@ describe("#1881 item findings carry their own identity", () => {
       message: "2 cross-origin resources without Subresource Integrity",
       value: "2",
       items: [
-        { id: "https://cdn/huge.js", snippet: "s".repeat(REPORT_LIMITS.maxFindingPayload * 2) },
+        {
+          id: "https://cdn/huge.js",
+          snippet: "s".repeat(REPORT_LIMITS.maxFindingPayload * 2),
+        },
         { id: "https://cdn/small.js" },
       ],
     };
-    const rows = flattenChecks("https://x/a", "security/sri", [check]).map(toRecord);
+    const rows = flattenChecks("https://x/a", "security/sri", [check]).map(
+      toRecord
+    );
     // The oversized item is over the cap and loses its stash; its sibling keeps
     // one. Reading only group[0] would make the restore depend on row order.
-    expect(rows.map((r) => JSON.parse(r.payload!).m !== undefined)).toEqual([false, true]);
+    expect(rows.map((r) => JSON.parse(r.payload!).m !== undefined)).toEqual([
+      false,
+      true,
+    ]);
 
     for (const order of [rows, [...rows].reverse()]) {
-      expect(reconstructPageRuleChecks(order).get("security/sri")![0]).toMatchObject({
+      expect(
+        reconstructPageRuleChecks(order).get("security/sri")![0]
+      ).toMatchObject({
         message: "2 cross-origin resources without Subresource Integrity",
         value: "2",
       });
@@ -429,7 +500,9 @@ describe("#1881 item findings carry their own identity", () => {
       provenance: "carried",
       state: "open",
     };
-    const rebuilt = reconstructPageRuleChecks([legacy]).get("security/sri")![0]!;
+    const rebuilt = reconstructPageRuleChecks([legacy]).get(
+      "security/sri"
+    )![0]!;
     expect(rebuilt).toMatchObject({
       message: "26 cross-origin resources without Subresource Integrity",
       value: "26",
@@ -447,8 +520,8 @@ describe("#1881 item findings carry their own identity", () => {
           expected: legacy.expected,
           payload: legacy.payload,
         },
-        legacy.normalizedUrl,
-      ),
+        legacy.normalizedUrl
+      )
     ).toMatchObject({
       message: "26 cross-origin resources without Subresource Integrity",
       value: "26",

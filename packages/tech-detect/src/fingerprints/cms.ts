@@ -120,7 +120,10 @@ export const CMS_FINGERPRINTS: TechFingerprint[] = [
     icon: "contentful",
     detectors: [
       // A script URL or package name (`cdn.contentful.com`, `contentful.js`, `/contentful@`), not the word.
-      { type: "script-url", pattern: /(?:^|[/@.])contentful(?:\.(?:com|net)\b|[-.@/]|\.min\.js)/i },
+      {
+        type: "script-url",
+        pattern: /(?:^|[/@.])contentful(?:\.(?:com|net)\b|[-.@/]|\.min\.js)/i,
+      },
       { type: "html", pattern: /ctfassets\.net/i },
       { type: "html", pattern: /images\.ctfassets\.net/i },
     ],

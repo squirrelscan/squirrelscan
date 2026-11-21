@@ -7,13 +7,17 @@
 // via getTextExcludingScripts. This guards that they leave the DOM intact AND
 // that the helper output matches the old "remove then read textContent".
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { keywordStuffingRule } from "../src/content/keyword-stuffing";
 import { readingLevelRule } from "../src/content/reading-level";
-import { getProseTextExcludingCode, getTextExcludingScripts } from "../src/content/text-content";
-import type { ParsedPage, RuleContext } from "../src/types";
+import {
+  getProseTextExcludingCode,
+  getTextExcludingScripts,
+} from "../src/content/text-content";
 
 const HTML = `<html><body>
   <p>${"keyword ".repeat(150)}</p>
@@ -25,7 +29,13 @@ const HTML = `<html><body>
 
 function makeCtx(doc: ReturnType<typeof parseHTML>["document"]): RuleContext {
   return {
-    page: { url: "https://example.com/", html: HTML, statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: HTML,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: { document: doc } as unknown as ParsedPage,
     options: {},
   };
@@ -50,7 +60,9 @@ describe("content rules do not mutate the shared DOM", () => {
     const a = parseHTML(html).document.querySelector("body")!;
     const b = parseHTML(html).document.querySelector("body")!;
 
-    for (const el of b.querySelectorAll("script, style, noscript, code, pre, samp, kbd")) {
+    for (const el of b.querySelectorAll(
+      "script, style, noscript, code, pre, samp, kbd"
+    )) {
       el.remove();
     }
 
@@ -59,7 +71,9 @@ describe("content rules do not mutate the shared DOM", () => {
     // neighbours and the caller scans the result for character sequences. Ignoring
     // the inserted newlines, no surviving text is lost, gained or reordered.
     const stripNewlines = (s: string) => s.replaceAll("\n", "");
-    expect(stripNewlines(getProseTextExcludingCode(a))).toBe(stripNewlines(b.textContent || ""));
+    expect(stripNewlines(getProseTextExcludingCode(a))).toBe(
+      stripNewlines(b.textContent || "")
+    );
     expect(getProseTextExcludingCode(a)).toContain("\n");
     // And it leaves the DOM it read intact.
     expect(a.querySelectorAll("code, pre, samp, kbd").length).toBe(4);

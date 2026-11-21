@@ -5,7 +5,11 @@
 // references rewritten as `{"@id": …}`. Nodes the site never gave an `@id` get
 // a generated, stable one derived from the site URL.
 
-import type { EntityMap, EntityMapJsonLd, EntityMapNode } from "@squirrelscan/core-contracts/entity-map";
+import type {
+  EntityMap,
+  EntityMapJsonLd,
+  EntityMapNode,
+} from "@squirrelscan/core-contracts/entity-map";
 
 /**
  * FNV-1a over the node key. Only needs to be stable and collision-resistant
@@ -53,7 +57,11 @@ function publishedId(node: EntityMapNode, siteUrl: string): string {
 }
 
 /** Dangling targets are not nodes; their key still carries the raw `@id`. */
-function targetId(targetKey: string, byKey: Map<string, EntityMapNode>, siteUrl: string): string {
+function targetId(
+  targetKey: string,
+  byKey: Map<string, EntityMapNode>,
+  siteUrl: string
+): string {
   const node = byKey.get(targetKey);
   if (node) return publishedId(node, siteUrl);
   return targetKey.startsWith("id:") ? targetKey.slice(3) : targetKey;
@@ -94,12 +102,22 @@ export function toJsonLd(map: EntityMap): EntityMapJsonLd {
       "@type": node.types.length === 1 ? node.types[0] : node.types,
     };
 
-    const { name, url, logo, image, sameAs, telephone, email, address, description } =
-      node.properties;
+    const {
+      name,
+      url,
+      logo,
+      image,
+      sameAs,
+      telephone,
+      email,
+      address,
+      description,
+    } = node.properties;
     if (name !== undefined) member.name = name;
     if (url !== undefined) member.url = url;
     if (logo !== undefined) member.logo = logo;
-    if (image !== undefined) member.image = image.length === 1 ? image[0] : image;
+    if (image !== undefined)
+      member.image = image.length === 1 ? image[0] : image;
     if (sameAs !== undefined) member.sameAs = sameAs;
     if (telephone !== undefined) member.telephone = telephone;
     if (email !== undefined) member.email = email;

@@ -179,17 +179,22 @@ function credentialParamKey(name: string): string {
   return key.replace(/[-_.]/g, "");
 }
 
-const CREDENTIAL_PARAM_SET = new Set(CREDENTIAL_PARAM_NAMES.map(credentialParamKey));
+const CREDENTIAL_PARAM_SET = new Set(
+  CREDENTIAL_PARAM_NAMES.map(credentialParamKey)
+);
 
 /** A JSON Web Token as a query value, whatever the parameter is called. */
-const JWT_VALUE = /^eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
+const JWT_VALUE =
+  /^eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
 
 /**
  * True for a query parameter that carries a credential, by its name (matched
  * as {@link credentialParamKey} describes) or a JWT value.
  */
 export function isCredentialParam(name: string, value = ""): boolean {
-  return CREDENTIAL_PARAM_SET.has(credentialParamKey(name)) || JWT_VALUE.test(value);
+  return (
+    CREDENTIAL_PARAM_SET.has(credentialParamKey(name)) || JWT_VALUE.test(value)
+  );
 }
 
 /** A session id in the URL, anywhere. */
@@ -230,7 +235,8 @@ const CREDENTIAL_CONTEXT_WORDS = new Set([
  * name, not a word of it. A static document's (`.html`, `.pdf`) still counts,
  * so `/how-to-verify.html` keeps its verdict.
  */
-const SCRIPT_EXTENSION = /\.(?:aspx|asp|ashx|php|jsp|jspx|do|action|cfm|cgi|pl)$/i;
+const SCRIPT_EXTENSION =
+  /\.(?:aspx|asp|ashx|php|jsp|jspx|do|action|cfm|cgi|pl)$/i;
 
 function words(text: string): string[] {
   return text
@@ -244,7 +250,12 @@ function words(text: string): string[] {
 /** `out2` as `out`. A backward scan: `/\d+$/` retries across a long digit run (#779). */
 function withoutTrailingDigits(word: string): string {
   let end = word.length;
-  while (end > 0 && word.charCodeAt(end - 1) >= 48 && word.charCodeAt(end - 1) <= 57) end--;
+  while (
+    end > 0 &&
+    word.charCodeAt(end - 1) >= 48 &&
+    word.charCodeAt(end - 1) <= 57
+  )
+    end--;
   return word.slice(0, end);
 }
 
@@ -262,9 +273,15 @@ function decode(text: string): string | null {
  * Slugs, UUIDs and campaign names have separators.
  */
 function looksLikeAToken(value: string): boolean {
-  if (/^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/.test(value)) return true;
+  if (/^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/.test(value))
+    return true;
   if (/^[a-f0-9]{16,}$/i.test(value)) return true;
-  if (/^[A-Za-z0-9]{20,}$/.test(value) && /[0-9]/.test(value) && /[A-Za-z]/.test(value)) return true;
+  if (
+    /^[A-Za-z0-9]{20,}$/.test(value) &&
+    /[0-9]/.test(value) &&
+    /[A-Za-z]/.test(value)
+  )
+    return true;
   return (
     /^[A-Za-z0-9_-]{20,}={0,2}$/.test(value) &&
     /[0-9]/.test(value) &&
@@ -280,7 +297,7 @@ function looksLikeAToken(value: string): boolean {
 function hasActionWords(
   parts: string[],
   inQuery: boolean,
-  reach = inQuery ? 1 : parts.length,
+  reach = inQuery ? 1 : parts.length
 ): boolean {
   for (let i = 0; i < parts.length; i++) {
     const word = parts[i]!;
@@ -312,7 +329,10 @@ function fragmentCarriesCredential(hash: string): boolean {
   for (const [rawKey, rawValue] of new URLSearchParams(fragment)) {
     const key = rawKey.toLowerCase();
     const keyWords = words(rawKey);
-    if (SECRET_KEYS.has(key) || keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))) {
+    if (
+      SECRET_KEYS.has(key) ||
+      keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))
+    ) {
       return true;
     }
     if (isCredentialParam(rawKey) || looksLikeAToken(rawValue)) return true;
@@ -367,7 +387,9 @@ export function looksLikeAnAction(url: string): boolean {
         const value = param.slice(equals + 1);
         if (
           isCredentialParam(key, value) ||
-          words(key).some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))
+          words(key).some(
+            (w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w)
+          )
         ) {
           return true;
         }
@@ -383,13 +405,17 @@ export function looksLikeAnAction(url: string): boolean {
     const keyWords = words(rawKey);
     const valueWords = words(rawValue);
     allWords.push(...keyWords, ...valueWords);
-    if (SECRET_KEYS.has(key) || keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))) {
+    if (
+      SECRET_KEYS.has(key) ||
+      keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))
+    ) {
       return true;
     }
     if (isCredentialParam(rawKey)) return true;
     // A JWT value (isCredentialParam's other half) is a token here too.
     if (looksLikeAToken(rawKey) || looksLikeAToken(rawValue)) return true;
-    if (hasActionWords(keyWords, true) || hasActionWords(valueWords, true)) return true;
+    if (hasActionWords(keyWords, true) || hasActionWords(valueWords, true))
+      return true;
   }
   // A credential in the fragment (an OAuth implicit-flow redirect,
   // `#access_token=…&token_type=bearer`) is never sent with a request, but the
@@ -398,7 +424,11 @@ export function looksLikeAnAction(url: string): boolean {
   // A token in the path is a credential when the URL says so; a bare id
   // (`/posts/<uuid>`) is still a page. A JWT is always a credential.
   if (pathTokens.some((t) => t.includes("."))) return true;
-  if (pathTokens.length > 0 && allWords.some((w) => CREDENTIAL_CONTEXT_WORDS.has(w))) return true;
+  if (
+    pathTokens.length > 0 &&
+    allWords.some((w) => CREDENTIAL_CONTEXT_WORDS.has(w))
+  )
+    return true;
   return false;
 }
 
@@ -416,7 +446,10 @@ const PLAIN_ACTION_TEXT =
  * rel=nofollow on any action text ("Remove", "Buy now"). Without nofollow,
  * "Buy now" or "Subscribe" on a product or newsletter page is still a page.
  */
-export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): boolean {
+export function linkTextLooksLikeAnAction(
+  text: string,
+  nofollow: boolean
+): boolean {
   const label = text.trim().replace(/\s+/g, " ");
   if (label === "") return false;
   if (nofollow && ACTION_TEXT.test(label)) return true;
@@ -428,9 +461,37 @@ export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): bool
  * are also top-level domains.
  */
 const ASSET_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp", "tif", "tiff",
-  "css", "js", "mjs", "json", "xml", "txt", "html", "htm", "pdf",
-  "woff", "woff2", "ttf", "otf", "eot", "mp4", "webm", "mp3", "wav", "ogg", "gz",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "avif",
+  "svg",
+  "ico",
+  "bmp",
+  "tif",
+  "tiff",
+  "css",
+  "js",
+  "mjs",
+  "json",
+  "xml",
+  "txt",
+  "html",
+  "htm",
+  "pdf",
+  "woff",
+  "woff2",
+  "ttf",
+  "otf",
+  "eot",
+  "mp4",
+  "webm",
+  "mp3",
+  "wav",
+  "ogg",
+  "gz",
 ]);
 
 /**
@@ -441,7 +502,9 @@ const ASSET_EXTENSIONS = new Set([
  * kept, and so are a handle (`/@writer`) and a version (`pkg@1.2.3`).
  */
 function containsAnEmail(value: string): boolean {
-  for (const match of value.matchAll(/[^\s@]@((?:[\p{L}\p{N}-]+\.)+[\p{L}\p{N}-]+)/giu)) {
+  for (const match of value.matchAll(
+    /[^\s@]@((?:[\p{L}\p{N}-]+\.)+[\p{L}\p{N}-]+)/giu
+  )) {
     const labels = match[1]!.split(".");
     const type = labels.at(-1)!.toLowerCase();
     if (ASSET_EXTENSIONS.has(type)) {
@@ -457,10 +520,19 @@ function containsAnEmail(value: string): boolean {
 
 /** A UUID, or a value of 8+ characters mixing letters and digits that is not a file name. */
 function looksLikeAnId(value: string): boolean {
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return true;
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value
+    )
+  )
+    return true;
   if (/\.[a-z0-9]{2,5}$/i.test(value)) return false;
   // A slug with a word in it (`top-10-tips`, `iphone-15-pro`) names a page.
-  if (/[-_]/.test(value) && value.split(/[-_]/).some((part) => /^[a-z]{3,}$/i.test(part))) return false;
+  if (
+    /[-_]/.test(value) &&
+    value.split(/[-_]/).some((part) => /^[a-z]{3,}$/i.test(part))
+  )
+    return false;
   return value.length >= 8 && /[0-9]/.test(value) && /[a-z]/i.test(value);
 }
 
@@ -491,8 +563,11 @@ export function maskLinkTokens(url: string): string {
     })
     .join("/");
   const keys = [...new Set(parsed.searchParams.keys())].map((key) =>
-    key.length > 40 || secret(key) ? "…" : encodeURIComponent(key),
+    key.length > 40 || secret(key) ? "…" : encodeURIComponent(key)
   );
-  const query = keys.length > 0 ? `?${[...new Set(keys)].map((k) => `${k}=…`).join("&")}` : "";
+  const query =
+    keys.length > 0
+      ? `?${[...new Set(keys)].map((k) => `${k}=…`).join("&")}`
+      : "";
   return `${parsed.protocol}//${parsed.host}${path}${query}`;
 }

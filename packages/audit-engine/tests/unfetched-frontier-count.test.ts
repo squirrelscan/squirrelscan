@@ -2,10 +2,9 @@
 // when it stopped. Only `pending` frontier rows count: a fetched, failed,
 // skipped (scope, robots) or in-flight URL is not one.
 
+import { SQLiteStorage, type CrawlStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { SQLiteStorage, type CrawlStorage } from "@squirrelscan/crawler";
 
 import { unfetchedFrontierCount } from "../src";
 
@@ -38,7 +37,9 @@ async function crawlWith(rows: Partial<Record<Status, number>>) {
         config: {} as never,
         stats: STATS,
       });
-      for (const [status, n] of Object.entries(rows) as Array<[Status, number]>) {
+      for (const [status, n] of Object.entries(rows) as Array<
+        [Status, number]
+      >) {
         for (let i = 0; i < n; i++) {
           yield* storage.upsertFrontier(crawlId, {
             normalizedUrl: `${BASE}/${status}/${i}`,
@@ -72,13 +73,19 @@ async function crawlWith(rows: Partial<Record<Status, number>>) {
         retryCount: 0,
       });
       return yield* unfetchedFrontierCount(storage, crawlId);
-    }),
+    })
   );
 }
 
 describe("unfetchedFrontierCount", () => {
   test("counts only the URLs still queued", async () => {
-    const count = await crawlWith({ pending: 7, fetching: 2, done: 20, failed: 3, skipped: 5 });
+    const count = await crawlWith({
+      pending: 7,
+      fetching: 2,
+      done: 20,
+      failed: 3,
+      skipped: 5,
+    });
     expect(count).toBe(7);
   });
 
@@ -90,6 +97,8 @@ describe("unfetchedFrontierCount", () => {
     const broken = {
       getPendingCount: () => Effect.fail(new Error("db gone")),
     } as unknown as CrawlStorage;
-    expect(await Effect.runPromise(unfetchedFrontierCount(broken, "crawl"))).toBe(0);
+    expect(
+      await Effect.runPromise(unfetchedFrontierCount(broken, "crawl"))
+    ).toBe(0);
   });
 });

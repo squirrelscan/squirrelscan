@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { pageTypeSkip, skippablePageType } from "../shared/page-type";
 
 /** Page types whose short title or description is normal (pub#841). */
@@ -41,7 +42,9 @@ export const metaTitleRule: Rule = {
     weight: 8,
     optionsSchema,
     // The old name carried both directions (pub#1765).
-    supersededChecks: { "meta-title": ["meta-title-too-short", "meta-title-too-long"] },
+    supersededChecks: {
+      "meta-title": ["meta-title-too-short", "meta-title-too-long"],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -74,16 +77,23 @@ export const metaTitleRule: Rule = {
     // ruleId|checkName: a fixed title resolves its old finding only when the
     // same check name reports it clean (pub#1765).
     const label = (bound: "under" | "over", limit: number) => [
-      { id: ctx.page.url, label: `${title.slice(0, 50)} (${len} chars, ${bound} ${limit})` },
+      {
+        id: ctx.page.url,
+        label: `${title.slice(0, 50)} (${len} chars, ${bound} ${limit})`,
+      },
     ];
     const expected = `${opts.min_length}-${opts.max_length} characters`;
     const tooShort = len < opts.min_length;
     const tooLong = len > opts.max_length;
-    const skipType = tooShort ? skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES) : null;
+    const skipType = tooShort
+      ? skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES)
+      : null;
 
     if (tooShort && skipType !== null) {
       // A contact or legal page is not a search target worth a long title (pub#841). Too long still applies.
-      checks.push(pageTypeSkip("meta-title-too-short", skipType, "The title length floor"));
+      checks.push(
+        pageTypeSkip("meta-title-too-short", skipType, "The title length floor")
+      );
     } else if (tooShort) {
       checks.push({
         name: "meta-title-too-short",
@@ -94,7 +104,12 @@ export const metaTitleRule: Rule = {
         items: label("under", opts.min_length),
       });
     } else {
-      checks.push({ name: "meta-title-too-short", status: "pass", message: "Title is long enough", value: title });
+      checks.push({
+        name: "meta-title-too-short",
+        status: "pass",
+        message: "Title is long enough",
+        value: title,
+      });
     }
     if (tooLong) {
       checks.push({
@@ -106,7 +121,12 @@ export const metaTitleRule: Rule = {
         items: label("over", opts.max_length),
       });
     } else {
-      checks.push({ name: "meta-title-too-long", status: "pass", message: "Title is short enough", value: title });
+      checks.push({
+        name: "meta-title-too-long",
+        status: "pass",
+        message: "Title is short enough",
+        value: title,
+      });
     }
 
     return { checks };

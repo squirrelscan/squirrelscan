@@ -17,7 +17,10 @@ import type { EntityMap, EntityMapPage } from "@squirrelscan/core-contracts";
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** `pages` with each variant replaced by its canonical page, de-duplicated and sorted like the builder's. */
-function foldPages(pages: readonly string[], variantOf: ReadonlyMap<string, string>): string[] {
+function foldPages(
+  pages: readonly string[],
+  variantOf: ReadonlyMap<string, string>
+): string[] {
   return [...new Set(pages.map((p) => variantOf.get(p) ?? p))].sort(compare);
 }
 
@@ -25,13 +28,24 @@ function foldPages(pages: readonly string[], variantOf: ReadonlyMap<string, stri
  * A copy of `map` with every page in `variantOf` (variant -> canonical) counted under its canonical page.
  * Returns `map` itself when there is nothing to fold, so a site with no variants is byte-identical.
  */
-export function foldEntityMapVariants(map: EntityMap, variantOf: ReadonlyMap<string, string>): EntityMap {
-  if (variantOf.size === 0 || !map.pages.some((p) => variantOf.has(p.url))) return map;
+export function foldEntityMapVariants(
+  map: EntityMap,
+  variantOf: ReadonlyMap<string, string>
+): EntityMap {
+  if (variantOf.size === 0 || !map.pages.some((p) => variantOf.has(p.url)))
+    return map;
 
-  const byUrl = new Map<string, { declares: Set<string>; references: Set<string>; entityCount: number }>();
+  const byUrl = new Map<
+    string,
+    { declares: Set<string>; references: Set<string>; entityCount: number }
+  >();
   for (const page of map.pages) {
     const url = variantOf.get(page.url) ?? page.url;
-    const into = byUrl.get(url) ?? { declares: new Set<string>(), references: new Set<string>(), entityCount: 0 };
+    const into = byUrl.get(url) ?? {
+      declares: new Set<string>(),
+      references: new Set<string>(),
+      entityCount: 0,
+    };
     for (const key of page.declares) into.declares.add(key);
     for (const key of page.references ?? []) into.references.add(key);
     // The canonical page and its variants carry the same template's entities; the larger count is the page's.
@@ -44,7 +58,9 @@ export function foldEntityMapVariants(map: EntityMap, variantOf: ReadonlyMap<str
       url,
       declares: [...page.declares].sort(compare),
       // A key the page declares is not also a reference.
-      references: [...page.references].filter((key) => !page.declares.has(key)).sort(compare),
+      references: [...page.references]
+        .filter((key) => !page.declares.has(key))
+        .sort(compare),
       entityCount: page.entityCount,
     }));
 
@@ -60,10 +76,16 @@ export function foldEntityMapVariants(map: EntityMap, variantOf: ReadonlyMap<str
       pages: foldPages(node.pages, variantOf),
       conflicts: node.conflicts.map((conflict) => ({
         ...conflict,
-        values: conflict.values.map((v) => ({ ...v, pages: foldPages(v.pages, variantOf) })),
+        values: conflict.values.map((v) => ({
+          ...v,
+          pages: foldPages(v.pages, variantOf),
+        })),
       })),
     })),
-    edges: map.edges.map((edge) => ({ ...edge, pages: foldPages(edge.pages, variantOf) })),
+    edges: map.edges.map((edge) => ({
+      ...edge,
+      pages: foldPages(edge.pages, variantOf),
+    })),
     pages,
   };
 }

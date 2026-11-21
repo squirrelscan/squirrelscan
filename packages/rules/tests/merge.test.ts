@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { mergeRuleRunResult } from "../src/merge";
+
 import type { CheckResult, RuleMeta, RuleRunResult } from "../src/types";
+
+import { mergeRuleRunResult } from "../src/merge";
 
 // The helper never reads check/meta internals — minimal cast fixtures are enough.
 const check = (id: string): CheckResult => ({ id }) as unknown as CheckResult;
@@ -80,7 +82,8 @@ describe("mergeRuleRunResult", () => {
     for (const p of pages) {
       const r = rr("r", p.map(check));
       const e = oldMap.get("r");
-      if (e) oldMap.set("r", { meta: e.meta, checks: [...e.checks, ...r.checks] });
+      if (e)
+        oldMap.set("r", { meta: e.meta, checks: [...e.checks, ...r.checks] });
       // First insert intentionally stores `r` without copying — faithfully
       // reproducing the OLD behaviour we're asserting parity against (not a
       // missing copy; the new helper deliberately copies, see test below).
@@ -89,7 +92,8 @@ describe("mergeRuleRunResult", () => {
 
     // new behavior
     const newMap = new Map<string, RuleRunResult>();
-    for (const p of pages) mergeRuleRunResult(newMap, "r", rr("r", p.map(check)));
+    for (const p of pages)
+      mergeRuleRunResult(newMap, "r", rr("r", p.map(check)));
 
     expect(ids(newMap.get("r"))).toEqual(ids(oldMap.get("r")));
     expect(ids(newMap.get("r"))).toEqual(["a", "b", "c", "d", "e", "f"]);

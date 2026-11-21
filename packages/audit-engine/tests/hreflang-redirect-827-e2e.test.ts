@@ -4,14 +4,18 @@
 // the source URL, so i18n/hreflang compared the self reference with the
 // pre-redirect URL and reported "No self-referencing hreflang found".
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -29,18 +33,23 @@ function serve(): string {
       const page = (hreflang: string) =>
         new Response(
           `<!doctype html><html lang="en"><head><title>Fixture page</title>${hreflang}</head><body><h1>Fixture</h1><a href="/en/old-slug">Old slug</a> <a href="/no-self">No self</a></body></html>`,
-          { headers: { "content-type": "text/html" } },
+          { headers: { "content-type": "text/html" } }
         );
       if (url.pathname === "/en/old-slug") {
-        return new Response(null, { status: 301, headers: { location: "/en/new-slug" } });
+        return new Response(null, {
+          status: 301,
+          headers: { location: "/en/new-slug" },
+        });
       }
       if (url.pathname === "/en/new-slug") {
         return page(
-          `<link rel="alternate" hreflang="en" href="${B}/en/new-slug"><link rel="alternate" hreflang="de" href="${B}/de/neuer-slug">`,
+          `<link rel="alternate" hreflang="en" href="${B}/en/new-slug"><link rel="alternate" hreflang="de" href="${B}/de/neuer-slug">`
         );
       }
       if (url.pathname === "/no-self") {
-        return page(`<link rel="alternate" hreflang="de" href="${B}/de/anders">`);
+        return page(
+          `<link rel="alternate" hreflang="de" href="${B}/de/anders">`
+        );
       }
       return page("");
     },
@@ -73,9 +82,11 @@ async function audit(engine: "v1" | "v2") {
         incremental: false,
         useCacheControl: false,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const storage = crawler.storage as SQLiteStorage;
   const ran = await Effect.runPromise(
     Effect.gen(function* () {
@@ -83,15 +94,29 @@ async function audit(engine: "v1" | "v2") {
       if (engine === "v1") {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, pre.assets);
+        return yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          pre.assets
+        );
       }
       return yield* runStreamingRules(storage, crawlId, CONFIG, pre.assets);
-    }) as unknown as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
+    }) as unknown as Effect.Effect<
+      { ruleResultsMap: Map<string, { checks: CheckResult[] }> },
+      never,
+      never
+    >
   );
-  const checks = (ran.ruleResultsMap.get("i18n/hreflang")?.checks ?? []) as CheckResult[];
+  const checks = (ran.ruleResultsMap.get("i18n/hreflang")?.checks ??
+    []) as CheckResult[];
   /** Check names on the page at `path`. */
   const on = (path: string) =>
-    checks.filter((c) => c.pageUrl === `${origin}${path}`).map((c) => `${c.name}:${c.status}`).sort();
+    checks
+      .filter((c) => c.pageUrl === `${origin}${path}`)
+      .map((c) => `${c.name}:${c.status}`)
+      .sort();
   return { on };
 }
 
@@ -103,7 +128,10 @@ for (const engine of ["v1", "v2"] as const) {
       expect(on("/en/old-slug")).toEqual([]);
       // The target is audited as itself and references itself; it has no x-default, which is
       // a real finding about that markup.
-      expect(on("/en/new-slug")).toEqual(["hreflang-xdefault:warn", "hreflang:pass"]);
+      expect(on("/en/new-slug")).toEqual([
+        "hreflang-xdefault:warn",
+        "hreflang:pass",
+      ]);
       // A 200 page with no self reference still warns.
       expect(on("/no-self")).toContain("hreflang-self:warn");
     });

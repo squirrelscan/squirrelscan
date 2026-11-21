@@ -21,6 +21,7 @@
 // metadata addresses, and always on the address that was vetted.
 
 import type { CheckItem, CheckResult } from "@squirrelscan/core-contracts";
+
 import { normalizeUrl } from "@squirrelscan/utils";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
@@ -36,6 +37,15 @@ import {
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 
+import type { ProbeBudget } from "../probe-budget";
+import type {
+  ExternalLinkCheckData,
+  Rule,
+  RuleContext,
+  RuleResult,
+  SiteData,
+} from "../types";
+
 import {
   classifyHost,
   isLocalOnlyName,
@@ -46,9 +56,12 @@ import {
   siteOriginOf,
   toSample,
 } from "../content/dev-leakage";
-import type { ProbeBudget } from "../probe-budget";
-import { fieldSelector, fieldSnippet, formSelector, inputType } from "../shared/form-fields";
-import type { ExternalLinkCheckData, Rule, RuleContext, RuleResult, SiteData } from "../types";
+import {
+  fieldSelector,
+  fieldSnippet,
+  formSelector,
+  inputType,
+} from "../shared/form-fields";
 
 /** Per-request cap, on top of the shared budget's deadline. */
 const PROBE_TIMEOUT_MS = 10_000;
@@ -63,8 +76,10 @@ const FORMACTION_SUBMITTERS =
 const REASON_PASSIVE = "passive probing sends no requests";
 const REASON_BUDGET = "probe budget exhausted";
 const REASON_EXTERNAL_OFF = "external link checking is off";
-const REASON_REFUSED = "its address is private, loopback or link-local, or it is off the site";
-const REASON_PLAIN_HTTP = "a plain-http action on a page the crawl did not fetch is not probed";
+const REASON_REFUSED =
+  "its address is private, loopback or link-local, or it is off the site";
+const REASON_PLAIN_HTTP =
+  "a plain-http action on a page the crawl did not fetch is not probed";
 const REASON_PROBE_CAP = "probe cap reached";
 
 /**
@@ -112,7 +127,7 @@ function endpointOf(href: string): string {
 function probeWithinQuota(
   quota: ProbeQuota,
   href: string,
-  probe: () => Promise<Reach>,
+  probe: () => Promise<Reach>
 ): Promise<Reach> {
   const endpoint = endpointOf(href);
   const known = quota.byEndpoint.get(endpoint);
@@ -162,7 +177,12 @@ type Reach =
 type Target =
   | { kind: "skip" }
   | { kind: "mailto"; href: string }
-  | { kind: "non-production"; href: string; host: string; classification: string }
+  | {
+      kind: "non-production";
+      href: string;
+      host: string;
+      classification: string;
+    }
   | { kind: "reach"; href: string; firstParty: boolean; plainHttp: boolean };
 
 interface ActionSource {
@@ -195,7 +215,9 @@ function selectorSample(raw: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/[()]/g, (c) => (c === "(" ? "%28" : "%29"));
-  return flat.length > MAX_LABEL_PART ? `${flat.slice(0, MAX_LABEL_PART - 1)}…` : flat;
+  return flat.length > MAX_LABEL_PART
+    ? `${flat.slice(0, MAX_LABEL_PART - 1)}…`
+    : flat;
 }
 
 /** One finding bucket: a list of items, each with the pages it was seen on. */
@@ -205,7 +227,12 @@ class Bucket {
     { label: string; pages: Set<string>; meta: Record<string, unknown> }
   >();
 
-  add(key: string, label: string, page: string, meta: Record<string, unknown> = {}): void {
+  add(
+    key: string,
+    label: string,
+    page: string,
+    meta: Record<string, unknown> = {}
+  ): void {
     const existing = this.items.get(key);
     if (existing) {
       existing.pages.add(page);
@@ -259,18 +286,23 @@ function isNameable(el: Element): boolean {
 function reachOf(sent: Sent, firstParty: boolean, fromProbe = false): Reach {
   if (sent.refused) return { kind: "unchecked", reason: REASON_REFUSED };
   if (sent.status === null) {
-    return { kind: "unreachable", detail: `error: ${toSample(sent.error ?? "unknown")}` };
+    return {
+      kind: "unreachable",
+      detail: `error: ${toSample(sent.error ?? "unknown")}`,
+    };
   }
   if (sent.challenge || isRateLimitedResponse(sent.status, sent.retryAfter)) {
     return { kind: "unverified", detail: `HTTP ${sent.status}` };
   }
   if (sent.status === 404 || sent.status === 410) {
-    if (!firstParty) return { kind: "unreachable", detail: `HTTP ${sent.status}` };
+    if (!firstParty)
+      return { kind: "unreachable", detail: `HTTP ${sent.status}` };
     return fromProbe
       ? { kind: "probe-missing", status: sent.status }
       : { kind: "dead", status: sent.status };
   }
-  if (sent.status >= 500) return { kind: "unreachable", detail: `HTTP ${sent.status}` };
+  if (sent.status >= 500)
+    return { kind: "unreachable", detail: `HTTP ${sent.status}` };
   // 401, 403, 405 and 501 mean the endpoint exists and refuses this probe. Not broken.
   return { kind: "ok" };
 }
@@ -282,14 +314,24 @@ function reachOf(sent: Sent, firstParty: boolean, fromProbe = false): Reach {
 type Locality = "network" | "preview" | "production";
 
 /** Tunnels to a developer's own machine: the site behind them is local. */
-const TUNNEL_SUFFIXES = ["ngrok.io", "ngrok.app", "ngrok-free.app", "trycloudflare.com"];
+const TUNNEL_SUFFIXES = [
+  "ngrok.io",
+  "ngrok.app",
+  "ngrok-free.app",
+  "trycloudflare.com",
+];
 
 function localityOf(host: string | null): Locality {
   if (!host) return "production";
   // pub#813: a local-only name (`myapp.test`, `box.local`) is the user's own
   // machine or network too.
-  if (isLoopbackHost(host) || isPrivateIpHost(host) || isLocalOnlyName(host)) return "network";
-  if (TUNNEL_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) {
+  if (isLoopbackHost(host) || isPrivateIpHost(host) || isLocalOnlyName(host))
+    return "network";
+  if (
+    TUNNEL_SUFFIXES.some(
+      (suffix) => host === suffix || host.endsWith(`.${suffix}`)
+    )
+  ) {
     return "network";
   }
   return isNonProductionSeedHost(host) ? "preview" : "production";
@@ -305,7 +347,8 @@ function localityOf(host: string | null): Locality {
  */
 function devHostExpected(kind: string, locality: Locality): boolean {
   if (locality === "network") return true;
-  if (locality === "preview") return kind === "preview-host" || kind === "dev-subdomain";
+  if (locality === "preview")
+    return kind === "preview-host" || kind === "dev-subdomain";
   return false;
 }
 
@@ -315,7 +358,7 @@ function targetOf(
   pageUrl: string,
   siteHostName: string | null,
   siteIsHttps: boolean,
-  siteLocality: Locality,
+  siteLocality: Locality
 ): Target {
   const value = raw.trim();
   if (/^mailto:/i.test(value)) return { kind: "mailto", href: value };
@@ -327,7 +370,8 @@ function targetOf(
     return { kind: "skip" };
   }
   // tel:, sms:, data: and friends never reach a handler this rule can judge.
-  if (resolved.protocol !== "https:" && resolved.protocol !== "http:") return { kind: "skip" };
+  if (resolved.protocol !== "https:" && resolved.protocol !== "http:")
+    return { kind: "skip" };
   resolved.hash = "";
 
   const host = resolved.hostname.toLowerCase().replace(/^\[|\]$/g, "");
@@ -343,7 +387,12 @@ function targetOf(
   // A dev host the site is not itself on is reported without a request: probing
   // localhost or a staging host from the audit would be a request to the wrong place.
   if (dev) {
-    return { kind: "non-production", href: resolved.href, host, classification: dev.kind };
+    return {
+      kind: "non-production",
+      href: resolved.href,
+      host,
+      classification: dev.kind,
+    };
   }
   // A plain-http action from an https site is an insecure submission:
   // security/form-https reports it, and this rule never sends it a request.
@@ -366,11 +415,13 @@ interface ProbeEgress {
 function probeEgressFor(
   siteHostName: string | null,
   siteOrigin: string | null,
-  resolveHost: ResolveHost,
+  resolveHost: ResolveHost
 ): ProbeEgress {
   const resolve = memoizeResolveHost(resolveHost);
-  const sameSite = (host: string) => siteHostName !== null && isFirstParty(host, siteHostName);
-  const sitePrivate = siteHostName !== null && isNonPublicHostname(siteHostName);
+  const sameSite = (host: string) =>
+    siteHostName !== null && isFirstParty(host, siteHostName);
+  const sitePrivate =
+    siteHostName !== null && isNonPublicHostname(siteHostName);
   return {
     // The site's own host and subdomains only. Private addresses only when the
     // site itself is private, or for the site's own origin (host and port), which
@@ -379,7 +430,8 @@ function probeEgressFor(
     // probe at the auditor's network. Never link-local or metadata addresses.
     firstParty: {
       allowPrivateNetwork: sitePrivate,
-      allowPrivateTarget: (url) => siteOrigin !== null && url.origin === siteOrigin,
+      allowPrivateTarget: (url) =>
+        siteOrigin !== null && url.origin === siteOrigin,
       allowHost: sameSite,
       resolve,
     },
@@ -393,7 +445,7 @@ async function send(
   budget: ProbeBudget,
   url: string,
   method: Method,
-  egress: EgressPolicy,
+  egress: EgressPolicy
 ): Promise<Sent | null> {
   if (!budget.allows("quiet")) return null;
   // Aborted once the request is done (#766): cancelling a body does not close
@@ -468,14 +520,19 @@ async function probeReach(
   budget: ProbeBudget,
   url: string,
   firstParty: boolean,
-  egress: EgressPolicy,
+  egress: EgressPolicy
 ): Promise<Reach> {
   const head = await send(budget, url, "HEAD", egress);
-  if (head === null) return { kind: "unchecked", reason: refusalReason(budget) };
+  if (head === null)
+    return { kind: "unchecked", reason: refusalReason(budget) };
   let sent = head;
-  if (!head.refused && (head.status === null || head.status === 405 || head.status === 501)) {
+  if (
+    !head.refused &&
+    (head.status === null || head.status === 405 || head.status === 501)
+  ) {
     const get = await send(budget, url, "GET", egress);
-    if (get === null) return { kind: "unchecked", reason: refusalReason(budget) };
+    if (get === null)
+      return { kind: "unchecked", reason: refusalReason(budget) };
     sent = get;
   }
   return reachOf(sent, firstParty, true);
@@ -530,9 +587,11 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
       }
       const egress = probeEgressFor(siteHostName, siteOrigin, resolveHost);
       const crawled = new Map<string, number>();
-      for (const page of site.pages) crawled.set(normalizeUrl(page.url), page.statusCode);
+      for (const page of site.pages)
+        crawled.set(normalizeUrl(page.url), page.statusCode);
       const external = new Map<string, ExternalLinkCheckData>();
-      for (const link of site.externalLinks ?? []) external.set(normalizeUrl(link.href), link);
+      for (const link of site.externalLinks ?? [])
+        external.set(normalizeUrl(link.href), link);
 
       // Pass 1: read every page's DOM for forms, unnamed controls and action sources.
       let formCount = 0;
@@ -557,12 +616,14 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
           if (attr !== null) return byId.get(attr) ?? null;
           return el.closest("form");
         };
-        const selectorOf = (form: Element): string => formSelector(form, forms.indexOf(form));
+        const selectorOf = (form: Element): string =>
+          formSelector(form, forms.indexOf(form));
 
         const realAction = new Map<Element, string>();
         for (const form of forms) {
           const raw = form.getAttribute("action");
-          if (raw !== null && hasRealAction(raw)) realAction.set(form, raw.trim());
+          if (raw !== null && hasRealAction(raw))
+            realAction.set(form, raw.trim());
         }
 
         for (const el of doc.querySelectorAll("input, select, textarea")) {
@@ -581,7 +642,12 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
         }
 
         for (const [form, raw] of realAction) {
-          sources.push({ page: pageUrl, form: selectorOf(form), raw, attribute: "action" });
+          sources.push({
+            page: pageUrl,
+            form: selectorOf(form),
+            raw,
+            attribute: "action",
+          });
         }
         for (const el of doc.querySelectorAll(FORMACTION_SUBMITTERS)) {
           const raw = el.getAttribute("formaction");
@@ -607,19 +673,29 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
       const unchecked = new Bucket();
       const uncheckedReasons = new Set<string>();
       const verdicts = new Map<string, Reach>();
-      const quota: ProbeQuota = { total: 0, perSite: new Map(), byEndpoint: new Map() };
+      const quota: ProbeQuota = {
+        total: 0,
+        perSite: new Map(),
+        byEndpoint: new Map(),
+      };
 
       // The site's own actions are probed before third-party ones, so a page full
       // of vendor forms cannot use up the probe quota ahead of them.
       const ordered = sources
         .map((source) => ({
           source,
-          target: targetOf(source.raw, source.page, siteHostName, siteIsHttps, siteLocality),
+          target: targetOf(
+            source.raw,
+            source.page,
+            siteHostName,
+            siteIsHttps,
+            siteLocality
+          ),
         }))
         .sort(
           (a, b) =>
             Number(a.target.kind === "reach" && !a.target.firstParty) -
-            Number(b.target.kind === "reach" && !b.target.firstParty),
+            Number(b.target.kind === "reach" && !b.target.firstParty)
         );
       for (const { source, target } of ordered) {
         if (target.kind === "skip") continue;
@@ -630,7 +706,7 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
             stored(`${source.form}\n${target.href}`),
             `${form} submits with ${toSample(target.href)}: this opens the visitor's mail client and loses the submission otherwise`,
             source.page,
-            { href: stored(target.href) },
+            { href: stored(target.href) }
           );
           continue;
         }
@@ -644,14 +720,22 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
               href: stored(target.href),
               host: stored(target.host),
               classification: target.classification,
-            },
+            }
           );
           continue;
         }
 
         let reach = verdicts.get(target.href);
         if (!reach) {
-          reach = await verdictFor(ctx, site, crawled, external, target, egress, quota);
+          reach = await verdictFor(
+            ctx,
+            site,
+            crawled,
+            external,
+            target,
+            egress,
+            quota
+          );
           verdicts.set(target.href, reach);
         }
         const key = stored(`${source.form}\n${target.href}`);
@@ -663,7 +747,7 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
               key,
               `${form} submits to ${href} (HTTP ${reach.status}): submissions are lost`,
               source.page,
-              { href: stored(target.href), status: reach.status },
+              { href: stored(target.href), status: reach.status }
             );
             break;
           case "probe-missing":
@@ -671,21 +755,26 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
               key,
               `${form} submits to ${href} (HTTP ${reach.status} to a HEAD or GET probe): the endpoint may accept POST only`,
               source.page,
-              { href: stored(target.href), status: reach.status },
+              { href: stored(target.href), status: reach.status }
             );
             break;
           case "unreachable":
-            unreachable.add(key, `${form} submits to ${href} (${reach.detail})`, source.page, {
-              href: stored(target.href),
-              detail: reach.detail,
-            });
+            unreachable.add(
+              key,
+              `${form} submits to ${href} (${reach.detail})`,
+              source.page,
+              {
+                href: stored(target.href),
+                detail: reach.detail,
+              }
+            );
             break;
           case "unverified":
             unverified.add(
               key,
               `${form} submits to ${href} (${reach.detail}): not verified, not reported as broken`,
               source.page,
-              { href: stored(target.href), detail: reach.detail },
+              { href: stored(target.href), detail: reach.detail }
             );
             break;
           case "unchecked":
@@ -697,7 +786,7 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
               {
                 href: stored(target.href),
                 reason: reach.reason,
-              },
+              }
             );
             break;
         }
@@ -719,7 +808,7 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
               field: stored(field.field),
               type: stored(field.type),
               snippet: field.snippet,
-            },
+            }
           );
         } else {
           unnamedInfo.add(
@@ -731,7 +820,7 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
               field: stored(field.field),
               type: stored(field.type),
               snippet: field.snippet,
-            },
+            }
           );
         }
       }
@@ -828,7 +917,11 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
           unnamedWarn.size >
         0;
       if (formCount === 0) {
-        checks.push({ name: "broken-forms", status: "info", message: "No forms detected" });
+        checks.push({
+          name: "broken-forms",
+          status: "info",
+          message: "No forms detected",
+        });
       } else if (
         !hasProblem &&
         unchecked.size === 0 &&
@@ -861,7 +954,7 @@ async function verdictFor(
   external: Map<string, ExternalLinkCheckData>,
   target: { href: string; firstParty: boolean; plainHttp: boolean },
   egress: ProbeEgress,
-  quota: ProbeQuota,
+  quota: ProbeQuota
 ): Promise<Reach> {
   const { href, firstParty } = target;
   const normalized = normalizeUrl(href);
@@ -869,20 +962,28 @@ async function verdictFor(
   if (firstParty) {
     const status = crawled.get(normalized);
     if (status !== undefined) {
-      if (status === 0) return { kind: "unchecked", reason: "the crawl did not fetch it" };
-      return reachOf({ status, error: null, retryAfter: null, challenge: false }, true);
+      if (status === 0)
+        return { kind: "unchecked", reason: "the crawl did not fetch it" };
+      return reachOf(
+        { status, error: null, retryAfter: null, challenge: false },
+        true
+      );
     }
-    if (target.plainHttp) return { kind: "unchecked", reason: REASON_PLAIN_HTTP };
+    if (target.plainHttp)
+      return { kind: "unchecked", reason: REASON_PLAIN_HTTP };
     if (!ctx.probe || ctx.probe.level === "passive") {
       return { kind: "unchecked", reason: refusalReason(ctx.probe) };
     }
     const budget = ctx.probe;
-    return probeWithinQuota(quota, href, () => probeReach(budget, href, true, egress.firstParty));
+    return probeWithinQuota(quota, href, () =>
+      probeReach(budget, href, true, egress.firstParty)
+    );
   }
   if (target.plainHttp) return { kind: "unchecked", reason: REASON_PLAIN_HTTP };
 
   // Third-party: only when external link checking ran for this audit.
-  if (site.externalLinks === undefined) return { kind: "unchecked", reason: REASON_EXTERNAL_OFF };
+  if (site.externalLinks === undefined)
+    return { kind: "unchecked", reason: REASON_EXTERNAL_OFF };
   const link = external.get(normalized);
   if (link) {
     if (link.rateLimited === true || link.wafBlocked === true) {
@@ -895,13 +996,20 @@ async function verdictFor(
       return { kind: "unchecked", reason: "the external check did not run" };
     }
     return reachOf(
-      { status: link.status, error: link.error, retryAfter: null, challenge: false },
-      false,
+      {
+        status: link.status,
+        error: link.error,
+        retryAfter: null,
+        challenge: false,
+      },
+      false
     );
   }
   if (!ctx.probe || ctx.probe.level === "passive") {
     return { kind: "unchecked", reason: refusalReason(ctx.probe) };
   }
   const budget = ctx.probe;
-  return probeWithinQuota(quota, href, () => probeReach(budget, href, false, egress.thirdParty));
+  return probeWithinQuota(quota, href, () =>
+    probeReach(budget, href, false, egress.thirdParty)
+  );
 }

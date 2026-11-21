@@ -40,7 +40,9 @@ const TYPE_PROPERTY = "@type";
 /** The one property a verified localized alias may differ on (#1615). */
 const URL_PROPERTY = "url";
 
-const IDENTITY_PREDICATES: ReadonlySet<string> = new Set(ENTITY_IDENTITY_PREDICATES);
+const IDENTITY_PREDICATES: ReadonlySet<string> = new Set(
+  ENTITY_IDENTITY_PREDICATES
+);
 
 /**
  * Most pages one alias check compares. Pairs grow with the square, and a set this large is not
@@ -55,7 +57,8 @@ export const ALIAS_PAGE_CAP = 40;
 const reportable = (node: EntityMapNode): EntityMapConflict[] =>
   node.conflicts.filter(
     (conflict) =>
-      conflict.property !== TYPE_PROPERTY && conflict.property !== ENTITY_IDENTITY_GUARD_PROPERTY,
+      conflict.property !== TYPE_PROPERTY &&
+      conflict.property !== ENTITY_IDENTITY_GUARD_PROPERTY
   );
 
 /**
@@ -97,9 +100,10 @@ interface AliasContext {
 function isLocalizedUrlAlias(
   node: EntityMapNode,
   conflict: EntityMapConflict,
-  alias: AliasContext,
+  alias: AliasContext
 ): boolean {
-  if (node.conflicts.some((c) => c.property === ENTITY_IDENTITY_GUARD_PROPERTY)) return false;
+  if (node.conflicts.some((c) => c.property === ENTITY_IDENTITY_GUARD_PROPERTY))
+    return false;
   if (conflict.values.some((value) => value.morePages > 0)) return false;
   const pages = [...new Set(conflict.values.flatMap((value) => value.pages))];
   if (pages.length > ALIAS_PAGE_CAP) return false;
@@ -120,7 +124,8 @@ function isLocalizedUrlAlias(
         if (idA === null) return false;
         for (const b of conflict.values[j]!.pages) {
           const idB = idOf(b);
-          if (idB === null || !alias.index.areReciprocalIds(idA, idB)) return false;
+          if (idB === null || !alias.index.areReciprocalIds(idA, idB))
+            return false;
         }
       }
     }
@@ -134,13 +139,18 @@ function isLocalizedUrlAlias(
 }
 
 /** Keys of the nodes whose `url` conflict is a verified localized alias. */
-async function localizedAliasNodes(ctx: RuleContext, map: EntityMap): Promise<Set<string>> {
+async function localizedAliasNodes(
+  ctx: RuleContext,
+  map: EntityMap
+): Promise<Set<string>> {
   const candidates = map.nodes.filter((node) => urlOnlyConflict(node) !== null);
   const aliases = new Set<string>();
   if (candidates.length === 0) return aliases;
 
   const urls = new Set(
-    candidates.flatMap((node) => urlOnlyConflict(node)!.values.flatMap((v) => v.pages)),
+    candidates.flatMap((node) =>
+      urlOnlyConflict(node)!.values.flatMap((v) => v.pages)
+    )
   );
   const index = ctx.siteQuery
     ? await RegionVariantIndex.fromSiteQueryByIdentity(ctx.siteQuery, urls)
@@ -159,7 +169,8 @@ async function localizedAliasNodes(ctx: RuleContext, map: EntityMap): Promise<Se
 
   const alias: AliasContext = { index, pageIds, identityEdges };
   for (const node of candidates) {
-    if (isLocalizedUrlAlias(node, urlOnlyConflict(node)!, alias)) aliases.add(node.key);
+    if (isLocalizedUrlAlias(node, urlOnlyConflict(node)!, alias))
+      aliases.add(node.key);
   }
   return aliases;
 }
@@ -184,7 +195,8 @@ export const entityConflictsRule: Rule = {
     const { map } = resolved;
     // Only a node whose sole disagreement is `url` can be an alias, so every other map is judged
     // synchronously, as before.
-    if (!map.nodes.some((node) => urlOnlyConflict(node) !== null)) return judge(map, new Set());
+    if (!map.nodes.some((node) => urlOnlyConflict(node) !== null))
+      return judge(map, new Set());
     return localizedAliasNodes(ctx, map).then((aliases) => judge(map, aliases));
   },
 };
@@ -200,7 +212,9 @@ function judge(map: EntityMap, aliases: ReadonlySet<string>): RuleResult {
   const rows: CheckItem[] = [];
   let entityCount = 0;
   let aliasCount = 0;
-  for (const node of [...map.nodes].sort((a, b) => compareStrings(a.key, b.key))) {
+  for (const node of [...map.nodes].sort((a, b) =>
+    compareStrings(a.key, b.key)
+  )) {
     // A verified localized alias is one entity under several URLs, not a disagreement (#1615).
     if (aliases.has(node.key)) {
       aliasCount += 1;
@@ -212,11 +226,16 @@ function judge(map: EntityMap, aliases: ReadonlySet<string>): RuleResult {
     for (const conflict of conflicts) {
       const values = conflict.values
         .slice(0, VALUE_CAP)
-        .map((value) => `${value.value} (${value.pages.length + value.morePages} pages)`);
+        .map(
+          (value) =>
+            `${value.value} (${value.pages.length + value.morePages} pages)`
+        );
       rows.push({
         id: `${node.key} ${conflict.property}`,
         label: `${entityLabel(node)}, ${conflict.property}: ${values.join(" vs ")}`,
-        sourcePages: conflict.values.flatMap((value) => value.pages).slice(0, ENTITY_PAGE_CAP),
+        sourcePages: conflict.values
+          .flatMap((value) => value.pages)
+          .slice(0, ENTITY_PAGE_CAP),
         meta: {
           key: node.key,
           property: conflict.property,
@@ -225,7 +244,8 @@ function judge(map: EntityMap, aliases: ReadonlySet<string>): RuleResult {
       });
     }
   }
-  const details = aliasCount > 0 ? { localizedUrlAliases: aliasCount } : undefined;
+  const details =
+    aliasCount > 0 ? { localizedUrlAliases: aliasCount } : undefined;
 
   if (rows.length === 0) {
     return {
@@ -233,7 +253,8 @@ function judge(map: EntityMap, aliases: ReadonlySet<string>): RuleResult {
         {
           name: CHECK,
           status: "pass",
-          message: "Every entity agrees with itself across the pages that declare it",
+          message:
+            "Every entity agrees with itself across the pages that declare it",
           ...(details ? { details } : {}),
         },
       ],

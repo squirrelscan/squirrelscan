@@ -5,12 +5,12 @@
 // connected to the address that was vetted (unless the transport pins), and no
 // headers but User-Agent and Accept.
 
+import type { Config } from "@squirrelscan/config";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
+
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { Config } from "@squirrelscan/config";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import { checkExternalLinks } from "../src/external-checker";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -48,7 +48,9 @@ function serve(): number {
         case "/hop-meta":
           return redirect("http://169.254.169.254/latest/meta-data/");
         case "/hop-meta-name":
-          return redirect("http://metadata.google.internal/computeMetadata/v1/");
+          return redirect(
+            "http://metadata.google.internal/computeMetadata/v1/"
+          );
         case "/hop-link-local":
           return redirect("http://[fe80::1]/x");
         case "/hop-file":
@@ -58,7 +60,10 @@ function serve(): number {
         case "/hop-public":
           return redirect(`http://public-b.example.com:${url.port}/landed`);
         case "/edge":
-          return new Response("edge error", { status: 522, headers: { "cf-ray": "example" } });
+          return new Response("edge error", {
+            status: 522,
+            headers: { "cf-ray": "example" },
+          });
         case "/challenge":
           return new Response("challenge", {
             status: 403,
@@ -67,10 +72,12 @@ function serve(): number {
         case "/":
           return new Response(
             `<!doctype html><html><head><title>Fixture</title></head><body><a href="http://localhost:${url.port}/landed">Elsewhere</a></body></html>`,
-            { headers: { "content-type": "text/html; charset=utf-8" } },
+            { headers: { "content-type": "text/html; charset=utf-8" } }
           );
         default:
-          return new Response("landed", { headers: { "content-type": "text/plain" } });
+          return new Response("landed", {
+            headers: { "content-type": "text/plain" },
+          });
       }
     },
   });
@@ -120,7 +127,11 @@ describe("every hop of the external check goes through the egress guard", () => 
   test("each hop is vetted by its own name and pinned to the vetted address, Host kept", async () => {
     const port = serve();
     const [result] = await Effect.runPromise(
-      checkExternalLinks([`http://public-a.example.com:${port}/hop-public`], null, options(publicSite())),
+      checkExternalLinks(
+        [`http://public-a.example.com:${port}/hop-public`],
+        null,
+        options(publicSite())
+      )
     );
     expect(result).toMatchObject({
       status: 200,
@@ -136,10 +147,16 @@ describe("every hop of the external check goes through the egress guard", () => 
 
   test("a redirect into a private, link-local or metadata address, or a non-http scheme, is not followed", async () => {
     const port = serve();
-    const urls = ["hop-private", "hop-meta", "hop-meta-name", "hop-link-local", "hop-file"].map(
-      (path) => `http://public-a.example.com:${port}/${path}`,
+    const urls = [
+      "hop-private",
+      "hop-meta",
+      "hop-meta-name",
+      "hop-link-local",
+      "hop-file",
+    ].map((path) => `http://public-a.example.com:${port}/${path}`);
+    const results = await Effect.runPromise(
+      checkExternalLinks(urls, null, options(publicSite()))
     );
-    const results = await Effect.runPromise(checkExternalLinks(urls, null, options(publicSite())));
     for (const r of results) {
       // The redirect is the link's answer; its target was never requested.
       expect(r.status).toBe(302);
@@ -162,7 +179,11 @@ describe("every hop of the external check goes through the egress guard", () => 
       setCachedBulk: (entries: unknown[]) => cacheWrites.push(...entries),
     };
     const [result] = await Effect.runPromise(
-      checkExternalLinks([`http://127.0.0.1:${port}/landed`], cache, options(publicSite())),
+      checkExternalLinks(
+        [`http://127.0.0.1:${port}/landed`],
+        cache,
+        options(publicSite())
+      )
     );
     expect(result).toMatchObject({ status: null, error: null });
     expect(seen).toEqual([]);
@@ -176,7 +197,7 @@ describe("every hop of the external check goes through the egress guard", () => 
         concurrency: 1,
         timeoutMs: 5_000,
         userAgent: "squirrel-test",
-      }),
+      })
     );
     expect(result).toMatchObject({ status: null, error: null });
     expect(seen).toEqual([]);
@@ -185,7 +206,11 @@ describe("every hop of the external check goes through the egress guard", () => 
   test("external link requests carry browser-like headers and no credentials", async () => {
     const port = serve();
     await Effect.runPromise(
-      checkExternalLinks([`http://public-a.example.com:${port}/hop-public`], null, options(publicSite())),
+      checkExternalLinks(
+        [`http://public-a.example.com:${port}/hop-public`],
+        null,
+        options(publicSite())
+      )
     );
     expect(seen.length).toBeGreaterThan(0);
     for (const r of seen) {
@@ -205,16 +230,22 @@ describe("every hop of the external check goes through the egress guard", () => 
         concurrency: 1,
         timeoutMs: 5_000,
         egress: publicSite(),
-      }),
+      })
     );
     expect(seen[0]?.userAgent).toContain("Mozilla/5.0");
-    expect(seen[0]?.userAgent).toEndWith("SquirrelScan/2.0 (+https://squirrelscan.com)");
+    expect(seen[0]?.userAgent).toEndWith(
+      "SquirrelScan/2.0 (+https://squirrelscan.com)"
+    );
   });
 
   test("Cloudflare edge errors are saved as unverified blocks", async () => {
     const port = serve();
     const [result] = await Effect.runPromise(
-      checkExternalLinks([`http://public-a.example.com:${port}/edge`], null, options(publicSite())),
+      checkExternalLinks(
+        [`http://public-a.example.com:${port}/edge`],
+        null,
+        options(publicSite())
+      )
     );
     expect(result).toMatchObject({
       status: 522,
@@ -228,7 +259,11 @@ describe("every hop of the external check goes through the egress guard", () => 
   test("a Cloudflare challenge header makes a 403 unverified", async () => {
     const port = serve();
     const [result] = await Effect.runPromise(
-      checkExternalLinks([`http://public-a.example.com:${port}/challenge`], null, options(publicSite())),
+      checkExternalLinks(
+        [`http://public-a.example.com:${port}/challenge`],
+        null,
+        options(publicSite())
+      )
     );
     expect(result).toMatchObject({
       status: 403,
@@ -241,7 +276,9 @@ describe("every hop of the external check goes through the egress guard", () => 
 });
 
 describe("the audit's external link phase", () => {
-  async function linkFetchUrls(egressPinnedByTransport: boolean): Promise<string[]> {
+  async function linkFetchUrls(
+    egressPinnedByTransport: boolean
+  ): Promise<string[]> {
     const port = serve();
     // The audited site is 127.0.0.1 (private, so private links are allowed);
     // its external link is the same server under `localhost`.
@@ -260,29 +297,44 @@ describe("the audit's external link phase", () => {
           incremental: false,
           useCacheControl: false,
         },
-      }),
+      })
     );
     const crawlId = await Effect.runPromise(crawler.start(home, home));
     const config = {
       rule_options: {},
       rules: { enable: ["links/broken-external-links"] },
       crawler: { max_pages: 1, exclude: [] },
-      external_links: { enabled: true, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
+      external_links: {
+        enabled: true,
+        concurrency: 1,
+        timeout_ms: 5_000,
+        cache_ttl_days: 1,
+      },
       internal_links: { enabled: false },
     } as unknown as Config;
     const real = globalThis.fetch;
     const fetched: string[] = [];
     globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
       if (url.includes("/landed")) fetched.push(url);
       return real(input, init);
     }) as typeof fetch;
     try {
       await Effect.runPromise(
-        runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {
-          externalLinks: { config: config.external_links, linkCache: null },
-          resourceOverrides: { egressPinnedByTransport },
-        }),
+        runStreamingPreRules(
+          crawler.storage as SQLiteStorage,
+          crawlId,
+          config,
+          {
+            externalLinks: { config: config.external_links, linkCache: null },
+            resourceOverrides: { egressPinnedByTransport },
+          }
+        )
       );
     } finally {
       globalThis.fetch = real;
@@ -293,7 +345,8 @@ describe("the audit's external link phase", () => {
   test("on the CLI, a link's request connects to the vetted address", async () => {
     const fetched = await linkFetchUrls(false);
     expect(fetched.length).toBeGreaterThan(0);
-    for (const url of fetched) expect(new URL(url).hostname).toMatch(/^(127\.0\.0\.1|\[::1\])$/);
+    for (const url of fetched)
+      expect(new URL(url).hostname).toMatch(/^(127\.0\.0\.1|\[::1\])$/);
   });
 
   test("in the hosted container, whose transport pins, it goes by name", async () => {

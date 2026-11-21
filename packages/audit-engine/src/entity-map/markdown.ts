@@ -4,10 +4,11 @@
 // disagree about what the map said; this file only supplies the document
 // heading and the provenance line around it.
 
+import type { EntityMap } from "@squirrelscan/core-contracts/entity-map";
+
 // Subpath, not the package root: the root re-exports the JSX report renderer
 // and this package does not compile with `--jsx`.
 import { entityMarkdownSection } from "@squirrelscan/report/entities";
-import type { EntityMap } from "@squirrelscan/core-contracts/entity-map";
 
 /**
  * Render an entity map as a standalone markdown document.

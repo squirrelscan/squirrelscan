@@ -3,12 +3,12 @@
 // contact form, kept distinct. Informational only; it never asks anyone to
 // publish contact details.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../src/types";
 
 import { organizationSchemaRule } from "../src/schema/organization";
-import type { RuleContext } from "../src/types";
 
 const BASE = "http://127.0.0.1:8765/contact";
 
@@ -32,7 +32,8 @@ async function run(html: string, statusCode = 200) {
 
 const page = (head: string, body = "<h1>t</h1>") =>
   `<!doctype html><html lang="en"><head><title>t</title>${head}</head><body>${body}</body></html>`;
-const ld = (o: unknown) => `<script type="application/ld+json">${JSON.stringify(o)}</script>`;
+const ld = (o: unknown) =>
+  `<script type="application/ld+json">${JSON.stringify(o)}</script>`;
 const org = (extra: Record<string, unknown> = {}) => ({
   "@context": "https://schema.org",
   "@type": "Organization",
@@ -43,7 +44,19 @@ const org = (extra: Record<string, unknown> = {}) => ({
 
 describe("schema/organization contact channels (#1654)", () => {
   test("nested ContactPoint telephone is a structured telephone, not an email or a link", async () => {
-    const r = (await run(page(ld(org({ contactPoint: { "@type": "ContactPoint", telephone: "+44 20 7946 0000", contactType: "sales" } })))));
+    const r = await run(
+      page(
+        ld(
+          org({
+            contactPoint: {
+              "@type": "ContactPoint",
+              telephone: "+44 20 7946 0000",
+              contactType: "sales",
+            },
+          })
+        )
+      )
+    );
     expect(r.ch["structured-telephone"]).toBe("present (json-ld)");
     expect(r.ch["structured-email"]).toBe("absent");
     expect(r.ch["tel-link"]).toBe("absent");
@@ -51,60 +64,102 @@ describe("schema/organization contact channels (#1654)", () => {
   });
 
   test("nested ContactPoint email", async () => {
-    const r = (await run(page(ld(org({ contactPoint: [{ "@type": "ContactPoint", email: "help@example.test" }] })))));
+    const r = await run(
+      page(
+        ld(
+          org({
+            contactPoint: [
+              { "@type": "ContactPoint", email: "help@example.test" },
+            ],
+          })
+        )
+      )
+    );
     expect(r.ch["structured-email"]).toBe("present (json-ld)");
     expect(r.ch["structured-telephone"]).toBe("absent");
   });
 
   test("a ContactPoint linked by @id reads like a nested one", async () => {
-    const nested = (await run(page(ld(org({ contactPoint: { "@type": "ContactPoint", telephone: "+44 20 7946 0000" } })))));
-    const linked = (await run(
+    const nested = await run(
+      page(
+        ld(
+          org({
+            contactPoint: {
+              "@type": "ContactPoint",
+              telephone: "+44 20 7946 0000",
+            },
+          })
+        )
+      )
+    );
+    const linked = await run(
       page(
         ld({
           "@graph": [
-            org({ "@id": `${BASE}#org`, contactPoint: { "@id": `${BASE}#cp` } }),
-            { "@type": "ContactPoint", "@id": `${BASE}#cp`, telephone: "+44 20 7946 0000" },
+            org({
+              "@id": `${BASE}#org`,
+              contactPoint: { "@id": `${BASE}#cp` },
+            }),
+            {
+              "@type": "ContactPoint",
+              "@id": `${BASE}#cp`,
+              telephone: "+44 20 7946 0000",
+            },
           ],
-        }),
-      ),
-    ));
+        })
+      )
+    );
     expect(linked.ch).toEqual(nested.ch);
   });
 
   test("only usable mailto: and tel: links are link channels, not structured ones", async () => {
-    const r = (await run(page(ld(org()), '<a href="mailto:help@example.test">Email</a> <a href="tel:+442079460000">Call</a>')));
+    const r = await run(
+      page(
+        ld(org()),
+        '<a href="mailto:help@example.test">Email</a> <a href="tel:+442079460000">Call</a>'
+      )
+    );
     expect(r.ch["mailto-link"]).toBe("present (html)");
     expect(r.ch["tel-link"]).toBe("present (html)");
     expect(r.ch["structured-telephone"]).toBe("absent");
-    expect(r.c?.message).toBe("Contact channels observed on this page: mailto-link, tel-link");
+    expect(r.c?.message).toBe(
+      "Contact channels observed on this page: mailto-link, tel-link"
+    );
   });
 
   test("an empty mailto: is not a usable channel", async () => {
-    const r = (await run(page(ld(org()), '<a href="mailto:">Email</a>')));
+    const r = await run(page(ld(org()), '<a href="mailto:">Email</a>'));
     expect(r.ch["mailto-link"]).toBe("absent");
   });
 
   test("a page with only a form reports the form alone", async () => {
-    const r = (await run(page("", '<form action="/send" method="post"><input name="email" type="email"><textarea name="m"></textarea></form>')));
+    const r = await run(
+      page(
+        "",
+        '<form action="/send" method="post"><input name="email" type="email"><textarea name="m"></textarea></form>'
+      )
+    );
     expect(r.ch["contact-form"]).toBe("present (html)");
-    expect(r.c?.message).toBe("Contact channels observed on this page: contact form only");
+    expect(r.c?.message).toBe(
+      "Contact channels observed on this page: contact form only"
+    );
     expect(JSON.stringify(r.c)).not.toMatch(/must|should|required/i);
   });
 
   test("a search form and a login form are not contact forms", async () => {
-    const r = (await run(
+    const r = await run(
       page(
         ld(org()),
-        '<form role="search"><input type="text"></form><form><input type="email"><input type="password"></form>',
-      ),
-    ));
+        '<form role="search"><input type="text"></form><form><input type="email"><input type="password"></form>'
+      )
+    );
     expect(r.ch["contact-form"]).toBe("absent");
     expect(r.c?.message).toBe("Contact channels observed on this page: none");
   });
 
   test("a truncated read leaves unobserved channels unknown and keeps observed ones", async () => {
     const html = `<!doctype html><html><head>${ld(org({ contactPoint: { "@type": "ContactPoint", telephone: "+1 555 0100" } }))}</head><body><a href="mailto:a@example.test">x</a><p>cut`;
-    const r = (await run(html));
+    const r = await run(html);
     expect(r.ch["structured-telephone"]).toBe("present (json-ld)");
     expect(r.ch["mailto-link"]).toBe("present (html)");
     expect(r.ch["structured-email"]).toBe("unknown (incomplete-read)");
@@ -112,8 +167,10 @@ describe("schema/organization contact channels (#1654)", () => {
   });
 
   test("a failed read with nothing observed is unknown, never none", async () => {
-    const r = (await run(page(ld(org())), 503));
-    expect(r.c?.message).toBe("Contact channels on this page: unknown (incomplete read)");
+    const r = await run(page(ld(org())), 503);
+    expect(r.c?.message).toBe(
+      "Contact channels on this page: unknown (incomplete read)"
+    );
   });
 
   test("nothing is emitted for a page with no organization, shop or contact signal", async () => {
@@ -121,9 +178,19 @@ describe("schema/organization contact channels (#1654)", () => {
   });
 
   test("existing organization checks are unchanged and nothing warns from the new check", async () => {
-    const withContact = (await run(page(ld(org({ contactPoint: { "@type": "ContactPoint", telephone: "1" } })))));
-    const rest = withContact.checks.filter((c) => c.name !== "organization-contact-channels");
-    expect(rest.map((c) => c.name)).toEqual(["organization-required", "organization-logo", "organization-social"]);
+    const withContact = await run(
+      page(
+        ld(org({ contactPoint: { "@type": "ContactPoint", telephone: "1" } }))
+      )
+    );
+    const rest = withContact.checks.filter(
+      (c) => c.name !== "organization-contact-channels"
+    );
+    expect(rest.map((c) => c.name)).toEqual([
+      "organization-required",
+      "organization-logo",
+      "organization-social",
+    ]);
     expect(withContact.c?.status).toBe("info");
   });
 });

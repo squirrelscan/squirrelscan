@@ -24,19 +24,22 @@
 // crash (OOM kill) still leaves the RSS trajectory up to that point on disk
 // instead of losing everything. Report path printed at the end of each case.
 
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+  type DuplicateGroupSpec,
+} from "@squirrelscan/synthetic-site";
 import { describe, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  generateSiteModel,
-  writeCrawlToStorage,
-  type DuplicateGroupSpec,
-} from "@squirrelscan/synthetic-site";
-import { SQLiteStorage } from "@squirrelscan/crawler";
-
-import { getGoldenBaselineConfig, run, runV1Pipeline } from "./helpers/golden-baseline";
+  getGoldenBaselineConfig,
+  run,
+  runV1Pipeline,
+} from "./helpers/golden-baseline";
 
 const RUN_MEMORY_HARNESS = process.env.RUN_MEMORY_HARNESS === "1";
 const RUN_25K = process.env.MEMORY_HARNESS_25K === "1";
@@ -67,14 +70,18 @@ function bytesToMb(bytes: number): number {
   return Math.round((bytes / 1024 / 1024) * 10) / 10;
 }
 
-async function runMemoryHarness(pageCount: number, label: string): Promise<MemoryHarnessReport> {
+async function runMemoryHarness(
+  pageCount: number,
+  label: string
+): Promise<MemoryHarnessReport> {
   const reportPath = join(tmpDir, `${label}-report.json`);
   const dbPath = join(tmpDir, `${label}.sqlite`);
   const startedAt = performance.now();
   const samples: RssSample[] = [];
 
   const flush = (completed: boolean, healthScoreOverall?: number | null) => {
-    const peakRssMb = samples.length > 0 ? Math.max(...samples.map((s) => s.rssMb)) : 0;
+    const peakRssMb =
+      samples.length > 0 ? Math.max(...samples.map((s) => s.rssMb)) : 0;
     const report: MemoryHarnessReport = {
       pageCount,
       completed,
@@ -98,7 +105,9 @@ async function runMemoryHarness(pageCount: number, label: string): Promise<Memor
     if (phase !== "rules" || (pagesDone ?? 0) % 1000 < 200) flush(false);
   };
 
-  console.log(`[memory-harness] ${label}: generating ${pageCount}-page synthetic model`);
+  console.log(
+    `[memory-harness] ${label}: generating ${pageCount}-page synthetic model`
+  );
   sample("start");
   const model = generateSiteModel({
     seed: `memory-harness-${label}`,
@@ -147,7 +156,7 @@ async function runMemoryHarness(pageCount: number, label: string): Promise<Memor
   const final = flush(true, report.healthScore!.overall);
   console.log(
     `[memory-harness] ${label}: peak RSS ${final.peakRssMb}MB over ${samples.length} samples, ` +
-      `healthScore=${report.healthScore!.overall}, report at ${reportPath}`,
+      `healthScore=${report.healthScore!.overall}, report at ${reportPath}`
   );
   return final;
 }
@@ -172,7 +181,7 @@ describe.skipIf(!RUN_MEMORY_HARNESS)(
         const result = await runMemoryHarness(25_000, "25k");
         console.log(JSON.stringify(result, null, 2).slice(0, 2000));
       },
-      1_800_000,
+      1_800_000
     );
-  },
+  }
 );

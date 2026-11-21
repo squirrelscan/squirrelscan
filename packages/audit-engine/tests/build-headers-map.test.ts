@@ -6,9 +6,15 @@
 // directly (bypassing this seam) would still pass — exactly what happened
 // when security/cookie-flags was first added without this wiring.
 
-import { describe, expect, test } from "bun:test";
 import type { PageRecord } from "@squirrelscan/core-contracts";
-import { buildHeadersMap, recordsResponseHeaders, recordsVersionHeaders } from "../src/adapter";
+
+import { describe, expect, test } from "bun:test";
+
+import {
+  buildHeadersMap,
+  recordsResponseHeaders,
+  recordsVersionHeaders,
+} from "../src/adapter";
 
 function page(overrides: Partial<PageRecord["headers"]> = {}): PageRecord {
   return {
@@ -58,9 +64,13 @@ function page(overrides: Partial<PageRecord["headers"]> = {}): PageRecord {
 
 describe("buildHeadersMap", () => {
   test("surfaces set-cookie into ctx.page.headers when present", () => {
-    const record = page({ setCookie: "session=abc123; Path=/; HttpOnly; Secure" });
+    const record = page({
+      setCookie: "session=abc123; Path=/; HttpOnly; Secure",
+    });
     const headers = buildHeadersMap(record);
-    expect(headers["set-cookie"]).toBe("session=abc123; Path=/; HttpOnly; Secure");
+    expect(headers["set-cookie"]).toBe(
+      "session=abc123; Path=/; HttpOnly; Secure"
+    );
   });
 
   test("multi-cookie set-cookie value passes through intact", () => {
@@ -119,13 +129,23 @@ describe("buildHeadersMap", () => {
   // them joined, as the server sent them. A record stored before the field
   // existed has no key and reads as before.
   test("content-type carries the stored charset; a record without one reads as before", () => {
-    expect(buildHeadersMap(page({ contentType: "text/html", contentTypeCharset: "UTF-8" }))["content-type"]).toBe(
-      "text/html; charset=UTF-8"
-    );
-    expect(buildHeadersMap(page({ contentType: "text/html", contentTypeCharset: null }))["content-type"]).toBe("text/html");
-    expect(buildHeadersMap(page({ contentType: "text/html" }))["content-type"]).toBe("text/html");
+    expect(
+      buildHeadersMap(
+        page({ contentType: "text/html", contentTypeCharset: "UTF-8" })
+      )["content-type"]
+    ).toBe("text/html; charset=UTF-8");
+    expect(
+      buildHeadersMap(
+        page({ contentType: "text/html", contentTypeCharset: null })
+      )["content-type"]
+    ).toBe("text/html");
+    expect(
+      buildHeadersMap(page({ contentType: "text/html" }))["content-type"]
+    ).toBe("text/html");
     // No media type, no content-type at all, charset or not.
-    expect(buildHeadersMap(page({ contentTypeCharset: "utf-8" }))["content-type"]).toBeUndefined();
+    expect(
+      buildHeadersMap(page({ contentTypeCharset: "utf-8" }))["content-type"]
+    ).toBeUndefined();
   });
 });
 
@@ -133,7 +153,17 @@ describe("recordsResponseHeaders (repo#4641)", () => {
   test("only an explicit recorded: false marks headers as not recorded", () => {
     const base = page();
     expect(recordsResponseHeaders(base)).toBe(true);
-    expect(recordsResponseHeaders({ ...base, headers: { ...base.headers, recorded: true } })).toBe(true);
-    expect(recordsResponseHeaders({ ...base, headers: { ...base.headers, recorded: false } })).toBe(false);
+    expect(
+      recordsResponseHeaders({
+        ...base,
+        headers: { ...base.headers, recorded: true },
+      })
+    ).toBe(true);
+    expect(
+      recordsResponseHeaders({
+        ...base,
+        headers: { ...base.headers, recorded: false },
+      })
+    ).toBe(false);
   });
 });

@@ -4,8 +4,6 @@
 // and a label is the producer's own word. The signal's list is the only
 // independent evidence, and it is evidence only when it was not clipped.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
@@ -14,8 +12,13 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 
+import { describe, expect, test } from "bun:test";
+
 import { findingKey } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { buildCheckTallies } from "../src/publish-cap";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
@@ -23,11 +26,19 @@ class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
 
-  private key(f: { normalizedUrl: string; ruleId: string; checkName: string; locator: string }) {
+  private key(f: {
+    normalizedUrl: string;
+    ruleId: string;
+    checkName: string;
+    locator: string;
+  }) {
     return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
   }
 
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -44,7 +55,7 @@ class MemStore implements SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void> {
     this.pages.set(normalizedUrl, {
       siteKey,
@@ -56,24 +67,36 @@ class MemStore implements SmartAuditStore {
     });
     for (const [k, f] of this.findings) {
       if (f.normalizedUrl === normalizedUrl && f.state === "open") {
-        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+        this.findings.set(k, {
+          ...f,
+          state: "stale",
+          lastSeenCrawlId: crawlId,
+        });
       }
     }
   }
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void> {
     for (const p of pages)
-      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+      await this.markPageRemoved(
+        siteKey,
+        p.normalizedUrl,
+        crawlId,
+        p.lastStatus
+      );
   }
   async compactFindings(): Promise<number> {
     return 0;
   }
 }
 
-describeSitePagesContract("outside-crawled-refuse-2078.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "outside-crawled-refuse-2078.test.ts MemStore",
+  () => new MemStore()
+);
 
 const meta = {
   id: "meta-title",
@@ -103,7 +126,9 @@ function run(signal: ResolutionSignal | undefined) {
     store,
     siteKey: "web_1",
     crawlId: "audit_1",
-    ruleResults: { "core/meta-title": { meta, checks: [...CRAWLED, ...NEVER].map(warn) } },
+    ruleResults: {
+      "core/meta-title": { meta, checks: [...CRAWLED, ...NEVER].map(warn) },
+    },
     pageStatuses: [],
     ...(signal ? { resolutionSignal: signal } : {}),
     now: NOW,
@@ -122,7 +147,9 @@ describe("repo#2078: refuse published checks outside a complete crawled set", ()
     expect(r.coverage.auditedPages).toBe(4);
     expect(r.outsideCrawledChecksDropped).toBe(6);
     expect(r.outsideCrawledPages).toBe(6);
-    const pages = (await store.getFindings("web_1")).map((f) => f.normalizedUrl);
+    const pages = (await store.getFindings("web_1")).map(
+      (f) => f.normalizedUrl
+    );
     expect(pages.sort()).toEqual([...CRAWLED].sort());
   });
 
@@ -210,7 +237,10 @@ describe("repo#2078: site-scope checks are never refused", () => {
       crawlId: "audit_1",
       ruleResults: {
         "core/meta-title": { meta, checks: [...CRAWLED, ...NEVER].map(warn) },
-        "integrity/known-malicious-url": { meta: siteMeta, checks: SITE_URLS.map(flagged) },
+        "integrity/known-malicious-url": {
+          meta: siteMeta,
+          checks: SITE_URLS.map(flagged),
+        },
       },
       pageStatuses: [],
       resolutionSignal: signal({ crawledUrlsComplete: true }),
@@ -221,6 +251,8 @@ describe("repo#2078: site-scope checks are never refused", () => {
     expect(r.outsideCrawledPages).toBe(6);
     // Every site-scope check survives into the union the report and score use.
     const site = r.unionRuleResults.get("integrity/known-malicious-url");
-    expect(site?.checks.map((c) => c.pageUrl).sort()).toEqual([...SITE_URLS].sort());
+    expect(site?.checks.map((c) => c.pageUrl).sort()).toEqual(
+      [...SITE_URLS].sort()
+    );
   });
 });

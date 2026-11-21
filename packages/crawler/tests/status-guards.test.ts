@@ -13,10 +13,12 @@ const URL = "https://example.com/";
 // Run the guard and return the CrawlError it failed with, or null if it passed.
 async function guard(
   status: number,
-  opts: { body?: string; headers?: Record<string, string> } = {},
+  opts: { body?: string; headers?: Record<string, string> } = {}
 ): Promise<CrawlError | null> {
   const result = await Effect.runPromise(
-    Effect.either(applyStatusGuards(URL, status, new Headers(opts.headers), opts.body)),
+    Effect.either(
+      applyStatusGuards(URL, status, new Headers(opts.headers), opts.body)
+    )
   );
   return result._tag === "Left" ? result.left : null;
 }
@@ -48,7 +50,9 @@ describe("applyStatusGuards (#792/#802)", () => {
   });
 
   test("403 with cf-mitigated: challenge → blocked, names Cloudflare", async () => {
-    const error = await guard(403, { headers: { "cf-mitigated": "challenge" } });
+    const error = await guard(403, {
+      headers: { "cf-mitigated": "challenge" },
+    });
     expect(error?.type).toBe("blocked");
     expect(error?.message).toBe("Blocked by Cloudflare challenge (403)");
   });
@@ -106,7 +110,9 @@ describe("applyStatusGuards (#792/#802)", () => {
   });
 
   test("503 with cf-mitigated: challenge header → blocked even without a body", async () => {
-    const error = await guard(503, { headers: { "cf-mitigated": "challenge" } });
+    const error = await guard(503, {
+      headers: { "cf-mitigated": "challenge" },
+    });
     expect(error?.type).toBe("blocked");
     expect(error?.message).toContain("Cloudflare");
   });
@@ -128,10 +134,12 @@ const DATADOME_CHALLENGE =
 
 async function wafGuard(
   status: number,
-  opts: { body?: string; headers?: Record<string, string> } = {},
+  opts: { body?: string; headers?: Record<string, string> } = {}
 ): Promise<CrawlError | null> {
   const result = await Effect.runPromise(
-    Effect.either(applyWafGuard(URL, status, new Headers(opts.headers), opts.body)),
+    Effect.either(
+      applyWafGuard(URL, status, new Headers(opts.headers), opts.body)
+    )
   );
   return result._tag === "Left" ? result.left : null;
 }
@@ -141,7 +149,10 @@ describe("a provider's challenge at any status (#1253)", () => {
     const error = await guard(429, { body: KASADA_CHALLENGE });
     expect(error?.type).toBe("blocked");
     expect(error?.status).toBe(429);
-    expect(error?.wafBlock).toMatchObject({ provider: "Kasada", providerId: "kasada" });
+    expect(error?.wafBlock).toMatchObject({
+      provider: "Kasada",
+      providerId: "kasada",
+    });
   });
 
   test("a plain 429 stays rate limiting, with or without a body", async () => {
@@ -158,13 +169,23 @@ describe("a provider's challenge at any status (#1253)", () => {
   });
 
   test("an AWS WAF challenge (202, header only) and CAPTCHA (405) are blocked", async () => {
-    expect((await wafGuard(202, { headers: { "x-amzn-waf-action": "challenge" } }))?.wafBlock?.providerId).toBe("aws-waf");
-    expect((await wafGuard(405, { headers: { "x-amzn-waf-action": "captcha" } }))?.status).toBe(405);
+    expect(
+      (await wafGuard(202, { headers: { "x-amzn-waf-action": "challenge" } }))
+        ?.wafBlock?.providerId
+    ).toBe("aws-waf");
+    expect(
+      (await wafGuard(405, { headers: { "x-amzn-waf-action": "captcha" } }))
+        ?.status
+    ).toBe(405);
   });
 
   test("ordinary 200, 202, 405 and 429 responses pass the WAF guard", async () => {
-    const page = "<html><head><title>Hi</title></head><body><p>hello</p></body></html>";
-    for (const status of [200, 202, 405]) expect(await wafGuard(status, { body: page })).toBeNull();
-    expect(await wafGuard(202, { headers: { "x-amzn-requestid": "TEST" } })).toBeNull();
+    const page =
+      "<html><head><title>Hi</title></head><body><p>hello</p></body></html>";
+    for (const status of [200, 202, 405])
+      expect(await wafGuard(status, { body: page })).toBeNull();
+    expect(
+      await wafGuard(202, { headers: { "x-amzn-requestid": "TEST" } })
+    ).toBeNull();
   });
 });

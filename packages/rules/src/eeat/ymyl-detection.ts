@@ -1,8 +1,8 @@
 // eeat/ymyl-detection - Your Money Your Life content detection
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const HEALTH_KEYWORDS = [
   "symptoms",

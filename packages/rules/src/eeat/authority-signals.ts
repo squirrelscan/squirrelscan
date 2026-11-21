@@ -23,15 +23,26 @@ export const authoritySignalsRule: Rule = {
     // Assessing authorship/citations on a soft-404 error page is meaningless —
     // skip so a broken template can't warn "no author" per page (#1174).
     skipOnSoft404: true,
-    cloud: { service: "authority-signals", unit: "page", creditFeature: "authority_signals" },
+    cloud: {
+      service: "authority-signals",
+      unit: "page",
+      creditFeature: "authority_signals",
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<AuthorityResult>(ctx.cloudResults, "authority-signals", ctx.page.url);
+    const envelope = readCloudResult<AuthorityResult>(
+      ctx.cloudResults,
+      "authority-signals",
+      ctx.page.url
+    );
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
-      const reason = envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+      const reason =
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "authority-signals",
         status: "skipped",
@@ -41,7 +52,8 @@ export const authoritySignalsRule: Rule = {
       return { checks };
     }
 
-    const { authorPresent, citationCount, outboundLinkCount, signals } = envelope.data;
+    const { authorPresent, citationCount, outboundLinkCount, signals } =
+      envelope.data;
 
     if (!authorPresent && citationCount === 0) {
       checks.push({
@@ -50,7 +62,9 @@ export const authoritySignalsRule: Rule = {
         message: "No author attribution or citations detected on this page",
         details:
           outboundLinkCount > 0
-            ? { note: `${outboundLinkCount} outbound link(s) present but none read as citations.` }
+            ? {
+                note: `${outboundLinkCount} outbound link(s) present but none read as citations.`,
+              }
             : undefined,
       });
     } else {
@@ -64,7 +78,9 @@ export const authoritySignalsRule: Rule = {
         status: "pass",
         message: `Authority signals: ${parts.join(", ")}`,
         items:
-          signals.length > 0 ? signals.map((s, i) => ({ id: `signal-${i}`, label: s })) : undefined,
+          signals.length > 0
+            ? signals.map((s, i) => ({ id: `signal-${i}`, label: s }))
+            : undefined,
       });
     }
 

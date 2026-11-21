@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { describe, expect, test } from "bun:test";
+
 import { loadAllRules } from "../src/loader";
 
 // #982: the API publish schema rejects reports with more rules than

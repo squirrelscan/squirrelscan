@@ -89,7 +89,9 @@ export function collectTextExcluding(
  * Build an exclusion predicate that drops elements whose lowercased tag name is
  * in `tags`.
  */
-export function tagExcluder(tags: ReadonlySet<string>): (el: Element) => boolean {
+export function tagExcluder(
+  tags: ReadonlySet<string>
+): (el: Element) => boolean {
   return (el) => {
     const tag = el.tagName?.toLowerCase();
     return !!tag && tags.has(tag);

@@ -31,10 +31,7 @@ export { findingFingerprint } from "./fingerprint";
 // (#1350) The report fold the API applies after scoring, and the map the merge returns for it.
 export { canonicalVariantMap, foldChecksToCanonical } from "./canonical-fold";
 
-export {
-  mergeFindingsPromise,
-  runCloudSmartAudits,
-} from "./merge-promise";
+export { mergeFindingsPromise, runCloudSmartAudits } from "./merge-promise";
 export type {
   CloudSmartAuditsInput,
   CloudSmartAuditsResult,
@@ -76,7 +73,10 @@ export type {
   ScoringContext,
 } from "./scoring";
 
-export { reconstructCompleteResults, reconstructPageRuleChecks } from "./reconstruct";
+export {
+  reconstructCompleteResults,
+  reconstructPageRuleChecks,
+} from "./reconstruct";
 export type { ReconstructCompleteInput } from "./reconstruct";
 
 export {

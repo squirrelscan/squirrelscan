@@ -12,13 +12,17 @@
 //   2. both production boundaries actually ran (a removed call site fails here,
 //      where an equality-only test would still pass).
 
+import type { Config } from "@squirrelscan/config";
+
+import { SchemaCollection } from "@squirrelscan/parser";
+import { extractLinks } from "@squirrelscan/parser";
+import { createRunner, type SiteData } from "@squirrelscan/rules";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { Config } from "@squirrelscan/config";
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import { createRunner, type SiteData } from "@squirrelscan/rules";
-import { SchemaCollection } from "@squirrelscan/parser";
 
 import {
   absorbExternalLinkOccurrences,
@@ -31,9 +35,13 @@ import {
   type PreFetchedAssets,
   type SiteContextPage,
 } from "../src/adapter";
-import { extractLinks } from "@squirrelscan/parser";
+import {
+  detachCounts,
+  detachFromPage,
+  detachParsedPage,
+  resetDetachCounts,
+} from "../src/detach";
 import { compareRetention, expectDetached, MB } from "./helpers/retention";
-import { detachCounts, detachFromPage, detachParsedPage, resetDetachCounts } from "../src/detach";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -41,7 +49,10 @@ function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
 
 // The whole rule set, as the golden tests run it (filterRules defaults every
 // rule to disabled, so `enable: ["*"]` is what makes this a real graph).
-const CONFIG = { rule_options: {}, rules: { enable: ["*"] } } as unknown as Config;
+const CONFIG = {
+  rule_options: {},
+  rules: { enable: ["*"] },
+} as unknown as Config;
 
 const EMPTY_ASSETS: PreFetchedAssets = {
   resourceSizes: { css: [], images: [] },
@@ -88,13 +99,16 @@ describe("detach at the production boundaries", () => {
           redirectChain: page.redirectChain,
           rendered: isRenderedFetch(page.fetcherId),
         } as never,
-        EMPTY_SITE_DATA,
+        EMPTY_SITE_DATA
       );
 
       // Exactly the graph streaming.ts detaches: the flat checks plus each
       // rule's checks, in ONE call, so the sharing between them is preserved.
       const byRule = [...raw.ruleResults];
-      const source = { checks: raw.checks, ruleChecks: byRule.map(([, rr]) => rr.checks) };
+      const source = {
+        checks: raw.checks,
+        ruleChecks: byRule.map(([, rr]) => rr.checks),
+      };
       const copy = detachFromPage(source, "page-rules");
 
       // A copy, and an equal one. `toEqual` over the real graph is the check
@@ -107,7 +121,10 @@ describe("detach at the production boundaries", () => {
 
     expect(cloned).toBeGreaterThan(0);
     // The point of the test: the real graph took the clone path every time.
-    expect(detachCounts("page-rules")).toEqual({ detached: cloned, fallbacks: 0 });
+    expect(detachCounts("page-rules")).toEqual({
+      detached: cloned,
+      fallbacks: 0,
+    });
 
     await run(storage.close());
   }, 120_000);
@@ -117,7 +134,9 @@ describe("detach at the production boundaries", () => {
 
     resetDetachCounts();
     const streamed = await run(
-      runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 3 }),
+      runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, {
+        batchSize: 3,
+      })
     );
     expect(streamed.ruleResultsMap.size).toBeGreaterThan(0);
 
@@ -184,7 +203,10 @@ describe("detach at the production boundaries", () => {
     }
 
     expect(checked).toBeGreaterThan(0);
-    expect(detachCounts("parsed-universe")).toEqual({ detached: checked, fallbacks: 0 });
+    expect(detachCounts("parsed-universe")).toEqual({
+      detached: checked,
+      fallbacks: 0,
+    });
 
     // The path this change is FOR: a crawl with no stored parsedData, where the
     // parse ran against a live DOM and every scalar is a slice of the page.
@@ -201,7 +223,10 @@ describe("detach at the production boundaries", () => {
       reparsed++;
     }
     expect(reparsed).toBeGreaterThan(0);
-    expect(detachCounts("parsed-universe")).toEqual({ detached: reparsed, fallbacks: 0 });
+    expect(detachCounts("parsed-universe")).toEqual({
+      detached: reparsed,
+      fallbacks: 0,
+    });
 
     await run(storage.close());
   }, 120_000);
@@ -234,7 +259,8 @@ describe("detach at the production boundaries", () => {
     const reference: ExternalLinkOccurrences = new Map();
     absorbAttached(reference, ctx);
     expect([...collected.keys()]).toEqual([...reference.keys()]);
-    for (const [href, list] of reference) expect(collected.get(href)).toEqual(list);
+    for (const [href, list] of reference)
+      expect(collected.get(href)).toEqual(list);
   }, 120_000);
 
   test("absorbing from a page-sized document does not retain the document", () => {
@@ -318,19 +344,25 @@ function externalLinkPage(i: number, fillerChars: number): SiteContextPage[] {
   const chunk = 20_000;
   const filler = Array.from(
     { length: Math.max(1, Math.ceil(fillerChars / (chunk + 7))) },
-    (_, k) => `<p>${`${i}-${k} `.padEnd(chunk, "abcdefghij")}</p>`,
+    (_, k) => `<p>${`${i}-${k} `.padEnd(chunk, "abcdefghij")}</p>`
   ).join("");
   const html =
     `<html><body>${filler}` +
     `<a href="https://partner-${i}.example.com/ref/${i}">Partner ${i} anchor text</a>` +
     `<a href="/local/${i}">Local ${i}</a></body></html>`;
   return [
-    { page: { normalizedUrl: url, finalUrl: url, html } as never, parsed: parseHtmlForRules(html, url) },
+    {
+      page: { normalizedUrl: url, finalUrl: url, html } as never,
+      parsed: parseHtmlForRules(html, url),
+    },
   ] as unknown as SiteContextPage[];
 }
 
 /** Exactly what absorbExternalLinkOccurrences did before the detach. */
-function absorbAttached(target: ExternalLinkOccurrences, siteContext: SiteContextPage[]): void {
+function absorbAttached(
+  target: ExternalLinkOccurrences,
+  siteContext: SiteContextPage[]
+): void {
   for (const { page, parsed } of siteContext) {
     if (!parsed || !parsed.document) continue;
     for (const link of extractLinks(parsed.document, page.finalUrl)) {

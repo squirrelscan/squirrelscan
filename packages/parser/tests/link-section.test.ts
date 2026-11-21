@@ -25,8 +25,8 @@ describe("link section", () => {
       sections(
         `<header><a href="/h">h</a></header><nav><a href="/n">n</a></nav>` +
           `<aside><a href="/s">s</a></aside><footer><a href="/f">f</a></footer>` +
-          `<main><p><a href="/c">c</a></p></main><a href="/x">x</a>`,
-      ),
+          `<main><p><a href="/c">c</a></p></main><a href="/x">x</a>`
+      )
     ).toEqual({
       h: "header",
       n: "navigation",
@@ -41,8 +41,8 @@ describe("link section", () => {
     expect(
       sections(
         `<div role="contentinfo"><nav><a href="/a">a</a></nav></div>` +
-          `<div role="banner"><a href="/b">b</a></div>`,
-      ),
+          `<div role="banner"><a href="/b">b</a></div>`
+      )
     ).toEqual({ a: "footer", b: "header" });
   });
 
@@ -50,8 +50,8 @@ describe("link section", () => {
     expect(
       sections(
         `<article><header><a href="/a">a</a></header><p><a href="/b">b</a></p>` +
-          `<footer><a href="/c">c</a></footer></article>`,
-      ),
+          `<footer><a href="/c">c</a></footer></article>`
+      )
     ).toEqual({ a: "content", b: "content", c: "content" });
   });
 
@@ -59,10 +59,12 @@ describe("link section", () => {
     expect(
       sections(
         `<main><article><a href="/body">body</a></article>` +
-          `<section id="comments"><ol class="comment-list"><li><a href="/spam">spam</a></li></ol></section></main>`,
-      ),
+          `<section id="comments"><ol class="comment-list"><li><a href="/spam">spam</a></li></ol></section></main>`
+      )
     ).toEqual({ body: "content", spam: "comments" });
-    expect(sections(`<div class="disqus_thread"><a href="/d">d</a></div>`)).toEqual({
+    expect(
+      sections(`<div class="disqus_thread"><a href="/d">d</a></div>`)
+    ).toEqual({
       d: "comments",
     });
   });
@@ -72,13 +74,15 @@ describe("link section", () => {
       sections(
         `<main><div class="comment-form"><a href="/a">a</a></div>` +
           `<div class="commentary"><a href="/b">b</a></div>` +
-          `<div id="recommendations"><a href="/c">c</a></div></main>`,
-      ),
+          `<div id="recommendations"><a href="/c">c</a></div></main>`
+      )
     ).toEqual({ a: "content", b: "content", c: "content" });
   });
 
   test("a comment thread inside the footer stays footer", () => {
-    expect(sections(`<footer><div id="comments"><a href="/a">a</a></div></footer>`)).toEqual({
+    expect(
+      sections(`<footer><div id="comments"><a href="/a">a</a></div></footer>`)
+    ).toEqual({
       a: "footer",
     });
   });
@@ -89,8 +93,8 @@ describe("link section", () => {
         `<nav aria-label="Breadcrumb"><ol><li><a href="/">a</a></li><li><a href="/p">b</a></li></ol></nav>` +
           `<main><div class="site-breadcrumbs"><a href="/c">c</a></div>` +
           `<ul id="breadcrumb"><li><a href="/d">d</a></li></ul><a href="/e">e</a></main>` +
-          `<nav aria-label="Main"><a href="/n">n</a></nav>`,
-      ),
+          `<nav aria-label="Main"><a href="/n">n</a></nav>`
+      )
     ).toEqual({
       a: "breadcrumbs",
       b: "breadcrumbs",
@@ -112,7 +116,14 @@ describe("link section", () => {
       `</body></html>`;
     const out: Record<string, string | undefined> = {};
     for (const l of parsePage(html, URL).links) out[l.text] = l.section;
-    expect(out).toEqual({ h: "header", n: "navigation", c: "content", f: "footer", w: "unknown", r: "footer" });
+    expect(out).toEqual({
+      h: "header",
+      n: "navigation",
+      c: "content",
+      f: "footer",
+      w: "unknown",
+      r: "footer",
+    });
   });
 
   test("a page-state class such as no-breadcrumb or has-breadcrumbs is not a trail", () => {
@@ -122,24 +133,37 @@ describe("link section", () => {
           `<div class="hide_breadcrumbs"><a href="/b">b</a></div>` +
           `<div id="without-breadcrumb"><a href="/c">c</a></div>` +
           `<div class="page has-breadcrumbs"><a href="/d">d</a></div>` +
-          `<div class="has-breadcrumbs breadcrumbs"><a href="/e">e</a></div></main>`,
-      ),
-    ).toEqual({ a: "content", b: "content", c: "content", d: "content", e: "breadcrumbs" });
+          `<div class="has-breadcrumbs breadcrumbs"><a href="/e">e</a></div></main>`
+      )
+    ).toEqual({
+      a: "content",
+      b: "content",
+      c: "content",
+      d: "content",
+      e: "breadcrumbs",
+    });
   });
 
   test("a breadcrumb trail inside the site header stays header", () => {
-    expect(sections(`<header><nav aria-label="breadcrumb"><a href="/a">a</a></nav></header>`)).toEqual({
+    expect(
+      sections(
+        `<header><nav aria-label="breadcrumb"><a href="/a">a</a></nav></header>`
+      )
+    ).toEqual({
       a: "header",
     });
   });
 
   test("extractLinks agrees with parsePage", () => {
     const html = page(
-      `<nav><a href="/n">n</a></nav><main><a href="/c">c</a><div id="comments"><a href="/m">m</a></div></main>`,
+      `<nav><a href="/n">n</a></nav><main><a href="/c">c</a><div id="comments"><a href="/m">m</a></div></main>`
     );
     const stored = parsePage(html, URL).links.map((l) => [l.text, l.section]);
     const document = parseDocument(html);
-    const extracted = extractLinks(document, URL).map((l) => [l.text, l.section]);
+    const extracted = extractLinks(document, URL).map((l) => [
+      l.text,
+      l.section,
+    ]);
     expect(extracted).toEqual(stored as typeof extracted);
   });
 });

@@ -12,10 +12,15 @@ import {
   type RefusedResource,
 } from "@squirrelscan/core-contracts";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
-import { detectWafFromHeaders, getWafProviderName } from "@squirrelscan/utils/waf";
+import {
+  detectWafFromHeaders,
+  getWafProviderName,
+} from "@squirrelscan/utils/waf";
 
 /** What a refusal check needs from a response. */
-export type RefusalCandidate = Pick<Response, "status" | "headers"> & { url?: string };
+export type RefusalCandidate = Pick<Response, "status" | "headers"> & {
+  url?: string;
+};
 
 /** The host without a leading `www.`, lowercased, so the audited host and its www/apex twin compare equal. */
 function siteHost(url: string): string | null {
@@ -35,7 +40,8 @@ function siteHost(url: string): string | null {
  */
 export function isRefusal(response: RefusalCandidate): boolean {
   const { status } = response;
-  if (status === 401 || status === 403 || isRateLimitStatus(status)) return true;
+  if (status === 401 || status === 403 || isRateLimitStatus(status))
+    return true;
   return status === 503 && response.headers.get("cf-mitigated") === "challenge";
 }
 
@@ -45,7 +51,10 @@ export function isRefusal(response: RefusalCandidate): boolean {
  * one: sites answer those for a single protected path without banning anyone.
  */
 export function isBlockSignal(response: RefusalCandidate): boolean {
-  return isRateLimitStatus(response.status) || response.headers.get("cf-mitigated") === "challenge";
+  return (
+    isRateLimitStatus(response.status) ||
+    response.headers.get("cf-mitigated") === "challenge"
+  );
 }
 
 /** Collects the refusals of one crawl, deduplicated by URL and bounded. */
@@ -85,10 +94,15 @@ export class RefusalLog {
   }
 
   /** Records `response` when it is a refusal. Returns whether it was one. */
-  note(url: string, resource: RefusedResource, response: RefusalCandidate): boolean {
+  note(
+    url: string,
+    resource: RefusedResource,
+    response: RefusalCandidate
+  ): boolean {
     this.observe(response, url);
     if (!isRefusal(response)) return false;
-    if (this.byUrl.has(url) || this.byUrl.size >= MAX_REFUSED_FETCHES) return true;
+    if (this.byUrl.has(url) || this.byUrl.size >= MAX_REFUSED_FETCHES)
+      return true;
     const waf = detectWafFromHeaders(response.headers);
     this.byUrl.set(url, {
       url,
@@ -112,7 +126,7 @@ export function noteRefusal(
   log: RefusalLog | undefined,
   url: string,
   resource: RefusedResource,
-  response: RefusalCandidate,
+  response: RefusalCandidate
 ): boolean {
   return log ? log.note(url, resource, response) : isRefusal(response);
 }

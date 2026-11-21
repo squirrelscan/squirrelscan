@@ -6,7 +6,11 @@
 // costs the others.
 import { describe, expect, test } from "bun:test";
 
-import { decodeSitemapBody, parseSitemap, SITEMAP_NOT_WELL_FORMED_ERROR } from "../src/sitemaps";
+import {
+  decodeSitemapBody,
+  parseSitemap,
+  SITEMAP_NOT_WELL_FORMED_ERROR,
+} from "../src/sitemaps";
 
 const SITEMAP_URL = "https://example.com/sitemap.xml";
 
@@ -21,9 +25,9 @@ describe("sitemap field values stay text (#687)", () => {
     const data = parseSitemap(
       urlset(
         "<loc>https://example.com/a</loc><lastmod>2024</lastmod>",
-        "<loc>https://example.com/b</loc><lastmod>2024-05-01T10:00:00+00:00</lastmod>",
+        "<loc>https://example.com/b</loc><lastmod>2024-05-01T10:00:00+00:00</lastmod>"
       ),
-      SITEMAP_URL,
+      SITEMAP_URL
     );
     expect(data.errors).toEqual([]);
     expect(data.urls.map((u) => [u.loc, u.lastmod])).toEqual([
@@ -35,20 +39,27 @@ describe("sitemap field values stay text (#687)", () => {
   test("numeric-looking values keep the text the sitemap wrote", () => {
     const data = parseSitemap(
       urlset(
-        "<loc>https://example.com/a</loc><lastmod>2024</lastmod><changefreq>1</changefreq><priority>0.80</priority>",
+        "<loc>https://example.com/a</loc><lastmod>2024</lastmod><changefreq>1</changefreq><priority>0.80</priority>"
       ),
-      SITEMAP_URL,
+      SITEMAP_URL
     );
     expect(data.errors).toEqual([]);
     expect(data.urls).toEqual([
-      { loc: "https://example.com/a", lastmod: "2024", changefreq: "1", priority: 0.8 },
+      {
+        loc: "https://example.com/a",
+        lastmod: "2024",
+        changefreq: "1",
+        priority: 0.8,
+      },
     ]);
   });
 
   test("a field with attributes is read from its text", () => {
     const data = parseSitemap(
-      urlset('<loc>https://example.com/a</loc><lastmod note="x">2024</lastmod>'),
-      SITEMAP_URL,
+      urlset(
+        '<loc>https://example.com/a</loc><lastmod note="x">2024</lastmod>'
+      ),
+      SITEMAP_URL
     );
     expect(data.errors).toEqual([]);
     expect(data.urls[0]?.lastmod).toBe("2024");
@@ -60,15 +71,17 @@ describe("one malformed entry does not discard the others (#687)", () => {
     const data = parseSitemap(
       urlset(
         "<loc>https://example.com/a</loc><lastmod><date>2024-01-01</date></lastmod>",
-        "<loc>https://example.com/b</loc><lastmod>2024</lastmod>",
+        "<loc>https://example.com/b</loc><lastmod>2024</lastmod>"
       ),
-      SITEMAP_URL,
+      SITEMAP_URL
     );
     expect(data.urls.map((u) => [u.loc, u.lastmod])).toEqual([
       ["https://example.com/a", undefined],
       ["https://example.com/b", "2024"],
     ]);
-    expect(data.errors).toEqual(["1 <lastmod> value ignored: not a single text value"]);
+    expect(data.errors).toEqual([
+      "1 <lastmod> value ignored: not a single text value",
+    ]);
   });
 
   test("text around markup inside a loc is never read as the URL", () => {
@@ -80,12 +93,17 @@ describe("one malformed entry does not discard the others (#687)", () => {
         "<loc>https://example.com/a</loc>",
         "<loc>https://example.com/p?title=<em>Hi</em></loc>",
         "<loc>https://example.com/x<br/>y</loc>",
-        "<loc>https://example.com/b</loc>",
+        "<loc>https://example.com/b</loc>"
       ),
-      SITEMAP_URL,
+      SITEMAP_URL
     );
-    expect(data.urls.map((u) => u.loc)).toEqual(["https://example.com/a", "https://example.com/b"]);
-    expect(data.errors).toEqual(["2 <url> entries skipped: <loc> is not a single text value"]);
+    expect(data.urls.map((u) => u.loc)).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
+    expect(data.errors).toEqual([
+      "2 <url> entries skipped: <loc> is not a single text value",
+    ]);
   });
 
   test("a raw < in a field is reported, not passed as valid", () => {
@@ -102,11 +120,17 @@ describe("one malformed entry does not discard the others (#687)", () => {
       ],
     ] as const) {
       const data = parseSitemap(
-        urlset("<loc>https://example.com/a</loc>", entry, "<loc>https://example.com/b</loc>"),
-        SITEMAP_URL,
+        urlset(
+          "<loc>https://example.com/a</loc>",
+          entry,
+          "<loc>https://example.com/b</loc>"
+        ),
+        SITEMAP_URL
       );
       expect(data.urls[0]?.loc).toBe("https://example.com/a");
-      expect(data.urls.map((u) => u.loc)).not.toContain("https://example.com/?q=a");
+      expect(data.urls.map((u) => u.loc)).not.toContain(
+        "https://example.com/?q=a"
+      );
       // The raw `<` also makes the file not well formed (#760), reported first.
       expect(data.errors).toHaveLength(2);
       expect(data.errors[0]).toStartWith(`${SITEMAP_NOT_WELL_FORMED_ERROR}: `);
@@ -120,13 +144,18 @@ describe("one malformed entry does not discard the others (#687)", () => {
         "<loc>https://example.com/a</loc>",
         "<loc><b>https://example.com/nested</b></loc>",
         "<loc>https://example.com/twice-1</loc><loc>https://example.com/twice-2</loc>",
-        "<loc>https://example.com/b</loc><lastmod>2024</lastmod>",
+        "<loc>https://example.com/b</loc><lastmod>2024</lastmod>"
       ),
-      SITEMAP_URL,
+      SITEMAP_URL
     );
-    expect(data.urls.map((u) => u.loc)).toEqual(["https://example.com/a", "https://example.com/b"]);
+    expect(data.urls.map((u) => u.loc)).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
     expect(data.urlCount).toBe(2);
-    expect(data.errors).toEqual(["2 <url> entries skipped: <loc> is not a single text value"]);
+    expect(data.errors).toEqual([
+      "2 <url> entries skipped: <loc> is not a single text value",
+    ]);
   });
 
   test("a sitemap index skips an unreadable child loc and keeps the others", () => {
@@ -140,7 +169,9 @@ describe("one malformed entry does not discard the others (#687)", () => {
       "https://example.com/s1.xml",
       "https://example.com/s3.xml",
     ]);
-    expect(data.errors).toEqual(["1 <sitemap> entry skipped: <loc> is not a single text value"]);
+    expect(data.errors).toEqual([
+      "1 <sitemap> entry skipped: <loc> is not a single text value",
+    ]);
   });
 
   test("a raw < in a sitemap index lastmod is reported", () => {
@@ -152,7 +183,9 @@ describe("one malformed entry does not discard the others (#687)", () => {
     expect(data.childSitemaps[0]).toBe("https://example.com/s1.xml");
     expect(data.errors).toHaveLength(2);
     expect(data.errors[0]).toStartWith(`${SITEMAP_NOT_WELL_FORMED_ERROR}: `);
-    expect(data.errors[1]).toBe("1 <lastmod> value ignored: not a single text value");
+    expect(data.errors[1]).toBe(
+      "1 <lastmod> value ignored: not a single text value"
+    );
   });
 
   test("empty and text-only entries are still ignored without an error", () => {
@@ -162,9 +195,9 @@ describe("one malformed entry does not discard the others (#687)", () => {
         "https://example.com/bare",
         "<loc></loc>",
         '<loc hreflang="en"/>',
-        "<loc>https://example.com/a</loc>",
+        "<loc>https://example.com/a</loc>"
       ),
-      SITEMAP_URL,
+      SITEMAP_URL
     );
     expect(data.urls.map((u) => u.loc)).toEqual(["https://example.com/a"]);
     expect(data.errors).toEqual([]);
@@ -174,12 +207,14 @@ describe("one malformed entry does not discard the others (#687)", () => {
     const data = parseSitemap(
       urlset(
         '<loc>https://example.com/a</loc><xhtml:link rel="alternate" hreflang="de" href="https://example.com/de/a"/>' +
-          "<image:image><image:loc>https://example.com/i.png</image:loc></image:image><lastmod>2024</lastmod>",
+          "<image:image><image:loc>https://example.com/i.png</image:loc></image:image><lastmod>2024</lastmod>"
       ),
-      SITEMAP_URL,
+      SITEMAP_URL
     );
     expect(data.errors).toEqual([]);
-    expect(data.urls.map((u) => [u.loc, u.lastmod])).toEqual([["https://example.com/a", "2024"]]);
+    expect(data.urls.map((u) => [u.loc, u.lastmod])).toEqual([
+      ["https://example.com/a", "2024"],
+    ]);
   });
 
   test("a sitemap served as text/html with a skipped entry is still a sitemap", () => {
@@ -188,11 +223,11 @@ describe("one malformed entry does not discard the others (#687)", () => {
         urlset(
           "<loc>https://example.com/a</loc>",
           "<loc>https://example.com/p?title=<em>Hi</em></loc>",
-          "<loc>https://example.com/b</loc>",
-        ),
+          "<loc>https://example.com/b</loc>"
+        )
       ),
       SITEMAP_URL,
-      "text/html",
+      "text/html"
     );
     expect(decoded.notASitemap).toBeUndefined();
     expect(decoded.data.urls.map((u) => u.loc)).toEqual([

@@ -25,7 +25,11 @@ export const llmParsabilityRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<AiParseResult>(ctx.cloudResults, "ai-parse", ctx.page.url);
+    const envelope = readCloudResult<AiParseResult>(
+      ctx.cloudResults,
+      "ai-parse",
+      ctx.page.url
+    );
     if (!envelope || envelope.status === "skipped") {
       const reason = envelope?.skipReason ?? "not-prefetched";
       checks.push({

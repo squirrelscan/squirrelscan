@@ -7,19 +7,23 @@
 // it did not reach are left unanswered, counted as `outOfTime`, and reported as
 // not checked.
 
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, jest, test } from "bun:test";
 import { Effect } from "effect";
 
-import { SQLiteStorage } from "@squirrelscan/crawler";
-
-import { checkCollectedExternalLinks, type ExternalLinkOccurrences } from "../src/adapter";
+import {
+  checkCollectedExternalLinks,
+  type ExternalLinkOccurrences,
+} from "../src/adapter";
 import {
   checkExternalLinks,
   runBulkChecker,
   type ExternalCheckResult,
 } from "../src/external-checker";
 
-const URLS = ["a", "b", "c", "d", "e", "f"].map((p) => `https://example.com/${p}`);
+const URLS = ["a", "b", "c", "d", "e", "f"].map(
+  (p) => `https://example.com/${p}`
+);
 
 const live = (url: string): ExternalCheckResult => ({
   href: url,
@@ -30,10 +34,12 @@ const live = (url: string): ExternalCheckResult => ({
 });
 
 /** A dead-links service that answers every url it is sent, as live. */
-const answersAll = async (urls: string[]) => new Map(urls.map((u) => [u, live(u)] as const));
+const answersAll = async (urls: string[]) =>
+  new Map(urls.map((u) => [u, live(u)] as const));
 
 /** One that is sent the chunk and never answers. */
-const neverAnswers = () => new Promise<Map<string, ExternalCheckResult>>(() => {});
+const neverAnswers = () =>
+  new Promise<Map<string, ExternalCheckResult>>(() => {});
 
 afterEach(() => {
   jest.useRealTimers();
@@ -50,7 +56,7 @@ describe("runBulkChecker under a budget", () => {
       },
       URLS,
       2,
-      { maxWaitMs: 90_000 },
+      { maxWaitMs: 90_000 }
     );
     jest.advanceTimersByTime(90_000);
     const resolved = await pass;
@@ -93,7 +99,10 @@ describe("runBulkChecker under a budget", () => {
 
     const late = { now: 150 };
     sent.length = 0;
-    await runBulkChecker(takes(30, late, sent), URLS, 2, { deadlineAt: 100, now: () => late.now });
+    await runBulkChecker(takes(30, late, sent), URLS, 2, {
+      deadlineAt: 100,
+      now: () => late.now,
+    });
     expect(sent).toEqual([]);
   });
 
@@ -111,7 +120,13 @@ describe("runBulkChecker under a budget", () => {
   });
 
   test("a zero, negative or non-numeric limit is no limit", async () => {
-    for (const maxWaitMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 40]) {
+    for (const maxWaitMs of [
+      0,
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      2 ** 40,
+    ]) {
       const resolved = await runBulkChecker(answersAll, URLS, 2, { maxWaitMs });
       expect(resolved.size).toBe(6);
     }
@@ -165,7 +180,7 @@ describe("checkExternalLinks under a budget", () => {
         ...LOCAL,
         maxWaitMs: 50,
         onProgress: ({ done }) => progress.push(done),
-      }),
+      })
     );
     // Never answered, so never a verdict: not broken, not live, just absent.
     expect(results).toEqual([]);
@@ -184,7 +199,7 @@ describe("checkExternalLinks under a budget", () => {
         },
         deadlineAt: 500,
         now: () => clock,
-      }),
+      })
     );
     // The two the service answered before the deadline; nothing is requested after it.
     expect(results.map((r) => r.href)).toEqual(URLS.slice(0, 2));
@@ -192,13 +207,15 @@ describe("checkExternalLinks under a budget", () => {
 
   test("progress counts cache hits and bulk answers", async () => {
     const cached = URLS[0]!;
-    const progress: Array<{ done: number; total: number; fromCache: number }> = [];
+    const progress: Array<{ done: number; total: number; fromCache: number }> =
+      [];
     await Effect.runPromise(
       // The default, public-only egress: the shared cache is read only under it.
       checkExternalLinks(
         URLS,
         {
-          getCachedBulk: () => new Map([[cached, { ...live(cached), checkedAt: Date.now() }]]),
+          getCachedBulk: () =>
+            new Map([[cached, { ...live(cached), checkedAt: Date.now() }]]),
           setCachedBulk: () => {},
         },
         {
@@ -207,8 +224,8 @@ describe("checkExternalLinks under a budget", () => {
           userAgent: "squirrel-test",
           bulkChecker: answersAll,
           onProgress: (p) => progress.push(p),
-        },
-      ),
+        }
+      )
     );
     expect(progress).toEqual([{ done: 6, total: 6, fromCache: 1 }]);
   });
@@ -234,8 +251,8 @@ async function crawlOn(baseUrl: string) {
         status: "running",
         config: {},
         stats: {},
-      } as never),
-    ),
+      } as never)
+    )
   );
   return { storage, crawlId };
 }
@@ -244,12 +261,24 @@ function linkedFrom(page: string, hrefs: string[]): ExternalLinkOccurrences {
   return new Map(
     hrefs.map((href) => [
       href,
-      [{ pageUrl: page, text: "x", position: "content" as const, isNofollow: false }],
-    ]),
+      [
+        {
+          pageUrl: page,
+          text: "x",
+          position: "content" as const,
+          isNofollow: false,
+        },
+      ],
+    ])
   );
 }
 
-const CONFIG = { enabled: true, concurrency: 2, timeout_ms: 600_000, cache_ttl_days: 1 } as never;
+const CONFIG = {
+  enabled: true,
+  concurrency: 2,
+  timeout_ms: 600_000,
+  cache_ttl_days: 1,
+} as never;
 
 describe("the external link phase records the links it ran out of time on", () => {
   test("a silent host's links are counted as outOfTime and never stored as a verdict", async () => {
@@ -272,16 +301,24 @@ describe("the external link phase records the links it ran out of time on", () =
         undefined,
         undefined,
         // Room for the live host to answer on a loaded runner.
-        { maxWaitMs: 1_000 },
-      ),
+        { maxWaitMs: 1_000 }
+      )
     );
 
-    const stats = await Effect.runPromise(Effect.orDie(storage.getStats(crawlId)));
-    expect(stats?.externalLinkCheck).toMatchObject({ found: 3, checked: 3, outOfTime: 2 });
-    const rows = await Effect.runPromise(Effect.orDie(storage.getLinks(crawlId)));
-    expect(rows.filter((l) => !l.isInternal).map((l) => [l.href, l.status])).toEqual([
-      [answered, 200],
-    ]);
+    const stats = await Effect.runPromise(
+      Effect.orDie(storage.getStats(crawlId))
+    );
+    expect(stats?.externalLinkCheck).toMatchObject({
+      found: 3,
+      checked: 3,
+      outOfTime: 2,
+    });
+    const rows = await Effect.runPromise(
+      Effect.orDie(storage.getLinks(crawlId))
+    );
+    expect(
+      rows.filter((l) => !l.isInternal).map((l) => [l.href, l.status])
+    ).toEqual([[answered, 200]]);
     // A report per settled check, then the final one.
     expect(progress.length).toBeGreaterThan(1);
     expect(progress.at(-1)).toBe(1);
@@ -306,14 +343,20 @@ describe("the external link phase records the links it ran out of time on", () =
         },
         undefined,
         undefined,
-        { budgetMs: 30 },
-      ),
+        { budgetMs: 30 }
+      )
     );
 
     // One call, abandoned at the budget; no local check of the six after it.
     expect(bulkCalls).toBe(1);
-    const stats = await Effect.runPromise(Effect.orDie(storage.getStats(crawlId)));
-    expect(stats?.externalLinkCheck).toMatchObject({ found: 6, checked: 6, outOfTime: 6 });
+    const stats = await Effect.runPromise(
+      Effect.orDie(storage.getStats(crawlId))
+    );
+    expect(stats?.externalLinkCheck).toMatchObject({
+      found: 6,
+      checked: 6,
+      outOfTime: 6,
+    });
   });
 
   test("no limits: the stats carry no outOfTime", async () => {
@@ -324,10 +367,12 @@ describe("the external link phase records the links it ran out of time on", () =
         storage,
         crawlId,
         linkedFrom(`${site}/`, [`${serveOk()}/live`]),
-        CONFIG,
-      ),
+        CONFIG
+      )
     );
-    const stats = await Effect.runPromise(Effect.orDie(storage.getStats(crawlId)));
+    const stats = await Effect.runPromise(
+      Effect.orDie(storage.getStats(crawlId))
+    );
     expect(stats?.externalLinkCheck).not.toHaveProperty("outOfTime");
   });
 });

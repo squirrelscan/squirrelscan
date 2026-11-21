@@ -22,11 +22,12 @@
 //   5. A robust-z floor AND an absolute point gap must BOTH be crossed.
 //   6. Noindex pages on an indexable site are left out, as in the other site-norm rules.
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
 
-import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { isLegalPage } from "../links/no-contextual-inbound";
+import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 import { pageReadingLevel } from "./reading-level";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
@@ -74,7 +75,13 @@ interface VoiceRollup {
 }
 
 function emptyRollup(): VoiceRollup {
-  return { pageCount: 0, skippedNoindexPages: 0, excludedLegalPages: 0, urls: [], scores: [] };
+  return {
+    pageCount: 0,
+    skippedNoindexPages: 0,
+    excludedLegalPages: 0,
+    urls: [],
+    scores: [],
+  };
 }
 
 function accumulatePage(rollup: VoiceRollup, record: VoicePageRecord): void {
@@ -89,7 +96,8 @@ function accumulatePage(rollup: VoiceRollup, record: VoicePageRecord): void {
     rollup.excludedLegalPages += 1;
     return;
   }
-  if (record.readingLevel === null || !Number.isFinite(record.readingLevel)) return;
+  if (record.readingLevel === null || !Number.isFinite(record.readingLevel))
+    return;
   rollup.urls.push(record.url);
   rollup.scores.push(record.readingLevel);
 }
@@ -97,7 +105,9 @@ function accumulatePage(rollup: VoiceRollup, record: VoicePageRecord): void {
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
-  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return sorted.length % 2 === 1
+    ? sorted[mid]!
+    : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
 function skip(message: string, rollup?: VoiceRollup): CheckResult {
@@ -116,12 +126,15 @@ function skip(message: string, rollup?: VoiceRollup): CheckResult {
   };
 }
 
-function buildChecks(rollup: VoiceRollup, sitePageCount: number): CheckResult[] {
+function buildChecks(
+  rollup: VoiceRollup,
+  sitePageCount: number
+): CheckResult[] {
   if (sitePageCount < VOICE_MIN_PAGES) {
     return [
       skip(
         `Only ${sitePageCount} page(s) crawled; ${VOICE_MIN_PAGES} needed to establish a site voice`,
-        rollup,
+        rollup
       ),
     ];
   }
@@ -130,15 +143,22 @@ function buildChecks(rollup: VoiceRollup, sitePageCount: number): CheckResult[] 
     return [
       skip(
         `Only ${sample} page(s) have enough text to score; ${VOICE_MIN_SAMPLE} needed to establish a site voice`,
-        rollup,
+        rollup
       ),
     ];
   }
 
   const med = median(rollup.scores);
-  const inBand = rollup.scores.filter((s) => Math.abs(s - med) <= VOICE_BAND).length;
+  const inBand = rollup.scores.filter(
+    (s) => Math.abs(s - med) <= VOICE_BAND
+  ).length;
   if (inBand / sample < VOICE_MIN_AGREEMENT) {
-    return [skip("The pages' reading levels do not cluster around one norm, so no page is an outlier", rollup)];
+    return [
+      skip(
+        "The pages' reading levels do not cluster around one norm, so no page is an outlier",
+        rollup
+      ),
+    ];
   }
 
   const mad = median(rollup.scores.map((s) => Math.abs(s - med)));
@@ -148,7 +168,8 @@ function buildChecks(rollup: VoiceRollup, sitePageCount: number): CheckResult[] 
   const outliers: { url: string; score: number; delta: number }[] = [];
   for (const [i, score] of rollup.scores.entries()) {
     const delta = score - med;
-    if (Math.abs(delta) >= gap) outliers.push({ url: rollup.urls[i]!, score, delta });
+    if (Math.abs(delta) >= gap)
+      outliers.push({ url: rollup.urls[i]!, score, delta });
   }
 
   const details: Record<string, unknown> = {
@@ -173,7 +194,9 @@ function buildChecks(rollup: VoiceRollup, sitePageCount: number): CheckResult[] 
   }
 
   outliers.sort(
-    (a, b) => Math.abs(b.delta) - Math.abs(a.delta) || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0),
+    (a, b) =>
+      Math.abs(b.delta) - Math.abs(a.delta) ||
+      (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)
   );
   const items: CheckItem[] = outliers.slice(0, VOICE_MAX_ITEMS).map((o) => ({
     id: o.url,
@@ -194,7 +217,10 @@ function buildChecks(rollup: VoiceRollup, sitePageCount: number): CheckResult[] 
   ];
 }
 
-async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
+async function runViaSiteQuery(
+  siteQuery: SiteQuery,
+  skipNoindex: boolean
+): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {
@@ -212,7 +238,8 @@ export const voiceConsistencyRule: Rule = {
   meta: {
     id: "content/voice-consistency",
     name: "Voice Consistency",
-    description: "Finds pages whose reading level is far from the site's own norm",
+    description:
+      "Finds pages whose reading level is far from the site's own norm",
     solution:
       "These pages read at a very different level from the rest of your site: a page written by a different author, text pasted in from another source, or bulk-generated copy usually shows up this way. Check each one. If it is meant to sound like the rest of the site, rewrite it in the site's voice (sentence length and word choice drive the score). If it is deliberately different (a technical reference, a children's section), that is fine. Legal pages are not judged, because their register is different on purpose.",
     category: "content",

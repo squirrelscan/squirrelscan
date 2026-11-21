@@ -22,9 +22,9 @@ describe("parsePage: hreflangAlternates", () => {
         `<link rel="canonical" href="http://127.0.0.1:8791/en-gb/shirt.html">` +
           `<link rel="alternate" hreflang="en-GB" href="http://127.0.0.1:8791/en-gb/shirt.html">` +
           `<link rel="alternate" hreflang="en-us" href="http://127.0.0.1:8791/en-us/shirt.html">` +
-          `<link rel="alternate" hreflang="x-default" href="http://127.0.0.1:8791/en-gb/shirt.html">`,
+          `<link rel="alternate" hreflang="x-default" href="http://127.0.0.1:8791/en-gb/shirt.html">`
       ),
-      URL,
+      URL
     );
 
     expect(parsed.hreflangAlternates).toEqual([
@@ -36,8 +36,10 @@ describe("parsePage: hreflangAlternates", () => {
 
   test("resolves relative hrefs against the page URL", () => {
     const parsed = parsePage(
-      page(`<link rel="alternate" hreflang="en-us" href="../en-us/shirt.html">`),
-      URL,
+      page(
+        `<link rel="alternate" hreflang="en-us" href="../en-us/shirt.html">`
+      ),
+      URL
     );
     expect(parsed.hreflangAlternates).toEqual([
       { hreflang: "en-us", href: "http://127.0.0.1:8791/en-us/shirt.html" },
@@ -49,9 +51,9 @@ describe("parsePage: hreflangAlternates", () => {
       page(
         `<link rel="alternate" hreflang="en-us" href="/en-us/shirt.html">` +
           `<link rel="alternate" hreflang="EN-US" href="/en-us/shirt.html">` +
-          `<link rel="alternate" hreflang="en-us" href="/en-us/other.html">`,
+          `<link rel="alternate" hreflang="en-us" href="/en-us/other.html">`
       ),
-      URL,
+      URL
     );
     expect(parsed.hreflangAlternates).toEqual([
       { hreflang: "en-us", href: "http://127.0.0.1:8791/en-us/shirt.html" },
@@ -62,11 +64,14 @@ describe("parsePage: hreflangAlternates", () => {
   test(`caps the list at ${HREFLANG_ALTERNATES_MAX} entries`, () => {
     const links = Array.from(
       { length: HREFLANG_ALTERNATES_MAX + 25 },
-      (_, i) => `<link rel="alternate" hreflang="en-x${i}" href="/p${i}.html">`,
+      (_, i) => `<link rel="alternate" hreflang="en-x${i}" href="/p${i}.html">`
     ).join("");
     const alternates = parsePage(page(links), URL).hreflangAlternates ?? [];
     expect(alternates).toHaveLength(HREFLANG_ALTERNATES_MAX);
-    expect(alternates[0]).toEqual({ hreflang: "en-x0", href: "http://127.0.0.1:8791/p0.html" });
+    expect(alternates[0]).toEqual({
+      hreflang: "en-x0",
+      href: "http://127.0.0.1:8791/p0.html",
+    });
   });
 
   test("skips links that are not rel=alternate, and empty or oversize fields", () => {
@@ -76,9 +81,9 @@ describe("parsePage: hreflangAlternates", () => {
           `<link rel="alternate" hreflang="" href="/b.html">` +
           `<link rel="alternate" hreflang="en-us" href="">` +
           `<link rel="alternate" hreflang="en-us" href="/${"x".repeat(2100)}">` +
-          `<link rel="ALTERNATE stylesheet" hreflang="de" href="/de.html">`,
+          `<link rel="ALTERNATE stylesheet" hreflang="de" href="/de.html">`
       ),
-      URL,
+      URL
     );
     expect(parsed.hreflangAlternates).toEqual([
       { hreflang: "de", href: "http://127.0.0.1:8791/de.html" },

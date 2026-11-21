@@ -4,11 +4,10 @@
 // link (a verdict another audit cached, or a remote service asked), and the
 // refused links are counted and sampled so the report can list them.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { refusedWithoutLookup } from "@squirrelscan/utils/public-egress";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   absorbExternalLinkOccurrences,
@@ -40,8 +39,14 @@ describe("a refused address is settled before the cache and the bulk checker", (
         return new Map<string, LinkCacheEntry>(
           urls.map((href) => [
             href,
-            { href, status: 200, error: null, redirectTarget: null, checkedAt: Date.now() },
-          ]),
+            {
+              href,
+              status: 200,
+              error: null,
+              redirectTarget: null,
+              checkedAt: Date.now(),
+            },
+          ])
         );
       },
       setCachedBulk: () => {},
@@ -57,11 +62,13 @@ describe("a refused address is settled before the cache and the bulk checker", (
           bulkAsked.push(urls);
           return new Map<string, ExternalCheckResult>();
         },
-      }),
+      })
     );
     expect(cacheAsked).toEqual([]);
     expect(bulkAsked).toEqual([]);
-    expect(results.map((r) => [r.href, r.status, r.error, r.refused, r.fromCache])).toEqual([
+    expect(
+      results.map((r) => [r.href, r.status, r.error, r.refused, r.fromCache])
+    ).toEqual([
       [PRIVATE, null, null, true, false],
       [LOOPBACK, null, null, true, false],
       [TEST_ZONE, null, null, true, false],
@@ -83,12 +90,15 @@ describe("the external link phase records the refused links", () => {
           status: "running",
           config: {},
           stats: {},
-        } as never),
-      ),
+        } as never)
+      )
     );
     const occurrences: ExternalLinkOccurrences = new Map();
     for (const [href, pages] of [
-      [`${PRIVATE}?id=7`, ["https://example.com/", "https://example.com/about"]],
+      [
+        `${PRIVATE}?id=7`,
+        ["https://example.com/", "https://example.com/about"],
+      ],
       [LOOPBACK, ["https://example.com/"]],
     ] as const) {
       occurrences.set(
@@ -98,7 +108,7 @@ describe("the external link phase records the refused links", () => {
           text: "link",
           position: "content" as const,
           isNofollow: false,
-        })),
+        }))
       );
     }
     await Effect.runPromise(
@@ -106,12 +116,19 @@ describe("the external link phase records the refused links", () => {
         storage,
         crawlId,
         occurrences,
-        { enabled: true, concurrency: 2, timeout_ms: 2_000, cache_ttl_days: 1 } as never,
+        {
+          enabled: true,
+          concurrency: 2,
+          timeout_ms: 2_000,
+          cache_ttl_days: 1,
+        } as never,
         undefined,
-        null,
-      ),
+        null
+      )
     );
-    const stats = await Effect.runPromise(Effect.orDie(storage.getStats(crawlId)));
+    const stats = await Effect.runPromise(
+      Effect.orDie(storage.getStats(crawlId))
+    );
     // Refused on the URL alone: never selected under the limit, never stored.
     expect(stats?.externalLinkCheck).toMatchObject({
       found: 2,
@@ -124,10 +141,16 @@ describe("the external link phase records the refused links", () => {
           sourcePages: ["https://example.com/", "https://example.com/about"],
           pageCount: 2,
         },
-        { href: "http://127.0.0.1:9/status", sourcePages: ["https://example.com/"], pageCount: 1 },
+        {
+          href: "http://127.0.0.1:9/status",
+          sourcePages: ["https://example.com/"],
+          pageCount: 1,
+        },
       ],
     });
-    const rows = await Effect.runPromise(Effect.orDie(storage.getLinks(crawlId)));
+    const rows = await Effect.runPromise(
+      Effect.orDie(storage.getLinks(crawlId))
+    );
     expect(rows.filter((l) => !l.isInternal)).toEqual([]);
   });
 });
@@ -153,15 +176,18 @@ describe("only http(s) links reach the external check", () => {
     </body></html>`;
     const collected: ExternalLinkOccurrences = new Map();
     absorbExternalLinkOccurrences(collected, [
-      { page: { normalizedUrl: url, finalUrl: url, html } as never, parsed: parseHtmlForRules(html, url) },
+      {
+        page: { normalizedUrl: url, finalUrl: url, html } as never,
+        parsed: parseHtmlForRules(html, url),
+      },
     ] as unknown as SiteContextPage[]);
     expect([...collected.keys()].sort()).toEqual([
       "http://192.168.1.1/admin",
       "https://partner.example.org/ok",
     ]);
     const policy = { allowPrivateNetwork: false };
-    expect([...collected.keys()].filter((href) => refusedWithoutLookup(href, policy))).toEqual([
-      "http://192.168.1.1/admin",
-    ]);
+    expect(
+      [...collected.keys()].filter((href) => refusedWithoutLookup(href, policy))
+    ).toEqual(["http://192.168.1.1/admin"]);
   });
 });

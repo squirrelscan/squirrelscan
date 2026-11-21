@@ -99,7 +99,10 @@ function extractSchemas(
     if (normalized) {
       schemas.push(normalized);
     }
-  } else if (typeof record["@id"] === "string" && Object.keys(record).length > 1) {
+  } else if (
+    typeof record["@id"] === "string" &&
+    Object.keys(record).length > 1
+  ) {
     // A bare `{"@id"}` describes nothing, so it is not kept.
     untypedNodes.push(record);
   }

@@ -26,7 +26,11 @@ export function hasFlightChunk(body: string): boolean {
 }
 
 /** The decoded text of every `push([1,"..."])` chunk of a flight script, into `parts`; false past the cap. */
-function decodeChunks(body: string, parts: string[], used: { total: number }): boolean {
+function decodeChunks(
+  body: string,
+  parts: string[],
+  used: { total: number }
+): boolean {
   let from = 0;
   for (;;) {
     const at = body.indexOf(PUSH, from);
@@ -57,21 +61,31 @@ type Json = unknown;
 const hasText = (v: Json): v is string => typeof v === "string" && v.length > 0;
 
 /** A JavaScript token that prose does not have: inline loader code, not text with a bracket in it. */
-const CODE_TOKEN = /\bfunction\b|=>|[\w\])]\s*=[^=]|\.createElement|\bwindow\.|\bdocument\./;
+const CODE_TOKEN =
+  /\bfunction\b|=>|[\w\])]\s*=[^=]|\.createElement|\bwindow\.|\bdocument\./;
 
 /**
  * Whether a `$L<id>` component is `next/script` by its props: a `strategy`, an `id` with inline code (`__html`,
  * or string `children` that has a JavaScript token), or a `src` URL beside a `strategy` or an `id`. A bare `src`
  * is any embed or image component. A dev build also names the module (`next/dist/client/script`), which counts.
  */
-function isScriptComponent(ref: string, props: Record<string, Json>, modules: Set<string>, codeLike: Map<string, boolean>): boolean {
+function isScriptComponent(
+  ref: string,
+  props: Record<string, Json>,
+  modules: Set<string>,
+  codeLike: Map<string, boolean>
+): boolean {
   if (modules.has(ref)) return true;
   if (typeof props.strategy === "string") return true;
   if (!hasText(props.id)) return false;
   if (hasText(props.src)) return true;
   const inner = props.dangerouslySetInnerHTML;
   if (isObject(inner) && hasText(inner.__html)) return true;
-  const children = Array.isArray(props.children) ? props.children.find((c): c is string => typeof c === "string" && c.length > 0) : props.children;
+  const children = Array.isArray(props.children)
+    ? props.children.find(
+        (c): c is string => typeof c === "string" && c.length > 0
+      )
+    : props.children;
   if (!hasText(children)) return false;
   // The verdict is per text, not per reference: many elements can point at one long text row, and each would rescan it.
   let verdict = codeLike.get(children);
@@ -79,7 +93,10 @@ function isScriptComponent(ref: string, props: Record<string, Json>, modules: Se
     const code = children.slice(0, 64 * 1024);
     // Prose has a bracket and a semicolon too, so a call and a statement end or block are required AND a token
     // that is code (the word `function`, `window.` or a `?query=` in prose is not).
-    verdict = code.includes("(") && (code.includes(";") || code.includes("{")) && CODE_TOKEN.test(code);
+    verdict =
+      code.includes("(") &&
+      (code.includes(";") || code.includes("{")) &&
+      CODE_TOKEN.test(code);
     codeLike.set(children, verdict);
   }
   return verdict;
@@ -107,7 +124,10 @@ const TEXT_ROW_HEAD = /^([0-9a-f]{1,16}):T([0-9a-f]{1,10}),/;
  * emits for a string of 1 KB or more: `id:T<hex byte length>,<text>`, the text running for exactly that many
  * UTF-8 bytes, newlines included. Text rows are returned by id; the rest are the line rows to parse.
  */
-function parseRows(text: string): { rows: FlightRow[]; texts: Map<string, string> } {
+function parseRows(text: string): {
+  rows: FlightRow[];
+  texts: Map<string, string>;
+} {
   const rows: FlightRow[] = [];
   const texts = new Map<string, string>();
   let pos = 0;
@@ -128,7 +148,8 @@ function parseRows(text: string): { rows: FlightRow[]; texts: Map<string, string
     if (nl === -1) nl = text.length;
     const line = text.slice(pos, nl);
     const colon = line.indexOf(":");
-    if (colon > 0 && colon <= 16 && /^[0-9a-f]+$/.test(line.slice(0, colon))) rows.push({ id: line.slice(0, colon), payload: line.slice(colon + 1) });
+    if (colon > 0 && colon <= 16 && /^[0-9a-f]+$/.test(line.slice(0, colon)))
+      rows.push({ id: line.slice(0, colon), payload: line.slice(colon + 1) });
     pos = nl + 1;
   }
   return { rows, texts };
@@ -146,36 +167,62 @@ function hasTextRef(props: Record<string, Json>): boolean {
 }
 
 /** The props with a text-row reference in `src`, `children` or `__html` replaced by the text. */
-function resolvedProps(props: Record<string, Json>, resolve: (v: Json) => Json): Record<string, Json> {
+function resolvedProps(
+  props: Record<string, Json>,
+  resolve: (v: Json) => Json
+): Record<string, Json> {
   const inner = props.dangerouslySetInnerHTML;
   return {
     ...props,
     ...(typeof props.src === "string" ? { src: resolve(props.src) } : {}),
-    ...(typeof props.children === "string" ? { children: resolve(props.children) } : {}),
-    ...(Array.isArray(props.children) ? { children: props.children.map((c) => (typeof c === "string" ? resolve(c) : c)) } : {}),
-    ...(isObject(inner) && typeof inner.__html === "string" ? { dangerouslySetInnerHTML: { ...inner, __html: resolve(inner.__html) } } : {}),
+    ...(typeof props.children === "string"
+      ? { children: resolve(props.children) }
+      : {}),
+    ...(Array.isArray(props.children)
+      ? {
+          children: props.children.map((c) =>
+            typeof c === "string" ? resolve(c) : c
+          ),
+        }
+      : {}),
+    ...(isObject(inner) && typeof inner.__html === "string"
+      ? { dangerouslySetInnerHTML: { ...inner, __html: resolve(inner.__html) } }
+      : {}),
   };
 }
 
 /** The loading strategies `next/script` takes; a lookalike component's `strategy` prop is not one of them. */
-const SCRIPT_STRATEGIES = new Set(["afterInteractive", "lazyOnload", "beforeInteractive", "worker"]);
+const SCRIPT_STRATEGIES = new Set([
+  "afterInteractive",
+  "lazyOnload",
+  "beforeInteractive",
+  "worker",
+]);
 
 const TEXT_REF = /^\$([0-9a-f]{1,16})$/;
-const isObject = (v: Json): v is Record<string, Json> => typeof v === "object" && v !== null && !Array.isArray(v);
+const isObject = (v: Json): v is Record<string, Json> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
  * The strings the script elements of a page's flight payload carry (loader URLs and inline loader code),
  * one per line. `bodies` are the page's flight scripts in document order. `isData` says whether a script
  * `type` holds data rather than code.
  */
-export function flightLoaderText(bodies: readonly string[], isData: (type: string) => boolean): string {
+export function flightLoaderText(
+  bodies: readonly string[],
+  isData: (type: string) => boolean
+): string {
   const parts: string[] = [];
   const used = { total: 0 };
   for (const body of bodies) if (!decodeChunks(body, parts, used)) break;
   const { rows, texts } = parseRows(parts.join(""));
   const scriptModules = new Set<string>();
   for (const row of rows) {
-    if (row.payload.startsWith("I[") && SCRIPT_MODULE.test(row.payload.slice(0, 512))) scriptModules.add(row.id);
+    if (
+      row.payload.startsWith("I[") &&
+      SCRIPT_MODULE.test(row.payload.slice(0, 512))
+    )
+      scriptModules.add(row.id);
   }
   /** A string, or the text row it points at (`"$2a"`): a long inline snippet is a text row, not a string of the element. */
   const resolve = (v: Json): Json => {
@@ -215,29 +262,47 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
   const scriptRefs = new Set<string>();
   let refNodes = 0;
   scan: for (const row of rows) {
-    if (!row.payload.includes('"strategy"') || (row.payload[0] !== "[" && row.payload[0] !== "{")) continue;
+    if (
+      !row.payload.includes('"strategy"') ||
+      (row.payload[0] !== "[" && row.payload[0] !== "{")
+    )
+      continue;
     let root: Json;
     try {
       root = JSON.parse(row.payload);
     } catch {
       continue;
     }
-    const stack: Array<{ node: Json; depth: number }> = [{ node: root, depth: 0 }];
+    const stack: Array<{ node: Json; depth: number }> = [
+      { node: root, depth: 0 },
+    ];
     while (stack.length > 0) {
       const { node, depth } = stack.pop()!;
       if (++refNodes > MAX_NODES) break scan; // the budget is the page's, not the row's: no later row is parsed for this
-      if (depth > MAX_DEPTH || typeof node !== "object" || node === null) continue;
+      if (depth > MAX_DEPTH || typeof node !== "object" || node === null)
+        continue;
       if (Array.isArray(node)) {
         const [marker, type, , props] = node;
         if (marker === "$" && typeof type === "string" && isObject(props)) {
           const ref = COMPONENT_REF.exec(type)?.[1];
-          if (ref !== undefined && typeof props.strategy === "string" && SCRIPT_STRATEGIES.has(props.strategy)) scriptRefs.add(ref);
-          for (const value of Object.values(props)) if (typeof value === "object" && value !== null) stack.push({ node: value, depth: depth + 1 });
+          if (
+            ref !== undefined &&
+            typeof props.strategy === "string" &&
+            SCRIPT_STRATEGIES.has(props.strategy)
+          )
+            scriptRefs.add(ref);
+          for (const value of Object.values(props))
+            if (typeof value === "object" && value !== null)
+              stack.push({ node: value, depth: depth + 1 });
           continue;
         }
-        for (const item of node) if (typeof item === "object" && item !== null) stack.push({ node: item, depth: depth + 1 });
+        for (const item of node)
+          if (typeof item === "object" && item !== null)
+            stack.push({ node: item, depth: depth + 1 });
       } else {
-        for (const value of Object.values(node)) if (typeof value === "object" && value !== null) stack.push({ node: value, depth: depth + 1 });
+        for (const value of Object.values(node))
+          if (typeof value === "object" && value !== null)
+            stack.push({ node: value, depth: depth + 1 });
       }
     }
   }
@@ -250,35 +315,50 @@ export function flightLoaderText(bodies: readonly string[], isData: (type: strin
     } catch {
       continue;
     }
-    const stack: Array<{ node: Json; depth: number }> = [{ node: root, depth: 0 }];
+    const stack: Array<{ node: Json; depth: number }> = [
+      { node: root, depth: 0 },
+    ];
     while (stack.length > 0) {
       const { node, depth } = stack.pop()!;
       if (++nodes > MAX_NODES) return out.join("\n");
-      if (depth > MAX_DEPTH || typeof node !== "object" || node === null) continue;
+      if (depth > MAX_DEPTH || typeof node !== "object" || node === null)
+        continue;
       if (Array.isArray(node)) {
         const [marker, type, , props] = node;
         if (marker === "$" && typeof type === "string" && isObject(props)) {
           const ref = COMPONENT_REF.exec(type)?.[1];
-          const seen = hasTextRef(props) ? resolvedProps(props, resolve) : props;
-          if (type === "script" || (ref !== undefined && (scriptRefs.has(ref) || isScriptComponent(ref, seen, scriptModules, codeLike)))) {
+          const seen = hasTextRef(props)
+            ? resolvedProps(props, resolve)
+            : props;
+          if (
+            type === "script" ||
+            (ref !== undefined &&
+              (scriptRefs.has(ref) ||
+                isScriptComponent(ref, seen, scriptModules, codeLike)))
+          ) {
             const kind = seen.type;
             if (!(typeof kind === "string" && isData(kind.slice(0, 256)))) {
               if (typeof seen.src === "string") emit(seen.src);
               const inner = seen.dangerouslySetInnerHTML;
-              if (isObject(inner) && typeof inner.__html === "string") emit(inner.__html);
+              if (isObject(inner) && typeof inner.__html === "string")
+                emit(inner.__html);
               collect(seen.children);
             }
           }
           // Elements nest (`head` and `body` hold scripts): look inside every prop that is a value tree.
           for (const value of Object.values(props)) {
-            if (typeof value === "object" && value !== null) stack.push({ node: value, depth: depth + 1 });
+            if (typeof value === "object" && value !== null)
+              stack.push({ node: value, depth: depth + 1 });
           }
           continue;
         }
-        for (const item of node) if (typeof item === "object" && item !== null) stack.push({ node: item, depth: depth + 1 });
+        for (const item of node)
+          if (typeof item === "object" && item !== null)
+            stack.push({ node: item, depth: depth + 1 });
       } else {
         for (const value of Object.values(node)) {
-          if (typeof value === "object" && value !== null) stack.push({ node: value, depth: depth + 1 });
+          if (typeof value === "object" && value !== null)
+            stack.push({ node: value, depth: depth + 1 });
         }
       }
     }

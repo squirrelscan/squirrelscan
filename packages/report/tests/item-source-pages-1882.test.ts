@@ -1,3 +1,4 @@
+import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 // #1882: an item a PER-PAGE check reports lives on that page. The grouper
 // stamps the page as the item's source so `affectedPages` attributes the item
 // to the page (case 2) instead of counting a bare-URL item id as a page of its
@@ -5,11 +6,11 @@
 // "(7 pages)" — 3 pages + 4 scripts — while the API's per-locator grouping
 // counted 3, so the two surfaces disagreed on the same finding.
 import { describe, expect, test } from "bun:test";
-import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
+
+import type { ReportRuleResult } from "../src/types";
 
 import { affectedPages } from "../src/affected-pages";
 import { groupIssuesByCategory } from "../src/grouping";
-import type { ReportRuleResult } from "../src/types";
 
 const meta = {
   id: "security/sri",
@@ -39,7 +40,10 @@ describe("per-page check items are attributed to their page (#1882)", () => {
         status: "fail",
         message: `${i + 2} cross-origin resources without SRI`,
         pageUrl,
-        items: [{ id: GLOBAL, label: "script" }, { id: `https://cdn.test/p${i}.js` }],
+        items: [
+          { id: GLOBAL, label: "script" },
+          { id: `https://cdn.test/p${i}.js` },
+        ],
       })),
     },
   } as unknown as Record<string, ReportRuleResult>;
@@ -83,7 +87,9 @@ describe("per-page check items are attributed to their page (#1882)", () => {
             status: "fail",
             message: "m",
             pageUrl: pages[0],
-            items: [{ id: GLOBAL, sourcePages: ["https://s.test/z", pages[0]] }],
+            items: [
+              { id: GLOBAL, sourcePages: ["https://s.test/z", pages[0]] },
+            ],
           },
           {
             name: "c",
@@ -95,7 +101,10 @@ describe("per-page check items are attributed to their page (#1882)", () => {
         ],
       },
     } as unknown as Record<string, ReportRuleResult>);
-    expect(check!.items![0]!.sourcePages).toEqual(["https://s.test/z", pages[0]]);
+    expect(check!.items![0]!.sourcePages).toEqual([
+      "https://s.test/z",
+      pages[0],
+    ]);
     expect(affectedPages(check!).count).toBe(2);
   });
 
@@ -108,7 +117,10 @@ describe("per-page check items are attributed to their page (#1882)", () => {
             name: "4xx",
             status: "fail",
             message: "2 sitemap URLs return 4xx",
-            items: [{ id: "https://s.test/gone" }, { id: "https://s.test/gone2" }],
+            items: [
+              { id: "https://s.test/gone" },
+              { id: "https://s.test/gone2" },
+            ],
           },
         ],
       },
@@ -143,7 +155,7 @@ describe("per-page check items are attributed to their page (#1882)", () => {
     const n = PUBLISH_LIMITS.maxSourcePagesPerItemPublish + 5;
     const many = Array.from(
       { length: n },
-      (_, i) => `https://s.test/p${String(i).padStart(2, "0")}`,
+      (_, i) => `https://s.test/p${String(i).padStart(2, "0")}`
     );
     const [check] = grouped({
       "security/sri": {
@@ -157,7 +169,9 @@ describe("per-page check items are attributed to their page (#1882)", () => {
         })),
       },
     } as unknown as Record<string, ReportRuleResult>);
-    expect(check!.items![0]!.sourcePages).toHaveLength(PUBLISH_LIMITS.maxSourcePagesPerItemPublish);
+    expect(check!.items![0]!.sourcePages).toHaveLength(
+      PUBLISH_LIMITS.maxSourcePagesPerItemPublish
+    );
     expect(affectedPages(check!).count).toBe(n);
   });
 });

@@ -1,8 +1,13 @@
 // a11y/video-captions - Videos have captions/transcripts
 
-import { hasCaptionTrack, partitionDecorativeVideos } from "../shared/decorative-video";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  hasCaptionTrack,
+  partitionDecorativeVideos,
+} from "../shared/decorative-video";
 
 export const videoCaptionsRule: Rule = {
   meta: {

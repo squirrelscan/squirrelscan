@@ -5,12 +5,12 @@
 // tell which one lacked a name. Items now read `dialog.newsletter-popup`, carry
 // the start tag as a snippet, and keep `dialog#id` when there is an id.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext } from "../src/types";
 
 import { ariaDialogNameRule } from "../src/a11y/aria-dialog-name";
-import type { CheckResult, RuleContext } from "../src/types";
 
 function run(body: string): CheckResult[] {
   const html = `<!doctype html><html lang="en"><head><title>t</title></head><body><h1>Repro</h1>${body}</body></html>`;
@@ -40,14 +40,22 @@ describe("native <dialog>", () => {
       "dialog-name"
     );
     expect(native?.status).toBe("warn");
-    expect(native?.message).toBe("1 native <dialog>(s) without accessible names");
+    expect(native?.message).toBe(
+      "1 native <dialog>(s) without accessible names"
+    );
     expect(native?.items).toEqual([
-      { id: "dialog.newsletter-popup", snippet: `<dialog class="newsletter-popup">` },
+      {
+        id: "dialog.newsletter-popup",
+        snippet: `<dialog class="newsletter-popup">`,
+      },
     ]);
   });
 
   test("a dialog with an id keeps dialog#id", () => {
-    const native = check(run(`<dialog id="promo" class="popup"></dialog>`), "dialog-name");
+    const native = check(
+      run(`<dialog id="promo" class="popup"></dialog>`),
+      "dialog-name"
+    );
     expect(native?.items?.map((i) => i.id)).toEqual(["dialog#promo"]);
   });
 
@@ -56,7 +64,9 @@ describe("native <dialog>", () => {
       run(`<dialog class="  drawer  drawer--right is-open js-hook "></dialog>`),
       "dialog-name"
     );
-    expect(native?.items?.map((i) => i.id)).toEqual(["dialog.drawer.drawer--right.is-open"]);
+    expect(native?.items?.map((i) => i.id)).toEqual([
+      "dialog.drawer.drawer--right.is-open",
+    ]);
   });
 
   test("a dialog with no id and no class is still a bare dialog", () => {
@@ -74,9 +84,18 @@ describe("native <dialog>", () => {
       "dialog-name"
     );
     expect(native?.items).toEqual([
-      { id: "dialog.drawer", snippet: `<dialog class="drawer" data-section="cart">` },
-      { id: "dialog.drawer (2)", snippet: `<dialog class="drawer" data-section="menu">` },
-      { id: "dialog.drawer (3)", snippet: `<dialog class="drawer" data-section="search">` },
+      {
+        id: "dialog.drawer",
+        snippet: `<dialog class="drawer" data-section="cart">`,
+      },
+      {
+        id: "dialog.drawer (2)",
+        snippet: `<dialog class="drawer" data-section="menu">`,
+      },
+      {
+        id: "dialog.drawer (3)",
+        snippet: `<dialog class="drawer" data-section="search">`,
+      },
     ]);
   });
 
@@ -85,7 +104,9 @@ describe("native <dialog>", () => {
     // `dialog.drawer` once the cart drawer was named, it would take over the
     // cart's finding and leave its own `(2)` finding behind.
     const before = check(
-      run(`<dialog class="drawer" data-section="cart"></dialog><dialog class="drawer" data-section="menu"></dialog>`),
+      run(
+        `<dialog class="drawer" data-section="cart"></dialog><dialog class="drawer" data-section="menu"></dialog>`
+      ),
       "dialog-name"
     );
     const after = check(
@@ -94,13 +115,18 @@ describe("native <dialog>", () => {
       ),
       "dialog-name"
     );
-    expect(before?.items?.map((i) => i.id)).toEqual(["dialog.drawer", "dialog.drawer (2)"]);
+    expect(before?.items?.map((i) => i.id)).toEqual([
+      "dialog.drawer",
+      "dialog.drawer (2)",
+    ]);
     expect(after?.items?.map((i) => i.id)).toEqual(["dialog.drawer (2)"]);
   });
 
   test("an ordinal never repeats an id given out already", () => {
     const native = check(
-      run(`<dialog id="x"></dialog><dialog id="x"></dialog><dialog id="x (2)"></dialog>`),
+      run(
+        `<dialog id="x"></dialog><dialog id="x"></dialog><dialog id="x (2)"></dialog>`
+      ),
       "dialog-name"
     );
     const ids = native?.items?.map((i) => i.id) ?? [];
@@ -110,7 +136,9 @@ describe("native <dialog>", () => {
 
   test("the same markup gives the same items on every scan", () => {
     const body = `<dialog class="a"></dialog><dialog class="a"></dialog><dialog id="x"></dialog>`;
-    expect(check(run(body), "dialog-name")?.items).toEqual(check(run(body), "dialog-name")?.items);
+    expect(check(run(body), "dialog-name")?.items).toEqual(
+      check(run(body), "dialog-name")?.items
+    );
   });
 
   test("named dialogs still pass", () => {
@@ -125,7 +153,9 @@ describe("native <dialog>", () => {
 
   test("the snippet is the start tag only, capped", () => {
     const native = check(
-      run(`<dialog class="popup" data-blob="${"x".repeat(1000)}"><p>${"Long content. ".repeat(200)}</p></dialog>`),
+      run(
+        `<dialog class="popup" data-blob="${"x".repeat(1000)}"><p>${"Long content. ".repeat(200)}</p></dialog>`
+      ),
       "dialog-name"
     );
     const snippet = native?.items?.[0]?.snippet ?? "";
@@ -138,23 +168,37 @@ describe("native <dialog>", () => {
 describe("ARIA dialogs", () => {
   test("an id-less role dialog is identified by tag, role and class", () => {
     const aria = check(
-      run(`<div role="dialog" class="modal modal--wide"></div><section role="alertdialog"></section>`),
+      run(
+        `<div role="dialog" class="modal modal--wide"></div><section role="alertdialog"></section>`
+      ),
       "aria-dialog-name"
     );
     expect(aria?.status).toBe("fail");
     expect(aria?.items).toEqual([
-      { id: `div[role="dialog"].modal.modal--wide`, snippet: `<div role="dialog" class="modal modal--wide">` },
-      { id: `section[role="alertdialog"]`, snippet: `<section role="alertdialog">` },
+      {
+        id: `div[role="dialog"].modal.modal--wide`,
+        snippet: `<div role="dialog" class="modal modal--wide">`,
+      },
+      {
+        id: `section[role="alertdialog"]`,
+        snippet: `<section role="alertdialog">`,
+      },
     ]);
   });
 
   test("a role dialog with an id keeps role#id", () => {
-    const aria = check(run(`<div role="alertdialog" id="confirm" class="modal"></div>`), "aria-dialog-name");
+    const aria = check(
+      run(`<div role="alertdialog" id="confirm" class="modal"></div>`),
+      "aria-dialog-name"
+    );
     expect(aria?.items?.map((i) => i.id)).toEqual(["alertdialog#confirm"]);
   });
 
   test("more than ten are capped with a remainder count", () => {
-    const body = Array.from({ length: 12 }, (_, i) => `<div role="dialog" class="m${i}"></div>`).join("");
+    const body = Array.from(
+      { length: 12 },
+      (_, i) => `<div role="dialog" class="m${i}"></div>`
+    ).join("");
     const aria = check(run(body), "aria-dialog-name");
     expect(aria?.items).toHaveLength(10);
     expect(aria?.details).toEqual({ additional: 2 });

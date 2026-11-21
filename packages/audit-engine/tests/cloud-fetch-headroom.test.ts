@@ -8,18 +8,25 @@
 // Synthetic origins only (egress is blocked in the harness). Deadlines are a
 // few hundred ms so the structure fires the way it does in production, faster.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect, Fiber, Stream } from "effect";
-
 import type { CloudServicesClient } from "@squirrelscan/cloud-client";
-import type { RenderChargeLine, RenderRequest } from "@squirrelscan/core-contracts";
-import { createCrawler, type CrawlerConfig, type CrawlerEvent } from "@squirrelscan/crawler";
+import type {
+  RenderChargeLine,
+  RenderRequest,
+} from "@squirrelscan/core-contracts";
+
+import {
+  createCrawler,
+  type CrawlerConfig,
+  type CrawlerEvent,
+} from "@squirrelscan/crawler";
 import {
   createFetchDocumentFetcher,
   type DocumentFetcher,
   type FetchRequest,
   type FetchResponse,
 } from "@squirrelscan/fetchers";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect, Fiber, Stream } from "effect";
 
 import { createCloudDocumentFetcher } from "../src/cloud-fetcher";
 
@@ -44,7 +51,7 @@ function serveOrigin(ttfbMs: number): { url: string; hits: string[] } {
       if (ttfbMs > 0) await Bun.sleep(ttfbMs);
       return new Response(
         `<!doctype html><html><head><title>${path}</title></head><body><a href="/one">one</a><a href="/two">two</a><p>plain</p></body></html>`,
-        { headers: { "content-type": "text/html" } },
+        { headers: { "content-type": "text/html" } }
       );
     },
   });
@@ -55,13 +62,22 @@ function serveOrigin(ttfbMs: number): { url: string; hits: string[] } {
 /** A render whose job never turns terminal — the "render never returns" shape. */
 function neverReturningClient(charged = 2): CloudServicesClient {
   return {
-    render: async () => ({ jobId: "job-1", status: "queued" as const, charged }),
-    renderResult: async (jobId: string) => ({ jobId, status: "running" as const }),
+    render: async () => ({
+      jobId: "job-1",
+      status: "queued" as const,
+      charged,
+    }),
+    renderResult: async (jobId: string) => ({
+      jobId,
+      status: "running" as const,
+    }),
   } as unknown as CloudServicesClient;
 }
 
 /** A recording fallback that answers `body` after `delayMs` (or throws `error`). */
-function fallbackFetcher(opts: { delayMs?: number; body?: string; error?: Error } = {}) {
+function fallbackFetcher(
+  opts: { delayMs?: number; body?: string; error?: Error } = {}
+) {
   const requests: FetchRequest[] = [];
   const fetcher: DocumentFetcher = {
     id: "fallback",
@@ -94,7 +110,11 @@ function fallbackFetcher(opts: { delayMs?: number; body?: string; error?: Error 
   return { fetcher, requests };
 }
 
-const fastPolling = { batchWindowMs: 1, firstPollDelayMs: 5, pollIntervalMs: 20 };
+const fastPolling = {
+  batchWindowMs: 1,
+  firstPollDelayMs: 5,
+  pollIntervalMs: 20,
+};
 const URL_A = "https://example.com/a";
 
 describe("fallback headroom inside the outer deadline (#2026)", () => {
@@ -134,16 +154,21 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
     // headroom. Neither is handed `timeoutMs` = outer a second time.
     const early = fallbackFetcher();
     const failingClient = {
-      render: async () => ({ jobId: "job-1", status: "queued" as const, charged: 2 }),
+      render: async () => ({
+        jobId: "job-1",
+        status: "queued" as const,
+        charged: 2,
+      }),
       renderResult: async (jobId: string) => ({
         jobId,
         status: "done" as const,
         results: [{ url: URL_A, status: null, error: "render failed" }],
       }),
     } as unknown as CloudServicesClient;
-    await createCloudDocumentFetcher(failingClient, { ...fastPolling, fallback: early.fetcher }).fetch(
-      { url: URL_A, timeoutMs: OUTER_MS },
-    );
+    await createCloudDocumentFetcher(failingClient, {
+      ...fastPolling,
+      fallback: early.fetcher,
+    }).fetch({ url: URL_A, timeoutMs: OUTER_MS });
     expect(early.requests).toHaveLength(1);
     expect(early.requests[0]!.timeoutMs).toBeLessThanOrEqual(OUTER_MS);
     expect(early.requests[0]!.timeoutMs).toBeGreaterThan(OUTER_MS - 100);
@@ -165,14 +190,25 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
     const fallback = fallbackFetcher({ delayMs: 150 });
     const startedAt = Date.now();
     const client = {
-      render: async () => ({ jobId: "job-1", status: "queued" as const, charged: 2 }),
+      render: async () => ({
+        jobId: "job-1",
+        status: "queued" as const,
+        charged: 2,
+      }),
       renderResult: async (jobId: string) =>
         Date.now() - startedAt < 260
           ? { jobId, status: "running" as const }
           : {
               jobId,
               status: "done" as const,
-              results: [{ url: URL_A, status: 200, html: "<html>rendered</html>", headers: {} }],
+              results: [
+                {
+                  url: URL_A,
+                  status: 200,
+                  html: "<html>rendered</html>",
+                  headers: {},
+                },
+              ],
             },
     } as unknown as CloudServicesClient;
     const charges: Array<[number, number]> = [];
@@ -193,20 +229,36 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
   });
 
   test("a racing fallback that fails fast does not throw a render away that lands inside the deadline", async () => {
-    const fallback = fallbackFetcher({ error: new Error("connection refused") });
+    const fallback = fallbackFetcher({
+      error: new Error("connection refused"),
+    });
     const startedAt = Date.now();
     const client = {
-      render: async () => ({ jobId: "job-1", status: "queued" as const, charged: 2 }),
+      render: async () => ({
+        jobId: "job-1",
+        status: "queued" as const,
+        charged: 2,
+      }),
       renderResult: async (jobId: string) =>
         Date.now() - startedAt < 300
           ? { jobId, status: "running" as const }
           : {
               jobId,
               status: "done" as const,
-              results: [{ url: URL_A, status: 200, html: "<html>late render</html>", headers: {} }],
+              results: [
+                {
+                  url: URL_A,
+                  status: 200,
+                  html: "<html>late render</html>",
+                  headers: {},
+                },
+              ],
             },
     } as unknown as CloudServicesClient;
-    const fetcher = createCloudDocumentFetcher(client, { ...fastPolling, fallback: fallback.fetcher });
+    const fetcher = createCloudDocumentFetcher(client, {
+      ...fastPolling,
+      fallback: fallback.fetcher,
+    });
 
     const resp = await fetcher.fetch({ url: URL_A, timeoutMs: OUTER_MS });
 
@@ -215,15 +267,17 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
   });
 
   test("neither lands by the outer deadline: the fetch fails with the fallback's error, once, at the deadline", async () => {
-    const fallback = fallbackFetcher({ error: new Error("connection refused") });
+    const fallback = fallbackFetcher({
+      error: new Error("connection refused"),
+    });
     const fetcher = createCloudDocumentFetcher(neverReturningClient(), {
       ...fastPolling,
       fallback: fallback.fetcher,
     });
     const startedAt = Date.now();
-    await expect(fetcher.fetch({ url: URL_A, timeoutMs: OUTER_MS })).rejects.toThrow(
-      "connection refused",
-    );
+    await expect(
+      fetcher.fetch({ url: URL_A, timeoutMs: OUTER_MS })
+    ).rejects.toThrow("connection refused");
     const elapsed = Date.now() - startedAt;
     expect(elapsed).toBeGreaterThanOrEqual(OUTER_MS - 20);
     expect(elapsed).toBeLessThan(OUTER_MS + 300);
@@ -234,7 +288,11 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
     const fallback = fallbackFetcher({ delayMs: 120 });
     const startedAt = Date.now();
     const client = {
-      render: async () => ({ jobId: "job-1", status: "queued" as const, charged: 2 }),
+      render: async () => ({
+        jobId: "job-1",
+        status: "queued" as const,
+        charged: 2,
+      }),
       renderResult: async (jobId: string) =>
         Date.now() - startedAt < 260
           ? { jobId, status: "running" as const }
@@ -244,7 +302,10 @@ describe("fallback headroom inside the outer deadline (#2026)", () => {
               results: [{ url: URL_A, status: null, error: "render failed" }],
             },
     } as unknown as CloudServicesClient;
-    const fetcher = createCloudDocumentFetcher(client, { ...fastPolling, fallback: fallback.fetcher });
+    const fetcher = createCloudDocumentFetcher(client, {
+      ...fastPolling,
+      fallback: fallback.fetcher,
+    });
 
     const resp = await fetcher.fetch({ url: URL_A, timeoutMs: OUTER_MS });
 
@@ -269,23 +330,36 @@ describe("the charge path is abort-aware (#2026)", () => {
         await gate;
         // The real client rejects when its signal aborts; the old code passed
         // the callers' abort through here.
-        if (opts?.signal?.aborted) throw new DOMException("aborted", "AbortError");
+        if (opts?.signal?.aborted)
+          throw new DOMException("aborted", "AbortError");
         return { jobId: "job-1", status: "queued" as const, charged: 2 };
       },
-      renderResult: async (jobId: string) => ({ jobId, status: "running" as const }),
+      renderResult: async (jobId: string) => ({
+        jobId,
+        status: "running" as const,
+      }),
     } as unknown as CloudServicesClient;
-    const charges: Array<{ units: number; credits: number; breakdown: RenderChargeLine[] }> = [];
+    const charges: Array<{
+      units: number;
+      credits: number;
+      breakdown: RenderChargeLine[];
+    }> = [];
     const budget = { spent: 0, cap: 100 };
     const fallback = fallbackFetcher();
     const fetcher = createCloudDocumentFetcher(client, {
       ...fastPolling,
       fallback: fallback.fetcher,
       budget,
-      onRenderCharged: (units, credits, breakdown) => charges.push({ units, credits, breakdown }),
+      onRenderCharged: (units, credits, breakdown) =>
+        charges.push({ units, credits, breakdown }),
     });
 
     const ctrl = new AbortController();
-    const pending = fetcher.fetch({ url: URL_A, timeoutMs: OUTER_MS, signal: ctrl.signal });
+    const pending = fetcher.fetch({
+      url: URL_A,
+      timeoutMs: OUTER_MS,
+      signal: ctrl.signal,
+    });
     // Wait for the submit to be in flight, then abort the caller.
     while (submitted.length === 0) await Bun.sleep(1);
     ctrl.abort();
@@ -298,7 +372,11 @@ describe("the charge path is abort-aware (#2026)", () => {
     await Bun.sleep(20);
 
     expect(charges).toEqual([
-      { units: 1, credits: 2, breakdown: [{ feature: "render", units: 1, credits: 2 }] },
+      {
+        units: 1,
+        credits: 2,
+        breakdown: [{ feature: "render", units: 1, credits: 2 }],
+      },
     ]);
     expect(budget.spent).toBe(2);
     // No fallback for an aborted caller (unchanged).
@@ -332,7 +410,7 @@ describe("through the crawler: a wedged render never costs the page (#2026)", ()
       timeoutMs: 10_000,
     });
     const crawler = await Effect.runPromise(
-      createCrawler({ config: { ...CRAWL_CONFIG, documentFetcher } }),
+      createCrawler({ config: { ...CRAWL_CONFIG, documentFetcher } })
     );
     const warnings: string[] = [];
     const failed: string[] = [];
@@ -341,12 +419,14 @@ describe("through the crawler: a wedged render never costs the page (#2026)", ()
         Effect.sync(() => {
           if (event.type === "warning") warnings.push(event.code);
           if (event.type === "page:failed") failed.push(event.error);
-        }),
-      ),
+        })
+      )
     );
     try {
       const startedAt = Date.now();
-      const crawlId = await Effect.runPromise(crawler.start(origin.url, origin.url));
+      const crawlId = await Effect.runPromise(
+        crawler.start(origin.url, origin.url)
+      );
       const pages = await Effect.runPromise(crawler.storage.getPages(crawlId));
       const stats = await Effect.runPromise(crawler.storage.getStats(crawlId));
 
@@ -388,7 +468,11 @@ describe("codex review follow-ups (#2026)", () => {
   test("the poll loop stops as soon as the last racing waiter settles, instead of polling on to the deadline", async () => {
     let polls = 0;
     const client = {
-      render: async () => ({ jobId: "job-1", status: "queued" as const, charged: 2 }),
+      render: async () => ({
+        jobId: "job-1",
+        status: "queued" as const,
+        charged: 2,
+      }),
       renderResult: async (jobId: string) => {
         polls++;
         return { jobId, status: "running" as const };

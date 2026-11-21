@@ -12,14 +12,22 @@ import { NO_CACHE_HEADERS, createCrawler } from "../src/core/crawler";
 import { createTestStorage } from "../src/storage";
 
 const ORIGIN = "https://nc.invalid";
-const PAGE = "<!doctype html><html><head><title>t</title></head><body></body></html>";
+const PAGE =
+  "<!doctype html><html><head><title>t</title></head><body></body></html>";
 
 const realFetch = globalThis.fetch;
 beforeAll(() => {
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
     if (new URL(url).hostname.endsWith(".invalid")) {
-      return Promise.reject(new TypeError("fetch failed: host does not resolve (test stub)"));
+      return Promise.reject(
+        new TypeError("fetch failed: host does not resolve (test stub)")
+      );
     }
     return realFetch(input, init);
   }) as typeof fetch;
@@ -28,12 +36,19 @@ afterAll(() => {
   globalThis.fetch = realFetch;
 });
 
-function response(url: string, extraHeaders: Record<string, string> = {}): FetchResponse {
+function response(
+  url: string,
+  extraHeaders: Record<string, string> = {}
+): FetchResponse {
   return {
     url,
     finalUrl: url,
     status: 200,
-    headers: { "content-type": "text/html; charset=utf-8", etag: '"v1"', ...extraHeaders },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      etag: '"v1"',
+      ...extraHeaders,
+    },
     body: PAGE,
     timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
     redirectChain: {
@@ -80,7 +95,10 @@ const baseConfig = {
 
 async function crawl(
   extra: Record<string, unknown>,
-  opts: { storage?: CrawlStorage; responseHeaders?: Record<string, string> } = {},
+  opts: {
+    storage?: CrawlStorage;
+    responseHeaders?: Record<string, string>;
+  } = {}
 ) {
   const sent: Array<Record<string, string>> = [];
   const documentFetcher: DocumentFetcher = {
@@ -91,7 +109,8 @@ async function crawl(
       return response(req.url, opts.responseHeaders);
     },
   };
-  const storage: CrawlStorage = opts.storage ?? (await Effect.runPromise(createTestStorage()));
+  const storage: CrawlStorage =
+    opts.storage ?? (await Effect.runPromise(createTestStorage()));
   const config = { ...baseConfig, ...extra };
   const crawlId = await Effect.runPromise(
     storage.createCrawl({
@@ -102,7 +121,7 @@ async function crawl(
       status: "paused",
       config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats,
-    }),
+    })
   );
   await Effect.runPromise(
     storage.upsertFrontier(crawlId, {
@@ -114,9 +133,11 @@ async function crawl(
       source: "seed" as const,
       enqueuedAt: Date.now(),
       retryCount: 0,
-    }),
+    })
   );
-  const crawler = await Effect.runPromise(createCrawler({ config: { ...config, documentFetcher }, storage }));
+  const crawler = await Effect.runPromise(
+    createCrawler({ config: { ...config, documentFetcher }, storage })
+  );
   await Effect.runPromise(crawler.resumeFromStorage(crawlId));
   const meta = await Effect.runPromise(storage.getCrawl(crawlId));
   return { sent, meta };
@@ -147,7 +168,10 @@ describe("no-cache page fetches (#2032)", () => {
   }, 30_000);
 
   test("a custom Cache-Control header wins over the no-cache default", async () => {
-    const { sent } = await crawl({ noCache: true, headers: { "cache-control": "max-age=0" } });
+    const { sent } = await crawl({
+      noCache: true,
+      headers: { "cache-control": "max-age=0" },
+    });
     for (const h of sent) expect(lower(h)["cache-control"]).toBe("max-age=0");
   }, 30_000);
 
@@ -166,13 +190,13 @@ describe("no-cache page fetches (#2032)", () => {
       // Control: without noCache the incremental re-run serves the cached copy with no request.
       const reuse = await crawl(
         { incremental: true, useCacheControl: true },
-        { storage, responseHeaders },
+        { storage, responseHeaders }
       );
       expect(reuse.sent.length).toBe(0);
 
       const { sent } = await crawl(
         { incremental: true, useCacheControl: true, noCache: true },
-        { storage, responseHeaders },
+        { storage, responseHeaders }
       );
       expect(sent.length).toBeGreaterThan(0);
       const root = lower(sent[0]!);

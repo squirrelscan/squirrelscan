@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import type { RuleContext } from "@squirrelscan/rules";
+
 import { parseHTML } from "@squirrelscan/parser/dom";
 import { content } from "@squirrelscan/rules";
-import type { RuleContext } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 const { brokenHtmlRule } = content;
 
@@ -26,19 +27,25 @@ describe("content/broken-html DOM reuse (#262)", () => {
     // page.html is clean; only the parsed document carries the deprecated tag.
     // A finding therefore proves the rule consumed ctx.parsed.document.
     const ctx = ctxFor(VALID, WITH_DEPRECATED);
-    const { checks } = (await brokenHtmlRule.run(ctx)) as { checks: { items?: { id: string }[] }[] };
+    const { checks } = (await brokenHtmlRule.run(ctx)) as {
+      checks: { items?: { id: string }[] }[];
+    };
     expect(issueIds(checks)).toContain("deprecated-center");
   });
 
   test("falls back to parsing page.html when parsed.document is null", async () => {
     const ctx = ctxFor(WITH_DEPRECATED, null);
-    const { checks } = (await brokenHtmlRule.run(ctx)) as { checks: { items?: { id: string }[] }[] };
+    const { checks } = (await brokenHtmlRule.run(ctx)) as {
+      checks: { items?: { id: string }[] }[];
+    };
     expect(issueIds(checks)).toContain("deprecated-center");
   });
 
   test("valid structure passes", async () => {
     const ctx = ctxFor(VALID, VALID);
-    const { checks } = (await brokenHtmlRule.run(ctx)) as { checks: { name: string; status: string }[] };
+    const { checks } = (await brokenHtmlRule.run(ctx)) as {
+      checks: { name: string; status: string }[];
+    };
     expect(checks.find((c) => c.name === "broken-html")?.status).toBe("pass");
   });
 });

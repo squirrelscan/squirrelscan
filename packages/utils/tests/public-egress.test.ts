@@ -21,7 +21,9 @@ import {
 import { safeRedirectFetch } from "../src/safe-fetch";
 
 /** A resolver from a fixed table that records every name it is asked for. */
-function table(answers: Record<string, string[]>): ResolveHost & { asked: string[] } {
+function table(
+  answers: Record<string, string[]>
+): ResolveHost & { asked: string[] } {
   const asked: string[] = [];
   const resolve = async (host: string) => {
     asked.push(host);
@@ -50,7 +52,9 @@ function publicOnly(resolve: ResolveHost = table(PUBLIC_DNS)): EgressPolicy {
   return { allowPrivateNetwork: false, resolve };
 }
 
-function privateNetwork(resolve: ResolveHost = table(PUBLIC_DNS)): EgressPolicy {
+function privateNetwork(
+  resolve: ResolveHost = table(PUBLIC_DNS)
+): EgressPolicy {
   return { allowPrivateNetwork: true, resolve };
 }
 
@@ -128,13 +132,25 @@ describe("assertEgressAllowed: public site", () => {
   });
 
   test("allows a public IP literal and a name whose every answer is public", async () => {
-    expect(await refused("https://93.184.216.34/a.js", publicOnly())).toBe(false);
-    expect(await refused("https://[2606:4700::1111]/a.js", publicOnly())).toBe(false);
+    expect(await refused("https://93.184.216.34/a.js", publicOnly())).toBe(
+      false
+    );
+    expect(await refused("https://[2606:4700::1111]/a.js", publicOnly())).toBe(
+      false
+    );
     // NAT64 and 6to4 of a public IPv4 address stay public.
-    expect(await refused("https://[64:ff9b::5db8:d822]/a.js", publicOnly())).toBe(false);
-    expect(await refused("https://[2002:5db8:d822::1]/a.js", publicOnly())).toBe(false);
-    expect(await refused("https://cdn.example.net/a.js", publicOnly())).toBe(false);
-    expect(await refused("https://dual.example.net/a.js", publicOnly())).toBe(false);
+    expect(
+      await refused("https://[64:ff9b::5db8:d822]/a.js", publicOnly())
+    ).toBe(false);
+    expect(
+      await refused("https://[2002:5db8:d822::1]/a.js", publicOnly())
+    ).toBe(false);
+    expect(await refused("https://cdn.example.net/a.js", publicOnly())).toBe(
+      false
+    );
+    expect(await refused("https://dual.example.net/a.js", publicOnly())).toBe(
+      false
+    );
   });
 
   test("a name that resolves to no address at all is refused", async () => {
@@ -143,15 +159,22 @@ describe("assertEgressAllowed: public site", () => {
   });
 
   test("a name that does not resolve fails as the network error, not as refused", async () => {
-    await expect(assertEgressAllowed("https://nx.example.net/a.js", publicOnly())).rejects.toThrow(
-      "ENOTFOUND",
-    );
+    await expect(
+      assertEgressAllowed("https://nx.example.net/a.js", publicOnly())
+    ).rejects.toThrow("ENOTFOUND");
   });
 
   test("an abort during a slow lookup rejects as an AbortError", async () => {
     const controller = new AbortController();
-    const policy = { allowPrivateNetwork: false, resolve: () => new Promise<string[]>(() => {}) };
-    const pending = assertEgressAllowed("https://slow.example.net/a.js", policy, controller.signal);
+    const policy = {
+      allowPrivateNetwork: false,
+      resolve: () => new Promise<string[]>(() => {}),
+    };
+    const pending = assertEgressAllowed(
+      "https://slow.example.net/a.js",
+      policy,
+      controller.signal
+    );
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   });
@@ -207,10 +230,10 @@ describe("assertEgressAllowed: site on a private network", () => {
   test.each(["gcp6.example.net", "eks6.example.net"])(
     "a pinned send never connects to %s's metadata answer",
     async (host) => {
-      await expect(vetEgressTarget(`http://${host}/a`, privateNetwork())).rejects.toBeInstanceOf(
-        EgressRefusedError,
-      );
-    },
+      await expect(
+        vetEgressTarget(`http://${host}/a`, privateNetwork())
+      ).rejects.toBeInstanceOf(EgressRefusedError);
+    }
   );
 });
 
@@ -260,29 +283,42 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     };
     return { send, sent };
   }
-  const to = (location: string) => () => new Response(null, { status: 302, headers: { location } });
+  const to = (location: string) => () =>
+    new Response(null, { status: 302, headers: { location } });
 
   test.each([
     ["the metadata address", "http://169.254.169.254/latest/meta-data/"],
     ["a private IP", "http://10.0.0.7/x"],
     ["loopback", "http://127.0.0.1:6379/"],
     ["a decimal-encoded loopback", "http://2130706433/"],
-    ["a public-looking name that resolves privately", "http://rebind.example.net/x"],
+    [
+      "a public-looking name that resolves privately",
+      "http://rebind.example.net/x",
+    ],
   ])("a redirect to %s is refused and never sent", async (_label, location) => {
     const first = "https://cdn.example.net/a.js";
     const { send, sent } = transport({ [first]: to(location) });
     await expect(
-      safeRedirectFetch(first, { method: "HEAD" }, egressGuardedSend(send, publicOnly())),
+      safeRedirectFetch(
+        first,
+        { method: "HEAD" },
+        egressGuardedSend(send, publicOnly())
+      )
     ).rejects.toBeInstanceOf(EgressRefusedError);
     expect(sent.map((s) => s.url)).toEqual(["https://93.184.216.34/a.js"]);
   });
 
   test("allowHost holds every hop to the allowed hosts: an off-site redirect is refused unsent", async () => {
     const first = "https://cdn.example.net/m.json";
-    const { send, sent } = transport({ [first]: to("https://dual.example.net/m.json") });
-    const policy = { ...publicOnly(), allowHost: (host: string) => host === "cdn.example.net" };
+    const { send, sent } = transport({
+      [first]: to("https://dual.example.net/m.json"),
+    });
+    const policy = {
+      ...publicOnly(),
+      allowHost: (host: string) => host === "cdn.example.net",
+    };
     await expect(
-      safeRedirectFetch(first, {}, egressGuardedSend(send, policy)),
+      safeRedirectFetch(first, {}, egressGuardedSend(send, policy))
     ).rejects.toBeInstanceOf(EgressRefusedError);
     expect(sent.map((s) => s.host)).toEqual(["cdn.example.net"]);
   });
@@ -294,17 +330,22 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     const send = async (url: string) => {
       tried.push(url);
       if (url.startsWith("http://127.0.0.1")) {
-        throw Object.assign(new TypeError("Unable to connect"), { code: "ConnectionRefused" });
+        throw Object.assign(new TypeError("Unable to connect"), {
+          code: "ConnectionRefused",
+        });
       }
       return new Response("ok", { status: 200 });
     };
     const { response } = await safeRedirectFetch(
       "http://dev.localhost:5173/app",
       {},
-      egressGuardedSend(send, privateNetwork(resolve)),
+      egressGuardedSend(send, privateNetwork(resolve))
     );
     expect(response.status).toBe(200);
-    expect(tried).toEqual(["http://127.0.0.1:5173/app", "http://[::1]:5173/app"]);
+    expect(tried).toEqual([
+      "http://127.0.0.1:5173/app",
+      "http://[::1]:5173/app",
+    ]);
 
     const aborted: string[] = [];
     const abortingSend = async (url: string) => {
@@ -315,8 +356,8 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
       safeRedirectFetch(
         "http://dev.localhost:5173/app",
         {},
-        egressGuardedSend(abortingSend, privateNetwork(resolve)),
-      ),
+        egressGuardedSend(abortingSend, privateNetwork(resolve))
+      )
     ).rejects.toMatchObject({ name: "AbortError" });
     expect(aborted).toHaveLength(1);
   });
@@ -326,14 +367,16 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     const tried: string[] = [];
     const send = async (url: string) => {
       tried.push(url);
-      throw Object.assign(new TypeError("socket reset"), { code: "ECONNRESET" });
+      throw Object.assign(new TypeError("socket reset"), {
+        code: "ECONNRESET",
+      });
     };
     await expect(
       safeRedirectFetch(
         "http://dev.localhost/app",
         {},
-        egressGuardedSend(send, privateNetwork(resolve)),
-      ),
+        egressGuardedSend(send, privateNetwork(resolve))
+      )
     ).rejects.toMatchObject({ code: "ECONNRESET" });
     expect(tried).toEqual(["http://127.0.0.1/app"]);
   });
@@ -345,14 +388,16 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     const send = async (url: string) => {
       tried.push(url);
       controller.abort();
-      throw Object.assign(new TypeError("Unable to connect"), { code: "ConnectionRefused" });
+      throw Object.assign(new TypeError("Unable to connect"), {
+        code: "ConnectionRefused",
+      });
     };
     await expect(
       safeRedirectFetch(
         "http://dev.localhost/app",
         { signal: controller.signal },
-        egressGuardedSend(send, privateNetwork(resolve)),
-      ),
+        egressGuardedSend(send, privateNetwork(resolve))
+      )
     ).rejects.toMatchObject({ code: "ConnectionRefused" });
     expect(tried).toHaveLength(1);
   });
@@ -367,27 +412,34 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     await safeRedirectFetch(
       "http://v6.localhost/app",
       {},
-      egressGuardedSend(send, privateNetwork(resolve)),
+      egressGuardedSend(send, privateNetwork(resolve))
     );
     expect(tried).toEqual(["http://[::1]/app"]);
   });
 
   test("at most one address per family is tried, however many the name answers", async () => {
     const many = Array.from({ length: 30 }, (_, n) => `93.184.216.${n + 1}`);
-    const resolve = table({ "wide.example.net": [...many, "2606:2800:220:1::1"] });
+    const resolve = table({
+      "wide.example.net": [...many, "2606:2800:220:1::1"],
+    });
     const tried: string[] = [];
     const send = async (url: string) => {
       tried.push(url);
-      throw Object.assign(new TypeError("Unable to connect"), { code: "ConnectionRefused" });
+      throw Object.assign(new TypeError("Unable to connect"), {
+        code: "ConnectionRefused",
+      });
     };
     await expect(
       safeRedirectFetch(
         "https://wide.example.net/a.js",
         {},
-        egressGuardedSend(send, publicOnly(resolve)),
-      ),
+        egressGuardedSend(send, publicOnly(resolve))
+      )
     ).rejects.toMatchObject({ code: "ConnectionRefused" });
-    expect(tried).toEqual(["https://93.184.216.1/a.js", "https://[2606:2800:220:1::1]/a.js"]);
+    expect(tried).toEqual([
+      "https://93.184.216.1/a.js",
+      "https://[2606:2800:220:1::1]/a.js",
+    ]);
   });
 
   test("allowPrivateTarget lets the site's own origin resolve privately, and nothing else", async () => {
@@ -398,22 +450,35 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     });
     const policy = {
       allowPrivateNetwork: false,
-      allowPrivateTarget: (url: URL) => url.origin === "https://staging.example.com",
+      allowPrivateTarget: (url: URL) =>
+        url.origin === "https://staging.example.com",
       resolve,
     };
-    expect(await refused("https://staging.example.com/m.json", policy)).toBe(false);
+    expect(await refused("https://staging.example.com/m.json", policy)).toBe(
+      false
+    );
     // Another port on the same host, or a subdomain, is not the site's origin.
-    expect(await refused("https://staging.example.com:8443/m.json", policy)).toBe(true);
-    expect(await refused("https://cdn.staging.example.com/m.json", policy)).toBe(true);
+    expect(
+      await refused("https://staging.example.com:8443/m.json", policy)
+    ).toBe(true);
+    expect(
+      await refused("https://cdn.staging.example.com/m.json", policy)
+    ).toBe(true);
     // Link-local and metadata stay refused even for an allowed target.
     const metaPolicy = { ...policy, allowPrivateTarget: () => true };
-    expect(await refused("https://meta.staging.example.com/m.json", metaPolicy)).toBe(true);
+    expect(
+      await refused("https://meta.staging.example.com/m.json", metaPolicy)
+    ).toBe(true);
   });
 
   test("a refused first hop sends nothing", async () => {
     const { send, sent } = transport({});
     await expect(
-      safeRedirectFetch("http://10.0.0.1/a", {}, egressGuardedSend(send, publicOnly())),
+      safeRedirectFetch(
+        "http://10.0.0.1/a",
+        {},
+        egressGuardedSend(send, publicOnly())
+      )
     ).rejects.toBeInstanceOf(EgressRefusedError);
     expect(sent).toEqual([]);
   });
@@ -423,7 +488,7 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     await safeRedirectFetch(
       "https://cdn.example.net:8443/a.js?v=1",
       {},
-      egressGuardedSend(send, publicOnly()),
+      egressGuardedSend(send, publicOnly())
     );
     expect(sent).toEqual([
       {
@@ -436,9 +501,17 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
 
   test("plain http keeps the Host header and sets no TLS server name; IPv4 is preferred", async () => {
     const { send, sent } = transport({});
-    await safeRedirectFetch("http://dual.example.net/a", {}, egressGuardedSend(send, publicOnly()));
+    await safeRedirectFetch(
+      "http://dual.example.net/a",
+      {},
+      egressGuardedSend(send, publicOnly())
+    );
     expect(sent).toEqual([
-      { url: "http://93.184.216.34/a", host: "dual.example.net", serverName: undefined },
+      {
+        url: "http://93.184.216.34/a",
+        host: "dual.example.net",
+        serverName: undefined,
+      },
     ]);
   });
 
@@ -448,7 +521,7 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     await safeRedirectFetch(
       "https://v6.example.net/a.js",
       {},
-      egressGuardedSend(send, publicOnly(resolve)),
+      egressGuardedSend(send, publicOnly(resolve))
     );
     expect(sent).toEqual([
       {
@@ -462,10 +535,20 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
   test("pin: false (a transport that pins itself) still vets and refuses, but sends the name", async () => {
     const { send, sent } = transport({});
     const policy = { ...publicOnly(), pin: false };
-    await safeRedirectFetch("http://cdn.example.net/a", {}, egressGuardedSend(send, policy));
-    expect(sent).toEqual([{ url: "http://cdn.example.net/a", host: null, serverName: undefined }]);
+    await safeRedirectFetch(
+      "http://cdn.example.net/a",
+      {},
+      egressGuardedSend(send, policy)
+    );
+    expect(sent).toEqual([
+      { url: "http://cdn.example.net/a", host: null, serverName: undefined },
+    ]);
     await expect(
-      safeRedirectFetch("http://rebind.example.net/a", {}, egressGuardedSend(send, policy)),
+      safeRedirectFetch(
+        "http://rebind.example.net/a",
+        {},
+        egressGuardedSend(send, policy)
+      )
     ).rejects.toBeInstanceOf(EgressRefusedError);
     expect(sent).toHaveLength(1);
   });
@@ -475,7 +558,10 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     await safeRedirectFetch(
       "https://cdn.example.net./a.js",
       {},
-      egressGuardedSend(send, publicOnly(table({ "cdn.example.net.": ["93.184.216.34"] }))),
+      egressGuardedSend(
+        send,
+        publicOnly(table({ "cdn.example.net.": ["93.184.216.34"] }))
+      )
     );
     expect(sent).toEqual([
       {
@@ -495,28 +581,39 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
       const { send, sent } = transport({});
       const policy = publicOnly(table({ "odd.example.net": [answer] }));
       await expect(
-        safeRedirectFetch("https://odd.example.net/a.js", {}, egressGuardedSend(send, policy)),
+        safeRedirectFetch(
+          "https://odd.example.net/a.js",
+          {},
+          egressGuardedSend(send, policy)
+        )
       ).rejects.toBeInstanceOf(EgressRefusedError);
       expect(sent).toEqual([]);
-    },
+    }
   );
 
   test("an IP literal is sent as is, with no Host override", async () => {
     const { send, sent } = transport({});
-    await safeRedirectFetch("http://93.184.216.34/a", {}, egressGuardedSend(send, publicOnly()));
-    expect(sent).toEqual([{ url: "http://93.184.216.34/a", host: null, serverName: undefined }]);
+    await safeRedirectFetch(
+      "http://93.184.216.34/a",
+      {},
+      egressGuardedSend(send, publicOnly())
+    );
+    expect(sent).toEqual([
+      { url: "http://93.184.216.34/a", host: null, serverName: undefined },
+    ]);
   });
 
   test("DNS rebinding cannot move the connection: the request goes to the address that was vetted", async () => {
     // Answers public to the guard; a second lookup would answer private. The
     // guard asks once and the connection is pinned, so the second never happens.
     let lookups = 0;
-    const resolve = async () => (++lookups === 1 ? ["93.184.216.34"] : ["10.0.0.9"]);
+    const resolve = async () =>
+      ++lookups === 1 ? ["93.184.216.34"] : ["10.0.0.9"];
     const { send, sent } = transport({});
     await safeRedirectFetch(
       "https://rebinder.example.net/a.js",
       {},
-      egressGuardedSend(send, publicOnly(resolve)),
+      egressGuardedSend(send, publicOnly(resolve))
     );
     expect(lookups).toBe(1);
     expect(sent.map((s) => s.url)).toEqual(["https://93.184.216.34/a.js"]);
@@ -529,12 +626,16 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     const { response, finalUrl } = await safeRedirectFetch(
       first,
       {},
-      egressGuardedSend(send, publicOnly()),
+      egressGuardedSend(send, publicOnly())
     );
     expect(response.status).toBe(200);
     expect(finalUrl).toBe(second);
     expect(sent).toEqual([
-      { url: "https://93.184.216.34/a.js", host: "cdn.example.net", serverName: "cdn.example.net" },
+      {
+        url: "https://93.184.216.34/a.js",
+        host: "cdn.example.net",
+        serverName: "cdn.example.net",
+      },
       {
         url: "https://93.184.216.34/b.js",
         host: "dual.example.net",
@@ -547,116 +648,124 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
 // The pin relies on the runtime checking the certificate against the TLS
 // server name, not the IP it connects to. Proven against a real TLS server with
 // a throwaway CA, generated at run time so no key is ever committed.
-describe.skipIf(!Bun.which("openssl"))("pinned TLS against a real server", () => {
-  let dir: string;
-  let ca: string;
-  let server: ReturnType<typeof Bun.serve>;
-  const hosts: string[] = [];
+describe.skipIf(!Bun.which("openssl"))(
+  "pinned TLS against a real server",
+  () => {
+    let dir: string;
+    let ca: string;
+    let server: ReturnType<typeof Bun.serve>;
+    const hosts: string[] = [];
 
-  beforeAll(() => {
-    dir = mkdtempSync(join(tmpdir(), "egress-pin-"));
-    const run = (...args: string[]) => {
-      const result = Bun.spawnSync(["openssl", ...args], { cwd: dir, stderr: "pipe" });
-      if (result.exitCode !== 0) throw new Error(result.stderr.toString());
-    };
-    run(
-      "req",
-      "-x509",
-      "-newkey",
-      "rsa:2048",
-      "-nodes",
-      "-keyout",
-      "ca.key",
-      "-out",
-      "ca.pem",
-      "-days",
-      "1",
-      "-subj",
-      "/CN=egress test CA",
-      "-addext",
-      "basicConstraints=critical,CA:TRUE",
-      "-addext",
-      "keyUsage=critical,keyCertSign",
-    );
-    run(
-      "req",
-      "-newkey",
-      "rsa:2048",
-      "-nodes",
-      "-keyout",
-      "leaf.key",
-      "-out",
-      "leaf.csr",
-      "-subj",
-      "/CN=pinned.test",
-    );
-    writeFileSync(
-      join(dir, "ext.cnf"),
-      "subjectAltName=DNS:pinned.test\nextendedKeyUsage=serverAuth\n",
-    );
-    run(
-      "x509",
-      "-req",
-      "-in",
-      "leaf.csr",
-      "-CA",
-      "ca.pem",
-      "-CAkey",
-      "ca.key",
-      "-CAcreateserial",
-      "-out",
-      "leaf.pem",
-      "-days",
-      "1",
-      "-extfile",
-      "ext.cnf",
-    );
-    ca = readFileSync(join(dir, "ca.pem"), "utf8");
-    server = Bun.serve({
-      port: 0,
-      hostname: "127.0.0.1",
-      tls: {
-        cert: readFileSync(join(dir, "leaf.pem"), "utf8"),
-        key: readFileSync(join(dir, "leaf.key"), "utf8"),
-      },
-      fetch(req) {
-        hosts.push(req.headers.get("host") ?? "");
-        return new Response("ok");
-      },
+    beforeAll(() => {
+      dir = mkdtempSync(join(tmpdir(), "egress-pin-"));
+      const run = (...args: string[]) => {
+        const result = Bun.spawnSync(["openssl", ...args], {
+          cwd: dir,
+          stderr: "pipe",
+        });
+        if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+      };
+      run(
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        "ca.key",
+        "-out",
+        "ca.pem",
+        "-days",
+        "1",
+        "-subj",
+        "/CN=egress test CA",
+        "-addext",
+        "basicConstraints=critical,CA:TRUE",
+        "-addext",
+        "keyUsage=critical,keyCertSign"
+      );
+      run(
+        "req",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        "leaf.key",
+        "-out",
+        "leaf.csr",
+        "-subj",
+        "/CN=pinned.test"
+      );
+      writeFileSync(
+        join(dir, "ext.cnf"),
+        "subjectAltName=DNS:pinned.test\nextendedKeyUsage=serverAuth\n"
+      );
+      run(
+        "x509",
+        "-req",
+        "-in",
+        "leaf.csr",
+        "-CA",
+        "ca.pem",
+        "-CAkey",
+        "ca.key",
+        "-CAcreateserial",
+        "-out",
+        "leaf.pem",
+        "-days",
+        "1",
+        "-extfile",
+        "ext.cnf"
+      );
+      ca = readFileSync(join(dir, "ca.pem"), "utf8");
+      server = Bun.serve({
+        port: 0,
+        hostname: "127.0.0.1",
+        tls: {
+          cert: readFileSync(join(dir, "leaf.pem"), "utf8"),
+          key: readFileSync(join(dir, "leaf.key"), "utf8"),
+        },
+        fetch(req) {
+          hosts.push(req.headers.get("host") ?? "");
+          return new Response("ok");
+        },
+      });
     });
-  });
 
-  afterAll(() => {
-    server?.stop(true);
-    if (dir) rmSync(dir, { recursive: true, force: true });
-  });
+    afterAll(() => {
+      server?.stop(true);
+      if (dir) rmSync(dir, { recursive: true, force: true });
+    });
 
-  // 127.0.0.1 is private, so these run under the private-network policy; the
-  // point is the TLS behaviour of a pinned request, not the address rules.
-  const policy = () =>
-    privateNetwork(table({ "pinned.test": ["127.0.0.1"], "other.test": ["127.0.0.1"] }));
-  const send = (url: string, init: RequestInit) => fetch(url, init);
+    // 127.0.0.1 is private, so these run under the private-network policy; the
+    // point is the TLS behaviour of a pinned request, not the address rules.
+    const policy = () =>
+      privateNetwork(
+        table({ "pinned.test": ["127.0.0.1"], "other.test": ["127.0.0.1"] })
+      );
+    const send = (url: string, init: RequestInit) => fetch(url, init);
 
-  test("connects to the vetted address with the name as Host and as the certificate's name", async () => {
-    const { response } = await safeRedirectFetch(
-      `https://pinned.test:${server.port}/a.js`,
-      { tls: { ca } } as RequestInit,
-      egressGuardedSend(send, policy()),
-    );
-    expect(response.status).toBe(200);
-    expect(hosts.at(-1)).toBe(`pinned.test:${server.port}`);
-  });
-
-  test("a certificate that does not cover the name is rejected, though the address is the same", async () => {
-    await expect(
-      safeRedirectFetch(
-        `https://other.test:${server.port}/a.js`,
+    test("connects to the vetted address with the name as Host and as the certificate's name", async () => {
+      const { response } = await safeRedirectFetch(
+        `https://pinned.test:${server.port}/a.js`,
         { tls: { ca } } as RequestInit,
-        egressGuardedSend(send, policy()),
-      ),
-    ).rejects.toMatchObject({ code: "ERR_TLS_CERT_ALTNAME_INVALID" });
-  });
-});
+        egressGuardedSend(send, policy())
+      );
+      expect(response.status).toBe(200);
+      expect(hosts.at(-1)).toBe(`pinned.test:${server.port}`);
+    });
+
+    test("a certificate that does not cover the name is rejected, though the address is the same", async () => {
+      await expect(
+        safeRedirectFetch(
+          `https://other.test:${server.port}/a.js`,
+          { tls: { ca } } as RequestInit,
+          egressGuardedSend(send, policy())
+        )
+      ).rejects.toMatchObject({ code: "ERR_TLS_CERT_ALTNAME_INVALID" });
+    });
+  }
+);
 
 describe("isNonPublicAddress", () => {
   test.each([
@@ -708,7 +817,10 @@ describe("trustTarget: the hosts the crawl requests are sent as it sends them (r
       "imds.printer.local": ["169.254.169.254"],
       "meta.example.net": ["169.254.169.254"],
     });
-  const policy = (resolve: ResolveHost, trusted = ["printer.local"]): EgressPolicy => ({
+  const policy = (
+    resolve: ResolveHost,
+    trusted = ["printer.local"]
+  ): EgressPolicy => ({
     allowPrivateNetwork: true,
     resolve,
     trustTarget: (url) => trusted.includes(url.hostname),
@@ -716,18 +828,28 @@ describe("trustTarget: the hosts the crawl requests are sent as it sends them (r
 
   test("a trusted host is neither resolved nor refused", async () => {
     const resolve = lan();
-    expect(await refused("http://printer.local/style.css", policy(resolve))).toBe(false);
+    expect(
+      await refused("http://printer.local/style.css", policy(resolve))
+    ).toBe(false);
     expect(resolve.asked).not.toContain("printer.local");
   });
 
   test("without trust, the same name is refused for its link-local answer", async () => {
     expect(
-      await refused("http://printer.local/style.css", { ...policy(lan()), trustTarget: undefined }),
+      await refused("http://printer.local/style.css", {
+        ...policy(lan()),
+        trustTarget: undefined,
+      })
     ).toBe(true);
   });
 
   test("a subdomain is not trusted with its parent: one pointed at metadata is refused", async () => {
-    expect(await refused("http://imds.printer.local/latest/meta-data/", policy(lan()))).toBe(true);
+    expect(
+      await refused(
+        "http://imds.printer.local/latest/meta-data/",
+        policy(lan())
+      )
+    ).toBe(true);
   });
 
   test("trust never reaches a metadata hostname or a link-local or metadata literal", async () => {
@@ -736,14 +858,20 @@ describe("trustTarget: the hosts the crawl requests are sent as it sends them (r
       resolve: lan(),
       trustTarget: () => true,
     };
-    expect(await refused("http://metadata.google.internal/", trustEverything)).toBe(true);
-    expect(await refused("http://169.254.169.254/latest/meta-data/", trustEverything)).toBe(true);
+    expect(
+      await refused("http://metadata.google.internal/", trustEverything)
+    ).toBe(true);
+    expect(
+      await refused("http://169.254.169.254/latest/meta-data/", trustEverything)
+    ).toBe(true);
     expect(await refused("http://[fe80::1]/x.png", trustEverything)).toBe(true);
   });
 
   test("a hop that leaves the trusted hosts is vetted as before", async () => {
     const p = policy(lan());
-    expect(await refused("http://169.254.169.254/latest/meta-data/", p)).toBe(true);
+    expect(await refused("http://169.254.169.254/latest/meta-data/", p)).toBe(
+      true
+    );
     expect(await refused("http://meta.example.net/", p)).toBe(true);
     expect(await refused("http://metadata.google.internal/", p)).toBe(true);
     expect(await refused("http://[fe80::1]/x.png", p)).toBe(true);
@@ -781,39 +909,64 @@ describe("refusedWithoutLookup: what the URL alone settles (pub#770)", () => {
   });
 
   test("a public name is left to the request's own vetting", () => {
-    expect(refusedWithoutLookup("https://partner.example.com/pricing", publicSite)).toBe(false);
+    expect(
+      refusedWithoutLookup("https://partner.example.com/pricing", publicSite)
+    ).toBe(false);
   });
 
   test("a private site's audit allows private addresses, never link-local or metadata", () => {
-    expect(refusedWithoutLookup("http://10.0.0.5/admin", privateSite)).toBe(false);
-    expect(refusedWithoutLookup("http://localhost:8080/", privateSite)).toBe(false);
-    expect(refusedWithoutLookup("http://169.254.169.254/", privateSite)).toBe(true);
+    expect(refusedWithoutLookup("http://10.0.0.5/admin", privateSite)).toBe(
+      false
+    );
+    expect(refusedWithoutLookup("http://localhost:8080/", privateSite)).toBe(
+      false
+    );
+    expect(refusedWithoutLookup("http://169.254.169.254/", privateSite)).toBe(
+      true
+    );
     expect(refusedWithoutLookup("http://[fe80::1]/", privateSite)).toBe(true);
-    expect(refusedWithoutLookup("http://metadata.google.internal/", privateSite)).toBe(true);
+    expect(
+      refusedWithoutLookup("http://metadata.google.internal/", privateSite)
+    ).toBe(true);
   });
 });
 
 describe("egressRefuses: a redirect loop's pre-check (repo#2830)", () => {
   const policy: EgressPolicy = {
     allowPrivateNetwork: true,
-    resolve: table({ "intranet.test": ["10.0.0.5"], "imds.example.com": ["169.254.169.254"] }),
+    resolve: table({
+      "intranet.test": ["10.0.0.5"],
+      "imds.example.com": ["169.254.169.254"],
+    }),
   };
 
   test("true for what the policy refuses, false for what it allows; nothing is sent", async () => {
-    expect(await egressRefuses("http://169.254.169.254/latest/", policy)).toBe(true);
-    expect(await egressRefuses("http://metadata.google.internal/", policy)).toBe(true);
+    expect(await egressRefuses("http://169.254.169.254/latest/", policy)).toBe(
+      true
+    );
+    expect(
+      await egressRefuses("http://metadata.google.internal/", policy)
+    ).toBe(true);
     expect(await egressRefuses("http://imds.example.com/", policy)).toBe(true);
     expect(await egressRefuses("http://intranet.test/", policy)).toBe(false);
   });
 
   test("a resolver failure is not a refusal: it propagates", async () => {
-    await expect(egressRefuses("http://unknown.test/", policy)).rejects.toThrow("ENOTFOUND");
+    await expect(egressRefuses("http://unknown.test/", policy)).rejects.toThrow(
+      "ENOTFOUND"
+    );
   });
 });
 
 describe("a scoped link-local answer beside routable ones (repo#2830)", () => {
   // What macOS answers for a LAN mDNS name such as `nas.local`.
-  const lan = ["::1", "fe80::1c2b:3a4d:5e6f:7081%en0", "fd07::5", "127.0.0.1", "192.168.1.5"];
+  const lan = [
+    "::1",
+    "fe80::1c2b:3a4d:5e6f:7081%en0",
+    "fd07::5",
+    "127.0.0.1",
+    "192.168.1.5",
+  ];
 
   test("is set aside for a pinned request, which connects to a routable address", async () => {
     const target = await vetEgressTarget("http://nas.local:5000/", {
@@ -829,7 +982,7 @@ describe("a scoped link-local answer beside routable ones (repo#2830)", () => {
       vetEgressTarget("http://printer.local/", {
         allowPrivateNetwork: true,
         resolve: table({ "printer.local": ["fe80::1%en0"] }),
-      }),
+      })
     ).rejects.toThrow(EgressRefusedError);
   });
 
@@ -838,14 +991,14 @@ describe("a scoped link-local answer beside routable ones (repo#2830)", () => {
       vetEgressTarget("http://nas.local/", {
         allowPrivateNetwork: true,
         resolve: table({ "nas.local": ["192.168.1.5", "fe80::1"] }),
-      }),
+      })
     ).rejects.toThrow(EgressRefusedError);
     await expect(
       vetEgressTarget("http://nas.local/", {
         allowPrivateNetwork: true,
         pin: false,
         resolve: table({ "nas.local": lan }),
-      }),
+      })
     ).rejects.toThrow(EgressRefusedError);
   });
 });

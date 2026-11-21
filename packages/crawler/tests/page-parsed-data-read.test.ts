@@ -10,6 +10,7 @@ import type {
   ResponseHeaders,
   SecurityHeaders,
 } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -64,7 +65,10 @@ async function freshCrawl(store: SQLiteStorage): Promise<string> {
   return run(store.createCrawl(meta));
 }
 
-function page(normalizedUrl: string, over: Partial<PageRecord> = {}): PageRecord {
+function page(
+  normalizedUrl: string,
+  over: Partial<PageRecord> = {}
+): PageRecord {
   return {
     url: normalizedUrl,
     normalizedUrl,
@@ -101,18 +105,27 @@ describe("getPageParsedData", () => {
     await run(
       store.upsertPage(
         crawlId,
-        page("https://example.com/a", { html: "<html>big</html>", parsedData: parsed }),
-      ),
+        page("https://example.com/a", {
+          html: "<html>big</html>",
+          parsedData: parsed,
+        })
+      )
     );
     await run(store.upsertPage(crawlId, page("https://example.com/b")));
 
     const full = await run(store.getPage(crawlId, "https://example.com/a"));
-    expect(await run(store.getPageParsedData(crawlId, "https://example.com/a"))).toBe(
-      full?.parsedData ?? "missing",
-    );
-    expect(await run(store.getPageParsedData(crawlId, "https://example.com/b"))).toBeNull();
-    expect(await run(store.getPageParsedData(crawlId, "https://example.com/nope"))).toBeNull();
-    expect(await run(store.getPageParsedData("other-crawl", "https://example.com/a"))).toBeNull();
+    expect(
+      await run(store.getPageParsedData(crawlId, "https://example.com/a"))
+    ).toBe(full?.parsedData ?? "missing");
+    expect(
+      await run(store.getPageParsedData(crawlId, "https://example.com/b"))
+    ).toBeNull();
+    expect(
+      await run(store.getPageParsedData(crawlId, "https://example.com/nope"))
+    ).toBeNull();
+    expect(
+      await run(store.getPageParsedData("other-crawl", "https://example.com/a"))
+    ).toBeNull();
   });
 
   test("the query selects only parsed_data, never html", async () => {
@@ -122,8 +135,8 @@ describe("getPageParsedData", () => {
     await run(
       store.upsertPage(
         crawlId,
-        page("https://example.com/a", { parsedData: "{}", html: "<p>x</p>" }),
-      ),
+        page("https://example.com/a", { parsedData: "{}", html: "<p>x</p>" })
+      )
     );
 
     // Spy on the live connection (an own property shadows the native method).
@@ -135,7 +148,9 @@ describe("getPageParsedData", () => {
       return real(sql);
     };
     try {
-      expect(await run(store.getPageParsedData(crawlId, "https://example.com/a"))).toBe("{}");
+      expect(
+        await run(store.getPageParsedData(crawlId, "https://example.com/a"))
+      ).toBe("{}");
     } finally {
       delete (db as unknown as Record<string, unknown>).query;
     }

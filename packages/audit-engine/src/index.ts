@@ -107,7 +107,12 @@ export type {
   TechScanDiff,
 } from "./technologies";
 
-export { buildReportHost, detectEdge, detectedEdge, EDGE_TECHNOLOGY_IDS } from "./host-info";
+export {
+  buildReportHost,
+  detectEdge,
+  detectedEdge,
+  EDGE_TECHNOLOGY_IDS,
+} from "./host-info";
 export type { HostProbe } from "./host-info";
 
 // Smart audits — finding merge / supplant (#110/#195)
@@ -136,12 +141,21 @@ export type {
   CloudSmartAuditsInput,
   CloudSmartAuditsResult,
 } from "./merge-promise";
-export { reconstructCompleteResults, reconstructPageRuleChecks } from "./reconstruct";
+export {
+  reconstructCompleteResults,
+  reconstructPageRuleChecks,
+} from "./reconstruct";
 export type { ReconstructCompleteInput } from "./reconstruct";
 // Bounded complete-store scoring fold (#1873) — the memory-safe twin of
 // reconstructCompleteResults + buildScoringResultsFromMerged.
-export { foldCompleteStoreTallies, checksPerPageFromTallies } from "./complete-store-fold";
-export type { CompleteStoreTallyInput, FindingPageSource } from "./complete-store-fold";
+export {
+  foldCompleteStoreTallies,
+  checksPerPageFromTallies,
+} from "./complete-store-fold";
+export type {
+  CompleteStoreTallyInput,
+  FindingPageSource,
+} from "./complete-store-fold";
 // Chunked-publish producer: flatten a report to complete streamable findings (#1023).
 export {
   buildStreamFindings,
@@ -228,7 +242,10 @@ export {
 } from "./fetch-budget";
 
 // Re-export tech detection types for consumers
-export type { DetectedTechnology, TechCategory } from "@squirrelscan/tech-detect";
+export type {
+  DetectedTechnology,
+  TechCategory,
+} from "@squirrelscan/tech-detect";
 
 // Publish-prep meta shared by the CLI publish controller and runCloudAudit (#656)
 export {
@@ -253,10 +270,21 @@ export type {
 } from "./publish-cap";
 
 // Re-export checker types + impl for consumers (CLI re-exports checkResourceSizes)
-export { checkResourceSizes, normalizeEncoding, varyForbidsReuse } from "./resource-checker";
-export type { ResourceCheckResult, ResourceCheckerOptions } from "./resource-checker";
+export {
+  checkResourceSizes,
+  normalizeEncoding,
+  varyForbidsReuse,
+} from "./resource-checker";
+export type {
+  ResourceCheckResult,
+  ResourceCheckerOptions,
+} from "./resource-checker";
 export type { ScriptContentCache, ScriptFetchResult } from "./script-fetcher";
-export type { ExternalCheckResult, LinkCache, LinkCacheEntry } from "./external-checker";
+export type {
+  ExternalCheckResult,
+  LinkCache,
+  LinkCacheEntry,
+} from "./external-checker";
 
 // SiteQuery factory (#1022) — streaming-engine aggregate view over a crawl.
 export { createSiteQuery } from "./site-query";
@@ -287,7 +315,12 @@ export {
   derivedFanoutSignature,
   measureSignatureCoverage,
 } from "./template-signature-coverage";
-export type { CoverageAccumulator, CoveragePage, SignatureCoverage, SignatureMode } from "./template-signature-coverage";
+export type {
+  CoverageAccumulator,
+  CoveragePage,
+  SignatureCoverage,
+  SignatureMode,
+} from "./template-signature-coverage";
 
 // Streaming rules engine (#1021, PR-E) — batched page-rule pass with DOM-drop.
 export { streamPageRules, STREAM_PAGE_BATCH } from "./streaming";
@@ -323,9 +356,15 @@ export type {
 
 // Streamed pre-rules phase (#1860) — one batched walk that feeds the asset,
 // external-link, tech-detect, intel and cloud-prefetch collectors together.
-export { runStreamingPreRules, PRE_RULES_PAGE_BATCH } from "./streaming-pre-rules";
+export {
+  runStreamingPreRules,
+  PRE_RULES_PAGE_BATCH,
+} from "./streaming-pre-rules";
 export { detachFromPage, type DetachBoundary } from "./detach";
-export type { StreamPreRulesOptions, StreamPreRulesResult } from "./streaming-pre-rules";
+export type {
+  StreamPreRulesOptions,
+  StreamPreRulesResult,
+} from "./streaming-pre-rules";
 export {
   linkVerdictDeadlineAt,
   LINK_RULES_RESERVE_MS,

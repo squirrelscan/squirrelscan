@@ -51,7 +51,9 @@ export const PLATFORM_COOKIES: readonly PlatformCookie[] = [
     name: "csrftoken",
     kind: "csrf",
     platform: "Django",
-    docs: ["https://docs.djangoproject.com/en/stable/ref/settings/#csrf-cookie-httponly"],
+    docs: [
+      "https://docs.djangoproject.com/en/stable/ref/settings/#csrf-cookie-httponly",
+    ],
     documented: true,
     evidence:
       "Django's default CSRF_COOKIE_NAME; CSRF_COOKIE_HTTPONLY defaults to False, and Django says HttpOnly on it offers no practical protection and that with HttpOnly set, JavaScript has to read the token from a form input instead.",

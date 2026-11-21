@@ -2,17 +2,27 @@
 // Every case runs through the legacy path (ctx.site.pages) and the streaming path
 // (collectedSignals + siteQuery) and asserts the same checks.
 
+import type { SiteQuery } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { SiteQuery } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
-
-import { buildCollectedPageSignal } from "../src/collected-signals";
-import { extractFontUsage, fontConsistencyRule } from "../src/content/font-consistency";
 import type { RuleContext } from "../src/types";
 
+import { buildCollectedPageSignal } from "../src/collected-signals";
+import {
+  extractFontUsage,
+  fontConsistencyRule,
+} from "../src/content/font-consistency";
+
 const BASE = {
-  page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: "https://example.com/",
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as never,
   options: {},
 };
@@ -32,31 +42,56 @@ function parse(s: Spec) {
   return parsePage(html(s), s.url);
 }
 
-function legacy(specs: Spec[], options: Record<string, unknown> = {}): RuleContext {
+function legacy(
+  specs: Spec[],
+  options: Record<string, unknown> = {}
+): RuleContext {
   return {
     ...BASE,
     options,
     site: {
-      pages: specs.map((s) => ({ url: s.url, statusCode: 200, headers: {}, parsed: parse(s) })),
+      pages: specs.map((s) => ({
+        url: s.url,
+        statusCode: 200,
+        headers: {},
+        parsed: parse(s),
+      })),
     },
   } as unknown as RuleContext;
 }
 
-function streaming(specs: Spec[], options: Record<string, unknown> = {}): RuleContext {
-  const pages = specs.map((s) => buildCollectedPageSignal({ url: s.url, parsed: parse(s) }));
+function streaming(
+  specs: Spec[],
+  options: Record<string, unknown> = {}
+): RuleContext {
+  const pages = specs.map((s) =>
+    buildCollectedPageSignal({ url: s.url, parsed: parse(s) })
+  );
   const siteQuery = { pageCount: () => specs.length } as unknown as SiteQuery;
-  return { ...BASE, options, collectedSignals: { pages }, siteQuery } as unknown as RuleContext;
+  return {
+    ...BASE,
+    options,
+    collectedSignals: { pages },
+    siteQuery,
+  } as unknown as RuleContext;
 }
 
 function both(specs: Spec[], options: Record<string, unknown> = {}) {
-  const a = fontConsistencyRule.run(legacy(specs, options)) as { checks: any[] };
-  const b = fontConsistencyRule.run(streaming(specs, options)) as { checks: any[] };
+  const a = fontConsistencyRule.run(legacy(specs, options)) as {
+    checks: any[];
+  };
+  const b = fontConsistencyRule.run(streaming(specs, options)) as {
+    checks: any[];
+  };
   expect(b.checks).toEqual(a.checks);
   return a.checks;
 }
 
 const pages = (n: number, mk: (i: number) => Partial<Spec>): Spec[] =>
-  Array.from({ length: n }, (_, i) => ({ url: `https://example.com/p${i}`, ...mk(i) }));
+  Array.from({ length: n }, (_, i) => ({
+    url: `https://example.com/p${i}`,
+    ...mk(i),
+  }));
 
 const BODY = "body{font-family:'Inter',-apple-system,Arial,sans-serif}";
 
@@ -84,8 +119,12 @@ describe("content/font-consistency", () => {
   });
 
   test("system stacks and generics are not families", () => {
-    const style = "body{font-family:system-ui,sans-serif} code{font-family:ui-monospace,monospace} p{font-family:var(--f)}";
-    expect(extractFontUsage(parse({ url: "https://example.com/", style }).document).families).toEqual([]);
+    const style =
+      "body{font-family:system-ui,sans-serif} code{font-family:ui-monospace,monospace} p{font-family:var(--f)}";
+    expect(
+      extractFontUsage(parse({ url: "https://example.com/", style }).document)
+        .families
+    ).toEqual([]);
   });
 
   test("warn: more families than the ceiling", () => {
@@ -100,18 +139,27 @@ describe("content/font-consistency", () => {
 
   test("the ceiling is configurable", () => {
     const style = ".a{font-family:A}.b{font-family:B}.c{font-family:C}";
-    const checks = both(pages(12, () => ({ style })), { max_families: 2 });
+    const checks = both(
+      pages(12, () => ({ style })),
+      { max_families: 2 }
+    );
     expect(checks.find((x) => x.name === "font-sprawl")!.status).toBe("warn");
   });
 
   test("fail: far over the ceiling", () => {
-    const style = "ABCDEFGHI".split("").map((f) => `.${f}{font-family:${f}x}`).join("");
+    const style = "ABCDEFGHI"
+      .split("")
+      .map((f) => `.${f}{font-family:${f}x}`)
+      .join("");
     const checks = both(pages(12, () => ({ style })));
     expect(checks.find((x) => x.name === "font-sprawl")!.status).toBe("fail");
   });
 
   test("warn: a family on exactly one page is rogue, from style= too", () => {
-    const specs = pages(12, (i) => ({ style: BODY, ...(i === 7 ? { attr: "font-family: Papyrus" } : {}) }));
+    const specs = pages(12, (i) => ({
+      style: BODY,
+      ...(i === 7 ? { attr: "font-family: Papyrus" } : {}),
+    }));
     const checks = both(specs);
     const c = checks.find((x) => x.name === "rogue-font-family")!;
     expect(c.status).toBe("warn");
@@ -128,13 +176,20 @@ describe("content/font-consistency", () => {
   });
 
   test("an @font-face family named only as a fallback is referenced", () => {
-    const style = "body{font-family:Inter,Ghost} @font-face{font-family:Ghost;src:url(g.woff2)}";
+    const style =
+      "body{font-family:Inter,Ghost} @font-face{font-family:Ghost;src:url(g.woff2)}";
     const checks = both(pages(12, () => ({ style })));
-    expect(checks.find((x) => x.name === "unreferenced-font-face")).toBeUndefined();
+    expect(
+      checks.find((x) => x.name === "unreferenced-font-face")
+    ).toBeUndefined();
   });
 
   test("comments are ignored and an unclosed one is safe", () => {
-    const style = "/* font-family: Hidden */ body{font-family:Real} /* unclosed font-family: Gone";
-    expect(extractFontUsage(parse({ url: "https://example.com/", style }).document).families).toEqual(["real"]);
+    const style =
+      "/* font-family: Hidden */ body{font-family:Real} /* unclosed font-family: Gone";
+    expect(
+      extractFontUsage(parse({ url: "https://example.com/", style }).document)
+        .families
+    ).toEqual(["real"]);
   });
 });

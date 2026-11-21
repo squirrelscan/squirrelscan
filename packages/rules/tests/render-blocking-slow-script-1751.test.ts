@@ -1,18 +1,18 @@
 // perf/render-blocking lists a synchronous head script and flags a slow one (#1751).
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext, SiteData } from "../src/types";
 
 import { renderBlockingRule } from "../src/performance/render-blocking";
-import type { CheckResult, RuleContext, SiteData } from "../src/types";
 
 const URL = "https://example.com/";
 
 async function run(
   head: string,
   timings: Record<string, number | undefined>,
-  hostFirst: string[] = [],
+  hostFirst: string[] = []
 ): Promise<CheckResult[]> {
   const html = `<!doctype html><html><head><title>scripts</title>${head}</head><body><h1>Test</h1></body></html>`;
   const parsed = parsePage(html, URL);
@@ -33,24 +33,28 @@ async function run(
     options: {},
     site: { scripts } as unknown as SiteData,
   };
-  return ((await renderBlockingRule.run(ctx)) as { checks: CheckResult[] }).checks;
+  return ((await renderBlockingRule.run(ctx)) as { checks: CheckResult[] })
+    .checks;
 }
 
-const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
+const named = (checks: CheckResult[], name: string) =>
+  checks.find((c) => c.name === name);
 
 describe("perf/render-blocking script reporting (#1751)", () => {
   test("a synchronous head script is listed with its URL next to the stylesheet", async () => {
-    const checks = (await run(
+    const checks = await run(
       `<link rel="stylesheet" href="/a.css"><script src="/_fault/slow.js"></script>`,
-      {},
-    ));
+      {}
+    );
     const c = named(checks, "render-blocking")!;
     expect(c.message).toBe("2 render-blocking resource(s)");
     expect(c.items?.map((i) => i.id)).toEqual(["/a.css", "/_fault/slow.js"]);
   });
 
   test("a blocking script over 1 s warns with the measured time", async () => {
-    const checks = (await run(`<script src="/_fault/slow.js"></script>`, { "/_fault/slow.js": 2512 }));
+    const checks = await run(`<script src="/_fault/slow.js"></script>`, {
+      "/_fault/slow.js": 2512,
+    });
     const c = named(checks, "slow-blocking-script")!;
     expect(c.status).toBe("warn");
     expect(c.message).toContain("2512 ms");
@@ -65,24 +69,44 @@ describe("perf/render-blocking script reporting (#1751)", () => {
   test("hysteresis: 1 to 2 s counts only from a warm host, over 2 s always counts (#1751)", async () => {
     const head = `<script src="/cold.js"></script>`;
     // The first script of its host paid for DNS and TLS in that time: not reported at 1.5 s.
-    expect(named(await run(head, { "/cold.js": 1500 }, ["/cold.js"]), "slow-blocking-script")).toBeUndefined();
+    expect(
+      named(
+        await run(head, { "/cold.js": 1500 }, ["/cold.js"]),
+        "slow-blocking-script"
+      )
+    ).toBeUndefined();
     // The same time from a warm host is a slow script.
-    expect(named(await run(head, { "/cold.js": 1500 }), "slow-blocking-script")?.status).toBe("warn");
+    expect(
+      named(await run(head, { "/cold.js": 1500 }), "slow-blocking-script")
+        ?.status
+    ).toBe("warn");
     // Over 2 s is reported whatever the connection cost.
-    expect(named(await run(head, { "/cold.js": 2001 }, ["/cold.js"]), "slow-blocking-script")?.status).toBe("warn");
+    expect(
+      named(
+        await run(head, { "/cold.js": 2001 }, ["/cold.js"]),
+        "slow-blocking-script"
+      )?.status
+    ).toBe("warn");
     // The boundaries are exclusive.
-    expect(named(await run(head, { "/cold.js": 1000 }), "slow-blocking-script")).toBeUndefined();
-    expect(named(await run(head, { "/cold.js": 2000 }, ["/cold.js"]), "slow-blocking-script")).toBeUndefined();
+    expect(
+      named(await run(head, { "/cold.js": 1000 }), "slow-blocking-script")
+    ).toBeUndefined();
+    expect(
+      named(
+        await run(head, { "/cold.js": 2000 }, ["/cold.js"]),
+        "slow-blocking-script"
+      )
+    ).toBeUndefined();
   });
 
   test("fast, unmeasured and non-blocking scripts raise nothing", async () => {
     const head = `<script src="/fast.js"></script><script src="/unknown.js"></script><script defer src="/d.js"></script><script async src="/e.js"></script>`;
-    const checks = (await run(head, {
+    const checks = await run(head, {
       "/fast.js": 1000,
       "/unknown.js": undefined,
       "/d.js": 5000,
       "/e.js": 5000,
-    }));
+    });
     expect(named(checks, "slow-blocking-script")).toBeUndefined();
   });
 
@@ -90,14 +114,29 @@ describe("perf/render-blocking script reporting (#1751)", () => {
     const html = `<!doctype html><html><head><title>t</title></head><body><script src="/b.js"></script></body></html>`;
     const parsed = parsePage(html, URL);
     const ctx = {
-      page: { url: URL, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+      page: {
+        url: URL,
+        html,
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+        parsed,
+      },
       parsed,
       options: {},
       site: {
-        scripts: [{ url: "https://example.com/b.js", responseMs: 4000, sourcePages: [URL] }],
+        scripts: [
+          {
+            url: "https://example.com/b.js",
+            responseMs: 4000,
+            sourcePages: [URL],
+          },
+        ],
       },
     } as unknown as RuleContext;
-    const checks = ((await renderBlockingRule.run(ctx)) as { checks: CheckResult[] }).checks;
+    const checks = (
+      (await renderBlockingRule.run(ctx)) as { checks: CheckResult[] }
+    ).checks;
     expect(named(checks, "slow-blocking-script")).toBeUndefined();
   });
 });

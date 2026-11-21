@@ -113,7 +113,15 @@ const REGION_TAGS = new Set([
 ]);
 
 /** Candidate whatever its size: the node IS the component. */
-const MEDIA_TAGS = new Set(["img", "iframe", "video", "audio", "picture", "canvas", "object"]);
+const MEDIA_TAGS = new Set([
+  "img",
+  "iframe",
+  "video",
+  "audio",
+  "picture",
+  "canvas",
+  "object",
+]);
 
 /** Tags whose candidacy needs >= 2 element children or >= 20 chars of text. */
 const SIZE_GATED_TAGS = new Set(["div", "li"]);
@@ -378,14 +386,17 @@ export const LABEL_WORDS = new Set([
 
 export const PATTERNS = {
   /** A copyright notice, with or without a year. */
-  copyright: /©|\(c\)\s*(19|20)\d{2}|copyright|derechos reservados|tous droits|urheberrecht/i,
+  copyright:
+    /©|\(c\)\s*(19|20)\d{2}|copyright|derechos reservados|tous droits|urheberrecht/i,
   /** A four-digit year on its own, which a footer almost always carries. */
   year: /\b(19|20)\d{2}\b/,
   /** Cookie / consent / privacy chrome. */
-  consent: /cookie|consent|gdpr|datenschutz|akzeptier|privacidad|confidentialit/i,
+  consent:
+    /cookie|consent|gdpr|datenschutz|akzeptier|privacidad|confidentialit/i,
   /** A price: a currency symbol next to a digit, or a digit next to a code. The digit run is
    *  bounded: an open-ended `[\d.,]*` rescans a long digit run from every start (polynomial). */
-  price: /[$£€¥₹]\s?\d|\d[\d.,]{0,24}\s?(usd|eur|gbp|jpy|inr|cad|aud|chf|sek|nok|pln)\b/i,
+  price:
+    /[$£€¥₹]\s?\d|\d[\d.,]{0,24}\s?(usd|eur|gbp|jpy|inr|cad|aud|chf|sek|nok|pln)\b/i,
   /** A date in any of the three shapes a CMS emits. */
   date: /\b\d{4}-\d{2}-\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+(19|20)\d{2}\b|\b\d{1,2}[/.]\d{1,2}[/.](19|20)?\d{2}\b/i,
   /** A byline: an attribution word followed by a CAPITALISED name. The case
@@ -401,7 +412,8 @@ export const PATTERNS = {
   /** Reader comments. */
   comments: /\b(comments?|kommentare|comentarios|commentaires|disqus)\b/i,
   /** Pagination chrome. */
-  pagination: /\b(next page|previous page|older posts|newer posts|page \d+ of \d+)\b/i,
+  pagination:
+    /\b(next page|previous page|older posts|newer posts|page \d+ of \d+)\b/i,
   /** Breadcrumb chrome. */
   breadcrumb: /breadcrumb/i,
 };
@@ -479,7 +491,10 @@ const WORD_PATTERN = /\p{L}{2,24}/gu;
 function textWords(text: string, max: number): string[] {
   const out: string[] = [];
   if (!text) return out;
-  for (const match of text.slice(0, MAX_WORD_SCAN).toLowerCase().matchAll(WORD_PATTERN)) {
+  for (const match of text
+    .slice(0, MAX_WORD_SCAN)
+    .toLowerCase()
+    .matchAll(WORD_PATTERN)) {
     out.push(match[0]);
     if (out.length >= max) break;
   }
@@ -490,14 +505,44 @@ function textWords(text: string, max: number): string[] {
 const PATH_SLUGS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["blog", ["blog", "blogs", "posts"]],
   ["news", ["news", "press", "newsroom"]],
-  ["docs", ["docs", "doc", "documentation", "guide", "guides", "manual", "reference", "api"]],
+  [
+    "docs",
+    [
+      "docs",
+      "doc",
+      "documentation",
+      "guide",
+      "guides",
+      "manual",
+      "reference",
+      "api",
+    ],
+  ],
   ["product", ["product", "products", "item", "shop", "store", "p"]],
-  ["category", ["category", "categories", "collection", "collections", "tag", "tags"]],
+  [
+    "category",
+    ["category", "categories", "collection", "collections", "tag", "tags"],
+  ],
   ["pricing", ["pricing", "plans", "price"]],
   ["about", ["about", "about-us", "company", "team"]],
   ["contact", ["contact", "contact-us", "support", "help"]],
-  ["legal", ["legal", "privacy", "terms", "tos", "policy", "policies", "imprint", "impressum"]],
-  ["account", ["account", "login", "signin", "signup", "register", "cart", "checkout"]],
+  [
+    "legal",
+    [
+      "legal",
+      "privacy",
+      "terms",
+      "tos",
+      "policy",
+      "policies",
+      "imprint",
+      "impressum",
+    ],
+  ],
+  [
+    "account",
+    ["account", "login", "signin", "signup", "register", "cart", "checkout"],
+  ],
   ["search", ["search", "s", "q"]],
 ];
 
@@ -529,7 +574,11 @@ export function tokenBucket(token: string): number {
 }
 
 /** p = 0.5, deterministic in (nodeId, token). Bit 0 of the same hash. */
-function dropsUnderMask(nodeId: number, token: string, always = false): boolean {
+function dropsUnderMask(
+  nodeId: number,
+  token: string,
+  always = false
+): boolean {
   return always || (fnv1a32(`${nodeId}\u0000${token}`) & 1) === 0;
 }
 
@@ -862,7 +911,11 @@ function hostOf(url: string): string {
 // Pass 1: walk
 // ---------------------------------------------------------------------------
 
-function walkDocument(body: ElementLike, host: string, elementsOut?: unknown[]): Walk {
+function walkDocument(
+  body: ElementLike,
+  host: string,
+  elementsOut?: unknown[]
+): Walk {
   const walk = allocate(1024);
   let capacity = 1024;
 
@@ -921,7 +974,8 @@ function walkDocument(body: ElementLike, host: string, elementsOut?: unknown[]):
       // Positions from `unwritten` up have not been filled yet; minHeading's
       // "no heading here" sentinel is 7, not 0.
       if (key === "minHeading") grown.fill(7, unwritten);
-      if (key === "sectionAncestor" || key === "bodyBlock") grown.fill(-1, unwritten);
+      if (key === "sectionAncestor" || key === "bodyBlock")
+        grown.fill(-1, unwritten);
       (walk as unknown as Record<string, Int32Array>)[key] = grown;
     }
     const links = new Uint8Array(next);
@@ -943,7 +997,16 @@ function walkDocument(body: ElementLike, host: string, elementsOut?: unknown[]):
     section: number;
     /** The ancestor that is a direct element child of <body>, or -1. */
     bodyBlock: number;
-  }> = [{ node: body, parent: -1, depth: 0, sibling: 0, section: -1, bodyBlock: -1 }];
+  }> = [
+    {
+      node: body,
+      parent: -1,
+      depth: 0,
+      sibling: 0,
+      section: -1,
+      bodyBlock: -1,
+    },
+  ];
 
   while (stack.length > 0) {
     const frame = stack.pop()!;
@@ -977,7 +1040,9 @@ function walkDocument(body: ElementLike, host: string, elementsOut?: unknown[]):
         const text = normalizeText(child.data ?? "");
         if (text) own = own ? `${own} ${text}` : text;
       } else if (child.nodeType === NODE_ELEMENT) {
-        const childTag = (child.localName ?? child.nodeName.toLowerCase()).toLowerCase();
+        const childTag = (
+          child.localName ?? child.nodeName.toLowerCase()
+        ).toLowerCase();
         if (SKIP_SUBTREE.has(childTag)) continue;
         children.push(child);
       }
@@ -992,7 +1057,8 @@ function walkDocument(body: ElementLike, host: string, elementsOut?: unknown[]):
     // Children are pushed in reverse so they pop in document order. That makes
     // the walk a strict preorder DFS, which is what lets `subtreeEnd` be
     // computed as i + subtreeElements - 1 rather than tracked per node.
-    const childSection = tag === "article" || tag === "section" ? index : frame.section;
+    const childSection =
+      tag === "article" || tag === "section" ? index : frame.section;
     const childBodyBlock = frame.parent === 0 ? index : frame.bodyBlock;
     for (let i = children.length - 1; i >= 0; i--) {
       stack.push({
@@ -1008,7 +1074,10 @@ function walkDocument(body: ElementLike, host: string, elementsOut?: unknown[]):
 
   // Link-up: every element knows its parent, so the ordered child lists fall
   // out of one pass over the parent array (document order is index order).
-  const childLists: number[][] = Array.from({ length: walk.count }, () => [] as number[]);
+  const childLists: number[][] = Array.from(
+    { length: walk.count },
+    () => [] as number[]
+  );
   for (let i = 1; i < walk.count; i++) childLists[walk.parent[i]!]!.push(i);
   walk.children = childLists;
 
@@ -1035,7 +1104,7 @@ function countAttributes(
   index: number,
   el: ElementLike,
   tag: string,
-  role: string,
+  role: string
 ): void {
   let aria = 0;
   for (const name of el.getAttributeNames()) {
@@ -1059,7 +1128,13 @@ function countAttributes(
   }
 }
 
-function countTag(walk: Walk, index: number, el: ElementLike, tag: string, host: string): void {
+function countTag(
+  walk: Walk,
+  index: number,
+  el: ElementLike,
+  tag: string,
+  host: string
+): void {
   switch (tag) {
     case "a": {
       const href = el.getAttribute("href");
@@ -1129,7 +1204,8 @@ function countTag(walk: Walk, index: number, el: ElementLike, tag: string, host:
       const named =
         `${el.getAttribute("name") ?? ""} ${el.getAttribute("placeholder") ?? ""} ` +
         `${el.getAttribute("aria-label") ?? ""} ${el.getAttribute("id") ?? ""}`;
-      if (type === "search" || PATTERNS.search.test(named)) walk.searchInputs[index] = 1;
+      if (type === "search" || PATTERNS.search.test(named))
+        walk.searchInputs[index] = 1;
       break;
     }
     case "button":
@@ -1313,7 +1389,11 @@ function isCandidate(walk: Walk, i: number, childCount: number): boolean {
  * Within a tier: biggest subtree first, document order breaks every tie. No
  * randomness anywhere, so two runs over the same bytes select the same nodes.
  */
-function selectCandidates(walk: Walk, childCounts: Int32Array, cap: number): number[] {
+function selectCandidates(
+  walk: Walk,
+  childCounts: Int32Array,
+  cap: number
+): number[] {
   const tiers: number[][] = [[], [], []];
   for (let i = 0; i < walk.count; i++) {
     if (!isCandidate(walk, i, childCounts[i]!)) continue;
@@ -1322,13 +1402,15 @@ function selectCandidates(walk: Walk, childCounts: Int32Array, cap: number): num
     const parent = walk.parent[i]!;
     const parentTag = parent >= 0 ? walk.tag[parent]! : "";
     if (LANDMARK_TAGS.has(tag) || LANDMARK_ROLES.has(role)) tiers[0]!.push(i);
-    else if (SECTIONING_TAGS.has(tag) || parentTag === "body") tiers[1]!.push(i);
+    else if (SECTIONING_TAGS.has(tag) || parentTag === "body")
+      tiers[1]!.push(i);
     else tiers[2]!.push(i);
   }
   const total = tiers[0]!.length + tiers[1]!.length + tiers[2]!.length;
   if (total <= cap) return tiers.flat().sort((a, b) => a - b);
 
-  const bySize = (a: number, b: number): number => walk.elements[b]! - walk.elements[a]! || a - b;
+  const bySize = (a: number, b: number): number =>
+    walk.elements[b]! - walk.elements[a]! || a - b;
   const kept: number[] = [];
   for (const tier of tiers) {
     if (kept.length >= cap) break;
@@ -1557,12 +1639,19 @@ interface EmitContext {
 function tokensOf(ctx: EmitContext, i: number): string[] {
   const cached = ctx.tokenCache[i];
   if (cached !== undefined) return cached;
-  const built = tokenize(ctx.walk.classAttr[i]!).concat(tokenize(ctx.walk.idAttr[i]!));
+  const built = tokenize(ctx.walk.classAttr[i]!).concat(
+    tokenize(ctx.walk.idAttr[i]!)
+  );
   ctx.tokenCache[i] = built;
   return built;
 }
 
-function emitNodeVector(ctx: EmitContext, i: number, mask: boolean, maskAll = false): number[] {
+function emitNodeVector(
+  ctx: EmitContext,
+  i: number,
+  mask: boolean,
+  maskAll = false
+): number[] {
   const { walk } = ctx;
   const parent = walk.parent[i]!;
   const grandparent = parent >= 0 ? walk.parent[parent]! : -1;
@@ -1600,22 +1689,30 @@ function emitNodeVector(ctx: EmitContext, i: number, mask: boolean, maskAll = fa
     isFirstElementChild: walk.siblingIndex[i]! === 0 ? 1 : 0,
     isLastElementChild: walk.siblingIndex[i]! === siblings - 1 ? 1 : 0,
     isBodyChild: parentTag === "body" ? 1 : 0,
-    isFirstBodyChild: parentTag === "body" && walk.siblingIndex[i]! === 0 ? 1 : 0,
-    isLastBodyChild: parentTag === "body" && walk.siblingIndex[i]! === siblings - 1 ? 1 : 0,
+    isFirstBodyChild:
+      parentTag === "body" && walk.siblingIndex[i]! === 0 ? 1 : 0,
+    isLastBodyChild:
+      parentTag === "body" && walk.siblingIndex[i]! === siblings - 1 ? 1 : 0,
     sectionAncestorDistance: sectionDistance(walk, i),
-    sectionAncestorTextShare: section >= 0 ? ratio(textLen, walk.textLen[section]!) : 0,
+    sectionAncestorTextShare:
+      section >= 0 ? ratio(textLen, walk.textLen[section]!) : 0,
     sectionAncestorElementShare:
       section >= 0 ? ratio(walk.elements[i]!, walk.elements[section]!) : 0,
     isFirstChildOfSection:
       section >= 0 && parent === section && walk.siblingIndex[i]! === 0 ? 1 : 0,
     isLastChildOfSection:
-      section >= 0 && parent === section && walk.siblingIndex[i]! === ctx.childCounts[section]! - 1
+      section >= 0 &&
+      parent === section &&
+      walk.siblingIndex[i]! === ctx.childCounts[section]! - 1
         ? 1
         : 0,
     siblingSectionCount: parent >= 0 ? ctx.sectionChildCount[parent]! : 0,
-    bodyBlockSizeRatio: block >= 0 ? ratio(walk.elements[block]!, ctx.largestBodyBlock) : 0,
+    bodyBlockSizeRatio:
+      block >= 0 ? ratio(walk.elements[block]!, ctx.largestBodyBlock) : 0,
     bodyBlockIndexShare:
-      block >= 0 ? ratio(walk.siblingIndex[block]!, Math.max(1, ctx.bodyChildCount - 1)) : 0,
+      block >= 0
+        ? ratio(walk.siblingIndex[block]!, Math.max(1, ctx.bodyChildCount - 1))
+        : 0,
     listItemTextShare: ratio(walk.listItemTextLen[i]!, textLen),
     firstChildIsHeading: ctx.firstChildHeading[i]!,
     linkCount: walk.links[i]!,
@@ -1659,8 +1756,12 @@ function emitNodeVector(ctx: EmitContext, i: number, mask: boolean, maskAll = fa
     grandparentTagId: TAG_INDEX.get(maskTag(grandparentTag)) ?? 0,
   };
 
-  const out: number[] = Array.from({ length: NODE_FEATURE_NAMES.length }, () => 0);
-  for (let f = 0; f < SELF_VOCAB_BASE; f++) out[f] = values[NODE_FEATURE_NAMES[f]!] ?? 0;
+  const out: number[] = Array.from(
+    { length: NODE_FEATURE_NAMES.length },
+    () => 0
+  );
+  for (let f = 0; f < SELF_VOCAB_BASE; f++)
+    out[f] = values[NODE_FEATURE_NAMES[f]!] ?? 0;
 
   for (const token of tokensOf(ctx, i)) {
     setVocabBit(out, token, SELF_VOCAB_BASE, mask, i, "", maskAll);
@@ -1682,9 +1783,13 @@ function setVocabBit(
   mask: boolean,
   nodeId: number,
   seedPrefix: string,
-  maskAll: boolean,
+  maskAll: boolean
 ): void {
-  if (mask && LABEL_WORDS.has(token) && dropsUnderMask(nodeId, `${seedPrefix}${token}`, maskAll)) {
+  if (
+    mask &&
+    LABEL_WORDS.has(token) &&
+    dropsUnderMask(nodeId, `${seedPrefix}${token}`, maskAll)
+  ) {
     return;
   }
   const slot = CURATED_INDEX.get(token);
@@ -1695,7 +1800,7 @@ function emitNodeTokens(
   ctx: EmitContext,
   i: number,
   mask: boolean,
-  maskAll = false,
+  maskAll = false
 ): { tokens: number[]; textTokens: number[] } {
   const { walk } = ctx;
   const parent = walk.parent[i]!;
@@ -1703,10 +1808,16 @@ function emitNodeTokens(
   // text/attribute stream is the v2.3.0 addition (the section head reads the union).
   const legacy = new Set<number>();
   const text = new Set<number>();
-  const add = (token: string, prefix: "s:" | "p:" | "t:" | "st:" | "a:" | "r:" | "h:"): void => {
+  const add = (
+    token: string,
+    prefix: "s:" | "p:" | "t:" | "st:" | "a:" | "r:" | "h:"
+  ): void => {
     const seed = prefix === "s:" ? token : `${prefix}${token}`;
-    if (mask && LABEL_WORDS.has(token) && dropsUnderMask(i, seed, maskAll)) return;
-    (prefix === "s:" || prefix === "p:" ? legacy : text).add(tokenBucket(`${prefix}${token}`));
+    if (mask && LABEL_WORDS.has(token) && dropsUnderMask(i, seed, maskAll))
+      return;
+    (prefix === "s:" || prefix === "p:" ? legacy : text).add(
+      tokenBucket(`${prefix}${token}`)
+    );
   };
   for (const token of tokensOf(ctx, i)) add(token, "s:");
   if (parent >= 0) {
@@ -1714,8 +1825,10 @@ function emitNodeTokens(
   }
   // v2.3.0 text/attribute channel. The label-word mask applies exactly as for class/id tokens: a word such as
   // "navigation" in an aria-label says the same thing as the class name, so it drops with the same coin per prefix.
-  for (const word of textWords(walk.ownText[i]!, MAX_TEXT_WORDS)) add(word, "t:");
-  for (const word of textWords(walk.ariaLabel.get(i) ?? "", MAX_TEXT_WORDS)) add(word, "a:");
+  for (const word of textWords(walk.ownText[i]!, MAX_TEXT_WORDS))
+    add(word, "t:");
+  for (const word of textWords(walk.ariaLabel.get(i) ?? "", MAX_TEXT_WORDS))
+    add(word, "a:");
   // The subtree is the contiguous index range [i, end]; the first MAX_SUBTREE_ELEMENTS of it feed the subtree words and
   // the anchor hosts, so a container whose text lives in its grandchildren still says what it is.
   const end = ctx.subtreeEnd[i]!;
@@ -1737,7 +1850,11 @@ function emitNodeTokens(
     if (walk.anchors[mid]! < i) lo = mid + 1;
     else hi = mid;
   }
-  for (let k = lo, taken = 0; k < walk.anchors.length && walk.anchors[k]! <= end; k++, taken++) {
+  for (
+    let k = lo, taken = 0;
+    k < walk.anchors.length && walk.anchors[k]! <= end;
+    k++, taken++
+  ) {
     const inWindow = walk.anchors[k]! <= windowEnd;
     if (taken >= MAX_TOKEN_ANCHORS && !inWindow) break;
     if (taken < MAX_TOKEN_ANCHORS) {
@@ -1760,7 +1877,7 @@ function emitPageVector(
   url: string,
   title: string,
   h1: string,
-  hasAuthorRel: boolean,
+  hasAuthorRel: boolean
 ): { features: number[]; tokens: number[]; landmarkKinds: string[] } {
   const { path, segments, query } = splitUrl(url);
   const last = segments.length > 0 ? segments[segments.length - 1]! : "";
@@ -1780,7 +1897,10 @@ function emitPageVector(
     elementCount: walk.count,
     maxDepth: 0,
     paragraphCount: walk.count > 0 ? walk.paragraphs[0]! : 0,
-    avgParagraphLength: walk.count > 0 ? ratio(walk.paragraphTextLen[0]!, walk.paragraphs[0]!) : 0,
+    avgParagraphLength:
+      walk.count > 0
+        ? ratio(walk.paragraphTextLen[0]!, walk.paragraphs[0]!)
+        : 0,
     maxParagraphLength: 0,
     h1Count: 0,
     h2Count: 0,
@@ -1789,9 +1909,12 @@ function emitPageVector(
     h5Count: 0,
     h6Count: 0,
     linkCount: walk.count > 0 ? walk.links[0]! : 0,
-    linkDensity: walk.count > 0 ? ratio(walk.linkTextLen[0]!, walk.textLen[0]!) : 0,
-    internalLinkShare: walk.count > 0 ? ratio(walk.internalLinks[0]!, walk.links[0]!) : 0,
-    externalLinkShare: walk.count > 0 ? ratio(walk.externalLinks[0]!, walk.links[0]!) : 0,
+    linkDensity:
+      walk.count > 0 ? ratio(walk.linkTextLen[0]!, walk.textLen[0]!) : 0,
+    internalLinkShare:
+      walk.count > 0 ? ratio(walk.internalLinks[0]!, walk.links[0]!) : 0,
+    externalLinkShare:
+      walk.count > 0 ? ratio(walk.externalLinks[0]!, walk.links[0]!) : 0,
     socialLinkCount: walk.count > 0 ? walk.socialLinks[0]! : 0,
     contactLinkCount: walk.count > 0 ? walk.contactLinks[0]! : 0,
     formCount: walk.count > 0 ? walk.forms[0]! : 0,
@@ -1828,7 +1951,11 @@ function emitPageVector(
     hasAuthorRel: hasAuthorRel ? 1 : 0,
   };
   for (const [name, slugs] of PATH_SLUGS) {
-    values[`urlSlug_${name}`] = segments.some((segment) => slugs.includes(segment)) ? 1 : 0;
+    values[`urlSlug_${name}`] = segments.some((segment) =>
+      slugs.includes(segment)
+    )
+      ? 1
+      : 0;
   }
 
   const landmarkKinds = new Set<string>();
@@ -1837,7 +1964,8 @@ function emitPageVector(
   for (let i = 0; i < walk.count; i++) {
     const tag = walk.tag[i]!;
     if (walk.depth[i]! > maxDepth) maxDepth = walk.depth[i]!;
-    if (tag === "p" && walk.textLen[i]! > maxParagraph) maxParagraph = walk.textLen[i]!;
+    if (tag === "p" && walk.textLen[i]! > maxParagraph)
+      maxParagraph = walk.textLen[i]!;
     switch (tag) {
       case "h1":
       case "h2":
@@ -1877,7 +2005,9 @@ function emitPageVector(
   // Body class/id tokens: WordPress and Shopify both stamp the page template
   // there, which is the strongest page-type signal that is not schema.
   const bodyTokens =
-    walk.count > 0 ? tokenize(walk.classAttr[0]!).concat(tokenize(walk.idAttr[0]!)) : [];
+    walk.count > 0
+      ? tokenize(walk.classAttr[0]!).concat(tokenize(walk.idAttr[0]!))
+      : [];
   for (const word of CURATED_VOCAB) values[`body_${word}`] = 0;
   const buckets = new Set<number>();
   for (const token of bodyTokens) {
@@ -1892,7 +2022,11 @@ function emitPageVector(
   };
 }
 
-function splitUrl(url: string): { path: string; segments: string[]; query: string } {
+function splitUrl(url: string): {
+  path: string;
+  segments: string[];
+  query: string;
+} {
   const withoutScheme = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
   const slash = withoutScheme.indexOf("/");
   const rest = slash === -1 ? "/" : withoutScheme.slice(slash);
@@ -1916,7 +2050,7 @@ function splitUrl(url: string): { path: string; segments: string[]; query: strin
 export function featurizePage(
   html: string,
   url: string,
-  options: FeaturizeOptions = {},
+  options: FeaturizeOptions = {}
 ): FeaturizedPage {
   const { document } = parseHTML(html);
   return featurizeDocument(document as unknown as ParsedDocument, url, options);
@@ -1948,7 +2082,7 @@ function safeRoot(document: ParsedDocument): ElementLike | null {
 export function featurizeDocument(
   document: ParsedDocument,
   url: string,
-  options: FeaturizeOptions = {},
+  options: FeaturizeOptions = {}
 ): FeaturizedPage {
   if (options.elementsOut) options.elementsOut.length = 0;
   if (options.attributesOut) {
@@ -1995,7 +2129,12 @@ export function featurizeDocument(
     const firstKid = kids[0];
     if (firstKid !== undefined) {
       const kidTag = walk.tag[firstKid]!;
-      if (kidTag.length === 2 && kidTag[0] === "h" && kidTag[1]! >= "1" && kidTag[1]! <= "6") {
+      if (
+        kidTag.length === 2 &&
+        kidTag[0] === "h" &&
+        kidTag[1]! >= "1" &&
+        kidTag[1]! <= "6"
+      ) {
         firstChildHeading[i] = 1;
       }
     }
@@ -2032,7 +2171,8 @@ export function featurizeDocument(
   let bodyChildCount = 0;
   for (const child of walk.children[0] ?? []) {
     bodyChildCount++;
-    if (walk.elements[child]! > largestBodyBlock) largestBodyBlock = walk.elements[child]!;
+    if (walk.elements[child]! > largestBodyBlock)
+      largestBodyBlock = walk.elements[child]!;
   }
 
   const ctx: EmitContext = {
@@ -2062,8 +2202,14 @@ export function featurizeDocument(
 
   const nodes: NodeFeatures[] = selected.map((i) => {
     let ancestor = walk.parent[i]!;
-    while (ancestor >= 0 && !selectedSet.has(ancestor)) ancestor = walk.parent[ancestor]!;
-    const emitted = emitNodeTokens(ctx, i, options.mask === true, options.maskAll === true);
+    while (ancestor >= 0 && !selectedSet.has(ancestor))
+      ancestor = walk.parent[ancestor]!;
+    const emitted = emitNodeTokens(
+      ctx,
+      i,
+      options.mask === true,
+      options.maskAll === true
+    );
     const node: NodeFeatures = {
       nodeId: i,
       tag: walk.tag[i]!,
@@ -2072,14 +2218,29 @@ export function featurizeDocument(
       parentCandidateId: ancestor,
       parentId: walk.parent[i]!,
       depth: walk.depth[i]!,
-      features: emitNodeVector(ctx, i, options.mask === true, options.maskAll === true),
+      features: emitNodeVector(
+        ctx,
+        i,
+        options.mask === true,
+        options.maskAll === true
+      ),
       tokens: emitted.tokens,
       textTokens: emitted.textTokens,
       masked: options.mask === true,
     };
     if (options.emitMasked && !options.mask) {
-      node.maskedFeatures = emitNodeVector(ctx, i, true, options.maskAll === true);
-      const maskedEmitted = emitNodeTokens(ctx, i, true, options.maskAll === true);
+      node.maskedFeatures = emitNodeVector(
+        ctx,
+        i,
+        true,
+        options.maskAll === true
+      );
+      const maskedEmitted = emitNodeTokens(
+        ctx,
+        i,
+        true,
+        options.maskAll === true
+      );
       node.maskedTokens = maskedEmitted.tokens;
       node.maskedTextTokens = maskedEmitted.textTokens;
     }
@@ -2108,7 +2269,8 @@ function textOf(el: ElementLike): string {
       continue;
     }
     const children: ElementLike[] = [];
-    for (let child = node.firstChild; child; child = child.nextSibling) children.push(child);
+    for (let child = node.firstChild; child; child = child.nextSibling)
+      children.push(child);
     for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!);
   }
   return out;

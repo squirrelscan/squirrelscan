@@ -10,9 +10,9 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { normalizeUrl } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { anchorLookup } from "../links/broken-anchors";
 import { decodeFragment, isJudgeableFragment } from "../links/page-anchors";
@@ -88,7 +88,8 @@ export const singlePageSiteRule: Rule = {
     if ((site.unfetchedPages ?? 0) > 0) return NOT_APPLICABLE;
 
     const page = pages[0]!;
-    if (page.statusCode < 200 || page.statusCode >= 300 || !page.parsed) return NOT_APPLICABLE;
+    if (page.statusCode < 200 || page.statusCode >= 300 || !page.parsed)
+      return NOT_APPLICABLE;
 
     if (inScopeSitemapUrls(ctx, site.baseUrl) > 1) return NOT_APPLICABLE;
 
@@ -114,7 +115,8 @@ export const singlePageSiteRule: Rule = {
     const found = new Set<string>();
     for (const raw of record.selfFragments) {
       const fragment = decodeFragment(raw);
-      if (isJudgeableFragment(fragment) && ids.has(fragment)) found.add(fragment);
+      if (isJudgeableFragment(fragment) && ids.has(fragment))
+        found.add(fragment);
     }
     const sections = [...found];
     if (sections.length < MIN_SECTION_LINKS) return NOT_APPLICABLE;
@@ -130,7 +132,9 @@ export const singlePageSiteRule: Rule = {
       items,
       details: {
         sections: sections.length,
-        ...(sections.length > listed.length ? { additional: sections.length - listed.length } : {}),
+        ...(sections.length > listed.length
+          ? { additional: sections.length - listed.length }
+          : {}),
       },
     };
     return { checks: [check] };

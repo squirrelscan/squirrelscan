@@ -4,7 +4,12 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { detectSoft404, hasErrorShellMarker, looksLikeNotFoundText, parsePage } from "../src/index";
+import {
+  detectSoft404,
+  hasErrorShellMarker,
+  looksLikeNotFoundText,
+  parsePage,
+} from "../src/index";
 
 const fixture = (name: string): string =>
   readFileSync(join(import.meta.dir, "fixtures", name), "utf8");
@@ -43,12 +48,16 @@ describe("looksLikeNotFoundText", () => {
 
 describe("hasErrorShellMarker", () => {
   test("detects the Next.js __next_error__ root id", () => {
-    const { document } = parseFixtureDoc('<html id="__next_error__"><body></body></html>');
+    const { document } = parseFixtureDoc(
+      '<html id="__next_error__"><body></body></html>'
+    );
     expect(hasErrorShellMarker(document)).toBe(true);
   });
 
   test("is false for a normal document", () => {
-    const { document } = parseFixtureDoc("<html><body><h1>Hi</h1></body></html>");
+    const { document } = parseFixtureDoc(
+      "<html><body><h1>Hi</h1></body></html>"
+    );
     expect(hasErrorShellMarker(document)).toBe(false);
   });
 });
@@ -60,7 +69,10 @@ function parseFixtureDoc(html: string) {
 
 describe("detectSoft404", () => {
   test("flags a 200 Next.js error shell with not-found title + noindex (real shape)", () => {
-    const parsed = parsePage(fixture("soft-404-next-error.html"), "https://example.com/blog/gone");
+    const parsed = parsePage(
+      fixture("soft-404-next-error.html"),
+      "https://example.com/blog/gone"
+    );
     const result = detectSoft404({
       statusCode: 200,
       document: parsed.document,
@@ -93,14 +105,18 @@ describe("detectSoft404", () => {
     ]);
   });
 
-  test.each(["The page can't be found", "This page can not be found", "Page cannot be found"])(
-    "matches broadened cannot-be-found phrasing: %j",
-    (title) => {
-      expect(looksLikeNotFoundText(title)).toBe(true);
-    }
-  );
+  test.each([
+    "The page can't be found",
+    "This page can not be found",
+    "Page cannot be found",
+  ])("matches broadened cannot-be-found phrasing: %j", (title) => {
+    expect(looksLikeNotFoundText(title)).toBe(true);
+  });
 
-  test.each(["How to Fix File Not Found Errors", "This Item Is No Longer Available"])(
+  test.each([
+    "How to Fix File Not Found Errors",
+    "This Item Is No Longer Available",
+  ])(
     "does NOT flag a real page whose title has a bare not-found phrase + a supporting signal: %j",
     (title) => {
       const result = detectSoft404({
@@ -117,7 +133,10 @@ describe("detectSoft404", () => {
   );
 
   test("does NOT flag a real 404 response (status 404)", () => {
-    const parsed = parsePage(fixture("soft-404-next-error.html"), "https://example.com/blog/gone");
+    const parsed = parsePage(
+      fixture("soft-404-next-error.html"),
+      "https://example.com/blog/gone"
+    );
     const result = detectSoft404({
       statusCode: 404,
       document: parsed.document,

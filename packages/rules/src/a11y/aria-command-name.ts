@@ -1,11 +1,12 @@
 // a11y/aria-command-name - Command elements have accessible names
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { elementsWithAttribute } from "../shared/attribute-lookup";
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { commandRoles } from "./aria-data";
-import { elementsWithAttribute } from "../shared/attribute-lookup";
 
 function hasAccessibleName(el: Element): boolean {
   // Check aria-label

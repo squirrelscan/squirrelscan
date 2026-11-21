@@ -8,14 +8,14 @@
 // must be deep-equal; the siteQuery run is given an EMPTY `site.pages`, so a pass
 // also proves the streaming path reads nothing from the resident page array.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { PageFeatureRow } from "@squirrelscan/core-contracts";
+import type { ParsedPage, RuleContext } from "@squirrelscan/rules";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { loadAllRules } from "@squirrelscan/rules";
-import type { ParsedPage, RuleContext } from "@squirrelscan/rules";
 import { getRichResultTypes } from "@squirrelscan/utils";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { createSiteQuery } from "../src/site-query";
 
@@ -83,7 +83,10 @@ function legacySitePages() {
   return FIXTURE.map((r) => ({
     url: r.normalizedUrl,
     statusCode: 200,
-    parsed: { pageType: r.pageType, schemas: { types: r.schemaTypes } } as unknown as ParsedPage,
+    parsed: {
+      pageType: r.pageType,
+      schemas: { types: r.schemaTypes },
+    } as unknown as ParsedPage,
   }));
 }
 
@@ -103,7 +106,12 @@ describe("SiteQuery dual-path — schema/coverage-outlier", () => {
       await Promise.resolve(
         coverageOutlierRule.run({
           ...base,
-          site: { baseUrl: BASE, pages: legacySitePages(), robotsTxt: null, sitemaps: null },
+          site: {
+            baseUrl: BASE,
+            pages: legacySitePages(),
+            robotsTxt: null,
+            sitemaps: null,
+          },
         } as RuleContext)
       )
     ).checks;
@@ -147,7 +155,13 @@ describe("SiteQuery dual-path — schema/coverage-outlier", () => {
           judgedPages: 12,
           judgedTypes: 1,
           flaggedPages: 2,
-          norms: [{ pageType: "product", pages: 12, schemaTypes: ["BreadcrumbList", "Product"] }],
+          norms: [
+            {
+              pageType: "product",
+              pages: 12,
+              schemaTypes: ["BreadcrumbList", "Product"],
+            },
+          ],
         },
       },
     ]);

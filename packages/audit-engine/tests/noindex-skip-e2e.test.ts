@@ -14,12 +14,12 @@
 //
 // crawl/all-noindex-pages must keep reporting the noindex pages in every case.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -32,7 +32,9 @@ const BASE = "https://site.example.com";
 
 const CONFIG = {
   rule_options: {},
-  rules: { enable: ["core/h1", "content/duplicate-title", "crawl/all-noindex-pages"] },
+  rules: {
+    enable: ["core/h1", "content/duplicate-title", "crawl/all-noindex-pages"],
+  },
 } as unknown as Config;
 
 const EMPTY_ASSETS: PreFetchedAssets = {
@@ -135,7 +137,7 @@ interface AuditResult {
 async function audit(
   pages: SeedPage[],
   seedPath: string,
-  engine: EnginePath,
+  engine: EnginePath
 ): Promise<AuditResult> {
   const storage = new SQLiteStorage(":memory:");
   return run(
@@ -160,23 +162,39 @@ async function audit(
           avgLoadTimeMs: 0,
         },
       } as never);
-      for (const page of pages) yield* storage.upsertPage(crawlId, pageRecord(page));
+      for (const page of pages)
+        yield* storage.upsertPage(crawlId, pageRecord(page));
 
       let result;
       if (engine === "streaming") {
-        result = yield* runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, {
-          batchSize: 1,
-        });
+        result = yield* runStreamingRules(
+          storage,
+          crawlId,
+          CONFIG,
+          EMPTY_ASSETS,
+          undefined,
+          {
+            batchSize: 1,
+          }
+        );
       } else {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+        result = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          EMPTY_ASSETS
+        );
       }
 
       const skipped: string[] = [];
       const graded: string[] = [];
       for (const [url, checks] of result.pageResults) {
-        const h1 = checks.filter((c) => c.name === "h1" || c.name === "core/h1");
+        const h1 = checks.filter(
+          (c) => c.name === "h1" || c.name === "core/h1"
+        );
         if (h1.some((c) => c.skipReason === "noindex")) skipped.push(url);
         else if (h1.some((c) => c.status === "fail")) graded.push(url);
       }
@@ -186,11 +204,11 @@ async function audit(
         skipped: skipped.sort(),
         graded: graded.sort(),
         duplicateTitle: siteChecks("content/duplicate-title").find(
-          (c) => c.name === "duplicate-title",
+          (c) => c.name === "duplicate-title"
         ),
         allNoindex: siteChecks("crawl/all-noindex-pages"),
       };
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
@@ -206,11 +224,13 @@ for (const engine of ["v1", "streaming"] as const) {
           { path: "/b", header: "noindex" },
         ],
         "/",
-        engine,
+        engine
       );
       expect(r.skipped).toEqual([]);
       expect(r.graded).toEqual([u("/"), u("/a"), u("/b")]);
-      expect(r.duplicateTitle?.message).toBe("1 duplicate title(s) found across 3 pages");
+      expect(r.duplicateTitle?.message).toBe(
+        "1 duplicate title(s) found across 3 pages"
+      );
       const listed = r.allNoindex.find((c) => c.name === "all-noindex");
       expect(listed?.message).toBe("3 page(s) blocked from indexing");
     });
@@ -219,13 +239,15 @@ for (const engine of ["v1", "streaming"] as const) {
       const r = await audit(
         [{ path: "/" }, { path: "/a" }, { path: "/thanks", meta: "noindex" }],
         "/",
-        engine,
+        engine
       );
       expect(r.skipped).toEqual([u("/thanks")]);
       expect(r.graded).toEqual([u("/"), u("/a")]);
-      expect(r.duplicateTitle?.message).toBe("1 duplicate title(s) found across 2 pages");
+      expect(r.duplicateTitle?.message).toBe(
+        "1 duplicate title(s) found across 2 pages"
+      );
       expect(r.allNoindex.find((c) => c.name === "all-noindex")?.message).toBe(
-        "1 page(s) blocked from indexing",
+        "1 page(s) blocked from indexing"
       );
     });
 
@@ -237,7 +259,7 @@ for (const engine of ["v1", "streaming"] as const) {
           { path: "/docs/b", header: "noindex" },
         ],
         "/docs/start",
-        engine,
+        engine
       );
       expect(r.skipped).toEqual([]);
       expect(r.graded).toEqual([u("/docs/a"), u("/docs/b"), u("/docs/start")]);
@@ -245,18 +267,26 @@ for (const engine of ["v1", "streaming"] as const) {
 
     test("deep-seeded audit with an indexable entry page skips the noindex page", async () => {
       const r = await audit(
-        [{ path: "/docs/start" }, { path: "/docs/a" }, { path: "/docs/b", header: "noindex" }],
+        [
+          { path: "/docs/start" },
+          { path: "/docs/a" },
+          { path: "/docs/b", header: "noindex" },
+        ],
         "/docs/start",
-        engine,
+        engine
       );
       expect(r.skipped).toEqual([u("/docs/b")]);
     });
 
     test("a homepage that answered 500 hands the decision to the entry page", async () => {
       const indexableEntry = await audit(
-        [{ path: "/", status: 500 }, { path: "/docs/start" }, { path: "/docs/b", meta: "noindex" }],
+        [
+          { path: "/", status: 500 },
+          { path: "/docs/start" },
+          { path: "/docs/b", meta: "noindex" },
+        ],
         "/docs/start",
-        engine,
+        engine
       );
       expect(indexableEntry.skipped).toEqual([u("/docs/b")]);
 
@@ -267,7 +297,7 @@ for (const engine of ["v1", "streaming"] as const) {
           { path: "/docs/b", meta: "noindex" },
         ],
         "/docs/start",
-        engine,
+        engine
       );
       expect(noindexEntry.skipped).toEqual([]);
     });
@@ -276,7 +306,7 @@ for (const engine of ["v1", "streaming"] as const) {
       const r = await audit(
         [{ path: "/docs/a" }, { path: "/docs/b", meta: "noindex" }],
         "/docs/missing",
-        engine,
+        engine
       );
       expect(r.skipped).toEqual([]);
       expect(r.graded).toEqual([u("/docs/a"), u("/docs/b")]);

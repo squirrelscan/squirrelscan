@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, ReportRuleResult } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -18,15 +19,24 @@ function rule(
   id: string,
   name: string,
   severity: ReportRuleResult["meta"]["severity"],
-  checks: ReportRuleResult["checks"],
+  checks: ReportRuleResult["checks"]
 ): ReportRuleResult {
   return {
-    meta: { id, name, description: `${name} description`, category: "seo", scope: "page", severity, weight: 5 },
+    meta: {
+      id,
+      name,
+      description: `${name} description`,
+      category: "seo",
+      scope: "page",
+      severity,
+      weight: 5,
+    },
     checks,
   };
 }
 
-const NOT_CHECKED = "External link checking was off for this audit, so 3 external link(s) on the audited pages were not checked";
+const NOT_CHECKED =
+  "External link checking was off for this audit, so 3 external link(s) on the audited pages were not checked";
 
 function structure() {
   const builder = createStructureBuilder();
@@ -49,8 +59,19 @@ function fullReport(): AuditReport {
     passed: 4,
     warnings: 0,
     failed: 1,
-    healthScore: { overall: 80, categories: [], errorCount: 1, warningCount: 0, passedCount: 4 },
-    scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true },
+    healthScore: {
+      overall: 80,
+      categories: [],
+      errorCount: 1,
+      warningCount: 0,
+      passedCount: 4,
+    },
+    scanScope: {
+      origin: "cli",
+      maxPages: 100,
+      pagesCrawled: 100,
+      capped: true,
+    },
     coverage: { auditedPages: 100, knownPages: 505, carriedFindings: 12 },
     rateLimited: { pages: 7, hosts: ["example.com"] },
     fetchFallbacks: { recovered: 3 },
@@ -60,14 +81,19 @@ function fullReport(): AuditReport {
         { name: "title", status: "fail", message: "Missing title" },
       ]),
       "links/broken-external-links": {
-        ...rule("links/broken-external-links", "Broken External Links", "warning", [
-          {
-            name: "broken-external-links",
-            status: "skipped",
-            message: NOT_CHECKED,
-            skipReason: "external-links-not-checked",
-          },
-        ]),
+        ...rule(
+          "links/broken-external-links",
+          "Broken External Links",
+          "warning",
+          [
+            {
+              name: "broken-external-links",
+              status: "skipped",
+              message: NOT_CHECKED,
+              skipReason: "external-links-not-checked",
+            },
+          ]
+        ),
         meta: {
           id: "links/broken-external-links",
           name: "Broken External Links",
@@ -82,7 +108,14 @@ function fullReport(): AuditReport {
   } as AuditReport;
 }
 
-const ABOVE = ["Not checked", "Page structure", "Rate limited", "Scan:", "Partial scan", "audited 100 of 505"];
+const ABOVE = [
+  "Not checked",
+  "Page structure",
+  "Rate limited",
+  "Scan:",
+  "Partial scan",
+  "audited 100 of 505",
+];
 
 describe("markdown", () => {
   const md = renderMarkdown(fullReport(), { version: "1.2.3" });
@@ -99,22 +132,32 @@ describe("markdown", () => {
   });
 
   test("Report detail is the last section, after the issues", () => {
-    expect(md.indexOf("## Issues")).toBeLessThan(md.indexOf("## Report detail"));
+    expect(md.indexOf("## Issues")).toBeLessThan(
+      md.indexOf("## Report detail")
+    );
     const headings = md.split("\n").filter((line) => line.startsWith("## "));
     expect(headings[headings.length - 1]).toBe("## Report detail");
   });
 
   test("it holds not-checked notices, then the page structure, then the scan details", () => {
     const detail = md.slice(md.indexOf("## Report detail"));
-    const order = ["### Not checked", "### Page structure", "### Scan details"].map((h) => detail.indexOf(h));
+    const order = [
+      "### Not checked",
+      "### Page structure",
+      "### Scan details",
+    ].map((h) => detail.indexOf(h));
 
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     // Plain list items, no "Not checked:" lead-in, no bold paragraphs.
-    expect(detail).toContain(`- Broken External Links. ${NOT_CHECKED.replaceAll("(", "\\(").replaceAll(")", "\\)")}`);
+    expect(detail).toContain(
+      `- Broken External Links. ${NOT_CHECKED.replaceAll("(", "\\(").replaceAll(")", "\\)")}`
+    );
     expect(detail).not.toContain("Not checked:");
     expect(detail).not.toContain("**");
-    expect(detail).toContain("- Rate limited: 7 page(s) not verified (example.com)");
+    expect(detail).toContain(
+      "- Rate limited: 7 page(s) not verified (example.com)"
+    );
     expect(detail).toContain("- Scan: 100 pages crawled");
   });
 
@@ -129,10 +172,16 @@ describe("markdown", () => {
       return report;
     };
 
-    expect(renderMarkdown(named("1"))).toContain("- 1\\. External link checking");
+    expect(renderMarkdown(named("1"))).toContain(
+      "- 1\\. External link checking"
+    );
     expect(renderMarkdown(named("1"))).not.toContain("- 1. ");
-    expect(renderMarkdown(named("# Loud"))).toContain("- \\# Loud. External link checking");
-    expect(renderMarkdown(named("- x"))).toContain("- \\- x. External link checking");
+    expect(renderMarkdown(named("# Loud"))).toContain(
+      "- \\# Loud. External link checking"
+    );
+    expect(renderMarkdown(named("- x"))).toContain(
+      "- \\- x. External link checking"
+    );
   });
 
   test("a report with none of it has no Report detail", () => {
@@ -190,20 +239,27 @@ describe("html", () => {
 
   test("the page structure has its own section after the findings", () => {
     const structureAt = html.indexOf('<section id="structure">');
-    expect(structureAt).toBeGreaterThan(html.indexOf('<section id="findings">'));
+    expect(structureAt).toBeGreaterThan(
+      html.indexOf('<section id="findings">')
+    );
     expect(html.slice(structureAt)).toContain("Page structure");
     // The notices keep the page's own dismissible lines at the top: no Report detail wrapper.
     expect(html).not.toContain("<h2>Report detail</h2>");
   });
 
   test("the not-checked notice is one of the page's own notices, with its lead-in", () => {
-    expect(html).toContain(`Not checked: Broken External Links. ${NOT_CHECKED}`);
+    expect(html).toContain(
+      `Not checked: Broken External Links. ${NOT_CHECKED}`
+    );
   });
 });
 
 describe("json and xml keep their data fields", () => {
   test("json still carries notChecked, structure and the scope fields at the top level", () => {
-    const parsed = JSON.parse(renderJson(fullReport())) as Record<string, unknown>;
+    const parsed = JSON.parse(renderJson(fullReport())) as Record<
+      string,
+      unknown
+    >;
     expect(Array.isArray(parsed.notChecked)).toBe(true);
     expect(parsed.structure).toBeDefined();
     expect(JSON.stringify(parsed)).not.toContain("reportDetail");

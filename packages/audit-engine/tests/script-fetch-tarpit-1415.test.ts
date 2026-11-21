@@ -17,7 +17,9 @@ beforeAll(() => {
     async fetch(request) {
       hits.push(new URL(request.url).pathname);
       await Bun.sleep(40);
-      return new Response("var a=1;", { headers: { "content-type": "application/javascript" } });
+      return new Response("var a=1;", {
+        headers: { "content-type": "application/javascript" },
+      });
     },
   });
   base = `http://127.0.0.1:${server.port}`;
@@ -29,7 +31,12 @@ describe("script fetcher tarpit budget (repo#1415)", () => {
     const budget = createFetchBudget({ tarpitLatencyMs: 10, tarpitStrikes: 2 });
     const urls = Array.from({ length: 10 }, (_, i) => `${base}/t${i}.js`);
     const results = await Effect.runPromise(
-      fetchScriptContents(urls, { concurrency: 1, fetchAll: true, maxScripts: 10, budget }),
+      fetchScriptContents(urls, {
+        concurrency: 1,
+        fetchAll: true,
+        maxScripts: 10,
+        budget,
+      })
     );
     expect(results).toHaveLength(10);
     expect(hits.length).toBeLessThan(10);
@@ -41,14 +48,16 @@ describe("script fetcher tarpit budget (repo#1415)", () => {
     const big = Bun.serve({
       port: 0,
       fetch: () =>
-        new Response("a".repeat(5000), { headers: { "content-type": "application/javascript" } }),
+        new Response("a".repeat(5000), {
+          headers: { "content-type": "application/javascript" },
+        }),
     });
     try {
       const results = await Effect.runPromise(
         fetchScriptContents([`http://127.0.0.1:${big.port}/big.js`], {
           concurrency: 1,
           maxSizeBytes: 100,
-        }),
+        })
       );
       expect(results[0]?.error).toBeTruthy();
     } finally {

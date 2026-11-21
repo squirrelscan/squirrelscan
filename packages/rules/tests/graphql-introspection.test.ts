@@ -5,9 +5,13 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { graphqlIntrospectionRule, readSchema } from "../src/security/graphql-introspection";
-import { INTROSPECTION_QUERY } from "../src/security/graphql-probe";
 import type { CheckResult } from "../src/types";
+
+import {
+  graphqlIntrospectionRule,
+  readSchema,
+} from "../src/security/graphql-introspection";
+import { INTROSPECTION_QUERY } from "../src/security/graphql-probe";
 import {
   BASE,
   candidate,
@@ -56,7 +60,10 @@ async function run(
 }
 
 function introspectionGet(r: SentRequest): boolean {
-  return r.method === "GET" && new URL(r.url).searchParams.get("query") === INTROSPECTION_QUERY;
+  return (
+    r.method === "GET" &&
+    new URL(r.url).searchParams.get("query") === INTROSPECTION_QUERY
+  );
 }
 
 describe("security/graphql-introspection", () => {
@@ -65,7 +72,10 @@ describe("security/graphql-introspection", () => {
       const { checks, sent } = await run({ [GQL]: () => json(SCHEMA) }, opts);
       expect(sent).toHaveLength(0);
       expect(checks).toHaveLength(1);
-      expect(checks[0]).toMatchObject({ status: "skipped", skipReason: "probing-passive" });
+      expect(checks[0]).toMatchObject({
+        status: "skipped",
+        skipReason: "probing-passive",
+      });
     }
   });
 
@@ -75,28 +85,51 @@ describe("security/graphql-introspection", () => {
     expect(warn).toHaveLength(1);
     expect(warn[0]!.message).toContain(GQL);
     expect(warn[0]!.message).toContain("8 types, 4 of them defined by the API");
-    expect(warn[0]!.items?.[0]).toMatchObject({ id: GQL, meta: { method: "GET", types: 8, apiTypes: 4 } });
+    expect(warn[0]!.items?.[0]).toMatchObject({
+      id: GQL,
+      meta: { method: "GET", types: 8, apiTypes: 4 },
+    });
     // One GET per endpoint (the two conventional paths), and nothing else.
     expect(sent.map((r) => `${r.method} ${new URL(r.url).pathname}`)).toEqual([
       "GET /graphql",
       "GET /api/graphql",
     ]);
     expect(sent.every(introspectionGet)).toBe(true);
-    expect(sent.every((r) => r.body === null && r.credentials === "omit" && r.redirect === "manual")).toBe(true);
+    expect(
+      sent.every(
+        (r) =>
+          r.body === null && r.credentials === "omit" && r.redirect === "manual"
+      )
+    ).toBe(true);
   });
 
   test("a discovered endpoint is probed and named", async () => {
     const { checks, sent } = await run(
-      { [`${BASE}/v1/graphql`]: () => json(SCHEMA, 200, "application/graphql-response+json") },
+      {
+        [`${BASE}/v1/graphql`]: () =>
+          json(SCHEMA, 200, "application/graphql-response+json"),
+      },
       { surface: surface([candidate("/v1/graphql")]) }
     );
-    expect(checks.find((c) => c.status === "warn")?.message).toContain(`${BASE}/v1/graphql`);
+    expect(checks.find((c) => c.status === "warn")?.message).toContain(
+      `${BASE}/v1/graphql`
+    );
     expect(sent[0]!.url.startsWith(`${BASE}/v1/graphql?query=`)).toBe(true);
   });
 
   test("active: a GraphQL error without a schema sends no POST and is not flagged", async () => {
     const csrf = () =>
-      json({ errors: [{ message: "This operation has been blocked as a potential Cross-Site Request Forgery (CSRF)." }] }, 400);
+      json(
+        {
+          errors: [
+            {
+              message:
+                "This operation has been blocked as a potential Cross-Site Request Forgery (CSRF).",
+            },
+          ],
+        },
+        400
+      );
     const { checks, sent } = await run({ [GQL]: csrf });
     expect(sent.some((r) => r.method === "POST")).toBe(false);
     expect(checks).toHaveLength(1);
@@ -108,8 +141,20 @@ describe("security/graphql-introspection", () => {
     const route: Route = (req) =>
       req.method === "POST"
         ? json(SCHEMA)
-        : json({ errors: [{ message: "GET requests are not supported for this operation" }] }, 405);
-    const { checks, sent } = await run({ [GQL]: route }, { level: "aggressive" });
+        : json(
+            {
+              errors: [
+                {
+                  message: "GET requests are not supported for this operation",
+                },
+              ],
+            },
+            405
+          );
+    const { checks, sent } = await run(
+      { [GQL]: route },
+      { level: "aggressive" }
+    );
     const posts = sent.filter((r) => r.method === "POST");
     expect(posts).toHaveLength(1);
     expect(posts[0]!.url).toBe(GQL);
@@ -126,9 +171,16 @@ describe("security/graphql-introspection", () => {
       () => html("<!doctype html><div id=app></div>", 200),
       () => json({ status: 404, error: "Not Found" }, 404),
       () => json({ errors: [{ status: "404", title: "Not Found" }] }, 404),
-      () => new Response(null, { status: 302, headers: { location: "https://login.example.com/" } }),
+      () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://login.example.com/" },
+        }),
     ]) {
-      const { checks, sent } = await run({ [GQL]: route }, { level: "aggressive" });
+      const { checks, sent } = await run(
+        { [GQL]: route },
+        { level: "aggressive" }
+      );
       expect(sent.filter((r) => r.method === "POST")).toHaveLength(0);
       expect(checks.every((c) => c.status === "pass")).toBe(true);
       restore?.();
@@ -139,7 +191,17 @@ describe("security/graphql-introspection", () => {
     const { checks, sent } = await run(
       {
         [GQL]: () =>
-          json({ errors: [{ message: "GraphQL introspection is not allowed, but the query contained __schema or __type." }] }, 400),
+          json(
+            {
+              errors: [
+                {
+                  message:
+                    "GraphQL introspection is not allowed, but the query contained __schema or __type.",
+                },
+              ],
+            },
+            400
+          ),
       },
       { level: "aggressive" }
     );
@@ -148,8 +210,12 @@ describe("security/graphql-introspection", () => {
   });
 
   test("aggressive: a POST that also fails is not flagged", async () => {
-    const route: Route = () => json({ errors: [{ message: "Must provide query string." }] }, 400);
-    const { checks, sent } = await run({ [GQL]: route }, { level: "aggressive" });
+    const route: Route = () =>
+      json({ errors: [{ message: "Must provide query string." }] }, 400);
+    const { checks, sent } = await run(
+      { [GQL]: route },
+      { level: "aggressive" }
+    );
     expect(sent.filter((r) => r.method === "POST")).toHaveLength(1);
     expect(checks.every((c) => c.status === "pass")).toBe(true);
   });
@@ -172,7 +238,9 @@ describe("security/graphql-introspection", () => {
   });
 
   test("an oversized introspection body is flagged as open but too large to count, never a pass", async () => {
-    const types = Array.from({ length: 60_000 }, (_, i) => ({ name: `Type${i}` }));
+    const types = Array.from({ length: 60_000 }, (_, i) => ({
+      name: `Type${i}`,
+    }));
     types.push({ name: "__Schema" }, { name: "String" });
     const big = () => json({ data: { __schema: { types } } });
     const { checks } = await run({ [GQL]: big });
@@ -180,7 +248,10 @@ describe("security/graphql-introspection", () => {
     expect(warn?.message).toContain(GQL);
     expect(warn?.message).toContain("larger than 1 MB, too large to count");
     expect(warn?.message).toContain("at least");
-    expect(warn?.items?.[0]?.meta).toMatchObject({ truncated: true, confidence: "lower" });
+    expect(warn?.items?.[0]?.meta).toMatchObject({
+      truncated: true,
+      confidence: "lower",
+    });
     expect(checks.some((c) => c.status === "pass")).toBe(false);
     expect(Number(warn?.items?.[0]?.meta?.types)).toBeGreaterThan(10_000);
   });
@@ -189,12 +260,15 @@ describe("security/graphql-introspection", () => {
     // The first type name alone is longer than the 1 MB cap.
     const body = `{"data":{"__schema":{"types":[{"name":"${"A".repeat(1100 * 1024)}"}]}}}`;
     const { checks } = await run({
-      [GQL]: () => new Response(body, { headers: { "content-type": "application/json" } }),
+      [GQL]: () =>
+        new Response(body, { headers: { "content-type": "application/json" } }),
     });
     const warn = checks.filter((c) => c.status === "warn");
     expect(warn).toHaveLength(1);
     expect(warn[0]!.message).toContain(GQL);
-    expect(warn[0]!.message).toContain("too large to count (answered over GET)");
+    expect(warn[0]!.message).toContain(
+      "too large to count (answered over GET)"
+    );
     expect(checks.some((c) => c.status === "pass")).toBe(false);
   });
 
@@ -203,7 +277,8 @@ describe("security/graphql-introspection", () => {
     for (const route of [
       () => json({ items: [{ name: "a" }], pad }),
       () => json({ data: { search: [{ name: "a" }] }, pad }),
-      () => html(`{"data":{"__schema":{"types":[{"name":"Query"}]}}${pad}`, 200),
+      () =>
+        html(`{"data":{"__schema":{"types":[{"name":"Query"}]}}${pad}`, 200),
     ]) {
       const { checks } = await run({ [GQL]: route });
       expect(checks.every((c) => c.status === "pass")).toBe(true);
@@ -215,9 +290,15 @@ describe("security/graphql-introspection", () => {
     const fail = () => {
       throw new TypeError("connection reset");
     };
-    const { checks } = await run({ [GQL]: fail, [`${BASE}/api/graphql`]: fail });
+    const { checks } = await run({
+      [GQL]: fail,
+      [`${BASE}/api/graphql`]: fail,
+    });
     expect(checks).toEqual([
-      expect.objectContaining({ status: "skipped", skipReason: "probe-errors" }),
+      expect.objectContaining({
+        status: "skipped",
+        skipReason: "probe-errors",
+      }),
     ]);
   });
 
@@ -231,7 +312,10 @@ describe("security/graphql-introspection", () => {
           candidate("/api/deleteAccount/graphql"),
           candidate("/gql", { method: "DELETE" }),
           candidate("https://api.vendor.com/graphql"),
-          candidate("https://other.example.org/graphql", { sameOrigin: true, probeEligible: true }),
+          candidate("https://other.example.org/graphql", {
+            sameOrigin: true,
+            probeEligible: true,
+          }),
         ]),
       }
     );
@@ -249,9 +333,16 @@ describe("security/graphql-introspection", () => {
       },
     });
     restore = stub.restore;
-    const { checks } = await graphqlIntrospectionRule.run(ruleCtx({ budgetMs: 50, now: () => t }));
+    const { checks } = await graphqlIntrospectionRule.run(
+      ruleCtx({ budgetMs: 50, now: () => t })
+    );
     expect(stub.sent.map((r) => new URL(r.url).pathname)).toEqual(["/graphql"]);
-    expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probe-budget" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({
+        status: "skipped",
+        skipReason: "probe-budget",
+      }),
+    ]);
     expect(checks[0]!.message).toContain("after 1 of 2 GraphQL endpoint(s)");
     expect(checks[0]!.message).toContain("the rest were not checked");
   });
@@ -266,20 +357,31 @@ describe("security/graphql-introspection", () => {
     t = 100;
     const { checks } = await graphqlIntrospectionRule.run(ctx);
     expect(stub.sent).toHaveLength(0);
-    expect(checks[0]).toMatchObject({ status: "skipped", skipReason: "probe-budget" });
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: "probe-budget",
+    });
   });
 
   test("each run probes live: a later run sees the server's new answer", async () => {
     const first = await run({ [GQL]: () => json(SCHEMA) });
     expect(first.checks.some((c) => c.status === "warn")).toBe(true);
     restore?.();
-    const second = await run({ [GQL]: () => json({ errors: [{ message: "introspection disabled" }] }, 400) });
+    const second = await run({
+      [GQL]: () =>
+        json({ errors: [{ message: "introspection disabled" }] }, 400),
+    });
     expect(second.checks.every((c) => c.status === "pass")).toBe(true);
   });
 
   test("readSchema needs named types", () => {
-    expect(readSchema({ data: SCHEMA.data, errors: [] })).toEqual({ types: 8, apiTypes: 4 });
-    expect(readSchema({ data: { __schema: { types: "x" } }, errors: [] })).toBeNull();
+    expect(readSchema({ data: SCHEMA.data, errors: [] })).toEqual({
+      types: 8,
+      apiTypes: 4,
+    });
+    expect(
+      readSchema({ data: { __schema: { types: "x" } }, errors: [] })
+    ).toBeNull();
     expect(readSchema(null)).toBeNull();
   });
 });

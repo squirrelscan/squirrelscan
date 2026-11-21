@@ -1,12 +1,14 @@
 // a11y/empty-heading - Headings have content
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckItem } from "@squirrelscan/core-contracts";
+
+import { wcag } from "@squirrelscan/core-contracts/wcag";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { fieldSnippet } from "../shared/form-fields";
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 export const emptyHeadingRule: Rule = {
   meta: {
@@ -67,7 +69,10 @@ export const emptyHeadingRule: Rule = {
       if (!hasContent) {
         const level = heading.tagName.toLowerCase();
         const id = heading.getAttribute("id");
-        const cls = heading.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
+        const cls = heading
+          .getAttribute("class")
+          ?.split(CLASS_SPLIT)
+          .find(Boolean);
         unnamed.add(heading, {
           id: id ? `${level}#${id}` : cls ? `${level}.${cls}` : level,
           label: `${level}, heading ${position} of ${headings.length} on the page`,
@@ -91,7 +96,9 @@ export const emptyHeadingRule: Rule = {
       });
     }
     if (unnamed.unconfirmed.length > 0) {
-      checks.push(unconfirmedRow("empty-heading", "empty heading(s)", unnamed.unconfirmed));
+      checks.push(
+        unconfirmedRow("empty-heading", "empty heading(s)", unnamed.unconfirmed)
+      );
     }
     if (emptyHeadings.length === 0 && unnamed.unconfirmed.length === 0) {
       if (headings.length > 0) {
@@ -101,7 +108,9 @@ export const emptyHeadingRule: Rule = {
           message: "All headings have content",
           details: {
             headingsChecked: headings.length,
-            ...(unnamed.hidden > 0 ? { hiddenWithoutName: unnamed.hidden } : {}),
+            ...(unnamed.hidden > 0
+              ? { hiddenWithoutName: unnamed.hidden }
+              : {}),
           },
         });
       } else {

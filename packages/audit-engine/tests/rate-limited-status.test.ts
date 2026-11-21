@@ -56,13 +56,21 @@ describe("deriveAuditStatus — rate-limit reasons (#1829)", () => {
   });
 
   test("a clean crawl is still completed with no reason", () => {
-    const out = deriveAuditStatus({ pagesCrawled: 40, contentPages: 40, blockedPages: 0 });
+    const out = deriveAuditStatus({
+      pagesCrawled: 40,
+      contentPages: 40,
+      blockedPages: 0,
+    });
     expect(out.status).toBe("completed");
     expect(out.reason).toBeUndefined();
   });
 
   test("an unreachable site is still failed, not rate limited", () => {
-    const out = deriveAuditStatus({ pagesCrawled: 0, contentPages: 0, blockedPages: 0 });
+    const out = deriveAuditStatus({
+      pagesCrawled: 0,
+      contentPages: 0,
+      blockedPages: 0,
+    });
     expect(out.status).toBe("failed");
     expect(out.reason).toContain("No pages were crawled");
   });
@@ -94,9 +102,13 @@ describe("deriveAuditStatus — rate-limit reasons (#1829)", () => {
 
 describe("deriveAuditStatusFromPages — stored 429/430 pages (#1829)", () => {
   test("a stored 429 page counts as rate limited, not as a bot wall", () => {
-    const out = deriveAuditStatusFromPages([{ status: 200 }, { status: 429 }], 0, {
-      hosts: ["shop.example.com"],
-    });
+    const out = deriveAuditStatusFromPages(
+      [{ status: 200 }, { status: 429 }],
+      0,
+      {
+        hosts: ["shop.example.com"],
+      }
+    );
 
     expect(out.status).toBe("partial");
     expect(out.reason).toContain("rate limited");
@@ -104,7 +116,10 @@ describe("deriveAuditStatusFromPages — stored 429/430 pages (#1829)", () => {
   });
 
   test("a stored 430 page counts the same way", () => {
-    const out = deriveAuditStatusFromPages([{ status: 200 }, { status: 430 }], 0);
+    const out = deriveAuditStatusFromPages(
+      [{ status: 200 }, { status: 430 }],
+      0
+    );
     expect(out.status).toBe("partial");
   });
 
@@ -115,7 +130,10 @@ describe("deriveAuditStatusFromPages — stored 429/430 pages (#1829)", () => {
   });
 
   test("an all-2xx crawl is completed", () => {
-    const out = deriveAuditStatusFromPages([{ status: 200 }, { status: 200 }], 0);
+    const out = deriveAuditStatusFromPages(
+      [{ status: 200 }, { status: 200 }],
+      0
+    );
     expect(out.status).toBe("completed");
   });
 });
@@ -126,12 +144,14 @@ describe("deriveAuditStatus: undecodable pages", () => {
   test("content gathered but pages lost to a bad content-encoding is partial, naming the count", () => {
     const out = deriveAuditStatus({ ...base, undecodablePages: 2 });
     expect(out.status).toBe("partial");
-    expect(out.reason).toBe("2 pages could not be decoded (bad content-encoding)");
+    expect(out.reason).toBe(
+      "2 pages could not be decoded (bad content-encoding)"
+    );
   });
 
   test("singular wording for one page", () => {
     expect(deriveAuditStatus({ ...base, undecodablePages: 1 }).reason).toBe(
-      "1 page could not be decoded (bad content-encoding)",
+      "1 page could not be decoded (bad content-encoding)"
     );
   });
 
@@ -157,7 +177,7 @@ describe("deriveAuditStatus: undecodable pages", () => {
     });
     expect(out.status).toBe("partial");
     expect(out.reason).toBe(
-      "3 pages rate limited by shop.example.com; 40 more discovered but not fetched; 2 pages could not be decoded (bad content-encoding)",
+      "3 pages rate limited by shop.example.com; 40 more discovered but not fetched; 2 pages could not be decoded (bad content-encoding)"
     );
   });
 
@@ -167,15 +187,17 @@ describe("deriveAuditStatus: undecodable pages", () => {
       0,
       { errors: 1, hosts: ["a.example.com"], unfetched: 5 },
       undefined,
-      1,
+      1
     );
     expect(out.reason).toBe(
-      "1 page rate limited by a.example.com; 5 more discovered but not fetched; 1 page could not be decoded (bad content-encoding)",
+      "1 page rate limited by a.example.com; 5 more discovered but not fetched; 1 page could not be decoded (bad content-encoding)"
     );
   });
 
   test("no undecodable pages stays completed", () => {
-    expect(deriveAuditStatus({ ...base, undecodablePages: 0 }).status).toBe("completed");
+    expect(deriveAuditStatus({ ...base, undecodablePages: 0 }).status).toBe(
+      "completed"
+    );
     expect(deriveAuditStatus(base).status).toBe("completed");
   });
 

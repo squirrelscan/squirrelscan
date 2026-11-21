@@ -10,13 +10,19 @@
 // visit cap is what keeps that linear. The most relevant controls also get a longer read from a page-wide
 // budget, and a relevant control whose read was cut is counted in `unread` so the rules can say so.
 
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 import { getAttrCI } from "@squirrelscan/utils";
 
 import { BRAND_SPECS } from "./brand-specs";
-import { CONFUSABLE_RUN, CONFUSABLES, INVISIBLE, digitForms, hasFoldableDigit } from "./confusables";
+import {
+  CONFUSABLE_RUN,
+  CONFUSABLES,
+  INVISIBLE,
+  digitForms,
+  hasFoldableDigit,
+} from "./confusables";
 import { AUTH_CUE_PHRASES, AUTH_LABEL } from "./cues";
 import { hiddenSelectors } from "./overlay-style";
-import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 /** Text with nothing outside ASCII (a linear test, with no backtracking). */
 const ASCII_ONLY = /^\p{ASCII}*$/u;
@@ -35,17 +41,19 @@ const ASCII_ONLY = /^\p{ASCII}*$/u;
 export function readable(text: string): string {
   // Plain ASCII has no marks, invisible characters, compatibility forms or look-alikes: only case and spacing.
   if (ASCII_ONLY.test(text)) return text.toLowerCase().replace(/\s+/g, " ");
-  return text
-    .replace(INVISIBLE, "")
-    .replace(/\p{M}+/gu, "")
-    // The lunate sigma, small and capital (U+03F2, U+03F9), draws a `c`; NFKC would turn them into sigmas that draw an `o` or a `s`.
-    .replace(/[\u03f2\u03f9]/g, "c")
-    .normalize("NFKC")
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(CONFUSABLE_RUN, (ch) => CONFUSABLES[ch] ?? ch)
-    .replace(/\s+/g, " ");
+  return (
+    text
+      .replace(INVISIBLE, "")
+      .replace(/\p{M}+/gu, "")
+      // The lunate sigma, small and capital (U+03F2, U+03F9), draws a `c`; NFKC would turn them into sigmas that draw an `o` or a `s`.
+      .replace(/[\u03f2\u03f9]/g, "c")
+      .normalize("NFKC")
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(CONFUSABLE_RUN, (ch) => CONFUSABLES[ch] ?? ch)
+      .replace(/\s+/g, " ")
+  );
 }
 
 /** `readable` text with every space removed: a phrase matches however the markup splits or breaks it. */
@@ -84,7 +92,11 @@ const ATTR_STRIDE = ATTR_CHARS / 2;
  * charged only for the excess: all of the text when both cover it, else only what the control's own allowance covers. So a page
  * of long digit-heavy fillers can use up the pool and a short swapped-digit label still folds, in a text or in an attribute.
  */
-function foldSpan(length: number, own: { left: number }, pool: { left: number }): number {
+function foldSpan(
+  length: number,
+  own: { left: number },
+  pool: { left: number }
+): number {
   const fromOwn = Math.min(length, own.left);
   const excess = length - fromOwn;
   if (excess <= pool.left) {
@@ -103,7 +115,11 @@ function foldSpan(length: number, own: { left: number }, pool: { left: number })
  * a word gets a letter stuck on it (`x`): a window cut out of `Redesign in with Google` must not read as `sign in
  * with Google`, and a cue half-cut by the edge must not read as a whole word either.
  */
-function boundedAttribute(text: string, own?: { left: number }, pool?: { left: number }): { texts: string[][]; cut: boolean } {
+function boundedAttribute(
+  text: string,
+  own?: { left: number },
+  pool?: { left: number }
+): { texts: string[][]; cut: boolean } {
   const normalised = readable(text.slice(0, ATTR_RAW_CHARS)).trim();
   const limited = normalised.slice(0, ATTR_RAW_CHARS);
   let cut = text.length > ATTR_RAW_CHARS || normalised.length > ATTR_RAW_CHARS;
@@ -111,7 +127,8 @@ function boundedAttribute(text: string, own?: { left: number }, pool?: { left: n
   // as written always. The fold is charged (see {@link foldSpan}); what it may not read is not folded and the control is counted cut.
   const readings = [limited];
   if (hasFoldableDigit(limited)) {
-    const span = own && pool ? foldSpan(limited.length, own, pool) : limited.length;
+    const span =
+      own && pool ? foldSpan(limited.length, own, pool) : limited.length;
     if (span < limited.length) cut = true;
     if (span > 0) readings.push(...digitForms(limited.slice(0, span)).slice(1));
   }
@@ -141,12 +158,20 @@ export function cuePattern(phrases: readonly string[]): string {
   const alternatives = new Set<string>();
   for (const phrase of phrases) {
     const [first, second] = phrase.split(" ");
-    const escape = (word: string): string => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    alternatives.add(first!.length <= 4 && second ? `${escape(first!)} ?${escape(second)}` : escape(first!));
+    const escape = (word: string): string =>
+      word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    alternatives.add(
+      first!.length <= 4 && second
+        ? `${escape(first!)} ?${escape(second)}`
+        : escape(first!)
+    );
   }
   return `(?<![\\p{L}\\p{N}])(?:${[...alternatives].join("|")})`;
 }
-const CUE_PATTERN = cuePattern([...AUTH_CUE_PHRASES, ...BRAND_SPECS.flatMap((spec) => spec.lexicon)]);
+const CUE_PATTERN = cuePattern([
+  ...AUTH_CUE_PHRASES,
+  ...BRAND_SPECS.flatMap((spec) => spec.lexicon),
+]);
 /** A window (normalised, lower case) that holds the start of a cue phrase. */
 export const WINDOW_CUE = new RegExp(CUE_PATTERN, "u");
 /** The same test on an attribute as written, no normalisation: the cheap first tier. */
@@ -157,10 +182,23 @@ const RAW_CUE = new RegExp(CUE_PATTERN, "iu");
  * sign-in word: a phrase of a brand is what decides, repeated `sign in` text is how a label is padded (#1458).
  */
 const BRAND_WORDS = (() => {
-  const auth = new Set([...AUTH_CUE_PHRASES, "with", "account", "in"].flatMap((phrase) => phrase.split(" ")));
-  return [...new Set(BRAND_SPECS.flatMap((spec) => spec.lexicon).flatMap((phrase) => phrase.split(" ")).filter((word) => !auth.has(word)))];
+  const auth = new Set(
+    [...AUTH_CUE_PHRASES, "with", "account", "in"].flatMap((phrase) =>
+      phrase.split(" ")
+    )
+  );
+  return [
+    ...new Set(
+      BRAND_SPECS.flatMap((spec) => spec.lexicon)
+        .flatMap((phrase) => phrase.split(" "))
+        .filter((word) => !auth.has(word))
+    ),
+  ];
 })();
-const BRAND_WINDOW = new RegExp(`(?<![\\p{L}\\p{N}])(?:${BRAND_WORDS.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "u");
+const BRAND_WINDOW = new RegExp(
+  `(?<![\\p{L}\\p{N}])(?:${BRAND_WORDS.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
+  "u"
+);
 /** Windows past an attribute's first that the page may read, how they are shared, and the most one attribute adds. */
 const SEQUENTIAL_WINDOW_BUDGET = 10_000;
 const SHARED_WINDOW_BUDGET = 10_000;
@@ -172,7 +210,10 @@ const MAX_ALTS_PER_CONTROL = 100;
 /** Windows every control with long attributes gets past each attribute's first, outside the page budgets (#1459). */
 const FLOOR_WINDOWS_PER_CONTROL = 2;
 /** The page's window budgets. A mutable object so a test can lower them to exercise the exhausted path. */
-export const integrityLimits = { sequentialWindows: SEQUENTIAL_WINDOW_BUDGET, sharedWindows: SHARED_WINDOW_BUDGET };
+export const integrityLimits = {
+  sequentialWindows: SEQUENTIAL_WINDOW_BUDGET,
+  sharedWindows: SHARED_WINDOW_BUDGET,
+};
 
 /**
  * One control's read: at most `SHORT_VISITS` nodes looked at (text or not) and `SHORT_CHARS` characters kept.
@@ -208,11 +249,14 @@ const styleHiddenCache = new WeakMap<Element, boolean>();
 function styleHides(el: Element, style: string): boolean {
   const cached = styleHiddenCache.get(el);
   if (cached !== undefined) return cached;
-  const hides = HIDDEN_STYLE.test(style.length > STYLE_ATTR_CHARS ? style.slice(0, STYLE_ATTR_CHARS) : style);
+  const hides = HIDDEN_STYLE.test(
+    style.length > STYLE_ATTR_CHARS ? style.slice(0, STYLE_ATTR_CHARS) : style
+  );
   styleHiddenCache.set(el, hides);
   return hides;
 }
-const SCAN_SELECTOR = "a[href], button, input, [role='button'], form[id], img[alt], template";
+const SCAN_SELECTOR =
+  "a[href], button, input, [role='button'], form[id], img[alt], template";
 /** Destination paths a sign-in control points at; a control to one of these is read before an ordinary link. */
 const AUTH_PATH = /(sign-?in|log-?in|oauth|auth|sso|account)/i;
 /** Subtrees that render as no text: reading them would let `Sign<script>0</script> in` hide a label. */
@@ -235,7 +279,7 @@ function readChunks(
   el: Element,
   maxVisits: number,
   maxChars: number,
-  hiddenBy: Hidden,
+  hiddenBy: Hidden
 ): { chunks: Chunk[]; visits: number; cut: boolean } {
   const chunks: Chunk[] = [];
   let chars = 0;
@@ -249,7 +293,8 @@ function readChunks(
   };
   push(el, false);
   while (stack.length > 0) {
-    if (visits >= maxVisits || chars >= maxChars) return { chunks, visits, cut: true };
+    if (visits >= maxVisits || chars >= maxChars)
+      return { chunks, visits, cut: true };
     const [node, hidden] = stack.pop()!;
     visits++;
     if (node.nodeType === 3) {
@@ -271,7 +316,11 @@ function readChunks(
           getAttrCI(child, "hidden") !== null ||
           getAttrCI(child, "aria-hidden")?.toLowerCase() === "true" ||
           (style !== null && styleHides(child, style)) ||
-          (cls !== null && cls.toLowerCase().split(CLASS_SPLIT).some((c) => hiddenBy.classes.has(c))) ||
+          (cls !== null &&
+            cls
+              .toLowerCase()
+              .split(CLASS_SPLIT)
+              .some((c) => hiddenBy.classes.has(c))) ||
           (id !== null && hiddenBy.ids.has(id.toLowerCase()));
       }
       push(child, nowHidden);
@@ -305,15 +354,28 @@ function isControl(el: Element): boolean {
 type Root = { querySelectorAll(selector: string): ArrayLike<Element> };
 
 /** The relevance of a control from what costs nothing to read (see {@link scanControls}). */
-export function rank(tag: string, target: string | null, extra: string[], localIsOwn = true): number {
+export function rank(
+  tag: string,
+  target: string | null,
+  extra: string[],
+  localIsOwn = true
+): number {
   // No destination (a script-driven button with no form): there is nothing to judge, so nothing to read.
   if (target === null) return 0;
-  if (extra.some((text) => AUTH_LABEL.test(readable(text.slice(0, ATTR_CHARS))))) return 3;
+  if (
+    extra.some((text) => AUTH_LABEL.test(readable(text.slice(0, ATTR_CHARS))))
+  )
+    return 3;
   if (tag !== "a") return 2;
   // A `<base href>` that moves the site makes every relative destination (an empty one included) another host's: read first and counted if cut.
   if (!localIsOwn) return 2;
   // `target` is the destination as the parser reads it (see `urlText`), the same text `shortlist()` decided on, computed once per control.
-  if (target && (offSiteText(target) || AUTH_PATH.test(target.slice(0, MAX_AUTH_PATH_CHARS)))) return 2;
+  if (
+    target &&
+    (offSiteText(target) ||
+      AUTH_PATH.test(target.slice(0, MAX_AUTH_PATH_CHARS)))
+  )
+    return 2;
   return 1;
 }
 
@@ -331,7 +393,10 @@ export function looksOffSite(href: string): boolean {
 }
 
 function offSiteText(target: string): boolean {
-  return /^(?:[a-z][a-z0-9+.-]*:)?[\\/]{2}/i.test(target) || /^(?:https?|wss?|ftp):/i.test(target);
+  return (
+    /^(?:[a-z][a-z0-9+.-]*:)?[\\/]{2}/i.test(target) ||
+    /^(?:https?|wss?|ftp):/i.test(target)
+  );
 }
 
 /**
@@ -344,7 +409,8 @@ export function urlText(href: string): string {
 }
 
 /** A destination that is plainly on the page's own site: a root-relative path, a fragment, a query or a bare relative path. */
-export const PLAIN_LOCAL_HREF = /^(?:\/(?![/\\])|#|\?|[\w.~-]+(?:[/?#][^:\\]*)?$)/;
+export const PLAIN_LOCAL_HREF =
+  /^(?:\/(?![/\\])|#|\?|[\w.~-]+(?:[/?#][^:\\]*)?$)/;
 
 /**
  * The controls worth a full prepare, in the order they get it. A link whose destination is plainly the
@@ -390,12 +456,27 @@ export interface ControlAttributes {
  * about 20 KB of valueless attributes to push its `href` and cue past the first pass. The first of each name wins, as in a browser.
  * `overlong` is true only when attributes remain that neither pass read.
  */
-export function readControlAttributes(el: Element, room = Number.POSITIVE_INFINITY): ControlAttributes {
-  const out: ControlAttributes = { href: null, cue: false, ariaLabel: null, title: null, value: null, alt: null, labelledby: null, overlong: false, scanned: 0 };
+export function readControlAttributes(
+  el: Element,
+  room = Number.POSITIVE_INFINITY
+): ControlAttributes {
+  const out: ControlAttributes = {
+    href: null,
+    cue: false,
+    ariaLabel: null,
+    title: null,
+    value: null,
+    alt: null,
+    labelledby: null,
+    overlong: false,
+    scanned: 0,
+  };
   const attrs = el.attributes;
   const total = attrs.length;
-  const first = total > MAX_ATTRIBUTES_PER_CONTROL ? MAX_ATTRIBUTES_PER_CONTROL : total;
-  const limit = total > first ? first + Math.max(0, Math.min(total - first, room)) : first;
+  const first =
+    total > MAX_ATTRIBUTES_PER_CONTROL ? MAX_ATTRIBUTES_PER_CONTROL : total;
+  const limit =
+    total > first ? first + Math.max(0, Math.min(total - first, room)) : first;
   out.overlong = total > limit;
   out.scanned = limit;
   for (let k = 0; k < limit; k++) {
@@ -403,16 +484,19 @@ export function readControlAttributes(el: Element, room = Number.POSITIVE_INFINI
     const name = attr.name;
     switch (name.length) {
       case 3:
-        if (out.alt === null && name.toLowerCase() === "alt") out.alt = attr.value;
+        if (out.alt === null && name.toLowerCase() === "alt")
+          out.alt = attr.value;
         break;
       case 4:
-        if (out.href === null && name.toLowerCase() === "href") out.href = attr.value;
+        if (out.href === null && name.toLowerCase() === "href")
+          out.href = attr.value;
         break;
       case 5:
         if (out.title === null && name.toLowerCase() === "title") {
           out.title = attr.value;
           out.cue = true;
-        } else if (out.value === null && name.toLowerCase() === "value") out.value = attr.value;
+        } else if (out.value === null && name.toLowerCase() === "value")
+          out.value = attr.value;
         break;
       case 10:
         if (out.ariaLabel === null && name.toLowerCase() === "aria-label") {
@@ -421,7 +505,10 @@ export function readControlAttributes(el: Element, room = Number.POSITIVE_INFINI
         }
         break;
       case 15:
-        if (out.labelledby === null && name.toLowerCase() === "aria-labelledby") {
+        if (
+          out.labelledby === null &&
+          name.toLowerCase() === "aria-labelledby"
+        ) {
           out.labelledby = attr.value;
           out.cue = true;
         }
@@ -432,7 +519,11 @@ export function readControlAttributes(el: Element, room = Number.POSITIVE_INFINI
 }
 
 /** What `scanControls` spends the page's attribute work on: a mutable object so a test can lower the budgets. */
-export const attributeLimits = { shortlist: SHORTLIST_ATTRIBUTE_BUDGET, prepare: PREPARE_ATTRIBUTE_BUDGET, fold: FOLD_CHAR_BUDGET };
+export const attributeLimits = {
+  shortlist: SHORTLIST_ATTRIBUTE_BUDGET,
+  prepare: PREPARE_ATTRIBUTE_BUDGET,
+  fold: FOLD_CHAR_BUDGET,
+};
 
 /** A test hook, off in production: when `enabled`, counts the distinct `aria-labelledby` targets whose text was read. */
 export const integrityCounters = { enabled: false, targetReads: 0 };
@@ -442,9 +533,24 @@ export function shortlist(
   destinationOf: (el: Element) => string | null,
   hasLogo: (el: Element) => boolean,
   localIsOwn = true,
-  budget: { left: number } = { left: Infinity },
-): { chosen: Array<{ element: Element; href: string; target: string; order: number; read: ControlAttributes }>; cut: number } {
-  type Entry = { element: Element; href: string; target: string; order: number; read: ControlAttributes };
+  budget: { left: number } = { left: Infinity }
+): {
+  chosen: Array<{
+    element: Element;
+    href: string;
+    target: string;
+    order: number;
+    read: ControlAttributes;
+  }>;
+  cut: number;
+} {
+  type Entry = {
+    element: Element;
+    href: string;
+    target: string;
+    order: number;
+    read: ControlAttributes;
+  };
   const first: Entry[] = [];
   const second: Entry[] = [];
   // Controls not looked at because the page's attribute budget ran out: counted as unread, never silently clean.
@@ -456,7 +562,10 @@ export function shortlist(
     }
     const isLink = el.tagName.toLowerCase() === "a";
     // One pass over the attributes: a link's first `href` (what a browser keeps) and whether any attribute could carry a cue.
-    const read = readControlAttributes(el, budget.left - 1 - MAX_ATTRIBUTES_PER_CONTROL);
+    const read = readControlAttributes(
+      el,
+      budget.left - 1 - MAX_ATTRIBUTES_PER_CONTROL
+    );
     budget.left -= 1 + read.scanned;
     const cue = read.cue;
     let href: string | null = isLink ? read.href : null;
@@ -469,14 +578,21 @@ export function shortlist(
     }
     const normalised = urlText(href);
     // A plainly local destination is the page's own site only while no `<base href>` moves where relative URLs resolve.
-    if (localIsOwn && (normalised === "" || PLAIN_LOCAL_HREF.test(normalised))) {
-      if (cue || hasLogo(el)) first.push({ element: el, href, target: normalised, order, read });
+    if (
+      localIsOwn &&
+      (normalised === "" || PLAIN_LOCAL_HREF.test(normalised))
+    ) {
+      if (cue || hasLogo(el))
+        first.push({ element: el, href, target: normalised, order, read });
       // A cue attribute past the cut would have made it a candidate: counted, not skipped silently.
       else if (read.overlong) unexamined++;
       continue;
     }
     // Off-site links are NOT promoted here (rank() reads them first once prepared): thousands of decoy links to other hosts must not fill the prepare cap ahead of a real control.
-    (!isLink || AUTH_PATH.test(normalised.slice(0, MAX_AUTH_PATH_CHARS)) ? first : second).push({
+    (!isLink || AUTH_PATH.test(normalised.slice(0, MAX_AUTH_PATH_CHARS))
+      ? first
+      : second
+    ).push({
       element: el,
       href,
       target: normalised,
@@ -485,7 +601,10 @@ export function shortlist(
     });
   }
   const all = first.concat(second);
-  return { chosen: all.slice(0, MAX_PREPARED), cut: Math.max(0, all.length - MAX_PREPARED) + unexamined };
+  return {
+    chosen: all.slice(0, MAX_PREPARED),
+    cut: Math.max(0, all.length - MAX_PREPARED) + unexamined,
+  };
 }
 
 const scanCache = new WeakMap<object, ControlScan>();
@@ -499,7 +618,9 @@ const scanCache = new WeakMap<object, ControlScan>();
 function firstHonouredBaseHref(doc: Document): string | null {
   const root = doc.documentElement;
   if (!root) return null;
-  const stack: Array<{ element: Element; foreign: boolean }> = [{ element: root, foreign: false }];
+  const stack: Array<{ element: Element; foreign: boolean }> = [
+    { element: root, foreign: false },
+  ];
   while (stack.length > 0) {
     const { element, foreign } = stack.pop()!;
     const tag = element.tagName.toLowerCase();
@@ -508,11 +629,15 @@ function firstHonouredBaseHref(doc: Document): string | null {
       const href = getAttrCI(element, "href");
       if (href !== null) return href;
     }
-    const childForeign = tag === "foreignobject" ? false : foreign || tag === "svg" || tag === "math";
+    const childForeign =
+      tag === "foreignobject"
+        ? false
+        : foreign || tag === "svg" || tag === "math";
     // pushed in reverse so the first child is popped first: document order
     // `children` builds a new list on every access in some DOMs: read it once per element
     const children = element.children;
-    for (let k = children.length - 1; k >= 0; k--) stack.push({ element: children[k]!, foreign: childForeign });
+    for (let k = children.length - 1; k >= 0; k--)
+      stack.push({ element: children[k]!, foreign: childForeign });
   }
   return null;
 }
@@ -693,7 +818,13 @@ export function scanControls(doc: Document): ControlScan {
     return form ? (getAttrCI(form, "action") ?? "") : null;
   };
   const localIsOwn = !baseMovesRelativeUrls(doc);
-  const { chosen, cut: notPrepared } = shortlist(found, destinationOf, (el) => imageAlts.has(el), localIsOwn, { left: attributeLimits.shortlist });
+  const { chosen, cut: notPrepared } = shortlist(
+    found,
+    destinationOf,
+    (el) => imageAlts.has(el),
+    localIsOwn,
+    { left: attributeLimits.shortlist }
+  );
   // Controls whose attribute text or `aria-labelledby` list was longer than what is read, or that a window cap cut: counted, not hidden.
   const cutControls = new Set<number>();
   // Phase 1: each control's attribute windows, and whether an attribute holds a sign-in or brand word as written (a
@@ -710,10 +841,25 @@ export function scanControls(doc: Document): ControlScan {
     // left past the slice is an id that was not read, and the control is counted cut.
     const ids = read.labelledby ?? "";
     const idsFrom = ids.search(/\S/);
-    const referenced = covered && idsFrom >= 0 ? ids.slice(idsFrom, idsFrom + ATTR_RAW_CHARS).split(/\s+/).filter(Boolean) : [];
-    const idsPast = covered && idsFrom >= 0 && ids.length > idsFrom + ATTR_RAW_CHARS && /\S/.test(ids.slice(idsFrom + ATTR_RAW_CHARS));
+    const referenced =
+      covered && idsFrom >= 0
+        ? ids
+            .slice(idsFrom, idsFrom + ATTR_RAW_CHARS)
+            .split(/\s+/)
+            .filter(Boolean)
+        : [];
+    const idsPast =
+      covered &&
+      idsFrom >= 0 &&
+      ids.length > idsFrom + ATTR_RAW_CHARS &&
+      /\S/.test(ids.slice(idsFrom + ATTR_RAW_CHARS));
     prepareBudget.left -= 1 + Math.min(referenced.length, MAX_LABELLEDBY);
-    let cut = referenced.length > MAX_LABELLEDBY || idsPast || altsCut.has(element) || read.overlong || !covered;
+    let cut =
+      referenced.length > MAX_LABELLEDBY ||
+      idsPast ||
+      altsCut.has(element) ||
+      read.overlong ||
+      !covered;
     const labelled: string[] = [];
     for (const id of referenced.slice(0, MAX_LABELLEDBY)) {
       const target = byId(id);
@@ -722,11 +868,21 @@ export function scanControls(doc: Document): ControlScan {
       if (text === null) cut = true;
       else labelled.push(text);
     }
-    const raw = (covered
-      ? [read.ariaLabel, read.title, tag === "input" ? read.value : null, tag === "input" ? read.alt : null, ...labelled, ...(imageAlts.get(element) ?? [])]
-      : []
+    const raw = (
+      covered
+        ? [
+            read.ariaLabel,
+            read.title,
+            tag === "input" ? read.value : null,
+            tag === "input" ? read.alt : null,
+            ...labelled,
+            ...(imageAlts.get(element) ?? []),
+          ]
+        : []
     ).filter((v): v is string => typeof v === "string" && v !== "");
-    const rawCue = raw.some((v) => RAW_CUE.test(v.length > ATTR_RAW_CHARS ? v.slice(0, ATTR_RAW_CHARS) : v));
+    const rawCue = raw.some((v) =>
+      RAW_CUE.test(v.length > ATTR_RAW_CHARS ? v.slice(0, ATTR_RAW_CHARS) : v)
+    );
     const attributeFree = { left: FOLD_FREE_CHARS };
     const windows = raw.flatMap((v) => {
       const bounded = boundedAttribute(v, attributeFree, foldBudget);
@@ -744,26 +900,38 @@ export function scanControls(doc: Document): ControlScan {
   // is emitted even when nothing matched.
   const wanted = gathered.map((item) =>
     item.windows.flatMap((windows) => {
-      const found = windows.slice(1).filter((window) => WINDOW_CUE.test(window));
+      const found = windows
+        .slice(1)
+        .filter((window) => WINDOW_CUE.test(window));
       if (found.length <= WINDOWS_PER_ATTRIBUTE) return found;
       item.cut = true;
       // Over the cap, windows with a brand word come first, then the ones that only repeat a sign-in word.
-      return [...found.filter((window) => BRAND_WINDOW.test(window)), ...found.filter((window) => !BRAND_WINDOW.test(window))].slice(
-        0,
-        WINDOWS_PER_ATTRIBUTE,
-      );
-    }),
+      return [
+        ...found.filter((window) => BRAND_WINDOW.test(window)),
+        ...found.filter((window) => !BRAND_WINDOW.test(window)),
+      ].slice(0, WINDOWS_PER_ATTRIBUTE);
+    })
   );
   // Every control with long attributes keeps a small floor outside the budgets, so no run of earlier controls can leave
   // a later one with only its first window.
-  const served = wanted.map((want) => Math.min(want.length, FLOOR_WINDOWS_PER_CONTROL));
+  const served = wanted.map((want) =>
+    Math.min(want.length, FLOOR_WINDOWS_PER_CONTROL)
+  );
   const servingOrder = gathered
     .map((_, index) => index)
-    .sort((a, b) => Number(!gathered[a]!.rawCue) - Number(!gathered[b]!.rawCue) || gathered[a]!.order - gathered[b]!.order);
+    .sort(
+      (a, b) =>
+        Number(!gathered[a]!.rawCue) - Number(!gathered[b]!.rawCue) ||
+        gathered[a]!.order - gathered[b]!.order
+    );
   let sequential = integrityLimits.sequentialWindows;
   for (const index of servingOrder) {
     if (sequential <= 0) break;
-    const take = Math.min(wanted[index]!.length - served[index]!, MAX_WINDOWS_PER_CONTROL - served[index]!, sequential);
+    const take = Math.min(
+      wanted[index]!.length - served[index]!,
+      MAX_WINDOWS_PER_CONTROL - served[index]!,
+      sequential
+    );
     if (take <= 0) continue;
     served[index]! += take;
     sequential -= take;
@@ -771,13 +939,19 @@ export function scanControls(doc: Document): ControlScan {
   let shared = integrityLimits.sharedWindows;
   // The shared half goes to controls without a cue word as written first: they are rare, and the cue-bearing ones
   // had the sequential half (#1459).
-  const stillCut = [...servingOrder.filter((index) => !gathered[index]!.rawCue), ...servingOrder.filter((index) => gathered[index]!.rawCue)].filter(
-    (index) => served[index]! < wanted[index]!.length,
-  );
+  const stillCut = [
+    ...servingOrder.filter((index) => !gathered[index]!.rawCue),
+    ...servingOrder.filter((index) => gathered[index]!.rawCue),
+  ].filter((index) => served[index]! < wanted[index]!.length);
   for (const [turn, index] of stillCut.entries()) {
     if (shared <= 0) break;
     const share = Math.max(1, Math.floor(shared / (stillCut.length - turn)));
-    const take = Math.min(wanted[index]!.length - served[index]!, MAX_WINDOWS_PER_CONTROL - served[index]!, share, shared);
+    const take = Math.min(
+      wanted[index]!.length - served[index]!,
+      MAX_WINDOWS_PER_CONTROL - served[index]!,
+      share,
+      shared
+    );
     if (take <= 0) continue;
     served[index]! += take;
     shared -= take;
@@ -786,11 +960,24 @@ export function scanControls(doc: Document): ControlScan {
     const want = wanted[index]!;
     const count = served[index]!;
     // The first windows it was served and the last: padding is at the ends as often as in the middle.
-    const taken = count >= want.length ? want : count === 0 ? [] : [...want.slice(0, count - 1), want[want.length - 1]!];
+    const taken =
+      count >= want.length
+        ? want
+        : count === 0
+          ? []
+          : [...want.slice(0, count - 1), want[want.length - 1]!];
     if (count < want.length) item.cut = true;
     if (item.cut) cutControls.add(index);
-    const extra = [...item.windows.flatMap((windows) => windows.slice(0, 1)), ...taken];
-    return { element: item.element, href: item.href, extra, rank: rank(item.tag, item.target, extra, localIsOwn) };
+    const extra = [
+      ...item.windows.flatMap((windows) => windows.slice(0, 1)),
+      ...taken,
+    ];
+    return {
+      element: item.element,
+      href: item.href,
+      extra,
+      rank: rank(item.tag, item.target, extra, localIsOwn),
+    };
   });
   // The window arrays are not needed past this point: free them before the reads below.
   gathered.length = 0;
@@ -804,13 +991,18 @@ export function scanControls(doc: Document): ControlScan {
     .map((_, i) => i)
     .filter((i) => prepared[i]!.rank > 0)
     .sort((a, b) => prepared[b]!.rank - prepared[a]!.rank || a - b);
-  const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({ length: prepared.length });
+  const reads: Array<ReturnType<typeof readChunks> | undefined> = Array.from({
+    length: prepared.length,
+  });
   // What the `aria-labelledby` target reads cost comes off the page's visits; they stop at three quarters of them, so a control's own read stays possible.
   let spend = TOTAL_VISITS - Math.min(targetVisits, targetBudget);
   let longBudget = LONG_BUDGET_VISITS;
   for (const [position, i] of order.entries()) {
     const item = prepared[i]!;
-    const allowance = Math.min(SHORT_VISITS, Math.max(MIN_ALLOWANCE, Math.floor(spend / (order.length - position))));
+    const allowance = Math.min(
+      SHORT_VISITS,
+      Math.max(MIN_ALLOWANCE, Math.floor(spend / (order.length - position)))
+    );
     let read = readChunks(item.element, allowance, SHORT_CHARS, hiddenBy);
     spend -= read.visits;
     if (read.cut && longBudget > 0 && item.rank >= 2) {
@@ -832,13 +1024,19 @@ export function scanControls(doc: Document): ControlScan {
       if (!hasFoldableDigit(plain)) return [plain];
       // The digit fold is bounded: a label is folded to at most 16,000 characters, charged to the control's allowance and the
       // page's pool; a control whose label was not folded in full is counted unread. The label as written is always kept.
-      const capped = plain.length > FOLD_LABEL_MAX_CHARS ? plain.slice(0, FOLD_LABEL_MAX_CHARS) : plain;
+      const capped =
+        plain.length > FOLD_LABEL_MAX_CHARS
+          ? plain.slice(0, FOLD_LABEL_MAX_CHARS)
+          : plain;
       const span = foldSpan(capped.length, textFree, foldBudget);
       if (span < plain.length) cutControls.add(i);
-      return span > 0 ? [plain, ...digitForms(capped.slice(0, span)).slice(1)] : [plain];
+      return span > 0
+        ? [plain, ...digitForms(capped.slice(0, span)).slice(1)]
+        : [plain];
     };
     const readings = [...new Set(item.extra)].map((text) => readable(text));
-    for (const text of new Set(read ? formsOf(read.chunks) : [])) readings.push(...foldedText(text));
+    for (const text of new Set(read ? formsOf(read.chunks) : []))
+      readings.push(...foldedText(text));
     const labels = [...new Set(readings.filter((f) => f.trim() !== ""))];
     return {
       element: item.element,
@@ -848,7 +1046,12 @@ export function scanControls(doc: Document): ControlScan {
     };
   });
   const unread = notPrepared + cutControls.size;
-  const scan = { controls, unread, templatesUnread: templatesCut, hiddenCssTruncated: hiddenBy.truncated };
+  const scan = {
+    controls,
+    unread,
+    templatesUnread: templatesCut,
+    hiddenCssTruncated: hiddenBy.truncated,
+  };
   scanCache.set(doc, scan);
   return scan;
 }

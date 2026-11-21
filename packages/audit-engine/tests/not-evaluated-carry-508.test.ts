@@ -10,8 +10,6 @@
 // local merge whatever the signal says. The complete-store finalize holds findings,
 // not checks, so it has no skip evidence; docs/guides/smart-audits says so.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
@@ -19,9 +17,14 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { NOT_APPLICABLE_SKIP_REASON, PAGE_TYPE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
+import {
+  NOT_APPLICABLE_SKIP_REASON,
+  PAGE_TYPE_SKIP_REASON,
+} from "@squirrelscan/core-contracts/resolution";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import {
   computeMerge,
@@ -29,7 +32,10 @@ import {
   findingKey,
   type FlatFinding,
 } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_508";
@@ -42,7 +48,10 @@ const C = "https://www.acme-shop.com/c";
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -51,7 +60,10 @@ class MemStore implements SmartAuditStore {
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
     for (const f of findings) {
-      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+      this.findings.set(
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+        { ...f }
+      );
     }
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
@@ -84,13 +96,25 @@ const skip = (url: string, skipReason = "no_data"): CheckResult => ({
   pageUrl: url,
 });
 
-const meta = { id: RULE, name: "TTFB", category: "performance", severity: "warning" };
+const meta = {
+  id: RULE,
+  name: "TTFB",
+  category: "performance",
+  severity: "warning",
+};
 
-type SignalOf = (crawled: string[], ruleResults: never) => ResolutionSignal | undefined;
+type SignalOf = (
+  crawled: string[],
+  ruleResults: never
+) => ResolutionSignal | undefined;
 
-const healthy: SignalOf = (crawled, ruleResults) => buildResolutionSignal(ruleResults, crawled);
+const healthy: SignalOf = (crawled, ruleResults) =>
+  buildResolutionSignal(ruleResults, crawled);
 /** The check's key dropped past the key cap: the signal never heard of it. */
-const keyDropped: SignalOf = (crawled) => ({ crawledUrls: crawled, failing: {} });
+const keyDropped: SignalOf = (crawled) => ({
+  crawledUrls: crawled,
+  failing: {},
+});
 /** The key's not-evaluated complement was over budget: listed truncated, no page set. */
 const keyTruncated: SignalOf = (crawled) => ({
   crawledUrls: crawled,
@@ -101,7 +125,11 @@ const keyTruncated: SignalOf = (crawled) => ({
 /** Run 1 fails TTFB on A; run 2 is `checks`. Returns A's row. */
 async function priorAfterRerun(checks: CheckResult[], signal: SignalOf) {
   const store = new MemStore();
-  const publish = async (crawlId: string, list: CheckResult[], sig: SignalOf) => {
+  const publish = async (
+    crawlId: string,
+    list: CheckResult[],
+    sig: SignalOf
+  ) => {
     const ruleResults = { [RULE]: { meta, checks: list } } as never;
     const crawled = [...new Set(list.map((c) => c.pageUrl!))];
     await runCloudSmartAudits({
@@ -116,11 +144,15 @@ async function priorAfterRerun(checks: CheckResult[], signal: SignalOf) {
   await publish("audit_1", [fail(A), pass(B)], healthy);
   await publish("audit_2", checks, signal);
   return [...store.findings.values()].find(
-    (f) => f.normalizedUrl === normalizePageUrl(A) && f.ruleId === RULE,
+    (f) => f.normalizedUrl === normalizePageUrl(A) && f.ruleId === RULE
   )!;
 }
 
-const SIGNALS = { healthy, "key dropped": keyDropped, "key truncated": keyTruncated };
+const SIGNALS = {
+  healthy,
+  "key dropped": keyDropped,
+  "key truncated": keyTruncated,
+};
 
 for (const [label, signal] of Object.entries(SIGNALS)) {
   describe(`sampled publish merge, signal: ${label} (#508)`, () => {
@@ -133,7 +165,7 @@ for (const [label, signal] of Object.entries(SIGNALS)) {
     test("a scan-truncated skip carries even when no page evaluated the check", async () => {
       const row = await priorAfterRerun(
         [skip(A, "scan-truncated"), skip(B, "scan-truncated")],
-        signal,
+        signal
       );
       expect(row.state).toBe("open");
     });
@@ -152,12 +184,18 @@ describe("sampled publish merge, signal: key dropped (#508)", () => {
   });
 
   test("the noindex verdict still reads as clean", async () => {
-    const row = await priorAfterRerun([skip(A, NOT_APPLICABLE_SKIP_REASON), pass(B)], keyDropped);
+    const row = await priorAfterRerun(
+      [skip(A, NOT_APPLICABLE_SKIP_REASON), pass(B)],
+      keyDropped
+    );
     expect(row.state).toBe("resolved");
   });
 
   test("the page-type verdict (pub#841) reads as clean in the local merge too", async () => {
-    const row = await priorAfterRerun([skip(A, PAGE_TYPE_SKIP_REASON), pass(B)], keyDropped);
+    const row = await priorAfterRerun(
+      [skip(A, PAGE_TYPE_SKIP_REASON), pass(B)],
+      keyDropped
+    );
     expect(row.state).toBe("resolved");
   });
 
@@ -171,7 +209,12 @@ describe("sampled publish merge, signal: key dropped (#508)", () => {
       details: { aggregated: true, occurrences: 5, pagesTruncated: 5 },
     };
     // A is crawled (another check ran there) but the clip left it off the list.
-    const other: CheckResult = { name: "other", status: "pass", message: "ok", pageUrl: A };
+    const other: CheckResult = {
+      name: "other",
+      status: "pass",
+      message: "ok",
+      pageUrl: A,
+    };
     const row = await priorAfterRerun([other, folded, pass(B)], keyDropped);
     expect(row.state).toBe("open");
   });
@@ -280,4 +323,7 @@ describe("local merge, no signal (#508)", () => {
   });
 });
 
-describeSitePagesContract("not-evaluated-carry-508.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "not-evaluated-carry-508.test.ts MemStore",
+  () => new MemStore()
+);

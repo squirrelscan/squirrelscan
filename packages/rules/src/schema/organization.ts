@@ -5,10 +5,11 @@
 // cross-checks the schema `sameAs` array against them and flags any detected
 // account the markup omits. The cross-check is a no-op without metadata.
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { flattenJsonLdNodes } from "@squirrelscan/utils";
 
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import { crossCheckSocials, socialPlatformLabel } from "../social/social-match";
 import { contactChannelsCheck, readContactEvidence } from "./contact-evidence";
 import {
   isConfirmedShop,
@@ -16,7 +17,6 @@ import {
   readMerchantIdentity,
   readOrganizations,
 } from "./merchant-evidence";
-import { crossCheckSocials, socialPlatformLabel } from "../social/social-match";
 
 const REQUIRED_PROPS = ["name", "url"];
 
@@ -75,7 +75,11 @@ export const organizationSchemaRule: Rule = {
       const org = readOrganizations(ctx, pageNodes);
       const merchant = readMerchantIdentity(ctx, org);
       if (merchant) checks.push(merchantIdentityCheck(merchant));
-      const contact = readContactEvidence(ctx, org, isConfirmedShop(ctx, org.allNodes));
+      const contact = readContactEvidence(
+        ctx,
+        org,
+        isConfirmedShop(ctx, org.allNodes)
+      );
       if (contact) checks.push(contactChannelsCheck(contact));
       return { checks };
     };
@@ -147,7 +151,10 @@ export const organizationSchemaRule: Rule = {
 
     // Cross-check detected (Stage-0) social accounts against the schema sameAs.
     // No-op without metadata or detected socials — keeps behaviour identical then.
-    const { missing: missingSocials } = crossCheckSocials(ctx.siteMetadata, sameAsUrls);
+    const { missing: missingSocials } = crossCheckSocials(
+      ctx.siteMetadata,
+      sameAsUrls
+    );
     if (missingSocials.length > 0) {
       checks.push({
         name: "organization-sameas-missing",

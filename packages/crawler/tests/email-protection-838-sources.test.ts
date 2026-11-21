@@ -6,8 +6,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 const OBFUSCATION = "/cdn-cgi/l/email-protection";
@@ -32,11 +33,17 @@ function serve(requested: string[]): string {
           `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
             `<url><loc>${origin}/</loc></url><url><loc>${origin}/about</loc></url>` +
             `<url><loc>${origin}${OBFUSCATION}</loc></url></urlset>`,
-          { headers: { "content-type": "application/xml" } },
+          { headers: { "content-type": "application/xml" } }
         );
       }
-      if (url.pathname === "/" || url.pathname === "/about" || url.pathname === OBFUSCATION) {
-        return new Response(page(url.pathname), { headers: { "content-type": "text/html" } });
+      if (
+        url.pathname === "/" ||
+        url.pathname === "/about" ||
+        url.pathname === OBFUSCATION
+      ) {
+        return new Response(page(url.pathname), {
+          headers: { "content-type": "text/html" },
+        });
       }
       return new Response("not found", { status: 404 });
     },
@@ -71,12 +78,15 @@ describe("the crawl never fetches the Cloudflare email obfuscation path (pub#838
         const crawler = yield* createCrawler({ config, storage });
         const crawlId = yield* crawler.start(`${origin}/`, `${origin}/`);
         return yield* storage.getPages(crawlId);
-      }),
+      })
     );
 
     // Sanity: the sitemap really was read and the ordinary pages crawled.
     expect(requested).toContain("/sitemap.xml");
-    expect(pages.map((p) => new URL(p.normalizedUrl).pathname).sort()).toEqual(["/", "/about"]);
+    expect(pages.map((p) => new URL(p.normalizedUrl).pathname).sort()).toEqual([
+      "/",
+      "/about",
+    ]);
     expect(requested).not.toContain(OBFUSCATION);
   }, 30000);
 });

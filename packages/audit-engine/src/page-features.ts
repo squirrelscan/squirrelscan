@@ -16,10 +16,10 @@
 //     v1 would score. (4xx/5xx pages, which v1 appends as EMPTY_PARSED_PAGE with
 //     empty headers, are E-E's universe-assembly concern, not this function's.)
 
-import { extractPageStructure } from "@squirrelscan/report/structure";
-import { detectWafChallengePage } from "@squirrelscan/waf-detect";
-import { extractNapSignal, getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
+import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
+import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
 
+import { extractPageStructure } from "@squirrelscan/report/structure";
 import {
   extractSiteChromeSignal,
   fingerprintPage,
@@ -28,13 +28,20 @@ import {
   pageReadingLevel,
   pageTerminologyVariants,
 } from "@squirrelscan/rules";
-
-import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
-import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
-
-import { buildHeadersMap, hasAuditableHtmlBody, isHtmlContentType } from "./site-fetch";
-import { templateFingerprintKey } from "./template-key";
+import {
+  extractNapSignal,
+  getRichResultTypes,
+  isPageIndexable,
+} from "@squirrelscan/utils";
 import { redirectedAway } from "@squirrelscan/utils/url";
+import { detectWafChallengePage } from "@squirrelscan/waf-detect";
+
+import {
+  buildHeadersMap,
+  hasAuditableHtmlBody,
+  isHtmlContentType,
+} from "./site-fetch";
+import { templateFingerprintKey } from "./template-key";
 
 /**
  * Whether a crawled page enters the audit the way v1 `runRulesOnStorage` decides:
@@ -67,7 +74,14 @@ function fnv1a(input: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
     hash ^= input.charCodeAt(i);
-    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+    hash =
+      (hash +
+        ((hash << 1) +
+          (hash << 4) +
+          (hash << 7) +
+          (hash << 8) +
+          (hash << 24))) >>>
+      0;
   }
   return hash.toString(16).padStart(8, "0");
 }
@@ -81,7 +95,11 @@ function hashNormalized(raw: string | null): string | null {
 /** Token-exact meta-robots noindex — the meta-ONLY notion (crawl/robots-meta-conflict). */
 function metaRobotsNoindex(robots: string | null): boolean {
   return (
-    robots?.toLowerCase().split(",").map((d) => d.trim()).includes("noindex") ?? false
+    robots
+      ?.toLowerCase()
+      .split(",")
+      .map((d) => d.trim())
+      .includes("noindex") ?? false
   );
 }
 
@@ -109,7 +127,10 @@ function metaRobotsNoindex(robots: string | null): boolean {
 export function extractPageFeatures(
   page: PageRecord,
   parsed: ParsedPage,
-  opts?: { fingerprint?: PageFingerprint | null; crawledUrls?: ReadonlySet<string> }
+  opts?: {
+    fingerprint?: PageFingerprint | null;
+    crawledUrls?: ReadonlySet<string>;
+  }
 ): PageFeatureRow {
   const headers = buildHeadersMap(page);
   // meta+header indexability only; the robots.txt reason is site-level and is
@@ -120,7 +141,11 @@ export function extractPageFeatures(
   // description (#1355). The rows that group pages by them (duplicate title and
   // description) count the content once, at the target. A target the crawl never
   // reached leaves this row as the only one with that content, so it keeps it.
-  const redirected = redirectedAway(page.normalizedUrl, page.finalUrl, opts?.crawledUrls);
+  const redirected = redirectedAway(
+    page.normalizedUrl,
+    page.finalUrl,
+    opts?.crawledUrls
+  );
   const title = redirected ? null : parsed.meta.title;
   const description = redirected ? null : parsed.meta.description;
   // Same extractor local/nap-consistency's legacy path calls on the live parsed
@@ -176,7 +201,9 @@ export function extractPageFeatures(
     // #489: bounded at parse time. Absent on parsed data stored before the
     // field existed (crawl reuse replays the old record), which stores as null
     // and exempts nothing, so the duplicate rules fall back to their old answer.
-    hreflangAlternates: parsed.hreflangAlternates?.length ? parsed.hreflangAlternates : null,
+    hreflangAlternates: parsed.hreflangAlternates?.length
+      ? parsed.hreflangAlternates
+      : null,
     // Same computation content/reading-level runs, so the stored score and the page rule agree.
     readingLevel: pageReadingLevel(parsed),
     // Same computation content/terminology-consistency's legacy path runs.
@@ -184,7 +211,11 @@ export function extractPageFeatures(
     // Same extractor links/nav-set-divergence's legacy path calls, keyed on the same page URL.
     navLinkSet: pageNavLinkSet(parsed, page.normalizedUrl),
     // Same function content/near-duplicate's legacy path calls on the live document.
-    contentSimhash: pageContentSimhash(parsed.document, page.normalizedUrl, page.finalUrl),
+    contentSimhash: pageContentSimhash(
+      parsed.document,
+      page.normalizedUrl,
+      page.finalUrl
+    ),
     // #2343: the report's own per-page scalars, taken here because this is the
     // one pass that holds the DOM. Recovering them later meant re-parsing every
     // stored page a second time.

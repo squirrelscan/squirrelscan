@@ -2,22 +2,22 @@
 // not leave an approved path, and a block signal stops the optional probes still waiting.
 // Every assertion is on what reached the origin or what the crawl stored for the rules.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import {
   PROBE_PATH_NOT_APPROVED_ERROR,
   PROBE_REDIRECT_NOT_FOLLOWED_ERROR,
   PROBE_STOPPED_ERROR,
   WELL_KNOWN_PATHS,
 } from "@squirrelscan/core-contracts/storage";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
+import type { CrawlerConfig } from "../src/core/types";
+
+import { probeAgentAccess } from "../src/agent-access";
 import { createCrawler } from "../src/core/crawler";
 import { createPhaseBudget, samePathRedirect } from "../src/deadline";
-import { probeAgentAccess } from "../src/agent-access";
-import { probeConfiguredPage } from "../src/well-known";
 import { RefusalLog } from "../src/refusals";
-import type { CrawlerConfig } from "../src/core/types";
+import { probeConfiguredPage } from "../src/well-known";
 
 const PAGE = `<!doctype html><html><head><title>t</title></head><body>
 <a href="/one">one</a></body></html>`;
@@ -52,9 +52,16 @@ afterEach(() => {
   for (const s of servers.splice(0)) s.stop(true);
 });
 
-type Handler = (path: string, origin: string, host: string) => Response | undefined;
+type Handler = (
+  path: string,
+  origin: string,
+  host: string
+) => Response | undefined;
 
-function serve(handler: Handler = () => undefined, latencyMs = 0): { url: string; hits: Hit[] } {
+function serve(
+  handler: Handler = () => undefined,
+  latencyMs = 0
+): { url: string; hits: Hit[] } {
   const hits: Hit[] = [];
   const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
@@ -74,7 +81,7 @@ function serve(handler: Handler = () => undefined, latencyMs = 0): { url: string
         return new Response(
           `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
             `<url><loc>${origin}/one</loc></url></urlset>`,
-          { headers: { "content-type": "application/xml" } },
+          { headers: { "content-type": "application/xml" } }
         );
       }
       if (path === "/" || path === "/one") {
@@ -88,7 +95,9 @@ function serve(handler: Handler = () => undefined, latencyMs = 0): { url: string
 }
 
 async function crawl(origin: string, config: Partial<CrawlerConfig>) {
-  const crawler = await Effect.runPromise(createCrawler({ config: { ...CONFIG, ...config } }));
+  const crawler = await Effect.runPromise(
+    createCrawler({ config: { ...CONFIG, ...config } })
+  );
   const crawlId = await Effect.runPromise(crawler.start(origin, origin));
   const read = <T>(effect: Effect.Effect<T, unknown, never>) =>
     Effect.runPromise(effect as Effect.Effect<T, never, never>);
@@ -136,7 +145,9 @@ describe("discovery_probe_paths allowlist (#1655)", () => {
     expect(probeHits(origin.hits)).toEqual(["/AGENTS.md"]);
     // llms.txt was selected but not approved: no row, and a marker the rule reads as "not approved".
     expect(out.llms).toBeNull();
-    const llmsMarker = out.wellKnown?.probes.find((p) => p.path === "/llms.txt");
+    const llmsMarker = out.wellKnown?.probes.find(
+      (p) => p.path === "/llms.txt"
+    );
     expect(llmsMarker?.error).toBe(PROBE_PATH_NOT_APPROVED_ERROR);
     const agents = out.wellKnown?.probes.find((p) => p.path === "/AGENTS.md");
     expect(agents?.status).toBe(404);
@@ -148,7 +159,10 @@ describe("discovery_probe_paths allowlist (#1655)", () => {
       discoveryProbes: ["llms-txt"],
       discoveryProbePaths: ["/llms.txt", "/llms-full.txt"],
     });
-    expect(probeHits(origin.hits).sort()).toEqual(["/llms-full.txt", "/llms.txt"]);
+    expect(probeHits(origin.hits).sort()).toEqual([
+      "/llms-full.txt",
+      "/llms.txt",
+    ]);
   }, 20_000);
 
   test("unset allowlist sends every selected probe (the control)", async () => {
@@ -161,14 +175,21 @@ describe("discovery_probe_paths allowlist (#1655)", () => {
     const origin = serve(() => undefined, 25);
     await crawl(origin.url, {
       discoveryProbes: PATH_PROBES,
-      discoveryProbePaths: ["/llms.txt", "/AGENTS.md", "/agents.md", "/security.txt"],
+      discoveryProbePaths: [
+        "/llms.txt",
+        "/AGENTS.md",
+        "/agents.md",
+        "/security.txt",
+      ],
       perHostConcurrency: 1,
     });
     const probes = origin.hits.filter((h) => PROBE_ONLY_PATHS.includes(h.path));
     expect(probes).toHaveLength(4);
     probes.sort((a, b) => a.startedAt - b.startedAt);
     for (let i = 1; i < probes.length; i++) {
-      expect(probes[i]!.startedAt).toBeGreaterThanOrEqual(probes[i - 1]!.endedAt - 1);
+      expect(probes[i]!.startedAt).toBeGreaterThanOrEqual(
+        probes[i - 1]!.endedAt - 1
+      );
     }
   }, 20_000);
 });
@@ -177,8 +198,11 @@ describe("redirects from an approved path (#1655)", () => {
   test("a redirect to another path is not followed and is not a missing file", async () => {
     const origin = serve((path) =>
       path === "/llms.txt" || path === "/AGENTS.md"
-        ? new Response(null, { status: 302, headers: { location: "/admin/excluded" } })
-        : undefined,
+        ? new Response(null, {
+            status: 302,
+            headers: { location: "/admin/excluded" },
+          })
+        : undefined
     );
     const out = await crawl(origin.url, {
       discoveryProbes: PATH_PROBES,
@@ -200,9 +224,13 @@ describe("redirects from an approved path (#1655)", () => {
       return host.startsWith("localhost")
         ? new Response(null, {
             status: 301,
-            headers: { location: `${base.replace("localhost", "127.0.0.1")}/llms.txt` },
+            headers: {
+              location: `${base.replace("localhost", "127.0.0.1")}/llms.txt`,
+            },
           })
-        : new Response("# Site\n\n- [a](/a)\n", { headers: { "content-type": "text/plain" } });
+        : new Response("# Site\n\n- [a](/a)\n", {
+            headers: { "content-type": "text/plain" },
+          });
     });
     const out = await crawl(origin.url, {
       discoveryProbes: ["llms-txt"],
@@ -216,7 +244,7 @@ describe("redirects from an approved path (#1655)", () => {
     const origin = serve((path) =>
       path === "/AGENTS.md"
         ? new Response(null, { status: 302, headers: { location: "/moved" } })
-        : undefined,
+        : undefined
     );
     await crawl(origin.url, { discoveryProbes: ["/AGENTS.md"] });
     expect(origin.hits.some((h) => h.path === "/moved")).toBe(true);
@@ -227,9 +255,11 @@ describe("block signals stop the optional probes (#1655)", () => {
   test("a 429 on the first well-known path stops the rest, which stay not checked", async () => {
     const first = WELL_KNOWN_PATHS[0];
     const origin = serve((path) =>
-      path === first ? new Response("slow down", { status: 429 }) : undefined,
+      path === first ? new Response("slow down", { status: 429 }) : undefined
     );
-    const out = await crawl(origin.url, { discoveryProbes: ["markdown", ...WELL_KNOWN_PATHS] });
+    const out = await crawl(origin.url, {
+      discoveryProbes: ["markdown", ...WELL_KNOWN_PATHS],
+    });
 
     expect(probeHits(origin.hits)).toEqual([first]);
     const probes = out.wellKnown?.probes ?? [];
@@ -251,24 +281,33 @@ describe("block signals stop the optional probes (#1655)", () => {
   test("a Cloudflare challenge on /llms.txt stops the well-known sweep", async () => {
     const origin = serve((path) =>
       path === "/llms.txt"
-        ? new Response("challenge", { status: 403, headers: { "cf-mitigated": "challenge" } })
-        : undefined,
+        ? new Response("challenge", {
+            status: 403,
+            headers: { "cf-mitigated": "challenge" },
+          })
+        : undefined
     );
     const out = await crawl(origin.url, { discoveryProbes: PATH_PROBES });
 
     expect(probeHits(origin.hits)).toEqual(["/llms.txt"]);
     expect(out.llms).toBeNull();
-    expect((out.wellKnown?.probes ?? []).every((p) => p.status === 0)).toBe(true);
+    expect((out.wellKnown?.probes ?? []).every((p) => p.status === 0)).toBe(
+      true
+    );
   }, 20_000);
 
   test("a lone 403 does not stop the probes", async () => {
     const origin = serve((path) =>
-      path === "/openapi.json" ? new Response("forbidden", { status: 403 }) : undefined,
+      path === "/openapi.json"
+        ? new Response("forbidden", { status: 403 })
+        : undefined
     );
     const out = await crawl(origin.url, { discoveryProbes: PATH_PROBES });
 
     expect(new Set(probeHits(origin.hits))).toEqual(new Set(PROBE_ONLY_PATHS));
-    expect(out.wellKnown?.probes.find((p) => p.path === "/openapi.json")?.status).toBe(403);
+    expect(
+      out.wellKnown?.probes.find((p) => p.path === "/openapi.json")?.status
+    ).toBe(403);
   }, 20_000);
 });
 
@@ -279,10 +318,15 @@ describe("block scope (#1655)", () => {
     const otherSitemap = `${other.url.replace("localhost", "127.0.0.1")}third.xml`;
     const origin = serve((path, base) =>
       path === "/robots.txt"
-        ? new Response(`User-agent: *\nSitemap: ${otherSitemap}\nSitemap: ${base}/sitemap.xml\n`)
-        : undefined,
+        ? new Response(
+            `User-agent: *\nSitemap: ${otherSitemap}\nSitemap: ${base}/sitemap.xml\n`
+          )
+        : undefined
     );
-    await crawl(origin.url, { discoveryProbes: PATH_PROBES, respectRobots: true });
+    await crawl(origin.url, {
+      discoveryProbes: PATH_PROBES,
+      respectRobots: true,
+    });
 
     expect(other.hits.some((h) => h.path === "/third.xml")).toBe(true);
     expect(new Set(probeHits(origin.hits))).toEqual(new Set(PROBE_ONLY_PATHS));
@@ -290,9 +334,14 @@ describe("block scope (#1655)", () => {
 
   test("a 429 from the audited host's own robots.txt stops the optional probes", async () => {
     const origin = serve((path) =>
-      path === "/robots.txt" ? new Response("slow down", { status: 429 }) : undefined,
+      path === "/robots.txt"
+        ? new Response("slow down", { status: 429 })
+        : undefined
     );
-    await crawl(origin.url, { discoveryProbes: PATH_PROBES, respectRobots: true });
+    await crawl(origin.url, {
+      discoveryProbes: PATH_PROBES,
+      respectRobots: true,
+    });
     expect(probeHits(origin.hits)).toEqual([]);
   }, 20_000);
 
@@ -300,17 +349,26 @@ describe("block scope (#1655)", () => {
     const blocked = { status: 429, headers: new Headers() };
     const log = new RefusalLog("https://example.com/");
     expect(log.observe(blocked, "https://cdn.example.net/s.xml")).toBe(false);
-    expect(log.observe({ ...blocked, url: "https://other.test/x" }, "https://example.com/s.xml")).toBe(false);
+    expect(
+      log.observe(
+        { ...blocked, url: "https://other.test/x" },
+        "https://example.com/s.xml"
+      )
+    ).toBe(false);
     expect(log.blocked).toBe(false);
     expect(log.observe(blocked, "https://www.example.com/s.xml")).toBe(true);
     expect(log.blocked).toBe(true);
   });
 
   test("a block signal on an agent access probe stops the probes after it, not its siblings", async () => {
-    const origin = serve((path) => (path === "/" ? new Response("slow", { status: 429 }) : undefined));
+    const origin = serve((path) =>
+      path === "/" ? new Response("slow", { status: 429 }) : undefined
+    );
     const refusals = new RefusalLog(origin.url);
     const budget = createPhaseBudget(30_000, Date.now(), refusals);
-    const data = await Effect.runPromise(probeAgentAccess(origin.url, "browser-ua", undefined, budget));
+    const data = await Effect.runPromise(
+      probeAgentAccess(origin.url, "browser-ua", undefined, budget)
+    );
     expect(data.probes.map((p) => p.status)).toEqual([429, 429, 429]);
     expect(refusals.blocked).toBe(true);
   }, 20_000);
@@ -320,7 +378,7 @@ describe("block scope (#1655)", () => {
     const refusals = new RefusalLog(origin.url);
     const budget = createPhaseBudget(30_000, Date.now(), refusals);
     const probe = await Effect.runPromise(
-      probeConfiguredPage(origin.url, "/about", "squirrel-test", { budget }),
+      probeConfiguredPage(origin.url, "/about", "squirrel-test", { budget })
     );
     expect(probe.status).toBe(0);
     expect(probe.configuredPage).toBe(true);
@@ -331,22 +389,36 @@ describe("block scope (#1655)", () => {
 describe("samePathRedirect (#1655)", () => {
   const from = "https://example.com/llms.txt";
   test("followed: scheme, host, query and www changes keep the path", () => {
-    expect(samePathRedirect(from, "http://www.example.com/llms.txt")).toBe(true);
-    expect(samePathRedirect(from, "https://example.com/llms.txt?x=1")).toBe(true);
+    expect(samePathRedirect(from, "http://www.example.com/llms.txt")).toBe(
+      true
+    );
+    expect(samePathRedirect(from, "https://example.com/llms.txt?x=1")).toBe(
+      true
+    );
   });
   test("a trailing-slash canonical redirect is not followed", () => {
-    expect(samePathRedirect("https://example.com/x", "https://example.com/x/")).toBe(false);
+    expect(
+      samePathRedirect("https://example.com/x", "https://example.com/x/")
+    ).toBe(false);
   });
   test("a case change is not followed", () => {
     expect(samePathRedirect(from, "https://example.com/LLMS.txt")).toBe(false);
   });
   test("a dot-segment path that resolves to another path is not followed", () => {
-    expect(samePathRedirect(from, "https://example.com/a/%2e%2e/admin")).toBe(false);
-    expect(samePathRedirect(from, "https://example.com/admin/%2E%2E/llms.txt")).toBe(true);
+    expect(samePathRedirect(from, "https://example.com/a/%2e%2e/admin")).toBe(
+      false
+    );
+    expect(
+      samePathRedirect(from, "https://example.com/admin/%2E%2E/llms.txt")
+    ).toBe(true);
   });
   test("a doubled slash or an encoded slash is another path", () => {
     expect(samePathRedirect(from, "https://example.com//llms.txt")).toBe(false);
-    expect(samePathRedirect(from, "https://example.com/llms%2Ftxt")).toBe(false);
-    expect(samePathRedirect(from, "https://example.com/%6Clms.txt")).toBe(false);
+    expect(samePathRedirect(from, "https://example.com/llms%2Ftxt")).toBe(
+      false
+    );
+    expect(samePathRedirect(from, "https://example.com/%6Clms.txt")).toBe(
+      false
+    );
   });
 });

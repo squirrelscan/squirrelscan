@@ -33,15 +33,19 @@ describe("parsePage — isChrome", () => {
           `<nav><a href="/n">n</a></nav>` +
           `<aside><a href="/s">s</a></aside>` +
           `<footer><a href="/f">f</a></footer>` +
-          `<main><p><a href="/c">c</a></p></main>`,
-      ),
+          `<main><p><a href="/c">c</a></p></main>`
+      )
     ).toEqual({ h: true, n: true, s: true, f: true, c: false });
   });
 
   test("a wrapper nested inside a landmark is still chrome", () => {
     // The whole subtree of a landmark is chrome — a content-ish wrapper inside
     // the footer does not make a sitewide link editorial.
-    expect(chromeByText(`<footer><div class="content"><a href="/f">f</a></div></footer>`)).toEqual({
+    expect(
+      chromeByText(
+        `<footer><div class="content"><a href="/f">f</a></div></footer>`
+      )
+    ).toEqual({
       f: true,
     });
   });
@@ -52,13 +56,15 @@ describe("parsePage — isChrome", () => {
     expect(
       chromeByText(
         `<div class="post-nav"><a href="/a">a</a></div>` +
-          `<div id="sidebar"><a href="/b">b</a></div>`,
-      ),
+          `<div id="sidebar"><a href="/b">b</a></div>`
+      )
     ).toEqual({ a: false, b: false });
   });
 
   test("a page with no landmarks at all marks every link contextual", () => {
-    expect(chromeByText(`<p><a href="/a">a</a></p><div><a href="/b">b</a></div>`)).toEqual({
+    expect(
+      chromeByText(`<p><a href="/a">a</a></p><div><a href="/b">b</a></div>`)
+    ).toEqual({
       a: false,
       b: false,
     });

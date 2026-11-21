@@ -12,13 +12,18 @@
  * response itself says comes from the response.
  */
 import type { FetchResult } from "../fetcher";
+import type {
+  PageRecord,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "../storage/types";
+
 import { contentTypeCharset } from "../fetcher";
-import type { PageRecord, ResponseHeaders, SecurityHeaders } from "../storage/types";
 
 /** The page's response headers as the crawler stores them, read off one fetch. */
 export function pageHeadersFromResponse(
   result: FetchResult,
-  lastModified: string | null,
+  lastModified: string | null
 ): ResponseHeaders {
   return {
     contentType: result.contentType,
@@ -53,7 +58,9 @@ export function pageHeadersFromResponse(
 }
 
 /** The page's security headers as the crawler stores them, read off one fetch. */
-export function securityHeadersFromResponse(result: FetchResult): SecurityHeaders {
+export function securityHeadersFromResponse(
+  result: FetchResult
+): SecurityHeaders {
   return {
     hsts: result.securityHeaders.hsts ?? null,
     csp: result.securityHeaders.csp ?? null,
@@ -103,11 +110,16 @@ export interface RevalidationInput {
  * they describe how the reused BODY was produced (a 304 or a plain probe in
  * front of a stored render measures neither).
  */
-export function revalidatedPage(cached: PageRecord, input: RevalidationInput): PageRecord {
+export function revalidatedPage(
+  cached: PageRecord,
+  input: RevalidationInput
+): PageRecord {
   const { result } = input;
   const freshHeaders = pageHeadersFromResponse(
     result,
-    input.completeHeaders ? input.lastModified : (result.headers.lastModified ?? null),
+    input.completeHeaders
+      ? input.lastModified
+      : (result.headers.lastModified ?? null)
   );
   const freshSecurity = securityHeadersFromResponse(result);
   const headers = input.completeHeaders

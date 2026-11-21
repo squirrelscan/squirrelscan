@@ -8,14 +8,13 @@
 // hold that line across all of them at once, so a rule added later that
 // interpolates `statusCode` itself is caught here.
 
-import { describe, expect, test } from "bun:test";
-
 import {
   formatRedirectHop,
   type RedirectChain,
   type RedirectHop,
 } from "@squirrelscan/core-contracts";
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
 import type { RuleContext, RuleResult } from "../src/types";
 
@@ -58,7 +57,13 @@ const html = `<!doctype html><html><head><title>t</title>
 
 function pageCtx(chain: RedirectChain): RuleContext {
   return {
-    page: { url: SOURCE, finalUrl: LANDING, statusCode: 200, html, redirectChain: chain },
+    page: {
+      url: SOURCE,
+      finalUrl: LANDING,
+      statusCode: 200,
+      html,
+      redirectChain: chain,
+    },
     parsed: parsePage(html, LANDING),
     site: { baseUrl: "https://example.com", pages: [] },
     options: {},
@@ -71,7 +76,14 @@ function siteCtx(chain: RedirectChain): RuleContext {
     parsed: parsePage(html, LANDING),
     site: {
       baseUrl: "https://example.com",
-      pages: [{ url: SOURCE, finalUrl: LANDING, redirectChain: chain, parsed: { links: [] } }],
+      pages: [
+        {
+          url: SOURCE,
+          finalUrl: LANDING,
+          redirectChain: chain,
+          parsed: { links: [] },
+        },
+      ],
     },
     options: {},
   } as unknown as RuleContext;
@@ -84,11 +96,16 @@ function siteCtx(chain: RedirectChain): RuleContext {
  * report, so a check that looked at labels alone passed with the bug still in
  * place.
  */
-function emittedText(result: { checks: { message?: string; items?: unknown[] }[] }): string[] {
+function emittedText(result: {
+  checks: { message?: string; items?: unknown[] }[];
+}): string[] {
   const out: string[] = [];
   for (const check of result.checks) {
     if (check.message) out.push(check.message);
-    for (const item of (check.items ?? []) as { label?: string; id?: string }[]) {
+    for (const item of (check.items ?? []) as {
+      label?: string;
+      id?: string;
+    }[]) {
       if (item.label) out.push(item.label);
       if (item.id) out.push(item.id);
     }
@@ -108,17 +125,31 @@ describe("formatRedirectHop", () => {
   });
 
   test("honours a display URL override", () => {
-    expect(formatRedirectHop(hop(SOURCE, 301), "/o-mnie")).toBe("/o-mnie (301)");
+    expect(formatRedirectHop(hop(SOURCE, 301), "/o-mnie")).toBe(
+      "/o-mnie (301)"
+    );
     expect(formatRedirectHop(hop(SOURCE, 0), "/o-mnie")).toBe("/o-mnie");
   });
 });
 
 describe("no rule renders (0) for an unobserved hop", () => {
   const cases: [string, () => RuleResult | Promise<RuleResult>][] = [
-    ["crawl/canonical-chain", () => canonicalChainRule.run(pageCtx(UNOBSERVED))],
-    ["crawl/canonical-chain (long)", () => canonicalChainRule.run(pageCtx(UNOBSERVED_LONG))],
-    ["crawl/redirect-chain", () => redirectChainRule.run(siteCtx(UNOBSERVED_LONG))],
-    ["links/redirect-chains", () => redirectChainsRule.run(siteCtx(UNOBSERVED))],
+    [
+      "crawl/canonical-chain",
+      () => canonicalChainRule.run(pageCtx(UNOBSERVED)),
+    ],
+    [
+      "crawl/canonical-chain (long)",
+      () => canonicalChainRule.run(pageCtx(UNOBSERVED_LONG)),
+    ],
+    [
+      "crawl/redirect-chain",
+      () => redirectChainRule.run(siteCtx(UNOBSERVED_LONG)),
+    ],
+    [
+      "links/redirect-chains",
+      () => redirectChainsRule.run(siteCtx(UNOBSERVED)),
+    ],
   ];
 
   test.each(cases)("%s", async (_name, run) => {
@@ -131,7 +162,9 @@ describe("no rule renders (0) for an unobserved hop", () => {
   });
 
   test("the unobserved hop's URL is still shown, just without a status", async () => {
-    const labels = emittedText(await canonicalChainRule.run(pageCtx(UNOBSERVED)));
+    const labels = emittedText(
+      await canonicalChainRule.run(pageCtx(UNOBSERVED))
+    );
     const chainLabel = labels.find((l) => l.includes(" → "));
     expect(chainLabel).toBe(`${SOURCE} → ${LANDING} (200)`);
   });

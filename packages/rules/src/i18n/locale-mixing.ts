@@ -1,8 +1,8 @@
 // i18n/locale-mixing - one page that follows two locale conventions at once
 
-import { getRenderedProseText } from "../content/text-content";
-
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { getRenderedProseText } from "../content/text-content";
 
 /**
  * Spelling pairs that differ between US and UK English. `us` and `uk` are whole-word
@@ -21,7 +21,12 @@ interface SpellingPair {
   oxford?: boolean;
 }
 
-const pair = (word: string, us: string, uk: string, oxford = false): SpellingPair => ({
+const pair = (
+  word: string,
+  us: string,
+  uk: string,
+  oxford = false
+): SpellingPair => ({
   word,
   us: new RegExp(`\\b(?:${us})\\b`, "gi"),
   uk: new RegExp(`\\b(?:${uk})\\b`, "gi"),
@@ -29,19 +34,41 @@ const pair = (word: string, us: string, uk: string, oxford = false): SpellingPai
 });
 
 const SPELLING_PAIRS: SpellingPair[] = [
-  pair("color/colour", "colors?|colored|colorful|coloring", "colours?|coloured|colourful|colouring"),
+  pair(
+    "color/colour",
+    "colors?|colored|colorful|coloring",
+    "colours?|coloured|colourful|colouring"
+  ),
   pair("center/centre", "centers?|centered", "centres?|centred"),
-  pair("behavior/behaviour", "behaviors?|behavioral", "behaviours?|behavioural"),
+  pair(
+    "behavior/behaviour",
+    "behaviors?|behavioral",
+    "behaviours?|behavioural"
+  ),
   pair("favorite/favourite", "favorites?", "favourites?"),
-  pair("license/licence", "(?:a|an|the|this|our|your|its|driver's|software|open-source)\\s+license", "licences?|licenced"),
+  pair(
+    "license/licence",
+    "(?:a|an|the|this|our|your|its|driver's|software|open-source)\\s+license",
+    "licences?|licenced"
+  ),
   pair(
     "organize/organise",
     "organize[sd]?|organizing|organization",
     "organise[sd]?|organising|organisation",
-    true,
+    true
   ),
-  pair("analyze/analyse", "analyze[sd]?|analyzing", "analyse[sd]?|analysing", true),
-  pair("optimize/optimise", "optimize[sd]?|optimizing|optimization", "optimise[sd]?|optimising|optimisation", true),
+  pair(
+    "analyze/analyse",
+    "analyze[sd]?|analyzing",
+    "analyse[sd]?|analysing",
+    true
+  ),
+  pair(
+    "optimize/optimise",
+    "optimize[sd]?|optimizing|optimization",
+    "optimise[sd]?|optimising|optimisation",
+    true
+  ),
 ];
 
 const UK_REGIONS = new Set(["gb", "au", "nz", "ie", "in", "za"]);
@@ -67,14 +94,17 @@ function tallyDates(text: string): DateTally {
 
 const BARE_DOLLAR_RE = /(?<![A-Za-z])\$\s?\d/;
 // A code next to an amount: "USD 20", "20 CAD", "CAD$20" (qualified symbols such as US$ or A$ are not bare).
-const CODE_RE = /\b(USD|CAD|AUD|NZD)\b(?=\s?\$?\s?\d)|\d[\d,.]*\s?\b(USD|CAD|AUD|NZD)\b/g;
+const CODE_RE =
+  /\b(USD|CAD|AUD|NZD)\b(?=\s?\$?\s?\d)|\d[\d,.]*\s?\b(USD|CAD|AUD|NZD)\b/g;
 
 function count(re: RegExp, text: string): number {
   return (text.match(re) ?? []).length;
 }
 
 const skipped = (message: string, skipReason: string): RuleResult => ({
-  checks: [{ name: "locale-mixing-skipped", status: "skipped", message, skipReason }],
+  checks: [
+    { name: "locale-mixing-skipped", status: "skipped", message, skipReason },
+  ],
 });
 
 export const localeMixingRule: Rule = {
@@ -119,7 +149,7 @@ export const localeMixingRule: Rule = {
       const alternates = ctx.parsed.hreflangAlternates?.length ?? 0;
       return skipped(
         `Page declares lang="${lang}", not English${alternates > 0 ? " (hreflang alternates present)" : ""}`,
-        "other-locale",
+        "other-locale"
       );
     }
 
@@ -171,7 +201,10 @@ export const localeMixingRule: Rule = {
         status: "fail",
         message: `Dates in both DD/MM/YYYY (${dates.dayFirst[0]}) and MM/DD/YYYY (${dates.monthFirst[0]}) order: a date like 3/4/2026 cannot be read reliably`,
         value: dates.dayFirst.length + dates.monthFirst.length,
-        details: { dayFirst: dates.dayFirst.slice(0, 5), monthFirst: dates.monthFirst.slice(0, 5) },
+        details: {
+          dayFirst: dates.dayFirst.slice(0, 5),
+          monthFirst: dates.monthFirst.slice(0, 5),
+        },
       });
     }
 

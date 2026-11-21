@@ -10,12 +10,13 @@
 // legitimately multi-location site, the rule must say nothing rather than accuse a
 // heterogeneous site of being inconsistent.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult, SiteMetadata } from "@squirrelscan/core-contracts";
-import { napAddressKey, napPhoneKey } from "@squirrelscan/utils";
 
 import { parsePage } from "@squirrelscan/parser";
+import { napAddressKey, napPhoneKey } from "@squirrelscan/utils";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { ruleApplies } from "../src/applicability";
 import {
@@ -23,7 +24,6 @@ import {
   NAP_DRIFT_MIN_PAGES,
   NAP_MODAL_MIN_AGREEMENT,
 } from "../src/local/nap-consistency";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 interface PageSpec {
   /** Rendered phone text; also the `tel:` href payload. */
@@ -50,7 +50,9 @@ function html(spec: PageSpec): string {
         postalCode: "2000",
       };
     }
-    parts.push(`<script type="application/ld+json">${JSON.stringify(node)}</script>`);
+    parts.push(
+      `<script type="application/ld+json">${JSON.stringify(node)}</script>`
+    );
   }
   if (spec.phone) {
     parts.push(`<a href="tel:${spec.phone}">${spec.phone}</a>`);
@@ -69,22 +71,37 @@ function siteCtx(specs: PageSpec[]): RuleContext {
     };
   });
   return {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     options: {},
-    site: { baseUrl: "https://example.com/", pages, robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: "https://example.com/",
+      pages,
+      robotsTxt: null,
+      sitemaps: null,
+    },
   };
 }
 
 function checks(ctx: RuleContext): CheckResult[] {
   const result = napConsistencyRule.run(ctx);
-  if (result instanceof Promise) throw new Error("legacy path must be synchronous");
+  if (result instanceof Promise)
+    throw new Error("legacy path must be synchronous");
   return result.checks as CheckResult[];
 }
 
 function named(list: CheckResult[], name: string): CheckResult {
   const found = list.find((c) => c.name === name);
-  if (!found) throw new Error(`no check named ${name} in [${list.map((c) => c.name).join(", ")}]`);
+  if (!found)
+    throw new Error(
+      `no check named ${name} in [${list.map((c) => c.name).join(", ")}]`
+    );
   return found;
 }
 
@@ -98,7 +115,9 @@ const FLOOR = NAP_DRIFT_MIN_PAGES;
 describe("local/nap-consistency — identity is unchanged", () => {
   test("rule id and the local-business gate are untouched", () => {
     expect(napConsistencyRule.meta.id).toBe("local/nap-consistency");
-    expect(napConsistencyRule.meta.appliesWhen).toEqual({ requiresLocalBusiness: true });
+    expect(napConsistencyRule.meta.appliesWhen).toEqual({
+      requiresLocalBusiness: true,
+    });
     expect(napConsistencyRule.meta.scope).toBe("site");
   });
 
@@ -112,7 +131,11 @@ describe("local/nap-consistency — skipped", () => {
   test("no pages → single skipped check", () => {
     const ctx = siteCtx([]);
     expect(checks(ctx)).toEqual([
-      { name: "nap-consistency", status: "skipped", message: "No pages available for analysis" },
+      {
+        name: "nap-consistency",
+        status: "skipped",
+        message: "No pages available for analysis",
+      },
     ]);
   });
 
@@ -132,7 +155,9 @@ describe("local/nap-consistency — skipped", () => {
   });
 
   test("below the sample floor → skipped with the count in the reason", () => {
-    const ctx = siteCtx(repeat(FLOOR - 1, { phone: "+1 (555) 123-4567", business: true }));
+    const ctx = siteCtx(
+      repeat(FLOOR - 1, { phone: "+1 (555) 123-4567", business: true })
+    );
     const phone = named(checks(ctx), "phone-consistency");
     expect(phone.status).toBe("skipped");
     expect(phone.message).toContain(`Only ${FLOOR - 1} page(s)`);
@@ -161,7 +186,9 @@ describe("local/nap-consistency — skipped", () => {
 
 describe("local/nap-consistency — pass (no false positives)", () => {
   test("one number and one address, identically rendered everywhere → pass", () => {
-    const ctx = siteCtx(repeat(FLOOR + 2, { phone: "+1 (555) 123-4567", street: "123 Main St" }));
+    const ctx = siteCtx(
+      repeat(FLOOR + 2, { phone: "+1 (555) 123-4567", street: "123 Main St" })
+    );
     const list = checks(ctx);
 
     const phone = named(list, "phone-consistency");
@@ -173,7 +200,9 @@ describe("local/nap-consistency — pass (no false positives)", () => {
     expect(address.status).toBe("pass");
 
     // Nothing in the rule's output is a warn/fail on a consistent site.
-    expect(list.some((c) => c.status === "warn" || c.status === "fail")).toBe(false);
+    expect(list.some((c) => c.status === "warn" || c.status === "fail")).toBe(
+      false
+    );
   });
 
   test("a page carrying extra branch numbers does not make the site inconsistent", () => {
@@ -188,9 +217,9 @@ describe("local/nap-consistency — pass (no false positives)", () => {
             parsed: parsePage(
               `<html><body><a href="tel:555-123-4567">555-123-4567</a>` +
                 `<a href="tel:555-999-0000">555-999-0000</a></body></html>`,
-              p.url,
+              p.url
             ) as ParsedPage,
-          },
+          }
     );
     ctx.site!.pages = withExtra;
     expect(named(checks(ctx), "phone-consistency").status).toBe("pass");
@@ -207,10 +236,13 @@ describe("local/nap-consistency — warn (format drift)", () => {
 
     expect(phone.status).toBe("warn");
     expect(phone.message).toBe(
-      "The same phone number is formatted 2 different ways across 12 pages",
+      "The same phone number is formatted 2 different ways across 12 pages"
     );
     expect(phone.value).toBe("+1 (555) 123-4567");
-    expect(phone.items?.map((i) => i.id)).toEqual(["+1 (555) 123-4567", "555.123.4567"]);
+    expect(phone.items?.map((i) => i.id)).toEqual([
+      "+1 (555) 123-4567",
+      "555.123.4567",
+    ]);
     expect(phone.items?.map((i) => i.meta?.pageCount)).toEqual([8, 4]);
     expect(phone.details).toEqual({
       norm: "+1 (555) 123-4567",
@@ -240,7 +272,7 @@ describe("local/nap-consistency — fail (conflicting NAP)", () => {
 
     expect(phone.status).toBe("fail");
     expect(phone.message).toBe(
-      '2 page(s) show a different phone number to the site norm "555-123-4567"',
+      '2 page(s) show a different phone number to the site norm "555-123-4567"'
     );
     expect(phone.items).toHaveLength(1);
     expect(phone.items?.[0]?.label).toBe('"555-987-6543" on 2 page(s)');
@@ -286,7 +318,7 @@ describe("local/nap-consistency — presence checks are preserved", () => {
     ctx.site!.pages[1]!.url = "https://example.com/contact";
     ctx.site!.pages[1]!.parsed = parsePage(
       `<html><body><a href="tel:555-123-4567">call</a><a href="mailto:hi@example.com">mail</a></body></html>`,
-      "https://example.com/contact",
+      "https://example.com/contact"
     ) as ParsedPage;
     expect(named(checks(ctx), "contact-info").status).toBe("pass");
   });
@@ -306,7 +338,9 @@ describe("NAP comparison keys", () => {
   });
 
   test("street-type abbreviations fold into their long form", () => {
-    expect(napAddressKey("123 Main St.")).toBe(napAddressKey("123 Main Street"));
+    expect(napAddressKey("123 Main St.")).toBe(
+      napAddressKey("123 Main Street")
+    );
     expect(napAddressKey("5 N. Oak Ave")).toBe("5 north oak avenue");
   });
 

@@ -60,7 +60,10 @@ const server = Bun.serve({
       // Same stalled body, but the headers alone identify the WAF.
       return new Response(stall, {
         status: 403,
-        headers: { "content-type": "text/html", "cf-ray": "8a1b2c3d4e5f6789-SYD" },
+        headers: {
+          "content-type": "text/html",
+          "cf-ray": "8a1b2c3d4e5f6789-SYD",
+        },
       });
     }
     if (path === "/fast.js") {
@@ -82,7 +85,7 @@ describe("script fetcher deadline (#1729)", () => {
   test("a script body that stalls after the headers times out", async () => {
     const startedAt = Date.now();
     const [result] = await Effect.runPromise(
-      fetchScriptContents([`${base}/stall.js`], { timeoutMs: DEADLINE_MS }),
+      fetchScriptContents([`${base}/stall.js`], { timeoutMs: DEADLINE_MS })
     );
     const elapsed = Date.now() - startedAt;
 
@@ -97,7 +100,7 @@ describe("script fetcher deadline (#1729)", () => {
 
   test("a script that answers promptly is still read in full", async () => {
     const [result] = await Effect.runPromise(
-      fetchScriptContents([`${base}/fast.js`], { timeoutMs: DEADLINE_MS }),
+      fetchScriptContents([`${base}/fast.js`], { timeoutMs: DEADLINE_MS })
     );
 
     expect(result?.error).toBe(null);
@@ -121,7 +124,8 @@ describe("script fetcher retry deadline (#1729)", () => {
     // end-of-stream, which reads as an empty body and never retries.)
     globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
       attempts += 1;
-      if (attempts === 1) return Promise.reject(new TypeError("connection reset"));
+      if (attempts === 1)
+        return Promise.reject(new TypeError("connection reset"));
       return realFetch(input, init);
     }) as typeof fetch;
 
@@ -134,13 +138,15 @@ describe("script fetcher retry deadline (#1729)", () => {
       // controller would fail attempt 2 instantly, at ~backoff rather than
       // ~backoff + deadline.
       const [result] = await Effect.runPromise(
-        fetchScriptContents([`${base}/stall.js`], { timeoutMs: DEADLINE_MS }),
+        fetchScriptContents([`${base}/stall.js`], { timeoutMs: DEADLINE_MS })
       );
       const elapsed = Date.now() - startedAt;
 
       expect(attempts).toBe(2);
       expect(result?.error).toBe("timeout");
-      expect(elapsed).toBeGreaterThanOrEqual(RETRY_BACKOFF_MS + DEADLINE_MS - 100);
+      expect(elapsed).toBeGreaterThanOrEqual(
+        RETRY_BACKOFF_MS + DEADLINE_MS - 100
+      );
       expect(elapsed).toBeLessThan(RETRY_BACKOFF_MS + DEADLINE_MS * 8);
     } finally {
       globalThis.fetch = realFetch;
@@ -156,7 +162,7 @@ describe("external checker deadline (#1729)", () => {
         timeoutMs: DEADLINE_MS,
         // Loopback fixture: the policy a private site's audit uses.
         egress: { allowPrivateNetwork: true },
-      }),
+      })
     );
     const elapsed = Date.now() - startedAt;
 
@@ -174,7 +180,7 @@ describe("external checker deadline (#1729)", () => {
       checkExternalLinks([`${base}/stall-403-cf`], null, {
         timeoutMs: DEADLINE_MS,
         egress: { allowPrivateNetwork: true },
-      }),
+      })
     );
 
     // The deadline now cuts the WAF body read short, so giving up on detection

@@ -1,24 +1,49 @@
 // XML report output
 
-import { validateBrandColor, type ReportBranding } from "@squirrelscan/core-contracts";
-import { techOpenTag, techOriginAttr } from "../technologies";
+import {
+  validateBrandColor,
+  type ReportBranding,
+} from "@squirrelscan/core-contracts";
+import { isWcagLevel } from "@squirrelscan/core-contracts/wcag";
+
 import type { AuditReport } from "../types";
-import { getScoreGrade } from "../scoring";
-import { javascriptXml } from "../javascript-shipped";
-import { getGroupName } from "../categories";
-import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
+
 import { affectedPages, itemsNotListed } from "../affected-pages";
-import { domainAgeYears } from "../site-metadata";
+import { getGroupName } from "../categories";
+import {
+  partialAuditLine,
+  followedStartRedirect,
+  scanScopeErrorPages,
+  scanScopePageTypes,
+  scanScopeUnfetched,
+  seedRedirect,
+} from "../coverage";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
-import { isWcagLevel } from "@squirrelscan/core-contracts/wcag";
-import { partialAuditLine, followedStartRedirect, scanScopeErrorPages, scanScopePageTypes, scanScopeUnfetched, seedRedirect } from "../coverage";
+import {
+  groupIssuesByCategory,
+  flattenIssuesBySeverity,
+  reportPassedRules,
+} from "../grouping";
 import { ignoredLine, safeIgnored } from "../ignored";
-import { notCheckedLine, notCheckedRules } from "../not-checked";
+import { javascriptXml } from "../javascript-shipped";
 import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
-import { pageTypePhrase, structureAttr, structureSectionName } from "../structure";
-import { checkRegionScope, itemLabel, itemRegionScope, type RegionScope } from "../region-scope";
+import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { checkPageTypeScope, type PageTypeScope } from "../page-type-scope";
+import {
+  checkRegionScope,
+  itemLabel,
+  itemRegionScope,
+  type RegionScope,
+} from "../region-scope";
+import { getScoreGrade } from "../scoring";
+import { domainAgeYears } from "../site-metadata";
+import {
+  pageTypePhrase,
+  structureAttr,
+  structureSectionName,
+} from "../structure";
+import { techOpenTag, techOriginAttr } from "../technologies";
 
 /** `<scope page-type="docs" pages="9" type-pages="11"/>` (pub#857). */
 function pageTypeScopeElement(scope: PageTypeScope): string {
@@ -51,15 +76,20 @@ function indent(level: number): string {
   return "  ".repeat(level);
 }
 
-export function renderXml(report: AuditReport, options?: XmlRenderOptions): string {
+export function renderXml(
+  report: AuditReport,
+  options?: XmlRenderOptions
+): string {
   const lines: string[] = [];
   const version = options?.version ?? "0.0.0";
   // White-label drops the squirrelscan-branded root element name (#810).
-  const rootTag = options?.branding?.whiteLabel ? "audit" : "squirrelscan-audit";
+  const rootTag = options?.branding?.whiteLabel
+    ? "audit"
+    : "squirrelscan-audit";
 
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
   const brand = validateBrandColor(
-    options?.branding?.whiteLabel ? options.branding.brandColor : undefined,
+    options?.branding?.whiteLabel ? options.branding.brandColor : undefined
   );
   const brandAttr = brand.ok ? ` brand-color="${brand.color}"` : "";
   lines.push(`<${rootTag} version="${escapeXml(version)}"${brandAttr}>`);
@@ -67,7 +97,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   lines.push(`${indent(1)}<site>`);
   lines.push(`${indent(2)}<url>${escapeXml(report.baseUrl)}</url>`);
   lines.push(`${indent(2)}<pages-crawled>${report.totalPages}</pages-crawled>`);
-  lines.push(`${indent(2)}<audit-date>${escapeXml(report.timestamp)}</audit-date>`);
+  lines.push(
+    `${indent(2)}<audit-date>${escapeXml(report.timestamp)}</audit-date>`
+  );
   // Scan scope (#350, as in every other renderer since #1180): where the audit
   // ran, the page limit in force, and whether it bound, so a consumer diffing two
   // reports can tell a site that shrank from a crawl that was capped.
@@ -78,27 +110,38 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   if (partialAuditLine(report) && report.partialAudit) {
     const pa = report.partialAudit;
     const attr = (v: unknown) =>
-      escapeXml((Array.isArray(v) ? v.filter((x) => typeof x === "string") : []).join(","));
+      escapeXml(
+        (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []).join(
+          ","
+        )
+      );
     lines.push(
-      `${indent(2)}<partial-audit include="${attr(pa.include)}" exclude="${attr(pa.exclude)}" included-categories="${attr(pa.includedCategories)}"${isWcagLevel(pa.wcagLevel) ? ` wcag-level="${pa.wcagLevel}"` : ""}/>`,
+      `${indent(2)}<partial-audit include="${attr(pa.include)}" exclude="${attr(pa.exclude)}" included-categories="${attr(pa.includedCategories)}"${isWcagLevel(pa.wcagLevel) ? ` wcag-level="${pa.wcagLevel}"` : ""}/>`
     );
   }
   if (report.scanScope) {
     const s = report.scanScope;
     const cap = s.maxPages !== undefined ? ` max-pages="${s.maxPages}"` : "";
     const requested =
-      s.requestedMaxPages !== undefined ? ` requested-max-pages="${s.requestedMaxPages}"` : "";
-    const stop = s.stopReason ? ` stop-reason="${escapeXml(s.stopReason)}"` : "";
+      s.requestedMaxPages !== undefined
+        ? ` requested-max-pages="${s.requestedMaxPages}"`
+        : "";
+    const stop = s.stopReason
+      ? ` stop-reason="${escapeXml(s.stopReason)}"`
+      : "";
     const left = scanScopeUnfetched(report);
     const unfetched = left > 0 ? ` unfetched="${left}"` : "";
-    const errorAttr = scanScopeErrorPages(report) > 0 ? ` error-pages="${scanScopeErrorPages(report)}"` : "";
+    const errorAttr =
+      scanScopeErrorPages(report) > 0
+        ? ` error-pages="${scanScopeErrorPages(report)}"`
+        : "";
     lines.push(
-      `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${errorAttr}/>`,
+      `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${errorAttr}/>`
     );
     // Pages known against pages audited, per URL-based page type (#1744).
     for (const t of scanScopePageTypes(report)) {
       lines.push(
-        `${indent(2)}<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`,
+        `${indent(2)}<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`
       );
     }
   }
@@ -116,9 +159,13 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   if (refusedSeedRedirect) {
     lines.push(`${indent(1)}<seed-redirect followed="false">`);
     if (refusedSeedRedirect.finalUrl) {
-      lines.push(`${indent(2)}<final-url>${escapeXml(refusedSeedRedirect.finalUrl)}</final-url>`);
+      lines.push(
+        `${indent(2)}<final-url>${escapeXml(refusedSeedRedirect.finalUrl)}</final-url>`
+      );
     }
-    lines.push(`${indent(2)}<note>${escapeXml(refusedSeedRedirect.note)}</note>`);
+    lines.push(
+      `${indent(2)}<note>${escapeXml(refusedSeedRedirect.note)}</note>`
+    );
     lines.push(`${indent(1)}</seed-redirect>`);
   }
 
@@ -127,10 +174,16 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   const startRedirect = followedStartRedirect(report);
   if (startRedirect) {
     lines.push(`${indent(1)}<start-redirect followed="true">`);
-    lines.push(`${indent(2)}<original-url>${escapeXml(startRedirect.originalUrl)}</original-url>`);
-    lines.push(`${indent(2)}<final-url>${escapeXml(startRedirect.finalUrl)}</final-url>`);
+    lines.push(
+      `${indent(2)}<original-url>${escapeXml(startRedirect.originalUrl)}</original-url>`
+    );
+    lines.push(
+      `${indent(2)}<final-url>${escapeXml(startRedirect.finalUrl)}</final-url>`
+    );
     for (const hop of startRedirect.chain) {
-      lines.push(`${indent(2)}<hop status="${hop.status}">${escapeXml(hop.url)}</hop>`);
+      lines.push(
+        `${indent(2)}<hop status="${hop.status}">${escapeXml(hop.url)}</hop>`
+      );
     }
     lines.push(`${indent(2)}<note>${escapeXml(startRedirect.note)}</note>`);
     lines.push(`${indent(1)}</start-redirect>`);
@@ -140,16 +193,18 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   const ignoredSummary = safeIgnored(report);
   if (ignoredSummary) {
     lines.push(
-      `${indent(1)}<ignored items="${ignoredSummary.items}" pages="${ignoredSummary.pages}"${ignoredSummary.disabled ? ' disabled="true"' : ""}>`,
+      `${indent(1)}<ignored items="${ignoredSummary.items}" pages="${ignoredSummary.pages}"${ignoredSummary.disabled ? ' disabled="true"' : ""}>`
     );
     const note = ignoredLine(report);
     if (note) lines.push(`${indent(2)}<note>${escapeXml(note)}</note>`);
     for (const [ruleId, counts] of Object.entries(ignoredSummary.byRule)) {
-      lines.push(`${indent(2)}<rule id="${escapeXml(ruleId)}" items="${counts.items}" pages="${counts.pages}"/>`);
+      lines.push(
+        `${indent(2)}<rule id="${escapeXml(ruleId)}" items="${counts.items}" pages="${counts.pages}"/>`
+      );
     }
     for (const entry of ignoredSummary.entries) {
       lines.push(
-        `${indent(2)}<entry index="${entry.index + 1}" rule="${escapeXml(entry.rule)}" items="${entry.items}" pages="${entry.pages}"${entry.reason ? ` reason="${escapeXml(entry.reason)}"` : ""}/>`,
+        `${indent(2)}<entry index="${entry.index + 1}" rule="${escapeXml(entry.rule)}" items="${entry.items}" pages="${entry.pages}"${entry.reason ? ` reason="${escapeXml(entry.reason)}"` : ""}/>`
       );
     }
     lines.push(`${indent(1)}</ignored>`);
@@ -158,19 +213,25 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   // null ⇒ N/A (failed/0-page audit) — never coerce to 0/"F" (#586).
   const overall = report.healthScore?.overall ?? null;
   const grade = overall === null ? "N/A" : getScoreGrade(overall);
-  lines.push(`${indent(1)}<health-score overall="${overall ?? "N/A"}" grade="${grade}">`);
+  lines.push(
+    `${indent(1)}<health-score overall="${overall ?? "N/A"}" grade="${grade}">`
+  );
   // Top-level group scores (#626), above the finer per-category scores.
   for (const g of report.healthScore?.groups ?? []) {
     lines.push(
-      `${indent(2)}<group name="${escapeXml(getGroupName(g.group))}" score="${g.score}" passed="${g.passed}" warnings="${g.warnings}" failed="${g.failed}"/>`,
+      `${indent(2)}<group name="${escapeXml(getGroupName(g.group))}" score="${g.score}" passed="${g.passed}" warnings="${g.warnings}" failed="${g.failed}"/>`
     );
   }
   for (const cat of report.healthScore?.categories ?? []) {
-    lines.push(`${indent(2)}<category name="${escapeXml(cat.name)}" score="${cat.score}"/>`);
+    lines.push(
+      `${indent(2)}<category name="${escapeXml(cat.name)}" score="${cat.score}"/>`
+    );
   }
   lines.push(`${indent(1)}</health-score>`);
 
-  lines.push(`${indent(1)}<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`);
+  lines.push(
+    `${indent(1)}<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`
+  );
 
   // Editor's summary — report-only exec narrative (does not affect the health score).
   const es = editorSummaryView(report.editorSummary, report);
@@ -186,7 +247,8 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
       }
       lines.push(`${indent(2)}</big-ticket>`);
     }
-    if (es.verdict) lines.push(`${indent(2)}<verdict>${escapeXml(es.verdict)}</verdict>`);
+    if (es.verdict)
+      lines.push(`${indent(2)}<verdict>${escapeXml(es.verdict)}</verdict>`);
     lines.push(`${indent(1)}</editor-summary>`);
   }
 
@@ -194,9 +256,17 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   if (es && es.priorities.length > 0) {
     lines.push(`${indent(1)}<priorities>`);
     for (const [i, p] of es.priorities.entries()) {
-      const rules = p.ruleIds.length > 0 ? ` rules="${escapeXml(p.ruleIds.join(" "))}"` : "";
-      const tech = p.technologies.length > 0 ? ` technologies="${escapeXml(p.technologies.join(" "))}"` : "";
-      lines.push(`${indent(2)}<priority rank="${i + 1}" effort="${escapeXml(p.effort)}"${rules}${tech}>`);
+      const rules =
+        p.ruleIds.length > 0
+          ? ` rules="${escapeXml(p.ruleIds.join(" "))}"`
+          : "";
+      const tech =
+        p.technologies.length > 0
+          ? ` technologies="${escapeXml(p.technologies.join(" "))}"`
+          : "";
+      lines.push(
+        `${indent(2)}<priority rank="${i + 1}" effort="${escapeXml(p.effort)}"${rules}${tech}>`
+      );
       lines.push(`${indent(3)}<title>${escapeXml(p.title)}</title>`);
       if (p.why) lines.push(`${indent(3)}<why>${escapeXml(p.why)}</why>`);
       lines.push(`${indent(3)}<action>${escapeXml(p.action)}</action>`);
@@ -208,26 +278,41 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   // Site profile — report-only (Stage-0 context; does not affect the health score).
   const meta = report.siteMetadata;
   if (meta) {
-    const cat = meta.businessCategory ? ` business-category="${escapeXml(meta.businessCategory)}"` : "";
-    const aud = meta.audienceScope ? ` audience-scope="${escapeXml(meta.audienceScope)}"` : "";
-    const ctry = meta.primaryCountry ? ` primary-country="${escapeXml(meta.primaryCountry)}"` : "";
+    const cat = meta.businessCategory
+      ? ` business-category="${escapeXml(meta.businessCategory)}"`
+      : "";
+    const aud = meta.audienceScope
+      ? ` audience-scope="${escapeXml(meta.audienceScope)}"`
+      : "";
+    const ctry = meta.primaryCountry
+      ? ` primary-country="${escapeXml(meta.primaryCountry)}"`
+      : "";
     lines.push(
-      `${indent(1)}<site-profile site-type="${escapeXml(meta.siteType)}"${cat}${aud}${ctry} ymyl="${meta.isYMYL}" local-business="${meta.isLocalBusiness}" confidence="${escapeXml(meta.confidence)}">`,
+      `${indent(1)}<site-profile site-type="${escapeXml(meta.siteType)}"${cat}${aud}${ctry} ymyl="${meta.isYMYL}" local-business="${meta.isLocalBusiness}" confidence="${escapeXml(meta.confidence)}">`
     );
     if (meta.languages && meta.languages.length > 0) {
-      lines.push(`${indent(2)}<languages>${escapeXml(meta.languages.join(", "))}</languages>`);
+      lines.push(
+        `${indent(2)}<languages>${escapeXml(meta.languages.join(", "))}</languages>`
+      );
     }
     const entityName = meta.entityName ?? meta.title;
     if (entityName) {
-      const et = meta.entityType && meta.entityType !== "unknown" ? ` kind="${escapeXml(meta.entityType)}"` : "";
+      const et =
+        meta.entityType && meta.entityType !== "unknown"
+          ? ` kind="${escapeXml(meta.entityType)}"`
+          : "";
       const eu = meta.entityUrl ? ` url="${escapeXml(meta.entityUrl)}"` : "";
-      lines.push(`${indent(2)}<identity name="${escapeXml(entityName)}"${et}${eu}/>`);
+      lines.push(
+        `${indent(2)}<identity name="${escapeXml(entityName)}"${et}${eu}/>`
+      );
     }
     if (meta.contacts && meta.contacts.length > 0) {
       lines.push(`${indent(2)}<contacts>`);
       for (const c of meta.contacts) {
         const label = c.label ? ` label="${escapeXml(c.label)}"` : "";
-        lines.push(`${indent(3)}<contact kind="${escapeXml(c.kind)}" value="${escapeXml(c.value)}"${label}/>`);
+        lines.push(
+          `${indent(3)}<contact kind="${escapeXml(c.kind)}" value="${escapeXml(c.value)}"${label}/>`
+        );
       }
       lines.push(`${indent(2)}</contacts>`);
     }
@@ -235,17 +320,26 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
       lines.push(`${indent(2)}<socials>`);
       for (const s of meta.socials) {
         const handle = s.handle ? ` handle="${escapeXml(s.handle)}"` : "";
-        lines.push(`${indent(3)}<social platform="${escapeXml(s.platform)}" url="${escapeXml(s.url)}"${handle}/>`);
+        lines.push(
+          `${indent(3)}<social platform="${escapeXml(s.platform)}" url="${escapeXml(s.url)}"${handle}/>`
+        );
       }
       lines.push(`${indent(2)}</socials>`);
     }
     const years = domainAgeYears(meta);
     if (years != null || meta.registeredAt || meta.registrar) {
       const ya = years != null ? ` age-years="${years}"` : "";
-      const ad = meta.domainAgeDays != null ? ` age-days="${meta.domainAgeDays}"` : "";
-      const ra = meta.registeredAt ? ` registered="${escapeXml(meta.registeredAt)}"` : "";
-      const ea = meta.expiresAt ? ` expires="${escapeXml(meta.expiresAt)}"` : "";
-      const rg = meta.registrar ? ` registrar="${escapeXml(meta.registrar)}"` : "";
+      const ad =
+        meta.domainAgeDays != null ? ` age-days="${meta.domainAgeDays}"` : "";
+      const ra = meta.registeredAt
+        ? ` registered="${escapeXml(meta.registeredAt)}"`
+        : "";
+      const ea = meta.expiresAt
+        ? ` expires="${escapeXml(meta.expiresAt)}"`
+        : "";
+      const rg = meta.registrar
+        ? ` registrar="${escapeXml(meta.registrar)}"`
+        : "";
       lines.push(`${indent(2)}<domain${ya}${ad}${ra}${ea}${rg}/>`);
     }
     lines.push(`${indent(1)}</site-profile>`);
@@ -255,31 +349,44 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   if (report.host) {
     const h = report.host;
     const attrs = [`name="${escapeXml(h.host)}"`];
-    if (h.addresses.ipv4.length > 0) attrs.push(`ipv4="${escapeXml(h.addresses.ipv4.join(" "))}"`);
-    if (h.addresses.ipv6.length > 0) attrs.push(`ipv6="${escapeXml(h.addresses.ipv6.join(" "))}"`);
+    if (h.addresses.ipv4.length > 0)
+      attrs.push(`ipv4="${escapeXml(h.addresses.ipv4.join(" "))}"`);
+    if (h.addresses.ipv6.length > 0)
+      attrs.push(`ipv6="${escapeXml(h.addresses.ipv6.join(" "))}"`);
     if (h.country) {
-      attrs.push(`country="${escapeXml(h.country.code)}"`, `countryLocation="${h.country.location}"`);
-      if (h.country.edge) attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
+      attrs.push(
+        `country="${escapeXml(h.country.code)}"`,
+        `countryLocation="${h.country.location}"`
+      );
+      if (h.country.edge)
+        attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
     }
     if (h.edge) {
-      attrs.push(`edgeProvider="${escapeXml(h.edge.name)}"`, `edgeSource="${h.edge.source}"`, `edgeHosted="${h.edge.edgeHosted}"`, `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`);
+      attrs.push(
+        `edgeProvider="${escapeXml(h.edge.name)}"`,
+        `edgeSource="${h.edge.source}"`,
+        `edgeHosted="${h.edge.edgeHosted}"`,
+        `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`
+      );
     }
-    if (h.cloudRange) attrs.push(`cloudRange="${escapeXml(h.cloudRange.name)}"`);
+    if (h.cloudRange)
+      attrs.push(`cloudRange="${escapeXml(h.cloudRange.name)}"`);
     if (h.latency) attrs.push(`connectMs="${h.latency.ms}"`);
     lines.push(`${indent(1)}<host ${attrs.join(" ")}/>`);
   }
 
   // Technologies — report-only (does not affect the health score).
-  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
+  if (
+    report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
+  ) {
     const tech = report.technologies;
-    lines.push(
-      techOpenTag("technologies", tech, indent(1)),
-    );
+    lines.push(techOpenTag("technologies", tech, indent(1)));
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";
       const icon = t.icon ? ` icon="${escapeXml(t.icon)}"` : "";
       lines.push(
-        `${indent(2)}<technology name="${escapeXml(t.name)}" category="${escapeXml(t.category)}"${ver}${icon}${techOriginAttr(t)}/>`,
+        `${indent(2)}<technology name="${escapeXml(t.name)}" category="${escapeXml(t.category)}"${ver}${icon}${techOriginAttr(t)}/>`
       );
     }
     lines.push(`${indent(1)}</technologies>`);
@@ -291,58 +398,81 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     const structure = report.structure;
     const share = structure.chrome.share;
     lines.push(
-      `${indent(1)}<page-structure pages="${structureAttr(structure.pages)}" links="${structureAttr(structure.totalLinks)}" unknown-links="${structureAttr(structure.unknownLinks)}" chrome-links="${structureAttr(structure.chrome.links)}" content-links="${structureAttr(structure.chrome.contentLinks)}"${typeof share === "number" ? ` chrome-share="${structureAttr(share)}"` : ""}>`,
+      `${indent(1)}<page-structure pages="${structureAttr(structure.pages)}" links="${structureAttr(structure.totalLinks)}" unknown-links="${structureAttr(structure.unknownLinks)}" chrome-links="${structureAttr(structure.chrome.links)}" content-links="${structureAttr(structure.chrome.contentLinks)}"${typeof share === "number" ? ` chrome-share="${structureAttr(share)}"` : ""}>`
     );
     for (const row of structure.sections) {
       if (structureSectionName(row.section) === undefined) continue;
       lines.push(
-        `${indent(2)}<section name="${escapeXml(row.section)}" pages="${structureAttr(row.pages)}" links="${structureAttr(row.links)}"/>`,
+        `${indent(2)}<section name="${escapeXml(row.section)}" pages="${structureAttr(row.pages)}" links="${structureAttr(row.links)}"/>`
       );
     }
     const types = structure.pageTypes;
     lines.push(
-      `${indent(2)}<page-types not-classified="${structureAttr(types.notClassified)}" by-model="${structureAttr(types.byModel)}" degraded="${structureAttr(types.degraded)}">`,
+      `${indent(2)}<page-types not-classified="${structureAttr(types.notClassified)}" by-model="${structureAttr(types.byModel)}" degraded="${structureAttr(types.degraded)}">`
     );
     for (const type of types.counts) {
       if (pageTypePhrase(type.label, type.pages) === undefined) continue;
       lines.push(
-        `${indent(3)}<page-type label="${escapeXml(type.label)}" pages="${structureAttr(type.pages)}"/>`,
+        `${indent(3)}<page-type label="${escapeXml(type.label)}" pages="${structureAttr(type.pages)}"/>`
       );
     }
     lines.push(`${indent(2)}</page-types>`);
     lines.push(`${indent(1)}</page-structure>`);
   }
 
-  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
+  const categoryIssues = groupIssuesByCategory(
+    report.ruleResults,
+    report.checkTallies
+  );
 
   if (categoryIssues.length > 0) {
     lines.push(`${indent(1)}<issues>`);
     // Flat and severity-first (#1536): no <category> wrapper — each rule carries
     // its category and group as attributes, so document order IS fix order.
     for (const rule of flattenIssuesBySeverity(categoryIssues)) {
-      lines.push(`${indent(2)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}" category="${escapeXml(rule.categoryName)}" group="${escapeXml(rule.group)}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""}>`);
+      lines.push(
+        `${indent(2)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}" category="${escapeXml(rule.categoryName)}" group="${escapeXml(rule.group)}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""}>`
+      );
       lines.push(`${indent(3)}<name>${escapeXml(rule.name)}</name>`);
-      lines.push(`${indent(3)}<description>${escapeXml(rule.description)}</description>`);
-      if (rule.solution) lines.push(`${indent(3)}<solution>${escapeXml(rule.solution)}</solution>`);
+      lines.push(
+        `${indent(3)}<description>${escapeXml(rule.description)}</description>`
+      );
+      if (rule.solution)
+        lines.push(
+          `${indent(3)}<solution>${escapeXml(rule.solution)}</solution>`
+        );
 
       for (const check of rule.checks) {
-        lines.push(`${indent(3)}<check name="${escapeXml(check.name)}" status="${check.status}">`);
-        lines.push(`${indent(4)}<message>${escapeXml(check.message)}</message>`);
+        lines.push(
+          `${indent(3)}<check name="${escapeXml(check.name)}" status="${check.status}">`
+        );
+        lines.push(
+          `${indent(4)}<message>${escapeXml(check.message)}</message>`
+        );
 
         // #1023 R-F: count is the authoritative total; the listed pages are a
         // labeled sample (examples) when has-more.
         const pages = affectedPages(check);
         // pub#846: a check that only reads one shared region names it, beside its page list.
-        const checkScope = checkRegionScope(check, pages.count, report.structure);
+        const checkScope = checkRegionScope(
+          check,
+          pages.count,
+          report.structure
+        );
         if (checkScope) lines.push(`${indent(4)}${scopeElement(checkScope)}`);
         else {
           // pub#857: a check on every page of one page type names the type, beside its page list.
-          const typeScope = checkPageTypeScope(check, pages.count, report.structure);
-          if (typeScope) lines.push(`${indent(4)}${pageTypeScopeElement(typeScope)}`);
+          const typeScope = checkPageTypeScope(
+            check,
+            pages.count,
+            report.structure
+          );
+          if (typeScope)
+            lines.push(`${indent(4)}${pageTypeScopeElement(typeScope)}`);
         }
         if (pages.sample.length > 0) {
           lines.push(
-            `${indent(4)}<affected-pages count="${pages.count}" examples="${pages.sample.length}" has-more="${pages.hasMore}">`,
+            `${indent(4)}<affected-pages count="${pages.count}" examples="${pages.sample.length}" has-more="${pages.hasMore}">`
           );
           for (const page of pages.sample)
             lines.push(`${indent(5)}<page url="${escapeXml(page)}"/>`);
@@ -353,30 +483,39 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
         const left = itemsNotListed(check);
         const notListed = left > 0 ? ` not-listed="${left}"` : "";
         if (check.items && check.items.length > 0) {
-          lines.push(`${indent(4)}<items count="${check.items.length}"${notListed}>`);
+          lines.push(
+            `${indent(4)}<items count="${check.items.length}"${notListed}>`
+          );
           for (const item of check.items) {
             lines.push(`${indent(5)}<item id="${escapeXml(item.id)}">`);
             // pub#846: the region the item is shown in, beside its bounded page list; a scoped
             // item's label drops the section phrase the region says.
             const scope = itemRegionScope(item, report.structure, check);
             const label = itemLabel(item, scope);
-            if (label && label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(label)}</label>`);
+            if (label && label !== item.id)
+              lines.push(`${indent(6)}<label>${escapeXml(label)}</label>`);
             if (scope) lines.push(`${indent(6)}${scopeElement(scope)}`);
             if (item.meta) {
               for (const [k, v] of Object.entries(item.meta)) {
                 // An object value (a link's `sections` counts) as JSON, not "[object Object]".
                 if (v !== undefined && v !== null)
-                  lines.push(`${indent(6)}<${k}>${escapeXml(typeof v === "object" ? JSON.stringify(v) : String(v))}</${k}>`);
+                  lines.push(
+                    `${indent(6)}<${k}>${escapeXml(typeof v === "object" ? JSON.stringify(v) : String(v))}</${k}>`
+                  );
               }
             }
             if (item.sourcePages && item.sourcePages.length > 0) {
               // pub#837: each page once, with its links to the item and where they sit.
-              const sources = new Map((item.sources ?? []).map((s) => [s.page, s]));
+              const sources = new Map(
+                (item.sources ?? []).map((s) => [s.page, s])
+              );
               lines.push(`${indent(6)}<source-pages>`);
               for (const src of new Set(item.sourcePages)) {
                 const source = sources.get(src);
                 const url = `url="${escapeXml(src)}"`;
-                const sections = Object.entries(source?.sections ?? {}).filter(([, n]) => (n ?? 0) > 0);
+                const sections = Object.entries(source?.sections ?? {}).filter(
+                  ([, n]) => (n ?? 0) > 0
+                );
                 if (!source) {
                   lines.push(`${indent(7)}<page ${url}/>`);
                   continue;
@@ -388,7 +527,9 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
                 }
                 lines.push(`${indent(7)}<page ${attrs}>`);
                 for (const [name, n] of sections)
-                  lines.push(`${indent(8)}<section name="${escapeXml(name)}" links="${escapeXml(String(n))}"/>`);
+                  lines.push(
+                    `${indent(8)}<section name="${escapeXml(name)}" links="${escapeXml(String(n))}"/>`
+                  );
                 lines.push(`${indent(7)}</page>`);
               }
               lines.push(`${indent(6)}</source-pages>`);
@@ -414,7 +555,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}<passed count="${passedRules.length}">`);
     for (const rule of passedRules) {
       lines.push(
-        `${indent(2)}<rule id="${escapeXml(rule.id)}" category="${escapeXml(rule.categoryName)}" scope="${rule.scope}" pages="${rule.pages}">`,
+        `${indent(2)}<rule id="${escapeXml(rule.id)}" category="${escapeXml(rule.categoryName)}" scope="${rule.scope}" pages="${rule.pages}">`
       );
       lines.push(`${indent(3)}<name>${escapeXml(rule.name)}</name>`);
       lines.push(`${indent(2)}</rule>`);
@@ -428,7 +569,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}<not-checked count="${notChecked.length}">`);
     for (const rule of notChecked) {
       lines.push(
-        `${indent(2)}<rule id="${escapeXml(rule.ruleId)}" name="${escapeXml(rule.name)}" check="${escapeXml(rule.check)}" reason="${escapeXml(rule.reason)}"${rule.cause ? ` cause="${rule.cause}"` : ""}>${escapeXml(notCheckedLine(rule))}</rule>`,
+        `${indent(2)}<rule id="${escapeXml(rule.ruleId)}" name="${escapeXml(rule.name)}" check="${escapeXml(rule.check)}" reason="${escapeXml(rule.reason)}"${rule.cause ? ` cause="${rule.cause}"` : ""}>${escapeXml(notCheckedLine(rule))}</rule>`
       );
     }
     lines.push(`${indent(1)}</not-checked>`);
@@ -437,15 +578,19 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   // #1734: cloud checks that did not run, with the reason each carries. Omitted for white-label reports, like
   // the HTML, text and markdown sections: the message and its call to action name squirrelscan signup,
   // credits and the dashboard.
-  const locked = options?.branding?.whiteLabel ? null : lockedRulesMessage(report);
+  const locked = options?.branding?.whiteLabel
+    ? null
+    : lockedRulesMessage(report);
   if (locked) {
-    lines.push(`${indent(1)}<locked-rules count="${locked.count}" audience="${locked.audience}">`);
+    lines.push(
+      `${indent(1)}<locked-rules count="${locked.count}" audience="${locked.audience}">`
+    );
     lines.push(`${indent(2)}<message>${escapeXml(locked.action)}</message>`);
     for (const rule of locked.rules.map(lockedRuleView)) {
       const reason = rule.reason ? ` reason="${rule.reason}"` : "";
       const detail = rule.detail ? ` detail="${escapeXml(rule.detail)}"` : "";
       lines.push(
-        `${indent(2)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"${reason}${detail}/>`,
+        `${indent(2)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"${reason}${detail}/>`
       );
     }
     lines.push(`${indent(1)}</locked-rules>`);

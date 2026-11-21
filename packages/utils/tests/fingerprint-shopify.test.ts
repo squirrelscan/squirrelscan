@@ -22,13 +22,13 @@ function shopifyPage(opts: {
   const blocks = opts.blockOrder
     .map(
       (app) =>
-        `<!-- BEGIN app block: shopify://apps/${app}/blocks/x/abc --><div>${app}</div><!-- END app block -->`,
+        `<!-- BEGIN app block: shopify://apps/${app}/blocks/x/abc --><div>${app}</div><!-- END app block -->`
     )
     .join("");
   const assets = opts.assetOrder
     .map(
       (a) =>
-        `<script src="https://cdn.shopify.com/extensions/${a}/assets/${a}.js" defer="defer"></script>`,
+        `<script src="https://cdn.shopify.com/extensions/${a}/assets/${a}.js" defer="defer"></script>`
     )
     .join("\n");
   return `<!doctype html><html><head><title>Bunion Cushions</title></head><body>
@@ -73,7 +73,9 @@ describe("Shopify cache-entry churn (#1899)", () => {
       ["app block order", { blockOrder: REGENERATED.blockOrder }],
       ["asset tag order", { assetOrder: REGENERATED.assetOrder }],
     ] as const) {
-      const changed = normalizeHtmlForFingerprint(shopifyPage({ ...FIRST, ...over }));
+      const changed = normalizeHtmlForFingerprint(
+        shopifyPage({ ...FIRST, ...over })
+      );
       expect(`${name}: ${changed === base}`).toBe(`${name}: true`);
     }
   });
@@ -84,15 +86,22 @@ describe("Shopify cache-entry churn (#1899)", () => {
     const rendered = shopifyPage(FIRST);
     const failed = rendered.replace(
       "<div>webrex-ai-seo-schema</div>",
-      '<!-- Failed to render app block "webrex" -->',
+      '<!-- Failed to render app block "webrex" -->'
     );
-    expect(normalizeHtmlForFingerprint(failed)).not.toBe(normalizeHtmlForFingerprint(rendered));
+    expect(normalizeHtmlForFingerprint(failed)).not.toBe(
+      normalizeHtmlForFingerprint(rendered)
+    );
   });
 
   test("a dropped block changes the fingerprint even though sorting reorders", () => {
     const three = shopifyPage(FIRST);
-    const two = shopifyPage({ ...FIRST, blockOrder: ["pandectes-gdpr", "klaviyo"] });
-    expect(normalizeHtmlForFingerprint(two)).not.toBe(normalizeHtmlForFingerprint(three));
+    const two = shopifyPage({
+      ...FIRST,
+      blockOrder: ["pandectes-gdpr", "klaviyo"],
+    });
+    expect(normalizeHtmlForFingerprint(two)).not.toBe(
+      normalizeHtmlForFingerprint(three)
+    );
   });
 });
 
@@ -100,31 +109,40 @@ describe("what is deliberately NOT reordered", () => {
   const ext = (n: string) =>
     `<script src="https://cdn.shopify.com/extensions/${n}/a.js"></script>`;
   const plain = (n: string) => `<script src="/assets/${n}.js"></script>`;
-  const sheet = (n: string) => `<link rel="stylesheet" href="/assets/${n}.css">`;
+  const sheet = (n: string) =>
+    `<link rel="stylesheet" href="/assets/${n}.css">`;
 
   test("ordinary scripts keep their order significant", () => {
     // Execution order decides initialization. We have not established that
     // reordering these is immaterial, so it must still rotate the hash.
     const a = `<body>${plain("a")}${plain("b")}</body>`;
     const b = `<body>${plain("b")}${plain("a")}</body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("ordinary stylesheets keep their order significant", () => {
     // The CSS cascade depends on it.
     const a = `<head>${sheet("a")}${sheet("b")}</head>`;
     const b = `<head>${sheet("b")}${sheet("a")}</head>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("sorting never moves a tag past unrelated content", () => {
     const a = `<body>${ext("b")}${ext("a")}<h1>Heading</h1>${ext("d")}${ext("c")}</body>`;
     // Swapping ACROSS the heading is a structural change, not noise.
     const across = `<body>${ext("d")}${ext("c")}<h1>Heading</h1>${ext("b")}${ext("a")}</body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(across));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(across)
+    );
     // Swapping WITHIN each run is noise, and is normalized.
     const within = `<body>${ext("a")}${ext("b")}<h1>Heading</h1>${ext("c")}${ext("d")}</body>`;
-    expect(normalizeHtmlForFingerprint(a)).toBe(normalizeHtmlForFingerprint(within));
+    expect(normalizeHtmlForFingerprint(a)).toBe(
+      normalizeHtmlForFingerprint(within)
+    );
   });
 
   test("markup-looking text inside a textarea or title is left alone", () => {
@@ -132,7 +150,9 @@ describe("what is deliberately NOT reordered", () => {
     // DISPLAYS would change the page while claiming to normalize noise.
     const a = `<body><textarea>${ext("b")}${ext("a")}</textarea></body>`;
     const b = `<body><textarea>${ext("a")}${ext("b")}</textarea></body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
     expect(normalizeHtmlForFingerprint(a)).toBe(a);
   });
 
@@ -141,7 +161,9 @@ describe("what is deliberately NOT reordered", () => {
     // Neutralizing it would reuse a render across an app upgrade.
     const v1 = `<body><script src="/x/019feafe-a942-7fff-96d6-964177000000/app.js"></script></body>`;
     const v2 = `<body><script src="/x/019feafe-a942-7fff-96d6-964177999999/app.js"></script></body>`;
-    expect(normalizeHtmlForFingerprint(v1)).not.toBe(normalizeHtmlForFingerprint(v2));
+    expect(normalizeHtmlForFingerprint(v1)).not.toBe(
+      normalizeHtmlForFingerprint(v2)
+    );
   });
 
   test("a quoted '>' inside an open tag does not end the tag", () => {
@@ -153,7 +175,9 @@ describe("what is deliberately NOT reordered", () => {
   test("a data-id attribute is not the __st bootstrap", () => {
     const a = `<body><script data-id="__st">document.body.textContent="A"</script></body>`;
     const b = `<body><script data-id="__st">document.body.textContent="B"</script></body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("a page with none of this passes through unchanged", () => {
@@ -186,8 +210,13 @@ describe("a block that contains a script", () => {
 
   test("a change to the contained script still moves the fingerprint", () => {
     const a = `<body>${block("aaa", "d95d8a62-c404-4417-b6ab-289c89e9dd61")}${block("bbb", "d95d8a62-c404-4417-b6ab-289c89e9dd61")}</body>`;
-    const changed = a.replace("window.ShopifyAnalytics.meta=", "window.ShopifyAnalytics.other=");
-    expect(normalizeHtmlForFingerprint(changed)).not.toBe(normalizeHtmlForFingerprint(a));
+    const changed = a.replace(
+      "window.ShopifyAnalytics.meta=",
+      "window.ShopifyAnalytics.other="
+    );
+    expect(normalizeHtmlForFingerprint(changed)).not.toBe(
+      normalizeHtmlForFingerprint(a)
+    );
   });
 });
 
@@ -205,7 +234,9 @@ describe("review counterexamples", () => {
     // the rest of the textarea's displayed content to sorting.
     const a = `<body><textarea></textareaX>${ext("b")}${ext("a")}</textarea></body>`;
     const b = `<body><textarea></textareaX>${ext("a")}${ext("b")}</textarea></body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("an apostrophe in an unquoted attribute does not swallow visible markup", () => {
@@ -222,32 +253,42 @@ describe("review counterexamples", () => {
   test("xmp content is text, not markup", () => {
     const a = `<body><xmp>${ext("b")}${ext("a")}</xmp></body>`;
     const b = `<body><xmp>${ext("a")}${ext("b")}</xmp></body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("an id-looking string inside another attribute's value is not an id", () => {
     const a = `<body><script data-note=' id="__st" '>document.title="A"</script></body>`;
     const b = `<body><script data-note=' id="__st" '>document.title="B"</script></body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("a different id that starts with __st is not the bootstrap", () => {
     const a = `<body><script id="__st suffix">document.title="A"</script></body>`;
     const b = `<body><script id="__st suffix">document.title="B"</script></body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("an identity FIELD NAME in an ordinary script is content, not identity", () => {
     // The counterexample verbatim: this script renders its "u" field.
     const alice = `<body><script>document.body.textContent=({"u":"Alice"}).u</script></body>`;
     const bob = `<body><script>document.body.textContent=({"u":"Bob"}).u</script></body>`;
-    expect(normalizeHtmlForFingerprint(alice)).not.toBe(normalizeHtmlForFingerprint(bob));
+    expect(normalizeHtmlForFingerprint(alice)).not.toBe(
+      normalizeHtmlForFingerprint(bob)
+    );
   });
 
   test("the same field inside a recognized analytics payload IS identity", () => {
     const one = `<body><script id="__st">var __st={"u":"fc3e51fed339"}</script></body>`;
     const two = `<body><script id="__st">var __st={"u":"be9f47fdfff1"}</script></body>`;
-    expect(normalizeHtmlForFingerprint(one)).toBe(normalizeHtmlForFingerprint(two));
+    expect(normalizeHtmlForFingerprint(one)).toBe(
+      normalizeHtmlForFingerprint(two)
+    );
   });
 
   test("an identity field mentioned near 'ShopifyAnalytics' is still content", () => {
@@ -255,7 +296,9 @@ describe("review counterexamples", () => {
     // tried and is not tighter: a mention in a COMMENT qualified the whole body.
     const one = `<body><script>/* ShopifyAnalytics */document.body.textContent=({"u":"Alice"}).u</script></body>`;
     const two = `<body><script>/* ShopifyAnalytics */document.body.textContent=({"u":"Bob"}).u</script></body>`;
-    expect(normalizeHtmlForFingerprint(one)).not.toBe(normalizeHtmlForFingerprint(two));
+    expect(normalizeHtmlForFingerprint(one)).not.toBe(
+      normalizeHtmlForFingerprint(two)
+    );
   });
 
   test("an identity field holding something that is not identity-shaped is content", () => {
@@ -263,11 +306,15 @@ describe("review counterexamples", () => {
     // data; one holding a uuid is Shopify's rotating request id.
     const slugA = `<body><script>var x={"requestId":"order-alpha"}</script></body>`;
     const slugB = `<body><script>var x={"requestId":"order-beta"}</script></body>`;
-    expect(normalizeHtmlForFingerprint(slugA)).not.toBe(normalizeHtmlForFingerprint(slugB));
+    expect(normalizeHtmlForFingerprint(slugA)).not.toBe(
+      normalizeHtmlForFingerprint(slugB)
+    );
 
     const uuidA = `<body><script>var x={"requestId":"d95d8a62-c404-4417-b6ab-289c89e9dd61-1788784074"}</script></body>`;
     const uuidB = `<body><script>var x={"requestId":"33449930-e1b6-47fe-934c-09410b1932fe-1788784195"}</script></body>`;
-    expect(normalizeHtmlForFingerprint(uuidA)).toBe(normalizeHtmlForFingerprint(uuidB));
+    expect(normalizeHtmlForFingerprint(uuidA)).toBe(
+      normalizeHtmlForFingerprint(uuidB)
+    );
   });
 
   test("a deleted Cloudflare block cannot join text into a tag the sort then eats", () => {
@@ -278,7 +325,7 @@ describe("review counterexamples", () => {
     const cf = `<script src="/cdn-cgi/challenge-platform/x"></script>`;
     const ghost = (x: string) => "<" + cf + ext(x).slice(1);
     expect(normalizeHtmlForFingerprint(ghost("b") + ext("a"))).not.toBe(
-      normalizeHtmlForFingerprint(ghost("a") + ext("b")),
+      normalizeHtmlForFingerprint(ghost("a") + ext("b"))
     );
   });
 
@@ -287,15 +334,17 @@ describe("review counterexamples", () => {
       `<!-- BEGIN app block: shopify://apps/${x}/b/1 -->${c}<!-- END app block -->`;
     const a = `${block("b", "<p>1</p>")}\u00a0${block("a", "<p>2</p>")}`;
     const b = `${block("a", "<p>2</p>")}\u00a0${block("b", "<p>1</p>")}`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("a canonical or preconnect link to the CDN is metadata, not an asset", () => {
     const canonical = (x: string) =>
       `<link rel="canonical" href="https://cdn.shopify.com/extensions/${x}">`;
-    expect(normalizeHtmlForFingerprint(canonical("z") + canonical("a"))).not.toBe(
-      normalizeHtmlForFingerprint(canonical("a") + canonical("z")),
-    );
+    expect(
+      normalizeHtmlForFingerprint(canonical("z") + canonical("a"))
+    ).not.toBe(normalizeHtmlForFingerprint(canonical("a") + canonical("z")));
   });
 
   test("sorting composes: assets inside blocks survive the block sort", () => {
@@ -308,9 +357,11 @@ describe("review counterexamples", () => {
       `<!-- BEGIN app block: shopify://apps/${x}/b/1 -->${c}<!-- END app block -->`;
     const one = block("b", ext("z") + ext("a")) + block("a", "<p>A</p>");
     const two = block("a", "<p>A</p>") + block("b", ext("z") + ext("a"));
-    expect(normalizeHtmlForFingerprint(one)).toBe(normalizeHtmlForFingerprint(two));
+    expect(normalizeHtmlForFingerprint(one)).toBe(
+      normalizeHtmlForFingerprint(two)
+    );
     expect(normalizeHtmlForFingerprint(normalizeHtmlForFingerprint(one))).toBe(
-      normalizeHtmlForFingerprint(one),
+      normalizeHtmlForFingerprint(one)
     );
   });
 
@@ -321,7 +372,9 @@ describe("review counterexamples", () => {
       `<script data-note="cdn.shopify.com/extensions/" src="/${n}.js"></script>`;
     const a = `<body>${tag("b")}${tag("a")}</body>`;
     const b = `<body>${tag("a")}${tag("b")}</body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("a lookalike hostname is not the extension CDN", () => {
@@ -329,7 +382,9 @@ describe("review counterexamples", () => {
       `<script src="https://not-cdn.shopify.com/extensions/${n}/a.js"></script>`;
     const a = `<body>${tag("b")}${tag("a")}</body>`;
     const b = `<body>${tag("a")}${tag("b")}</body>`;
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("a nested app fence does not let a sort cross a boundary", () => {
@@ -340,7 +395,9 @@ describe("review counterexamples", () => {
     const a = `<body>${nested("aaa")}</body>`;
     const b = `<body>${nested("bbb")}</body>`;
     // Different inner content is a real difference; nothing may collapse it.
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
     // And the outer div is never relocated.
     expect(normalizeHtmlForFingerprint(a)).toContain("<div>outer");
   });
@@ -370,7 +427,8 @@ describe("hostile and malformed input", () => {
   });
 
   test("many unclosed app-block BEGINs do not rescan the document", () => {
-    const hostile = "<!-- BEGIN app block: shopify://apps/x/blocks/y/z -->".repeat(4000);
+    const hostile =
+      "<!-- BEGIN app block: shopify://apps/x/blocks/y/z -->".repeat(4000);
     const started = performance.now();
     normalizeHtmlForFingerprint(hostile);
     expect(performance.now() - started).toBeLessThan(500);

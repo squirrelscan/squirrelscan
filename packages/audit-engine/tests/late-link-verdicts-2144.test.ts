@@ -7,17 +7,23 @@
 // mode (`externalLinks.lateBinding` + `runStreamingRules({ linkVerdicts })`).
 // Ordering is asserted on events, never on absolute milliseconds.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
+import { getAllRuleIds, LINK_VERDICT_RULE_IDS } from "@squirrelscan/rules";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-import { getAllRuleIds, LINK_VERDICT_RULE_IDS } from "@squirrelscan/rules";
-
 import { runStreamingRules, type StreamingRulePhase } from "../src/adapter";
-import { BULK_CHECK_CHUNK_SIZE, type ExternalCheckResult } from "../src/external-checker";
-import { LINK_RULES_RESERVE_MS, linkVerdictDeadlineAt } from "../src/late-link-verdicts";
+import {
+  BULK_CHECK_CHUNK_SIZE,
+  type ExternalCheckResult,
+} from "../src/external-checker";
+import {
+  LINK_RULES_RESERVE_MS,
+  linkVerdictDeadlineAt,
+} from "../src/late-link-verdicts";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const T = 60_000;
@@ -47,10 +53,14 @@ function serveSite(count: number): { home: string; links: string[] } {
       const html = (body: string) =>
         new Response(
           `<!doctype html><html lang="en"><head><title>Fixture home page</title></head><body><h1>Fixture</h1>${body}</body></html>`,
-          { headers: { "content-type": "text/html; charset=utf-8" } },
+          { headers: { "content-type": "text/html; charset=utf-8" } }
         );
       if (url.pathname === "/") {
-        return html(links.map((href, i) => `<p><a href="${href}">Target ${i}</a></p>`).join(""));
+        return html(
+          links
+            .map((href, i) => `<p><a href="${href}">Target ${i}</a></p>`)
+            .join("")
+        );
       }
       if (url.pathname.startsWith("/gone-")) {
         localRequests.push(url.pathname);
@@ -67,7 +77,9 @@ function serveSite(count: number): { home: string; links: string[] } {
   servers.push(server);
   port = server.port as number;
   const links = Array.from({ length: count }, (_, i) =>
-    i % 10 === 0 ? `http://${LINK_HOST}:${port}/gone-${i}` : `http://${LINK_HOST}:${port}/ok-${i}`,
+    i % 10 === 0
+      ? `http://${LINK_HOST}:${port}/gone-${i}`
+      : `http://${LINK_HOST}:${port}/ok-${i}`
   );
   return { home: `http://localhost:${port}/`, links };
 }
@@ -78,7 +90,13 @@ const resolveHost = async (hostname: string): Promise<string[]> =>
 /** The service's verdict for a link: its true status, as the local checker would find it. */
 function verdict(url: string): ExternalCheckResult {
   const gone = url.includes("/gone-");
-  return { href: url, status: gone ? 404 : 200, error: null, redirectTarget: null, fromCache: false };
+  return {
+    href: url,
+    status: gone ? 404 : 200,
+    error: null,
+    redirectTarget: null,
+    fromCache: false,
+  };
 }
 
 /** A gate a test opens when it chooses. */
@@ -113,7 +131,9 @@ const CONFIG = {
   internal_links: { enabled: false },
 } as unknown as Config;
 
-async function crawl(home: string): Promise<{ storage: SQLiteStorage; crawlId: string }> {
+async function crawl(
+  home: string
+): Promise<{ storage: SQLiteStorage; crawlId: string }> {
   const crawler = await Effect.runPromise(
     createCrawler({
       config: {
@@ -128,7 +148,7 @@ async function crawl(home: string): Promise<{ storage: SQLiteStorage; crawlId: s
         incremental: false,
         useCacheControl: false,
       },
-    }),
+    })
   );
   const crawlId = await Effect.runPromise(crawler.start(home, home));
   return { storage: crawler.storage as SQLiteStorage, crawlId };
@@ -153,7 +173,10 @@ async function audit(home: string, o: AuditOptions) {
   const { storage, crawlId } = await crawl(home);
   const events = o.events ?? [];
   const config = o.alsoEnable
-    ? ({ ...CONFIG, rules: { enable: [...CONFIG.rules!.enable!, ...o.alsoEnable] } } as Config)
+    ? ({
+        ...CONFIG,
+        rules: { enable: [...CONFIG.rules!.enable!, ...o.alsoEnable] },
+      } as Config)
     : CONFIG;
   const preRules = await Effect.runPromise(
     runStreamingPreRules(storage, crawlId, config, {
@@ -162,21 +185,24 @@ async function audit(home: string, o: AuditOptions) {
         config: CONFIG.external_links,
         linkCache: null,
         bulkChecker: o.bulkChecker,
-        ...(o.budgetMs !== undefined ? { limits: { budgetMs: o.budgetMs } } : {}),
+        ...(o.budgetMs !== undefined
+          ? { limits: { budgetMs: o.budgetMs } }
+          : {}),
         ...(o.late ? { lateBinding: {} } : {}),
       },
-    }),
+    })
   );
   events.push("pre-rules:end");
   const ran = (await Effect.runPromise(
     runStreamingRules(storage, crawlId, config, preRules.assets, undefined, {
-      onPhase: (phase: StreamingRulePhase, boundary) => events.push(`${phase}:${boundary}`),
+      onPhase: (phase: StreamingRulePhase, boundary) =>
+        events.push(`${phase}:${boundary}`),
       ...(preRules.linkVerdicts ? { linkVerdicts: preRules.linkVerdicts } : {}),
       onLinkVerdicts: (boundary) => {
         events.push(`link-verdicts:${boundary}`);
         if (boundary === "start") o.onLinkVerdictsStart?.();
       },
-    }),
+    })
   )) as unknown as Ran;
   return { storage, crawlId, preRules, ran, events };
 }
@@ -192,27 +218,40 @@ const checksOf = (ran: Ran, id: string) => ran.siteRuleResults.get(id) ?? [];
 
 async function externalRows(storage: SQLiteStorage, crawlId: string) {
   const links = await Effect.runPromise(storage.getLinks(crawlId));
-  return links.filter((l) => !l.isInternal).map((l) => ({ href: l.href, status: l.status }));
+  return links
+    .filter((l) => !l.isInternal)
+    .map((l) => ({ href: l.href, status: l.status }));
 }
 
 describe("linkVerdictDeadlineAt", () => {
   test("is the earliest of the link budget and the run deadline less the reserve", () => {
-    expect(linkVerdictDeadlineAt({ checkStartedAt: 1_000, linkBudgetMs: 60_000 })).toBe(61_000);
-    expect(linkVerdictDeadlineAt({ checkStartedAt: 1_000, runDeadlineAt: 100_000 })).toBe(
-      100_000 - LINK_RULES_RESERVE_MS,
-    );
     expect(
-      linkVerdictDeadlineAt({ checkStartedAt: 1_000, linkBudgetMs: 60_000, runDeadlineAt: 80_000 }),
+      linkVerdictDeadlineAt({ checkStartedAt: 1_000, linkBudgetMs: 60_000 })
+    ).toBe(61_000);
+    expect(
+      linkVerdictDeadlineAt({ checkStartedAt: 1_000, runDeadlineAt: 100_000 })
+    ).toBe(100_000 - LINK_RULES_RESERVE_MS);
+    expect(
+      linkVerdictDeadlineAt({
+        checkStartedAt: 1_000,
+        linkBudgetMs: 60_000,
+        runDeadlineAt: 80_000,
+      })
     ).toBe(80_000 - LINK_RULES_RESERVE_MS);
   });
 
   test("no bound, or a zero, negative or non-numeric one, is no deadline", () => {
     expect(linkVerdictDeadlineAt({ checkStartedAt: 1_000 })).toBeUndefined();
     for (const linkBudgetMs of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(linkVerdictDeadlineAt({ checkStartedAt: 1_000, linkBudgetMs })).toBeUndefined();
+      expect(
+        linkVerdictDeadlineAt({ checkStartedAt: 1_000, linkBudgetMs })
+      ).toBeUndefined();
     }
     expect(
-      linkVerdictDeadlineAt({ checkStartedAt: 1_000, runDeadlineAt: Number.POSITIVE_INFINITY }),
+      linkVerdictDeadlineAt({
+        checkStartedAt: 1_000,
+        runDeadlineAt: Number.POSITIVE_INFINITY,
+      })
     ).toBeUndefined();
   });
 });
@@ -253,11 +292,11 @@ describe("late-bound link verdicts (repo#2144)", () => {
       expect(at("link-verdicts:end")).toBeLessThan(at("site-rules:end"));
 
       // And the link rules read the verdicts that arrived.
-      expect(checksOf(late.ran, "links/dead-links").map((c) => c.message)).toEqual([
-        "Checked 30 external link(s); 3 dead",
-      ]);
+      expect(
+        checksOf(late.ran, "links/dead-links").map((c) => c.message)
+      ).toEqual(["Checked 30 external link(s); 3 dead"]);
     },
-    T,
+    T
   );
 
   test(
@@ -272,11 +311,14 @@ describe("late-bound link verdicts (repo#2144)", () => {
       // after security/supabase-rls in the registry, so it is first-pass and
       // the rule lands after it only when it runs late.
       const ids = await getAllRuleIds();
-      expect(ids.indexOf("security/security-txt")).toBeGreaterThan(ids.indexOf("security/supabase-rls"));
+      expect(ids.indexOf("security/security-txt")).toBeGreaterThan(
+        ids.indexOf("security/supabase-rls")
+      );
       expect(LINK_VERDICT_RULE_IDS.has("security/security-txt")).toBe(false);
 
       const { home } = serveSite(3);
-      const service = async (urls: string[]) => new Map(urls.map((u) => [u, verdict(u)] as const));
+      const service = async (urls: string[]) =>
+        new Map(urls.map((u) => [u, verdict(u)] as const));
       const late = await audit(home, {
         bulkChecker: service,
         late: true,
@@ -286,19 +328,22 @@ describe("late-bound link verdicts (repo#2144)", () => {
       const order = [...late.ran.siteRuleResults.keys()];
       expect(order).toContain("security/supabase-rls");
       expect(order).toContain("security/security-txt");
-      expect(order.indexOf("security/supabase-rls")).toBeGreaterThan(order.indexOf("security/security-txt"));
+      expect(order.indexOf("security/supabase-rls")).toBeGreaterThan(
+        order.indexOf("security/security-txt")
+      );
       for (const check of checksOf(late.ran, "security/supabase-rls")) {
         expect(check.skipReason).not.toBe("external-requests-off");
       }
     },
-    T,
+    T
   );
 
   test(
     "verdicts in time: every rule's findings equal the blocking mode's",
     async () => {
       const { home } = serveSite(30);
-      const service = async (urls: string[]) => new Map(urls.map((u) => [u, verdict(u)] as const));
+      const service = async (urls: string[]) =>
+        new Map(urls.map((u) => [u, verdict(u)] as const));
 
       const blocking = await audit(home, { bulkChecker: service, late: false });
       const late = await audit(home, { bulkChecker: service, late: true });
@@ -311,19 +356,22 @@ describe("late-bound link verdicts (repo#2144)", () => {
       // ...and every rule, link rules included, says exactly what the blocking run says.
       expect(normalised(late.ran)).toEqual(normalised(blocking.ran));
       for (const id of LINK_VERDICT_RULE_IDS) {
-        expect(late.ran.ruleResultsMap.has(id)).toBe(blocking.ran.ruleResultsMap.has(id));
+        expect(late.ran.ruleResultsMap.has(id)).toBe(
+          blocking.ran.ruleResultsMap.has(id)
+        );
       }
       // The same rows and coverage stat were stored.
       expect(await externalRows(late.storage, late.crawlId)).toEqual(
-        await externalRows(blocking.storage, blocking.crawlId),
+        await externalRows(blocking.storage, blocking.crawlId)
       );
       const statsOf = async (r: typeof late) =>
-        (await Effect.runPromise(r.storage.getStats(r.crawlId)))?.externalLinkCheck;
+        (await Effect.runPromise(r.storage.getStats(r.crawlId)))
+          ?.externalLinkCheck;
       expect(await statsOf(late)).toEqual(await statsOf(blocking));
       // Nothing went to the local checker: the service answered every link.
       expect(localRequests).toEqual([]);
     },
-    T,
+    T
   );
 
   test(
@@ -335,13 +383,18 @@ describe("late-bound link verdicts (repo#2144)", () => {
       const lateAnswer = gate();
       let lateAnswered = false;
       const service = async (urls: string[]) => {
-        if (urls.includes(links[0]!)) return new Map(urls.map((u) => [u, verdict(u)] as const));
+        if (urls.includes(links[0]!))
+          return new Map(urls.map((u) => [u, verdict(u)] as const));
         await lateAnswer.opened;
         lateAnswered = true;
         return new Map(urls.map((u) => [u, verdict(u)] as const));
       };
 
-      const late = await audit(home, { bulkChecker: service, late: true, budgetMs: 400 });
+      const late = await audit(home, {
+        bulkChecker: service,
+        late: true,
+        budgetMs: 400,
+      });
       const handle = late.preRules.linkVerdicts!;
       const settlement = await handle.settle();
 
@@ -351,19 +404,30 @@ describe("late-bound link verdicts (repo#2144)", () => {
       expect(settlement.unverifiable).toBe(10);
 
       // Unverifiable, never broken: counted as out of time, with no row.
-      const stats = (await Effect.runPromise(late.storage.getStats(late.crawlId)))?.externalLinkCheck;
-      expect(stats).toMatchObject({ found: count, checked: count, outOfTime: 10 });
+      const stats = (
+        await Effect.runPromise(late.storage.getStats(late.crawlId))
+      )?.externalLinkCheck;
+      expect(stats).toMatchObject({
+        found: count,
+        checked: count,
+        outOfTime: 10,
+      });
       const rows = await externalRows(late.storage, late.crawlId);
       expect(rows).toHaveLength(BULK_CHECK_CHUNK_SIZE);
       const unanswered = links.slice(BULK_CHECK_CHUNK_SIZE);
-      for (const href of unanswered) expect(rows.some((r) => r.href === href)).toBe(false);
+      for (const href of unanswered)
+        expect(rows.some((r) => r.href === href)).toBe(false);
       const dead = checksOf(late.ran, "links/dead-links");
-      expect(dead.map((c) => c.message).join("\n")).toContain(`${BULK_CHECK_CHUNK_SIZE} external link(s)`);
+      expect(dead.map((c) => c.message).join("\n")).toContain(
+        `${BULK_CHECK_CHUNK_SIZE} external link(s)`
+      );
       const broken = checksOf(late.ran, "links/broken-external-links");
       const brokenIds = broken.flatMap((c) => c.items?.map((i) => i.id) ?? []);
       for (const href of unanswered) expect(brokenIds).not.toContain(href);
       // Reported as not checked (skipped, so never scored), as a link the blocking check's budget ran out on.
-      expect(broken.filter((c) => c.status === "skipped").map((c) => c.message)).toEqual([
+      expect(
+        broken.filter((c) => c.status === "skipped").map((c) => c.message)
+      ).toEqual([
         `10 of ${count} external link(s) were not checked: the link check ran out of time before reaching them`,
       ]);
       // Nothing was checked locally after the deadline either.
@@ -374,17 +438,20 @@ describe("late-bound link verdicts (repo#2144)", () => {
       lateAnswer.open();
       await handle.checkDone;
       await Bun.sleep(10);
-      expect(await externalRows(late.storage, late.crawlId)).toEqual(before.rows);
-      expect((await Effect.runPromise(late.storage.getStats(late.crawlId)))?.externalLinkCheck).toEqual(
-        before.stats,
+      expect(await externalRows(late.storage, late.crawlId)).toEqual(
+        before.rows
       );
+      expect(
+        (await Effect.runPromise(late.storage.getStats(late.crawlId)))
+          ?.externalLinkCheck
+      ).toEqual(before.stats);
       expect(await handle.settle()).toBe(settlement);
       expect(normalised(late.ran)).toEqual(before.findings);
       // (The check had already abandoned the call at the deadline, so the
       // answer may or may not have been read; either way it bound nothing.)
       void lateAnswered;
     },
-    T,
+    T
   );
 
   test(
@@ -402,12 +469,20 @@ describe("late-bound link verdicts (repo#2144)", () => {
         };
       };
 
-      const late = await audit(home, { bulkChecker: failingService(), late: true });
+      const late = await audit(home, {
+        bulkChecker: failingService(),
+        late: true,
+      });
       const lateLocal = [...localRequests];
-      const blocking = await audit(home, { bulkChecker: failingService(), late: false });
+      const blocking = await audit(home, {
+        bulkChecker: failingService(),
+        late: false,
+      });
 
       // The second chunk's links went to the local checker.
-      const fellBack = links.slice(BULK_CHECK_CHUNK_SIZE).map((href) => new URL(href).pathname);
+      const fellBack = links
+        .slice(BULK_CHECK_CHUNK_SIZE)
+        .map((href) => new URL(href).pathname);
       expect(new Set(lateLocal)).toEqual(new Set(fellBack));
 
       const settlement = await late.preRules.linkVerdicts!.settle();
@@ -416,17 +491,21 @@ describe("late-bound link verdicts (repo#2144)", () => {
       expect(settlement.results).toHaveLength(count);
 
       // Complete: one verdict per link, and every broken link found, local ones included.
-      expect(await externalRows(late.storage, late.crawlId)).toHaveLength(count);
-      expect(checksOf(late.ran, "links/dead-links").map((c) => c.message)).toEqual([
-        `Checked ${count} external link(s); ${count / 10} dead`,
-      ]);
-      const brokenIds = checksOf(late.ran, "links/broken-external-links").flatMap(
-        (c) => c.items?.map((i) => i.id) ?? [],
+      expect(await externalRows(late.storage, late.crawlId)).toHaveLength(
+        count
       );
-      for (const href of links.filter((l) => l.includes("/gone-"))) expect(brokenIds).toContain(href);
+      expect(
+        checksOf(late.ran, "links/dead-links").map((c) => c.message)
+      ).toEqual([`Checked ${count} external link(s); ${count / 10} dead`]);
+      const brokenIds = checksOf(
+        late.ran,
+        "links/broken-external-links"
+      ).flatMap((c) => c.items?.map((i) => i.id) ?? []);
+      for (const href of links.filter((l) => l.includes("/gone-")))
+        expect(brokenIds).toContain(href);
       // And the same report the blocking mode builds from the same failure.
       expect(normalised(late.ran)).toEqual(normalised(blocking.ran));
     },
-    T,
+    T
   );
 });

@@ -1,8 +1,8 @@
 // images/optimized - Image compression analysis
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Known image CDN domains that typically serve optimized images
 const imageCdnDomains = [

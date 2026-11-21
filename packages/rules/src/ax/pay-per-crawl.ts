@@ -4,7 +4,11 @@ import type { AgentAccessProbe } from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { answered, notCheckedCheck, notCheckedReason } from "./discovery-probe-state";
+import {
+  answered,
+  notCheckedCheck,
+  notCheckedReason,
+} from "./discovery-probe-state";
 
 function mechanismFor(signal: string | null): string {
   switch (signal) {
@@ -57,8 +61,8 @@ export const payPerCrawlRule: Rule = {
           "pay-per-crawl",
           "Monetized agent access",
           { notChecked: silent.map((p) => p.userAgent) },
-          notCheckedReason(silent),
-        ),
+          notCheckedReason(silent)
+        )
       );
       return { checks };
     }
@@ -74,7 +78,9 @@ export const payPerCrawlRule: Rule = {
       return { checks };
     }
 
-    const mechanisms = [...new Set(charged.map((p) => mechanismFor(p.paymentSignal)))];
+    const mechanisms = [
+      ...new Set(charged.map((p) => mechanismFor(p.paymentSignal))),
+    ];
     checks.push({
       name: "pay-per-crawl",
       status: "info",
@@ -90,7 +96,8 @@ export const payPerCrawlRule: Rule = {
 
     // A real person's in-the-moment AI-assistant request being the thing that
     // gets billed, while a normal browser sails through, is the harmful case.
-    const browserOk = browser != null && browser.status >= 200 && browser.status < 300;
+    const browserOk =
+      browser != null && browser.status >= 200 && browser.status < 300;
     if (claudeUser?.paymentRequired && browserOk) {
       checks.push({
         name: "pay-per-crawl-user-action",
@@ -98,7 +105,10 @@ export const payPerCrawlRule: Rule = {
         message:
           "Claude-User (a live user-action fetch) is charged HTTP 402 while browsers get a normal 2xx response, this bills a real person's in-the-moment question, not a background crawl",
         value: "user-action-charged",
-        details: { claudeUserStatus: claudeUser.status, browserStatus: browser?.status ?? null },
+        details: {
+          claudeUserStatus: claudeUser.status,
+          browserStatus: browser?.status ?? null,
+        },
       });
     }
 

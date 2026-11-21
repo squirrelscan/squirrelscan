@@ -7,15 +7,19 @@
 // out. A page parsed before the parser knew these links (an incremental crawl
 // reusing a stored parse) still has them in `links`; that is covered too.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
+
+import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
+import { parsePage } from "@squirrelscan/parser";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
-import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
-import { parsePage } from "@squirrelscan/parser";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -49,9 +53,13 @@ function serveSite(): string {
       const url = new URL(req.url);
       requested.push(url.pathname);
       const ok = (body: string) =>
-        new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
-      if (url.pathname === "/") return ok(html(`<a href="/about">About</a>${FOOTER}`));
-      if (url.pathname === "/about") return ok(html(`<a href="/">Home</a>${FOOTER}`));
+        new Response(body, {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      if (url.pathname === "/")
+        return ok(html(`<a href="/about">About</a>${FOOTER}`));
+      if (url.pathname === "/about")
+        return ok(html(`<a href="/">Home</a>${FOOTER}`));
       // Cloudflare's answer to a direct request for the obfuscation path.
       return new Response(html("Not found"), {
         status: 404,
@@ -74,20 +82,36 @@ const CONFIG = {
 function rules(
   storage: SQLiteStorage,
   crawlId: string,
-  engine: "v1" | "v2",
+  engine: "v1" | "v2"
 ): Promise<CheckResult[]> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const preRules = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
+      const preRules = yield* runStreamingPreRules(
+        storage,
+        crawlId,
+        CONFIG,
+        {}
+      );
       if (engine === "v1") {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        const ran = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, preRules.assets);
+        const ran = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          preRules.assets
+        );
         return ran.siteRuleResults.get("links/broken-links") ?? [];
       }
-      const ran = yield* runStreamingRules(storage, crawlId, CONFIG, preRules.assets);
+      const ran = yield* runStreamingRules(
+        storage,
+        crawlId,
+        CONFIG,
+        preRules.assets
+      );
       return ran.siteRuleResults.get("links/broken-links") ?? [];
-    }) as Effect.Effect<CheckResult[], never, never>,
+    }) as Effect.Effect<CheckResult[], never, never>
   );
 }
 
@@ -108,13 +132,19 @@ async function crawlAndAudit(engine: "v1" | "v2", followLinks: boolean) {
         useCacheControl: false,
         disableLinkDiscovery: !followLinks,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   return rules(crawler.storage as SQLiteStorage, crawlId, engine);
 }
 
-function pageRecord(origin: string, path: string, parsedData: string | null): PageRecord {
+function pageRecord(
+  origin: string,
+  path: string,
+  parsedData: string | null
+): PageRecord {
   const url = `${origin}${path}`;
   const body = html(`<a href="/about">About</a>${FOOTER}`);
   return {
@@ -171,11 +201,14 @@ async function storedParseAudit(engine: "v1" | "v2") {
         bytesTotal: 0,
         avgLoadTimeMs: 0,
       },
-    } as never),
+    } as never)
   );
   // The crawler's own serialization of today's parse, with `links` and
   // `contactLinks` as a parse before pub#811 stored them.
-  const { document: _doc, ...parsed } = parsePage(pageRecord(origin, "/", null).html!, `${origin}/`);
+  const { document: _doc, ...parsed } = parsePage(
+    pageRecord(origin, "/", null).html!,
+    `${origin}/`
+  );
   const oldParse = JSON.stringify({
     ...parsed,
     links: [
@@ -185,12 +218,20 @@ async function storedParseAudit(engine: "v1" | "v2") {
         text: "[email protected]",
         isInternal: true,
       },
-      { url: `${origin}/cdn-cgi/l/email-protection`, text: "[email protected]", isInternal: true },
+      {
+        url: `${origin}/cdn-cgi/l/email-protection`,
+        text: "[email protected]",
+        isInternal: true,
+      },
     ],
     contactLinks: [],
   });
-  await Effect.runPromise(storage.upsertPage(crawlId, pageRecord(origin, "/", oldParse)));
-  await Effect.runPromise(storage.upsertPage(crawlId, pageRecord(origin, "/about", null)));
+  await Effect.runPromise(
+    storage.upsertPage(crawlId, pageRecord(origin, "/", oldParse))
+  );
+  await Effect.runPromise(
+    storage.upsertPage(crawlId, pageRecord(origin, "/about", null))
+  );
   try {
     return await rules(storage, crawlId, engine);
   } finally {
@@ -212,7 +253,10 @@ for (const engine of ["v1", "v2"] as const) {
         expect(requested.filter((p) => p.startsWith("/cdn-cgi/"))).toEqual([]);
         const row = brokenLinksRow(checks);
         // Two obfuscated addresses on each of the two pages.
-        expect(row.details).toMatchObject({ emailProtectionLinks: 4, linkTargets: 2 });
+        expect(row.details).toMatchObject({
+          emailProtectionLinks: 4,
+          linkTargets: 2,
+        });
       });
     }
 

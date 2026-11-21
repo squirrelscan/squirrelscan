@@ -63,23 +63,31 @@ describe("parseByteSize", () => {
 
 describe("[storage] content_store_max_bytes", () => {
   test("is optional, so an unset cap leaves the CLI default in force", () => {
-    expect(StorageConfigSchema.parse({}).content_store_max_bytes).toBeUndefined();
+    expect(
+      StorageConfigSchema.parse({}).content_store_max_bytes
+    ).toBeUndefined();
   });
 
   test("normalizes a size string to bytes", () => {
-    expect(StorageConfigSchema.parse({ content_store_max_bytes: "4GB" }).content_store_max_bytes).toBe(
-      4 * GiB,
-    );
     expect(
-      StorageConfigSchema.parse({ content_store_max_bytes: 2_000_000_000 }).content_store_max_bytes,
+      StorageConfigSchema.parse({ content_store_max_bytes: "4GB" })
+        .content_store_max_bytes
+    ).toBe(4 * GiB);
+    expect(
+      StorageConfigSchema.parse({ content_store_max_bytes: 2_000_000_000 })
+        .content_store_max_bytes
     ).toBe(2_000_000_000);
   });
 
   test("rejects a bad value with a message that names the setting", () => {
-    const result = StorageConfigSchema.safeParse({ content_store_max_bytes: "lots" });
+    const result = StorageConfigSchema.safeParse({
+      content_store_max_bytes: "lots",
+    });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0]!.message).toContain("content_store_max_bytes");
+      expect(result.error.issues[0]!.message).toContain(
+        "content_store_max_bytes"
+      );
     }
   });
 });

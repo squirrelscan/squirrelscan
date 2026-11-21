@@ -20,10 +20,18 @@ function findTagEnd(html: string, start: number): number {
   return -1;
 }
 
-function openingTagName(lowerHtml: string, start: number, end: number): string | null {
+function openingTagName(
+  lowerHtml: string,
+  start: number,
+  end: number
+): string | null {
   let cursor = start + 1;
   while (cursor < end && /\s/.test(lowerHtml[cursor])) cursor++;
-  if (lowerHtml[cursor] === "/" || lowerHtml[cursor] === "!" || lowerHtml[cursor] === "?") {
+  if (
+    lowerHtml[cursor] === "/" ||
+    lowerHtml[cursor] === "!" ||
+    lowerHtml[cursor] === "?"
+  ) {
     return null;
   }
   const nameStart = cursor;
@@ -40,7 +48,12 @@ function openingTagName(lowerHtml: string, start: number, end: number): string |
   return cursor > nameStart ? lowerHtml.slice(nameStart, cursor) : null;
 }
 
-function findClosingTagEnd(lowerHtml: string, html: string, tag: string, start: number): number {
+function findClosingTagEnd(
+  lowerHtml: string,
+  html: string,
+  tag: string,
+  start: number
+): number {
   const prefix = `</${tag}`;
   let cursor = start;
   while (cursor < html.length) {
@@ -67,8 +80,13 @@ function findClosingTagEnd(lowerHtml: string, html: string, tag: string, start: 
  * intentionally an approximate text extractor for hot paths that do not need a
  * DOM; it avoids backtracking regexes on hostile or malformed response bodies.
  */
-export function stripHtmlForText(html: string, options: HtmlTextOptions = {}): string {
-  const excluded = new Set((options.exclude ?? []).map((tag) => tag.toLowerCase()));
+export function stripHtmlForText(
+  html: string,
+  options: HtmlTextOptions = {}
+): string {
+  const excluded = new Set(
+    (options.exclude ?? []).map((tag) => tag.toLowerCase())
+  );
   const lowerHtml = html.toLowerCase();
   const parts: string[] = [];
   let cursor = 0;

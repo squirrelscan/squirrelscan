@@ -1,8 +1,8 @@
 // images/srcset - Responsive images check
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const srcsetRule: Rule = {
   meta: {

@@ -8,7 +8,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { buildTechInputs, detectReportTechnologiesMulti } from "../src/technologies";
+import {
+  buildTechInputs,
+  detectReportTechnologiesMulti,
+} from "../src/technologies";
 
 const REF = "abcdefghijklmnopqrst";
 // Key-shaped values are assembled at run time so no literal sits in this file.
@@ -28,7 +31,7 @@ function filler(count: number): string {
     (_, i) =>
       // URLs, quotes, a template literal and a regex literal in every function:
       // string-heavy code, as vendor bundles are, before the app's config.
-      `export function f${i}(x){let y=x*${i + 3};const u="https://www.google.com/a/${i}?q='"+y,t=\`//t/\${y}\`,r=/["']\\/\\//.test(u);for(let i=0;i<${(i % 5) + 2};i++)y=(y^${i * 7})+${i % 11}+(r?t.length:u.length);return y}`,
+      `export function f${i}(x){let y=x*${i + 3};const u="https://www.google.com/a/${i}?q='"+y,t=\`//t/\${y}\`,r=/["']\\/\\//.test(u);for(let i=0;i<${(i % 5) + 2};i++)y=(y^${i * 7})+${i % 11}+(r?t.length:u.length);return y}`
   );
   return `${fns.join("\n")}\nexport const all=[${Array.from({ length: count }, (_, i) => `f${i}`).join(",")}];`;
 }
@@ -38,7 +41,7 @@ async function bundle(name: string, appCode: string): Promise<string> {
   writeFileSync(join(dir, `${name}-filler.js`), filler(3000));
   writeFileSync(
     join(dir, `${name}.js`),
-    `import { all } from "./${name}-filler.js";\nglobalThis.__sum = all.reduce((n, f) => n + f(1), 0);\n${appCode}\n`,
+    `import { all } from "./${name}-filler.js";\nglobalThis.__sum = all.reduce((n, f) => n + f(1), 0);\n${appCode}\n`
   );
   const result = await Bun.build({
     entrypoints: [join(dir, `${name}.js`)],
@@ -60,7 +63,7 @@ function detect(code: string): string[] {
         html: `<!doctype html><div id="root"></div><script type="module" src="/assets/index-1.js"></script>`,
       },
     ],
-    [{ url, content: code, sourcePages: ["https://example.com/"] }],
+    [{ url, content: code, sourcePages: ["https://example.com/"] }]
   );
   return detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
 }
@@ -75,7 +78,7 @@ describe("vendor config at the end of a real minified bundle", () => {
     const code = await bundle(
       "sb",
       `function mk(u,k){let h=0;for(const c of u+k)h=(h*31+c.charCodeAt(0))|0;return{u,k,h,from:t=>t+h}}
-globalThis.__c = mk("https://${REF}.supabase.co","${JWT}");`,
+globalThis.__c = mk("https://${REF}.supabase.co","${JWT}");`
     );
     expect(code).not.toContain("createClient");
     expectLateConfig(code, `${REF}.supabase.co`);
@@ -85,7 +88,7 @@ globalThis.__c = mk("https://${REF}.supabase.co","${JWT}");`,
   test("Supabase: a publishable key and an object config", async () => {
     const code = await bundle(
       "sb2",
-      `globalThis.__c = {supabaseUrl:"https://${REF}.supabase.co/",anon:"sb_publishable_${"y".repeat(24)}"};`,
+      `globalThis.__c = {supabaseUrl:"https://${REF}.supabase.co/",anon:"sb_publishable_${"y".repeat(24)}"};`
     );
     expectLateConfig(code, `${REF}.supabase.co`);
     expect(detect(code)).toContain("supabase");
@@ -95,7 +98,7 @@ globalThis.__c = mk("https://${REF}.supabase.co","${JWT}");`,
     const code = await bundle(
       "fb",
       `function init(c){let n=0;for(const k in c)n+=String(c[k]).length;return n}
-globalThis.__f = init({"authDomain":"demo-app.firebaseapp.com",projectId:"demo-app",storageBucket:"demo-app.appspot.com"});`,
+globalThis.__f = init({"authDomain":"demo-app.firebaseapp.com",projectId:"demo-app",storageBucket:"demo-app.appspot.com"});`
     );
     expectLateConfig(code, "demo-app.firebaseapp.com");
     expect(detect(code)).toContain("firebase");
@@ -105,7 +108,7 @@ globalThis.__f = init({"authDomain":"demo-app.firebaseapp.com",projectId:"demo-a
     const code = await bundle(
       "ck",
       `function Provider(p){let n=0;for(const k in p)n+=String(p[k]).length;return n}
-globalThis.__p = Provider({publishableKey:"${CLERK_KEY}",afterSignOutUrl:"/"});`,
+globalThis.__p = Provider({publishableKey:"${CLERK_KEY}",afterSignOutUrl:"/"});`
     );
     expectLateConfig(code, CLERK_KEY);
     expect(detect(code)).toContain("clerk");
@@ -115,7 +118,7 @@ globalThis.__p = Provider({publishableKey:"${CLERK_KEY}",afterSignOutUrl:"/"});`
     const code = await bundle(
       "ck2",
       `function Provider(p){return String(p.publishableKey||"").length}
-globalThis.__p = Provider({publishableKey: globalThis.__pk || "${CLERK_KEY}"});`,
+globalThis.__p = Provider({publishableKey: globalThis.__pk || "${CLERK_KEY}"});`
     );
     // the minifier keeps `publishableKey:globalThis.__pk||"pk_..."`: the property
     // and the literal are one expression, so it reads as the provider's key
@@ -125,7 +128,8 @@ globalThis.__p = Provider({publishableKey: globalThis.__pk || "${CLERK_KEY}"});`
   test("the filler alone detects none of them", async () => {
     const code = await bundle("none", `globalThis.__n = 1;`);
     const ids = detect(code);
-    for (const id of ["supabase", "firebase", "clerk"]) expect(ids).not.toContain(id);
+    for (const id of ["supabase", "firebase", "clerk"])
+      expect(ids).not.toContain(id);
   });
 });
 
@@ -135,16 +139,23 @@ describe("alignment sweep: string-heavy code before the config", () => {
   const UNIT = `var a="https://www.example.com/x//y",b='it\\'s "q"',c=\`t//\${a}\`,d=/["']\\//g;/* c "x */ // note 'y\n`;
   const REF = "abcdefghijklmnopqrst";
   const apps: Record<string, [string, string]> = {
-    firebase: [`var cfg={apiKey:"k",authDomain:"demo-app.firebaseapp.com",projectId:"p"};`, "firebase"],
+    firebase: [
+      `var cfg={apiKey:"k",authDomain:"demo-app.firebaseapp.com",projectId:"p"};`,
+      "firebase",
+    ],
     clerk: [`var p={publishableKey:"${CLERK_KEY}"};`, "clerk"],
-    supabase: [`var c=tg("https://${REF}.supabase.co","${["eyJ", "x".repeat(60)].join("")}");`, "supabase"],
+    supabase: [
+      `var c=tg("https://${REF}.supabase.co","${["eyJ", "x".repeat(60)].join("")}");`,
+      "supabase",
+    ],
   };
   for (const [name, [app, id]] of Object.entries(apps)) {
     test(`${name}: 0..400 chars of offset (81 alignments), every one detects`, () => {
       const base = UNIT.repeat(Math.ceil(90_000 / UNIT.length));
       const misses: number[] = [];
       for (let offset = 0; offset <= 400; offset += 5) {
-        const code = base + `var p${"x".repeat(offset)}=1;` + "\n" + app + UNIT.repeat(40);
+        const code =
+          base + `var p${"x".repeat(offset)}=1;` + "\n" + app + UNIT.repeat(40);
         if (!detect(code).includes(id)) misses.push(offset);
       }
       expect(misses).toEqual([]);
@@ -156,7 +167,8 @@ describe("alignment sweep: string-heavy code before the config", () => {
     const [app] = apps.firebase!;
     const misses: number[] = [];
     for (let offset = 0; offset < 80; offset++) {
-      const code = base + `var p${"x".repeat(offset)}=1;` + "\n" + app + UNIT.repeat(40);
+      const code =
+        base + `var p${"x".repeat(offset)}=1;` + "\n" + app + UNIT.repeat(40);
       if (!detect(code).includes("firebase")) misses.push(offset);
     }
     expect(misses).toEqual([]);
@@ -167,7 +179,8 @@ describe("alignment sweep: string-heavy code before the config", () => {
     const misses: number[] = [];
     for (let decoys = 0; decoys <= 20; decoys++) {
       let code = UNIT.repeat(Math.ceil(90_000 / UNIT.length));
-      for (let i = 0; i < decoys; i++) code += `var id${i}="pk_test_x";` + UNIT.repeat(8);
+      for (let i = 0; i < decoys; i++)
+        code += `var id${i}="pk_test_x";` + UNIT.repeat(8);
       code += `var p={publishableKey:"${key}"};` + UNIT.repeat(40);
       if (!detect(code).includes("clerk")) misses.push(decoys);
     }

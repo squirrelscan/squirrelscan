@@ -3,8 +3,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { generateSiteModel } from "../src/page-model";
 import { renderPageHtml } from "../src/html-render";
+import { generateSiteModel } from "../src/page-model";
 
 describe("generateSiteModel determinism", () => {
   test("same seed produces a byte-identical model", () => {
@@ -28,7 +28,10 @@ describe("generateSiteModel determinism", () => {
   });
 
   test("rendered HTML for a page is identical across repeated calls (order-independent)", () => {
-    const model = generateSiteModel({ seed: "render-determinism", pageCount: 40 });
+    const model = generateSiteModel({
+      seed: "render-determinism",
+      pageCount: 40,
+    });
     const page = model.pages[10]!;
     const first = renderPageHtml(page, "http://example.test");
     const second = renderPageHtml(page, "http://example.test");
@@ -36,7 +39,10 @@ describe("generateSiteModel determinism", () => {
   });
 
   test("rendered HTML is identical regardless of which page is rendered first (no shared rng state)", () => {
-    const model = generateSiteModel({ seed: "render-order-independence", pageCount: 40 });
+    const model = generateSiteModel({
+      seed: "render-order-independence",
+      pageCount: 40,
+    });
     const [pageA, pageB] = [model.pages[5]!, model.pages[20]!];
 
     const forwardA = renderPageHtml(pageA, "http://example.test");

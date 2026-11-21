@@ -30,7 +30,8 @@ export const soft404Rule: Rule = {
   meta: {
     id: "crawl/soft-404",
     name: "Soft 404",
-    description: "Detects pages that serve 404/error content with an HTTP 200 status",
+    description:
+      "Detects pages that serve 404/error content with an HTTP 200 status",
     solution:
       "A soft 404 is a page that shows 'not found' / error content but returns a success (2xx) status instead of a real 404 or 410. Search engines waste crawl budget on these and may index them as thin or duplicate content. Return a proper 404 (or 410 for permanently removed URLs) for missing pages, or restore the real content if the URL should resolve. If the URL is valid, remove the error-shell markup and the 'page not found' title/heading.",
     category: "crawl",

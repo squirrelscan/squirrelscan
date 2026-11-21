@@ -42,7 +42,7 @@ export async function getOrRefresh<T>(
   key: string,
   ttlMs: number,
   refresh: () => Promise<T>,
-  now: number = Date.now(),
+  now: number = Date.now()
 ): Promise<T> {
   const cacheKey = `${KEY_PREFIX}${key}`;
   const raw = await store.get(cacheKey);

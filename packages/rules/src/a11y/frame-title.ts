@@ -1,10 +1,11 @@
 // a11y/frame-title - Frames/iframes have titles
 
-import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 
 export const frameTitleRule: Rule = {
   meta: {
@@ -75,7 +76,13 @@ export const frameTitleRule: Rule = {
       });
     }
     if (unnamed.unconfirmed.length > 0) {
-      checks.push(unconfirmedRow("frame-title", "iframe(s) without title attribute", unnamed.unconfirmed));
+      checks.push(
+        unconfirmedRow(
+          "frame-title",
+          "iframe(s) without title attribute",
+          unnamed.unconfirmed
+        )
+      );
     }
     if (missingTitles.length === 0 && unnamed.unconfirmed.length === 0) {
       if (frames.length > 0) {
@@ -86,7 +93,9 @@ export const frameTitleRule: Rule = {
             unnamed.hidden > 0
               ? "All iframes in the accessibility tree have title attributes"
               : `${frames.length} iframe(s) have title attributes`,
-          ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+          ...(unnamed.hidden > 0
+            ? { details: { hiddenWithoutName: unnamed.hidden } }
+            : {}),
         });
       } else {
         checks.push({

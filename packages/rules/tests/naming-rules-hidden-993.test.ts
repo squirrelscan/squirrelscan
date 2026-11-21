@@ -4,10 +4,12 @@
 // page with an unread stylesheet included) is `<check>-unconfirmed`, and a
 // visible unnamed element still fails.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { ariaMeterNameRule } from "../src/a11y/aria-meter-name";
 import { ariaProgressbarNameRule } from "../src/a11y/aria-progressbar-name";
@@ -16,18 +18,22 @@ import { ariaTooltipNameRule } from "../src/a11y/aria-tooltip-name";
 import { ariaTreeitemNameRule } from "../src/a11y/aria-treeitem-name";
 import { inputImageAltRule } from "../src/a11y/input-image-alt";
 import { linkTextRule } from "../src/a11y/link-text";
-import { createStaticVisibility, SCRIPT_STATE_LABEL } from "../src/shared/static-hidden";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
+import {
+  createStaticVisibility,
+  SCRIPT_STATE_LABEL,
+} from "../src/shared/static-hidden";
 
 type AnyRule = Pick<Rule, "run">;
 
 async function checks(rule: AnyRule, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
-  return (await rule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  })).checks as CheckResult[];
+  return (
+    await rule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    })
+  ).checks as CheckResult[];
 }
 
 const LINK = '<link rel="stylesheet" href="/site.css">';
@@ -115,7 +121,8 @@ const CASES: Case[] = [
 ];
 
 describe.each(CASES)("$check: $failName", ({ rule, check, failName, el }) => {
-  const summary = async (html: string) => (await checks(rule, html)).map((c) => [c.name, c.status]);
+  const summary = async (html: string) =>
+    (await checks(rule, html)).map((c) => [c.name, c.status]);
 
   test("a visible unnamed element still fails, with or without an unread sheet", async () => {
     for (const head of ["", LINK, LINK + "<style>.x{display:flex}</style>"]) {
@@ -131,48 +138,70 @@ describe.each(CASES)("$check: $failName", ({ rule, check, failName, el }) => {
       `<dialog>${el("")}</dialog>`,
       `<style>.x{display:none}</style>${el('class="x"')}`,
     ]) {
-      expect((await summary(page("", body))).some(([n, st]) => n === failName && st === "fail")).toBe(
-        false,
-      );
-      expect((await summary(page("", body))).some(([, s]) => s === "warn" || s === "fail")).toBe(false);
+      expect(
+        (await summary(page("", body))).some(
+          ([n, st]) => n === failName && st === "fail"
+        )
+      ).toBe(false);
+      expect(
+        (await summary(page("", body))).some(
+          ([, s]) => s === "warn" || s === "fail"
+        )
+      ).toBe(false);
     }
   });
 
   test("a no-js fallback on a page with an unread stylesheet is unconfirmed, with the script-state reason", async () => {
-    const out = (await checks(rule, page(LINK, el('class="no-js"'))));
-    expect(out.map((c) => [c.name, c.status])).toEqual([[`${check}-unconfirmed`, "warn"]]);
+    const out = await checks(rule, page(LINK, el('class="no-js"')));
+    expect(out.map((c) => [c.name, c.status])).toEqual([
+      [`${check}-unconfirmed`, "warn"],
+    ]);
     expect(out[0]?.items?.[0]?.label).toBe(SCRIPT_STATE_LABEL);
   });
 
   test("a no-js fallback under a non-root wrapper is unconfirmed", async () => {
-    const out = (await checks(rule, page(LINK, `<div class="no-js">${el("")}</div>`)));
+    const out = await checks(
+      rule,
+      page(LINK, `<div class="no-js">${el("")}</div>`)
+    );
     expect(out.map((c) => c.name)).toEqual([`${check}-unconfirmed`]);
   });
 
   test("all styles read: a no-js fallback keeps failing", async () => {
-    expect(await summary(page("", el('class="no-js"')))).toEqual([[failName, "fail"]]);
+    expect(await summary(page("", el('class="no-js"')))).toEqual([
+      [failName, "fail"],
+    ]);
   });
 
   test("a style squirrel cannot settle is unconfirmed, not failed", async () => {
-    const head = "<style>.x:hover{display:none}@media print{.x{display:none}}</style>";
-    const out = (await checks(rule, page(head, el('class="x"'))));
-    expect(out.some((c) => c.name === failName && c.status === "fail")).toBe(false);
+    const head =
+      "<style>.x:hover{display:none}@media print{.x{display:none}}</style>";
+    const out = await checks(rule, page(head, el('class="x"')));
+    expect(out.some((c) => c.name === failName && c.status === "fail")).toBe(
+      false
+    );
     expect(out.map((c) => c.name)).toEqual([`${check}-unconfirmed`]);
   });
 });
 
 describe("hidden unnamed elements alongside visible ones", () => {
   test("a hidden unnamed meter is skipped, a visible one fails", async () => {
-    const out = (await checks(
+    const out = await checks(
       ariaMeterNameRule,
-      page("", '<meter hidden value="1"></meter><meter id="m" value="1"></meter>'),
-    ));
+      page(
+        "",
+        '<meter hidden value="1"></meter><meter id="m" value="1"></meter>'
+      )
+    );
     expect(out).toHaveLength(1);
     expect(out[0]?.items?.map((i) => i.id)).toEqual(["meter#m"]);
   });
 
   test("all unnamed hidden: pass reads in the accessibility tree and counts the hidden", async () => {
-    const out = (await checks(ariaTooltipNameRule, page("", '<div role="tooltip" hidden></div>')));
+    const out = await checks(
+      ariaTooltipNameRule,
+      page("", '<div role="tooltip" hidden></div>')
+    );
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({
       status: "pass",
@@ -184,39 +213,52 @@ describe("hidden unnamed elements alongside visible ones", () => {
 
 describe("link-text", () => {
   test("a hidden generic link is not reported; a visible one is", async () => {
-    const hidden = (await checks(linkTextRule, page("", '<a href="/x" hidden>click here</a>')));
+    const hidden = await checks(
+      linkTextRule,
+      page("", '<a href="/x" hidden>click here</a>')
+    );
     expect(hidden.some((c) => c.name === "link-text-generic")).toBe(false);
-    const shown = (await checks(linkTextRule, page("", '<a href="/x">click here</a>')));
+    const shown = await checks(
+      linkTextRule,
+      page("", '<a href="/x">click here</a>')
+    );
     expect(shown.map((c) => c.name)).toEqual(["link-text-generic"]);
   });
 
   test("an unconfirmed empty link outside the script state carries the default reason", async () => {
     const head = "<style>.x:hover{display:none}</style>";
-    const out = (await checks(linkTextRule, page(head, '<a class="x" href="/x"></a>')));
+    const out = await checks(
+      linkTextRule,
+      page(head, '<a class="x" href="/x"></a>')
+    );
     expect(out.map((c) => c.name)).toEqual(["link-text-unconfirmed"]);
     expect(out[0]?.items?.[0]?.label).not.toBe("empty");
   });
 });
 
 describe("no-js class bail-out", () => {
-  const doc = (html: string) => parsePage(html, "https://example.com/").document as Document;
+  const doc = (html: string) =>
+    parsePage(html, "https://example.com/").document as Document;
 
   test("tokens are matched whole: no-js-x and x-no-js are not the marker", () => {
     const d = doc(
-      page(LINK, '<div class="no-js-x"><div class="x-no-js"><button id="b"></button></div></div>'),
+      page(
+        LINK,
+        '<div class="no-js-x"><div class="x-no-js"><button id="b"></button></div></div>'
+      )
     );
     const seen = createStaticVisibility({ ariaHidden: true }).visibility(
-      d.getElementById("b") as Element,
+      d.getElementById("b") as Element
     );
     expect(seen.state).toBe("shown");
   });
 
   test("a quirks-mode NO-JS class still counts (case-blind)", () => {
     const d = doc(
-      `<html><head>${LINK}</head><body><div class="NO-JS"><button id="b"></button></div></body></html>`,
+      `<html><head>${LINK}</head><body><div class="NO-JS"><button id="b"></button></div></body></html>`
     );
     const seen = createStaticVisibility({ ariaHidden: true }).visibility(
-      d.getElementById("b") as Element,
+      d.getElementById("b") as Element
     );
     expect(seen).toEqual({ state: "unknown", reason: "script" });
   });
@@ -224,14 +266,18 @@ describe("no-js class bail-out", () => {
   test("a 20000-element DOM resolves once per element, in well under a second", () => {
     const rows = Array.from(
       { length: 20000 },
-      (_, i) => `<li class="item item-${i}"><b></b></li>`,
+      (_, i) => `<li class="item item-${i}"><b></b></li>`
     ).join("");
-    const d = doc(page(LINK, `<ul>${rows}</ul><div class="no-js"><i id="t"></i></div>`));
+    const d = doc(
+      page(LINK, `<ul>${rows}</ul><div class="no-js"><i id="t"></i></div>`)
+    );
     const resolver = createStaticVisibility({ ariaHidden: true });
     const start = performance.now();
     for (const b of d.querySelectorAll("b")) resolver.visibility(b);
     const ms = performance.now() - start;
-    expect(resolver.visibility(d.getElementById("t") as Element).state).toBe("unknown");
+    expect(resolver.visibility(d.getElementById("t") as Element).state).toBe(
+      "unknown"
+    );
     expect(ms).toBeLessThan(2000);
   });
 });

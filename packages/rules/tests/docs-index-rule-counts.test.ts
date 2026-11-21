@@ -10,12 +10,14 @@
 // rules pages, and the same floor rule (the advertised total is the live total rounded DOWN to the
 // nearest 10, so the live total is in [floor, floor + 10), and `PUBLIC_RULE_COUNT_FLOOR` must equal it).
 
+import { normalizeCategoryCode } from "@squirrelscan/core-contracts";
+import {
+  PUBLIC_CATEGORY_COUNT,
+  PUBLIC_RULE_COUNT_FLOOR,
+} from "@squirrelscan/utils/constants";
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-
-import { normalizeCategoryCode } from "@squirrelscan/core-contracts";
-import { PUBLIC_CATEGORY_COUNT, PUBLIC_RULE_COUNT_FLOOR } from "@squirrelscan/utils/constants";
 
 import { CATEGORIES } from "../src/categories";
 import { loadAllRules } from "../src/loader";
@@ -38,7 +40,7 @@ const codeByName = new Map(
   [...registry.keys()].map((code) => [
     (CATEGORIES as Record<string, { name: string }>)[code]?.name ?? code,
     code,
-  ]),
+  ])
 );
 
 interface Table {
@@ -54,10 +56,13 @@ function readTable(file: string): Table {
   if (start === -1) throw new Error(`${file}: no "## Rule categories" section`);
   const section = text.slice(start);
   const rows = new Map<string, number>();
-  for (const match of section.matchAll(/^\| \*{0,2}([^|*]+?)\*{0,2} \| (\d+) \|/gm)) {
+  for (const match of section.matchAll(
+    /^\| \*{0,2}([^|*]+?)\*{0,2} \| (\d+) \|/gm
+  )) {
     const [, name, count] = match;
     if (name === "Category") continue;
-    if (rows.has(name as string)) throw new Error(`${file}: "${name}" is listed twice`);
+    if (rows.has(name as string))
+      throw new Error(`${file}: "${name}" is listed twice`);
     rows.set(name as string, Number(count));
   }
   return { rows, text: section };
@@ -74,7 +79,11 @@ describe("rule counts in README.md and docs/index.mdx", () => {
       const expected = [...codeByName.keys()].sort();
       const missing = expected.filter((name) => !table.rows.has(name));
       const unknown = listed.filter((name) => !codeByName.has(name));
-      expect({ file, missing, unknown }).toEqual({ file, missing: [], unknown: [] });
+      expect({ file, missing, unknown }).toEqual({
+        file,
+        missing: [],
+        unknown: [],
+      });
     });
 
     test(`${file}: each category's count equals the registry's`, () => {
@@ -85,7 +94,7 @@ describe("rule counts in README.md and docs/index.mdx", () => {
         const actual = registry.get(code) ?? 0;
         if (stated !== actual) {
           wrong.push(
-            `${file}: ${name} (${code}/*) says ${stated} rules, the registry has ${actual}. Update that row.`,
+            `${file}: ${name} (${code}/*) says ${stated} rules, the registry has ${actual}. Update that row.`
           );
         }
       }
@@ -94,14 +103,18 @@ describe("rule counts in README.md and docs/index.mdx", () => {
 
     test(`${file}: the rows add up to the registry's total`, () => {
       const sum = [...table.rows.values()].reduce((a, b) => a + b, 0);
-      expect(`${file}: rows sum to ${sum}`).toBe(`${file}: rows sum to ${total}`);
+      expect(`${file}: rows sum to ${sum}`).toBe(
+        `${file}: rows sum to ${total}`
+      );
     });
   }
 
   test("docs/index.mdx states the category count and the advertised floor", () => {
     const { text } = readTable("docs/index.mdx");
     expect(text).toContain(`**${codeByName.size} categories**`);
-    const stated = [...text.matchAll(/\*\*(?:Total: )?(\d+)\+ rules\b/g)].map((m) => Number(m[1]));
+    const stated = [...text.matchAll(/\*\*(?:Total: )?(\d+)\+ rules\b/g)].map(
+      (m) => Number(m[1])
+    );
     expect(stated.length).toBeGreaterThan(0);
     for (const floor of stated) expect(floor).toBe(advertisedFloor);
   });
@@ -109,7 +122,8 @@ describe("rule counts in README.md and docs/index.mdx", () => {
   test("README.md states the same floor and category count, in both places it says them", () => {
     const readme = readFileSync(join(ROOT, "README.md"), "utf8");
     const feature = /\*\*\[(\d+)\+ rules, (\d+) categories\]/.exec(readme);
-    const totalLine = /\*\*Total: (\d+)\+ rules across (\d+) categories\*\*/.exec(readme);
+    const totalLine =
+      /\*\*Total: (\d+)\+ rules across (\d+) categories\*\*/.exec(readme);
     for (const found of [feature, totalLine]) {
       expect(found).not.toBeNull();
       expect(Number(found?.[1])).toBe(advertisedFloor);
@@ -137,7 +151,8 @@ describe("rule counts in README.md and docs/index.mdx", () => {
 describe("rules page category cards", () => {
   const RULES_DOCS_DIR = "docs/rules";
   const DOCS_ONLY_CATEGORIES = new Set(["gaps"]);
-  const CARD_RE = /<Card\b[^>]*\bhref="\/rules\/([a-z0-9-]+)"[^>]*>([\s\S]*?)<\/Card>/g;
+  const CARD_RE =
+    /<Card\b[^>]*\bhref="\/rules\/([a-z0-9-]+)"[^>]*>([\s\S]*?)<\/Card>/g;
   const COUNT_RE = /\((\d+)\s+rules\b/;
 
   const candidates = [
@@ -183,12 +198,16 @@ describe("rules page category cards", () => {
         if (DOCS_ONLY_CATEGORIES.has(code)) continue;
         const live = registry.get(code);
         if (count === undefined) {
-          wrong.push(`${file}: the /rules/${slug} card has no "(N rules)" count`);
+          wrong.push(
+            `${file}: the /rules/${slug} card has no "(N rules)" count`
+          );
         } else if (live === undefined) {
-          wrong.push(`${file}: /rules/${slug} maps to "${code}", which has no rules in the registry`);
+          wrong.push(
+            `${file}: /rules/${slug} maps to "${code}", which has no rules in the registry`
+          );
         } else if (Number(count) !== live) {
           wrong.push(
-            `${file}: /rules/${slug} (${code}/*) says ${count} rules, the registry has ${live}. Update that card.`,
+            `${file}: /rules/${slug} (${code}/*) says ${count} rules, the registry has ${live}. Update that card.`
           );
         }
       }
@@ -199,7 +218,9 @@ describe("rules page category cards", () => {
   test("docs/rules/index.mdx documents every category the registry has", () => {
     const page = pages.find((p) => p.file === `${RULES_DOCS_DIR}/index.mdx`);
     const documented = new Set(page?.cards.map((card) => card.code));
-    const owed = [...registry.keys()].filter((code) => !documented.has(code)).sort();
+    const owed = [...registry.keys()]
+      .filter((code) => !documented.has(code))
+      .sort();
     expect(owed).toEqual([]);
   });
 });
@@ -217,7 +238,11 @@ describe("rule counts stated in prose", () => {
   // `against` is the category code the number describes, or "total" for the whole catalog, which
   // pages state as the advertised floor ("340+"), not the exact total.
   const PROSE_COUNTS: Array<{ file: string; against: string; re: RegExp }> = [
-    { file: `${RULES_DOCS_DIR}/index.mdx`, against: "total", re: /All (\d+)\+ audit rules/ },
+    {
+      file: `${RULES_DOCS_DIR}/index.mdx`,
+      against: "total",
+      re: /All (\d+)\+ audit rules/,
+    },
     {
       file: `${RULES_DOCS_DIR}/index.mdx`,
       against: "total",
@@ -239,16 +264,22 @@ describe("rule counts stated in prose", () => {
   for (const { file, against, re } of PROSE_COUNTS) {
     test(`${file}: the prose count for "${against}" matches`, () => {
       const found = [...read(file).matchAll(new RegExp(re.source, "g"))];
-      expect(`${file}: ${found.length} match(es) of ${re}`).toBe(`${file}: 1 match(es) of ${re}`);
+      expect(`${file}: ${found.length} match(es) of ${re}`).toBe(
+        `${file}: 1 match(es) of ${re}`
+      );
       const live = expected(against);
-      if (live === undefined) throw new Error(`${file}: "${against}" is not a live category or "total"`);
+      if (live === undefined)
+        throw new Error(
+          `${file}: "${against}" is not a live category or "total"`
+        );
       expect(Number(found[0]![1])).toBe(live);
     });
   }
 
   // Everything that says "N rules" outside a code fence and outside a category card must be one of the
   // sentences above. Cards are removed first (their counts are the cards test's job).
-  const CARD_RE = /<Card\b[^>]*\bhref="\/rules\/[a-z0-9-]+"[^>]*>[\s\S]*?<\/Card>/g;
+  const CARD_RE =
+    /<Card\b[^>]*\bhref="\/rules\/[a-z0-9-]+"[^>]*>[\s\S]*?<\/Card>/g;
   const FENCE_RE = /```[\s\S]*?```/g;
   const STATED_RE = /\b(\d+)\+?\s+(?:audit\s+)?rules\b/g;
   const pages = [
@@ -282,8 +313,12 @@ describe("rule counts stated in prose", () => {
   for (const file of ["README.md", "docs/index.mdx"]) {
     test(`${file}: every "N+ rules" is the advertised floor and every "N categories" the live count`, () => {
       const text = read(file).replace(FENCE_RE, "");
-      const floors = [...text.matchAll(/(\d+)\+\s+rules\b/g)].map((m) => Number(m[1]));
-      const categories = [...text.matchAll(/(\d+)\s+categories\b/g)].map((m) => Number(m[1]));
+      const floors = [...text.matchAll(/(\d+)\+\s+rules\b/g)].map((m) =>
+        Number(m[1])
+      );
+      const categories = [...text.matchAll(/(\d+)\s+categories\b/g)].map((m) =>
+        Number(m[1])
+      );
       expect(floors.length).toBeGreaterThan(0);
       expect(categories.length).toBeGreaterThan(0);
       for (const n of floors) expect(n).toBe(advertisedFloor);

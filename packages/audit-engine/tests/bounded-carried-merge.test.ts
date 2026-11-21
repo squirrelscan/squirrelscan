@@ -13,16 +13,20 @@
 // wrong and the array driver could not — a page holding fresh AND carried findings,
 // a page removed this run, and a rule carrying more findings than the report keeps.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { DEFAULT_FOLD_LIMITS, foldOverflowChecks } from "@squirrelscan/rules/fold";
 
+import {
+  DEFAULT_FOLD_LIMITS,
+  foldOverflowChecks,
+} from "@squirrelscan/rules/fold";
+import { describe, expect, test } from "bun:test";
+
+import { findingFingerprint } from "../src/fingerprint";
 import { computeMerge, findingKey } from "../src/merge-core";
 import {
   runCloudSmartAudits,
@@ -31,7 +35,6 @@ import {
   type SmartAuditStore,
 } from "../src/merge-promise";
 import { calculateHealthScoreFromTallies } from "../src/scoring";
-import { findingFingerprint } from "../src/fingerprint";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_1876";
@@ -65,9 +68,14 @@ class MemStore implements SmartAuditStore {
   }) {
     return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
   }
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     if (this.refuseWholeRead) {
-      throw new Error("getFindings: the streaming path must never load the whole open set");
+      throw new Error(
+        "getFindings: the streaming path must never load the whole open set"
+      );
     }
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
@@ -82,7 +90,9 @@ class MemStore implements SmartAuditStore {
       const prior = this.findings.get(k);
       this.findings.set(k, {
         ...f,
-        firstSeenAt: prior ? Math.min(prior.firstSeenAt, f.firstSeenAt) : f.firstSeenAt,
+        firstSeenAt: prior
+          ? Math.min(prior.firstSeenAt, f.firstSeenAt)
+          : f.firstSeenAt,
       });
     }
   }
@@ -93,7 +103,7 @@ class MemStore implements SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void> {
     this.pages.set(normalizedUrl, {
       siteKey,
@@ -105,17 +115,26 @@ class MemStore implements SmartAuditStore {
     });
     for (const [k, f] of this.findings) {
       if (f.normalizedUrl === normalizedUrl && f.state === "open") {
-        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+        this.findings.set(k, {
+          ...f,
+          state: "stale",
+          lastSeenCrawlId: crawlId,
+        });
       }
     }
   }
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void> {
     for (const p of pages) {
-      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+      await this.markPageRemoved(
+        siteKey,
+        p.normalizedUrl,
+        crawlId,
+        p.lastStatus
+      );
     }
   }
   async compactFindings(): Promise<number> {
@@ -127,7 +146,7 @@ function row(
   normalizedUrl: string,
   locator: string,
   auditId: string,
-  overrides: Partial<PageFindingRecord> = {},
+  overrides: Partial<PageFindingRecord> = {}
 ): PageFindingRecord {
   const message = `Missing meta description${locator ? `: ${locator}` : ""}`;
   return {
@@ -141,7 +160,9 @@ function row(
     message,
     value: null,
     expected: null,
-    payload: locator ? JSON.stringify({ items: [{ id: locator, label: locator }], i: 0 }) : null,
+    payload: locator
+      ? JSON.stringify({ items: [{ id: locator, label: locator }], i: 0 })
+      : null,
     fingerprint: findingFingerprint("fail", message, null, null),
     firstSeenAt: 1_600_000_000_000,
     lastSeenCrawlId: auditId,
@@ -170,7 +191,10 @@ const shell = { [RULE]: { meta, checks: [] as CheckResult[] } };
  * The API's cursor, in memory: every OPEN finding for the site in page order, one
  * page per item, split by which audit last saw it.
  */
-async function* openPagesOf(store: MemStore, auditId: string): AsyncGenerator<OpenFindingPage> {
+async function* openPagesOf(
+  store: MemStore,
+  auditId: string
+): AsyncGenerator<OpenFindingPage> {
   const byPage = new Map<string, PageFindingRecord[]>();
   const sorted = [...store.findings.values()]
     .filter((f) => f.state === "open")
@@ -214,20 +238,26 @@ interface Fixture {
 function seed(fixture: Fixture): MemStore {
   const store = new MemStore();
   for (const r of fixture.rows) {
-    store.findings.set(findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator), r);
+    store.findings.set(
+      findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator),
+      r
+    );
   }
   for (const p of fixture.pages) store.pages.set(p, activePage(p));
   return store;
 }
 
-async function runStreamed(fixture: Fixture): Promise<[CloudSmartAuditsResult, MemStore]> {
+async function runStreamed(
+  fixture: Fixture
+): Promise<[CloudSmartAuditsResult, MemStore]> {
   const store = seed(fixture);
   const result = await runCloudSmartAudits({
     store,
     siteKey: SITE,
     crawlId: AUDIT,
     ruleResults: shell,
-    pageStatuses: fixture.statuses ?? fixture.crawled.map((url) => ({ url, status: 200 })),
+    pageStatuses:
+      fixture.statuses ?? fixture.crawled.map((url) => ({ url, status: 200 })),
     now: 1_700_000_000_000,
     completeStore: {
       openPages: openPagesOf(store, AUDIT),
@@ -237,19 +267,22 @@ async function runStreamed(fixture: Fixture): Promise<[CloudSmartAuditsResult, M
   return [result, store];
 }
 
-async function runMaterialized(fixture: Fixture): Promise<[CloudSmartAuditsResult, MemStore]> {
+async function runMaterialized(
+  fixture: Fixture
+): Promise<[CloudSmartAuditsResult, MemStore]> {
   const store = seed(fixture);
   const result = await runCloudSmartAudits({
     store,
     siteKey: SITE,
     crawlId: AUDIT,
     ruleResults: shell,
-    pageStatuses: fixture.statuses ?? fixture.crawled.map((url) => ({ url, status: 200 })),
+    pageStatuses:
+      fixture.statuses ?? fixture.crawled.map((url) => ({ url, status: 200 })),
     now: 1_700_000_000_000,
     completeStore: {
       findingPages: freshPagesOf(store, AUDIT),
       priorOpenFindings: [...store.findings.values()].filter(
-        (f) => f.state === "open" && f.lastSeenCrawlId !== AUDIT,
+        (f) => f.state === "open" && f.lastSeenCrawlId !== AUDIT
       ),
       crawledUrls: fixture.crawled,
     },
@@ -266,7 +299,7 @@ function storeState(store: MemStore): Array<[string, string, string]> {
           findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
           f.state,
           f.provenance,
-        ] as [string, string, string],
+        ] as [string, string, string]
     )
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 }
@@ -275,7 +308,10 @@ function storeState(store: MemStore): Array<[string, string, string]> {
 function surface(result: CloudSmartAuditsResult) {
   const checks = result.unionRuleResults.get(RULE)?.checks ?? [];
   return {
-    score: calculateHealthScoreFromTallies(result.scoringTallies!, result.unionRuleResults),
+    score: calculateHealthScoreFromTallies(
+      result.scoringTallies!,
+      result.unionRuleResults
+    ),
     tally: result.scoringTallies!.get(RULE)!.tally,
     coverage: result.coverage,
     persistedFindings: result.persistedFindings,
@@ -294,8 +330,14 @@ describe("streamed carried merge == materialized carried merge (#1876)", () => {
    * prior on it, and a page carrying BOTH this run's findings and an older one.
    */
   function everyShape(): Fixture {
-    const crawled = Array.from({ length: 6 }, (_, i) => `https://x.test/p/${i}`);
-    const carriedPages = Array.from({ length: 5 }, (_, i) => `https://x.test/old/${i}`);
+    const crawled = Array.from(
+      { length: 6 },
+      (_, i) => `https://x.test/p/${i}`
+    );
+    const carriedPages = Array.from(
+      { length: 5 },
+      (_, i) => `https://x.test/old/${i}`
+    );
     const removed = "https://x.test/gone";
     // A page with ingested findings that is NOT in the crawled set — the merge
     // carries its priors, so its fresh and carried findings must fold together.
@@ -349,7 +391,10 @@ describe("streamed carried merge == materialized carried merge (#1876)", () => {
       ruleResults: shell,
       pageStatuses: fixture.statuses!,
       now: 1_700_000_000_000,
-      completeStore: { openPages: openPagesOf(store, AUDIT), crawledUrls: fixture.crawled },
+      completeStore: {
+        openPages: openPagesOf(store, AUDIT),
+        crawledUrls: fixture.crawled,
+      },
     });
     // 5 carried: 4 on the three un-crawled backlog pages (one holds two items),
     // plus the one on the ingested-but-uncrawled page.
@@ -362,7 +407,10 @@ describe("streamed carried merge == materialized carried merge (#1876)", () => {
     // overlap page's two locators in two calls would count the bucket twice.
     const overlap = "https://x.test/uncrawled-but-ingested";
     const fixture: Fixture = {
-      rows: [row(overlap, "item-new", AUDIT), row(overlap, "item-old", PRIOR_AUDIT)],
+      rows: [
+        row(overlap, "item-new", AUDIT),
+        row(overlap, "item-old", PRIOR_AUDIT),
+      ],
       pages: [overlap],
       crawled: [],
       statuses: [],
@@ -370,7 +418,7 @@ describe("streamed carried merge == materialized carried merge (#1876)", () => {
     const [streamed] = await runStreamed(fixture);
     const [materialized] = await runMaterialized(fixture);
     expect(streamed.scoringTallies!.get(RULE)!.tally).toEqual(
-      materialized.scoringTallies!.get(RULE)!.tally,
+      materialized.scoringTallies!.get(RULE)!.tally
     );
     // ONE (check, page) bucket, two item findings in it: 2 fail units, not 2 buckets.
     expect(streamed.scoringTallies!.get(RULE)!.tally.failUnits).toBe(2);
@@ -388,7 +436,7 @@ describe("streamed carried merge == materialized carried merge (#1876)", () => {
     // path needs no `carriedLastSeen` — but it must say exactly what that map said.
     expect(carried.provenance).toBe("carried");
     expect(carried.lastSeenAt).toBe(
-      materialized.carriedLastSeen.get(`https://x.test/old/0|${RULE}|${CHECK}`),
+      materialized.carriedLastSeen.get(`https://x.test/old/0|${RULE}|${CHECK}`)
     );
     expect(streamed.carriedLastSeen.size).toBe(0);
   });
@@ -403,7 +451,7 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
   test("past the cap the checks stop growing but the occurrence count stays true", async () => {
     const carriedPages = Array.from(
       { length: OVER_CAP },
-      (_, i) => `https://x.test/backlog/${String(i).padStart(4, "0")}`,
+      (_, i) => `https://x.test/backlog/${String(i).padStart(4, "0")}`
     );
     const fixture: Fixture = {
       rows: carriedPages.map((u) => row(u, "", PRIOR_AUDIT)),
@@ -448,7 +496,7 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     const TOTAL = 30;
     const backlog = Array.from(
       { length: TOTAL },
-      (_, i) => `https://x.test/backlog/${String(i).padStart(4, "0")}`,
+      (_, i) => `https://x.test/backlog/${String(i).padStart(4, "0")}`
     );
     // One page inside the retained window that NO audit has ever rendered: it has
     // no site_pages row, so the merge stamps its finding "unrendered" while the
@@ -468,7 +516,7 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
 
     const occurrences = checks.reduce(
       (sum, c) => sum + ((c.details?.occurrences as number | undefined) ?? 1),
-      0,
+      0
     );
     expect(occurrences).toBe(TOTAL);
     expect(byProvenance.get("carried")!.details?.occurrences).toBe(TOTAL - 1);
@@ -486,7 +534,10 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     // second class is ever seen. Dropping the second class would lose it from the
     // report entirely while its findings stayed open in the store — the counts have
     // to ride on a check, so every class keeps one.
-    const loud = Array.from({ length: 200 }, (_, i) => `https://x.test/loud/${i}`);
+    const loud = Array.from(
+      { length: 200 },
+      (_, i) => `https://x.test/loud/${i}`
+    );
     const quiet = ["https://x.test/quiet/0", "https://x.test/quiet/1"];
     const fixture: Fixture = {
       rows: [
@@ -535,7 +586,7 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     // and the test would pass without exercising a drop at all.
     const backlog = Array.from(
       { length: 30 },
-      (_, i) => `https://x.test/agg/${String(i).padStart(2, "0")}`,
+      (_, i) => `https://x.test/agg/${String(i).padStart(2, "0")}`
     );
     const fixture: Fixture = {
       rows: backlog.map((u, i) => ({
@@ -543,7 +594,10 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
         // Every replay stands for 2 findings; the LAST one — dropped, because the
         // sample is full by then — also reports 400 affected pages.
         payload: JSON.stringify({
-          details: i === backlog.length - 1 ? { occurrences: 2, pagesTruncated: 400 } : { occurrences: 2 },
+          details:
+            i === backlog.length - 1
+              ? { occurrences: 2, pagesTruncated: 400 }
+              : { occurrences: 2 },
         }),
       })),
       pages: backlog,
@@ -568,14 +622,17 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     // after the retained sample is full and is only visible through them.
     const rendered = Array.from(
       { length: 30 },
-      (_, i) => `https://x.test/seen/${String(i).padStart(2, "0")}`,
+      (_, i) => `https://x.test/seen/${String(i).padStart(2, "0")}`
     );
     // Sorts AFTER every rendered page, so the sample is full before it is seen and
     // the mixed class is only visible through the counters.
     const unseen = "https://x.test/zz-never";
     const fixture: Fixture = {
       rows: [
-        ...rendered.map((u) => ({ ...row(u, "", PRIOR_AUDIT), lastSeenAt: 1_600_000_000_000 })),
+        ...rendered.map((u) => ({
+          ...row(u, "", PRIOR_AUDIT),
+          lastSeenAt: 1_600_000_000_000,
+        })),
         { ...row(unseen, "", PRIOR_AUDIT), lastSeenAt: 1_650_000_000_000 },
       ],
       // `unseen` gets NO site_pages row, so no audit has ever rendered it (#1652).
@@ -601,13 +658,14 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
   test("an all-carried class keeps the NEWEST last-seen, dropped checks included", async () => {
     const backlog = Array.from(
       { length: 30 },
-      (_, i) => `https://x.test/dated/${String(i).padStart(2, "0")}`,
+      (_, i) => `https://x.test/dated/${String(i).padStart(2, "0")}`
     );
     const fixture: Fixture = {
       rows: backlog.map((u, i) => ({
         ...row(u, "", PRIOR_AUDIT),
         // The newest date is on a check the sample drops.
-        lastSeenAt: i === backlog.length - 1 ? 1_690_000_000_000 : 1_600_000_000_000,
+        lastSeenAt:
+          i === backlog.length - 1 ? 1_690_000_000_000 : 1_600_000_000_000,
       })),
       pages: backlog,
       crawled: ["https://x.test/p/0"],
@@ -630,7 +688,7 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     // and this would prove nothing.
     const backlog = Array.from(
       { length: CARRIED_SAMPLE_PER_RULE },
-      (_, i) => `https://x.test/frac/${String(i).padStart(2, "0")}`,
+      (_, i) => `https://x.test/frac/${String(i).padStart(2, "0")}`
     );
     const odd = "https://x.test/zz-odd";
     const fixture: Fixture = {
@@ -638,7 +696,9 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
         ...backlog.map((u) => row(u, "", PRIOR_AUDIT)),
         {
           ...row(odd, "", PRIOR_AUDIT),
-          payload: JSON.stringify({ details: { occurrences: 0.5, pagesTruncated: 400 } }),
+          payload: JSON.stringify({
+            details: { occurrences: 0.5, pagesTruncated: 400 },
+          }),
         },
       ],
       // `odd` is a rendered page like the rest, so it shares their class (#2063)
@@ -661,7 +721,7 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
     // would invent an occurrence the materialized fold does not have.
     const plain = Array.from(
       { length: CARRIED_SAMPLE_PER_RULE - 1 },
-      (_, i) => `https://x.test/plain/${String(i).padStart(2, "0")}`,
+      (_, i) => `https://x.test/plain/${String(i).padStart(2, "0")}`
     );
     const fractional = ["https://x.test/zz-frac-0", "https://x.test/zz-frac-1"];
     const fixture: Fixture = {
@@ -685,7 +745,10 @@ describe("the report's carried side is bounded per rule (#1876)", () => {
   });
 
   test("under the cap the report is exactly what the materialized path builds", async () => {
-    const carriedPages = Array.from({ length: 20 }, (_, i) => `https://x.test/backlog/${i}`);
+    const carriedPages = Array.from(
+      { length: 20 },
+      (_, i) => `https://x.test/backlog/${i}`
+    );
     const fixture: Fixture = {
       rows: carriedPages.map((u) => row(u, "", PRIOR_AUDIT)),
       pages: carriedPages,
@@ -761,4 +824,7 @@ describe("computeMerge keeps its array-API contract (#1876)", () => {
   });
 });
 
-describeSitePagesContract("bounded-carried-merge.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "bounded-carried-merge.test.ts MemStore",
+  () => new MemStore()
+);

@@ -2,11 +2,12 @@
 // to it and where on the page they sit, and the summary separates links from pages. Truncated
 // lists say how many pages are left out and never point at a list somewhere else.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
+import { describe, expect, test } from "bun:test";
+
 import type { AuditReport, ReportRuleResult } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -15,7 +16,8 @@ import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
 
 /** Markdown output with its backslash escapes undone, to compare wording with the other formats (3522). */
-const plain = (markdown: string): string => markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
+const plain = (markdown: string): string =>
+  markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
 
 const SITE = "https://example.com";
 const GONE = `${SITE}/gone`;
@@ -39,11 +41,16 @@ const TWO_SECTIONS: CheckItem = {
   id: MIXED,
   label: `${MIXED} (404), linked in the page content and the footer`,
   sourcePages: [`${SITE}/d`],
-  sources: [{ page: `${SITE}/d`, links: 2, sections: { footer: 1, content: 1 } }],
+  sources: [
+    { page: `${SITE}/d`, links: 2, sections: { footer: 1, content: 1 } },
+  ],
   meta: { statusCode: 404, sections: { content: 1, footer: 1 }, linkedFrom: 1 },
 };
 
-function report(items: CheckItem[], message = `${items.length} broken internal link(s) (4xx/5xx)`): AuditReport {
+function report(
+  items: CheckItem[],
+  message = `${items.length} broken internal link(s) (4xx/5xx)`
+): AuditReport {
   const rule: ReportRuleResult = {
     meta: {
       id: "links/broken-links",
@@ -81,7 +88,8 @@ const MANY: CheckItem = {
   })),
 };
 
-const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+const count = (haystack: string, needle: string) =>
+  haystack.split(needle).length - 1;
 
 describe("broken link sources: text", () => {
   const text = renderText(BOTH);
@@ -94,11 +102,15 @@ describe("broken link sources: text", () => {
   });
 
   test("a page linking from two sections names both", () => {
-    expect(text).toContain("from: /d (2 links, in the page content and the footer)");
+    expect(text).toContain(
+      "from: /d (2 links, in the page content and the footer)"
+    );
   });
 
   test("the summary separates links from pages", () => {
-    expect(text).toContain("broken-links: 2 broken internal link(s) (4xx/5xx), found on 4 pages");
+    expect(text).toContain(
+      "broken-links: 2 broken internal link(s) (4xx/5xx), found on 4 pages"
+    );
   });
 
   test("a long list says how many pages it leaves out", () => {
@@ -114,14 +126,20 @@ describe("broken link sources: markdown", () => {
   const md = renderMarkdown(BOTH);
 
   test("each source page once, with its link count and section", () => {
-    expect(md).toContain(`  - from: [/a](${SITE}/a) (2 links, in the page content)`);
+    expect(md).toContain(
+      `  - from: [/a](${SITE}/a) (2 links, in the page content)`
+    );
     expect(md).toContain(`  - from: [/b](${SITE}/b) (in the footer)`);
-    expect(md).toContain(`  - from: [/d](${SITE}/d) (2 links, in the page content and the footer)`);
+    expect(md).toContain(
+      `  - from: [/d](${SITE}/d) (2 links, in the page content and the footer)`
+    );
     expect(count(md, "from: [/a]")).toBe(1);
   });
 
   test("the summary separates links from pages", () => {
-    expect(plain(md)).toContain("| 2 broken internal link(s) (4xx/5xx), found on 4 pages |");
+    expect(plain(md)).toContain(
+      "| 2 broken internal link(s) (4xx/5xx), found on 4 pages |"
+    );
   });
 
   test("a long list is listed in full, with no pointer elsewhere", () => {
@@ -143,13 +161,17 @@ describe("broken link sources: html", () => {
   });
 
   test("the summary separates links from pages", () => {
-    expect(html).toContain("2 broken internal link(s) (4xx/5xx), found on 4 pages");
+    expect(html).toContain(
+      "2 broken internal link(s) (4xx/5xx), found on 4 pages"
+    );
   });
 
   test("a long list expands in place to the rest of the pages", () => {
     const long = renderHtml(report([MANY]));
     expect(long).not.toContain("see full list");
-    expect(long).toMatch(/<details[^>]*><summary[^>]*>\+3 more pages<\/summary>/);
+    expect(long).toMatch(
+      /<details[^>]*><summary[^>]*>\+3 more pages<\/summary>/
+    );
     // Every page is in the item, not only in the page list above it.
     const item = long.slice(long.indexOf("+3 more pages"));
     for (const k of [3, 4, 5]) expect(item).toContain(`href="${SITE}/p${k}"`);
@@ -160,16 +182,24 @@ describe("broken link sources: llm", () => {
   const llm = renderLlm(BOTH);
 
   test("each source page once, with its link count and section", () => {
-    expect(llm).toContain("(from: /a (2 links, in the page content), /b (in the footer), /c)");
-    expect(llm).toContain("(from: /d (2 links, in the page content and the footer))");
+    expect(llm).toContain(
+      "(from: /a (2 links, in the page content), /b (in the footer), /c)"
+    );
+    expect(llm).toContain(
+      "(from: /d (2 links, in the page content and the footer))"
+    );
   });
 
   test("the summary separates links from pages", () => {
-    expect(llm).toContain("2 broken internal link(s) (4xx/5xx), found on 4 pages");
+    expect(llm).toContain(
+      "2 broken internal link(s) (4xx/5xx), found on 4 pages"
+    );
   });
 
   test("a long list says how many pages it leaves out", () => {
-    const long = renderLlm(report([{ ...MANY, sourcePages: [...MANY.sourcePages!, `${SITE}/p6`] }]));
+    const long = renderLlm(
+      report([{ ...MANY, sourcePages: [...MANY.sourcePages!, `${SITE}/p6`] }])
+    );
     expect(long).toContain("; +2 more pages)");
   });
 });
@@ -178,9 +208,13 @@ describe("broken link sources: json and xml carry the per-source data", () => {
   test("json", () => {
     const json = JSON.parse(renderJson(BOTH));
     const items = json.issues
-      ? json.issues.flatMap((r: { checks: { items?: CheckItem[] }[] }) => r.checks.flatMap((c) => c.items ?? []))
+      ? json.issues.flatMap((r: { checks: { items?: CheckItem[] }[] }) =>
+          r.checks.flatMap((c) => c.items ?? [])
+        )
       : [];
-    const gone = items.find((i: CheckItem) => i.id === GONE) as CheckItem | undefined;
+    const gone = items.find((i: CheckItem) => i.id === GONE) as
+      | CheckItem
+      | undefined;
     expect(gone?.sources).toEqual(TWICE.sources);
   });
 
@@ -194,13 +228,21 @@ describe("broken link sources: json and xml carry the per-source data", () => {
 });
 
 describe("an item from an older report, with repeated source pages and no per-source detail", () => {
-  const OLD = report([{ id: GONE, label: `${GONE} (404)`, sourcePages: [`${SITE}/a`, `${SITE}/a`, `${SITE}/b`] }]);
+  const OLD = report([
+    {
+      id: GONE,
+      label: `${GONE} (404)`,
+      sourcePages: [`${SITE}/a`, `${SITE}/a`, `${SITE}/b`],
+    },
+  ]);
 
   test("lists each page once, keeps the old summary", () => {
     const text = renderText(OLD);
     expect(count(text, "from: /a")).toBe(1);
     expect(text).toMatch(/from: \/a\n/);
-    expect(text).toContain("broken-links: 1 broken internal link(s) (4xx/5xx) (2 pages)");
+    expect(text).toContain(
+      "broken-links: 1 broken internal link(s) (4xx/5xx) (2 pages)"
+    );
     expect(count(renderMarkdown(OLD), "from: [/a]")).toBe(1);
   });
 });

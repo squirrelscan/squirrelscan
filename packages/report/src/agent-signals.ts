@@ -28,18 +28,29 @@ interface SignalSpec {
 }
 
 const SIGNALS: SignalSpec[] = [
-  { id: "llms-txt", label: "llms.txt", ruleId: "ax/llms-txt", check: "llms-txt-present" },
+  {
+    id: "llms-txt",
+    label: "llms.txt",
+    ruleId: "ax/llms-txt",
+    check: "llms-txt-present",
+  },
   {
     id: "markdown-response",
     label: "Markdown response",
     ruleId: "ax/markdown-response",
     check: "markdown-response",
   },
-  { id: "agents-md", label: "AGENTS.md", ruleId: "ax/agents-md", check: "agents-md-present" },
+  {
+    id: "agents-md",
+    label: "AGENTS.md",
+    ruleId: "ax/agents-md",
+    check: "agents-md-present",
+  },
 ];
 
 // Reports stored before the `ai` to `ax` category rename keep the old prefix.
-const canonicalRuleId = (id: string): string => (id.startsWith("ai/") ? `ax/${id.slice(3)}` : id);
+const canonicalRuleId = (id: string): string =>
+  id.startsWith("ai/") ? `ax/${id.slice(3)}` : id;
 
 function statusOf(value: unknown): AgentSignalStatus {
   if (value === "present" || value === "available") return "present";
@@ -52,10 +63,11 @@ function statusOf(value: unknown): AgentSignalStatus {
  * (quick level), so renderers print nothing rather than three "unchecked".
  */
 export function getAgentSignals(
-  report: Pick<AuditReport, "ruleResults">,
+  report: Pick<AuditReport, "ruleResults">
 ): AgentSignal[] {
   const byRule = new Map<string, ReportRuleResult>();
-  for (const r of Object.values(report.ruleResults ?? {})) byRule.set(canonicalRuleId(r.meta.id), r);
+  for (const r of Object.values(report.ruleResults ?? {}))
+    byRule.set(canonicalRuleId(r.meta.id), r);
   if (!SIGNALS.some((s) => byRule.has(s.ruleId))) return [];
   return SIGNALS.map((s) => {
     const check = byRule.get(s.ruleId)?.checks.find((c) => c.name === s.check);
@@ -92,13 +104,18 @@ const CITABILITY_RULES: { ruleId: string; label: string }[] = [
  * Where the report stands on each citability rule, read from the rule results that already exist.
  * Empty when none of them ran, so a quick-level report prints nothing.
  */
-export function getCitabilitySignals(report: Pick<AuditReport, "ruleResults">): CitabilitySignal[] {
+export function getCitabilitySignals(
+  report: Pick<AuditReport, "ruleResults">
+): CitabilitySignal[] {
   const byRule = new Map<string, ReportRuleResult>();
-  for (const r of Object.values(report.ruleResults ?? {})) byRule.set(canonicalRuleId(r.meta.id), r);
+  for (const r of Object.values(report.ruleResults ?? {}))
+    byRule.set(canonicalRuleId(r.meta.id), r);
   if (!CITABILITY_RULES.some((c) => byRule.has(c.ruleId))) return [];
   return CITABILITY_RULES.map(({ ruleId, label }) => {
     const checks = byRule.get(ruleId)?.checks ?? [];
-    const status: CitabilityStatus = checks.some((c) => c.status === "warn" || c.status === "fail")
+    const status: CitabilityStatus = checks.some(
+      (c) => c.status === "warn" || c.status === "fail"
+    )
       ? "issues"
       : checks.some((c) => c.status === "pass" || c.status === "info")
         ? "ok"
@@ -112,15 +129,20 @@ export function citabilityLine(signals: CitabilitySignal[]): string {
   const parts = signals.map((s) =>
     s.status === "issues"
       ? `${s.label} issues (${s.ruleId})`
-      : `${s.label} ${s.status === "unchecked" ? "not checked" : "ok"}`,
+      : `${s.label} ${s.status === "unchecked" ? "not checked" : "ok"}`
   );
   return `Citability (findings stay under their own rules): ${parts.join(", ")}`;
 }
 
 /** Both lines for an Agents group, or [] when the rules did not run. */
-export function agentSignalLines(report: Pick<AuditReport, "ruleResults">): string[] {
+export function agentSignalLines(
+  report: Pick<AuditReport, "ruleResults">
+): string[] {
   const signals = getAgentSignals(report);
-  const lines = signals.length === 0 ? [] : [AGENTS_SCORE_MEASURES, agentSignalsLine(signals)];
+  const lines =
+    signals.length === 0
+      ? []
+      : [AGENTS_SCORE_MEASURES, agentSignalsLine(signals)];
   const citability = getCitabilitySignals(report);
   if (citability.length > 0) lines.push(citabilityLine(citability));
   return lines;

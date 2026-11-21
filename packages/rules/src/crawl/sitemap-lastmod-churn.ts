@@ -1,8 +1,8 @@
 // crawl/sitemap-lastmod-churn - Sitemap lastmod values collapsed onto one build date
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { datePeriod } from "@squirrelscan/utils/date-period";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const MIN_URLS_WITH_LASTMOD = 20;
 const MAX_DISTINCT_DAYS = 2;
@@ -23,7 +23,8 @@ export const sitemapLastmodChurnRule: Rule = {
   meta: {
     id: "crawl/sitemap-lastmod-churn",
     name: "Sitemap Lastmod Churn",
-    description: "Checks that sitemap lastmod values aren't all stamped with the same build date",
+    description:
+      "Checks that sitemap lastmod values aren't all stamped with the same build date",
     solution:
       "If every URL in your sitemap carries the same (or nearly the same) lastmod date, the field is being stamped at build/deploy time rather than reflecting real content changes. This makes lastmod useless as a freshness signal - search engines may learn to ignore it entirely. Update lastmod only when a page's content actually changes, driven by your CMS or version control history, not by the deploy pipeline. Google News sitemaps are excluded from this check: they hold only about 48 hours of articles by design, so their lastmod values are supposed to cluster.",
     category: "crawl",
@@ -98,41 +99,50 @@ export const sitemapLastmodChurnRule: Rule = {
       // Distinguish "too small to judge" from "everything we saw was a news sitemap". The second is not
       // a finding about the site at all, and reporting it as one sends the operator looking for a bug
       // in a sitemap that is behaving exactly as specified.
-      const newsOnly = urlsWithLastmod === 0 && newsUrlsWithLastmod > 0 && coarseLastmods === 0;
+      const newsOnly =
+        urlsWithLastmod === 0 &&
+        newsUrlsWithLastmod > 0 &&
+        coarseLastmods === 0;
       // Too coarse, not too small: counting them would have been enough.
-      const coarseOnly = coarseLastmods > 0 && urlsWithLastmod + coarseLastmods >= MIN_URLS_WITH_LASTMOD;
+      const coarseOnly =
+        coarseLastmods > 0 &&
+        urlsWithLastmod + coarseLastmods >= MIN_URLS_WITH_LASTMOD;
       // Unreadable, not too few: counting them would have been enough.
       const unreadable =
         !coarseOnly &&
         unreadableLastmods > 0 &&
-        urlsWithLastmod + coarseLastmods + unreadableLastmods >= MIN_URLS_WITH_LASTMOD;
+        urlsWithLastmod + coarseLastmods + unreadableLastmods >=
+          MIN_URLS_WITH_LASTMOD;
       // Plenty of URLs, none with a lastmod: the sitemap omits the field, which is not "too small".
       const omitsLastmod =
-        urlsWithLastmod + coarseLastmods + unreadableLastmods + newsUrlsWithLastmod === 0 &&
-        nonNewsUrls >= MIN_URLS_WITH_LASTMOD;
+        urlsWithLastmod +
+          coarseLastmods +
+          unreadableLastmods +
+          newsUrlsWithLastmod ===
+          0 && nonNewsUrls >= MIN_URLS_WITH_LASTMOD;
       checks.push({
         name: "sitemap-lastmod-churn",
         status: "skipped",
         message: omitsLastmod
           ? `The sitemap omits lastmod: none of its ${nonNewsUrls} URL(s) carry one, so there is nothing to judge lastmod churn from`
           : newsOnly
-          ? `Only news-sitemap URLs carry a lastmod (${newsUrlsWithLastmod}); news sitemaps hold ~48 hours of articles by design, so their lastmod values are excluded from this check`
-          : coarseOnly
-            ? `${coarseLastmods} sitemap lastmod value(s) name only a year or month, which says nothing about the day a page changed; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
-            : unreadable
-              ? `${unreadableLastmods} sitemap lastmod value(s) are not dates squirrel can read the same way on every machine; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
-              : // Year and month values carry a lastmod too: counting only the
-              // day-level ones read "Only 0" for a sitemap of coarse values.
-                `Only ${urlsWithLastmod + coarseLastmods + unreadableLastmods} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
+            ? `Only news-sitemap URLs carry a lastmod (${newsUrlsWithLastmod}); news sitemaps hold ~48 hours of articles by design, so their lastmod values are excluded from this check`
+            : coarseOnly
+              ? `${coarseLastmods} sitemap lastmod value(s) name only a year or month, which says nothing about the day a page changed; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
+              : unreadable
+                ? `${unreadableLastmods} sitemap lastmod value(s) are not dates squirrel can read the same way on every machine; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
+                : // Year and month values carry a lastmod too: counting only the
+                  // day-level ones read "Only 0" for a sitemap of coarse values.
+                  `Only ${urlsWithLastmod + coarseLastmods + unreadableLastmods} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
         skipReason: omitsLastmod
           ? "Sitemap omits lastmod"
           : newsOnly
-          ? "Only news-sitemap lastmod values"
-          : coarseOnly
-            ? "Lastmod values name only a year or month"
-            : unreadable
-              ? "Lastmod values are not readable dates"
-              : "Too few URLs with lastmod",
+            ? "Only news-sitemap lastmod values"
+            : coarseOnly
+              ? "Lastmod values name only a year or month"
+              : unreadable
+                ? "Lastmod values are not readable dates"
+                : "Too few URLs with lastmod",
         details: {
           urlsWithLastmod,
           newsUrlsExcluded: newsUrlsWithLastmod,
@@ -154,7 +164,10 @@ export const sitemapLastmodChurnRule: Rule = {
         name: "sitemap-lastmod-churn",
         status: "warn",
         message: `${urlsWithLastmod} sitemap URL(s) with lastmod collapse onto ${distinctDays} distinct day(s): ${offendingDates.join(", ")} (from ${sources.join(", ")})`,
-        items: offendingDates.map((date) => ({ id: date, meta: { count: days.get(date) } })),
+        items: offendingDates.map((date) => ({
+          id: date,
+          meta: { count: days.get(date) },
+        })),
         details: {
           distinctDays,
           urlsWithLastmod,

@@ -15,7 +15,9 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 describe("openSqlite", () => {
   test("busy_timeout is set on the connection before anything else runs", () => {
     const db = openSqlite(join(dir, "a.db"), 1234);
-    expect((db.query("PRAGMA busy_timeout").get() as { timeout: number }).timeout).toBe(1234);
+    expect(
+      (db.query("PRAGMA busy_timeout").get() as { timeout: number }).timeout
+    ).toBe(1234);
     db.close();
   });
 
@@ -25,7 +27,11 @@ describe("openSqlite", () => {
     db.exec("INSERT INTO t VALUES (1), (2), (3)");
     // A method reached through the guard's Object.create wrapper cannot see the
     // native statement's private fields unless it is bound to the statement.
-    const rows = [...(db.prepare("SELECT x FROM t ORDER BY x").iterate() as Iterable<{ x: number }>)];
+    const rows = [
+      ...(db.prepare("SELECT x FROM t ORDER BY x").iterate() as Iterable<{
+        x: number;
+      }>),
+    ];
     expect(rows.map((r) => r.x)).toEqual([1, 2, 3]);
     db.close();
   });
@@ -85,7 +91,9 @@ describe("openSqlite", () => {
     })();
     await holder.exited;
 
-    expect((db.query("SELECT count(*) AS n FROM t").get() as { n: number }).n).toBe(2);
+    expect(
+      (db.query("SELECT count(*) AS n FROM t").get() as { n: number }).n
+    ).toBe(2);
     db.close();
   });
 
@@ -93,7 +101,10 @@ describe("openSqlite", () => {
     const file = join(dir, "wal.db");
     const db = openSqlite(file, 1000);
     enableWal(db);
-    expect((db.query("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode).toBe("wal");
+    expect(
+      (db.query("PRAGMA journal_mode").get() as { journal_mode: string })
+        .journal_mode
+    ).toBe("wal");
     db.close();
   });
 });

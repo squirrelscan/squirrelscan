@@ -1,13 +1,22 @@
 // crawl/robots-txt - robots.txt validation
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { describeRefusedFetch, type RobotsTxtData } from "@squirrelscan/core-contracts";
+import {
+  describeRefusedFetch,
+  type RobotsTxtData,
+} from "@squirrelscan/core-contracts";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { refusalReason, refusedFor } from "../refused";
 
-const SEARCH_CRAWL_DELAY_AGENTS = new Set(["*", "bingbot", "msnbot", "yandex", "googlebot"]);
+const SEARCH_CRAWL_DELAY_AGENTS = new Set([
+  "*",
+  "bingbot",
+  "msnbot",
+  "yandex",
+  "googlebot",
+]);
 
 // Major search crawlers whose own group can let them in when `User-agent: *` blocks the site.
 const MAJOR_SEARCH_CRAWLERS = ["Googlebot", "Bingbot"];
@@ -24,7 +33,9 @@ function crawlersStillAllowed(robotsTxt: RobotsTxtData): string[] {
     return [];
   }
   return MAJOR_SEARCH_CRAWLERS.filter((agent) => {
-    const named = robotsTxt.rules.some((group) => group.userAgent.toLowerCase() === agent.toLowerCase());
+    const named = robotsTxt.rules.some(
+      (group) => group.userAgent.toLowerCase() === agent.toLowerCase()
+    );
     return named && !isRobotsTxtDisallowed(root, robotsTxt, agent);
   });
 }
@@ -35,11 +46,16 @@ function formatInteger(value: number): string {
 
 function crawlDelayCheck(userAgent: string, delay: number): CheckResult | null {
   const normalizedAgent = userAgent.toLowerCase();
-  if (!SEARCH_CRAWL_DELAY_AGENTS.has(normalizedAgent) || !Number.isFinite(delay) || delay <= 0) {
+  if (
+    !SEARCH_CRAWL_DELAY_AGENTS.has(normalizedAgent) ||
+    !Number.isFinite(delay) ||
+    delay <= 0
+  ) {
     return null;
   }
 
-  const slowBing = delay >= 10 && (normalizedAgent === "*" || normalizedAgent === "bingbot");
+  const slowBing =
+    delay >= 10 && (normalizedAgent === "*" || normalizedAgent === "bingbot");
   if (slowBing) {
     const dailyCap = Math.floor(86_400 / delay);
     return {
@@ -47,7 +63,12 @@ function crawlDelayCheck(userAgent: string, delay: number): CheckResult | null {
       status: "warn",
       message: `Crawl-delay ${delay}s slows Bing crawling for User-agent: ${userAgent}`,
       value: `Google ignores Crawl-delay; Bing obeys it and may fetch at most about ${formatInteger(dailyCap)} URLs/day`,
-      items: [{ id: userAgent, label: `User-agent: ${userAgent}; Crawl-delay: ${delay}` }],
+      items: [
+        {
+          id: userAgent,
+          label: `User-agent: ${userAgent}; Crawl-delay: ${delay}`,
+        },
+      ],
     };
   }
 
@@ -67,7 +88,12 @@ function crawlDelayCheck(userAgent: string, delay: number): CheckResult | null {
     status: "info",
     message: `Crawl-delay ${delay}s applies to User-agent: ${userAgent}`,
     value: behavior,
-    items: [{ id: userAgent, label: `User-agent: ${userAgent}; Crawl-delay: ${delay}` }],
+    items: [
+      {
+        id: userAgent,
+        label: `User-agent: ${userAgent}; Crawl-delay: ${delay}`,
+      },
+    ],
   };
 }
 
@@ -75,7 +101,8 @@ export const robotsTxtRule: Rule = {
   meta: {
     id: "crawl/robots-txt",
     name: "Robots.txt",
-    description: "Checks if robots.txt exists and is properly configured, including crawl delays",
+    description:
+      "Checks if robots.txt exists and is properly configured, including crawl delays",
     solution:
       "robots.txt tells search engines which pages to crawl. Place it at the root of your domain (example.com/robots.txt). Include your sitemap URL. Avoid blocking important resources (CSS, JS, images) that search engines need to render pages. Never use 'Disallow: /' unless you want to block all crawling. Use Google Search Console to test your robots.txt.",
     category: "crawl",
@@ -86,9 +113,17 @@ export const robotsTxtRule: Rule = {
     checks: [
       { name: "robots-txt-exists", outcome: "problem" },
       { name: "robots-txt-exists", outcome: "skipped" },
-      { name: "robots-txt-exists", outcome: "clean", clears: ["robots-txt-exists"] },
+      {
+        name: "robots-txt-exists",
+        outcome: "clean",
+        clears: ["robots-txt-exists"],
+      },
       { name: "robots-txt-syntax", outcome: "problem" },
-      { name: "robots-txt-syntax", outcome: "clean", clears: ["robots-txt-syntax"] },
+      {
+        name: "robots-txt-syntax",
+        outcome: "clean",
+        clears: ["robots-txt-syntax"],
+      },
       { name: "robots-txt-disallow", outcome: "problem" },
       { name: "robots-txt-disallow-wildcard", outcome: "problem" },
       {
@@ -98,7 +133,11 @@ export const robotsTxtRule: Rule = {
       },
       { name: "robots-txt-crawl-delay", outcome: "problem" },
       { name: "robots-txt-sitemap", outcome: "problem" },
-      { name: "robots-txt-sitemap", outcome: "clean", clears: ["robots-txt-sitemap"] },
+      {
+        name: "robots-txt-sitemap",
+        outcome: "clean",
+        clears: ["robots-txt-sitemap"],
+      },
       { name: "robots-txt-size", outcome: "problem" },
     ],
   },
@@ -196,7 +235,10 @@ export const robotsTxtRule: Rule = {
         status: "warn",
         message: "robots.txt blocks crawlers without a group of their own",
         value: `User-agent: * has Disallow: /; still allowed: ${stillAllowed.join(", ")}`,
-        items: stillAllowed.map((agent) => ({ id: agent, label: `User-agent: ${agent} may crawl /` })),
+        items: stillAllowed.map((agent) => ({
+          id: agent,
+          label: `User-agent: ${agent} may crawl /`,
+        })),
       });
     } else if (hasFullDisallow) {
       // Check if there are allow rules that might permit some crawling

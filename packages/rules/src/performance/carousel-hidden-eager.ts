@@ -1,8 +1,8 @@
 // perf/carousel-hidden-eager - Eagerly-loaded images inside hidden carousel slides
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Strong carousel/slider evidence: a known framework, or a "carousel"/"slideshow"
 // container class. Deliberately NOT bare "slide"/"slider" tokens — those match
@@ -15,7 +15,9 @@ const MAX_ANCESTOR_DEPTH = 8;
 function isHidden(el: Element): boolean {
   if (el.getAttribute("aria-hidden") === "true") return true;
   if (el.hasAttribute("hidden")) return true;
-  const style = (el.getAttribute("style") || "").toLowerCase().replace(/\s+/g, "");
+  const style = (el.getAttribute("style") || "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
   return style.includes("display:none") || style.includes("visibility:hidden");
 }
 
@@ -23,7 +25,8 @@ export const carouselHiddenEagerRule: Rule = {
   meta: {
     id: "perf/carousel-hidden-eager",
     name: "Carousel Hidden Eager Images",
-    description: "Flags eagerly-loaded images inside hidden carousel slides (wasted bandwidth)",
+    description:
+      "Flags eagerly-loaded images inside hidden carousel slides (wasted bandwidth)",
     solution:
       "Images inside inactive/hidden carousel slides are still downloaded when loaded eagerly, wasting bandwidth and competing with above-fold resources: hiding a slide with display:none or aria-hidden does not stop the fetch. Add loading='lazy' to images in off-screen carousel slides so the browser defers them until the slide is shown. Keep the first (visible) slide eager so it is not delayed.",
     category: "perf",
@@ -74,7 +77,8 @@ export const carouselHiddenEagerRule: Rule = {
         status: "warn",
         message: `${flagged.length} eagerly-loaded image(s) inside hidden carousel slides`,
         items: flagged.slice(0, 10).map((id) => ({ id })),
-        details: flagged.length > 10 ? { additional: flagged.length - 10 } : undefined,
+        details:
+          flagged.length > 10 ? { additional: flagged.length - 10 } : undefined,
       });
     } else {
       checks.push({

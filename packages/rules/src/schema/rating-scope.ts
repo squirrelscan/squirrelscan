@@ -31,16 +31,23 @@
 //   - Structural validity is untouched: schema/review still owns ratingValue /
 //     ratingCount and its messages are unchanged.
 
-import { getPathname, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
-import { EEAT_PAGE_PATTERNS, LOCAL_BUSINESS_TYPES } from "@squirrelscan/utils/constants";
-
+import type { CheckItem } from "@squirrelscan/core-contracts";
 import type { Document } from "linkedom";
 
-import type { CheckItem } from "@squirrelscan/core-contracts";
+import {
+  getPathname,
+  indexJsonLdIds,
+  resolveJsonLdRef,
+} from "@squirrelscan/utils";
+import {
+  EEAT_PAGE_PATTERNS,
+  LOCAL_BUSINESS_TYPES,
+} from "@squirrelscan/utils/constants";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getPageSeparatedText } from "../content/text-content";
 import { isPrivacyPage } from "../shared/privacy-page";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const VISIBILITY_CHECK = "rating-visible";
 const SUBJECT_CHECK = "rating-subject";
@@ -71,7 +78,7 @@ const BUSINESS_CARRIER_TYPES = new Set(
     "Brand",
     "WebSite",
     "WebPage",
-  ].map((t) => t.toLowerCase()),
+  ].map((t) => t.toLowerCase())
 );
 
 /** Page kinds on which a rating cannot be about the page's subject. */
@@ -162,7 +169,8 @@ export const ratingScopeRule: Rule = {
   meta: {
     id: "schema/rating-scope",
     name: "Rating Scope",
-    description: "Checks AggregateRating is about the page's subject and visible to readers",
+    description:
+      "Checks AggregateRating is about the page's subject and visible to readers",
     solution:
       "AggregateRating must describe the thing THIS page is about, and the rating has to be visible to the reader in the page content. A single sitewide rating emitted by a template lands on pages that cannot be rated, privacy policies, terms, blog posts, where it is a self-serving rating of the site rather than markup about the page. Google treats invisible or off-topic rating markup as a structured-data policy violation and issues manual actions for it, which costs the whole site its rich results, not just this page. Move the rating onto the pages whose subject it actually describes (the LocalBusiness on the homepage or location pages, the Product on its product page) and make sure the same rating is on screen.",
     category: "schema",
@@ -253,7 +261,10 @@ function collectRatedEntities(ctx: RuleContext): RatedEntity[] {
   const nodes = ctx.parsed.schemas.all as Record<string, unknown>[];
   // The id index also takes the untyped nodes: a referenced rating may carry
   // no `@type` of its own.
-  const ids = indexJsonLdIds([...nodes, ...ctx.parsed.schemas.untypedNodes], ctx.page.url);
+  const ids = indexJsonLdIds(
+    [...nodes, ...ctx.parsed.schemas.untypedNodes],
+    ctx.page.url
+  );
   const walk: RatingWalk = {
     push,
     resolve: (value) => resolveJsonLdRef(value, ids, ctx.page.url),
@@ -287,7 +298,7 @@ function walkForRatings(
   value: unknown,
   carrier: Record<string, unknown> | null,
   depth: number,
-  walk: RatingWalk,
+  walk: RatingWalk
 ): void {
   if (depth > MAX_DEPTH || !value || typeof value !== "object") return;
 
@@ -320,7 +331,7 @@ function walkForRatings(
 
 function toEntity(
   carrier: Record<string, unknown> | null,
-  rating: Record<string, unknown>,
+  rating: Record<string, unknown>
 ): RatedEntity {
   return {
     type: carrier ? (typeNames(carrier, false)[0] ?? null) : null,
@@ -368,13 +379,14 @@ function buildVisibilityCheck(
   ctx: RuleContext,
   doc: Document,
   entities: RatedEntity[],
-  label: string | null,
+  label: string | null
 ): CheckResult {
   if (hasReviewWidget(doc)) {
     return {
       name: VISIBILITY_CHECK,
       status: "pass",
-      message: "AggregateRating backed by a third-party review widget on the page",
+      message:
+        "AggregateRating backed by a third-party review widget on the page",
       details: { pageType: label, ratedEntities: entities.length },
     };
   }
@@ -422,12 +434,15 @@ function buildVisibilityCheck(
  * text can only clear the check, never trip it.
  */
 function visibleText(ctx: RuleContext, doc: Document): string {
-  const parts = [ctx.parsed.content?.textContent ?? "", getPageSeparatedText(doc)];
+  const parts = [
+    ctx.parsed.content?.textContent ?? "",
+    getPageSeparatedText(doc),
+  ];
   for (const el of doc.querySelectorAll("[alt], [aria-label], [title]")) {
     parts.push(
       el.getAttribute("alt") ?? "",
       el.getAttribute("aria-label") ?? "",
-      el.getAttribute("title") ?? "",
+      el.getAttribute("title") ?? ""
     );
   }
   return parts.join(" ");
@@ -442,15 +457,28 @@ function hasVisibleRating(text: string, entities: RatedEntity[]): boolean {
   return entities.some((e) => {
     const value = e.ratingValue;
     if (!value || !/^\d+[.,]\d+$/.test(value)) return false;
-    const alternates = new Set([value, value.replace(".", ","), value.replace(",", ".")]);
-    return [...alternates].some((v) => new RegExp(`(?<!\\d)${escapeRe(v)}(?!\\d)`).test(text));
+    const alternates = new Set([
+      value,
+      value.replace(".", ","),
+      value.replace(",", "."),
+    ]);
+    return [...alternates].some((v) =>
+      new RegExp(`(?<!\\d)${escapeRe(v)}(?!\\d)`).test(text)
+    );
   });
 }
 
 function hasReviewWidget(doc: Document): boolean {
-  for (const el of doc.querySelectorAll("script[src], iframe[src], link[href]")) {
-    const src = (el.getAttribute("src") ?? el.getAttribute("href") ?? "").toLowerCase();
-    if (REVIEW_WIDGET_SRC_TOKENS.some((token) => src.includes(token))) return true;
+  for (const el of doc.querySelectorAll(
+    "script[src], iframe[src], link[href]"
+  )) {
+    const src = (
+      el.getAttribute("src") ??
+      el.getAttribute("href") ??
+      ""
+    ).toLowerCase();
+    if (REVIEW_WIDGET_SRC_TOKENS.some((token) => src.includes(token)))
+      return true;
   }
   try {
     return doc.querySelector(REVIEW_WIDGET_SELECTOR) !== null;
@@ -468,13 +496,18 @@ function escapeRe(value: string): string {
 // Subject
 // ============================================================================
 
-function buildSubjectCheck(entities: RatedEntity[], kind: IneligiblePageKind): CheckResult {
+function buildSubjectCheck(
+  entities: RatedEntity[],
+  kind: IneligiblePageKind
+): CheckResult {
   const label = PAGE_KIND_LABEL[kind];
   // Legal pages have no rateable subject at all, so every rating on them is out
   // of scope. An article's subject CAN be rateable (a product review), so only
   // the sitewide business entity is reported there.
   const offenders =
-    kind === "article" ? entities.filter((e) => isBusinessCarrier(e.types)) : entities;
+    kind === "article"
+      ? entities.filter((e) => isBusinessCarrier(e.types))
+      : entities;
 
   if (offenders.length === 0) {
     return {
@@ -531,9 +564,14 @@ function isTermsPage(ctx: RuleContext): boolean {
   const path = getPathname(ctx.page.url) || ctx.page.url;
   if (EEAT_PAGE_PATTERNS.terms.some((p) => p.test(path))) return true;
 
-  const headings = [ctx.parsed.meta?.title ?? "", ...(ctx.parsed.h1?.texts ?? [])];
+  const headings = [
+    ctx.parsed.meta?.title ?? "",
+    ...(ctx.parsed.h1?.texts ?? []),
+  ];
   return headings.some((heading) =>
-    heading.split(TITLE_SEPARATORS).some((seg) => TERMS_HEADING_RE.test(seg.trim())),
+    heading
+      .split(TITLE_SEPARATORS)
+      .some((seg) => TERMS_HEADING_RE.test(seg.trim()))
   );
 }
 
@@ -545,7 +583,10 @@ function isTermsPage(ctx: RuleContext): boolean {
  * Page label used in both the message and `details.pageType`: the legal kind,
  * else the classified page type, else null when the classifier could not name it.
  */
-function pageLabel(ctx: RuleContext, kind: IneligiblePageKind | null): string | null {
+function pageLabel(
+  ctx: RuleContext,
+  kind: IneligiblePageKind | null
+): string | null {
   if (kind) return PAGE_KIND_LABEL[kind];
   const pageType = ctx.parsed.pageType;
   return !pageType || pageType === "unknown" ? null : pageType;
@@ -575,7 +616,9 @@ function describeRating(entity: RatedEntity): string {
 
 /** The entities {@link toItems} leaves out, recorded so the list is not read as complete. */
 function itemsOverflow(entities: RatedEntity[]): { additional?: number } {
-  return entities.length > MAX_ITEMS ? { additional: entities.length - MAX_ITEMS } : {};
+  return entities.length > MAX_ITEMS
+    ? { additional: entities.length - MAX_ITEMS }
+    : {};
 }
 
 function toItems(entities: RatedEntity[]): CheckItem[] {

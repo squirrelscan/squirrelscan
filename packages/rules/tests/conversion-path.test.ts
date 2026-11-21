@@ -1,14 +1,22 @@
 // content/conversion-path: money pages whose only calls to action leave the site.
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
 
-import { conversionPathRule, isMoneyPage } from "../src/content/conversion-path";
-import { rules as contentRules } from "../src/content";
-import { buildResolutionSignal } from "../src/resolution";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-async function run(body: string, url = "https://shop.example.com/pricing", types: string[] = []) {
+import { rules as contentRules } from "../src/content";
+import {
+  conversionPathRule,
+  isMoneyPage,
+} from "../src/content/conversion-path";
+import { buildResolutionSignal } from "../src/resolution";
+
+async function run(
+  body: string,
+  url = "https://shop.example.com/pricing",
+  types: string[] = []
+) {
   const html = `<html><head><title>t</title></head><body>${body}</body></html>`;
   const { document } = parseHTML(html);
   const ctx: RuleContext = {
@@ -36,58 +44,67 @@ describe("content/conversion-path", () => {
 
   test("a contact form clears it", async () => {
     const check = await run(
-      `${linkedin}<form action="/lead"><input name="email"><button>Send</button></form>`,
+      `${linkedin}<form action="/lead"><input name="email"><button>Send</button></form>`
     );
     expect(check.status).toBe("pass");
   });
 
   test("a site-search form does not count as a form", async () => {
-    const check = await run(`${linkedin}<form role="search"><input type="search" name="q"></form>`);
+    const check = await run(
+      `${linkedin}<form role="search"><input type="search" name="q"></form>`
+    );
     expect(check.status).toBe("warn");
   });
 
   test("mailto and tel clear it", async () => {
-    expect((await run(`${linkedin}<a href="mailto:hi@shop.example.com">Mail</a>`)).status).toBe(
-      "pass",
-    );
-    expect((await run(`${linkedin}<a href="tel:+15550100">Call</a>`)).status).toBe("pass");
+    expect(
+      (await run(`${linkedin}<a href="mailto:hi@shop.example.com">Mail</a>`))
+        .status
+    ).toBe("pass");
+    expect(
+      (await run(`${linkedin}<a href="tel:+15550100">Call</a>`)).status
+    ).toBe("pass");
   });
 
   test("a link to the contact page clears it", async () => {
-    const check = await run(`${linkedin}<nav><a href="/contact">Contact</a></nav>`);
+    const check = await run(
+      `${linkedin}<nav><a href="/contact">Contact</a></nav>`
+    );
     expect(check.status).toBe("pass");
   });
 
   test("Calendly CTA is info at most", async () => {
     const check = await run(
-      `<main><a class="btn" href="https://calendly.com/acme/demo">Book</a></main>`,
+      `<main><a class="btn" href="https://calendly.com/acme/demo">Book</a></main>`
     );
     expect(check.status).toBe("info");
   });
 
   test("Stripe Checkout CTA is info at most", async () => {
     const check = await run(
-      `<main><a class="cta" href="https://buy.stripe.com/abc">Buy</a><a class="btn" href="https://linkedin.com/in/x">Hi</a></main>`,
+      `<main><a class="cta" href="https://buy.stripe.com/abc">Buy</a><a class="btn" href="https://linkedin.com/in/x">Hi</a></main>`
     );
     expect(check.status).toBe("info");
   });
 
   test("an on-site CTA is a conversion path", async () => {
-    const check = await run(`${linkedin}<a class="btn" href="/signup">Start</a>`);
+    const check = await run(
+      `${linkedin}<a class="btn" href="/signup">Start</a>`
+    );
     expect(check.status).toBe("pass");
   });
 
   test("a subdomain CTA counts as on-site", async () => {
     const check = await run(
       `<main><a class="btn" href="https://app.example.com/start">Start</a></main>`,
-      "https://www.example.com/pricing",
+      "https://www.example.com/pricing"
     );
     expect(check.status).toBe("pass");
   });
 
   test("plain links and chrome buttons are not prominent CTAs", async () => {
     const check = await run(
-      `<header><a class="btn" href="https://linkedin.com/in/x">Follow</a></header><main><a href="https://linkedin.com/in/x">me</a></main>`,
+      `<header><a class="btn" href="https://linkedin.com/in/x">Follow</a></header><main><a href="https://linkedin.com/in/x">me</a></main>`
     );
     expect(check.status).toBe("pass");
     expect(check.details?.ctaCount).toBe(0);
@@ -105,13 +122,16 @@ describe("content/conversion-path", () => {
   });
 
   test("Article schema on a pricing-looking URL is not a money page", async () => {
-    expect((await run(linkedin, "https://shop.example.com/pricing", ["BlogPosting"])).status).toBe(
-      "skipped",
-    );
+    expect(
+      (await run(linkedin, "https://shop.example.com/pricing", ["BlogPosting"]))
+        .status
+    ).toBe("skipped");
   });
 
   test("Product schema makes any page a money page", async () => {
-    const check = await run(linkedin, "https://shop.example.com/widget-3000", ["Product"]);
+    const check = await run(linkedin, "https://shop.example.com/widget-3000", [
+      "Product",
+    ]);
     expect(check.status).toBe("warn");
   });
 });
@@ -120,14 +140,19 @@ describe("input not fully read (#2134)", () => {
   const SCAN_TRUNCATED = "scan-truncated";
 
   test("a call to action past the link cap is a gap, not a pass", async () => {
-    const nav = Array.from({ length: 2001 }, (_, i) => `<a href="/p/${i}">p${i}</a>`).join("");
+    const nav = Array.from(
+      { length: 2001 },
+      (_, i) => `<a href="/p/${i}">p${i}</a>`
+    ).join("");
     const check = await run(`<main><h1>Pricing</h1>${nav}${linkedin}</main>`);
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe(SCAN_TRUNCATED);
   });
 
   test("a page under the link cap with no call to action still passes", async () => {
-    const check = await run(`<main><h1>Pricing</h1><a href="/p/1">p</a></main>`);
+    const check = await run(
+      `<main><h1>Pricing</h1><a href="/p/1">p</a></main>`
+    );
     expect(check.status).toBe("pass");
   });
 
@@ -149,10 +174,16 @@ describe("input not fully read (#2134)", () => {
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe(SCAN_TRUNCATED);
     const signal = buildResolutionSignal(
-      { "content/conversion-path": { checks: [{ ...check, pageUrl: ctx.page.url }] } },
-      [ctx.page.url],
+      {
+        "content/conversion-path": {
+          checks: [{ ...check, pageUrl: ctx.page.url }],
+        },
+      },
+      [ctx.page.url]
     )!;
-    expect(signal.notEvaluated?.["content/conversion-path|conversion-path"]).toHaveLength(1);
+    expect(
+      signal.notEvaluated?.["content/conversion-path|conversion-path"]
+    ).toHaveLength(1);
   });
 
   test("a page read whole that is not a money page stays a not-applicable verdict", async () => {
@@ -190,16 +221,22 @@ describe("content/conversion-path never clears a finding it could not judge", ()
       parsed: { document, schemas: { types: [] } } as unknown as ParsedPage,
       options: {},
     };
-    const check = { ...(await conversionPathRule.run(ctx)).checks[0]!, pageUrl: URL_ };
+    const check = {
+      ...(await conversionPathRule.run(ctx)).checks[0]!,
+      pageUrl: URL_,
+    };
     return {
       check,
-      signal: buildResolutionSignal({ "content/conversion-path": { checks: [check] } }, [URL_])!,
+      signal: buildResolutionSignal(
+        { "content/conversion-path": { checks: [check] } },
+        [URL_]
+      )!,
     };
   }
 
   test("a truncated page with no call to action found keeps the stored finding open", async () => {
     const { check, signal } = await runHtml(
-      `<html><head><title>t</title></head><body><main><h1>Pricing</h1><p>Plans from`,
+      `<html><head><title>t</title></head><body><main><h1>Pricing</h1><p>Plans from`
     );
     expect(check.status).toBe("info");
     expect(check.details?.inconclusive).toBe(true);
@@ -209,7 +246,7 @@ describe("content/conversion-path never clears a finding it could not judge", ()
 
   test("a page read whole with no call to action is still a pass that resolves", async () => {
     const { check, signal } = await runHtml(
-      `<html><head><title>t</title></head><body><main><h1>Pricing</h1></main></body></html>`,
+      `<html><head><title>t</title></head><body><main><h1>Pricing</h1></main></body></html>`
     );
     expect(check.status).toBe("pass");
     expect(signal.failing[KEY]).toEqual([]);
@@ -217,7 +254,9 @@ describe("content/conversion-path never clears a finding it could not judge", ()
   });
 
   test("a truncated page whose calls to action were read is still judged", async () => {
-    const { check } = await runHtml(`<html><head><title>t</title></head><body>${linkedin}`);
+    const { check } = await runHtml(
+      `<html><head><title>t</title></head><body>${linkedin}`
+    );
     expect(check.status).toBe("warn");
   });
 });

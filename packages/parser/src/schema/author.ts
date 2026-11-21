@@ -63,9 +63,7 @@ export function extractAuthorFromSchema(
 }
 
 /** Build an `@id` → node lookup from all parsed schema nodes. */
-function buildIdIndex(
-  nodes: ParsedSchema[]
-): Map<string, ParsedSchema> {
+function buildIdIndex(nodes: ParsedSchema[]): Map<string, ParsedSchema> {
   const map = new Map<string, ParsedSchema>();
   for (const node of nodes) {
     const id = node["@id"];

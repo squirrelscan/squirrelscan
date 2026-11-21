@@ -58,5 +58,9 @@ export function isReplayedCheck(check: CheckResult): boolean {
  */
 export function isPageAttributed(check: CheckResult): boolean {
   if (check.pageUrl) return true;
-  return check.details?.aggregated === true && !!check.pages && check.pages.length > 0;
+  return (
+    check.details?.aggregated === true &&
+    !!check.pages &&
+    check.pages.length > 0
+  );
 }

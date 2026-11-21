@@ -15,13 +15,14 @@
 // visible text), so one missing real address cannot be reported twice.
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
+
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { getPathname } from "@squirrelscan/utils";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 
-import { getRenderedProseText, isInsideCodeOrUnrendered } from "./text-content";
-
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
+import { getRenderedProseText, isInsideCodeOrUnrendered } from "./text-content";
 
 export type PlaceholderContactKind = "email" | "phone" | "address" | "social";
 
@@ -66,7 +67,8 @@ const ADDRESS_RES: readonly RegExp[] = [
 ];
 
 /** `@yourhandle` as prose. The lookbehind keeps `user@username.com` out. */
-const HANDLE_RE = /(?<![\w@.])@(?:yourhandle|your_handle|yourusername|username)(?![\w-])/gi;
+const HANDLE_RE =
+  /(?<![\w@.])@(?:yourhandle|your_handle|yourusername|username)(?![\w-])/gi;
 
 /** A social profile URL whose path is the theme's placeholder. */
 const SOCIAL_HREF_RE =
@@ -81,12 +83,17 @@ const MAX_SAMPLES = 5;
 function collect(
   kind: PlaceholderContactKind,
   text: string,
-  patterns: readonly RegExp[],
+  patterns: readonly RegExp[]
 ): PlaceholderContactFinding | undefined {
   const hits: string[] = [];
-  for (const re of patterns) for (const m of text.matchAll(re)) hits.push(m[0].trim());
+  for (const re of patterns)
+    for (const m of text.matchAll(re)) hits.push(m[0].trim());
   if (hits.length === 0) return undefined;
-  return { kind, samples: [...new Set(hits)].slice(0, MAX_SAMPLES), count: hits.length };
+  return {
+    kind,
+    samples: [...new Set(hits)].slice(0, MAX_SAMPLES),
+    count: hits.length,
+  };
 }
 
 /**
@@ -98,7 +105,7 @@ function collect(
  */
 export function findPlaceholderContacts(
   text: string,
-  hrefs: readonly string[] = [],
+  hrefs: readonly string[] = []
 ): PlaceholderContactFinding[] {
   const prose = text.replace(/[^\S\n]+/g, " ");
   const targets: string[] = [];
@@ -124,7 +131,9 @@ export function findPlaceholderContacts(
       ? handles
       : {
           kind: "social",
-          samples: [...new Set([...(handles?.samples ?? []), ...socialHits])].slice(0, MAX_SAMPLES),
+          samples: [
+            ...new Set([...(handles?.samples ?? []), ...socialHits]),
+          ].slice(0, MAX_SAMPLES),
           count: (handles?.count ?? 0) + socialHits.length,
         };
 
@@ -141,7 +150,8 @@ export function findPlaceholderContacts(
 /* -------------------------------------------------------------------------- */
 
 /** A page a visitor uses to reach the business or pay it. */
-const CHECKOUT_PATH_RE = /\/(?:checkout|cart|basket|payment|billing|order)(?:\/|\.html?)?$/i;
+const CHECKOUT_PATH_RE =
+  /\/(?:checkout|cart|basket|payment|billing|order)(?:\/|\.html?)?$/i;
 
 /** Developer and help documentation, where these strings are samples. */
 const DOCS_PATH_RE =
@@ -149,7 +159,10 @@ const DOCS_PATH_RE =
 
 export type ContactPageWeight = "critical" | "docs" | "standard";
 
-export function classifyContactPage(url: string, pageType?: string): ContactPageWeight {
+export function classifyContactPage(
+  url: string,
+  pageType?: string
+): ContactPageWeight {
   const path = getPathname(url);
   if (
     pageType === "contact" ||
@@ -178,7 +191,8 @@ export const placeholderContactRule: Rule = {
   meta: {
     id: "content/placeholder-contact",
     name: "Placeholder Contact Details",
-    description: "Detects template-default emails, phone numbers, addresses and social handles",
+    description:
+      "Detects template-default emails, phone numbers, addresses and social handles",
     solution:
       "Replace every template-default contact detail with a real one, or remove the block. A fake phone number or an address at example.com on a contact or checkout page means customers cannot reach the business, and it reads as an abandoned site to visitors and search engines. Check the footer, the contact page, schema.org markup and any mailto: or tel: links, since themes repeat the same default in all of them. If the page is documentation that shows these values as samples, keep them in a code block.",
     category: "content",
@@ -219,7 +233,8 @@ export const placeholderContactRule: Rule = {
       checks.push({
         name: "placeholder-contact",
         status: "skipped",
-        message: "Documentation page: placeholder contact details are samples here",
+        message:
+          "Documentation page: placeholder contact details are samples here",
         skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
         details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
@@ -261,7 +276,11 @@ export const placeholderContactRule: Rule = {
       items,
       details: {
         pageWeight: weight,
-        kinds: found.map((f) => ({ kind: f.kind, count: f.count, samples: f.samples })),
+        kinds: found.map((f) => ({
+          kind: f.kind,
+          count: f.count,
+          samples: f.samples,
+        })),
       },
     });
     return { checks };

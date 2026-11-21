@@ -31,7 +31,10 @@ export const SECURITY_FINGERPRINTS: TechFingerprint[] = [
     website: "https://developers.cloudflare.com/turnstile",
     icon: "cloudflare",
     detectors: [
-      { type: "script-url", pattern: /challenges\.cloudflare\.com\/turnstile/i },
+      {
+        type: "script-url",
+        pattern: /challenges\.cloudflare\.com\/turnstile/i,
+      },
       { type: "html", pattern: /cf-turnstile/i },
     ],
   },
@@ -63,7 +66,11 @@ export const SECURITY_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.f5.com/products/big-ip-services",
     icon: "f5",
     detectors: [
-      { type: "header", name: "set-cookie", pattern: /(?:^|[;\s])BIGipServer[\w.-]{1,128}=/ },
+      {
+        type: "header",
+        name: "set-cookie",
+        pattern: /(?:^|[;\s])BIGipServer[\w.-]{1,128}=/,
+      },
       { type: "header", name: "server", pattern: /^BigIP$/i },
     ],
     confidence: "high",

@@ -15,6 +15,8 @@ describe("customUserAgent (#1152)", () => {
   });
 
   test("when two spellings are set the later one wins, as on the wire", () => {
-    expect(customUserAgent({ "User-Agent": "first", "user-agent": "second" })).toBe("second");
+    expect(
+      customUserAgent({ "User-Agent": "first", "user-agent": "second" })
+    ).toBe("second");
   });
 });

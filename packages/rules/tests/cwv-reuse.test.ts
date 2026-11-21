@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
 import { getCWVHints } from "../src/performance/cwv";
 
 const HTML = `<!doctype html><html><head>

@@ -1,4 +1,5 @@
 import type { WafDetectionResult, WafProvider } from "./types";
+
 import {
   CONTENT_PATTERNS,
   COOKIE_PATTERNS,
@@ -29,7 +30,12 @@ function emptySignals(): Signals {
   return { confidence: new Map(), indicators: [] };
 }
 
-function note(signals: Signals, provider: WafProvider, confidence: Confidence, indicator: string): void {
+function note(
+  signals: Signals,
+  provider: WafProvider,
+  confidence: Confidence,
+  indicator: string
+): void {
   signals.indicators.push(indicator);
   const prior = signals.confidence.get(provider);
   if (prior === undefined || RANK[confidence] > RANK[prior]) {
@@ -54,7 +60,9 @@ function merge(...all: Signals[]): Signals {
 /** Attribute: the most specific provider with a signal (PROVIDER_PRECEDENCE), with its confidence. */
 function attribute(signals: Signals): WafDetectionResult {
   if (signals.confidence.size === 0) return NO_WAF;
-  const providers = PROVIDER_PRECEDENCE.filter((provider) => signals.confidence.has(provider));
+  const providers = PROVIDER_PRECEDENCE.filter((provider) =>
+    signals.confidence.has(provider)
+  );
   const provider = providers[0] ?? null;
   return {
     detected: true,
@@ -81,11 +89,20 @@ export function cookieNamesFromHeaders(headers: Headers): string[] {
 
 function headerSignals(headers: Headers): Signals {
   const signals = emptySignals();
-  for (const { provider, headers: headerPatterns, confidence } of HEADER_PATTERNS) {
+  for (const {
+    provider,
+    headers: headerPatterns,
+    confidence,
+  } of HEADER_PATTERNS) {
     for (const { name, pattern } of headerPatterns) {
       const value = headers.get(name);
       if (value !== null && (!pattern || pattern.test(value))) {
-        note(signals, provider, confidence, `header:${name}=${value.slice(0, 50)}`);
+        note(
+          signals,
+          provider,
+          confidence,
+          `header:${name}=${value.slice(0, 50)}`
+        );
       }
     }
   }
@@ -113,7 +130,12 @@ function contentSignals(html: string): Signals {
     const sample = views[view];
     for (const pattern of patterns) {
       if (pattern.test(sample)) {
-        note(signals, provider, confidence, `content:${pattern.source.slice(0, 30)}`);
+        note(
+          signals,
+          provider,
+          confidence,
+          `content:${pattern.source.slice(0, 30)}`
+        );
         break; // One match per provider is enough
       }
     }
@@ -123,11 +145,18 @@ function contentSignals(html: string): Signals {
 
 /** Detect WAF from response headers, including the cookie names they set. */
 export function detectWafFromHeaders(headers: Headers): WafDetectionResult {
-  return attribute(merge(headerSignals(headers), cookieSignals(cookieNamesFromHeaders(headers))));
+  return attribute(
+    merge(
+      headerSignals(headers),
+      cookieSignals(cookieNamesFromHeaders(headers))
+    )
+  );
 }
 
 /** Detect WAF from cookie names alone (a stored response that kept names, not values). */
-export function detectWafFromCookies(names: readonly string[]): WafDetectionResult {
+export function detectWafFromCookies(
+  names: readonly string[]
+): WafDetectionResult {
   return attribute(cookieSignals(names));
 }
 
@@ -143,8 +172,13 @@ export function detectWafFromContent(html: string): WafDetectionResult {
  * header or markup) is attributed to DataDome, not Cloudflare (#750).
  */
 export function detectWaf(headers: Headers, body?: string): WafDetectionResult {
-  const fromHeaders = merge(headerSignals(headers), cookieSignals(cookieNamesFromHeaders(headers)));
-  return attribute(body ? merge(fromHeaders, contentSignals(body)) : fromHeaders);
+  const fromHeaders = merge(
+    headerSignals(headers),
+    cookieSignals(cookieNamesFromHeaders(headers))
+  );
+  return attribute(
+    body ? merge(fromHeaders, contentSignals(body)) : fromHeaders
+  );
 }
 
 /**
@@ -158,11 +192,13 @@ export function detectWaf(headers: Headers, body?: string): WafDetectionResult {
 export function isLikelyWafBlock(
   status: number,
   headers: Headers,
-  body?: string,
+  body?: string
 ): boolean {
   if (status !== 403) {
     return false;
   }
-  const signals = body ? merge(headerSignals(headers), contentSignals(body)) : headerSignals(headers);
+  const signals = body
+    ? merge(headerSignals(headers), contentSignals(body))
+    : headerSignals(headers);
   return attribute(signals).detected;
 }

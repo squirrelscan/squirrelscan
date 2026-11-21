@@ -2,13 +2,24 @@
 // rules nested in a style rule, descendant and attribute selectors (the iframe is the last compound), and a cascade that
 // follows specificity then source order. Each case is a page whose iframe is a fixed full-viewport cover only through its CSS.
 
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
-import { overlayGeometry, overlayGeometryFor, type Reading } from "../src/integrity/overlay-style";
-import { cssScanTruncated, hiddenSelectors, isCover, nestingUsed, selectorListState } from "../src/integrity/overlay-style";
-import { detectFakeAuthOverlay } from "../src/integrity/signals";
 import type { RuleContext } from "../src/types";
+
+import {
+  overlayGeometry,
+  overlayGeometryFor,
+  type Reading,
+} from "../src/integrity/overlay-style";
+import {
+  cssScanTruncated,
+  hiddenSelectors,
+  isCover,
+  nestingUsed,
+  selectorListState,
+} from "../src/integrity/overlay-style";
+import { detectFakeAuthOverlay } from "../src/integrity/signals";
 
 setDefaultTimeout(60_000);
 
@@ -23,16 +34,24 @@ function page(css: string, frame = FRAME, body = "") {
 }
 function context(css: string, frame = FRAME, body = ""): RuleContext {
   const { html, parsed } = page(css, frame, body);
-  return { page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext;
+  return {
+    page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+    parsed,
+    options: {},
+  } as unknown as RuleContext;
 }
-const fires = (css: string, frame = FRAME, body = ""): boolean => detectFakeAuthOverlay(context(css, frame, body)) !== null;
+const fires = (css: string, frame = FRAME, body = ""): boolean =>
+  detectFakeAuthOverlay(context(css, frame, body)) !== null;
 
 describe("rules inside the at-rules that apply to a screen (#1409)", () => {
   for (const [name, css] of [
     ["@media all", `@media all{.c{${FIXED}}}`],
     ["@media screen", `@media screen{.c{${FIXED}}}`],
     ["@media with a width condition", `@media (min-width:1px){.c{${FIXED}}}`],
-    ["@media screen and (min-width:0)", `@media screen and (min-width:0){.c{${FIXED}}}`],
+    [
+      "@media screen and (min-width:0)",
+      `@media screen and (min-width:0){.c{${FIXED}}}`,
+    ],
     ["@media print, screen", `@media print, screen{.c{${FIXED}}}`],
     ["@media not print", `@media not print{.c{${FIXED}}}`],
     ["@layer with a name", `@layer base{.c{${FIXED}}}`],
@@ -40,8 +59,14 @@ describe("rules inside the at-rules that apply to a screen (#1409)", () => {
     ["@supports", `@supports (position:fixed){.c{${FIXED}}}`],
     ["@container", `@container (min-width:1px){.c{${FIXED}}}`],
     ["@scope", `@scope (main){.c{${FIXED}}}`],
-    ["nested at-rules", `@layer a{@media all{@supports (display:block){.c{${FIXED}}}}}`],
-    ["after a layer statement and an import", `@layer a,b;@import "x.css";@media all{.c{${FIXED}}}`],
+    [
+      "nested at-rules",
+      `@layer a{@media all{@supports (display:block){.c{${FIXED}}}}}`,
+    ],
+    [
+      "after a layer statement and an import",
+      `@layer a,b;@import "x.css";@media all{.c{${FIXED}}}`,
+    ],
     ["uppercase and escaped at-rule name", `@MEDIA ALL{.c{${FIXED}}}`],
   ] as const) {
     test(`${name} is read`, () => {
@@ -85,7 +110,9 @@ describe("rules inside the at-rules that apply to a screen (#1409)", () => {
   });
 
   test("the hidden-text scan is unchanged: a rule inside an at-rule hides nothing there", () => {
-    const { parsed } = page(`@media (max-width:1px){.x{display:none}} @media all{.y{display:none}} .z{display:none}`);
+    const { parsed } = page(
+      `@media (max-width:1px){.x{display:none}} @media all{.y{display:none}} .z{display:none}`
+    );
     const hidden = hiddenSelectors(parsed.document!);
     expect([...hidden.classes].sort()).toEqual(["z"]);
   });
@@ -112,7 +139,14 @@ describe("rules nested in a style rule", () => {
 
 describe("descendant and attribute selectors name the iframe by its last compound", () => {
   test("descendant, child and sibling combinators", () => {
-    for (const css of [`main iframe{${FIXED}}`, `main .c{${FIXED}}`, `main > iframe.c{${FIXED}}`, `h1 + iframe{${FIXED}}`, `h1 ~ #google-auth{${FIXED}}`, `body main   iframe{${FIXED}}`]) {
+    for (const css of [
+      `main iframe{${FIXED}}`,
+      `main .c{${FIXED}}`,
+      `main > iframe.c{${FIXED}}`,
+      `h1 + iframe{${FIXED}}`,
+      `h1 ~ #google-auth{${FIXED}}`,
+      `body main   iframe{${FIXED}}`,
+    ]) {
       expect(fires(css), css).toBe(true);
     }
   });
@@ -150,7 +184,8 @@ describe("descendant and attribute selectors name the iframe by its last compoun
     }
   });
   test("the frame's attributes, not its neighbours', decide: two iframes with different attributes", () => {
-    const frames = '<iframe id="a" class="c" srcdoc=""></iframe><iframe id="google-auth" data-x="y" srcdoc=""></iframe>';
+    const frames =
+      '<iframe id="a" class="c" srcdoc=""></iframe><iframe id="google-auth" data-x="y" srcdoc=""></iframe>';
     expect(fires(`iframe[data-x=y]{${FIXED}}`, frames)).toBe(true);
     expect(fires(`iframe[data-x=n]{${FIXED}}`, frames)).toBe(false);
   });
@@ -172,7 +207,12 @@ describe("the cascade: !important, then specificity, then source order", () => {
     expect(fires(`iframe{${STATIC}} .c{${FIXED}}`)).toBe(true);
     expect(fires(`[id=google-auth]{${FIXED}} iframe{${STATIC}}`)).toBe(true);
     expect(fires(`iframe.c{${STATIC}} .c{${FIXED}}`)).toBe(false); // tag + class (0,1,1) beats class (0,1,0)
-    expect(fires(`.c.c2{${STATIC}} .c{${FIXED}}`, '<iframe id="google-auth" class="c c2" srcdoc=""></iframe>')).toBe(false);
+    expect(
+      fires(
+        `.c.c2{${STATIC}} .c{${FIXED}}`,
+        '<iframe id="google-auth" class="c c2" srcdoc=""></iframe>'
+      )
+    ).toBe(false);
   });
   test("equal specificity falls to source order", () => {
     expect(fires(`.c{${STATIC}} .c{${FIXED}}`)).toBe(true);
@@ -188,18 +228,31 @@ describe("the cascade: !important, then specificity, then source order", () => {
     expect(fires(`main .c{${STATIC}} .c{${FIXED}}`)).toBe(true);
   });
   test("!important beats specificity, and specificity among !important rules still applies", () => {
-    expect(fires(`.c{position:fixed!important;${FIXED}} #google-auth{${STATIC}}`)).toBe(true);
-    expect(fires(`.c{${FIXED};position:static!important} #google-auth{position:fixed!important}`)).toBe(true);
-    expect(fires(`#google-auth{position:static!important} .c{position:fixed!important;${FIXED}}`)).toBe(false);
+    expect(
+      fires(`.c{position:fixed!important;${FIXED}} #google-auth{${STATIC}}`)
+    ).toBe(true);
+    expect(
+      fires(
+        `.c{${FIXED};position:static!important} #google-auth{position:fixed!important}`
+      )
+    ).toBe(true);
+    expect(
+      fires(
+        `#google-auth{position:static!important} .c{position:fixed!important;${FIXED}}`
+      )
+    ).toBe(false);
   });
   test("an inline style beats the stylesheet, and an important stylesheet rule beats a normal inline one", () => {
     const inline = `<iframe id="google-auth" class="c" srcdoc="" style="position:static"></iframe>`;
     expect(fires(`#google-auth{${FIXED}}`, inline)).toBe(false);
-    expect(fires(`#google-auth{${FIXED};position:fixed!important}`, inline)).toBe(true);
+    expect(
+      fires(`#google-auth{${FIXED};position:fixed!important}`, inline)
+    ).toBe(true);
   });
   test("frames that differ only by an attribute some rule tests are cascaded apart (the memo key)", () => {
     // The same id and classes, so only the attribute tells them apart; the static one is first in the page.
-    const frames = '<iframe id="google-auth" class="c" data-k="2" srcdoc=""></iframe><iframe id="google-auth" class="c" data-k="1" srcdoc=""></iframe>';
+    const frames =
+      '<iframe id="google-auth" class="c" data-k="2" srcdoc=""></iframe><iframe id="google-auth" class="c" data-k="1" srcdoc=""></iframe>';
     expect(fires(`.c{${FIXED}} .c[data-k="2"]{${STATIC}}`, frames)).toBe(true); // the data-k=1 frame stays fixed
     expect(fires(`.c{${FIXED}} .c[data-k]{${STATIC}}`, frames)).toBe(false);
   });
@@ -242,7 +295,9 @@ describe("a rule whose applicability cannot be decided never disables a cover (#
   test("the same decoys written before the cover, and nested", () => {
     expect(fires(`@media (max-width:1px){.c{${STATIC}}}${COVER}`)).toBe(true);
     expect(fires(`.c{${FIXED}} main{ .c:hover{${STATIC}} }`)).toBe(true);
-    expect(fires(`.c{${FIXED}} @media (max-width:1px){ .c{ ${STATIC} } }`)).toBe(true);
+    expect(
+      fires(`.c{${FIXED}} @media (max-width:1px){ .c{ ${STATIC} } }`)
+    ).toBe(true);
   });
   test("a decoy that is decided (a screen, an exact selector) still disables it, as in a browser", () => {
     expect(fires(`${COVER}@media screen{.c{${STATIC}}}`)).toBe(false);
@@ -266,7 +321,9 @@ describe("a rule whose applicability cannot be decided never disables a cover (#
   });
   test("an undecided rule enabling the cover does not beat a decided rule that disables it", () => {
     // the decided cascade alone has no cover, and the full one has the undecided rule applied: reported (either)
-    expect(fires(`.c{${STATIC}} @media (min-width:1px){.c{${FIXED}}}`)).toBe(true);
+    expect(fires(`.c{${STATIC}} @media (min-width:1px){.c{${FIXED}}}`)).toBe(
+      true
+    );
     // with nothing undecided there is one cascade and it is the browser's
     expect(fires(`.c{${FIXED}} .c{${STATIC}}`)).toBe(false);
   });
@@ -274,7 +331,10 @@ describe("a rule whose applicability cannot be decided never disables a cover (#
     for (const length of [2_060, 3_000, 100_000]) {
       const prelude = `screen, ${"(min-width:1px),".repeat(Math.ceil(length / 16))} (x)`;
       expect(fires(`@media ${prelude}{.c{${FIXED}}}`), `${length}`).toBe(true);
-      expect(fires(`${COVER}@media ${prelude}{.c{${STATIC}}}`), `${length} decoy`).toBe(true);
+      expect(
+        fires(`${COVER}@media ${prelude}{.c{${STATIC}}}`),
+        `${length} decoy`
+      ).toBe(true);
     }
   });
   test("the three readings all apply the decided cascade", () => {
@@ -300,7 +360,10 @@ describe("an open rule ends at the end of the text, and the order of a nested ru
   test("an unclosed rule, also inside an unclosed at-rule", () => {
     for (const reading of ["tokens", "naive", "plain"] as Reading[]) {
       const doc = page(`.c{${FIXED}`).parsed.document!;
-      expect(isCover(overlayGeometryFor(doc, doc.querySelector("iframe")!, reading)), reading).toBe(true);
+      expect(
+        isCover(overlayGeometryFor(doc, doc.querySelector("iframe")!, reading)),
+        reading
+      ).toBe(true);
     }
     expect(tokenCover(`@media all{.c{${FIXED}`)).toBe(true);
     expect(tokenCover(`main{ .c{${FIXED}`)).toBe(true);
@@ -320,10 +383,22 @@ describe("an open rule ends at the end of the text, and the order of a nested ru
     expect(tokenCover(`.c{ ${FIXED}; &{border:0} z-index:5000 }`)).toBe(true);
   });
   test("a nested block without `;` before the next declaration does not garble it", () => {
-    expect(fires(`.c{ &{border:0} position:fixed;inset:0;z-index:9999;width:100%;height:100% }`)).toBe(true);
+    expect(
+      fires(
+        `.c{ &{border:0} position:fixed;inset:0;z-index:9999;width:100%;height:100% }`
+      )
+    ).toBe(true);
     // (`height:100% &{...}` is a nested rule with an invalid selector in a browser: the declaration is not one)
-    expect(tokenCover(`.c{ position:fixed;inset:0;z-index:9999;width:100%;height:100% &{border:0} }`)).toBe(false);
-    expect(fires(`.c{ position:fixed;inset:0;&{border:0} z-index:9999;width:100%;height:100% }`)).toBe(true);
+    expect(
+      tokenCover(
+        `.c{ position:fixed;inset:0;z-index:9999;width:100%;height:100% &{border:0} }`
+      )
+    ).toBe(false);
+    expect(
+      fires(
+        `.c{ position:fixed;inset:0;&{border:0} z-index:9999;width:100%;height:100% }`
+      )
+    ).toBe(true);
   });
   test("`&` is the parent's last compound, in a compound or alone", () => {
     const withP = '<iframe id="google-auth" class="p c" srcdoc=""></iframe>';
@@ -336,8 +411,18 @@ describe("an open rule ends at the end of the text, and the order of a nested ru
     expect(fires(`main .p{ &.c{${FIXED}} }`, withP)).toBe(true); // the parent's ancestor is not evaluated
   });
   test("an attribute value is compared without case on both sides", () => {
-    expect(fires(`iframe[data-k=Vv]{${FIXED}}`, '<iframe id="google-auth" data-k="Vv" srcdoc=""></iframe>')).toBe(true);
-    expect(fires(`iframe[data-k=vv]{${FIXED}}`, '<iframe id="google-auth" data-k="VV" srcdoc=""></iframe>')).toBe(true);
+    expect(
+      fires(
+        `iframe[data-k=Vv]{${FIXED}}`,
+        '<iframe id="google-auth" data-k="Vv" srcdoc=""></iframe>'
+      )
+    ).toBe(true);
+    expect(
+      fires(
+        `iframe[data-k=vv]{${FIXED}}`,
+        '<iframe id="google-auth" data-k="VV" srcdoc=""></iframe>'
+      )
+    ).toBe(true);
   });
 });
 
@@ -364,25 +449,66 @@ describe("hostile CSS stays linear, at 5 MB and at 10 MiB", () => {
     run();
     return performance.now() - started;
   };
-  const repeat = (unit: string, bytes: number): string => unit.repeat(Math.ceil(bytes / unit.length));
+  const repeat = (unit: string, bytes: number): string =>
+    unit.repeat(Math.ceil(bytes / unit.length));
 
   // The sheet is read up to MAX_CSS_CHARS (4,000,000): a larger one is reported truncated, so the real rule is placed within it
   // for the detection check and the full size is the timing check.
   const WITHIN = 3_900_000;
   const cases: Array<[string, (bytes: number) => string, boolean]> = [
-    ["unclosed @media all openers, then the real rule", (n) => `${repeat("@media all{", n)}.c{${FIXED}}`, true],
+    [
+      "unclosed @media all openers, then the real rule",
+      (n) => `${repeat("@media all{", n)}.c{${FIXED}}`,
+      true,
+    ],
     ["unclosed @media print openers", (n) => repeat("@media print{", n), false],
-    ["balanced @media all blocks of unrelated rules, then the real rule", (n) => `${repeat("@media all{.n{border:0}}", n)}.c{${FIXED}}`, true],
+    [
+      "balanced @media all blocks of unrelated rules, then the real rule",
+      (n) => `${repeat("@media all{.n{border:0}}", n)}.c{${FIXED}}`,
+      true,
+    ],
     ["unclosed style-rule openers (nesting)", (n) => repeat("a{", n), false],
-    ["nested rules to the depth bound and far past it", (n) => `${repeat("a{", 4_000)}.c{${FIXED}}${repeat("}", 4_000)}${repeat("x{", n)}`, false],
-    ["a selector list of millions of parts, then the real rule", (n) => `${repeat(".x,", n)}.c{${FIXED}}`, false],
-    ["attribute-selector rules that set nothing that matters", (n) => repeat('iframe[a="v"]{border:0}', n), false],
-    ["descendant selectors of 4 KB each", (n) => repeat(`${"a ".repeat(2_000)}iframe{border:0}`, n), false],
-    ["unclosed attribute selectors and :is() groups", (n) => repeat('iframe[a="b{x:y}:is(', n), false],
-    ["backslashes and comment openers in selectors", (n) => repeat("\\\\/*", n), false],
-    ["escaped at-rule names, then the real rule", (n) => `${repeat("@\\6d edia all{", n)}.c{${FIXED}}`, true],
+    [
+      "nested rules to the depth bound and far past it",
+      (n) =>
+        `${repeat("a{", 4_000)}.c{${FIXED}}${repeat("}", 4_000)}${repeat("x{", n)}`,
+      false,
+    ],
+    [
+      "a selector list of millions of parts, then the real rule",
+      (n) => `${repeat(".x,", n)}.c{${FIXED}}`,
+      false,
+    ],
+    [
+      "attribute-selector rules that set nothing that matters",
+      (n) => repeat('iframe[a="v"]{border:0}', n),
+      false,
+    ],
+    [
+      "descendant selectors of 4 KB each",
+      (n) => repeat(`${"a ".repeat(2_000)}iframe{border:0}`, n),
+      false,
+    ],
+    [
+      "unclosed attribute selectors and :is() groups",
+      (n) => repeat('iframe[a="b{x:y}:is(', n),
+      false,
+    ],
+    [
+      "backslashes and comment openers in selectors",
+      (n) => repeat("\\\\/*", n),
+      false,
+    ],
+    [
+      "escaped at-rule names, then the real rule",
+      (n) => `${repeat("@\\6d edia all{", n)}.c{${FIXED}}`,
+      true,
+    ],
   ];
-  for (const [label, bytes] of [["5 MB", MB5], ["10 MiB", MIB10]] as const) {
+  for (const [label, bytes] of [
+    ["5 MB", MB5],
+    ["10 MiB", MIB10],
+  ] as const) {
     for (const [name, build, detectable] of cases) {
       test(`${label}: ${name}`, () => {
         const ctx = context(build(bytes));
@@ -400,14 +526,22 @@ describe("hostile CSS stays linear, at 5 MB and at 10 MiB", () => {
     test(`within the amount read, the real rule is found: ${name}`, () => {
       const ctx = context(build(WITHIN));
       let hit: unknown;
-      expect(time(() => (hit = detectFakeAuthOverlay(ctx)))).toBeLessThan(6_000);
+      expect(time(() => (hit = detectFakeAuthOverlay(ctx)))).toBeLessThan(
+        6_000
+      );
       expect(hit).not.toBeNull();
     }, 60_000);
   }
 
   test("thousands of frames with distinct attribute values against attribute-selector rules", () => {
-    const rules = Array.from({ length: 2_000 }, (_, i) => `iframe[data-i^="x${i}"]{top:0}`).join("");
-    const frames = Array.from({ length: 3_000 }, (_, i) => `<iframe data-i="x${i}y" srcdoc=""></iframe>`).join("");
+    const rules = Array.from(
+      { length: 2_000 },
+      (_, i) => `iframe[data-i^="x${i}"]{top:0}`
+    ).join("");
+    const frames = Array.from(
+      { length: 3_000 },
+      (_, i) => `<iframe data-i="x${i}y" srcdoc=""></iframe>`
+    ).join("");
     const ctx = context(rules, `${frames}${FRAME}`);
     expect(time(() => detectFakeAuthOverlay(ctx))).toBeLessThan(6_000);
   });
@@ -425,14 +559,23 @@ describe("CSS nesting is bounded: no product of selectors, lengths or rules (#14
     let elapsed = 0;
     const ctx = context(css);
     elapsed = time(() => detectFakeAuthOverlay(ctx));
-    return { elapsed, used: nestingUsed(ctx.parsed.document!), truncated: cssScanTruncated(ctx.parsed.document!), doc };
+    return {
+      elapsed,
+      used: nestingUsed(ctx.parsed.document!),
+      truncated: cssScanTruncated(ctx.parsed.document!),
+      doc,
+    };
   };
   const parts = (prefix: string, n: number, withAmp = true): string =>
-    Array.from({ length: n }, (_, i) => `${withAmp ? "&" : ""}${prefix}${i}`).join(",");
+    Array.from(
+      { length: n },
+      (_, i) => `${withAmp ? "&" : ""}${prefix}${i}`
+    ).join(",");
 
   test("20 comma-separated parts per level, 10 levels deep, every part using `&`: bounded counts, truncated", () => {
     let css = `.c{${FIXED}}`;
-    for (let level = 10; level >= 1; level--) css = `${parts(`.k${level}_`, 20)}{${css}}`;
+    for (let level = 10; level >= 1; level--)
+      css = `${parts(`.k${level}_`, 20)}{${css}}`;
     const r = probe(css);
     expect(r.used.selectors).toBeLessThanOrEqual(20_000);
     expect(r.used.rules).toBeLessThanOrEqual(10);
@@ -476,7 +619,8 @@ describe("CSS nesting is bounded: no product of selectors, lengths or rules (#14
   test("a produced selector never grows from level to level", () => {
     // `&&` doubles the parent's last compound at each level; the bound stops it long before 2^8 x 1,000
     let css = `.c{${FIXED}}`;
-    for (let level = 8; level >= 1; level--) css = `${level === 1 ? `.${"z".repeat(1_000)}` : "&&"}{${css}}`;
+    for (let level = 8; level >= 1; level--)
+      css = `${level === 1 ? `.${"z".repeat(1_000)}` : "&&"}{${css}}`;
     const r = probe(css);
     expect(r.elapsed).toBeLessThan(3_000);
     expect(r.used.selectors).toBeLessThanOrEqual(8);
@@ -510,13 +654,17 @@ describe("CSS nesting is bounded: no product of selectors, lengths or rules (#14
     const r = probe(padded);
     expect(r.truncated).toBe(true);
     // a large body with no nested rule is skipped without a signal, as before (it cannot match an iframe)
-    expect(probe(`main{${"/*pad*/".repeat(60_000)}color:red}`).truncated).toBe(false);
+    expect(probe(`main{${"/*pad*/".repeat(60_000)}color:red}`).truncated).toBe(
+      false
+    );
   });
 
   test("a nested rule whose own selector or body is past the bounds is reported", () => {
     const longSelector = `.${"s".repeat(300_000)}`;
     expect(probe(`main{ ${longSelector}{${FIXED}} }`).truncated).toBe(true);
-    expect(probe(`main{ .c{${"/*pad*/".repeat(60_000)}${FIXED}} }`).truncated).toBe(true);
+    expect(
+      probe(`main{ .c{${"/*pad*/".repeat(60_000)}${FIXED}} }`).truncated
+    ).toBe(true);
   });
 
   test("a page with no nested rule spends none of the budget and is not reported truncated", () => {
@@ -528,7 +676,8 @@ describe("CSS nesting is bounded: no product of selectors, lengths or rules (#14
 
 describe("review round 3: attribute case, nested at-rules, spent nesting budget (#1409)", () => {
   const COVER_ID = `.cover{${FIXED}}`;
-  const coverFrame = (attrs: string): string => `<iframe id="google-auth" class="cover" ${attrs} srcdoc=""></iframe>`;
+  const coverFrame = (attrs: string): string =>
+    `<iframe id="google-auth" class="cover" ${attrs} srcdoc=""></iframe>`;
 
   test("an attribute value is compared case-sensitively: a decoy that only matches case-folded does not hide a cover", () => {
     for (const [css, attrs] of [
@@ -544,14 +693,27 @@ describe("review round 3: attribute case, nested at-rules, spent nesting budget 
   });
 
   test("an exact-case or `i` attribute decoy still hides the cover", () => {
-    expect(fires(`${COVER_ID}[data-k=V]{position:static}`, coverFrame('data-k="V"'))).toBe(false);
-    expect(fires(`${COVER_ID}[data-k=V i]{position:static}`, coverFrame('data-k="v"'))).toBe(false);
-    expect(fires(`${COVER_ID}[DATA-K=v]{position:static}`, coverFrame('data-k="v"'))).toBe(false);
+    expect(
+      fires(`${COVER_ID}[data-k=V]{position:static}`, coverFrame('data-k="V"'))
+    ).toBe(false);
+    expect(
+      fires(
+        `${COVER_ID}[data-k=V i]{position:static}`,
+        coverFrame('data-k="v"')
+      )
+    ).toBe(false);
+    expect(
+      fires(`${COVER_ID}[DATA-K=v]{position:static}`, coverFrame('data-k="v"'))
+    ).toBe(false);
   });
 
   test("an undecided at-rule is inherited by a rule nested in it, with or without `&`", () => {
-    expect(fires(`.c{${FIXED}} @media (max-width:1px){.c{&{position:static}}}`)).toBe(true);
-    expect(fires(`.c{${FIXED}} @media (max-width:1px){main{.c{position:static}}}`)).toBe(true);
+    expect(
+      fires(`.c{${FIXED}} @media (max-width:1px){.c{&{position:static}}}`)
+    ).toBe(true);
+    expect(
+      fires(`.c{${FIXED}} @media (max-width:1px){main{.c{position:static}}}`)
+    ).toBe(true);
   });
 
   test("a nested child past 2,112 characters without `&` is dropped and the CSS is reported truncated", () => {
@@ -580,12 +742,19 @@ describe("review round 3: attribute case, nested at-rules, spent nesting budget 
 
 describe("review round 4: class and id case, HTML whitespace, the `s` flag, case-insensitive attributes (#1409)", () => {
   const COVER = `.cover{${FIXED}}`;
-  const frame = (attrs: string): string => `<iframe ${attrs} srcdoc=""></iframe>`;
+  const frame = (attrs: string): string =>
+    `<iframe ${attrs} srcdoc=""></iframe>`;
   const STATIC = "position:static";
 
   test("a class or id decoy that only matches case-folded does not hide a cover; an exact one does", () => {
     const f = frame('id="google-auth" class="cover"');
-    for (const decoy of [`.COVER{${STATIC}}`, `.Cover{${STATIC}}`, `#GOOGLE-AUTH{${STATIC}}`, `iframe.COVER#google-auth{${STATIC}}`, `main .COVER{${STATIC}}`]) {
+    for (const decoy of [
+      `.COVER{${STATIC}}`,
+      `.Cover{${STATIC}}`,
+      `#GOOGLE-AUTH{${STATIC}}`,
+      `iframe.COVER#google-auth{${STATIC}}`,
+      `main .COVER{${STATIC}}`,
+    ]) {
       expect(fires(`${COVER}${decoy}`, f), decoy).toBe(true);
     }
     expect(fires(`${COVER}.cover{${STATIC}}`, f)).toBe(false);
@@ -594,7 +763,9 @@ describe("review round 4: class and id case, HTML whitespace, the `s` flag, case
     const upper = frame('id="Google-Auth" class="Cover"');
     expect(fires(`.Cover{${FIXED}}.cover{${STATIC}}`, upper)).toBe(true);
     expect(fires(`.Cover{${FIXED}}.Cover{${STATIC}}`, upper)).toBe(false);
-    expect(fires(`#Google-Auth{${FIXED}}#google-auth{${STATIC}}`, upper)).toBe(true);
+    expect(fires(`#Google-Auth{${FIXED}}#google-auth{${STATIC}}`, upper)).toBe(
+      true
+    );
   });
 
   test("a class attribute splits on HTML whitespace only: NBSP, U+2003, U+FEFF and VT stay inside the token", () => {
@@ -602,7 +773,10 @@ describe("review round 4: class and id case, HTML whitespace, the `s` flag, case
     // element: what the rule reads is what a parser that kept the characters would hand it.
     const coverIn = (sep: string): boolean => {
       // a second frame carries a plain `x` class, so the rule `.x` is read for the page
-      const { parsed } = page(`${COVER}.x{${STATIC}}`, `${frame('id="google-auth" class="cover"')}<iframe class="x"></iframe>`);
+      const { parsed } = page(
+        `${COVER}.x{${STATIC}}`,
+        `${frame('id="google-auth" class="cover"')}<iframe class="x"></iframe>`
+      );
       const el = parsed.document!.querySelector("iframe")!;
       Object.defineProperty(el, "attributes", {
         value: [
@@ -612,8 +786,10 @@ describe("review round 4: class and id case, HTML whitespace, the `s` flag, case
       });
       return isCover(overlayGeometry(parsed.document!, el));
     };
-    for (const sep of ["\u00a0", "\u2003", "\ufeff", "\u000b"]) expect(coverIn(sep), JSON.stringify(sep)).toBe(true); // `x<sep>y` is one class, not `.x`
-    for (const sep of [" ", "\t", "\n", "\f", "\r"]) expect(coverIn(sep), JSON.stringify(sep)).toBe(false);
+    for (const sep of ["\u00a0", "\u2003", "\ufeff", "\u000b"])
+      expect(coverIn(sep), JSON.stringify(sep)).toBe(true); // `x<sep>y` is one class, not `.x`
+    for (const sep of [" ", "\t", "\n", "\f", "\r"])
+      expect(coverIn(sep), JSON.stringify(sep)).toBe(false);
   });
 
   test("`[a=b s]` is not read (a browser that does not support the flag drops the rule): neither a decoy nor a cover", () => {
@@ -624,13 +800,27 @@ describe("review round 4: class and id case, HTML whitespace, the `s` flag, case
   });
 
   test("attributes HTML compares without case: type, lang, dir, align, scrolling, target", () => {
-    for (const [name, value] of [["type", "Text"], ["lang", "EN"], ["dir", "RTL"], ["align", "Left"], ["scrolling", "NO"], ["target", "_Blank"]] as const) {
+    for (const [name, value] of [
+      ["type", "Text"],
+      ["lang", "EN"],
+      ["dir", "RTL"],
+      ["align", "Left"],
+      ["scrolling", "NO"],
+      ["target", "_Blank"],
+    ] as const) {
       const f = frame(`id="google-auth" class="cover" ${name}="${value}"`);
       const lower = value.toLowerCase();
-      expect(fires(`${COVER}[${name}=${lower}]{${STATIC}}`, f), name).toBe(false); // the decoy applies: case is ignored for it
+      expect(fires(`${COVER}[${name}=${lower}]{${STATIC}}`, f), name).toBe(
+        false
+      ); // the decoy applies: case is ignored for it
     }
     // another attribute stays case-sensitive
-    expect(fires(`${COVER}[data-k=v]{${STATIC}}`, frame('id="google-auth" class="cover" data-k="V"'))).toBe(true);
+    expect(
+      fires(
+        `${COVER}[data-k=v]{${STATIC}}`,
+        frame('id="google-auth" class="cover" data-k="V"')
+      )
+    ).toBe(true);
   });
 
   test("a cover that sits in an undecided rule is still reported (the full reading)", () => {
@@ -641,7 +831,9 @@ describe("review round 4: class and id case, HTML whitespace, the `s` flag, case
       `.cover:hover{${FIXED}}`,
       `@layer a{.cover{${FIXED}}}`,
     ]) {
-      expect(fires(css, frame('id="google-auth" class="cover"')), css).toBe(true);
+      expect(fires(css, frame('id="google-auth" class="cover"')), css).toBe(
+        true
+      );
     }
   });
 
@@ -659,14 +851,23 @@ describe("review round 4: class and id case, HTML whitespace, the `s` flag, case
     const upper = '<iframe id="google-auth" class="COVER" srcdoc=""></iframe>';
     const lower = '<iframe id="google-auth" class="cover" srcdoc=""></iframe>';
     // `.cover` is a cover and `.COVER` is a static decoy for the other frame: the lower-case frame is the cover, whichever is read first
-    expect(fires(`.cover{${FIXED}}.COVER{${STATIC}}`, upper + lower)).toBe(true);
-    expect(fires(`.cover{${FIXED}}.COVER{${STATIC}}`, lower + upper)).toBe(true);
+    expect(fires(`.cover{${FIXED}}.COVER{${STATIC}}`, upper + lower)).toBe(
+      true
+    );
+    expect(fires(`.cover{${FIXED}}.COVER{${STATIC}}`, lower + upper)).toBe(
+      true
+    );
   });
 
   test("`~=` splits the frame's value on HTML whitespace: NBSP does not separate words", () => {
     const f = frame('id="google-auth" class="cover" data-k="x\u00a0y"');
     expect(fires(`${COVER}[data-k~=y]{${STATIC}}`, f)).toBe(true);
-    expect(fires(`${COVER}[data-k~=x]{${STATIC}}`, frame('id="google-auth" class="cover" data-k="x y"'))).toBe(false);
+    expect(
+      fires(
+        `${COVER}[data-k~=x]{${STATIC}}`,
+        frame('id="google-auth" class="cover" data-k="x y"')
+      )
+    ).toBe(false);
   });
 
   test("an escaped class name matches as written: `.\\000043over` is `.Cover`", () => {
@@ -685,7 +886,10 @@ describe("review round 4: class and id case, HTML whitespace, the `s` flag, case
 
 describe("the nesting budget spent exactly: each early exit reports the cut (#1409)", () => {
   const parts = (prefix: string, n: number, withAmp = true): string =>
-    Array.from({ length: n }, (_, i) => `${withAmp ? "&" : ""}${prefix}${i}`).join(",");
+    Array.from(
+      { length: n },
+      (_, i) => `${withAmp ? "&" : ""}${prefix}${i}`
+    ).join(",");
   // 4 x 4,096 + 3,584 + 31 = 19,999 produced selectors: exactly one is left
   const prefix =
     `${parts(".p", 64, false)}{ ${parts(".q", 64)}{border:0} }`.repeat(4) +
@@ -694,23 +898,38 @@ describe("the nesting budget spent exactly: each early exit reports the cut (#14
   const probe = (tail: string) => {
     const ctx = context(`${prefix}${tail}`);
     detectFakeAuthOverlay(ctx);
-    return { used: nestingUsed(ctx.parsed.document!).selectors, truncated: cssScanTruncated(ctx.parsed.document!) };
+    return {
+      used: nestingUsed(ctx.parsed.document!).selectors,
+      truncated: cssScanTruncated(ctx.parsed.document!),
+    };
   };
 
   test("the prefix leaves one selector and is not itself truncated", () => {
     expect(probe("")).toEqual({ used: 19_999, truncated: false });
   });
   test("a nested rule that fits exactly the last one is not truncated", () => {
-    expect(probe("a{ &.x{border:0} }")).toEqual({ used: 20_000, truncated: false });
+    expect(probe("a{ &.x{border:0} }")).toEqual({
+      used: 20_000,
+      truncated: false,
+    });
   });
   test("a nested rule met with the budget already spent is reported", () => {
-    expect(probe("a{ &.x{border:0} } b{ &.y{border:0} }")).toEqual({ used: 20_000, truncated: true });
+    expect(probe("a{ &.x{border:0} } b{ &.y{border:0} }")).toEqual({
+      used: 20_000,
+      truncated: true,
+    });
   });
   test("a second child part after the last selector is reported", () => {
-    expect(probe("a{ &.x,&.y{border:0} }")).toEqual({ used: 20_000, truncated: true });
+    expect(probe("a{ &.x,&.y{border:0} }")).toEqual({
+      used: 20_000,
+      truncated: true,
+    });
   });
   test("a second parent part after the last selector is reported", () => {
-    expect(probe("a,b{ &.x{border:0} }")).toEqual({ used: 20_000, truncated: true });
+    expect(probe("a,b{ &.x{border:0} }")).toEqual({
+      used: 20_000,
+      truncated: true,
+    });
   });
 });
 
@@ -718,14 +937,21 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
   const COVER = `.cover{${FIXED}}`;
   const STATIC = "position:static";
   const KELVIN = "K";
-  const frame = (attrs: string): string => `<iframe ${attrs} srcdoc=""></iframe>`;
+  const frame = (attrs: string): string =>
+    `<iframe ${attrs} srcdoc=""></iframe>`;
   const COVER_FRAME = frame('id="google-auth" class="cover"');
   /** The same page with no doctype: a browser renders it in quirks mode. */
   const firesQuirks = (css: string, f: string): boolean => {
     const html = `<html><head><title>F</title><style>${css}</style></head><body><main><h1>F</h1>${f}</main></body></html>`;
     const parsed = parsePage(html, url);
     expect(parsed.document!.doctype).toBeNull();
-    return detectFakeAuthOverlay({ page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed }, parsed, options: {} } as unknown as RuleContext) !== null;
+    return (
+      detectFakeAuthOverlay({
+        page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
+        parsed,
+        options: {},
+      } as unknown as RuleContext) !== null
+    );
   };
 
   test("the case fold is ASCII only: the Kelvin sign is not `k`, in an attribute value, with the `i` flag, and for a cover", () => {
@@ -741,45 +967,100 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
     expect(fires(`[type="${KELVIN}"]{${FIXED}}`, f)).toBe(false);
     expect(fires(`[type="K"]{${FIXED}}`, f)).toBe(true);
     // a class or id: the Kelvin sign is not `k` there either
-    expect(fires(`.kover{${FIXED}}.${KELVIN}over{${STATIC}}`, frame('id="google-auth" class="kover"'))).toBe(true);
+    expect(
+      fires(
+        `.kover{${FIXED}}.${KELVIN}over{${STATIC}}`,
+        frame('id="google-auth" class="kover"')
+      )
+    ).toBe(true);
   });
 
   test("in quirks mode (no doctype) a class and an id are compared without case, as in a browser", () => {
     const f = frame('id="google-auth" class="cover"');
     expect(firesQuirks(`${COVER}.COVER{${STATIC}}`, f)).toBe(false);
     expect(firesQuirks(`${COVER}#GOOGLE-AUTH{${STATIC}}`, f)).toBe(false);
-    expect(firesQuirks(`.Cover{${FIXED}}.cover{${STATIC}}`, frame('id="google-auth" class="Cover"'))).toBe(false);
+    expect(
+      firesQuirks(
+        `.Cover{${FIXED}}.cover{${STATIC}}`,
+        frame('id="google-auth" class="Cover"')
+      )
+    ).toBe(false);
     // standards mode keeps the exact reading
     expect(fires(`${COVER}.COVER{${STATIC}}`, f)).toBe(true);
     expect(fires(`${COVER}#GOOGLE-AUTH{${STATIC}}`, f)).toBe(true);
     // an attribute value is still case-sensitive in quirks mode
-    expect(firesQuirks(`${COVER}[data-k=V]{${STATIC}}`, frame('id="google-auth" class="cover" data-k="v"'))).toBe(true);
+    expect(
+      firesQuirks(
+        `${COVER}[data-k=V]{${STATIC}}`,
+        frame('id="google-auth" class="cover" data-k="v"')
+      )
+    ).toBe(true);
     // and the Kelvin sign is still not `k`
-    expect(firesQuirks(`.kover{${FIXED}}.${KELVIN}over{${STATIC}}`, frame('id="google-auth" class="kover"'))).toBe(true);
+    expect(
+      firesQuirks(
+        `.kover{${FIXED}}.${KELVIN}over{${STATIC}}`,
+        frame('id="google-auth" class="kover"')
+      )
+    ).toBe(true);
   });
 
   /** Parts every engine rejects: the whole rule is dropped, for a decoy and for a cover. */
-  const CERTAIN = ["[x=y q]", "[x=1]", "!!", "a > > b", ".1a", ":not(!!)", ":has(.a,,.b)", ".x:hover:1a"];
+  const CERTAIN = [
+    "[x=y q]",
+    "[x=1]",
+    "!!",
+    "a > > b",
+    ".1a",
+    ":not(!!)",
+    ":has(.a,,.b)",
+    ".x:hover:1a",
+  ];
   /** Parts that are valid in some engine or after an `@namespace`: the rule is kept, read as undecided (never silent for a cover). */
-  const DOUBTFUL = ["[x=y s]", ":bogus", "::bogus", ":-moz-any-link", "::-moz-selection", ":-ms-input-placeholder", ":-o-prefocus", "h|x", "ns|iframe", ":not(.x, :bogus)", ":has(:bogus)", ".x:hover:bogus", "[x=\"y"];
+  const DOUBTFUL = [
+    "[x=y s]",
+    ":bogus",
+    "::bogus",
+    ":-moz-any-link",
+    "::-moz-selection",
+    ":-ms-input-placeholder",
+    ":-o-prefocus",
+    "h|x",
+    "ns|iframe",
+    ":not(.x, :bogus)",
+    ":has(:bogus)",
+    ".x:hover:bogus",
+    '[x="y',
+  ];
   const NAMESPACE = "@namespace h url(http://www.w3.org/1999/xhtml);";
 
   test("a selector list with a certain syntax error is dropped whole: a decoy rule no longer hides a cover", () => {
     for (const bad of CERTAIN) {
-      expect(fires(`${COVER}.cover, ${bad}{${STATIC}}`, COVER_FRAME), bad).toBe(true);
-      expect(fires(`${COVER}${bad}, .cover{${STATIC}}`, COVER_FRAME), `${bad} first`).toBe(true);
+      expect(fires(`${COVER}.cover, ${bad}{${STATIC}}`, COVER_FRAME), bad).toBe(
+        true
+      );
+      expect(
+        fires(`${COVER}${bad}, .cover{${STATIC}}`, COVER_FRAME),
+        `${bad} first`
+      ).toBe(true);
     }
     // an empty part (`,,` or a trailing comma) is invalid too
-    for (const list of [".cover,", ".cover,,.x", ",.cover", "> .cover"]) expect(fires(`${COVER}${list}{${STATIC}}`, COVER_FRAME), list).toBe(true);
+    for (const list of [".cover,", ".cover,,.x", ",.cover", "> .cover"])
+      expect(fires(`${COVER}${list}{${STATIC}}`, COVER_FRAME), list).toBe(true);
     // controls: the same list with every part valid hides the cover
     expect(fires(`${COVER}.cover, .other{${STATIC}}`, COVER_FRAME)).toBe(false);
-    expect(fires(`${COVER}.cover, [x=y i]{${STATIC}}`, COVER_FRAME)).toBe(false);
-    expect(fires(`${COVER}.cover, ::before{${STATIC}}`, COVER_FRAME)).toBe(false);
+    expect(fires(`${COVER}.cover, [x=y i]{${STATIC}}`, COVER_FRAME)).toBe(
+      false
+    );
+    expect(fires(`${COVER}.cover, ::before{${STATIC}}`, COVER_FRAME)).toBe(
+      false
+    );
   });
 
   test("a selector list with a certain syntax error is dropped whole: a cover rule no longer draws a cover", () => {
-    for (const bad of CERTAIN) expect(fires(`.cover, ${bad}{${FIXED}}`, COVER_FRAME), bad).toBe(false);
-    for (const list of [".cover,", ".cover,,.x"]) expect(fires(`${list}{${FIXED}}`, COVER_FRAME), list).toBe(false);
+    for (const bad of CERTAIN)
+      expect(fires(`.cover, ${bad}{${FIXED}}`, COVER_FRAME), bad).toBe(false);
+    for (const list of [".cover,", ".cover,,.x"])
+      expect(fires(`${list}{${FIXED}}`, COVER_FRAME), list).toBe(false);
     expect(fires(`.cover, .other{${FIXED}}`, COVER_FRAME)).toBe(true);
     expect(fires(`.cover:hover{${FIXED}}`, COVER_FRAME)).toBe(true);
   });
@@ -788,9 +1069,20 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
     for (const bad of DOUBTFUL) {
       expect(fires(`.cover, ${bad}{${FIXED}}`, COVER_FRAME), bad).toBe(true);
       // an unterminated bracket swallows what follows it, so it is only tried last
-      if (!bad.startsWith("[x=\"")) expect(fires(`${bad}, .cover{${FIXED}}`, COVER_FRAME), `${bad} first`).toBe(true);
-      expect(fires(`@media screen{.cover, ${bad}{${FIXED}}}`, COVER_FRAME), `@media ${bad}`).toBe(true);
-      if (!bad.startsWith("[x=\"")) expect(tokensCover(`.cover{${STATIC};&, ${bad}{${FIXED}}}`), `nested ${bad}`).toBe(true);
+      if (!bad.startsWith('[x="'))
+        expect(
+          fires(`${bad}, .cover{${FIXED}}`, COVER_FRAME),
+          `${bad} first`
+        ).toBe(true);
+      expect(
+        fires(`@media screen{.cover, ${bad}{${FIXED}}}`, COVER_FRAME),
+        `@media ${bad}`
+      ).toBe(true);
+      if (!bad.startsWith('[x="'))
+        expect(
+          tokensCover(`.cover{${STATIC};&, ${bad}{${FIXED}}}`),
+          `nested ${bad}`
+        ).toBe(true);
     }
     expect(fires(`${NAMESPACE}.cover, h|x{${FIXED}}`, COVER_FRAME)).toBe(true);
     expect(fires(`.cover, ::search-text{${FIXED}}`, COVER_FRAME)).toBe(true);
@@ -799,28 +1091,70 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
 
   test("a part that may be valid in some engine cannot hide a cover: the rule is undecided, so a decoy is ignored in the decided reading", () => {
     for (const bad of DOUBTFUL) {
-      expect(fires(`${COVER}.cover, ${bad}{${STATIC}}`, COVER_FRAME), bad).toBe(true);
-      expect(fires(`${COVER}${NAMESPACE}.cover, h|x{${STATIC}}`, COVER_FRAME)).toBe(true);
+      expect(fires(`${COVER}.cover, ${bad}{${STATIC}}`, COVER_FRAME), bad).toBe(
+        true
+      );
+      expect(
+        fires(`${COVER}${NAMESPACE}.cover, h|x{${STATIC}}`, COVER_FRAME)
+      ).toBe(true);
     }
   });
 
   test("names newer than this check's lists are accepted as valid: :target-*, ::search-text and the scrollbar pseudo-classes", () => {
-    for (const ok of [".cover:target-current", ".cover:target-before", ".cover:target-after", ".cover::search-text", "::-webkit-scrollbar:horizontal", "::-webkit-scrollbar-button:vertical:decrement:window-inactive", ".x::-webkit-scrollbar-thumb:start:end"]) {
+    for (const ok of [
+      ".cover:target-current",
+      ".cover:target-before",
+      ".cover:target-after",
+      ".cover::search-text",
+      "::-webkit-scrollbar:horizontal",
+      "::-webkit-scrollbar-button:vertical:decrement:window-inactive",
+      ".x::-webkit-scrollbar-thumb:start:end",
+    ]) {
       expect(selectorListState(ok, false), ok).toBe("valid");
     }
     // the forms that stayed accepted
-    for (const ok of [":is(.a, :bogus)", ":where(:bogus)", ":not(.a, .b)", ":has(> .a)", ".x:nth-child(2n+1 of .y)", "&", "[x=y i]", ".\\31 a", "::-webkit-bogus", "*|a", "|a", "*|*"]) {
-      expect(selectorListState(ok, ok === "&" || ok.startsWith(":has")), ok).toBe("valid");
+    for (const ok of [
+      ":is(.a, :bogus)",
+      ":where(:bogus)",
+      ":not(.a, .b)",
+      ":has(> .a)",
+      ".x:nth-child(2n+1 of .y)",
+      "&",
+      "[x=y i]",
+      ".\\31 a",
+      "::-webkit-bogus",
+      "*|a",
+      "|a",
+      "*|*",
+    ]) {
+      expect(
+        selectorListState(ok, ok === "&" || ok.startsWith(":has")),
+        ok
+      ).toBe("valid");
     }
-    for (const doubtful of [":bogus", "::bogus", ":-moz-any-link", "::-moz-selection", ":-ms-input-placeholder", "ns|a", "[x=y s]", ":not(:bogus)"]) {
+    for (const doubtful of [
+      ":bogus",
+      "::bogus",
+      ":-moz-any-link",
+      "::-moz-selection",
+      ":-ms-input-placeholder",
+      "ns|a",
+      "[x=y s]",
+      ":not(:bogus)",
+    ]) {
       expect(selectorListState(doubtful, false), doubtful).toBe("doubtful");
     }
-    for (const bad of ["!!", ".a,", "a > > b", "[x=y q]", "[x=1]", "> a", ".1"]) expect(selectorListState(bad, false), bad).toBe("invalid");
+    for (const bad of ["!!", ".a,", "a > > b", "[x=y q]", "[x=1]", "> a", ".1"])
+      expect(selectorListState(bad, false), bad).toBe("invalid");
   });
 
   test("`:is()` and `:where()` forgive an invalid argument, so the rule stays; `:not()` with a doubtful argument is undecided", () => {
-    expect(fires(`.cover:is(.cover, :bogus){${FIXED}}`, COVER_FRAME)).toBe(true);
-    expect(fires(`.cover:where(:bogus, [x=y q]){${FIXED}}`, COVER_FRAME)).toBe(true);
+    expect(fires(`.cover:is(.cover, :bogus){${FIXED}}`, COVER_FRAME)).toBe(
+      true
+    );
+    expect(fires(`.cover:where(:bogus, [x=y q]){${FIXED}}`, COVER_FRAME)).toBe(
+      true
+    );
     expect(fires(`.cover:not(.x, :bogus){${FIXED}}`, COVER_FRAME)).toBe(true);
     expect(fires(`.cover:not(.x, !!){${FIXED}}`, COVER_FRAME)).toBe(false);
   });
@@ -830,15 +1164,29 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
     const { parsed } = page(css, COVER_FRAME);
     const doc = parsed.document!;
     const el = doc.querySelector("iframe")!;
-    return (["decided", "all"] as const).some((mode) => isCover(overlayGeometryFor(doc, el, "tokens", mode)));
+    return (["decided", "all"] as const).some((mode) =>
+      isCover(overlayGeometryFor(doc, el, "tokens", mode))
+    );
   };
 
   test("a certain syntax error drops the rule inside @media and in a nested rule too", () => {
     for (const bad of ["[x=y q]", "!!", ".1a"]) {
-      expect(fires(`${COVER}@media screen{.cover, ${bad}{${STATIC}}}`, COVER_FRAME), `@media ${bad}`).toBe(true);
-      expect(fires(`@media screen{.cover, ${bad}{${FIXED}}}`, COVER_FRAME), `@media cover ${bad}`).toBe(false);
-      expect(tokensCover(`.cover{${FIXED};&, ${bad}{${STATIC}}}`), `nested ${bad}`).toBe(true);
-      expect(tokensCover(`.cover{${STATIC};&, ${bad}{${FIXED}}}`), `nested cover ${bad}`).toBe(false);
+      expect(
+        fires(`${COVER}@media screen{.cover, ${bad}{${STATIC}}}`, COVER_FRAME),
+        `@media ${bad}`
+      ).toBe(true);
+      expect(
+        fires(`@media screen{.cover, ${bad}{${FIXED}}}`, COVER_FRAME),
+        `@media cover ${bad}`
+      ).toBe(false);
+      expect(
+        tokensCover(`.cover{${FIXED};&, ${bad}{${STATIC}}}`),
+        `nested ${bad}`
+      ).toBe(true);
+      expect(
+        tokensCover(`.cover{${STATIC};&, ${bad}{${FIXED}}}`),
+        `nested cover ${bad}`
+      ).toBe(false);
     }
     expect(tokensCover(`.cover{${FIXED};&, .other{${STATIC}}}`)).toBe(false);
     expect(tokensCover(`.cover{${STATIC};&, .other{${FIXED}}}`)).toBe(true);
@@ -856,10 +1204,17 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
   });
 
   test("mutants R13 and R14: `rel` and `http-equiv` are compared without case", () => {
-    const f = frame('id="google-auth" class="cover" rel="nofollow" http-equiv="refresh"');
+    const f = frame(
+      'id="google-auth" class="cover" rel="nofollow" http-equiv="refresh"'
+    );
     expect(fires(`${COVER}[rel="NoFollow"]{${STATIC}}`, f)).toBe(false);
     expect(fires(`${COVER}[http-equiv="REFRESH"]{${STATIC}}`, f)).toBe(false);
-    expect(fires(`${COVER}[data-rel="NoFollow"]{${STATIC}}`, frame('id="google-auth" class="cover" data-rel="nofollow"'))).toBe(true);
+    expect(
+      fires(
+        `${COVER}[data-rel="NoFollow"]{${STATIC}}`,
+        frame('id="google-auth" class="cover" data-rel="nofollow"')
+      )
+    ).toBe(true);
   });
 
   test("mutants R20 and R21: an uppercase name after a CSS escape keeps its case", () => {
@@ -867,16 +1222,33 @@ describe("follow-ups of the #1535 review: ASCII fold, quirks mode, invalid selec
     const upper = frame('id="google-auth" class="COVER"');
     const mixed = frame('id="google-auth" class="Cover"');
     for (const decoy of [".\\43 OVER", ".\\43OVER", ".\\000043 OVER"]) {
-      expect(fires(`.COVER{${FIXED}}${decoy}{${STATIC}}`, upper), decoy).toBe(false);
-      expect(fires(`.Cover{${FIXED}}${decoy}{${STATIC}}`, mixed), `${decoy} on Cover`).toBe(true);
+      expect(fires(`.COVER{${FIXED}}${decoy}{${STATIC}}`, upper), decoy).toBe(
+        false
+      );
+      expect(
+        fires(`.Cover{${FIXED}}${decoy}{${STATIC}}`, mixed),
+        `${decoy} on Cover`
+      ).toBe(true);
     }
     // an escape with its optional space is not a combinator: a cover written `.\63 over` is a cover
-    expect(fires(`.\\63 over{${FIXED}}`, frame('id="google-auth" class="cover"'))).toBe(true);
-    expect(fires(`${COVER}.\\63 over{${STATIC}}`, frame('id="google-auth" class="cover"'))).toBe(false);
+    expect(
+      fires(`.\\63 over{${FIXED}}`, frame('id="google-auth" class="cover"'))
+    ).toBe(true);
+    expect(
+      fires(
+        `${COVER}.\\63 over{${STATIC}}`,
+        frame('id="google-auth" class="cover"')
+      )
+    ).toBe(false);
     // a single-character escape (`\-`) in the middle of an uppercase name
     const dashed = frame('id="google-auth" class="a-B"');
     expect(fires(`.a-B{${FIXED}}.a\\-B{${STATIC}}`, dashed)).toBe(false);
     expect(fires(`.a-B{${FIXED}}.a\\-b{${STATIC}}`, dashed)).toBe(true);
-    expect(fires(`.a-b{${FIXED}}.a\\-B{${STATIC}}`, frame('id="google-auth" class="a-b"'))).toBe(true);
+    expect(
+      fires(
+        `.a-b{${FIXED}}.a\\-B{${STATIC}}`,
+        frame('id="google-auth" class="a-b"')
+      )
+    ).toBe(true);
   });
 });

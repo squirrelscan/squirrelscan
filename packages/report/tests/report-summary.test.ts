@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, DomainStatsPositions } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -24,7 +25,9 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 describe("ReportSummary", () => {
   test("favicon renders as an offline initial tile", () => {
     const html = renderHtml(baseReport());
-    expect(html).toMatch(/<span class="site-favicon [^"]*" aria-hidden="true">G<\/span>/);
+    expect(html).toMatch(
+      /<span class="site-favicon [^"]*" aria-hidden="true">G<\/span>/
+    );
     expect(html).not.toContain("<img");
     expect(html).not.toContain("icons.duckduckgo.com");
     expect(html).not.toContain("squirrelscan.com/tech-icons");
@@ -49,40 +52,48 @@ describe("ReportSummary", () => {
           removed: [],
           firstScan: true,
         },
-      }),
+      })
     );
     expect(html).toContain(">React</span>");
     expect(html).not.toContain("squirrelscan.com/tech-icons");
   });
 
   test("title uses homepage.title, falls back to the host", () => {
-    expect(renderHtml(baseReport({ homepage: { title: "My Site", description: null } }))).toContain(
-      "My Site",
-    );
+    expect(
+      renderHtml(
+        baseReport({ homepage: { title: "My Site", description: null } })
+      )
+    ).toContain("My Site");
     // No homepage → the <h1> falls back to the bare host.
     expect(renderHtml(baseReport())).toContain(">github.com<");
   });
 
   test("description renders when present", () => {
-    const html = renderHtml(baseReport({ homepage: { title: "X", description: "A great site" } }));
+    const html = renderHtml(
+      baseReport({ homepage: { title: "X", description: "A great site" } })
+    );
     expect(html).toContain("A great site");
   });
 
   test("generated line shows date AND time (UTC)", () => {
     const html = renderHtml(baseReport());
     // Rendered in UTC; the page script swaps in the reader's own timezone.
-    expect(html).toContain('<time dateTime="2026-06-16T14:30:00.000Z" data-local-time="true">');
+    expect(html).toContain(
+      '<time dateTime="2026-06-16T14:30:00.000Z" data-local-time="true">'
+    );
     expect(html).toContain("16 Jun 2026, 14:30 UTC");
   });
 
   test("header shows the squirrel generator version when present, omits it otherwise", () => {
-    expect(renderHtml(baseReport({ generatorVersion: "1.2.3" }))).toContain(">v1.2.3</span>");
+    expect(renderHtml(baseReport({ generatorVersion: "1.2.3" }))).toContain(
+      ">v1.2.3</span>"
+    );
     expect(renderHtml(baseReport())).not.toMatch(/>v\d/);
   });
 
   test("no dedicated Screenshot heading — the screenshot moved into the summary", () => {
     const html = renderHtml(
-      baseReport({ screenshotUrl: "https://assets.squirrelscan.com/s.png" }),
+      baseReport({ screenshotUrl: "https://assets.squirrelscan.com/s.png" })
     );
     expect(html).not.toContain(">Screenshot</h2>");
     expect(html).toContain('class="screenshot-section ');
@@ -96,9 +107,10 @@ describe("failed/blocked report copy", () => {
     const html = renderHtml(
       baseReport({
         status: "blocked",
-        statusReason: "Site blocked the crawler (bot protection / auth / rate limit)",
+        statusReason:
+          "Site blocked the crawler (bot protection / auth / rate limit)",
         totalPages: 0,
-      }),
+      })
     );
     expect(html).toContain('id="failure-notice"');
     expect(html).toContain("Your site blocked the audit");
@@ -111,11 +123,12 @@ describe("failed/blocked report copy", () => {
     const html = renderHtml(
       baseReport({
         status: "blocked",
-        statusReason: "Site blocked the crawler (bot protection / auth / rate limit)",
+        statusReason:
+          "Site blocked the crawler (bot protection / auth / rate limit)",
         totalPages: 0,
         cloudPlan: "paid",
         lockedRules: [{ id: "a", name: "JS Rendering" }],
-      }),
+      })
     );
     expect(html).not.toContain("temporarily unavailable");
     expect(html).toContain("need a completed audit to run");
@@ -127,7 +140,7 @@ describe("failed/blocked report copy", () => {
         status: "failed",
         statusReason: "No pages were crawled",
         totalPages: 0,
-      }),
+      })
     );
     expect(html).toContain('id="failure-notice"');
     // Apostrophes render escaped (&#x27;), so assert on apostrophe-free spans.
@@ -137,7 +150,9 @@ describe("failed/blocked report copy", () => {
   });
 
   test("no em-dashes in the failure notice copy", () => {
-    const blocked = renderHtml(baseReport({ status: "blocked", totalPages: 0 }));
+    const blocked = renderHtml(
+      baseReport({ status: "blocked", totalPages: 0 })
+    );
     const failed = renderHtml(baseReport({ status: "failed", totalPages: 0 }));
     // Isolate the notice so unrelated markup can't mask an em-dash in the copy.
     for (const html of [blocked, failed]) {
@@ -157,23 +172,32 @@ describe("LockedRulesSection", () => {
           { id: "a/render", name: "JS Rendering" },
           { id: "b/ai", name: "AI Content Quality" },
         ],
-      }),
+      })
     );
     // A signed-out local run: the cloud card lists what did not run.
     expect(html).toContain('<section id="cloud"');
-    expect(html).toContain("2 checks on this site need the cloud and did not run:");
+    expect(html).toContain(
+      "2 checks on this site need the cloud and did not run:"
+    );
     expect(html).toContain("JS Rendering");
     expect(html).toContain("AI Content Quality");
     expect(html).toContain("https://squirrelscan.com");
   });
 
   test("singular wording for a single locked rule", () => {
-    const html = renderHtml(baseReport({ lockedRules: [{ id: "a", name: "X" }] }));
-    expect(html).toContain("1 check on this site needs the cloud and did not run:");
+    const html = renderHtml(
+      baseReport({ lockedRules: [{ id: "a", name: "X" }] })
+    );
+    expect(html).toContain(
+      "1 check on this site needs the cloud and did not run:"
+    );
   });
 
   test("omits the section when there are no locked rules", () => {
-    for (const html of [renderHtml(baseReport()), renderHtml(baseReport({ lockedRules: [] }))]) {
+    for (const html of [
+      renderHtml(baseReport()),
+      renderHtml(baseReport({ lockedRules: [] })),
+    ]) {
       expect(html).not.toContain('id="locked-rules"');
       expect(html).not.toContain("did not run:");
     }
@@ -182,7 +206,7 @@ describe("LockedRulesSection", () => {
   // #368: a signed-in user must never see the "get a free account" upsell.
   test("signed-in free plan: no signup upsell, shows dashboard link", () => {
     const html = renderHtml(
-      baseReport({ lockedRules: [{ id: "a", name: "X" }], cloudPlan: "free" }),
+      baseReport({ lockedRules: [{ id: "a", name: "X" }], cloudPlan: "free" })
     );
     expect(html).toContain('id="locked-rules"');
     expect(html).not.toContain('id="cloud"');
@@ -195,7 +219,7 @@ describe("LockedRulesSection", () => {
 
   test("signed-in paid plan: framed as temporarily unavailable, no upsell", () => {
     const html = renderHtml(
-      baseReport({ lockedRules: [{ id: "a", name: "X" }], cloudPlan: "paid" }),
+      baseReport({ lockedRules: [{ id: "a", name: "X" }], cloudPlan: "paid" })
     );
     expect(html).toContain("temporarily unavailable");
     expect(html).not.toContain("free squirrelscan account");
@@ -210,7 +234,7 @@ describe("LockedRulesSection", () => {
         lockedRules: [{ id: "a", name: "X" }],
         cloudPlan: "paid",
         cloudMode: "http",
-      }),
+      })
     );
     expect(html).toContain("without cloud rendering");
     expect(html).toContain("--http");
@@ -226,7 +250,7 @@ describe("LockedRulesSection", () => {
         lockedRules: [{ id: "a", name: "X" }],
         cloudPlan: "paid",
         cloudMode: "browser",
-      }),
+      })
     );
     expect(html).toContain("temporarily unavailable");
     expect(html).not.toContain("--http");
@@ -234,7 +258,10 @@ describe("LockedRulesSection", () => {
 
   test("explicit anonymous keeps the free-account upsell (back-compat with absent)", () => {
     const html = renderHtml(
-      baseReport({ lockedRules: [{ id: "a", name: "X" }], cloudPlan: "anonymous" }),
+      baseReport({
+        lockedRules: [{ id: "a", name: "X" }],
+        cloudPlan: "anonymous",
+      })
     );
     expect(html).toContain("Get the full audit with squirrelscan cloud");
     expect(html).toContain("Create a free account");
@@ -242,7 +269,9 @@ describe("LockedRulesSection", () => {
 });
 
 describe("DomainStats organic-positions chart (#491)", () => {
-  function withStats(positions: Partial<DomainStatsPositions> | null): AuditReport {
+  function withStats(
+    positions: Partial<DomainStatsPositions> | null
+  ): AuditReport {
     return baseReport({
       domainStats: {
         domain: "github.com",
@@ -269,7 +298,13 @@ describe("DomainStats organic-positions chart (#491)", () => {
 
   test("renders a static CSS bar chart (no inline 'Organic positions:' text list)", () => {
     const html = renderHtml(
-      withStats({ pos1: 5, pos2_3: 12, pos4_10: 30, pos11_20: null, pos21_30: null }),
+      withStats({
+        pos1: 5,
+        pos2_3: 12,
+        pos4_10: 30,
+        pos11_20: null,
+        pos21_30: null,
+      })
     );
     expect(html).toContain("data-position-chart");
     // Bands present best→worst, with counts.
@@ -284,7 +319,7 @@ describe("DomainStats organic-positions chart (#491)", () => {
   test("absent/all-null positions render no chart", () => {
     expect(renderHtml(withStats(null))).not.toContain("data-position-chart");
     expect(renderHtml(withStats({ pos1: null, pos2_3: null }))).not.toContain(
-      "data-position-chart",
+      "data-position-chart"
     );
   });
 });

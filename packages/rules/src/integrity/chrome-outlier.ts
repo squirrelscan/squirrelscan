@@ -18,12 +18,12 @@
 // equivalence (the six chrome markers of the fingerprint) and build the result
 // through one function, so output is byte-identical.
 
-import { z } from "zod";
-
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
 
 import { getPathname } from "@squirrelscan/utils";
+import { z } from "zod";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import {
   buildBaseline,
@@ -97,14 +97,19 @@ function chromeKey(fp: PageFingerprint): string {
  * stylesheet or a script), never image or bare `<link>` hosts, because content
  * images and resource hints say nothing about which template rendered a page.
  */
-function missingChrome(fp: PageFingerprint, dominant: PageFingerprint): string[] {
+function missingChrome(
+  fp: PageFingerprint,
+  dominant: PageFingerprint
+): string[] {
   const missing: string[] = [];
   if (dominant.hasNav && !fp.hasNav) missing.push("navigation");
   if (dominant.hasFooter && !fp.hasFooter) missing.push("footer");
   const sharesNone = (want: Set<string>, have: Set<string>): boolean =>
     want.size > 0 && ![...want].some((v) => have.has(v));
-  if (sharesNone(dominant.stylesheetHrefs, fp.stylesheetHrefs)) missing.push("site stylesheets");
-  if (sharesNone(dominant.codeHosts, fp.codeHosts)) missing.push("site CSS and script hosts");
+  if (sharesNone(dominant.stylesheetHrefs, fp.stylesheetHrefs))
+    missing.push("site stylesheets");
+  if (sharesNone(dominant.codeHosts, fp.codeHosts))
+    missing.push("site CSS and script hosts");
   return missing;
 }
 
@@ -115,13 +120,17 @@ const isOk = (status: number): boolean => status >= 200 && status < 300;
  * rule owns them; this one leaves them out. Empty when the rule would itself be
  * skipped (too few pages, or no shared theme markers).
  */
-function discontinuityUrls(fps: { url: string; fp: PageFingerprint }[]): Set<string> {
+function discontinuityUrls(
+  fps: { url: string; fp: PageFingerprint }[]
+): Set<string> {
   const out = new Set<string>();
   if (fps.length < DISCONTINUITY_MIN_PAGES) return out;
   const baseline = buildBaseline(fps.map((e) => e.fp));
-  if (baseline.stylesheetHrefs.size === 0 && baseline.assetHosts.size === 0) return out;
+  if (baseline.stylesheetHrefs.size === 0 && baseline.assetHosts.size === 0)
+    return out;
   for (const { url, fp } of fps) {
-    if (similarityToBaseline(fp, baseline) < DISCONTINUITY_THRESHOLD) out.add(url);
+    if (similarityToBaseline(fp, baseline) < DISCONTINUITY_THRESHOLD)
+      out.add(url);
   }
   return out;
 }
@@ -131,7 +140,11 @@ const skipped = (message: string, skipReason: string): RuleResult => ({
 });
 
 // Shared by both paths: identical entries in, identical result out.
-function evaluate(entries: Entry[], suppressed: Set<string>, opts: Options): RuleResult {
+function evaluate(
+  entries: Entry[],
+  suppressed: Set<string>,
+  opts: Options
+): RuleResult {
   if (entries.length < opts.minPages) {
     return skipped(
       `Need >=${opts.minPages} pages to establish a site template`,
@@ -150,7 +163,10 @@ function evaluate(entries: Entry[], suppressed: Set<string>, opts: Options): Rul
   let dominantSize = 0;
   for (const [key, list] of clusters) {
     // Tie-break on the key so the choice is order-independent.
-    if (list.length > dominantSize || (list.length === dominantSize && key < dominantKey)) {
+    if (
+      list.length > dominantSize ||
+      (list.length === dominantSize && key < dominantKey)
+    ) {
       dominantKey = key;
       dominantSize = list.length;
     }
@@ -195,7 +211,8 @@ function evaluate(entries: Entry[], suppressed: Set<string>, opts: Options): Rul
         {
           name: CHECK_NAME,
           status: "pass",
-          message: "All pages share the site's dominant template or a sizeable template of their own",
+          message:
+            "All pages share the site's dominant template or a sizeable template of their own",
         },
       ],
     };
@@ -206,13 +223,17 @@ function evaluate(entries: Entry[], suppressed: Set<string>, opts: Options): Rul
     stragglers
       .slice(0, 5)
       .map((e) => getPathname(e.url))
-      .join("\n") + (stragglers.length > 5 ? `\n+${stragglers.length - 5} more` : "");
+      .join("\n") +
+    (stragglers.length > 5 ? `\n+${stragglers.length - 5} more` : "");
   const check: CheckResult = {
     name: CHECK_NAME,
     status: share >= opts.failShare && stragglers.length >= 3 ? "fail" : "warn",
     message: `${stragglers.length} page(s) look left on an outdated or broken site template`,
     value: preview,
-    items: stragglers.map((e) => ({ id: e.url, label: `Missing ${e.missing.join(", ")}` })),
+    items: stragglers.map((e) => ({
+      id: e.url,
+      label: `Missing ${e.missing.join(", ")}`,
+    })),
     details: {
       total: stragglers.length,
       pagesCompared: entries.length,
@@ -246,14 +267,21 @@ async function runViaSiteQuery(
   const collected = ctx.collectedSignals;
   const fps: { url: string; fp: PageFingerprint }[] = [];
   if (collected) {
-    for (const rec of collected.pages) if (rec.fingerprint) fps.push({ url: rec.url, fp: rec.fingerprint });
+    for (const rec of collected.pages)
+      if (rec.fingerprint) fps.push({ url: rec.url, fp: rec.fingerprint });
   }
   const fpByUrl = new Map(fps.map((e) => [e.url, e.fp]));
   const entries: Entry[] = [];
-  for await (const row of siteQuery.pagesMatching((r: PageFeatureRow) => isOk(r.status))) {
+  for await (const row of siteQuery.pagesMatching((r: PageFeatureRow) =>
+    isOk(r.status)
+  )) {
     if (!row.templateFp) continue;
     const fp = fpByUrl.get(row.normalizedUrl);
-    entries.push({ url: row.normalizedUrl, key: row.templateFp, ...(fp ? { fp } : {}) });
+    entries.push({
+      url: row.normalizedUrl,
+      key: row.templateFp,
+      ...(fp ? { fp } : {}),
+    });
   }
   return evaluate(entries, discontinuityUrls(fps), opts);
 }
@@ -286,19 +314,25 @@ export const chromeOutlierRule: Rule = {
         .min(0.5)
         .max(1)
         .default(CHROME_OUTLIER_MIN_AGREEMENT)
-        .describe("Share of pages the dominant template must cover before outliers are flagged"),
+        .describe(
+          "Share of pages the dominant template must cover before outliers are flagged"
+        ),
       maxClusterPages: z
         .number()
         .int()
         .min(1)
         .default(CHROME_OUTLIER_MAX_CLUSTER_PAGES)
-        .describe("A non-dominant template used by at most this many pages counts as stragglers"),
+        .describe(
+          "A non-dominant template used by at most this many pages counts as stragglers"
+        ),
       failShare: z
         .number()
         .min(0)
         .max(1)
         .default(CHROME_OUTLIER_FAIL_SHARE)
-        .describe("Straggler share of all pages at which the rule fails instead of warning"),
+        .describe(
+          "Straggler share of all pages at which the rule fails instead of warning"
+        ),
     }),
     checks: [
       { name: CHECK_NAME, outcome: "problem" },
@@ -324,7 +358,8 @@ export const chromeOutlierRule: Rule = {
       const fp = fingerprintPage(page.parsed, page.url);
       if (!fp) continue;
       fps.push({ url: page.url, fp });
-      if (isOk(page.statusCode)) entries.push({ url: page.url, key: chromeKey(fp), fp });
+      if (isOk(page.statusCode))
+        entries.push({ url: page.url, key: chromeKey(fp), fp });
     }
     return evaluate(entries, discontinuityUrls(fps), opts);
   },

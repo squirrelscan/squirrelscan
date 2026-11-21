@@ -1,3 +1,4 @@
+import { byteLength } from "@squirrelscan/utils/bytes";
 // #1293 integration guard: drive probeWellKnown end-to-end with a mocked fetch
 // returning a MULTI-BYTE body, and assert the returned excerpt + bodySize are
 // bounded by real UTF-8 BYTES (not UTF-16 .length) with no split-codepoint
@@ -6,8 +7,6 @@
 // truncateToBytes unit tests.
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { byteLength } from "@squirrelscan/utils/bytes";
 
 import {
   EXCERPT_MAX_BYTES,
@@ -35,12 +34,16 @@ describe("probeWellKnown byte-accurate truncation (#1293)", () => {
         headers: { "content-type": "application/json" },
       })) as unknown as typeof fetch;
 
-    const result = await Effect.runPromise(probeWellKnown("https://x.test/", "test-ua"));
+    const result = await Effect.runPromise(
+      probeWellKnown("https://x.test/", "test-ua")
+    );
 
     let sawTruncatedNonOauth = false;
     for (const probe of result.probes) {
       if (probe.error) continue;
-      const cap = isOAuthMetadataPath(probe.path) ? OAUTH_EXCERPT_MAX_BYTES : EXCERPT_MAX_BYTES;
+      const cap = isOAuthMetadataPath(probe.path)
+        ? OAUTH_EXCERPT_MAX_BYTES
+        : EXCERPT_MAX_BYTES;
       // Excerpt bounded by BYTES, not code units (the bug: a .length slice of CJK
       // over-keeps ~3x). And truncateToBytes never emits a partial-sequence �.
       expect(byteLength(probe.excerpt)).toBeLessThanOrEqual(cap);

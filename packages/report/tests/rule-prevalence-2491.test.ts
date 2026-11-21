@@ -1,7 +1,11 @@
-import { describe, expect, test } from "bun:test";
 import type { ReportRuleResult } from "@squirrelscan/core-contracts";
 
-import { flattenIssuesBySeverity, groupIssuesByCategory } from "../src/grouping";
+import { describe, expect, test } from "bun:test";
+
+import {
+  flattenIssuesBySeverity,
+  groupIssuesByCategory,
+} from "../src/grouping";
 import {
   isNearUniversal,
   prevalenceNote,
@@ -33,7 +37,9 @@ describe("rule prevalence (#2491)", () => {
 
   test("the shipped data file has the expected shape", () => {
     expect(typeof prevalenceJson.sites).toBe("number");
-    for (const p of Object.values(prevalenceJson.prevalence as Record<string, number>)) {
+    for (const p of Object.values(
+      prevalenceJson.prevalence as Record<string, number>
+    )) {
       expect(p).toBeGreaterThanOrEqual(0);
       expect(p).toBeLessThanOrEqual(1);
     }
@@ -57,13 +63,22 @@ describe("ranking by prevalence (#2491)", () => {
             severity: "warning",
             weight: 5,
           },
-          checks: [{ name: "C", status: "warn", message: "m", pageUrl: "https://e.com/" }],
+          checks: [
+            {
+              name: "C",
+              status: "warn",
+              message: "m",
+              pageUrl: "https://e.com/",
+            },
+          ],
         } as ReportRuleResult,
-      ]),
+      ])
     );
 
   test("without prevalence data order is unchanged (weight then id)", () => {
-    const flat = flattenIssuesBySeverity(groupIssuesByCategory(results(["core/b", "core/a"])));
+    const flat = flattenIssuesBySeverity(
+      groupIssuesByCategory(results(["core/b", "core/a"]))
+    );
     expect(flat.map((r) => r.id)).toEqual(["core/a", "core/b"]);
     expect(flat.every((r) => r.prevalenceNote === undefined)).toBe(true);
   });
@@ -72,19 +87,29 @@ describe("ranking by prevalence (#2491)", () => {
     const grouped = groupIssuesByCategory(
       results(["core/common", "core/rare", "core/z-rare"]),
       undefined,
-      sample,
+      sample
     );
     const flat = flattenIssuesBySeverity(grouped);
-    expect(flat.map((r) => r.id)).toEqual(["core/rare", "core/z-rare", "core/common"]);
+    expect(flat.map((r) => r.id)).toEqual([
+      "core/rare",
+      "core/z-rare",
+      "core/common",
+    ]);
     expect(flat[2].prevalenceNote).toContain("90% of sites");
-    expect(grouped[0].rules.map((r) => r.id)).toEqual(["core/rare", "core/z-rare", "core/common"]);
+    expect(grouped[0].rules.map((r) => r.id)).toEqual([
+      "core/rare",
+      "core/z-rare",
+      "core/common",
+    ]);
   });
 
   test("prevalence never outranks severity", () => {
     const r = results(["core/common", "core/rare"]);
     r["core/common"].meta.severity = "error";
     (r["core/common"].checks[0] as { status: string }).status = "fail";
-    const flat = flattenIssuesBySeverity(groupIssuesByCategory(r, undefined, sample));
+    const flat = flattenIssuesBySeverity(
+      groupIssuesByCategory(r, undefined, sample)
+    );
     expect(flat.map((x) => x.id)).toEqual(["core/common", "core/rare"]);
   });
 });

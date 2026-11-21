@@ -3,7 +3,11 @@
 // structurally by the CLI's vendored AuditReport), and runCloudAudit calls it
 // directly, so cloud and CLI reports stamp identical `homepage`/`lockedRules`.
 
-import { NOT_CHECKED_SKIP_REASONS, type LockedRule, type PartialAudit } from "@squirrelscan/core-contracts";
+import {
+  NOT_CHECKED_SKIP_REASONS,
+  type LockedRule,
+  type PartialAudit,
+} from "@squirrelscan/core-contracts";
 import {
   isNotApplicableCloudSkip,
   isRenderDisabledCloudSkip,
@@ -40,7 +44,9 @@ export function deriveHomepageSummary(report: {
       pages.find((p) => {
         try {
           const u = new URL(p.url);
-          return u.origin === baseOrigin && (u.pathname === "/" || u.pathname === "");
+          return (
+            u.origin === baseOrigin && (u.pathname === "/" || u.pathname === "")
+          );
         } catch {
           return false;
         }
@@ -63,19 +69,21 @@ export function deriveHomepageSummary(report: {
  */
 export function isRuleFilteredOut(
   ruleId: string,
-  partial: Pick<PartialAudit, "include" | "exclude"> | undefined,
+  partial: Pick<PartialAudit, "include" | "exclude"> | undefined
 ): boolean {
   if (!partial) return false;
   const exclude = Array.isArray(partial.exclude) ? partial.exclude : [];
   const include = Array.isArray(partial.include) ? partial.include : [];
   if (exclude.some((p) => matchesRulePattern(ruleId, p))) return true;
-  return include.length > 0 && !include.some((p) => matchesRulePattern(ruleId, p));
+  return (
+    include.length > 0 && !include.some((p) => matchesRulePattern(ruleId, p))
+  );
 }
 
 /** `locked` without the rules a `--rule-include`/`--rule-exclude` filter turned off (repo#1082). */
 export function withoutFilteredLockedRules<T extends { id: string }>(
   locked: T[] | undefined,
-  partial: Pick<PartialAudit, "include" | "exclude"> | undefined,
+  partial: Pick<PartialAudit, "include" | "exclude"> | undefined
 ): T[] | undefined {
   if (!locked || !partial) return locked;
   return locked.filter((r) => !isRuleFilteredOut(r.id, partial));
@@ -91,10 +99,13 @@ export function withoutFilteredLockedRules<T extends { id: string }>(
  */
 export function computeLockedRules(
   report: {
-    ruleResults: Record<string, { checks: Array<{ status: string; skipReason?: string }> }>;
+    ruleResults: Record<
+      string,
+      { checks: Array<{ status: string; skipReason?: string }> }
+    >;
     partialAudit?: Pick<PartialAudit, "include" | "exclude">;
   },
-  rules: Iterable<Rule> = loadAllRules().values(),
+  rules: Iterable<Rule> = loadAllRules().values()
 ): LockedRule[] {
   const locked: LockedRule[] = [];
   for (const rule of rules) {
@@ -123,7 +134,11 @@ export function computeLockedRules(
     const notChecked =
       checks != null &&
       checks.length > 0 &&
-      checks.every((c) => c.skipReason !== undefined && NOT_CHECKED_SKIP_REASONS.has(c.skipReason));
+      checks.every(
+        (c) =>
+          c.skipReason !== undefined &&
+          NOT_CHECKED_SKIP_REASONS.has(c.skipReason)
+      );
     if (notChecked) continue;
     locked.push({ id: rule.meta.id, name: rule.meta.name });
   }

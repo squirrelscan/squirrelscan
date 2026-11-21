@@ -31,9 +31,38 @@ const QUOTE_ELEMENTS = new Set(["code", "kbd", "samp"]);
  * stray `<code>` must not hide a block page's wording for the rest of the page.
  */
 const QUOTE_CLOSING_BLOCKS = new Set([
-  "address", "article", "aside", "blockquote", "body", "dd", "div", "dl", "dt", "figure",
-  "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "html", "li", "main",
-  "nav", "ol", "p", "pre", "section", "table", "td", "th", "tr", "ul",
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "body",
+  "dd",
+  "div",
+  "dl",
+  "dt",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "html",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
 ]);
 
 /**
@@ -42,7 +71,16 @@ const QUOTE_CLOSING_BLOCKS = new Set([
  * `noframes` and `title` hold text a page shows (an iframe's is fallback text,
  * as on Imperva's block page).
  */
-const RAW_TEXT_ELEMENTS = new Set(["script", "style", "textarea", "xmp", "iframe", "noembed", "noframes", "title"]);
+const RAW_TEXT_ELEMENTS = new Set([
+  "script",
+  "style",
+  "textarea",
+  "xmp",
+  "iframe",
+  "noembed",
+  "noframes",
+  "title",
+]);
 const RAW_TEXT_SHOWN = new Set(["iframe", "noembed", "noframes", "title"]);
 
 /** The index of the `>` that ends the tag opened before `start`, quotes respected. */
@@ -69,7 +107,12 @@ function rawTextEnd(lower: string, name: string, from: number): number {
     const close = lower.indexOf(prefix, cursor);
     if (close < 0) return lower.length;
     const boundary = lower[close + prefix.length];
-    if (boundary === undefined || boundary === ">" || boundary === "/" || /\s/.test(boundary)) {
+    if (
+      boundary === undefined ||
+      boundary === ">" ||
+      boundary === "/" ||
+      /\s/.test(boundary)
+    ) {
       return close;
     }
     cursor = close + prefix.length;
@@ -101,7 +144,8 @@ export function signatureViews(html: string): SignatureViews {
   while (cursor < html.length) {
     const lt = html.indexOf("<", cursor);
     const textEnd = lt < 0 ? html.length : lt;
-    if (textEnd > cursor && quoteDepth === 0) text.push(html.slice(cursor, textEnd));
+    if (textEnd > cursor && quoteDepth === 0)
+      text.push(html.slice(cursor, textEnd));
     if (lt < 0) break;
 
     if (lower.startsWith("<!--", lt)) {

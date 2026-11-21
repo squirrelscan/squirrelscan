@@ -37,7 +37,9 @@ export const entityOrganizationMissingRule: Rule = {
     const organizations = map.nodes.filter((node) =>
       node.types.some(
         (type) =>
-          type === "Organization" || type === "Corporation" || isLocalBusinessType(type)
+          type === "Organization" ||
+          type === "Corporation" ||
+          isLocalBusinessType(type)
       )
     );
 
@@ -122,9 +124,11 @@ export const entityOrganizationMissingRule: Rule = {
         {
           name: CHECK,
           status: "info",
-          message: "This site presents as a business but declares no Organization or LocalBusiness entity",
+          message:
+            "This site presents as a business but declares no Organization or LocalBusiness entity",
           value: clipValue(signals.join(", ")),
-          expected: "one Organization or LocalBusiness with @id, name, url, logo and sameAs",
+          expected:
+            "one Organization or LocalBusiness with @id, name, url, logo and sameAs",
         },
       ],
     };

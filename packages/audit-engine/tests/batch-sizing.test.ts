@@ -2,11 +2,15 @@
 // `batch × per-page cost` and per-page cost belongs to the site. A fixed page
 // count is right for one site shape and wrong for the other by fifty times.
 
+import type {
+  PageRecord,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "@squirrelscan/core-contracts";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { PageRecord, ResponseHeaders, SecurityHeaders } from "@squirrelscan/core-contracts";
-import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import {
   resolveStreamBatch,
@@ -47,35 +51,47 @@ describe("resolveStreamBatchPages", () => {
   test("a page heavier than the whole budget still yields a runnable batch", () => {
     // 64 MB of html in one page would divide to zero. A batch of zero is an
     // infinite loop (SQLite reads LIMIT 0 as no limit), so the floor holds.
-    expect(resolveStreamBatchPages({ avgPageBytes: 64 * MB })).toBe(STREAM_BATCH_MIN_PAGES);
+    expect(resolveStreamBatchPages({ avgPageBytes: 64 * MB })).toBe(
+      STREAM_BATCH_MIN_PAGES
+    );
   });
 
   test("an unknown page size falls to the floor, never to a huge batch", () => {
     // An empty crawl or pages with no stored html must not be read as "tiny
     // pages, use a 500-page batch".
     for (const avg of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(resolveStreamBatchPages({ avgPageBytes: avg })).toBe(STREAM_BATCH_MIN_PAGES);
+      expect(resolveStreamBatchPages({ avgPageBytes: avg })).toBe(
+        STREAM_BATCH_MIN_PAGES
+      );
     }
     // An unusable BUDGET is different from an unknown page size: it is a typo in
     // a knob, so it falls back to the documented default budget rather than to a
     // 5-page batch that would make every audit crawl along for no stated reason.
-    expect(resolveStreamBatchPages({ avgPageBytes: 1 * MB, byteBudget: 0 })).toBe(
-      resolveStreamBatchPages({ avgPageBytes: 1 * MB }),
-    );
+    expect(
+      resolveStreamBatchPages({ avgPageBytes: 1 * MB, byteBudget: 0 })
+    ).toBe(resolveStreamBatchPages({ avgPageBytes: 1 * MB }));
   });
 
   test("a bigger budget buys proportionally more pages", () => {
-    const at48 = resolveStreamBatchPages({ avgPageBytes: 1 * MB, byteBudget: 48 * MB });
-    const at96 = resolveStreamBatchPages({ avgPageBytes: 1 * MB, byteBudget: 96 * MB });
+    const at48 = resolveStreamBatchPages({
+      avgPageBytes: 1 * MB,
+      byteBudget: 48 * MB,
+    });
+    const at96 = resolveStreamBatchPages({
+      avgPageBytes: 1 * MB,
+      byteBudget: 96 * MB,
+    });
     expect(at96).toBe(at48 * 2);
   });
 
   test("clamps are honoured and cannot invert", () => {
     expect(resolveStreamBatchPages({ avgPageBytes: 1, maxPages: 10 })).toBe(10);
-    expect(resolveStreamBatchPages({ avgPageBytes: 1 * MB, minPages: 30 })).toBe(48);
+    expect(
+      resolveStreamBatchPages({ avgPageBytes: 1 * MB, minPages: 30 })
+    ).toBe(48);
     // A max below the min must not produce a nonsense batch.
     expect(
-      resolveStreamBatchPages({ avgPageBytes: 1, minPages: 20, maxPages: 5 }),
+      resolveStreamBatchPages({ avgPageBytes: 1, minPages: 20, maxPages: 5 })
     ).toBeGreaterThanOrEqual(20);
   });
 });
@@ -108,7 +124,11 @@ const EMPTY_SECURITY: SecurityHeaders = {
   xRobotsTag: null,
 };
 
-function page(url: string, htmlBytes: number, opts?: { sizeBytes?: number }): PageRecord {
+function page(
+  url: string,
+  htmlBytes: number,
+  opts?: { sizeBytes?: number }
+): PageRecord {
   const html = htmlBytes > 0 ? "x".repeat(htmlBytes) : null;
   return {
     url,
@@ -131,7 +151,9 @@ function page(url: string, htmlBytes: number, opts?: { sizeBytes?: number }): Pa
   } as PageRecord;
 }
 
-async function seed(pages: PageRecord[]): Promise<{ storage: SQLiteStorage; crawlId: string }> {
+async function seed(
+  pages: PageRecord[]
+): Promise<{ storage: SQLiteStorage; crawlId: string }> {
   const storage = new SQLiteStorage(":memory:");
   await run(storage.init());
   const crawlId = await run(
@@ -153,7 +175,7 @@ async function seed(pages: PageRecord[]): Promise<{ storage: SQLiteStorage; craw
         bytesTotal: 0,
         avgLoadTimeMs: 0,
       },
-    } as never),
+    } as never)
   );
   for (const p of pages) await run(storage.upsertPage(crawlId, p));
   return { storage, crawlId };
@@ -166,11 +188,13 @@ describe("sampleAveragePageBytes", () => {
     // budgeting against the wire size picks a batch ten times too large on
     // exactly the sites that need it smallest.
     const pages = Array.from({ length: 20 }, (_, i) =>
-      page(`https://example.com/p${i}`, 100 * KB, { sizeBytes: 10 * KB }),
+      page(`https://example.com/p${i}`, 100 * KB, { sizeBytes: 10 * KB })
     );
     const { storage, crawlId } = await seed(pages);
 
-    const avg = await run(sampleAveragePageBytes(storage, crawlId, pages.length));
+    const avg = await run(
+      sampleAveragePageBytes(storage, crawlId, pages.length)
+    );
     expect(avg).toBe(100 * KB);
 
     await run(storage.close());
@@ -186,7 +210,9 @@ describe("sampleAveragePageBytes", () => {
       page("https://example.com/d", 0),
     ]);
 
-    expect(await run(sampleAveragePageBytes(storage, crawlId, 4))).toBe(200 * KB);
+    expect(await run(sampleAveragePageBytes(storage, crawlId, 4))).toBe(
+      200 * KB
+    );
 
     await run(storage.close());
   });
@@ -196,10 +222,10 @@ describe("sampleAveragePageBytes", () => {
     // type. Here the front is light and the tail is heavy; a front-only sample
     // would size the batch for the wrong page.
     const light = Array.from({ length: 40 }, (_, i) =>
-      page(`https://example.com/a${String(i).padStart(3, "0")}`, 10 * KB),
+      page(`https://example.com/a${String(i).padStart(3, "0")}`, 10 * KB)
     );
     const heavy = Array.from({ length: 40 }, (_, i) =>
-      page(`https://example.com/z${String(i).padStart(3, "0")}`, 1 * MB),
+      page(`https://example.com/z${String(i).padStart(3, "0")}`, 1 * MB)
     );
     const { storage, crawlId } = await seed([...light, ...heavy]);
 
@@ -220,11 +246,13 @@ describe("sampleAveragePageBytes", () => {
 describe("resolveStreamBatch", () => {
   test("derives the batch from the crawl and reports what produced it", async () => {
     const pages = Array.from({ length: 30 }, (_, i) =>
-      page(`https://example.com/p${String(i).padStart(3, "0")}`, 1 * MB),
+      page(`https://example.com/p${String(i).padStart(3, "0")}`, 1 * MB)
     );
     const { storage, crawlId } = await seed(pages);
 
-    const resolved = await run(resolveStreamBatch(storage, crawlId, pages.length));
+    const resolved = await run(
+      resolveStreamBatch(storage, crawlId, pages.length)
+    );
     expect(resolved.explicit).toBeFalse();
     expect(resolved.avgPageBytes).toBe(1 * MB);
     expect(resolved.pages).toBe(48);
@@ -235,11 +263,13 @@ describe("resolveStreamBatch", () => {
 
   test("an explicit page count wins and skips the sampling entirely", async () => {
     const pages = Array.from({ length: 30 }, (_, i) =>
-      page(`https://example.com/p${String(i).padStart(3, "0")}`, 1 * MB),
+      page(`https://example.com/p${String(i).padStart(3, "0")}`, 1 * MB)
     );
     const { storage, crawlId } = await seed(pages);
 
-    const resolved = await run(resolveStreamBatch(storage, crawlId, pages.length, { pages: 12 }));
+    const resolved = await run(
+      resolveStreamBatch(storage, crawlId, pages.length, { pages: 12 })
+    );
     expect(resolved.explicit).toBeTrue();
     expect(resolved.pages).toBe(12);
     // Not sampled: an operator pinning a count is answering the question this
@@ -250,13 +280,16 @@ describe("resolveStreamBatch", () => {
   });
 
   test("an explicit count is still clamped", async () => {
-    const { storage, crawlId } = await seed([page("https://example.com/a", 1 * KB)]);
-    expect((await run(resolveStreamBatch(storage, crawlId, 1, { pages: 100000 }))).pages).toBe(
-      STREAM_BATCH_MAX_PAGES,
-    );
-    expect((await run(resolveStreamBatch(storage, crawlId, 1, { pages: 0 }))).pages).toBe(
-      STREAM_BATCH_MIN_PAGES,
-    );
+    const { storage, crawlId } = await seed([
+      page("https://example.com/a", 1 * KB),
+    ]);
+    expect(
+      (await run(resolveStreamBatch(storage, crawlId, 1, { pages: 100000 })))
+        .pages
+    ).toBe(STREAM_BATCH_MAX_PAGES);
+    expect(
+      (await run(resolveStreamBatch(storage, crawlId, 1, { pages: 0 }))).pages
+    ).toBe(STREAM_BATCH_MIN_PAGES);
     await run(storage.close());
   });
 });
@@ -271,7 +304,10 @@ describe("batch sizing cannot emit a value SQLite will misread", () => {
 
   test("an unusable explicit page count falls back instead of propagating", () => {
     for (const pages of bad) {
-      const n = resolveStreamBatchPages({ avgPageBytes: 1 * MB, minPages: pages });
+      const n = resolveStreamBatchPages({
+        avgPageBytes: 1 * MB,
+        minPages: pages,
+      });
       expect(Number.isInteger(n)).toBeTrue();
       expect(n).toBeGreaterThanOrEqual(1);
     }
@@ -280,7 +316,11 @@ describe("batch sizing cannot emit a value SQLite will misread", () => {
   test("unusable bounds cannot produce a fractional or NaN batch", () => {
     for (const minPages of bad) {
       for (const maxPages of bad) {
-        const n = resolveStreamBatchPages({ avgPageBytes: 250 * KB, minPages, maxPages });
+        const n = resolveStreamBatchPages({
+          avgPageBytes: 250 * KB,
+          minPages,
+          maxPages,
+        });
         expect(Number.isInteger(n)).toBeTrue();
         expect(n).toBeGreaterThanOrEqual(1);
       }
@@ -296,9 +336,13 @@ describe("batch sizing cannot emit a value SQLite will misread", () => {
   });
 
   test("resolveStreamBatch clamps an unusable explicit count", async () => {
-    const { storage, crawlId } = await seed([page("https://example.com/a", 1 * KB)]);
+    const { storage, crawlId } = await seed([
+      page("https://example.com/a", 1 * KB),
+    ]);
     for (const pages of bad) {
-      const resolved = await run(resolveStreamBatch(storage, crawlId, 1, { pages }));
+      const resolved = await run(
+        resolveStreamBatch(storage, crawlId, 1, { pages })
+      );
       expect(Number.isInteger(resolved.pages)).toBeTrue();
       expect(resolved.pages).toBeGreaterThanOrEqual(1);
     }
@@ -306,9 +350,13 @@ describe("batch sizing cannot emit a value SQLite will misread", () => {
   });
 
   test("a nonsense page total does not send the sampler into a bad read", async () => {
-    const { storage, crawlId } = await seed([page("https://example.com/a", 4 * KB)]);
+    const { storage, crawlId } = await seed([
+      page("https://example.com/a", 4 * KB),
+    ]);
     for (const total of [Number.NaN, Number.POSITIVE_INFINITY, -5]) {
-      expect(await run(sampleAveragePageBytes(storage, crawlId, total))).toBe(0);
+      expect(await run(sampleAveragePageBytes(storage, crawlId, total))).toBe(
+        0
+      );
     }
     await run(storage.close());
   });
@@ -321,7 +369,7 @@ describe("the size sample reads distinct pages", () => {
   for (const total of [13, 14, 15, 20, 37]) {
     test(`${total} pages: the mean matches counting each sampled page once`, async () => {
       const pages = Array.from({ length: total }, (_, i) =>
-        page(`https://example.com/p${String(i).padStart(3, "0")}`, (i + 1) * KB),
+        page(`https://example.com/p${String(i).padStart(3, "0")}`, (i + 1) * KB)
       );
       const { storage, crawlId } = await seed(pages);
 

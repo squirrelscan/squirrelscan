@@ -1,10 +1,18 @@
 // ax/agents-md - detect /AGENTS.md and its conventional variants
 
-import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
+import type {
+  WellKnownPath,
+  WellKnownProbe,
+} from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { answeredWellKnown, includesPath, notApprovedPath, notCheckedCheck } from "./discovery-probe-state";
+import {
+  answeredWellKnown,
+  includesPath,
+  notApprovedPath,
+  notCheckedCheck,
+} from "./discovery-probe-state";
 
 // Probed in this order (mirrors core-contracts WELL_KNOWN_PATHS).
 const AGENTS_MD_PATHS: readonly WellKnownPath[] = [
@@ -46,7 +54,9 @@ export const agentsMdRule: Rule = {
       return { checks };
     }
 
-    const probes = wk.probes.filter((p) => includesPath(AGENTS_MD_PATHS, p.path));
+    const probes = wk.probes.filter((p) =>
+      includesPath(AGENTS_MD_PATHS, p.path)
+    );
     const hit = probes.find(isRealHit);
 
     if (hit) {
@@ -55,7 +65,11 @@ export const agentsMdRule: Rule = {
         status: "info",
         message: `AGENTS.md found at ${hit.path} (${hit.bodySize} bytes)`,
         value: "present",
-        details: { path: hit.path, bodySize: hit.bodySize, excerpt: hit.excerpt.slice(0, 200) },
+        details: {
+          path: hit.path,
+          bodySize: hit.bodySize,
+          excerpt: hit.excerpt.slice(0, 200),
+        },
       });
       return { checks };
     }
@@ -79,11 +93,19 @@ export const agentsMdRule: Rule = {
     // path. Variants the user left out of `discovery_probe_paths` are theirs to leave out, so an approved path
     // that answered is a verdict on its own (#1794). A variant that was never sent (budget, probes off) or got
     // no answer still makes the whole check "not checked".
-    const { answered, unchecked, reason } = answeredWellKnown(wk, AGENTS_MD_PATHS);
+    const { answered, unchecked, reason } = answeredWellKnown(
+      wk,
+      AGENTS_MD_PATHS
+    );
     const leftOut = unchecked.filter((path) => notApprovedPath(wk, path));
     if (answered.length === 0 || unchecked.length > leftOut.length) {
       checks.push(
-        notCheckedCheck("agents-md-present", "AGENTS.md", { notChecked: unchecked }, reason),
+        notCheckedCheck(
+          "agents-md-present",
+          "AGENTS.md",
+          { notChecked: unchecked },
+          reason
+        )
       );
       return { checks };
     }

@@ -1,10 +1,17 @@
 // ax/well-known-agent - detect MCP server cards, A2A agent cards, and agent-skills manifests
 
-import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
+import type {
+  WellKnownPath,
+  WellKnownProbe,
+} from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { answeredWellKnown, includesPath, notCheckedCheck } from "./discovery-probe-state";
+import {
+  answeredWellKnown,
+  includesPath,
+  notCheckedCheck,
+} from "./discovery-probe-state";
 
 const MCP_PATHS: readonly WellKnownPath[] = [
   "/.well-known/mcp/server-card.json",
@@ -18,7 +25,11 @@ const DEPRECATED_PATHS: readonly WellKnownPath[] = [
   "/ai-plugin.json",
   "/.well-known/ai-plugin.json",
 ];
-const MANIFEST_PATHS: readonly WellKnownPath[] = [...MCP_PATHS, A2A_PATH, AGENT_SKILLS_PATH];
+const MANIFEST_PATHS: readonly WellKnownPath[] = [
+  ...MCP_PATHS,
+  A2A_PATH,
+  AGENT_SKILLS_PATH,
+];
 
 // Fields that plausibly indicate a real MCP/A2A manifest rather than an
 // unrelated JSON document that happened to 200 at the path.
@@ -62,28 +73,40 @@ export const wellKnownAgentRule: Rule = {
       return { checks };
     }
 
-    const mcpHit = wk.probes.find((p) => includesPath(MCP_PATHS, p.path) && isRealHit(p));
+    const mcpHit = wk.probes.find(
+      (p) => includesPath(MCP_PATHS, p.path) && isRealHit(p)
+    );
     const a2aHit = wk.probes.find((p) => p.path === A2A_PATH && isRealHit(p));
-    const skillsHit = wk.probes.find((p) => p.path === AGENT_SKILLS_PATH && isRealHit(p));
+    const skillsHit = wk.probes.find(
+      (p) => p.path === AGENT_SKILLS_PATH && isRealHit(p)
+    );
 
     const hits: ManifestHit[] = [
       ...(mcpHit ? [{ kind: "MCP server card", probe: mcpHit }] : []),
       ...(a2aHit ? [{ kind: "A2A agent card", probe: a2aHit }] : []),
-      ...(skillsHit ? [{ kind: "agent-skills manifest", probe: skillsHit }] : []),
+      ...(skillsHit
+        ? [{ kind: "agent-skills manifest", probe: skillsHit }]
+        : []),
     ];
 
     const { unchecked, reason } = answeredWellKnown(wk, MANIFEST_PATHS);
     if (hits.length === 0 && unchecked.length > 0) {
       // Absence is only established for paths that got an answer.
       checks.push(
-        notCheckedCheck("well-known-agent", "Agent manifests", { notChecked: unchecked }, reason),
+        notCheckedCheck(
+          "well-known-agent",
+          "Agent manifests",
+          { notChecked: unchecked },
+          reason
+        )
       );
     } else if (hits.length === 0) {
       // Detect-and-inform only — absence stays a single quiet info, never a warning.
       checks.push({
         name: "well-known-agent",
         status: "info",
-        message: "No MCP server card, A2A agent card, or agent-skills manifest found",
+        message:
+          "No MCP server card, A2A agent card, or agent-skills manifest found",
         value: "absent",
       });
     } else {
@@ -93,7 +116,9 @@ export const wellKnownAgentRule: Rule = {
           name: "well-known-agent-present",
           status: "info",
           message: `${hit.kind} found at ${hit.probe.path}${
-            plausible ? "" : " (JSON present, but no plausible manifest fields recognized)"
+            plausible
+              ? ""
+              : " (JSON present, but no plausible manifest fields recognized)"
           }`,
           value: "present",
           details: {
@@ -107,7 +132,7 @@ export const wellKnownAgentRule: Rule = {
     }
 
     const deprecatedHit = wk.probes.find(
-      (p) => includesPath(DEPRECATED_PATHS, p.path) && isRealHit(p),
+      (p) => includesPath(DEPRECATED_PATHS, p.path) && isRealHit(p)
     );
     if (deprecatedHit) {
       checks.push({

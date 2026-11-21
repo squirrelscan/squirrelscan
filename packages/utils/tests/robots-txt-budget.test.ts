@@ -19,7 +19,10 @@ const URL_ = "https://example.com/robots.txt";
 const entriesOf = (rules: ReturnType<typeof parseRobotsTxt>["rules"]) =>
   rules.reduce((sum, group) => sum + Math.max(1, group.rules.length), 0);
 const charsOf = (rules: ReturnType<typeof parseRobotsTxt>["rules"]) =>
-  rules.reduce((sum, group) => sum + group.rules.reduce((n, r) => n + r.path.length, 0), 0);
+  rules.reduce(
+    (sum, group) => sum + group.rules.reduce((n, r) => n + r.path.length, 0),
+    0
+  );
 
 /** Run `fn`, returning its result and the wall time it took. */
 function timed<T>(fn: () => T): { value: T; ms: number } {
@@ -31,28 +34,37 @@ function timed<T>(fn: () => T): { value: T; ms: number } {
 describe("parseRobotsTxt stays bounded on adversarial files", () => {
   test("stacked user agents over many rules stop at the entry budget", () => {
     // ~1.1 MB: 40,000 user agents sharing 40,000 rules would be 1.6 billion entries.
-    const content = "User-agent: a\n".repeat(40_000) + "Disallow: /x\n".repeat(40_000);
+    const content =
+      "User-agent: a\n".repeat(40_000) + "Disallow: /x\n".repeat(40_000);
     const { value, ms } = timed(() => parseRobotsTxt(content, URL_));
 
-    expect(entriesOf(value.rules)).toBeLessThanOrEqual(ROBOTS_MAX_DIRECTIVE_ENTRIES);
-    expect(value.errors.some((e) => e.includes("the rest of the file was not read"))).toBe(true);
+    expect(entriesOf(value.rules)).toBeLessThanOrEqual(
+      ROBOTS_MAX_DIRECTIVE_ENTRIES
+    );
+    expect(
+      value.errors.some((e) => e.includes("the rest of the file was not read"))
+    ).toBe(true);
     expect(ms).toBeLessThan(5_000);
   }, 30_000);
 
   test("one huge group keeps its first rules, in file order", () => {
-    const content = "User-agent: *\nDisallow: /\n" + "Disallow: /x\n".repeat(150_000);
+    const content =
+      "User-agent: *\nDisallow: /\n" + "Disallow: /x\n".repeat(150_000);
     const { value, ms } = timed(() => parseRobotsTxt(content, URL_));
 
     expect(value.rules).toHaveLength(1);
     expect(value.rules[0]!.rules).toHaveLength(ROBOTS_MAX_DIRECTIVE_ENTRIES);
     expect(value.errors).toHaveLength(1);
     expect(value.rules[0]!.rules[0]).toEqual({ type: "disallow", path: "/" });
-    expect(isRobotsTxtDisallowed("https://example.com/a", value, "GPTBot")).toBe(true);
+    expect(
+      isRobotsTxtDisallowed("https://example.com/a", value, "GPTBot")
+    ).toBe(true);
     expect(ms).toBeLessThan(5_000);
   }, 30_000);
 
   test("a group cut between two agents keeps whole rules in file order for each", () => {
-    const content = "User-agent: a\nUser-agent: b\n" + "Disallow: /x\n".repeat(60_000);
+    const content =
+      "User-agent: a\nUser-agent: b\n" + "Disallow: /x\n".repeat(60_000);
     const result = parseRobotsTxt(content, URL_);
 
     expect(result.rules.map((g) => [g.userAgent, g.rules.length])).toEqual([
@@ -64,7 +76,8 @@ describe("parseRobotsTxt stays bounded on adversarial files", () => {
   test("stacked agents over one very long rule stop at the character budget", () => {
     // ~290 KB: 2,000 copies of a 250,000-character rule would be 500 MB of rule text.
     const content =
-      "User-agent: GPTBot\n".repeat(2_000) + `Disallow: /${"a".repeat(250_000)}\n`;
+      "User-agent: GPTBot\n".repeat(2_000) +
+      `Disallow: /${"a".repeat(250_000)}\n`;
     const { value, ms } = timed(() => parseRobotsTxt(content, URL_));
 
     expect(charsOf(value.rules)).toBeLessThanOrEqual(ROBOTS_MAX_RULE_CHARS);
@@ -75,7 +88,11 @@ describe("parseRobotsTxt stays bounded on adversarial files", () => {
     // And a crawl's worth of URL checks against it stays fast.
     const check = timed(() => {
       for (let i = 0; i < 500; i++) {
-        isRobotsTxtDisallowed(`https://example.com/${"a".repeat(i)}`, value, "GPTBot");
+        isRobotsTxtDisallowed(
+          `https://example.com/${"a".repeat(i)}`,
+          value,
+          "GPTBot"
+        );
       }
     });
     expect(check.ms).toBeLessThan(10_000);
@@ -94,11 +111,16 @@ describe("parseRobotsTxt stays bounded on adversarial files", () => {
 
   // Linear in rules times URLs (about 16 ms a URL here), never worse.
   test("URL checks against 80,000 wildcard rules stay linear", () => {
-    const content = "User-agent: *\n" + "Disallow: /private-*/page$\n".repeat(80_000);
+    const content =
+      "User-agent: *\n" + "Disallow: /private-*/page$\n".repeat(80_000);
     const robots = parseRobotsTxt(content, URL_);
     const { ms } = timed(() => {
       for (let i = 0; i < 200; i++) {
-        isRobotsTxtDisallowed(`https://example.com/public-${i}/page`, robots, "Googlebot");
+        isRobotsTxtDisallowed(
+          `https://example.com/public-${i}/page`,
+          robots,
+          "Googlebot"
+        );
       }
     });
 
@@ -106,7 +128,8 @@ describe("parseRobotsTxt stays bounded on adversarial files", () => {
   }, 30_000);
 
   test("a file under the budget is read whole, with no error", () => {
-    const content = "User-agent: a\nUser-agent: b\n" + "Disallow: /x\n".repeat(1_000);
+    const content =
+      "User-agent: a\nUser-agent: b\n" + "Disallow: /x\n".repeat(1_000);
     const result = parseRobotsTxt(content, URL_);
 
     expect(result.rules.map((g) => g.rules.length)).toEqual([1_000, 1_000]);
@@ -114,21 +137,40 @@ describe("parseRobotsTxt stays bounded on adversarial files", () => {
   });
 
   test.each([
-    ["one 2 MB line with no line break", "User-agent: *" + " Disallow: /".repeat(170_000)],
-    ["2 MB of CR-only line endings", "User-agent: a\rDisallow: /x\r".repeat(75_000)],
+    [
+      "one 2 MB line with no line break",
+      "User-agent: *" + " Disallow: /".repeat(170_000),
+    ],
+    [
+      "2 MB of CR-only line endings",
+      "User-agent: a\rDisallow: /x\r".repeat(75_000),
+    ],
     ["2 MB of comments", "# x\n".repeat(500_000)],
-  ])("%s parses in bounded time", (_name, content) => {
-    const { value, ms } = timed(() => parseRobotsTxt(content, URL_));
+  ])(
+    "%s parses in bounded time",
+    (_name, content) => {
+      const { value, ms } = timed(() => parseRobotsTxt(content, URL_));
 
-    expect(entriesOf(value.rules)).toBeLessThanOrEqual(ROBOTS_MAX_DIRECTIVE_ENTRIES);
-    expect(ms).toBeLessThan(5_000);
-  }, 30_000);
+      expect(entriesOf(value.rules)).toBeLessThanOrEqual(
+        ROBOTS_MAX_DIRECTIVE_ENTRIES
+      );
+      expect(ms).toBeLessThan(5_000);
+    },
+    30_000
+  );
 
   test("a rule of 100,000 wildcards matches in bounded time", () => {
     const pattern = `/${"*a".repeat(100_000)}$`;
-    const robots = parseRobotsTxt(`User-agent: *\nDisallow: ${pattern}\n`, URL_);
+    const robots = parseRobotsTxt(
+      `User-agent: *\nDisallow: ${pattern}\n`,
+      URL_
+    );
     const { value, ms } = timed(() =>
-      isRobotsTxtDisallowed(`https://example.com/${"a".repeat(2_000)}b`, robots, "Googlebot"),
+      isRobotsTxtDisallowed(
+        `https://example.com/${"a".repeat(2_000)}b`,
+        robots,
+        "Googlebot"
+      )
     );
 
     expect(value).toBe(false);

@@ -8,10 +8,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+import type {
+  RedirectChain,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "../src/storage/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
-import type { RedirectChain, ResponseHeaders, SecurityHeaders } from "../src/storage/types";
 
 const ORIGIN = "https://example.com";
 
@@ -105,14 +110,20 @@ const BASE_CONFIG: Partial<CrawlerConfig> = {
   coverageMode: "full",
 };
 
-async function runCrawl(config: Partial<CrawlerConfig>, site: Site): Promise<string[]> {
+async function runCrawl(
+  config: Partial<CrawlerConfig>,
+  site: Site
+): Promise<string[]> {
   const fetched: string[] = [];
   const fetcher = buildFetcher(site, fetched);
   await Effect.runPromise(
     Effect.gen(function* () {
-      const crawler = yield* createCrawler({ fetcher, config: { ...BASE_CONFIG, ...config } });
+      const crawler = yield* createCrawler({
+        fetcher,
+        config: { ...BASE_CONFIG, ...config },
+      });
       yield* crawler.start(ORIGIN);
-    }),
+    })
   );
   return fetched;
 }
@@ -129,7 +140,10 @@ describe("carried-finding crawl seeding (#1146)", () => {
           : input instanceof URL
             ? input.toString()
             : (input as Request).url;
-      const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
+      const res = new Response("", {
+        status: 404,
+        headers: { "content-type": "text/plain" },
+      });
       Object.defineProperty(res, "url", { value: url, configurable: true });
       return Promise.resolve(res);
     }) as typeof globalThis.fetch;
@@ -144,7 +158,9 @@ describe("carried-finding crawl seeding (#1146)", () => {
     // (not linked anywhere), so only frontier seeding pulls them in. /dead-* are
     // intentionally unmapped in the site fixture → the fetcher 404s them.
     const site: Site = {
-      [`${ORIGIN}/`]: { body: html("/live-a", "/live-b", "/dead-1", "/dead-2", "/dead-3") },
+      [`${ORIGIN}/`]: {
+        body: html("/live-a", "/live-b", "/dead-1", "/dead-2", "/dead-3"),
+      },
       [`${ORIGIN}/live-a`]: { body: html() },
       [`${ORIGIN}/live-b`]: { body: html() },
       [`${ORIGIN}/carried-x`]: { body: html() },
@@ -155,9 +171,13 @@ describe("carried-finding crawl seeding (#1146)", () => {
       {
         maxPages: 5,
         carriedSeedUrls: [`${ORIGIN}/carried-x`, `${ORIGIN}/carried-y`],
-        deprioritizedUrls: [`${ORIGIN}/dead-1`, `${ORIGIN}/dead-2`, `${ORIGIN}/dead-3`],
+        deprioritizedUrls: [
+          `${ORIGIN}/dead-1`,
+          `${ORIGIN}/dead-2`,
+          `${ORIGIN}/dead-3`,
+        ],
       },
-      site,
+      site
     );
 
     // Both orphaned carried pages were re-crawled despite never being linked.
@@ -181,7 +201,11 @@ describe("carried-finding crawl seeding (#1146)", () => {
     const fetched = await runCrawl({ maxPages: 100 }, site);
 
     // Under budget: every linked page crawled, the orphan is not reached.
-    expect(fetched.sort()).toEqual([`${ORIGIN}/`, `${ORIGIN}/live-a`, `${ORIGIN}/live-b`]);
+    expect(fetched.sort()).toEqual([
+      `${ORIGIN}/`,
+      `${ORIGIN}/live-a`,
+      `${ORIGIN}/live-b`,
+    ]);
     expect(fetched).not.toContain(`${ORIGIN}/orphan`);
   });
 });

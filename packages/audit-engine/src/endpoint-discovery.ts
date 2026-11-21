@@ -12,6 +12,7 @@
 // (repo#4188): `renderedRequestsOf` feeds them in as `render-request` refs.
 
 import type { PageRecord } from "@squirrelscan/core-contracts";
+import type { RenderedRequest } from "@squirrelscan/core-contracts";
 import type {
   EndpointSurface,
   PageEndpointRef,
@@ -20,14 +21,15 @@ import type {
   SiteData,
 } from "@squirrelscan/rules";
 
-import { buildEndpointSurface, extractEndpointRefsFromDocument } from "@squirrelscan/rules";
-import { detectTechnologies } from "@squirrelscan/tech-detect";
-
+import {
+  buildEndpointSurface,
+  extractEndpointRefsFromDocument,
+} from "@squirrelscan/rules";
 import { RENDER_REQUEST_VIA } from "@squirrelscan/rules";
-import type { RenderedRequest } from "@squirrelscan/core-contracts";
+import { detectTechnologies } from "@squirrelscan/tech-detect";
+import { trimTrailing } from "@squirrelscan/utils/trim";
 
 import type { PageSignalCollector } from "./streaming";
-import { trimTrailing } from "@squirrelscan/utils/trim";
 
 /**
  * Distinct refs the collector retains across the whole crawl. The final list is
@@ -70,11 +72,13 @@ export function isSamePage(a: string, b: string): boolean {
  */
 export function entryFirst<T extends { page: PageRecord }>(
   pages: Iterable<T>,
-  entryUrl: string,
+  entryUrl: string
 ): T[] {
   const all = [...pages];
   const at = all.findIndex(
-    ({ page }) => isSamePage(page.normalizedUrl, entryUrl) || isSamePage(page.finalUrl, entryUrl),
+    ({ page }) =>
+      isSamePage(page.normalizedUrl, entryUrl) ||
+      isSamePage(page.finalUrl, entryUrl)
   );
   if (at <= 0) return all;
   return [all[at], ...all.slice(0, at), ...all.slice(at + 1)];
@@ -114,7 +118,10 @@ function scriptUrls(parsed: ParsedPage, pageUrl: string): { url: string }[] {
  * `?access_token=...`), so both are dropped: the ref ends up in findings and the
  * persisted rule-cache snapshot, and the endpoint is identified by its path.
  */
-function renderedRef(req: RenderedRequest, pageUrl: string): PageEndpointRef | null {
+function renderedRef(
+  req: RenderedRequest,
+  pageUrl: string
+): PageEndpointRef | null {
   try {
     const u = new URL(req.url, pageUrl);
     if (u.protocol !== "http:" && u.protocol !== "https:") return null;
@@ -123,7 +130,11 @@ function renderedRef(req: RenderedRequest, pageUrl: string): PageEndpointRef | n
     u.username = "";
     u.password = "";
     const method = req.method?.trim().toUpperCase();
-    return { url: u.href, ...(method ? { method } : {}), discoveredVia: RENDER_REQUEST_VIA };
+    return {
+      url: u.href,
+      ...(method ? { method } : {}),
+      discoveredVia: RENDER_REQUEST_VIA,
+    };
   } catch {
     return null;
   }
@@ -197,7 +208,9 @@ export function createEndpointCollector(opts: {
    * Omitted or empty: the pass stays static. Captured requests become refs, so
    * the same-origin filter, the caps and the rule cache snapshot apply to them.
    */
-  renderedRequestsOf?: (pageUrl: string) => readonly RenderedRequest[] | undefined;
+  renderedRequestsOf?: (
+    pageUrl: string
+  ) => readonly RenderedRequest[] | undefined;
 }): EndpointCollector {
   const same = new SmallestKeys(MAX_RETAINED_REFS);
   const cross = new SmallestKeys(MAX_RETAINED_CROSS_ORIGIN_REFS);
@@ -225,7 +238,8 @@ export function createEndpointCollector(opts: {
       const key = refKey(ref);
       if (same.has(key)) continue;
       const refOrigin = originOrNull(ref.url);
-      const isCross = pageOrigin !== null && refOrigin !== null && refOrigin !== pageOrigin;
+      const isCross =
+        pageOrigin !== null && refOrigin !== null && refOrigin !== pageOrigin;
       if (isCross) {
         if (!cross.has(key)) cross.offer(key, ref);
       } else {
@@ -238,7 +252,9 @@ export function createEndpointCollector(opts: {
   const retained = (): PageEndpointRef[] => {
     same.compact();
     cross.compact();
-    return [...same.map, ...cross.map].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, r]) => r);
+    return [...same.map, ...cross.map]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([, r]) => r);
   };
 
   const collector: EndpointCollector = {
@@ -247,7 +263,9 @@ export function createEndpointCollector(opts: {
       const pageUrl = page.finalUrl || page.normalizedUrl;
       const record: PageEndpointRefs = {
         pageUrl: page.normalizedUrl,
-        refs: parsed.document ? extractEndpointRefsFromDocument(parsed.document, pageUrl) : [],
+        refs: parsed.document
+          ? extractEndpointRefsFromDocument(parsed.document, pageUrl)
+          : [],
       };
       for (const req of opts.renderedRequestsOf?.(page.normalizedUrl) ?? []) {
         const ref = renderedRef(req, pageUrl);
@@ -259,7 +277,8 @@ export function createEndpointCollector(opts: {
       // not first, the next fresh page runs detection instead.
       const isEntry =
         opts.entryUrl !== undefined &&
-        (isSamePage(page.normalizedUrl, opts.entryUrl) || isSamePage(pageUrl, opts.entryUrl));
+        (isSamePage(page.normalizedUrl, opts.entryUrl) ||
+          isSamePage(pageUrl, opts.entryUrl));
       if (
         (isEntry && !entryDetected) ||
         (techIds.size === 0 && detectionAttempts < MAX_DETECTION_ATTEMPTS)

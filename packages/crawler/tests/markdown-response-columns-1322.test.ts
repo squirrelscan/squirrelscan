@@ -6,13 +6,14 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import { Effect } from "effect";
 import { unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { Effect } from "effect";
+
+import type { CrawlMetadata } from "../src/storage/types";
 
 import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
-import type { CrawlMetadata } from "../src/storage/types";
 
 const STATS = {
   pagesTotal: 0,
@@ -33,7 +34,7 @@ const newCrawl = (store: SQLiteStorage): Promise<string> =>
       status: "running",
       config: {} as CrawlMetadata["config"],
       stats: STATS,
-    } as Omit<CrawlMetadata, "id">),
+    } as Omit<CrawlMetadata, "id">)
   );
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -68,7 +69,9 @@ const NEW_COLUMNS = [
 function markdownColumns(path: string): string[] {
   const db = new Database(path);
   const cols = (
-    db.prepare("PRAGMA table_info(markdown_response)").all() as Array<{ name: string }>
+    db.prepare("PRAGMA table_info(markdown_response)").all() as Array<{
+      name: string;
+    }>
   ).map((c) => c.name);
   db.close();
   return cols;
@@ -90,11 +93,15 @@ describe("markdown_response negotiation status columns (repo#1322)", () => {
     await run(store.close());
 
     const db = new Database(path);
-    for (const col of NEW_COLUMNS) db.exec(`ALTER TABLE markdown_response DROP COLUMN ${col}`);
-    const version = db.prepare("SELECT MAX(version) AS v FROM schema_version").get() as { v: number };
+    for (const col of NEW_COLUMNS)
+      db.exec(`ALTER TABLE markdown_response DROP COLUMN ${col}`);
+    const version = db
+      .prepare("SELECT MAX(version) AS v FROM schema_version")
+      .get() as { v: number };
     db.close();
     expect(version.v).toBe(SCHEMA_VERSION);
-    for (const col of NEW_COLUMNS) expect(markdownColumns(path)).not.toContain(col);
+    for (const col of NEW_COLUMNS)
+      expect(markdownColumns(path)).not.toContain(col);
 
     const reopened = new SQLiteStorage(path);
     await run(reopened.init());
@@ -121,7 +128,7 @@ describe("markdown_response negotiation status columns (repo#1322)", () => {
         ...base,
         strictNegotiationAnswered: false,
         mdVariantAnswered: false,
-      }),
+      })
     );
     const legacy = await newCrawl(store);
     await run(store.setMarkdownProbe(legacy, base));

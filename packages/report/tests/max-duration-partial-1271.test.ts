@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
@@ -12,7 +13,12 @@ import { renderText } from "../src/output/text";
 const REASON =
   "Stopped at the 60 s time limit (--max-duration): 12 discovered pages were not fetched";
 
-const cut = { seconds: 60, unfetchedPages: 12, pagesNotEvaluated: 0, siteChecksCut: false };
+const cut = {
+  seconds: 60,
+  unfetchedPages: 12,
+  pagesNotEvaluated: 0,
+  siteChecksCut: false,
+};
 
 function partialReport(withCut: boolean): AuditReport {
   return {
@@ -33,13 +39,18 @@ function partialReport(withCut: boolean): AuditReport {
     },
     status: "partial",
     statusReason: REASON,
-    ...(withCut ? { statusReasonCode: "max_duration" as const, maxDuration: cut } : {}),
+    ...(withCut
+      ? { statusReasonCode: "max_duration" as const, maxDuration: cut }
+      : {}),
   } as unknown as AuditReport;
 }
 
 describe("max_duration partial report", () => {
   test("JSON carries status, reason code and the counts", () => {
-    const json = JSON.parse(renderJson(partialReport(true))) as Record<string, unknown>;
+    const json = JSON.parse(renderJson(partialReport(true))) as Record<
+      string,
+      unknown
+    >;
     expect(json.status).toBe("partial");
     expect(json.statusReason).toBe(REASON);
     expect(json.statusReasonCode).toBe("max_duration");
@@ -47,7 +58,10 @@ describe("max_duration partial report", () => {
   });
 
   test("JSON of an ordinary partial report gains neither field", () => {
-    const json = JSON.parse(renderJson(partialReport(false))) as Record<string, unknown>;
+    const json = JSON.parse(renderJson(partialReport(false))) as Record<
+      string,
+      unknown
+    >;
     expect(json.statusReasonCode).toBeUndefined();
     expect(json.maxDuration).toBeUndefined();
   });

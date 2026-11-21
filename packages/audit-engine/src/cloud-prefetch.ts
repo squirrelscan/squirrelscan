@@ -9,12 +9,13 @@
 // cap reached) degrades to `skipped` envelopes with a reason. A failed or
 // skipped prefetch must not fail the audit.
 
+import type { CloudConfig } from "@squirrelscan/config";
+
 import {
   CloudClientError,
   type CloudServicesClient,
   type CreditsResponse,
 } from "@squirrelscan/cloud-client";
-import type { CloudConfig } from "@squirrelscan/config";
 import {
   computeCost,
   type ArchiveIndexingRequest,
@@ -158,7 +159,7 @@ export interface CloudPrefetchInput {
      * read as "you cannot afford this". The prompt itself is still asked, since
      * the spend is real and gets invoiced.
      */
-    balance: number | "unlimited",
+    balance: number | "unlimited"
   ) => Promise<boolean>;
   onProgress?: (message: string) => void;
   /**
@@ -341,10 +342,15 @@ export class CloudPrefetchAccumulator {
   beginCall(
     service: CloudServiceId,
     units: number,
-    batch?: { index: number; of: number },
+    batch?: { index: number; of: number }
   ): number {
     const id = this.nextCallId++;
-    this.openCalls.set(id, { service, units, startedAt: Date.now(), ...(batch ? { batch } : {}) });
+    this.openCalls.set(id, {
+      service,
+      units,
+      startedAt: Date.now(),
+      ...(batch ? { batch } : {}),
+    });
     return id;
   }
 
@@ -362,7 +368,7 @@ export class CloudPrefetchAccumulator {
   private emitCall(
     call: OpenCall,
     status: CloudPrefetchCallEvent["status"],
-    detail?: string,
+    detail?: string
   ): void {
     const listener = this.onCall;
     if (!listener) return;
@@ -410,7 +416,7 @@ export class CloudPrefetchAccumulator {
     // Copies throughout: the prefetch may still be awaiting calls that land
     // after this, and they must not reach a result the caller already holds.
     const store: CloudResultStore = new Map(
-      [...this.store].map(([service, byKey]) => [service, new Map(byKey)]),
+      [...this.store].map(([service, byKey]) => [service, new Map(byKey)])
     );
     const spend = this.spend.map((line) => ({ ...line }));
     const failures = this.failures.map((failure) => ({ ...failure }));
@@ -418,7 +424,8 @@ export class CloudPrefetchAccumulator {
     const inFlight = this.inFlight;
     if (inFlight) {
       // Same batch-order merge the completed path does, over the batches that returned.
-      const byKey = store.get(inFlight.service) ?? new Map<string, CloudResultEnvelope>();
+      const byKey =
+        store.get(inFlight.service) ?? new Map<string, CloudResultEnvelope>();
       const line: CloudSpendLine = {
         service: inFlight.service,
         feature: inFlight.feature,
@@ -453,7 +460,10 @@ export class CloudPrefetchAccumulator {
           failedUnits,
           attemptedUnits: inFlight.attemptedUnits,
           failedBatches,
-          ...(failure ?? { reason: PREFETCH_OUT_OF_TIME, detail: PREFETCH_DEADLINE_DETAIL }),
+          ...(failure ?? {
+            reason: PREFETCH_OUT_OF_TIME,
+            detail: PREFETCH_DEADLINE_DETAIL,
+          }),
         });
       }
       if (line.credits > 0) spend.push(line);
@@ -493,7 +503,9 @@ export class CloudPrefetchAccumulator {
       siteMetadata: this.siteMetadata,
       abandoned: true,
       // Calls still in flight are not in `spend` but may yet be charged.
-      ...(balanceAfter !== null ? { balanceAfterApproximate: true as const } : {}),
+      ...(balanceAfter !== null
+        ? { balanceAfterApproximate: true as const }
+        : {}),
     };
     return this.settled;
   }
@@ -507,15 +519,21 @@ export class CloudPrefetchAccumulator {
  */
 export async function prefetchCloudDataWithDeadline(
   input: Omit<CloudPrefetchInput, "accumulator">,
-  deadlineMs: number,
+  deadlineMs: number
 ): Promise<CloudPrefetchResult> {
   const accumulator = new CloudPrefetchAccumulator();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new Promise<CloudPrefetchResult>((resolve) => {
-    timer = setTimeout(() => resolve(accumulator.abandon()), Math.max(0, deadlineMs));
+    timer = setTimeout(
+      () => resolve(accumulator.abandon()),
+      Math.max(0, deadlineMs)
+    );
   });
   try {
-    return await Promise.race([prefetchCloudData({ ...input, accumulator }), expired]);
+    return await Promise.race([
+      prefetchCloudData({ ...input, accumulator }),
+      expired,
+    ]);
   } finally {
     clearTimeout(timer);
   }
@@ -559,9 +577,16 @@ function unmeteredBalance(preflight: CreditsResponse): boolean {
 
 function emptyResult(
   store: CloudResultStore,
-  siteMetadata: SiteMetadata | null = null,
+  siteMetadata: SiteMetadata | null = null
 ): CloudPrefetchResult {
-  return { store, spend: [], totalSpent: 0, failures: [], balanceAfter: null, siteMetadata };
+  return {
+    store,
+    spend: [],
+    totalSpent: 0,
+    failures: [],
+    balanceAfter: null,
+    siteMetadata,
+  };
 }
 
 /** Stamp a skip envelope for every key a service would have produced. */
@@ -570,7 +595,7 @@ function skipService(
   service: CloudServiceId,
   unit: RuleCloudSpec["unit"],
   pages: CloudPagePayload[],
-  reason: CloudSkipReason,
+  reason: CloudSkipReason
 ): void {
   const byKey = store.get(service) ?? new Map<string, CloudResultEnvelope>();
   if (unit === "site") {
@@ -578,7 +603,8 @@ function skipService(
       byKey.set(CLOUD_SITE_KEY, { status: "skipped", skipReason: reason });
   } else {
     for (const p of pages) {
-      if (!byKey.has(p.url)) byKey.set(p.url, { status: "skipped", skipReason: reason });
+      if (!byKey.has(p.url))
+        byKey.set(p.url, { status: "skipped", skipReason: reason });
     }
   }
   store.set(service, byKey);
@@ -600,8 +626,13 @@ export const BATCH_CONCURRENCY = 4;
  * but never runs wider than its plan renders. Without one it is
  * {@link BATCH_CONCURRENCY}. The number of calls is the same either way.
  */
-export function prefetchBatchConcurrency(planRenderConcurrency?: number): number {
-  if (planRenderConcurrency === undefined || !Number.isFinite(planRenderConcurrency)) {
+export function prefetchBatchConcurrency(
+  planRenderConcurrency?: number
+): number {
+  if (
+    planRenderConcurrency === undefined ||
+    !Number.isFinite(planRenderConcurrency)
+  ) {
     return BATCH_CONCURRENCY;
   }
   return Math.max(1, Math.floor(planRenderConcurrency));
@@ -618,7 +649,7 @@ export function prefetchBatchConcurrency(planRenderConcurrency?: number): number
 export function chunkPagesBySize(
   pages: CloudPagePayload[],
   maxCount: number,
-  maxBytes: number = BATCH_BYTE_BUDGET,
+  maxBytes: number = BATCH_BYTE_BUDGET
 ): CloudPagePayload[][] {
   const encoder = new TextEncoder();
   const out: CloudPagePayload[][] = [];
@@ -628,7 +659,10 @@ export function chunkPagesBySize(
     // +1 for the array comma separator; envelope overhead is covered by the
     // budget headroom (5MB limit vs 4MB budget).
     const size = encoder.encode(JSON.stringify(page)).length + 1;
-    if (current.length > 0 && (current.length >= maxCount || currentBytes + size > maxBytes)) {
+    if (
+      current.length > 0 &&
+      (current.length >= maxCount || currentBytes + size > maxBytes)
+    ) {
       out.push(current);
       current = [];
       currentBytes = 0;
@@ -641,7 +675,9 @@ export function chunkPagesBySize(
 }
 
 /** Unique (service → spec) map from the enabled cloud rules, stable order. */
-function planServices(rules: CloudPrefetchInput["rules"]): Map<CloudServiceId, RuleCloudSpec> {
+function planServices(
+  rules: CloudPrefetchInput["rules"]
+): Map<CloudServiceId, RuleCloudSpec> {
   const specs = new Map<CloudServiceId, RuleCloudSpec>();
   for (const r of [...rules].sort((a, b) => (a.id < b.id ? -1 : 1))) {
     if (!specs.has(r.cloud.service)) specs.set(r.cloud.service, r.cloud);
@@ -657,7 +693,7 @@ function planServices(rules: CloudPrefetchInput["rules"]): Map<CloudServiceId, R
 function applyCap(
   specs: Map<CloudServiceId, RuleCloudSpec>,
   pages: CloudPagePayload[],
-  cap: number,
+  cap: number
 ): ServicePlan[] {
   const plans: ServicePlan[] = [];
   let remaining = cap === 0 ? Number.POSITIVE_INFINITY : cap;
@@ -732,7 +768,7 @@ function reasonForError(error: unknown): CloudSkipReason {
  */
 function latchFatal(
   error: unknown,
-  reason: CloudSkipReason,
+  reason: CloudSkipReason
 ): { reason: CloudSkipReason; detail: string } | null {
   const fatal =
     reason === "insufficient-credits" ||
@@ -757,7 +793,9 @@ function describeError(error: unknown): string {
       case "run_inactive":
         return "run no longer active";
       case "service_unavailable":
-        return error.status > 0 ? `service error (${error.status})` : "service error";
+        return error.status > 0
+          ? `service error (${error.status})`
+          : "service error";
       case "network_error":
         return "network error";
     }
@@ -787,7 +825,7 @@ export const RENDER_POLL_INTERVAL_MS = 1_500;
 async function pollRenderResults(
   client: CloudServicesClient,
   jobId: string,
-  abandoned: () => boolean,
+  abandoned: () => boolean
 ): Promise<RenderResultItem[]> {
   const deadline = Date.now() + RENDER_POLL_TIMEOUT_MS;
   for (;;) {
@@ -797,7 +835,8 @@ async function pollRenderResults(
     } catch {
       /* transient poll error — retry until the deadline */
     }
-    if (res && (res.status === "done" || res.status === "error")) return res.results ?? [];
+    if (res && (res.status === "done" || res.status === "error"))
+      return res.results ?? [];
     // An abandoned prefetch has nobody left to read these: stop polling (no charge rides on a poll).
     if (Date.now() >= deadline || abandoned()) return res?.results ?? [];
     await new Promise<void>((r) => setTimeout(r, RENDER_POLL_INTERVAL_MS));
@@ -815,7 +854,7 @@ async function fetchPageBatch(
   batch: CloudPagePayload[],
   auditId: string,
   runId: string | undefined,
-  hooks: { onCharged: () => void; abandoned: () => boolean },
+  hooks: { onCharged: () => void; abandoned: () => boolean }
 ): Promise<Map<string, unknown>> {
   if (service === "render") {
     // Charge-on-submit + non-idempotent (client pins maxAttempts:1 → no double-charge on retry). A submit
@@ -835,15 +874,21 @@ async function fetchPageBatch(
     // NOT usable content — drop it so the page maps to a skip rather than feeding a challenge page into the
     // rule's word-count diff (spurious "JS-only content"). The live crawl renderer retries these via a
     // non-browser egress (#490); prefetch has no fallback, so a blocked page is simply unavailable here.
-    return new Map(results.filter((r) => !isRenderBlocked(r)).map((r) => [r.url, r]));
+    return new Map(
+      results.filter((r) => !isRenderBlocked(r)).map((r) => [r.url, r])
+    );
   }
   const req = { auditId, pages: batch };
   const res =
-    service === "ai-parse" ? await client.aiParse(req) : await client.authoritySignals(req);
+    service === "ai-parse"
+      ? await client.aiParse(req)
+      : await client.authoritySignals(req);
   return new Map(res.results.map((r) => [r.url, r]));
 }
 
-export async function prefetchCloudData(input: CloudPrefetchInput): Promise<CloudPrefetchResult> {
+export async function prefetchCloudData(
+  input: CloudPrefetchInput
+): Promise<CloudPrefetchResult> {
   const acc = input.accumulator ?? new CloudPrefetchAccumulator();
   const result = await runPrefetch(input, acc);
   acc.settle(result);
@@ -852,7 +897,7 @@ export async function prefetchCloudData(input: CloudPrefetchInput): Promise<Clou
 
 async function runPrefetch(
   input: CloudPrefetchInput,
-  acc: CloudPrefetchAccumulator,
+  acc: CloudPrefetchAccumulator
 ): Promise<CloudPrefetchResult> {
   // The accumulator's own collections ARE the run's: every write below is
   // visible to an abandon() taken mid-run (#280).
@@ -889,7 +934,11 @@ async function runPrefetch(
   // loopback / private-network target the hosted renderer is refused access to.
   // Both are "this comparison cannot happen for this run", both must land
   // BEFORE the charge, so they share one skip.
-  if (input.crawlRendered || input.hostUnreachableByCloud || input.renderDisabled) {
+  if (
+    input.crawlRendered ||
+    input.hostUnreachableByCloud ||
+    input.renderDisabled
+  ) {
     const spec = specs.get("render");
     if (spec) {
       skipService(
@@ -897,7 +946,7 @@ async function runPrefetch(
         "render",
         spec.unit,
         input.pages,
-        input.renderDisabled ? "render-disabled" : "not-applicable",
+        input.renderDisabled ? "render-disabled" : "not-applicable"
       );
       specs.delete("render");
     }
@@ -916,11 +965,12 @@ async function runPrefetch(
   // From here every remaining service owes the store an envelope; an abandon
   // fills whichever it had not reached yet.
   // Run order: Stage 0 first, then service-id order as applyCap runs them.
-  const runRank = (service: CloudServiceId) => (service === SITE_METADATA_SERVICE ? 0 : 1);
+  const runRank = (service: CloudServiceId) =>
+    service === SITE_METADATA_SERVICE ? 0 : 1;
   acc.planned = new Map(
     [...specs]
       .sort(([a], [b]) => runRank(a) - runRank(b) || (a < b ? -1 : 1))
-      .map(([service, spec]) => [service, spec.unit]),
+      .map(([service, spec]) => [service, spec.unit])
   );
 
   // Preflight: balance + connectivity in one call.
@@ -964,14 +1014,21 @@ async function runPrefetch(
     const stage1Specs = new Map(specs);
     stage1Specs.delete(SITE_METADATA_SERVICE);
     const stage1Cap =
-      remainingCap === Number.POSITIVE_INFINITY ? 0 : Math.max(0, remainingCap - metaCost);
+      remainingCap === Number.POSITIVE_INFINITY
+        ? 0
+        : Math.max(0, remainingCap - metaCost);
     const upperEstimate =
       metaCost +
-      applyCap(stage1Specs, input.pages, stage1Cap).reduce((sum, p) => sum + p.estimate, 0);
+      applyCap(stage1Specs, input.pages, stage1Cap).reduce(
+        (sum, p) => sum + p.estimate,
+        0
+      );
     if (upperEstimate > input.config.confirm_threshold) {
       const proceed = await input.confirm(
         upperEstimate,
-        preflight.balance.unlimited === true ? "unlimited" : preflight.balance.total,
+        preflight.balance.unlimited === true
+          ? "unlimited"
+          : preflight.balance.total
       );
       if (!proceed) {
         for (const [service, spec] of specs) {
@@ -980,7 +1037,7 @@ async function runPrefetch(
             service,
             spec.unit,
             spec.unit === "site" ? [] : input.pages,
-            "not-prefetched",
+            "not-prefetched"
           );
         }
         return {
@@ -988,7 +1045,9 @@ async function runPrefetch(
           spend,
           totalSpent,
           failures,
-          balanceAfter: unmeteredBalance(preflight) ? null : preflight.balance.total,
+          balanceAfter: unmeteredBalance(preflight)
+            ? null
+            : preflight.balance.total,
           siteMetadata: null,
         };
       }
@@ -1006,7 +1065,13 @@ async function runPrefetch(
       // Nothing to extract from — skip without charging.
       skipService(store, SITE_METADATA_SERVICE, "site", [], "not-prefetched");
     } else if (cost0 > remainingCap) {
-      skipService(store, SITE_METADATA_SERVICE, "site", [], "credit-cap-reached");
+      skipService(
+        store,
+        SITE_METADATA_SERVICE,
+        "site",
+        [],
+        "credit-cap-reached"
+      );
     } else if (!acc.abandoned) {
       // (Abandoned already: dispatch nothing more, the abandon result is final.)
       input.onProgress?.(`cloud: ${SITE_METADATA_SERVICE}`);
@@ -1021,8 +1086,14 @@ async function runPrefetch(
         // bill the cap or report spend for it, else a finite cap can be falsely
         // exhausted and downstream services wrongly skipped.
         const credits = data.cached ? 0 : cost0;
-        const byKey = store.get(SITE_METADATA_SERVICE) ?? new Map<string, CloudResultEnvelope>();
-        byKey.set(CLOUD_SITE_KEY, { status: "ok", data, creditsSpent: credits });
+        const byKey =
+          store.get(SITE_METADATA_SERVICE) ??
+          new Map<string, CloudResultEnvelope>();
+        byKey.set(CLOUD_SITE_KEY, {
+          status: "ok",
+          data,
+          creditsSpent: credits,
+        });
         store.set(SITE_METADATA_SERVICE, byKey);
         siteMetadata = data;
         acc.siteMetadata = data;
@@ -1050,7 +1121,9 @@ async function runPrefetch(
           reason,
           detail: describeError(error),
         });
-        input.onProgress?.(`cloud: ${SITE_METADATA_SERVICE} failed (${describeError(error)})`);
+        input.onProgress?.(
+          `cloud: ${SITE_METADATA_SERVICE} failed (${describeError(error)})`
+        );
       }
     }
     specs.delete(SITE_METADATA_SERVICE);
@@ -1096,7 +1169,7 @@ async function runPrefetch(
   const plans = applyCap(
     specs,
     input.pages,
-    remainingCap === Number.POSITIVE_INFINITY ? 0 : remainingCap,
+    remainingCap === Number.POSITIVE_INFINITY ? 0 : remainingCap
   );
   // Stamp cap exclusions up front so they read `credit-cap-reached`, not a
   // generic miss, regardless of what happens to the rest of the run.
@@ -1107,10 +1180,16 @@ async function runPrefetch(
         plan.service,
         plan.unit,
         plan.unit === "site" ? [] : input.pages,
-        "credit-cap-reached",
+        "credit-cap-reached"
       );
     else if (plan.capped.length > 0)
-      skipService(store, plan.service, plan.unit, plan.capped, "credit-cap-reached");
+      skipService(
+        store,
+        plan.service,
+        plan.unit,
+        plan.capped,
+        "credit-cap-reached"
+      );
   }
 
   // NO zero-estimate short-circuit (pricing v10): folded services estimate 0
@@ -1175,7 +1254,8 @@ async function runPrefetch(
       try {
         const data = await call;
         acc.endCall(callId, "completed");
-        const byKey = store.get(plan.service) ?? new Map<string, CloudResultEnvelope>();
+        const byKey =
+          store.get(plan.service) ?? new Map<string, CloudResultEnvelope>();
         // Cache-aware services (archive-indexing) return `cached: true` on a
         // 0-credit server cache hit — mirror that in the spend accounting
         // (same treatment as site-metadata's Stage-0 call).
@@ -1198,7 +1278,9 @@ async function runPrefetch(
           reason,
           detail: describeError(error),
         });
-        input.onProgress?.(`cloud: ${plan.service} failed (${describeError(error)})`);
+        input.onProgress?.(
+          `cloud: ${plan.service} failed (${describeError(error)})`
+        );
       }
       if (line.credits > 0) {
         spend.push(line);
@@ -1213,11 +1295,21 @@ async function runPrefetch(
     // on a diff the rule's per-page `page.rendered` guard discards anyway. Skip them `not-applicable` and
     // submit only the raw pages. Non-render services are unaffected (they want every page).
     let pagesToFetch = plan.pages;
-    if (plan.service === "render" && input.renderedPageUrls && input.renderedPageUrls.size > 0) {
+    if (
+      plan.service === "render" &&
+      input.renderedPageUrls &&
+      input.renderedPageUrls.size > 0
+    ) {
       const rendered = input.renderedPageUrls;
       const alreadyRendered = plan.pages.filter((p) => rendered.has(p.url));
       if (alreadyRendered.length > 0) {
-        skipService(store, plan.service, plan.unit, alreadyRendered, "not-applicable");
+        skipService(
+          store,
+          plan.service,
+          plan.unit,
+          alreadyRendered,
+          "not-applicable"
+        );
         pagesToFetch = plan.pages.filter((p) => !rendered.has(p.url));
       }
     }
@@ -1231,7 +1323,8 @@ async function runPrefetch(
         ? Math.min(input.config.batch_size, SERVICE_LIMITS.renderBatchUrls)
         : input.config.batch_size;
     const batches = chunkPagesBySize(pagesToFetch, maxBatch);
-    const byKey = store.get(plan.service) ?? new Map<string, CloudResultEnvelope>();
+    const byKey =
+      store.get(plan.service) ?? new Map<string, CloudResultEnvelope>();
     const perPage = computeCost(plan.feature, 1);
 
     // Publish the in-flight batches so an abandon mid-service keeps the ones that returned (#280).
@@ -1248,7 +1341,10 @@ async function runPrefetch(
 
     // Independent batches overlap (bounded); `stop` short-circuits batches not yet dispatched.
     // onProgress may fire out of batch order under concurrency — it is display-only.
-    const runBatch = async (batch: CloudPagePayload[], i: number): Promise<BatchOutcome> => {
+    const runBatch = async (
+      batch: CloudPagePayload[],
+      i: number
+    ): Promise<BatchOutcome> => {
       const outcome = await fetchBatchOutcome(batch, i);
       inFlight.outcomes[i] = outcome;
       return outcome;
@@ -1256,13 +1352,16 @@ async function runPrefetch(
 
     const fetchBatchOutcome = async (
       batch: CloudPagePayload[],
-      i: number,
+      i: number
     ): Promise<BatchOutcome> => {
       // Nothing is dispatched once abandoned; the abandon result already reads these pages unavailable.
       const s = stop ?? (acc.abandoned ? ABANDONED_STOP : null); // capture for closure narrowing
       if (s) {
         return {
-          entries: batch.map((p) => [p.url, { status: "skipped", skipReason: s.reason }]),
+          entries: batch.map((p) => [
+            p.url,
+            { status: "skipped", skipReason: s.reason },
+          ]),
           units: 0,
           credits: 0,
           failedUnits: batch.length,
@@ -1287,7 +1386,7 @@ async function runPrefetch(
               inFlight.charged[i] = true;
             },
             abandoned,
-          },
+          }
         );
         acc.endCall(callId, "completed");
         // Pages the server omitted from results are a partial provider failure — skipped, not refunded.
@@ -1315,10 +1414,13 @@ async function runPrefetch(
         acc.endCall(callId, "failed", describeError(error));
         stop ??= latchFatal(error, reason);
         input.onProgress?.(
-          `cloud: ${plan.service} ${i + 1}/${batches.length} failed (${describeError(error)})`,
+          `cloud: ${plan.service} ${i + 1}/${batches.length} failed (${describeError(error)})`
         );
         return {
-          entries: batch.map((p) => [p.url, { status: "skipped", skipReason: reason }]),
+          entries: batch.map((p) => [
+            p.url,
+            { status: "skipped", skipReason: reason },
+          ]),
           units: 0,
           credits: 0,
           failedUnits: batch.length,
@@ -1330,7 +1432,7 @@ async function runPrefetch(
 
     const outcomes = await mapWithConcurrency(
       batches.map((batch, i) => () => runBatch(batch, i)),
-      prefetchBatchConcurrency(input.planRenderConcurrency),
+      prefetchBatchConcurrency(input.planRenderConcurrency)
     );
 
     // Merge in batch order — byte-identical to serial accumulation.

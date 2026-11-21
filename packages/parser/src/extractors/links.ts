@@ -1,7 +1,6 @@
 // Link extractor - works with pre-parsed Document
 // Extracts all links with position detection and rel attributes
 
-import { anchorTextResult } from "./anchor-text";
 import type { Document, Element } from "linkedom";
 
 import {
@@ -10,6 +9,8 @@ import {
   isCloudflareEmailProtectionUrl,
 } from "@squirrelscan/utils";
 import { Effect } from "effect";
+
+import { anchorTextResult } from "./anchor-text";
 
 // Trace stubs (CLI wraps with rich logger)
 const logger = {
@@ -39,7 +40,8 @@ function ownLinkPosition(current: Element): LinkPosition | null {
   if (tagName === "footer" || role === "contentinfo") return "footer";
   if (tagName === "nav" || role === "navigation") return "nav";
   if (tagName === "aside" || role === "complementary") return "sidebar";
-  if (tagName === "main" || tagName === "article" || role === "main") return "content";
+  if (tagName === "main" || tagName === "article" || role === "main")
+    return "content";
 
   // Class/id pattern groups — only computed when the element actually has a
   // class or id (use getAttribute for className: SVG elements expose an
@@ -50,10 +52,18 @@ function ownLinkPosition(current: Element): LinkPosition | null {
     const className = rawClass ? rawClass.toLowerCase() : "";
     const id = rawId ? rawId.toLowerCase() : "";
 
-    if (className.includes("header") || className.includes("masthead") || id.includes("header")) {
+    if (
+      className.includes("header") ||
+      className.includes("masthead") ||
+      id.includes("header")
+    ) {
       return "header";
     }
-    if (className.includes("footer") || className.includes("colophon") || id.includes("footer")) {
+    if (
+      className.includes("footer") ||
+      className.includes("colophon") ||
+      id.includes("footer")
+    ) {
       return "footer";
     }
     if (
@@ -64,7 +74,11 @@ function ownLinkPosition(current: Element): LinkPosition | null {
     ) {
       return "nav";
     }
-    if (className.includes("sidebar") || className.includes("aside") || id.includes("sidebar")) {
+    if (
+      className.includes("sidebar") ||
+      className.includes("aside") ||
+      id.includes("sidebar")
+    ) {
       return "sidebar";
     }
     if (
@@ -133,7 +147,9 @@ export function parseRel(rel: string | null): string[] {
  */
 export function hasNofollow(relArray: string[]): boolean {
   return (
-    relArray.includes("nofollow") || relArray.includes("sponsored") || relArray.includes("ugc")
+    relArray.includes("nofollow") ||
+    relArray.includes("sponsored") ||
+    relArray.includes("ugc")
   );
 }
 
@@ -144,7 +160,7 @@ export function hasNofollow(relArray: string[]): boolean {
 export function extractLinks(
   doc: Document,
   baseUrl: string,
-  placeLink?: LinkPlacer,
+  placeLink?: LinkPlacer
 ): ExtractedLink[] {
   const spanId = logger.traceStart("extractLinks");
   const anchors = doc.querySelectorAll("a[href]");
@@ -213,7 +229,10 @@ export function toLinkData(link: ExtractedLink): LinkData {
     ...(link.textGlued ? { textGlued: true, textParts: link.textParts } : {}),
     section: link.section,
     ...(link.sectionSource
-      ? { sectionSource: link.sectionSource, sectionConfidence: link.sectionConfidence }
+      ? {
+          sectionSource: link.sectionSource,
+          sectionConfidence: link.sectionConfidence,
+        }
       : {}),
   };
 }
@@ -221,14 +240,20 @@ export function toLinkData(link: ExtractedLink): LinkData {
 /**
  * Extract internal links only
  */
-export function extractInternalLinks(doc: Document, baseUrl: string): ExtractedLink[] {
+export function extractInternalLinks(
+  doc: Document,
+  baseUrl: string
+): ExtractedLink[] {
   return extractLinks(doc, baseUrl).filter((link) => link.isInternal);
 }
 
 /**
  * Extract external links only
  */
-export function extractExternalLinks(doc: Document, baseUrl: string): ExtractedLink[] {
+export function extractExternalLinks(
+  doc: Document,
+  baseUrl: string
+): ExtractedLink[] {
   return extractLinks(doc, baseUrl).filter((link) => !link.isInternal);
 }
 

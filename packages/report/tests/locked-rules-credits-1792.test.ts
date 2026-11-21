@@ -2,10 +2,12 @@
 // words it on its own, never as a plan exclusion or an environment limit, and a reader that does not know the
 // code reads it as no reason and keeps the audience wording.
 
+import type { LockedRule } from "@squirrelscan/core-contracts";
+
+import { isLockedRuleReason } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
-import type { LockedRule } from "@squirrelscan/core-contracts";
-import { isLockedRuleReason } from "@squirrelscan/core-contracts";
+import type { AuditReport } from "../src/types";
 
 import { lockedRulesMessage } from "../src/locked-rules";
 import { notCheckedRules } from "../src/not-checked";
@@ -15,7 +17,6 @@ import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
-import type { AuditReport } from "../src/types";
 
 const CREDITS: LockedRule = {
   id: "ax/content-without-js",
@@ -23,10 +24,21 @@ const CREDITS: LockedRule = {
   reason: "credits",
   detail: "The audit stopped at 40 of 120 pages.",
 };
-const PROVIDER: LockedRule = { id: "ax/archive-indexing", name: "Archive Indexing", reason: "provider_error" };
-const PLAN: LockedRule = { id: "ai/llm-parsability", name: "LLM Parsability", reason: "plan" };
+const PROVIDER: LockedRule = {
+  id: "ax/archive-indexing",
+  name: "Archive Indexing",
+  reason: "provider_error",
+};
+const PLAN: LockedRule = {
+  id: "ai/llm-parsability",
+  name: "LLM Parsability",
+  reason: "plan",
+};
 
-function report(lockedRules: LockedRule[], over: Partial<AuditReport> = {}): AuditReport {
+function report(
+  lockedRules: LockedRule[],
+  over: Partial<AuditReport> = {}
+): AuditReport {
   return {
     baseUrl: "https://example.com",
     timestamp: "2026-11-12T00:00:00.000Z",
@@ -53,7 +65,13 @@ describe("lockedRulesMessage words credits on its own", () => {
     expect(msg.action).toContain("ran out of credits");
     expect(msg.action).toContain("Add credits, then re-run the audit");
     expect(msg.action).toContain("The audit stopped at 40 of 120 pages.");
-    for (const not of ["not included in", "your plan", "environment", "temporarily", "may include it"]) {
+    for (const not of [
+      "not included in",
+      "your plan",
+      "environment",
+      "temporarily",
+      "may include it",
+    ]) {
       expect(msg.action, not).not.toContain(not);
     }
     // The paid audience has no upsell link of its own.
@@ -67,23 +85,38 @@ describe("lockedRulesMessage words credits on its own", () => {
   });
 
   test("one rule or several, singular and plural", () => {
-    expect(lockedRulesMessage(report([CREDITS], { cloudPlan: "paid" }))!.action).toContain("This check did not run");
-    const two = lockedRulesMessage(report([CREDITS, { ...CREDITS, id: "x/y", name: "Y" }], { cloudPlan: "paid" }))!;
+    expect(
+      lockedRulesMessage(report([CREDITS], { cloudPlan: "paid" }))!.action
+    ).toContain("This check did not run");
+    const two = lockedRulesMessage(
+      report([CREDITS, { ...CREDITS, id: "x/y", name: "Y" }], {
+        cloudPlan: "paid",
+      })
+    )!;
     expect(two.action).toContain("These 2 checks did not run");
     expect(two.action).toContain("include them");
   });
 
   test("the order is plan, credits, provider_error, unsupported_environment, then no reason", () => {
     const msg = lockedRulesMessage(
-      report([{ id: "a/b", name: "A" }, PROVIDER, CREDITS, PLAN], { cloudPlan: "free" }),
+      report([{ id: "a/b", name: "A" }, PROVIDER, CREDITS, PLAN], {
+        cloudPlan: "free",
+      })
     )!;
-    expect(msg.groups?.map((g) => g.reason)).toEqual(["plan", "credits", "provider_error", undefined]);
+    expect(msg.groups?.map((g) => g.reason)).toEqual([
+      "plan",
+      "credits",
+      "provider_error",
+      undefined,
+    ]);
   });
 
   test("a failed audit keeps its own message whatever the reasons say", () => {
-    expect(lockedRulesMessage(report([CREDITS], { status: "failed", cloudPlan: "paid" }))!.audience).toBe(
-      "audit-failed",
-    );
+    expect(
+      lockedRulesMessage(
+        report([CREDITS], { status: "failed", cloudPlan: "paid" })
+      )!.audience
+    ).toBe("audit-failed");
   });
 });
 
@@ -92,13 +125,27 @@ describe("a reader that does not know the code falls back without failing", () =
   // (`isLockedRuleReason` is false) and keeps the audience wording. The same path, exercised with a value
   // the set has never held, is what such a reader runs.
   test("an unknown reason reads as none and the audience wording stays", () => {
-    const unknown = { ...CREDITS, reason: "some-future-code" } as unknown as LockedRule;
-    const none = lockedRulesMessage(report([{ id: CREDITS.id, name: CREDITS.name }], { cloudPlan: "paid" }))!;
+    const unknown = {
+      ...CREDITS,
+      reason: "some-future-code",
+    } as unknown as LockedRule;
+    const none = lockedRulesMessage(
+      report([{ id: CREDITS.id, name: CREDITS.name }], { cloudPlan: "paid" })
+    )!;
     const msg = lockedRulesMessage(report([unknown], { cloudPlan: "paid" }))!;
     expect(msg.groups).toBeUndefined();
     expect(msg.action).toBe(none.action);
-    for (const render of [renderText, renderMarkdown, renderLlm, renderXml, renderJson, (r: AuditReport) => renderHtml(r)]) {
-      expect(() => render(report([unknown], { cloudPlan: "paid" }))).not.toThrow();
+    for (const render of [
+      renderText,
+      renderMarkdown,
+      renderLlm,
+      renderXml,
+      renderJson,
+      (r: AuditReport) => renderHtml(r),
+    ]) {
+      expect(() =>
+        render(report([unknown], { cloudPlan: "paid" }))
+      ).not.toThrow();
     }
   });
 });
@@ -144,14 +191,22 @@ describe("a not-checked entry can carry credits as its cause", () => {
   const rep = report([], {
     ruleResults: {
       "security/tls-certificate": {
-        meta: { id: "security/tls-certificate", name: "TLS Certificate", category: "security", severity: "error" },
+        meta: {
+          id: "security/tls-certificate",
+          name: "TLS Certificate",
+          category: "security",
+          severity: "error",
+        },
         checks: [
           {
             name: "tls-certificate",
             status: "skipped",
             message: "TLS certificate not checked.",
             skipReason: "tls-certificate-not-checked",
-            details: { cause: "credits", causeDetail: "Stopped at 40 of 120 pages." },
+            details: {
+              cause: "credits",
+              causeDetail: "Stopped at 40 of 120 pages.",
+            },
           },
         ],
       },

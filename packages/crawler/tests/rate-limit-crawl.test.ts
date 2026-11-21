@@ -18,9 +18,14 @@
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect, Fiber, Stream } from "effect";
 
+import type {
+  CrawlerConfig,
+  CrawlerEvent,
+  RateLimitEvent,
+} from "../src/core/types";
+
 import { createCrawler } from "../src/core/crawler";
 import { createTestStorage } from "../src/storage";
-import type { CrawlerConfig, CrawlerEvent, RateLimitEvent } from "../src/core/types";
 
 const ORIGIN = "https://shop.example.com";
 
@@ -31,9 +36,10 @@ function html(body: string): string {
 /** A root page linking to `n` leaves, so the frontier has work beyond the seed. */
 function hubSite(n: number): Record<string, string> {
   const site: Record<string, string> = {};
-  const anchors = Array.from({ length: n }, (_, i) => `<a href="${ORIGIN}/p${i}">p${i}</a>`).join(
-    "",
-  );
+  const anchors = Array.from(
+    { length: n },
+    (_, i) => `<a href="${ORIGIN}/p${i}">p${i}</a>`
+  ).join("");
   site[`${ORIGIN}/`] = html(anchors);
   for (let i = 0; i < n; i++) site[`${ORIGIN}/p${i}`] = html(`leaf ${i}`);
   return site;
@@ -53,7 +59,10 @@ interface FetcherOptions {
  * through the production `applyStatusGuards` inside `fetchWithDocumentFetcher`,
  * so classification here is real behaviour rather than a double's opinion.
  */
-function scriptedFetcher(site: Record<string, string>, options: FetcherOptions) {
+function scriptedFetcher(
+  site: Record<string, string>,
+  options: FetcherOptions
+) {
   const requests: string[] = [];
   let served = 0;
 
@@ -65,7 +74,8 @@ function scriptedFetcher(site: Record<string, string>, options: FetcherOptions) 
       served += 1;
 
       const headers: Record<string, string> = { "content-type": "text/html" };
-      if (options.retryAfter && status !== 200) headers["retry-after"] = options.retryAfter;
+      if (options.retryAfter && status !== 200)
+        headers["retry-after"] = options.retryAfter;
       const body = status === 200 ? (site[url] ?? "") : "";
 
       return {
@@ -126,7 +136,7 @@ interface CrawlOutcome {
 async function runCrawl(
   options: FetcherOptions,
   configOverrides: Partial<CrawlerConfig> = {},
-  site = hubSite(10),
+  site = hubSite(10)
 ): Promise<CrawlOutcome> {
   const hookEvents: RateLimitEvent[] = [];
   const rateLimitEvents: Extract<CrawlerEvent, { type: "rate-limited" }>[] = [];
@@ -142,7 +152,10 @@ async function runCrawl(
         : input instanceof URL
           ? input.toString()
           : (input as Request).url;
-    const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
+    const res = new Response("", {
+      status: 404,
+      headers: { "content-type": "text/plain" },
+    });
     Object.defineProperty(res, "url", { value: url, configurable: true });
     return Promise.resolve(res);
   }) as typeof globalThis.fetch;
@@ -165,7 +178,7 @@ async function runCrawl(
       (e: CrawlerEvent) =>
         Effect.sync(() => {
           if (e.type === "rate-limited") rateLimitEvents.push(e);
-        }),
+        })
     ).pipe(Effect.fork);
     yield* Effect.yieldNow();
 
@@ -178,10 +191,15 @@ async function runCrawl(
     const durationMs = Date.now() - startedAt;
     const crawlId = crawler.currentCrawlId!;
 
-    yield* Fiber.join(collector).pipe(Effect.timeout(Duration.seconds(2)), Effect.ignore);
+    yield* Fiber.join(collector).pipe(
+      Effect.timeout(Duration.seconds(2)),
+      Effect.ignore
+    );
     yield* Fiber.interrupt(collector);
 
-    const stats = yield* storage.getStats(crawlId).pipe(Effect.orElseSucceed(() => null));
+    const stats = yield* storage
+      .getStats(crawlId)
+      .pipe(Effect.orElseSucceed(() => null));
     const frontier = yield* storage
       .getAllFrontierEntries(crawlId)
       .pipe(Effect.orElseSucceed(() => []));
@@ -249,7 +267,11 @@ describe("crawl-wide rate limiting (#1829)", () => {
     // walked the ENTIRE frontier marking rows. A 100-page audit of a 1000-URL
     // sitemap reported "907 pages rate limited" — wasted work, and a loss figure
     // far larger than the crawl had ever intended to fetch.
-    const out = await runCrawl(THROTTLES_AFTER_SEED, { maxPages: 5 }, hubSite(60));
+    const out = await runCrawl(
+      THROTTLES_AFTER_SEED,
+      { maxPages: 5 },
+      hubSite(60)
+    );
 
     expect(out.finished).toBe(true);
     // Attempts (fetched + recorded) are bounded by the budget, not by the
@@ -304,7 +326,11 @@ describe("crawl-wide rate limiting (#1829)", () => {
   }, 30_000);
 
   test("a 503 carrying Retry-After is treated as throttling, a bare 503 is not", async () => {
-    const throttled = await runCrawl({ script: [200], then: 503, retryAfter: "1" });
+    const throttled = await runCrawl({
+      script: [200],
+      then: 503,
+      retryAfter: "1",
+    });
     expect(throttled.pagesRateLimited).toBeGreaterThan(0);
     expect(throttled.rateLimitEvents.length).toBeGreaterThan(0);
 
@@ -356,7 +382,10 @@ describe("crawl-wide rate limiting (#1829)", () => {
           : input instanceof URL
             ? input.toString()
             : (input as Request).url;
-      const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
+      const res = new Response("", {
+        status: 404,
+        headers: { "content-type": "text/plain" },
+      });
       Object.defineProperty(res, "url", { value: url, configurable: true });
       return Promise.resolve(res);
     }) as typeof globalThis.fetch;
@@ -368,21 +397,28 @@ describe("crawl-wide rate limiting (#1829)", () => {
           storage,
           config: {
             ...BASE_CONFIG,
-            documentFetcher: fetcher as unknown as CrawlerConfig["documentFetcher"],
+            documentFetcher:
+              fetcher as unknown as CrawlerConfig["documentFetcher"],
           },
         });
 
         // Run 1: the host refuses everything, so it ends the run exhausted.
-        yield* crawler.start(ORIGIN).pipe(Effect.timeout(Duration.seconds(20)), Effect.either);
+        yield* crawler
+          .start(ORIGIN)
+          .pipe(Effect.timeout(Duration.seconds(20)), Effect.either);
         const firstId = crawler.currentCrawlId!;
-        const firstStats = yield* storage.getStats(firstId).pipe(Effect.orElseSucceed(() => null));
+        const firstStats = yield* storage
+          .getStats(firstId)
+          .pipe(Effect.orElseSucceed(() => null));
 
         // Run 2 on the same crawler, with the host now healthy.
         throttling = false;
         yield* crawler
           .restartCrawl(firstId, {})
           .pipe(Effect.timeout(Duration.seconds(20)), Effect.either);
-        const secondStats = yield* storage.getStats(firstId).pipe(Effect.orElseSucceed(() => null));
+        const secondStats = yield* storage
+          .getStats(firstId)
+          .pipe(Effect.orElseSucceed(() => null));
 
         return {
           firstRateLimited: firstStats?.pagesRateLimited ?? 0,
@@ -392,9 +428,9 @@ describe("crawl-wide rate limiting (#1829)", () => {
         Effect.ensuring(
           Effect.sync(() => {
             globalThis.fetch = originalFetch;
-          }),
-        ),
-      ),
+          })
+        )
+      )
     );
 
     expect(outcome.firstRateLimited).toBeGreaterThan(0);

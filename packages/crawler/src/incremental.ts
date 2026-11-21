@@ -1,14 +1,13 @@
 // Change detection for incremental crawling
 // Uses ETag, Last-Modified, and content hash to detect changes
 
-import { createHash } from "node:crypto";
-
 import {
   type CacheControl,
   cacheControlLifetimeSeconds,
   expiresLifetimeSeconds,
   parseCacheControl,
 } from "@squirrelscan/utils/cache-control";
+import { createHash } from "node:crypto";
 
 // Re-export the shared Cache-Control parser so existing consumers that import
 // it from this module (or via @squirrelscan/crawler) keep working.
@@ -318,7 +317,8 @@ export function calculateFreshness(
   options: FreshnessOptions = {}
 ): FreshnessResult {
   const now = options.now ?? Date.now();
-  const maxStaleness = options.maxStalenessSeconds ?? DEFAULT_MAX_STALENESS_SECONDS;
+  const maxStaleness =
+    options.maxStalenessSeconds ?? DEFAULT_MAX_STALENESS_SECONDS;
 
   const responseAge =
     typeof input.age === "number"
@@ -360,7 +360,12 @@ export function calculateFreshness(
   // Within freshness lifetime → fresh, but never beyond the staleness cap.
   if (ageSeconds < lifetime) {
     if (ageSeconds > maxStaleness) {
-      return { state: "stale", reason: "staleness-cap", lifetimeSeconds: lifetime, ageSeconds };
+      return {
+        state: "stale",
+        reason: "staleness-cap",
+        lifetimeSeconds: lifetime,
+        ageSeconds,
+      };
     }
     return { state: "fresh", reason, lifetimeSeconds: lifetime, ageSeconds };
   }

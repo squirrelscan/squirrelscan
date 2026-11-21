@@ -1,13 +1,15 @@
 // Heading extractor - works with pre-parsed Document
 // Analyzes heading hierarchy and structure
 
+import type {
+  HeadingHierarchy,
+  HeadingData,
+} from "@squirrelscan/core-contracts";
 import type { Document, Element } from "linkedom";
 
-import { Effect } from "effect";
-
-import type { HeadingHierarchy, HeadingData } from "@squirrelscan/core-contracts";
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { Effect } from "effect";
 
 import { isHiddenFromMarkup } from "../hidden-markup";
 

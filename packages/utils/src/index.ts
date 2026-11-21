@@ -34,9 +34,16 @@ export {
   nonPublicHostLabel,
   privateNetworkHostLabel,
 } from "./non-public-host";
-export { isSpecialUseIpLiteral, isSpecialUseIpv4, isSpecialUseIpv6 } from "./special-use-ip";
+export {
+  isSpecialUseIpLiteral,
+  isSpecialUseIpv4,
+  isSpecialUseIpv6,
+} from "./special-use-ip";
 
-export { decodeCloudflareEmail, isCloudflareEmailProtectionUrl } from "./cloudflare-email";
+export {
+  decodeCloudflareEmail,
+  isCloudflareEmailProtectionUrl,
+} from "./cloudflare-email";
 
 export {
   getAttrCI,
@@ -57,7 +64,11 @@ export {
   recordToHeaders,
 } from "./headers";
 
-export { isHttpOrHttpsUrl, safeRedirectFetch, type SafeRedirectResult } from "./safe-fetch";
+export {
+  isHttpOrHttpsUrl,
+  safeRedirectFetch,
+  type SafeRedirectResult,
+} from "./safe-fetch";
 
 export {
   ContentDecodingError,
@@ -71,7 +82,11 @@ export {
 
 export { isPageIndexable, type IndexabilityCheck } from "./indexable";
 
-export { excludePatternError, matchesExcludePattern, COMMON_EXCLUDE_PATTERNS } from "./patterns";
+export {
+  excludePatternError,
+  matchesExcludePattern,
+  COMMON_EXCLUDE_PATTERNS,
+} from "./patterns";
 
 export { isRobotsTxtDisallowed } from "./robots-txt";
 

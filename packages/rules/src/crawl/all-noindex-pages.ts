@@ -1,11 +1,11 @@
-import { z } from "zod";
-
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { RobotsTxtData, SiteQuery } from "@squirrelscan/core-contracts";
 
 import { matchesExcludePattern } from "@squirrelscan/utils";
 import { isPageIndexable, isRobotsTxtDisallowed } from "@squirrelscan/utils";
 import { getPathname } from "@squirrelscan/utils";
+import { z } from "zod";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 interface NoindexPage {
   url: string;
@@ -45,7 +45,8 @@ function buildChecks(buckets: Buckets): CheckResult[] {
       .slice(0, 5)
       .map((p) => `${getPathname(p.url)} (${p.sources.join(", ")})`)
       .join("\n");
-    const suffix = buckets.error.length > 5 ? `\n+${buckets.error.length - 5} more` : "";
+    const suffix =
+      buckets.error.length > 5 ? `\n+${buckets.error.length - 5} more` : "";
     checks.push({
       name: "critical-noindex",
       status: "fail",
@@ -59,7 +60,8 @@ function buildChecks(buckets: Buckets): CheckResult[] {
       .slice(0, 5)
       .map((p) => `${getPathname(p.url)} (${p.sources.join(", ")})`)
       .join("\n");
-    const suffix = buckets.warn.length > 5 ? `\n+${buckets.warn.length - 5} more` : "";
+    const suffix =
+      buckets.warn.length > 5 ? `\n+${buckets.warn.length - 5} more` : "";
     checks.push({
       name: "important-noindex",
       status: "warn",
@@ -73,7 +75,8 @@ function buildChecks(buckets: Buckets): CheckResult[] {
       .slice(0, 10)
       .map((p) => `${getPathname(p.url)} (${p.sources.join(", ")})`)
       .join("\n");
-    const suffix = buckets.info.length > 10 ? `\n+${buckets.info.length - 10} more` : "";
+    const suffix =
+      buckets.info.length > 10 ? `\n+${buckets.info.length - 10} more` : "";
     checks.push({
       name: "all-noindex",
       status: "info",
@@ -116,7 +119,11 @@ async function runViaSiteQuery(
 ): Promise<RuleResult> {
   const buckets: Buckets = { error: [], warn: [], info: [] };
   for await (const row of siteQuery.pagesMatching(() => true)) {
-    const reasons = fullReasons(row.indexableReasons, row.normalizedUrl, robotsTxt);
+    const reasons = fullReasons(
+      row.indexableReasons,
+      row.normalizedUrl,
+      robotsTxt
+    );
     classify(row.normalizedUrl, reasons, warnPatterns, errorPatterns, buckets);
   }
   return { checks: buildChecks(buckets) };
@@ -159,24 +166,46 @@ export const allNoindexPages: Rule = {
     if (ctx.siteQuery) {
       if (ctx.siteQuery.pageCount() === 0) {
         return {
-          checks: [{ name: "all-noindex", status: "skipped", message: "No pages to check" }],
+          checks: [
+            {
+              name: "all-noindex",
+              status: "skipped",
+              message: "No pages to check",
+            },
+          ],
         };
       }
-      return runViaSiteQuery(ctx.siteQuery, robotsTxt, warnPatterns, errorPatterns);
+      return runViaSiteQuery(
+        ctx.siteQuery,
+        robotsTxt,
+        warnPatterns,
+        errorPatterns
+      );
     }
 
     const pages = ctx.site?.pages;
 
     if (!pages || pages.length === 0) {
       return {
-        checks: [{ name: "all-noindex", status: "skipped", message: "No pages to check" }],
+        checks: [
+          {
+            name: "all-noindex",
+            status: "skipped",
+            message: "No pages to check",
+          },
+        ],
       };
     }
 
     const buckets: Buckets = { error: [], warn: [], info: [] };
 
     for (const page of pages) {
-      const check = isPageIndexable(page.parsed, page.headers, page.url, robotsTxt);
+      const check = isPageIndexable(
+        page.parsed,
+        page.headers,
+        page.url,
+        robotsTxt
+      );
       if (!check.isIndexable) {
         classify(page.url, check.reasons, warnPatterns, errorPatterns, buckets);
       }

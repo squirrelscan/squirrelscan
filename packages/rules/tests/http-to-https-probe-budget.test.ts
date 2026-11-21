@@ -3,12 +3,12 @@
 // a per-hop timeout signal in followRedirects. These assert the bounds without
 // waiting out the real 10s per-hop timeout.
 
-import { afterEach, describe, expect, test } from "bun:test";
-
 import type { RedirectChain } from "@squirrelscan/core-contracts";
 
-import { probeHttpVariants } from "../src/security/http-to-https";
+import { afterEach, describe, expect, test } from "bun:test";
+
 import { followRedirects } from "../src/links/redirects";
+import { probeHttpVariants } from "../src/security/http-to-https";
 import { setRequestAsync } from "../src/tools";
 
 function chain(from: string, to: string, httpToHttps: boolean): RedirectChain {
@@ -28,7 +28,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("probeHttpVariants total budget (#1252)", () => {
   test("stops launching new probes once the budget is spent", async () => {
-    const urls = Array.from({ length: 10 }, (_, i) => `https://tarpit.com/p${i}`);
+    const urls = Array.from(
+      { length: 10 },
+      (_, i) => `https://tarpit.com/p${i}`
+    );
     let probed = 0;
     const probe = async (httpUrl: string): Promise<RedirectChain> => {
       probed++;

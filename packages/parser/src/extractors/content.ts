@@ -6,9 +6,13 @@ import type { Document, Element, Node } from "linkedom";
 import { Effect } from "effect";
 
 // Trace stubs (CLI wraps with rich logger)
-const logger = { traceStart: (_n: string) => "", traceEnd: (_id: string, _m?: Record<string, unknown>) => {} };
+const logger = {
+  traceStart: (_n: string) => "",
+  traceEnd: (_id: string, _m?: Record<string, unknown>) => {},
+};
 
 import type { ContentAnalysis } from "./types";
+
 import { collectTextExcluding, tagExcluder } from "./dom-text";
 
 // Tag-based exclusions, plus class/aria exclusions for clean text below.

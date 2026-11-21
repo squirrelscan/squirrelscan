@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { CheckResult } from "../src/types";
+
 import {
   checkAffectedPageCount,
   ruleAffectedPageCount,
@@ -65,7 +66,10 @@ describe("checkAffectedPageCount", () => {
       status: "warn",
       message: "dupe",
       items: [
-        { id: "Home — Example", sourcePages: ["https://e.com/", "https://e.com/index"] },
+        {
+          id: "Home — Example",
+          sourcePages: ["https://e.com/", "https://e.com/index"],
+        },
         { id: "About — Example" }, // non-URL id, no sourcePages → contributes nothing
       ],
     };
@@ -102,14 +106,14 @@ describe("ruleAffectedPageCount", () => {
     // Union of {/, /about} and {/} = 2 unique pages.
     expect(ruleAffectedPageCount(checks)).toBe(2);
     expect(ruleAffectedPages(checks)).toEqual(
-      new Set(["https://e.com/", "https://e.com/about"]),
+      new Set(["https://e.com/", "https://e.com/about"])
     );
   });
 
   test("returns 0 when nothing references a page", () => {
     expect(ruleAffectedPageCount([])).toBe(0);
     expect(
-      ruleAffectedPageCount([{ name: "x", status: "warn", message: "m" }]),
+      ruleAffectedPageCount([{ name: "x", status: "warn", message: "m" }])
     ).toBe(0);
   });
 });

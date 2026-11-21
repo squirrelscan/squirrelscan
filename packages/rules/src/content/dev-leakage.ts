@@ -6,14 +6,14 @@
 // an image served from a Vercel preview that will 404 the moment the deployment
 // is garbage-collected.
 
-import { getDomain } from "tldts";
-
 import type { Element } from "linkedom";
 
 import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
+import { getDomain } from "tldts";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { getRenderedProseText } from "./text-content";
 
 /**
@@ -154,7 +154,8 @@ function ipv4Octets(host: string): number[] | null {
   for (const part of parts) {
     // Length first: `Number("")` is 0 and `Number(" 1")` is 1, so the numeric
     // test alone would accept `10...` and `10. 0.0.1` as addresses.
-    if (part.length === 0 || part.length > 3 || !/^\d+$/.test(part)) return null;
+    if (part.length === 0 || part.length > 3 || !/^\d+$/.test(part))
+      return null;
     const value = Number(part);
     if (value > 255) return null;
     octets.push(value);
@@ -202,8 +203,10 @@ export function isLocalOnlyName(host: string): boolean {
   let end = host.length;
   while (end > 0 && host.charCodeAt(end - 1) === 0x2e) end--;
   const name = host.slice(0, end).toLowerCase();
-  if (name.includes(":") || name.startsWith("[") || ipv4Octets(name)) return false;
-  if (NON_DNS_ZONES.some((zone) => name === zone || name.endsWith(`.${zone}`))) return false;
+  if (name.includes(":") || name.startsWith("[") || ipv4Octets(name))
+    return false;
+  if (NON_DNS_ZONES.some((zone) => name === zone || name.endsWith(`.${zone}`)))
+    return false;
   return isNonPublicHostname(name);
 }
 
@@ -214,7 +217,9 @@ export function isPreviewSuffix(host: string): boolean {
 
 /** A host on one of the ephemeral-deployment platforms. */
 export function isPreviewHost(host: string): boolean {
-  return PREVIEW_HOST_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`));
+  return PREVIEW_HOST_SUFFIXES.some(
+    (s) => host === s || host.endsWith(`.${s}`)
+  );
 }
 
 /**
@@ -237,7 +242,12 @@ export function devTierOf(host: string, apex: string): "high" | "low" | null {
   // reaches this function, and `getDomain` is the expensive half; almost none of
   // them carry a tier label, so this ordering is what keeps the scan cheap.
   const labels = name.split(".");
-  if (!labels.some((l) => HIGH_CONFIDENCE_TIER_LABELS.has(l) || LOW_CONFIDENCE_TIER_LABELS.has(l))) {
+  if (
+    !labels.some(
+      (l) =>
+        HIGH_CONFIDENCE_TIER_LABELS.has(l) || LOW_CONFIDENCE_TIER_LABELS.has(l)
+    )
+  ) {
     return null;
   }
   if (registrableDomain(name) !== apex) return null;
@@ -278,7 +288,8 @@ export function looksLikeOwnPreview(host: string, apexLabel: string): boolean {
 
 /** True for a host that means "this audit is not of a production origin". */
 export function isNonProductionSeedHost(host: string): boolean {
-  if (isLoopbackHost(host) || isPrivateIpHost(host) || isPreviewHost(host)) return true;
+  if (isLoopbackHost(host) || isPrivateIpHost(host) || isPreviewHost(host))
+    return true;
   // pub#813: an audit of `myapp.test` or `box.local` is of a local site, and
   // its links to other local names are its own.
   if (isLocalOnlyName(host)) return true;
@@ -299,12 +310,15 @@ export function isNonProductionSeedHost(host: string): boolean {
 /** Which family `host` belongs to, and whether it is this site's own artifact. */
 export function classifyHost(
   host: string,
-  site: SiteOrigin,
+  site: SiteOrigin
 ): { kind: DevLeakageKind; own: boolean } | null {
   if (isLoopbackHost(host)) return { kind: "localhost", own: true };
   if (isPrivateIpHost(host)) return { kind: "private-ip", own: true };
   if (isPreviewHost(host)) {
-    return { kind: "preview-host", own: looksLikeOwnPreview(host, site.apexLabel) };
+    return {
+      kind: "preview-host",
+      own: looksLikeOwnPreview(host, site.apexLabel),
+    };
   }
   const tier = devTierOf(host, site.apex);
   if (tier) return { kind: "dev-subdomain", own: tier === "high" };
@@ -355,7 +369,9 @@ export function toSample(raw: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .replace(MARKDOWN_ACTIVE, (c) => MARKDOWN_ACTIVE_ESCAPES[c] ?? c);
-  return flat.length > MAX_SAMPLE_LENGTH ? `${flat.slice(0, MAX_SAMPLE_LENGTH - 1)}…` : flat;
+  return flat.length > MAX_SAMPLE_LENGTH
+    ? `${flat.slice(0, MAX_SAMPLE_LENGTH - 1)}…`
+    : flat;
 }
 
 // ---------------------------------------------------------------------------
@@ -395,12 +411,12 @@ const LEADING_LABELS = String.raw`(?:[a-z0-9-]{1,63}\.){0,10}`;
 
 const LOCALHOST_TEXT_RE = new RegExp(
   `${LEFT_BOUNDARY}${OPTIONAL_SCHEME}(${LEADING_LABELS}localhost)${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
-  "gi",
+  "gi"
 );
 
 const IPV4_TEXT_RE = new RegExp(
   `${LEFT_BOUNDARY}${OPTIONAL_SCHEME}(\\d{1,3}(?:\\.\\d{1,3}){3})${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
-  "gi",
+  "gi"
 );
 
 /**
@@ -422,7 +438,7 @@ const IPV4_TEXT_RE = new RegExp(
  */
 const NAMED_HOST_TEXT_RE = new RegExp(
   `${LEFT_BOUNDARY}${OPTIONAL_SCHEME}((?:[a-z0-9-]{1,63}\\.){1,10}[a-z]{2,24})${RIGHT_BOUNDARY}${OPTIONAL_PORT}${OPTIONAL_PATH}`,
-  "gi",
+  "gi"
 );
 
 interface UrlishMatch {
@@ -484,7 +500,10 @@ const hasUrlContext = (m: UrlishMatch): boolean =>
  *   number a leak is worse than one that misses it. `192.168.*`, `172.16-31.*`
  *   and `127.*` have no such reading and count bare.
  */
-export function findDevHostsInText(text: string, site: SiteOrigin): DevLeakageHit[] {
+export function findDevHostsInText(
+  text: string,
+  site: SiteOrigin
+): DevLeakageHit[] {
   return scanDevHostsInText(text, site).hits;
 }
 
@@ -495,7 +514,7 @@ export function findDevHostsInText(text: string, site: SiteOrigin): DevLeakageHi
  */
 export function scanDevHostsInText(
   text: string,
-  site: SiteOrigin,
+  site: SiteOrigin
 ): { hits: DevLeakageHit[]; truncated: boolean } {
   let truncated = text.length > MAX_SCANNED_CHARS;
   const scanned = truncated ? text.slice(0, MAX_SCANNED_CHARS) : text;
@@ -507,7 +526,13 @@ export function scanDevHostsInText(
   };
 
   const add = (kind: DevLeakageKind, own: boolean, m: UrlishMatch): void => {
-    hits.push({ kind, source: "text", host: m.host, sample: toSample(m.text), own });
+    hits.push({
+      kind,
+      source: "text",
+      host: m.host,
+      sample: toSample(m.text),
+      own,
+    });
   };
 
   for (const m of scan(LOCALHOST_TEXT_RE, MAX_HITS_PER_KIND)) {
@@ -536,7 +561,8 @@ export function scanDevHostsInText(
       // A bare platform name is not a deployment: "we deploy to pages.dev" names
       // Cloudflare, `abc123.pages.dev` names something that will stop resolving.
       // The attribute path has no such reading, so this lives here.
-      if (classified.kind === "preview-host" && isPreviewSuffix(m.host)) continue;
+      if (classified.kind === "preview-host" && isPreviewSuffix(m.host))
+        continue;
       // A local name in copy counts only written as a URL: `config.local` and
       // `app.test` are file names as often as hosts (pub#813).
       if (classified.kind === "local-name" && m.scheme === undefined) continue;
@@ -566,7 +592,10 @@ const MAX_URL_ATTRIBUTES = 2_000;
  * patched DOM, and reading the list once is cheaper than two by-name lookups
  * per element, each of which walks that same list.
  */
-export function collectUrlAttributes(root: Element): { values: string[]; truncated: boolean } {
+export function collectUrlAttributes(root: Element): {
+  values: string[];
+  truncated: boolean;
+} {
   const values: string[] = [];
   let seen = 0;
   for (const el of root.querySelectorAll("*")) {
@@ -592,7 +621,7 @@ export function collectUrlAttributes(root: Element): { values: string[]; truncat
 export function classifyUrlAttribute(
   raw: string,
   pageUrl: string,
-  site: SiteOrigin,
+  site: SiteOrigin
 ): DevLeakageHit | null {
   let url: URL;
   try {
@@ -609,7 +638,13 @@ export function classifyUrlAttribute(
 
   const classified = classifyHost(host, site);
   if (classified) {
-    return { kind: classified.kind, source: "attribute", host, sample, own: classified.own };
+    return {
+      kind: classified.kind,
+      source: "attribute",
+      host,
+      sample,
+      own: classified.own,
+    };
   }
   return null;
 }
@@ -655,7 +690,8 @@ export const devLeakageRule: Rule = {
   meta: {
     id: "content/dev-leakage",
     name: "Development Host Leakage",
-    description: "Detects localhost, private, staging and preview hosts on a production page",
+    description:
+      "Detects localhost, private, staging and preview hosts on a production page",
     solution:
       "A URL that was correct in development shipped to production. Find where it is stored, not just the page it appears on: a link or image pointing at localhost, a private address, or a preview deployment is usually a hard-coded value in a template, a CMS field written while working locally, or a base-URL environment variable that never got a production value, so the same URL is on every page that renders that component. Replace the origin with a relative path where the target is on this site, which is what makes the link correct in every environment at once. For a staging or preview host, point the link at the production equivalent and check whether the staging site is publicly indexable while you are there. An `http://` link to your own site is not reported here: it is a mixed-content or downgrade problem, covered by the links and security rules.",
     category: "content",
@@ -711,9 +747,11 @@ export const devLeakageRule: Rule = {
     // and this page's own final URL otherwise. Both are checked: a seed on a
     // preview host means the whole audit is of a preview, and a page that
     // redirected onto one means this page is.
-    const seedHost = ctx.site?.baseUrl ? siteOriginOf(ctx.site.baseUrl)?.host : undefined;
+    const seedHost = ctx.site?.baseUrl
+      ? siteOriginOf(ctx.site.baseUrl)?.host
+      : undefined;
     const nonProductionHost = [seedHost, site.host].find(
-      (h): h is string => h !== undefined && isNonProductionSeedHost(h),
+      (h): h is string => h !== undefined && isNonProductionSeedHost(h)
     );
     if (nonProductionHost) {
       checks.push({
@@ -766,15 +804,19 @@ export const devLeakageRule: Rule = {
           ? {
               name,
               status: "skipped",
-              message: "Page too large to scan in full; no development hosts in the part scanned",
+              message:
+                "Page too large to scan in full; no development hosts in the part scanned",
               skipReason: SCAN_TRUNCATED_SKIP_REASON,
-              details: { scanTruncated: true, foldKey: SCAN_TRUNCATED_SKIP_REASON },
+              details: {
+                scanTruncated: true,
+                foldKey: SCAN_TRUNCATED_SKIP_REASON,
+              },
             }
           : {
               name,
               status: "pass",
               message: "No development, private or preview hosts referenced",
-            },
+            }
       );
       return { checks };
     }
@@ -787,9 +829,7 @@ export const devLeakageRule: Rule = {
     // artifact is a broken reference a visitor can hit right now, so it fails. A
     // mention in copy is embarrassing rather than broken, and a preview host
     // that could belong to anyone is a judgement call, so both warn.
-    const broken = hits.some(
-      (h) => h.source === "attribute" && h.own,
-    );
+    const broken = hits.some((h) => h.source === "attribute" && h.own);
     const status = broken ? "fail" : "warn";
 
     // Lead with the row that decided the status, so the example line is the

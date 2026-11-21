@@ -8,15 +8,20 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, CheckResult, ReportRuleResult } from "../src/types";
-import { REPORT_PAGES_HARD_CAP } from "../src/constants";
-import { renderText } from "../src/output/text";
-import { renderMarkdown } from "../src/output/markdown";
-import { renderLlm } from "../src/output/llm";
-import { renderJson } from "../src/output/json";
-import { renderXml } from "../src/output/xml";
-import { renderHtml } from "../src/output/html";
 
-function reportWithCheck(id: string, severity: "error" | "warning", check: CheckResult): AuditReport {
+import { REPORT_PAGES_HARD_CAP } from "../src/constants";
+import { renderHtml } from "../src/output/html";
+import { renderJson } from "../src/output/json";
+import { renderLlm } from "../src/output/llm";
+import { renderMarkdown } from "../src/output/markdown";
+import { renderText } from "../src/output/text";
+import { renderXml } from "../src/output/xml";
+
+function reportWithCheck(
+  id: string,
+  severity: "error" | "warning",
+  check: CheckResult
+): AuditReport {
   const rule: ReportRuleResult = {
     meta: {
       id,
@@ -51,7 +56,11 @@ function reportWithCheck(id: string, severity: "error" | "warning", check: Check
 
 // A folded/sampled check: 3 example page URLs retained, but the true pre-clip
 // total (600) stamped on details.pagesTruncated. Every renderer must show 600.
-const SAMPLE = ["https://example.com/a", "https://example.com/b", "https://example.com/c"];
+const SAMPLE = [
+  "https://example.com/a",
+  "https://example.com/b",
+  "https://example.com/c",
+];
 const foldedReport = reportWithCheck("core/missing-title", "error", {
   name: "missing-title",
   status: "fail",
@@ -105,7 +114,9 @@ describe("#1023 R-F: authoritative affected-page count across all 6 renderers", 
 
   test("xml: <affected-pages count=600 examples=3 has-more=true>", () => {
     const out = renderXml(foldedReport);
-    expect(out).toContain('<affected-pages count="600" examples="3" has-more="true">');
+    expect(out).toContain(
+      '<affected-pages count="600" examples="3" has-more="true">'
+    );
   });
 });
 
@@ -119,7 +130,7 @@ const OVERSHOOT = REPORT_PAGES_HARD_CAP + 1; // 201
 // the hard-cap slice then deterministically drops the last URL, /p200.
 const overshootPages = Array.from(
   { length: OVERSHOOT },
-  (_, i) => `https://example.com/p${String(i).padStart(3, "0")}`,
+  (_, i) => `https://example.com/p${String(i).padStart(3, "0")}`
 );
 const cappedReport = reportWithCheck("core/img-alt", "warning", {
   name: "img-alt",
@@ -131,7 +142,9 @@ const cappedReport = reportWithCheck("core/img-alt", "warning", {
 describe("#1023 R-F: cap+1 overshoot proves display truncation is disclosed", () => {
   test("html: materializes exactly the cap, discloses 'Showing 200 of 201'", () => {
     const out = renderHtml(cappedReport);
-    expect(out).toContain(`Showing ${REPORT_PAGES_HARD_CAP} of ${OVERSHOOT} affected pages.`);
+    expect(out).toContain(
+      `Showing ${REPORT_PAGES_HARD_CAP} of ${OVERSHOOT} affected pages.`
+    );
     // The (cap+1)-th URL must NOT be embedded — it sits beyond the hard cap.
     expect(out).toContain("/p199");
     expect(out).not.toContain("/p200");
@@ -139,7 +152,9 @@ describe("#1023 R-F: cap+1 overshoot proves display truncation is disclosed", ()
 
   test("markdown: 'Showing 200 examples of 201', last URL clipped", () => {
     const out = renderMarkdown(cappedReport);
-    expect(out).toContain(`_Showing ${REPORT_PAGES_HARD_CAP} examples of ${OVERSHOOT} affected pages._`);
+    expect(out).toContain(
+      `_Showing ${REPORT_PAGES_HARD_CAP} examples of ${OVERSHOOT} affected pages._`
+    );
     expect(out).toContain("/p199");
     expect(out).not.toContain("/p200");
   });
@@ -162,7 +177,7 @@ describe("#1023 R-F: cap+1 overshoot proves display truncation is disclosed", ()
 function reportWithChecks(
   id: string,
   severity: "error" | "warning",
-  checks: CheckResult[],
+  checks: CheckResult[]
 ): AuditReport {
   const rule: ReportRuleResult = {
     meta: {
@@ -201,14 +216,22 @@ const multiCheckReport = reportWithChecks("core/multi", "error", [
     name: "check-a",
     status: "fail",
     message: "Check A failed",
-    pages: ["https://example.com/a1", "https://example.com/a2", "https://example.com/a3"],
+    pages: [
+      "https://example.com/a1",
+      "https://example.com/a2",
+      "https://example.com/a3",
+    ],
     details: { aggregated: true, pagesTruncated: 400 },
   } as unknown as CheckResult,
   {
     name: "check-b",
     status: "fail",
     message: "Check B failed",
-    pages: ["https://example.com/b1", "https://example.com/b2", "https://example.com/b3"],
+    pages: [
+      "https://example.com/b1",
+      "https://example.com/b2",
+      "https://example.com/b3",
+    ],
     details: { aggregated: true, pagesTruncated: 300 },
   } as unknown as CheckResult,
 ]);

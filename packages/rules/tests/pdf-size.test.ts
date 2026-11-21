@@ -3,8 +3,9 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { pdfSizeRule, optionsSchema } from "../src/crawl/pdf-size";
 import type { CheckResult, RuleContext } from "../src/types";
+
+import { pdfSizeRule, optionsSchema } from "../src/crawl/pdf-size";
 
 const MB = 1024 * 1024;
 const ORIGIN = "https://example.com";
@@ -38,7 +39,9 @@ describe("crawl/pdf-size wording (#320)", () => {
 
   test("the warning message has no em-dash and names the 60MB threshold", async () => {
     const check = (await run([35])).find((c) => c.name === "pdf-size-warn");
-    expect(check?.message).toBe("1 PDF(s) exceed 30MB, approaching the 60MB error threshold");
+    expect(check?.message).toBe(
+      "1 PDF(s) exceed 30MB, approaching the 60MB error threshold"
+    );
     expect(check?.message).not.toContain("—");
   });
 

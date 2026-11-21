@@ -23,9 +23,9 @@ describe("parsePage — contactLinks", () => {
     const parsed = parsePage(
       page(
         `<a href="tel:+1 (555) 123-4567">+1 (555) 123-4567</a>` +
-          `<a href="mailto:hi@example.com">Email us</a>`,
+          `<a href="mailto:hi@example.com">Email us</a>`
       ),
-      URL,
+      URL
     );
 
     expect(parsed.contactLinks).toEqual([
@@ -37,10 +37,12 @@ describe("parsePage — contactLinks", () => {
   test("they stay OUT of the crawlable link graph", () => {
     const parsed = parsePage(
       page(`<a href="tel:5551234567">call</a><a href="/about">about</a>`),
-      URL,
+      URL
     );
 
-    expect(parsed.links.map((l) => l.url)).toEqual(["https://example.com/about"]);
+    expect(parsed.links.map((l) => l.url)).toEqual([
+      "https://example.com/about",
+    ]);
     expect(parsed.contactLinks).toHaveLength(1);
   });
 
@@ -48,9 +50,9 @@ describe("parsePage — contactLinks", () => {
     const parsed = parsePage(
       page(
         `<a href="mailto:hi@example.com?subject=Hello&body=Hi">Contact</a>` +
-          `<a href="tel:+15551234567;phone-context=+1">Call</a>`,
+          `<a href="tel:+15551234567;phone-context=+1">Call</a>`
       ),
-      URL,
+      URL
     );
 
     expect(parsed.contactLinks?.map((c) => c.value)).toEqual([
@@ -68,8 +70,10 @@ describe("parsePage — contactLinks", () => {
 
   test("other schemes are not contact links", () => {
     const parsed = parsePage(
-      page(`<a href="sms:5551234567">text</a><a href="javascript:void(0)">x</a>`),
-      URL,
+      page(
+        `<a href="sms:5551234567">text</a><a href="javascript:void(0)">x</a>`
+      ),
+      URL
     );
     expect(parsed.contactLinks).toEqual([]);
   });
@@ -77,7 +81,7 @@ describe("parsePage — contactLinks", () => {
   test("the carried list is capped", () => {
     const anchors = Array.from(
       { length: 50 },
-      (_, i) => `<a href="tel:555000${i}">n${i}</a>`,
+      (_, i) => `<a href="tel:555000${i}">n${i}</a>`
     ).join("");
     const parsed = parsePage(page(anchors), URL);
     expect(parsed.contactLinks).toHaveLength(32);
@@ -99,25 +103,34 @@ describe("parsePage — Cloudflare email-protection links (pub#811)", () => {
     const parsed = parsePage(
       page(
         `<a href="/cdn-cgi/l/email-protection#${encode("hi@example.com?subject=Hello")}">[email&#160;protected]</a>` +
-          `<a href="/about">about</a>`,
+          `<a href="/about">about</a>`
       ),
-      URL,
+      URL
     );
     expect(parsed.contactLinks).toEqual([
-      { scheme: "mailto", value: "hi@example.com", text: "[email\u00a0protected]", obfuscated: "cloudflare" },
+      {
+        scheme: "mailto",
+        value: "hi@example.com",
+        text: "[email\u00a0protected]",
+        obfuscated: "cloudflare",
+      },
     ]);
-    expect(parsed.links.map((l) => l.url)).toEqual(["https://example.com/about"]);
+    expect(parsed.links.map((l) => l.url)).toEqual([
+      "https://example.com/about",
+    ]);
   });
 
   test("an obfuscated address in the text reads its data-cfemail, on the anchor or inside it", () => {
     const parsed = parsePage(
       page(
         `<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="${encode("a@example.com")}">[email&#160;protected]</a>` +
-          `<a href="/cdn-cgi/l/email-protection"><span class="__cf_email__" data-cfemail="${encode("b@example.com", 0x13)}">[email&#160;protected]</span></a>`,
+          `<a href="/cdn-cgi/l/email-protection"><span class="__cf_email__" data-cfemail="${encode("b@example.com", 0x13)}">[email&#160;protected]</span></a>`
       ),
-      URL,
+      URL
     );
-    expect(parsed.contactLinks?.map((c) => [c.scheme, c.value, c.obfuscated])).toEqual([
+    expect(
+      parsed.contactLinks?.map((c) => [c.scheme, c.value, c.obfuscated])
+    ).toEqual([
       ["mailto", "a@example.com", "cloudflare"],
       ["mailto", "b@example.com", "cloudflare"],
     ]);
@@ -126,11 +139,18 @@ describe("parsePage — Cloudflare email-protection links (pub#811)", () => {
 
   test("a payload that does not decode to an address is still a contact link, with no value", () => {
     const parsed = parsePage(
-      page(`<a href="/cdn-cgi/l/email-protection#abcd">[email&#160;protected]</a>`),
-      URL,
+      page(
+        `<a href="/cdn-cgi/l/email-protection#abcd">[email&#160;protected]</a>`
+      ),
+      URL
     );
     expect(parsed.contactLinks).toEqual([
-      { scheme: "mailto", value: "", text: "[email\u00a0protected]", obfuscated: "cloudflare" },
+      {
+        scheme: "mailto",
+        value: "",
+        text: "[email\u00a0protected]",
+        obfuscated: "cloudflare",
+      },
     ]);
     expect(parsed.links).toEqual([]);
   });
@@ -138,29 +158,45 @@ describe("parsePage — Cloudflare email-protection links (pub#811)", () => {
   test("one on another host is not an external link either", () => {
     const html = page(
       `<a href="https://other.example/cdn-cgi/l/email-protection#${encode("x@other.example")}">mail</a>` +
-        `<a href="https://other.example/page">page</a>`,
+        `<a href="https://other.example/page">page</a>`
     );
     const parsed = parsePage(html, URL);
-    expect(parsed.links.map((l) => l.url)).toEqual(["https://other.example/page"]);
-    expect(parsed.contactLinks?.map((c) => c.value)).toEqual(["x@other.example"]);
+    expect(parsed.links.map((l) => l.url)).toEqual([
+      "https://other.example/page",
+    ]);
+    expect(parsed.contactLinks?.map((c) => c.value)).toEqual([
+      "x@other.example",
+    ]);
     const doc = parseDocument(html);
-    expect(extractLinks(doc, URL).map((l) => l.href)).toEqual(["https://other.example/page"]);
+    expect(extractLinks(doc, URL).map((l) => l.href)).toEqual([
+      "https://other.example/page",
+    ]);
   });
 
   test("the crawl never queues one", () => {
     const doc = parseDocument(
-      page(`<a href="/cdn-cgi/l/email-protection#abcd">mail</a><a href="/about">about</a>`),
+      page(
+        `<a href="/cdn-cgi/l/email-protection#abcd">mail</a><a href="/about">about</a>`
+      )
     );
-    expect(extractCrawlableUrls(doc, URL)).toEqual(["https://example.com/about"]);
-    expect(extractLinks(doc, URL).map((l) => l.href)).toEqual(["https://example.com/about"]);
+    expect(extractCrawlableUrls(doc, URL)).toEqual([
+      "https://example.com/about",
+    ]);
+    expect(extractLinks(doc, URL).map((l) => l.href)).toEqual([
+      "https://example.com/about",
+    ]);
   });
 
   test("obfuscated addresses have a cap of their own, so they never push out tel: links", () => {
     const obfuscated = Array.from(
       { length: 40 },
-      (_, i) => `<a href="/cdn-cgi/l/email-protection#${encode(`a${i}@example.com`)}">mail</a>`,
+      (_, i) =>
+        `<a href="/cdn-cgi/l/email-protection#${encode(`a${i}@example.com`)}">mail</a>`
     ).join("");
-    const parsed = parsePage(page(`${obfuscated}<a href="tel:+15551234567">call</a>`), URL);
+    const parsed = parsePage(
+      page(`${obfuscated}<a href="tel:+15551234567">call</a>`),
+      URL
+    );
     expect(parsed.contactLinks?.filter((c) => c.obfuscated)).toHaveLength(32);
     expect(parsed.contactLinks?.filter((c) => !c.obfuscated)).toEqual([
       { scheme: "tel", value: "+15551234567", text: "call" },
@@ -168,7 +204,10 @@ describe("parsePage — Cloudflare email-protection links (pub#811)", () => {
   });
 
   test("other /cdn-cgi/ links are links: an image-resizing URL is a real resource", () => {
-    const parsed = parsePage(page(`<a href="/cdn-cgi/image/width=1200/a.jpg">full size</a>`), URL);
+    const parsed = parsePage(
+      page(`<a href="/cdn-cgi/image/width=1200/a.jpg">full size</a>`),
+      URL
+    );
     expect(parsed.links.map((l) => l.url)).toEqual([
       "https://example.com/cdn-cgi/image/width=1200/a.jpg",
     ]);
@@ -184,14 +223,19 @@ describe("parsePage — contactLinks sections", () => {
       page(
         `<footer><a href="tel:+15551234567">call</a></footer>` +
           `<main><a href="mailto:hi@example.com">Email us</a></main>` +
-          `<p><a href="mailto:loose@example.com">loose</a></p>`,
+          `<p><a href="mailto:loose@example.com">loose</a></p>`
       ),
-      URL,
+      URL
     );
 
     expect(parsed.contactLinks).toEqual([
       { scheme: "tel", value: "+15551234567", text: "call", section: "footer" },
-      { scheme: "mailto", value: "hi@example.com", text: "Email us", section: "content" },
+      {
+        scheme: "mailto",
+        value: "hi@example.com",
+        text: "Email us",
+        section: "content",
+      },
       { scheme: "mailto", value: "loose@example.com", text: "loose" },
     ]);
   });
@@ -199,7 +243,10 @@ describe("parsePage — contactLinks sections", () => {
 
 describe("parsePage — invalid links keep their section", () => {
   test("a link the parser cannot read still says where it sat", () => {
-    const parsed = parsePage(page(`<footer><a href="http://[bad">bad</a></footer>`), URL);
+    const parsed = parsePage(
+      page(`<footer><a href="http://[bad">bad</a></footer>`),
+      URL
+    );
 
     expect(parsed.links).toEqual([
       {

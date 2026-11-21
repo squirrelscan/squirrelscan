@@ -2,10 +2,10 @@
  * robots.txt URL checking utilities
  */
 
-import { parse as parseTld } from "tldts";
 import type { RobotsTxtData, RobotsRule } from "@squirrelscan/core-contracts";
 
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
+import { parse as parseTld } from "tldts";
 
 /**
  * The robots.txt group token a crawl configured with `agent` is matched as: the
@@ -53,8 +53,11 @@ export function isRobotsTxtDisallowed(
   }
 
   const agent = userAgent.toLowerCase();
-  let groups = robotsTxt.rules.filter((r) => r.userAgent.toLowerCase() === agent);
-  if (groups.length === 0) groups = robotsTxt.rules.filter((r) => r.userAgent === "*");
+  let groups = robotsTxt.rules.filter(
+    (r) => r.userAgent.toLowerCase() === agent
+  );
+  if (groups.length === 0)
+    groups = robotsTxt.rules.filter((r) => r.userAgent === "*");
   if (groups.length === 0) return false;
 
   let best: { length: number; allow: boolean } | null = null;
@@ -68,7 +71,11 @@ export function isRobotsTxtDisallowed(
       if (!robotsPathMatches(pattern, target)) continue;
       const length = pattern.length;
       const allow = rule.type === "allow";
-      if (!best || length > best.length || (length === best.length && allow && !best.allow)) {
+      if (
+        !best ||
+        length > best.length ||
+        (length === best.length && allow && !best.allow)
+      ) {
         best = { length, allow };
       }
     }
@@ -195,7 +202,10 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
         }
         let kept: typeof currentRules;
         let keptChars: number;
-        if (currentRules.length <= roomEntries && currentRuleChars <= roomChars) {
+        if (
+          currentRules.length <= roomEntries &&
+          currentRuleChars <= roomChars
+        ) {
           kept = [...currentRules];
           keptChars = currentRuleChars;
         } else {
@@ -234,7 +244,9 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
 
   for (const rawLine of lines) {
     const commentIndex = rawLine.indexOf("#");
-    const line = (commentIndex === -1 ? rawLine : rawLine.slice(0, commentIndex)).trim();
+    const line = (
+      commentIndex === -1 ? rawLine : rawLine.slice(0, commentIndex)
+    ).trim();
     if (!line) continue;
 
     const colonIndex = line.indexOf(":");
@@ -296,7 +308,7 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
   flushCurrentGroup();
   if (truncated) {
     errors.push(
-      `robots.txt has more than ${ROBOTS_MAX_DIRECTIVE_ENTRIES.toLocaleString("en-US")} directives across its user-agent groups; the rest of the file was not read`,
+      `robots.txt has more than ${ROBOTS_MAX_DIRECTIVE_ENTRIES.toLocaleString("en-US")} directives across its user-agent groups; the rest of the file was not read`
     );
   }
 
@@ -392,7 +404,12 @@ const SITEMAP_LOOKS_LIKE_HOST =
  * real domain such as `worldairops.com/sitemap.xml` as a path is the more
  * common failure, and the read is reported on `robotsTxt.errors`.
  */
-const RESERVED_HOST_TLDS: ReadonlySet<string> = new Set(["test", "example", "invalid", "localhost"]);
+const RESERVED_HOST_TLDS: ReadonlySet<string> = new Set([
+  "test",
+  "example",
+  "invalid",
+  "localhost",
+]);
 
 function hasPublicSuffixTld(hostSegment: string): boolean {
   const host = hostSegment.replace(/:\d+$/, "");
@@ -430,7 +447,9 @@ function toHttpUrl(value: string, base?: URL): URL | undefined {
   } catch {
     return undefined;
   }
-  return url.protocol === "http:" || url.protocol === "https:" ? url : undefined;
+  return url.protocol === "http:" || url.protocol === "https:"
+    ? url
+    : undefined;
 }
 
 /**
@@ -453,9 +472,13 @@ function sitemapResolutionBase(baseUrl: string): URL | undefined {
  * entry points for one file, spending the walk's URL budget twice and, on a
  * 404, recording the same file as failed under two different sources.
  */
-export function resolveRobotsSitemapUrl(value: unknown, baseUrl: string): RobotsSitemapResolution {
+export function resolveRobotsSitemapUrl(
+  value: unknown,
+  baseUrl: string
+): RobotsSitemapResolution {
   const raw = typeof value === "string" ? value : "";
-  if (typeof value !== "string") return { raw, reading: "unresolvable", url: null };
+  if (typeof value !== "string")
+    return { raw, reading: "unresolvable", url: null };
 
   const trimmed = raw.trim();
   if (SITEMAP_HAS_HTTP_AUTHORITY.test(trimmed)) {
@@ -470,7 +493,11 @@ export function resolveRobotsSitemapUrl(value: unknown, baseUrl: string): Robots
   // (`https:sitemap.xml`). Neither is resolved against the base: #1393 already
   // refuses to fetch the first, and resolving the second lands on a host the
   // audited site does not own. Skip it.
-  if (!trimmed || SITEMAP_HAS_WHITESPACE.test(trimmed) || SITEMAP_HAS_SCHEME.test(trimmed)) {
+  if (
+    !trimmed ||
+    SITEMAP_HAS_WHITESPACE.test(trimmed) ||
+    SITEMAP_HAS_SCHEME.test(trimmed)
+  ) {
     return { raw, reading: "unresolvable", url: null };
   }
   if (!base) return { raw, reading: "unresolvable", url: null };
@@ -480,9 +507,17 @@ export function resolveRobotsSitemapUrl(value: unknown, baseUrl: string): Robots
     firstSegment.length < trimmed.length &&
     SITEMAP_LOOKS_LIKE_HOST.test(firstSegment) &&
     hasPublicSuffixTld(firstSegment);
-  const resolved = toHttpUrl(isHost ? `${base.protocol}//${trimmed}` : trimmed, base)?.href;
-  if (resolved === undefined) return { raw, reading: "unresolvable", url: null };
-  return { raw, reading: isHost ? "scheme-less-host" : "relative", url: resolved };
+  const resolved = toHttpUrl(
+    isHost ? `${base.protocol}//${trimmed}` : trimmed,
+    base
+  )?.href;
+  if (resolved === undefined)
+    return { raw, reading: "unresolvable", url: null };
+  return {
+    raw,
+    reading: isHost ? "scheme-less-host" : "relative",
+    url: resolved,
+  };
 }
 
 /** A declared value quoted back into an errors entry, bounded and de-escaped. */
@@ -506,7 +541,9 @@ function quoteSitemapValue(raw: string): string {
  * before this helper existed and still do, so flagging them would be a new
  * finding on a large share of healthy sites rather than a fix for this bug.
  */
-export function robotsSitemapIssue(resolution: RobotsSitemapResolution): string | null {
+export function robotsSitemapIssue(
+  resolution: RobotsSitemapResolution
+): string | null {
   if (resolution.reading === "scheme-less-host" && resolution.url) {
     return `Sitemap "${quoteSitemapValue(resolution.raw)}" is missing a scheme; read as ${resolution.url}`;
   }

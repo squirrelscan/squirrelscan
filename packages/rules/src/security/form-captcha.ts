@@ -1,8 +1,10 @@
 // security/form-captcha - Detect public forms without CAPTCHA protection
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { elementsWithAttribute } from "../shared/attribute-lookup";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import { elementsWithAttribute } from "../shared/attribute-lookup";
 
 // CAPTCHA provider detection patterns
 const CAPTCHA_PATTERNS = {
@@ -104,7 +106,9 @@ function hasPageLevelCaptchaScript(doc: Document): boolean {
   for (const link of hintLinks) {
     // `rel` is a space-separated token list (e.g. rel="preload modulepreload"),
     // so a CSS attribute-equals selector would miss valid combined markup.
-    const relTokens = (link.getAttribute("rel") || "").toLowerCase().split(/\s+/);
+    const relTokens = (link.getAttribute("rel") || "")
+      .toLowerCase()
+      .split(/\s+/);
     const asAttr = (link.getAttribute("as") || "").toLowerCase();
     const isHintLink =
       (relTokens.includes("preload") && asAttr === "script") ||
@@ -163,23 +167,28 @@ const CAPTCHA_PROVIDERS = Object.keys(SITE_KEY_FORMATS);
 // underscore, a word character, before the provider.
 const PROVIDER_OBJECT_START = new RegExp(
   `(?<![a-z0-9])(${CAPTCHA_PROVIDERS.join("|")})["']?\\s*:\\s*\\{`,
-  "gi",
+  "gi"
 );
 const NESTED_SITE_KEY = Object.fromEntries(
   Object.entries(SITE_KEY_FORMATS).map(([provider, key]) => [
     provider,
     new RegExp(`(?<![a-z0-9])site_?key["']?\\s*:\\s*["']${key}["']`, "i"),
-  ]),
+  ])
 );
-const FLAT_SITE_KEYS = Object.entries(SITE_KEY_FORMATS).map(([provider, key]) => ({
-  key: new RegExp(`(?<![a-z0-9])${provider}_?site_?key["']?\\s*[:=]\\s*["']${key}["']`, "i"),
-  // A sibling switch for the same provider: `recaptchaEnabled: false`,
-  // `TURNSTILE_ENABLED = "false"`, `hcaptchaDisabled: true`.
-  off: new RegExp(
-    `(?<![a-z0-9])${provider}_?(?:(?:enabled?|active)["']?\\s*[:=]\\s*(?:false|0|["']false["'])|disabled["']?\\s*[:=]\\s*(?:true|1|["']true["']))`,
-    "i",
-  ),
-}));
+const FLAT_SITE_KEYS = Object.entries(SITE_KEY_FORMATS).map(
+  ([provider, key]) => ({
+    key: new RegExp(
+      `(?<![a-z0-9])${provider}_?site_?key["']?\\s*[:=]\\s*["']${key}["']`,
+      "i"
+    ),
+    // A sibling switch for the same provider: `recaptchaEnabled: false`,
+    // `TURNSTILE_ENABLED = "false"`, `hcaptchaDisabled: true`.
+    off: new RegExp(
+      `(?<![a-z0-9])${provider}_?(?:(?:enabled?|active)["']?\\s*[:=]\\s*(?:false|0|["']false["'])|disabled["']?\\s*[:=]\\s*(?:true|1|["']true["']))`,
+      "i"
+    ),
+  })
+);
 const PROVIDER_SWITCHED_OFF =
   /(?<![a-z0-9])(?:enabled?|active)["']?\s*:\s*(?:false|0|["']false["'])|(?<![a-z0-9])disabled["']?\s*:\s*(?:true|1|["']true["'])/i;
 /** How far one provider object is read, and how many are read per script. */
@@ -221,14 +230,23 @@ function hasPageLevelCaptchaConfig(doc: Document): boolean {
     if (!content) continue;
     // A flat key has no object of its own: a sibling switch for the same
     // provider anywhere in the script turns it off.
-    if (FLAT_SITE_KEYS.some(({ key, off }) => key.test(content) && !off.test(content))) return true;
+    if (
+      FLAT_SITE_KEYS.some(
+        ({ key, off }) => key.test(content) && !off.test(content)
+      )
+    )
+      return true;
     let seen = 0;
     for (const match of content.matchAll(PROVIDER_OBJECT_START)) {
       if (++seen > PROVIDER_OBJECTS_PER_SCRIPT) break;
       const provider = match[1]!.toLowerCase();
       const own = objectTopLevel(content, match.index + match[0].length);
       if (own === null) continue;
-      if (NESTED_SITE_KEY[provider]?.test(own) && !PROVIDER_SWITCHED_OFF.test(own)) return true;
+      if (
+        NESTED_SITE_KEY[provider]?.test(own) &&
+        !PROVIDER_SWITCHED_OFF.test(own)
+      )
+        return true;
     }
   }
   return false;
@@ -239,7 +257,10 @@ function hasFormShieldProtection(doc: Document, baseUrl: string): boolean {
   const scripts = doc.querySelectorAll("script[src]");
   for (const script of scripts) {
     const src = script.getAttribute("src") || "";
-    if (isFormShieldScriptSrc(src, baseUrl) || script.hasAttribute(FORMSHIELD_PROJECT_KEY_ATTR)) {
+    if (
+      isFormShieldScriptSrc(src, baseUrl) ||
+      script.hasAttribute(FORMSHIELD_PROJECT_KEY_ATTR)
+    ) {
       return true;
     }
   }
@@ -282,7 +303,12 @@ function hasPageLevelCaptchaClass(doc: Document): boolean {
 // (`.cf-turnstile` etc.) until JS runs, and it may never gain an iframe if
 // the widget renders lazily/on interaction. These tokens are provider-anchored
 // enough to stand alone as a page-level signal.
-const EXPLICIT_CONTAINER_TOKENS = ["turnstile", "g-recaptcha", "h-captcha", "frc-captcha"];
+const EXPLICIT_CONTAINER_TOKENS = [
+  "turnstile",
+  "g-recaptcha",
+  "h-captcha",
+  "frc-captcha",
+];
 
 // Bare "captcha" is too generic to anchor alone — ids like "captcha-help-text"
 // reference a captcha without being its container. Unlike the provider tokens
@@ -292,13 +318,24 @@ const EXPLICIT_CONTAINER_TOKENS = ["turnstile", "g-recaptcha", "h-captcha", "frc
 // class on the same element (e.g. id="captcha-help-text" class="footer-widget")
 // is not a signal and must not downgrade a real warning to a false pass.
 const GENERIC_CAPTCHA_TOKEN = "captcha";
-const CONTAINER_HINT_WORDS = ["widget", "container", "box", "embed", "frame", "wrapper"];
+const CONTAINER_HINT_WORDS = [
+  "widget",
+  "container",
+  "box",
+  "embed",
+  "frame",
+  "wrapper",
+];
 
 // Precompiled once at module scope, not per element/audit run (containsToken
 // used to build a new RegExp per call against a page-wide "[id], [class]" scan).
-const EXPLICIT_CONTAINER_TOKEN_PATTERNS = EXPLICIT_CONTAINER_TOKENS.map(tokenBoundaryPattern);
-const GENERIC_CAPTCHA_TOKEN_PATTERN = tokenBoundaryPattern(GENERIC_CAPTCHA_TOKEN);
-const CONTAINER_HINT_WORD_PATTERNS = CONTAINER_HINT_WORDS.map(tokenBoundaryPattern);
+const EXPLICIT_CONTAINER_TOKEN_PATTERNS =
+  EXPLICIT_CONTAINER_TOKENS.map(tokenBoundaryPattern);
+const GENERIC_CAPTCHA_TOKEN_PATTERN = tokenBoundaryPattern(
+  GENERIC_CAPTCHA_TOKEN
+);
+const CONTAINER_HINT_WORD_PATTERNS =
+  CONTAINER_HINT_WORDS.map(tokenBoundaryPattern);
 
 function tokenBoundaryPattern(token: string): RegExp {
   const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -341,7 +378,15 @@ function getElementIdentifiers(el: Element): string[] {
 // An explicit-render widget mounts into an empty div/span the JS SDK fills in
 // later — never a heading or link — so require the matched element to
 // actually look like that kind of mount point (#1173 review round 2).
-const MOUNT_POINT_EXCLUDED_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6", "a"]);
+const MOUNT_POINT_EXCLUDED_TAGS = new Set([
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "a",
+]);
 
 function looksLikeMountPoint(el: Element): boolean {
   const tag = el.tagName?.toLowerCase() ?? "";
@@ -350,17 +395,24 @@ function looksLikeMountPoint(el: Element): boolean {
 }
 
 function isExplicitCaptchaContainerElement(el: Element): boolean {
-  const combined = `${el.getAttribute("id") || ""} ${el.getAttribute("class") || ""}`.trim();
+  const combined =
+    `${el.getAttribute("id") || ""} ${el.getAttribute("class") || ""}`.trim();
   if (!combined || !looksLikeMountPoint(el)) return false;
 
-  if (EXPLICIT_CONTAINER_TOKEN_PATTERNS.some((pattern) => containsToken(combined, pattern))) {
+  if (
+    EXPLICIT_CONTAINER_TOKEN_PATTERNS.some((pattern) =>
+      containsToken(combined, pattern)
+    )
+  ) {
     return true;
   }
 
   return getElementIdentifiers(el).some(
     (identifier) =>
       containsToken(identifier, GENERIC_CAPTCHA_TOKEN_PATTERN) &&
-      CONTAINER_HINT_WORD_PATTERNS.some((pattern) => containsToken(identifier, pattern)),
+      CONTAINER_HINT_WORD_PATTERNS.some((pattern) =>
+        containsToken(identifier, pattern)
+      )
   );
 }
 
@@ -397,7 +449,10 @@ function formHasExplicitCaptchaContainer(form: Element): boolean {
 function formHasCaptchaResponseField(form: Element): boolean {
   for (const provider of Object.values(CAPTCHA_PATTERNS)) {
     for (const fieldName of provider.responseFields) {
-      if (elementsWithAttribute(form, "name", fieldName).length > 0 || form.querySelector(`#${fieldName}`)) {
+      if (
+        elementsWithAttribute(form, "name", fieldName).length > 0 ||
+        form.querySelector(`#${fieldName}`)
+      ) {
         return true;
       }
     }
@@ -455,7 +510,8 @@ function classifyForm(form: Element): FormClassification {
 
   // Check for email input without password (newsletter/contact)
   const hasEmailInput = form.querySelector('input[type="email"]') !== null;
-  const hasPasswordInput = form.querySelector('input[type="password"]') !== null;
+  const hasPasswordInput =
+    form.querySelector('input[type="password"]') !== null;
   if (hasEmailInput && !hasPasswordInput) {
     return "public";
   }
@@ -539,14 +595,15 @@ export const formCaptchaRule: Rule = {
     // reCAPTCHA, or a nav-search form wrapping the Turnstile div), the
     // page-level signal belongs to that form, not to our public form — don't
     // credit it twice.
-    const singlePublicForm = publicForms.length === 1 ? publicForms[0].form : null;
+    const singlePublicForm =
+      publicForms.length === 1 ? publicForms[0].form : null;
     const anotherFormOwnsCaptcha = singlePublicForm
       ? Array.from(forms).some(
           (form) =>
             form !== singlePublicForm &&
             (formHasCaptchaWidget(form) ||
               formHasCaptchaResponseField(form) ||
-              formHasExplicitCaptchaContainer(form)),
+              formHasExplicitCaptchaContainer(form))
         )
       : false;
 
@@ -561,7 +618,8 @@ export const formCaptchaRule: Rule = {
       // of how many *other* (e.g. nav search) forms are on the page (#1173),
       // unless one of those other forms already owns the CAPTCHA itself.
       const assumeProtected =
-        hasFormShield || (hasPageCaptcha && publicForms.length === 1 && !anotherFormOwnsCaptcha);
+        hasFormShield ||
+        (hasPageCaptcha && publicForms.length === 1 && !anotherFormOwnsCaptcha);
 
       if (!formHasCaptcha && !assumeProtected) {
         unprotectedForms.push(getFormIdentifier(form, index));
@@ -586,7 +644,8 @@ export const formCaptchaRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "Only client-side markup was inspected; this does not establish whether server-side abuse controls exist.",
+          uncertainty:
+            "Only client-side markup was inspected; this does not establish whether server-side abuse controls exist.",
         },
       });
     } else {
@@ -598,7 +657,8 @@ export const formCaptchaRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "A detected client-side signal does not verify that the control is enforced server-side.",
+          uncertainty:
+            "A detected client-side signal does not verify that the control is enforced server-side.",
         },
       });
     }

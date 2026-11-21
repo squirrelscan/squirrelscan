@@ -1,10 +1,12 @@
 // crawl/pdf-size - Checks linked PDF sizes against Googlebot limits
 
+import {
+  GOOGLEBOT_PDF_MAX_BYTES,
+  GOOGLEBOT_PDF_WARN_BYTES,
+} from "@squirrelscan/utils/constants";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { GOOGLEBOT_PDF_MAX_BYTES, GOOGLEBOT_PDF_WARN_BYTES } from "@squirrelscan/utils/constants";
 
 export const optionsSchema = z.object({
   warn_bytes: z
@@ -14,7 +16,9 @@ export const optionsSchema = z.object({
   error_bytes: z
     .number()
     .default(GOOGLEBOT_PDF_MAX_BYTES)
-    .describe("Byte size to trigger error (60MB default, under Google's 64MB PDF limit)"),
+    .describe(
+      "Byte size to trigger error (60MB default, under Google's 64MB PDF limit)"
+    ),
 });
 
 export const pdfSizeRule: Rule = {

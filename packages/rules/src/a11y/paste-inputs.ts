@@ -41,7 +41,10 @@ export function authFieldReason(el: Element): string | null {
   const type = (el.getAttribute("type") ?? "").trim().toLowerCase();
   if (tag === "input" && NON_TEXT_INPUT_TYPES.has(type)) return null;
   if (tag === "input" && type === "password") return "type=password";
-  const tokens = (el.getAttribute("autocomplete") ?? "").trim().toLowerCase().split(/\s+/);
+  const tokens = (el.getAttribute("autocomplete") ?? "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/);
   const token = tokens.find((t) => AUTH_AUTOCOMPLETE_TOKENS.has(t));
   return token ? `autocomplete=${token}` : null;
 }
@@ -58,7 +61,8 @@ export const pasteInputsRule: Rule = {
   meta: {
     id: "a11y/paste-inputs",
     name: "Paste Inputs",
-    description: "Detects password and one-time-code fields that prevent pasting",
+    description:
+      "Detects password and one-time-code fields that prevent pasting",
     solution:
       "Remove any JavaScript that prevents pasting into password and one-time-code fields. Blocking paste forces users to transcribe a password from a password manager or a code from another device by hand, which WCAG 2.2 success criterion 3.3.8 Accessible Authentication (Minimum) treats as a cognitive function test. Remove onpaste='return false', event.preventDefault() on paste events, and similar anti-paste code.",
     category: "a11y",
@@ -85,7 +89,10 @@ export const pasteInputsRule: Rule = {
       .filter(({ el }) => blocksPaste(el))
       .map(({ el, reason }) => {
         const name =
-          el.getAttribute("name") || el.getAttribute("id") || el.getAttribute("placeholder") || reason;
+          el.getAttribute("name") ||
+          el.getAttribute("id") ||
+          el.getAttribute("placeholder") ||
+          reason;
         return `${name} (${reason})`;
       });
 

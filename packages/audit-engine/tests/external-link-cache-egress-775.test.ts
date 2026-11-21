@@ -11,10 +11,10 @@
 //   - The service's refusal of a non-public address is not a verdict: the link
 //     takes the local check, so it is never recorded as broken.
 
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
+
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import {
   checkExternalLinks,
@@ -31,7 +31,8 @@ beforeAll(() => {
   server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
-    fetch: () => new Response("ok", { headers: { "content-type": "text/plain" } }),
+    fetch: () =>
+      new Response("ok", { headers: { "content-type": "text/plain" } }),
   });
   port = server.port!;
 });
@@ -43,7 +44,10 @@ afterAll(() => {
 const PUBLIC = "https://example.com/page";
 
 /** Every name resolves to `address`, so no lookup leaves the machine. */
-function policy(allowPrivateNetwork: boolean, address = "127.0.0.1"): EgressPolicy {
+function policy(
+  allowPrivateNetwork: boolean,
+  address = "127.0.0.1"
+): EgressPolicy {
   return { allowPrivateNetwork, resolve: async () => [address] };
 }
 
@@ -85,7 +89,7 @@ function spyBulk(answers: Record<string, Partial<ExternalCheckResult>>) {
               fromCache: false,
               ...answers[url],
             },
-          ]),
+          ])
       );
     },
   };
@@ -94,7 +98,7 @@ function spyBulk(answers: Record<string, Partial<ExternalCheckResult>>) {
 const run = (
   urls: string[],
   options: Parameters<typeof checkExternalLinks>[2],
-  cache = spyCache(),
+  cache = spyCache()
 ) =>
   Effect.runPromise(
     checkExternalLinks(urls, cache.cache, {
@@ -102,7 +106,7 @@ const run = (
       timeoutMs: 5_000,
       userAgent: "squirrel-test",
       ...options,
-    }),
+    })
   );
 
 describe("a private site's audit and the shared link cache", () => {
@@ -113,7 +117,7 @@ describe("a private site's audit and the shared link cache", () => {
     const results = await run(
       [PUBLIC, local],
       { egress: policy(true), bulkChecker: bulk.bulkChecker },
-      cache,
+      cache
     );
     expect(cache.asked).toEqual([]);
     expect(cache.written).toEqual([]);
@@ -126,9 +130,15 @@ describe("a private site's audit and the shared link cache", () => {
   test("a public site's checks still use it", async () => {
     const cache = spyCache();
     const bulk = spyBulk({ [PUBLIC]: { status: 404 } });
-    await run([PUBLIC], { egress: policy(false), bulkChecker: bulk.bulkChecker }, cache);
+    await run(
+      [PUBLIC],
+      { egress: policy(false), bulkChecker: bulk.bulkChecker },
+      cache
+    );
     expect(cache.asked).toEqual([[PUBLIC]]);
-    expect(cache.written.map((e) => [e.href, e.status])).toEqual([[PUBLIC, 404]]);
+    expect(cache.written.map((e) => [e.href, e.status])).toEqual([
+      [PUBLIC, 404],
+    ]);
   });
 });
 
@@ -136,11 +146,21 @@ describe("which policies may share the cache", () => {
   test("only one held to public addresses on any host", () => {
     expect(isPublicOnlyEgress({ allowPrivateNetwork: false })).toBe(true);
     expect(isPublicOnlyEgress({ allowPrivateNetwork: true })).toBe(false);
-    expect(isPublicOnlyEgress({ allowPrivateNetwork: false, allowPrivateTarget: () => true })).toBe(
-      false,
-    );
-    expect(isPublicOnlyEgress({ allowPrivateNetwork: false, trustTarget: () => true })).toBe(false);
-    expect(isPublicOnlyEgress({ allowPrivateNetwork: false, allowHost: () => true })).toBe(false);
+    expect(
+      isPublicOnlyEgress({
+        allowPrivateNetwork: false,
+        allowPrivateTarget: () => true,
+      })
+    ).toBe(false);
+    expect(
+      isPublicOnlyEgress({
+        allowPrivateNetwork: false,
+        trustTarget: () => true,
+      })
+    ).toBe(false);
+    expect(
+      isPublicOnlyEgress({ allowPrivateNetwork: false, allowHost: () => true })
+    ).toBe(false);
   });
 });
 
@@ -168,7 +188,10 @@ describe("the bulk checker only ever gets public links", () => {
 
     // Only non-public links: the bulk checker is not called at all.
     const none = spyBulk({});
-    await run(nonPublic, { egress: policy(true), bulkChecker: none.bulkChecker });
+    await run(nonPublic, {
+      egress: policy(true),
+      bulkChecker: none.bulkChecker,
+    });
     expect(none.sent).toEqual([]);
   });
 });
@@ -179,12 +202,14 @@ describe("the bulk checker's refusal of a non-public address is not a verdict", 
   test("a public site's audit: checked locally, refused, never broken and never cached", async () => {
     const url = intranet();
     const cache = spyCache();
-    const bulk = spyBulk({ [url]: { error: "blocked_non_public_host:private" } });
+    const bulk = spyBulk({
+      [url]: { error: "blocked_non_public_host:private" },
+    });
     // The name resolves to a private address, which the public policy refuses.
     const results = await run(
       [url],
       { egress: policy(false, "10.0.0.7"), bulkChecker: bulk.bulkChecker },
-      cache,
+      cache
     );
     expect(bulk.sent).toEqual([[url]]);
     expect(results.map((r) => [r.href, r.status, r.error, r.refused])).toEqual([
@@ -196,15 +221,27 @@ describe("the bulk checker's refusal of a non-public address is not a verdict", 
 
   test("a private site's audit: checked locally and answered", async () => {
     const url = intranet();
-    const bulk = spyBulk({ [url]: { error: "blocked_non_public_host:private" } });
-    const results = await run([url], { egress: policy(true), bulkChecker: bulk.bulkChecker });
-    expect(results.map((r) => [r.href, r.status, r.error])).toEqual([[url, 200, null]]);
+    const bulk = spyBulk({
+      [url]: { error: "blocked_non_public_host:private" },
+    });
+    const results = await run([url], {
+      egress: policy(true),
+      bulkChecker: bulk.bulkChecker,
+    });
+    expect(results.map((r) => [r.href, r.status, r.error])).toEqual([
+      [url, 200, null],
+    ]);
     expect(filterBrokenLinks(results)).toEqual([]);
   });
 
   test("any other bulk error is still the link's answer", async () => {
     const bulk = spyBulk({ [PUBLIC]: { error: "timeout" } });
-    const results = await run([PUBLIC], { egress: policy(false), bulkChecker: bulk.bulkChecker });
-    expect(results.map((r) => [r.href, r.error])).toEqual([[PUBLIC, "timeout"]]);
+    const results = await run([PUBLIC], {
+      egress: policy(false),
+      bulkChecker: bulk.bulkChecker,
+    });
+    expect(results.map((r) => [r.href, r.error])).toEqual([
+      [PUBLIC, "timeout"],
+    ]);
   });
 });

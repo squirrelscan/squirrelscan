@@ -64,7 +64,13 @@ export type Detector =
   // `comments`: this detector also reads HTML comments (a marker comment such as an app block banner); no other detector does (#1550).
   // `dataScripts`: this detector also reads the text of data scripts (`type="application/json"` and the like), for a fact a page
   // states only as JSON (a shop config flag); no other detector does. `<template>` content and comments stay cut (#1550).
-  | { type: "html"; pattern: RegExp; requires?: string; comments?: true; dataScripts?: true }
+  | {
+      type: "html";
+      pattern: RegExp;
+      requires?: string;
+      comments?: true;
+      dataScripts?: true;
+    }
   | { type: "dom"; selector: string }
   | { type: "url-path"; pattern: RegExp }
   // Matches the audited page's own host name only, never its HTML: a third-party app a page loads
@@ -74,7 +80,13 @@ export type Detector =
   // tags instead of a scan of the HTML per signature (#1456). `pattern` tests the value (anchor it to the start of a
   // URL); `tokens` also tests each whitespace or comma separated token (`srcset`). `tags` must be among the tags the
   // page pass collects (`COLLECTED_TAGS` in detect.ts).
-  | { type: "tag-attr"; tags: readonly string[]; attrs: readonly string[]; pattern: RegExp; tokens?: boolean };
+  | {
+      type: "tag-attr";
+      tags: readonly string[];
+      attrs: readonly string[];
+      pattern: RegExp;
+      tokens?: boolean;
+    };
 
 export interface TechFingerprint {
   id: string;

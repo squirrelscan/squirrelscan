@@ -1,7 +1,8 @@
 // mobile/viewport-zoom - Viewport zoom check
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const viewportZoomRule: Rule = {
   meta: {

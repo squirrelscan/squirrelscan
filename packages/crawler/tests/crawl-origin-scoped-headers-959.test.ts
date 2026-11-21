@@ -22,9 +22,16 @@ const ORIGIN = "https://h.invalid";
 const realFetch = globalThis.fetch;
 beforeAll(() => {
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
     if (new URL(url).hostname.endsWith(".invalid")) {
-      return Promise.reject(new TypeError("fetch failed: host does not resolve (test stub)"));
+      return Promise.reject(
+        new TypeError("fetch failed: host does not resolve (test stub)")
+      );
     }
     return realFetch(input, init);
   }) as typeof fetch;
@@ -34,14 +41,18 @@ afterAll(() => {
 });
 const TOKEN = { "X-Audit-Token": "secret" };
 
-const PAGE = "<!doctype html><html><head><title>t</title></head><body></body></html>";
+const PAGE =
+  "<!doctype html><html><head><title>t</title></head><body></body></html>";
 
 function mockResponse(url: string, body: string): FetchResponse {
   return {
     url,
     finalUrl: url,
     status: 200,
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "max-age=3600" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "max-age=3600",
+    },
     body,
     timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
     redirectChain: {
@@ -65,7 +76,7 @@ function fetcherFor(seen: Seen[]): DocumentFetcher {
     capabilities: { jsRendering: false, cookies: false, screenshot: false },
     async fetch(req) {
       const token = Object.entries(req.headers ?? {}).find(
-        ([name]) => name.toLowerCase() === "x-audit-token",
+        ([name]) => name.toLowerCase() === "x-audit-token"
       )?.[1];
       seen.push({ url: req.url, token });
       return mockResponse(req.url, PAGE);
@@ -106,7 +117,7 @@ const baseConfig = {
 async function crawlUrls(
   urls: string[],
   extra: Record<string, unknown> = {},
-  crawl: { baseUrl?: string; originalUrl?: string } = {},
+  crawl: { baseUrl?: string; originalUrl?: string } = {}
 ): Promise<Seen[]> {
   const storage: CrawlStorage = await Effect.runPromise(createTestStorage());
   const config = { ...baseConfig, ...extra };
@@ -119,7 +130,7 @@ async function crawlUrls(
       status: "paused",
       config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
-    }),
+    })
   );
   for (const [index, url] of urls.entries()) {
     await Effect.runPromise(
@@ -132,12 +143,15 @@ async function crawlUrls(
         source: index === 0 ? ("seed" as const) : ("sitemap" as const),
         enqueuedAt: Date.now(),
         retryCount: 0,
-      }),
+      })
     );
   }
   const seen: Seen[] = [];
   const crawler = await Effect.runPromise(
-    createCrawler({ config: { ...config, documentFetcher: fetcherFor(seen) }, storage }),
+    createCrawler({
+      config: { ...config, documentFetcher: fetcherFor(seen) },
+      storage,
+    })
   );
   await Effect.runPromise(crawler.resumeFromStorage(crawlId));
   return seen;
@@ -159,7 +173,9 @@ describe("the crawl sends custom headers only to the audited origin (#959)", () 
 
   test("an explicit default port is still the audited origin", async () => {
     const seen = await crawlUrls([`${ORIGIN}/`, `${ORIGIN}:443/a`]);
-    expect(seen.some((s) => s.token === "secret" && s.url.endsWith("/a"))).toBe(true);
+    expect(seen.some((s) => s.token === "secret" && s.url.endsWith("/a"))).toBe(
+      true
+    );
   });
 
   test("an http: page on the audited host is crawled without them", async () => {
@@ -175,7 +191,10 @@ describe("the crawl sends custom headers only to the audited origin (#959)", () 
 
   test("a host that allowedDomains admits gets none unless header_hosts names it", async () => {
     const allowed = { allowedDomains: ["h.invalid", "other.invalid"] };
-    const without = await crawlUrls([`${ORIGIN}/`, "https://other.invalid/o"], allowed);
+    const without = await crawlUrls(
+      [`${ORIGIN}/`, "https://other.invalid/o"],
+      allowed
+    );
     expect(tokenOf(without, `${ORIGIN}/`)).toBe("secret");
     expect(tokenOf(without, "https://other.invalid/o")).toBeUndefined();
 
@@ -199,7 +218,7 @@ describe("custom headers are never sent over http on the strength of a redirect 
     const seen = await crawlUrls(
       ["http://h.invalid/", "http://h.invalid/a", `${ORIGIN}/b`],
       {},
-      { baseUrl: "http://h.invalid", originalUrl: `${ORIGIN}/` },
+      { baseUrl: "http://h.invalid", originalUrl: `${ORIGIN}/` }
     );
     expect(tokenOf(seen, "http://h.invalid/")).toBeUndefined();
     expect(tokenOf(seen, "http://h.invalid/a")).toBeUndefined();
@@ -210,18 +229,28 @@ describe("custom headers are never sent over http on the strength of a redirect 
     const seen = await crawlUrls(
       ["http://h.invalid/", "http://h.invalid/a"],
       {},
-      { baseUrl: "http://h.invalid", originalUrl: "http://h.invalid/" },
+      { baseUrl: "http://h.invalid", originalUrl: "http://h.invalid/" }
     );
     expect(tokenOf(seen, "http://h.invalid/a")).toBe("secret");
   });
 
   test("a named header host gets them over https only, unless written with http://", async () => {
     const allowed = { allowedDomains: ["h.invalid", "other.invalid"] };
-    const urls = [`${ORIGIN}/`, "http://other.invalid/p", "https://other.invalid/s"];
-    const bare = await crawlUrls(urls, { ...allowed, headerHosts: ["other.invalid"] });
+    const urls = [
+      `${ORIGIN}/`,
+      "http://other.invalid/p",
+      "https://other.invalid/s",
+    ];
+    const bare = await crawlUrls(urls, {
+      ...allowed,
+      headerHosts: ["other.invalid"],
+    });
     expect(tokenOf(bare, "http://other.invalid/p")).toBeUndefined();
     expect(tokenOf(bare, "https://other.invalid/s")).toBe("secret");
-    const explicit = await crawlUrls(urls, { ...allowed, headerHosts: ["http://other.invalid"] });
+    const explicit = await crawlUrls(urls, {
+      ...allowed,
+      headerHosts: ["http://other.invalid"],
+    });
     expect(tokenOf(explicit, "http://other.invalid/p")).toBe("secret");
   });
 });

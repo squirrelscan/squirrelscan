@@ -6,7 +6,14 @@
 // no further than its byte cap, like every other request the audit sends.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { constants, createBrotliCompress, createGzip, gzipSync } from "node:zlib";
+import {
+  constants,
+  createBrotliCompress,
+  createGzip,
+  gzipSync,
+} from "node:zlib";
+
+import type { RuleContext } from "../src/types";
 
 import { createProbeBudget } from "../src/probe-budget";
 import { graphqlIntrospectionRule } from "../src/security/graphql-introspection";
@@ -15,7 +22,6 @@ import {
   parseGraphqlBody,
   sendGraphqlProbe,
 } from "../src/security/graphql-probe";
-import type { RuleContext } from "../src/types";
 
 const GIB = 1024 * 1024 * 1024;
 
@@ -34,13 +40,17 @@ const SCHEMA = JSON.stringify({
 });
 
 /** `total` bytes of spaces through a streaming compressor, never held whole. */
-async function bomb(compressor: NodeJS.ReadWriteStream, total: number): Promise<Buffer> {
+async function bomb(
+  compressor: NodeJS.ReadWriteStream,
+  total: number
+): Promise<Buffer> {
   const out: Buffer[] = [];
   compressor.on("data", (chunk: Buffer) => out.push(chunk));
   const ended = new Promise((resolve) => compressor.on("end", resolve));
   const chunk = Buffer.alloc(16 * 1024 * 1024, 0x20);
   for (let sent = 0; sent < total; sent += chunk.byteLength) {
-    if (!compressor.write(chunk)) await new Promise((resolve) => compressor.once("drain", resolve));
+    if (!compressor.write(chunk))
+      await new Promise((resolve) => compressor.once("drain", resolve));
   }
   compressor.end();
   await ended;
@@ -66,13 +76,14 @@ beforeAll(async () => {
   gzipBomb = await bomb(createGzip({ level: 6 }), GIB);
   brBomb = await bomb(
     createBrotliCompress({ params: { [constants.BROTLI_PARAM_QUALITY]: 1 } }),
-    GIB,
+    GIB
   );
   server = Bun.serve({
     port: 0,
     fetch(req) {
       const path = new URL(req.url).pathname;
-      if (path !== "/graphql") return new Response("not found", { status: 404 });
+      if (path !== "/graphql")
+        return new Response("not found", { status: 404 });
       switch (mode) {
         case "gzip-bomb":
           return encoded(gzipBomb, "gzip");
@@ -123,7 +134,9 @@ describe("GraphQL probe responses are decoded no further than the cap (#722)", (
         });
       });
       expect(outcome && "response" in outcome).toBe(true);
-      const response = (outcome as { response: { body: string; truncated: boolean } }).response;
+      const response = (
+        outcome as { response: { body: string; truncated: boolean } }
+      ).response;
       expect(response.truncated).toBe(true);
       expect(response.body.length).toBe(GRAPHQL_RESPONSE_CAPS.introspection);
       expect(response.body.trim()).toBe("");
@@ -144,13 +157,18 @@ describe("the probe request turns the runtime's decoding off (#722)", () => {
       return real(input, init);
     }) as typeof fetch;
     try {
-      await sendGraphqlProbe(budget(), `${origin}/graphql`, { op: "introspection", method: "GET" });
+      await sendGraphqlProbe(budget(), `${origin}/graphql`, {
+        op: "introspection",
+        method: "GET",
+      });
     } finally {
       globalThis.fetch = real;
     }
     expect(inits).toHaveLength(1);
     expect((inits[0] as { decompress?: boolean }).decompress).toBe(false);
-    expect(new Headers(inits[0]!.headers).get("accept-encoding")).toBe("gzip, deflate, br, zstd");
+    expect(new Headers(inits[0]!.headers).get("accept-encoding")).toBe(
+      "gzip, deflate, br, zstd"
+    );
     // What the probe always sent is still sent.
     expect(inits[0]!.credentials).toBe("omit");
     expect(inits[0]!.redirect).toBe("manual");
@@ -175,9 +193,20 @@ describe("the probe request turns the runtime's decoding off (#722)", () => {
 
   test("security/graphql-introspection reaches the same finding over gzip", async () => {
     const ctx = (): RuleContext => ({
-      page: { url: `${origin}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: `${origin}/`,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: {} as RuleContext["parsed"],
-      site: { baseUrl: `${origin}/`, pages: [], robotsTxt: null, sitemaps: null },
+      site: {
+        baseUrl: `${origin}/`,
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+      },
       probe: budget(),
       options: {},
     });
@@ -213,7 +242,7 @@ describe("a capped probe closes its connection (#722)", () => {
           if (socket.data.started) return;
           socket.data.started = true;
           socket.write(
-            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n",
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n"
           );
           pump(socket);
         },
@@ -232,11 +261,12 @@ describe("a capped probe closes its connection (#722)", () => {
         {
           op: "noop-mutation",
           method: "GET",
-        },
+        }
       );
       const returnedAt = Date.now();
       expect("response" in outcome && outcome.response.truncated).toBe(true);
-      while (closedAt === 0 && Date.now() - returnedAt < 5_000) await Bun.sleep(10);
+      while (closedAt === 0 && Date.now() - returnedAt < 5_000)
+        await Bun.sleep(10);
       expect(closedAt).toBeGreaterThan(0);
       // The probe timeout is 10 s; a reader cancel alone kept the transfer
       // going until then.

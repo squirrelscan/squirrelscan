@@ -3,7 +3,11 @@
 // resolving the same audience for the same report shape.
 
 import { describe, expect, test } from "bun:test";
-import { lockedRulesMessage, type LockedRulesReportShape } from "../src/locked-rules";
+
+import {
+  lockedRulesMessage,
+  type LockedRulesReportShape,
+} from "../src/locked-rules";
 
 const ONE_RULE = [{ id: "ai/llm-parsability", name: "LLM Parsability" }];
 const TWO_RULES = [
@@ -33,7 +37,10 @@ describe("lockedRulesMessage", () => {
   });
 
   test("free, no --http, no quick coverage: credits upsell, no signup copy", () => {
-    const msg = lockedRulesMessage({ lockedRules: ONE_RULE, cloudPlan: "free" });
+    const msg = lockedRulesMessage({
+      lockedRules: ONE_RULE,
+      cloudPlan: "free",
+    });
     expect(msg?.audience).toBe("free-upsell");
     expect(msg?.signedIn).toBe(true);
     expect(msg?.heading).toBe("1 check didn't run this audit");
@@ -86,7 +93,10 @@ describe("lockedRulesMessage", () => {
   });
 
   test("paid, no quick/--http: temporarily-unavailable framing", () => {
-    const msg = lockedRulesMessage({ lockedRules: ONE_RULE, cloudPlan: "paid" });
+    const msg = lockedRulesMessage({
+      lockedRules: ONE_RULE,
+      cloudPlan: "paid",
+    });
     expect(msg?.audience).toBe("paid-unavailable");
     expect(msg?.action).toContain("temporarily unavailable");
     expect(msg?.cta).toBeUndefined();
@@ -107,12 +117,18 @@ describe("lockedRulesMessage", () => {
   });
 
   test("anonymous quick coverage keeps the signup upsell (quick-coverage branch requires signedIn)", () => {
-    const msg = lockedRulesMessage({ lockedRules: ONE_RULE, coverageMode: "quick" });
+    const msg = lockedRulesMessage({
+      lockedRules: ONE_RULE,
+      coverageMode: "quick",
+    });
     expect(msg?.audience).toBe("anonymous-upsell");
   });
 
   test("narrow report shape (only the fields the helper needs) type-checks and resolves", () => {
-    const shape: LockedRulesReportShape = { lockedRules: ONE_RULE, cloudPlan: "paid" };
+    const shape: LockedRulesReportShape = {
+      lockedRules: ONE_RULE,
+      cloudPlan: "paid",
+    };
     expect(lockedRulesMessage(shape)?.audience).toBe("paid-unavailable");
   });
 });

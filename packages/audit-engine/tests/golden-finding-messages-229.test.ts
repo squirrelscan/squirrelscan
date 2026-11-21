@@ -16,7 +16,10 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { canonicalV1Snapshot, type EngineBaselineSnapshot } from "./helpers/golden-baseline";
+import {
+  canonicalV1Snapshot,
+  type EngineBaselineSnapshot,
+} from "./helpers/golden-baseline";
 
 const PINNED = join(import.meta.dir, "golden/finding-messages.json");
 
@@ -38,7 +41,11 @@ export function pinMessages(snapshot: EngineBaselineSnapshot): PinnedMessages {
   for (const f of snapshot.findings) {
     let set = exact.get(f.ruleId);
     if (!set) exact.set(f.ruleId, (set = new Set()));
-    set.add([f.checkName, f.status, f.message, f.value ?? "", f.expected ?? ""].join("|"));
+    set.add(
+      [f.checkName, f.status, f.message, f.value ?? "", f.expected ?? ""].join(
+        "|"
+      )
+    );
   }
   const out: PinnedMessages = {};
   for (const ruleId of [...exact.keys()].sort()) {
@@ -52,23 +59,32 @@ export function pinMessages(snapshot: EngineBaselineSnapshot): PinnedMessages {
 }
 
 /** Readable per-rule divergences between two pinned sets, capped. */
-export function diffPinned(expected: PinnedMessages, actual: PinnedMessages, cap = 40): string[] {
+export function diffPinned(
+  expected: PinnedMessages,
+  actual: PinnedMessages,
+  cap = 40
+): string[] {
   const out: string[] = [];
-  for (const ruleId of [...new Set([...Object.keys(expected), ...Object.keys(actual)])].sort()) {
+  for (const ruleId of [
+    ...new Set([...Object.keys(expected), ...Object.keys(actual)]),
+  ].sort()) {
     const a = expected[ruleId];
     const b = actual[ruleId];
     if (!a)
       out.push(
-        `${ruleId}: a rule that was not pinned now produces findings (${b!.lines.length} distinct lines)`,
+        `${ruleId}: a rule that was not pinned now produces findings (${b!.lines.length} distinct lines)`
       );
-    else if (!b) out.push(`${ruleId}: pinned findings are gone (${a.lines.length} distinct lines)`);
+    else if (!b)
+      out.push(
+        `${ruleId}: pinned findings are gone (${a.lines.length} distinct lines)`
+      );
     else if (a.digest !== b.digest) {
       const gone = a.lines.filter((l) => !b.lines.includes(l));
       const added = b.lines.filter((l) => !a.lines.includes(l));
       out.push(
         gone.length + added.length === 0
           ? `${ruleId}: the same messages with different numbers or values (digest ${a.digest.slice(0, 8)} -> ${b.digest.slice(0, 8)})`
-          : `${ruleId}:\n${gone.map((l) => `    - ${l}`).join("\n")}${gone.length && added.length ? "\n" : ""}${added.map((l) => `    + ${l}`).join("\n")}`,
+          : `${ruleId}:\n${gone.map((l) => `    - ${l}`).join("\n")}${gone.length && added.length ? "\n" : ""}${added.map((l) => `    + ${l}`).join("\n")}`
       );
     }
     if (out.length >= cap) {
@@ -90,7 +106,7 @@ describe("pinned finding messages, values and expected (#229)", () => {
     const divergences = diffPinned(expected, actual);
     if (divergences.length > 0) {
       throw new Error(
-        `A finding's message, value or expected changed (#229). If that is deliberate, regenerate with UPDATE_GOLDEN=1 and review the diff of tests/golden/finding-messages.json: stored fingerprints and report groups change with it.\n${divergences.join("\n")}`,
+        `A finding's message, value or expected changed (#229). If that is deliberate, regenerate with UPDATE_GOLDEN=1 and review the diff of tests/golden/finding-messages.json: stored fingerprints and report groups change with it.\n${divergences.join("\n")}`
       );
     }
     expect(divergences).toEqual([]);
@@ -98,10 +114,16 @@ describe("pinned finding messages, values and expected (#229)", () => {
 
   test("a reworded message is reported as a readable per-rule divergence", () => {
     const base: PinnedMessages = {
-      "core/meta-title": { digest: "aaa", lines: ["title|warn|Title is # characters||"] },
+      "core/meta-title": {
+        digest: "aaa",
+        lines: ["title|warn|Title is # characters||"],
+      },
     };
     const changed: PinnedMessages = {
-      "core/meta-title": { digest: "bbb", lines: ["title|warn|Title length is # characters||"] },
+      "core/meta-title": {
+        digest: "bbb",
+        lines: ["title|warn|Title length is # characters||"],
+      },
     };
     const out = diffPinned(base, changed);
     expect(out).toHaveLength(1);
@@ -111,8 +133,11 @@ describe("pinned finding messages, values and expected (#229)", () => {
     // numbers only: the digest names it
     expect(
       diffPinned(base, {
-        "core/meta-title": { digest: "ccc", lines: base["core/meta-title"]!.lines },
-      })[0],
+        "core/meta-title": {
+          digest: "ccc",
+          lines: base["core/meta-title"]!.lines,
+        },
+      })[0]
     ).toContain("different numbers or values");
     expect(diffPinned(base, base)).toEqual([]);
   });
@@ -131,10 +156,10 @@ describe("pinned finding messages, values and expected (#229)", () => {
         })),
       }) as unknown as EngineBaselineSnapshot;
     expect(pinMessages(snap("m", true))["r/x"]!.digest).toBe(
-      pinMessages(snap("m", false))["r/x"]!.digest,
+      pinMessages(snap("m", false))["r/x"]!.digest
     );
     expect(pinMessages(snap("m", true))["r/x"]!.digest).not.toBe(
-      pinMessages(snap("n", true))["r/x"]!.digest,
+      pinMessages(snap("n", true))["r/x"]!.digest
     );
   });
 });

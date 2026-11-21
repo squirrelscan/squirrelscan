@@ -6,8 +6,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { loadPlugins, PluginLoadError } from "../src/plugins";
 import type { Rule } from "../src/types";
+
+import { loadPlugins, PluginLoadError } from "../src/plugins";
 
 const dir = mkdtempSync(join(tmpdir(), "squirrel-plugin-register-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -34,7 +35,10 @@ type Scenario = keyof typeof BODIES;
 
 function pluginFile(name: Scenario): string {
   const path = join(dir, `${name}.ts`);
-  writeFileSync(path, PREFIX + BODIES[name] + SUFFIX, { flag: "wx", mode: 0o600 });
+  writeFileSync(path, PREFIX + BODIES[name] + SUFFIX, {
+    flag: "wx",
+    mode: 0o600,
+  });
   return path;
 }
 
@@ -43,7 +47,7 @@ describe("plugin register() (#1599)", () => {
     const entry = pluginFile("async-ok");
     const snapshot = await loadPlugins(
       [{ id: "async-ok", entry, allow: ["rules"] }],
-      new Set(["async-ok"]),
+      new Set(["async-ok"])
     );
     expect(snapshot.rules.map((r) => r.meta.id)).toEqual(["late/after-await"]);
   });
@@ -52,7 +56,7 @@ describe("plugin register() (#1599)", () => {
     const entry = pluginFile("async-reject");
     const error = await loadPlugins(
       [{ id: "async-reject", entry, allow: ["rules"] }],
-      new Set(["async-reject"]),
+      new Set(["async-reject"])
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(PluginLoadError);
     expect((error as Error).message).toContain('"async-reject"');
@@ -63,7 +67,7 @@ describe("plugin register() (#1599)", () => {
     const entry = pluginFile("sync-throw");
     const error = await loadPlugins(
       [{ id: "sync-throw", entry, allow: ["rules"] }],
-      new Set(["sync-throw"]),
+      new Set(["sync-throw"])
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(PluginLoadError);
     expect((error as Error).message).toContain('"sync-throw"');
@@ -74,7 +78,7 @@ describe("plugin register() (#1599)", () => {
     const entry = pluginFile("async-clash");
     const error = await loadPlugins(
       [{ id: "async-clash", entry, allow: ["rules"] }],
-      new Set(["async-clash"]),
+      new Set(["async-clash"])
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(PluginLoadError);
     expect((error as Error).message).toContain('"core/meta-title"');
@@ -82,10 +86,13 @@ describe("plugin register() (#1599)", () => {
 
   test("a module that throws while it is evaluated fails the load naming the plugin", async () => {
     const path = join(dir, "eval-throw.ts");
-    writeFileSync(path, `throw new Error("top-level boom");`, { flag: "wx", mode: 0o600 });
+    writeFileSync(path, `throw new Error("top-level boom");`, {
+      flag: "wx",
+      mode: 0o600,
+    });
     const error = await loadPlugins(
       [{ id: "eval-throw", entry: path, allow: ["rules"] }],
-      new Set(["eval-throw"]),
+      new Set(["eval-throw"])
     ).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(PluginLoadError);
     expect((error as Error).message).toContain('"eval-throw"');
@@ -118,7 +125,7 @@ describe("plugin register() (#1599)", () => {
             register: (ctx) => ctx.registerRule(rule),
           },
         }),
-      },
+      }
     );
     expect(snapshot.rules.map((r) => r.meta.id)).toEqual(["hook/ok"]);
   });

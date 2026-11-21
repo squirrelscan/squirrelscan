@@ -3,9 +3,9 @@
 // runs none of its readers has no reason to send it, and a user whose firewall
 // bans the requests can turn them all off.
 
-import { DISCOVERY_PROBES } from "@squirrelscan/core-contracts/storage";
-
 import type { DiscoveryProbe } from "@squirrelscan/core-contracts";
+
+import { DISCOVERY_PROBES } from "@squirrelscan/core-contracts/storage";
 
 import { filterRules } from "./filter";
 import { loadAllRules, type RuleNamespace } from "./loader";
@@ -29,7 +29,9 @@ export interface DiscoveryProbeSelectionInput {
  * The discovery probes at least one enabled rule reads, in preamble order.
  * Empty when probes are turned off.
  */
-export function selectDiscoveryProbes(input: DiscoveryProbeSelectionInput): DiscoveryProbe[] {
+export function selectDiscoveryProbes(
+  input: DiscoveryProbeSelectionInput
+): DiscoveryProbe[] {
   if (!input.enabled) return [];
   const rules = loadAllRules({
     additionalNamespaces: input.additionalNamespaces,
@@ -41,15 +43,19 @@ export function selectDiscoveryProbes(input: DiscoveryProbeSelectionInput): Disc
     input.rules.enable,
     input.rules.disable,
     input.ruleOptions ?? {},
-    rules,
+    rules
   )) {
-    for (const probe of rules.get(id)?.meta.discoveryProbes ?? []) wanted.add(probe);
+    for (const probe of rules.get(id)?.meta.discoveryProbes ?? [])
+      wanted.add(probe);
   }
   return DISCOVERY_PROBES.filter((probe) => wanted.has(probe));
 }
 
 /** The rules whose configured `paths` the `configured-pages` probe asks for (#1428). */
-const CONFIGURED_PAGE_RULES = ["eeat/about-page", "eeat/privacy-policy"] as const;
+const CONFIGURED_PAGE_RULES = [
+  "eeat/about-page",
+  "eeat/privacy-policy",
+] as const;
 
 /**
  * The concrete page paths the E-E-A-T rules are configured with, for the `configured-pages` probe (#1428).
@@ -57,7 +63,9 @@ const CONFIGURED_PAGE_RULES = ["eeat/about-page", "eeat/privacy-policy"] as cons
  * no whitespace, query or fragment. A substring such as `agentur` or a regular expression has no path to
  * ask for and is matched against crawled pages only, as before.
  */
-export function configuredPagePaths(ruleOptions: Record<string, unknown> | undefined): string[] {
+export function configuredPagePaths(
+  ruleOptions: Record<string, unknown> | undefined
+): string[] {
   const out = new Set<string>();
   for (const id of CONFIGURED_PAGE_RULES) {
     const options = ruleOptions?.[id];

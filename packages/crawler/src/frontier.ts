@@ -1,6 +1,10 @@
 import { getDomain } from "tldts";
 
-import type { CrawlDecision, ScopeOptions, UrlNormalizationOptions } from "./types";
+import type {
+  CrawlDecision,
+  ScopeOptions,
+  UrlNormalizationOptions,
+} from "./types";
 
 const DEFAULT_SCHEME = "https:";
 
@@ -46,7 +50,10 @@ const TRACKING_PARAM_PREFIXES = new Set([
   "sfmc_id",
 ]);
 
-function shouldDropQueryParam(key: string, allowQueryParams: string[]): boolean {
+function shouldDropQueryParam(
+  key: string,
+  allowQueryParams: string[]
+): boolean {
   const lowerKey = key.toLowerCase();
 
   for (const prefix of TRACKING_PARAM_PREFIXES) {
@@ -63,7 +70,10 @@ function shouldDropQueryParam(key: string, allowQueryParams: string[]): boolean 
   return false;
 }
 
-export function normalizeUrl(rawUrl: string, options: UrlNormalizationOptions): string | null {
+export function normalizeUrl(
+  rawUrl: string,
+  options: UrlNormalizationOptions
+): string | null {
   try {
     const resolved = new URL(rawUrl, options.baseUrl);
 
@@ -171,7 +181,8 @@ function isAllowedDomain(hostname: string, allowedDomains: string[]): boolean {
 function isWwwHostOfApex(base: URL, candidate: URL): boolean {
   const baseHostname = base.hostname.toLowerCase();
   if (baseHostname.startsWith("www.")) return false;
-  if (getDomain(baseHostname, { allowPrivateDomains: true }) !== baseHostname) return false;
+  if (getDomain(baseHostname, { allowPrivateDomains: true }) !== baseHostname)
+    return false;
   return candidate.host.toLowerCase() === `www.${base.host.toLowerCase()}`;
 }
 
@@ -195,15 +206,21 @@ export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
 
   const isAbsolutePattern = (pattern: string) =>
     pattern.startsWith("http://") || pattern.startsWith("https://");
-  const matchTarget = (pattern: string) => (isAbsolutePattern(pattern) ? url : candidatePath);
+  const matchTarget = (pattern: string) =>
+    isAbsolutePattern(pattern) ? url : candidatePath;
 
-  if (exclude.some((pattern) => matchesPattern(matchTarget(pattern), pattern))) {
+  if (
+    exclude.some((pattern) => matchesPattern(matchTarget(pattern), pattern))
+  ) {
     return { allowed: false, reason: "excluded" };
   }
 
   if (include.length > 0) {
-    const matching = include.filter((pattern) => matchesPattern(matchTarget(pattern), pattern));
-    if (matching.length === 0) return { allowed: false, reason: "not_included" };
+    const matching = include.filter((pattern) =>
+      matchesPattern(matchTarget(pattern), pattern)
+    );
+    if (matching.length === 0)
+      return { allowed: false, reason: "not_included" };
     // An absolute-URL pattern names its host, so with no allowedDomains a match
     // is explicit consent to reach it, including a host outside the crawl's
     // scope. An explicit allowedDomains is a hard allowlist and vetoes it: the
@@ -212,9 +229,14 @@ export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
     // (below) rather than replacing it (#347).
     const absoluteMatch = matching.find(isAbsolutePattern);
     if (absoluteMatch) {
-      if (!allowedDomains || allowedDomains.length === 0) return { allowed: true };
+      if (!allowedDomains || allowedDomains.length === 0)
+        return { allowed: true };
       if (!isAllowedDomain(candidateHostname, allowedDomains)) {
-        return { allowed: false, reason: "cross_domain", vetoedInclude: absoluteMatch };
+        return {
+          allowed: false,
+          reason: "cross_domain",
+          vetoedInclude: absoluteMatch,
+        };
       }
     }
   }
@@ -231,7 +253,10 @@ export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
     return { allowed: true };
   }
 
-  if (candidateHost !== baseHost && !isWwwHostOfApex(baseUrlObj, candidateUrlObj)) {
+  if (
+    candidateHost !== baseHost &&
+    !isWwwHostOfApex(baseUrlObj, candidateUrlObj)
+  ) {
     return { allowed: false, reason: "cross_domain" };
   }
 
@@ -294,7 +319,10 @@ export interface SeedRedirectResolution {
  * target's content is what ends up in the report while the report still claims
  * to describe the seed.
  */
-export function resolveSeedRedirect(seedUrl: string, finalUrl: string): SeedRedirectResolution {
+export function resolveSeedRedirect(
+  seedUrl: string,
+  finalUrl: string
+): SeedRedirectResolution {
   const seed = parseHttpUrl(seedUrl);
   const final = parseHttpUrl(finalUrl);
 
@@ -304,7 +332,11 @@ export function resolveSeedRedirect(seedUrl: string, finalUrl: string): SeedRedi
     // `blob:https://host/…`, `URL.origin` reports the EMBEDDED origin, so
     // pinning to it would base the whole crawl — every root probe included — on
     // a host that was never fetched and never named as a site.
-    return { baseUrl: final?.origin ?? finalUrl, seedUrl: finalUrl, offSite: false };
+    return {
+      baseUrl: final?.origin ?? finalUrl,
+      seedUrl: finalUrl,
+      offSite: false,
+    };
   }
 
   if (!final) {
@@ -350,7 +382,9 @@ export function isOffSiteFinalUrl(baseUrl: string, finalUrl: string): boolean {
 function parseHttpUrl(url: string): URL | null {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed : null;
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed
+      : null;
   } catch {
     return null;
   }

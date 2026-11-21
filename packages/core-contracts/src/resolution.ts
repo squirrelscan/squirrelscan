@@ -180,7 +180,6 @@ export function encodeIndexGaps(sortedIndexes: readonly number[]): number[] {
   return gaps;
 }
 
-
 /**
  * `skipReason` of a page check whose rule stopped at a work cap before it had
  * looked at the whole page and found nothing in the part it did look at
@@ -220,9 +219,14 @@ export const UNREAD_PAGE_SKIP_REASON = "unread-page";
  * Skip reasons that are a gap of a WHOLE rule on a page (its real check names are unknown, the skip is named after the rule): the
  * rule did not look at the page, so a prior finding of any of its checks there carries, keyed `<ruleId>|*`.
  */
-export const isRuleWideGapSkipReason = (reason: string | undefined): boolean => {
+export const isRuleWideGapSkipReason = (
+  reason: string | undefined
+): boolean => {
   const cls = skipReasonClass(reason);
-  return cls?.scope === "rule" && (cls.outcome === "timed_out" || cls.outcome === "coverage_gap");
+  return (
+    cls?.scope === "rule" &&
+    (cls.outcome === "timed_out" || cls.outcome === "coverage_gap")
+  );
 };
 
 /**
@@ -294,12 +298,15 @@ export type SupersededVerdict = "resolved" | "failing" | "not-checked";
  * declarations. Empty for rules that declare none.
  */
 export function buildSupersededIndex(
-  metas: Iterable<{ id: string; supersededChecks?: Record<string, string[]> }>,
+  metas: Iterable<{ id: string; supersededChecks?: Record<string, string[]> }>
 ): Map<string, readonly string[]> {
   const index = new Map<string, readonly string[]>();
   for (const meta of metas) {
-    for (const [oldName, successors] of Object.entries(meta.supersededChecks ?? {})) {
-      if (successors.length > 0) index.set(resolutionCheckKey(meta.id, oldName), successors);
+    for (const [oldName, successors] of Object.entries(
+      meta.supersededChecks ?? {}
+    )) {
+      if (successors.length > 0)
+        index.set(resolutionCheckKey(meta.id, oldName), successors);
     }
   }
   return index;
@@ -310,7 +317,9 @@ export function buildSupersededIndex(
  * still failing when any successor fails, else not checked when any was not checked, else
  * resolved (every successor passed, or did not apply and so counts as passed).
  */
-export function judgeSuperseded(outcomes: Iterable<SupersededOutcome>): SupersededVerdict {
+export function judgeSuperseded(
+  outcomes: Iterable<SupersededOutcome>
+): SupersededVerdict {
   let notChecked = false;
   for (const outcome of outcomes) {
     if (outcome === "failing") return "failing";

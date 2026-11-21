@@ -61,37 +61,39 @@ export const NAP_MAX_ADDRESS_CHARS = 200;
  * `TABLE[token]` on a `{}` would resolve "constructor"/"__proto__" through the
  * prototype chain and fold a whole function body into the address key.
  */
-const NAP_ADDRESS_ABBREVIATIONS = new Map<string, string>(Object.entries({
-  st: "street",
-  str: "street",
-  ave: "avenue",
-  av: "avenue",
-  rd: "road",
-  blvd: "boulevard",
-  blv: "boulevard",
-  dr: "drive",
-  ln: "lane",
-  ct: "court",
-  pl: "place",
-  sq: "square",
-  hwy: "highway",
-  pkwy: "parkway",
-  ter: "terrace",
-  cir: "circle",
-  ste: "suite",
-  apt: "apartment",
-  fl: "floor",
-  bldg: "building",
-  rm: "room",
-  n: "north",
-  s: "south",
-  e: "east",
-  w: "west",
-  ne: "northeast",
-  nw: "northwest",
-  se: "southeast",
-  sw: "southwest",
-}));
+const NAP_ADDRESS_ABBREVIATIONS = new Map<string, string>(
+  Object.entries({
+    st: "street",
+    str: "street",
+    ave: "avenue",
+    av: "avenue",
+    rd: "road",
+    blvd: "boulevard",
+    blv: "boulevard",
+    dr: "drive",
+    ln: "lane",
+    ct: "court",
+    pl: "place",
+    sq: "square",
+    hwy: "highway",
+    pkwy: "parkway",
+    ter: "terrace",
+    cir: "circle",
+    ste: "suite",
+    apt: "apartment",
+    fl: "floor",
+    bldg: "building",
+    rm: "room",
+    n: "north",
+    s: "south",
+    e: "east",
+    w: "west",
+    ne: "northeast",
+    nw: "northwest",
+    se: "southeast",
+    sw: "southwest",
+  })
+);
 
 /** PostalAddress fields joined, in schema.org's own reading order, for display. */
 const NAP_ADDRESS_FIELDS = [
@@ -165,10 +167,16 @@ const NAP_PHONE_TRAILING_JUNK = new Set(["(", ".", "/", "-"]);
 function trimPhoneEdges(text: string): string {
   let start = 0;
   let end = text.length;
-  while (start < end && (isSpace(text[start]!) || NAP_PHONE_LEADING_JUNK.has(text[start]!))) {
+  while (
+    start < end &&
+    (isSpace(text[start]!) || NAP_PHONE_LEADING_JUNK.has(text[start]!))
+  ) {
     start++;
   }
-  while (end > start && (isSpace(text[end - 1]!) || NAP_PHONE_TRAILING_JUNK.has(text[end - 1]!))) {
+  while (
+    end > start &&
+    (isSpace(text[end - 1]!) || NAP_PHONE_TRAILING_JUNK.has(text[end - 1]!))
+  ) {
     end--;
   }
   return text.slice(start, end);
@@ -190,11 +198,14 @@ function trimPhoneEdges(text: string): string {
  */
 export function napPhoneToken(text: string, key: string): string | null {
   for (const match of text.matchAll(NAP_PHONE_RUN)) {
-    const run = trimPhoneEdges(trimPhoneEdges(match[0]).slice(0, NAP_PHONE_TOKEN_MAX_CHARS));
+    const run = trimPhoneEdges(
+      trimPhoneEdges(match[0]).slice(0, NAP_PHONE_TOKEN_MAX_CHARS)
+    );
     let end = run.length;
     while (end > 0) {
       const token = trimPhoneEdges(run.slice(0, end));
-      if (token && napPhoneKey(token) === key) return dropLeadingGroups(token, key);
+      if (token && napPhoneKey(token) === key)
+        return dropLeadingGroups(token, key);
       // Drop the last space-separated group and try again.
       end = token.length;
       while (end > 0 && !isSpace(run[end - 1]!)) end--;
@@ -281,13 +292,16 @@ function mayCarryNap(raw: string): boolean {
  * because the FIRST phone/address found is the one treated as the page's primary
  * contact by the rule; a stable order keeps both rule paths agreeing.
  */
-export function extractNapSignal(parsed: ParsedPage | null | undefined): NapSignal {
+export function extractNapSignal(
+  parsed: ParsedPage | null | undefined
+): NapSignal {
   const signal = emptyNapSignal();
   if (!parsed) return signal;
 
   const phoneKeys = new Map<string, string>();
   const addPhone = (key: string | null, display: string): void => {
-    if (!key || phoneKeys.size >= NAP_MAX_PHONES_PER_PAGE || phoneKeys.has(key)) return;
+    if (!key || phoneKeys.size >= NAP_MAX_PHONES_PER_PAGE || phoneKeys.has(key))
+      return;
     phoneKeys.set(key, display);
   };
 
@@ -355,8 +369,10 @@ export function extractNapSignal(parsed: ParsedPage | null | undefined): NapSign
   }
   // Business phones lead (the rule treats the first phone as the page's primary),
   // whatever their document order; the remaining link phones follow.
-  for (const [key, display] of businessPhones) addPhone(key, linkPhones.get(key) ?? display);
-  for (const [key, display] of linkPhones) if (!businessKeys.has(key)) addPhone(key, display);
+  for (const [key, display] of businessPhones)
+    addPhone(key, linkPhones.get(key) ?? display);
+  for (const [key, display] of linkPhones)
+    if (!businessKeys.has(key)) addPhone(key, display);
 
   signal.phones = [...phoneKeys.keys()];
   signal.phoneFormats = [...phoneKeys.values()];
@@ -367,17 +383,25 @@ export function extractNapSignal(parsed: ParsedPage | null | undefined): NapSign
 function isForeignContactNode(node: Record<string, unknown>): boolean {
   const type = node["@type"];
   const types = Array.isArray(type) ? type : [type];
-  return types.some((t) => typeof t === "string" && (t === "Person" || t.endsWith("Event")));
+  return types.some(
+    (t) => typeof t === "string" && (t === "Person" || t.endsWith("Event"))
+  );
 }
 
 /** Every `telephone` string under `value`, depth-bounded (the JSON is untrusted). */
-function collectTelephones(value: unknown, depth: number, visit: (phone: string) => void): void {
+function collectTelephones(
+  value: unknown,
+  depth: number,
+  visit: (phone: string) => void
+): void {
   if (depth > 6 || !value || typeof value !== "object") return;
   if (Array.isArray(value)) {
     for (const entry of value) collectTelephones(entry, depth + 1, visit);
     return;
   }
-  for (const [field, child] of Object.entries(value as Record<string, unknown>)) {
+  for (const [field, child] of Object.entries(
+    value as Record<string, unknown>
+  )) {
     if (field === "telephone" && typeof child === "string") visit(child.trim());
     else collectTelephones(child, depth + 1, visit);
   }

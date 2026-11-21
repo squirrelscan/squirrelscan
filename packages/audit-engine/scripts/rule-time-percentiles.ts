@@ -12,13 +12,12 @@
 // Usage (from packages/audit-engine):
 //   SQUIRREL_RULE_PROFILE=1 bun run scripts/rule-time-percentiles.ts [--top 25] [--runs 3]
 
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import { writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-
-import { writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import {
   buildGoldenBaselineModel,
@@ -28,11 +27,16 @@ import {
 } from "../tests/helpers/golden-baseline";
 
 const { values } = parseArgs({
-  options: { top: { type: "string", default: "25" }, runs: { type: "string", default: "3" } },
+  options: {
+    top: { type: "string", default: "25" },
+    runs: { type: "string", default: "3" },
+  },
 });
 
 if (!process.env.SQUIRREL_RULE_PROFILE) {
-  console.error("Set SQUIRREL_RULE_PROFILE=1: the per-rule timings come from the rules profiler.");
+  console.error(
+    "Set SQUIRREL_RULE_PROFILE=1: the per-rule timings come from the rules profiler."
+  );
   process.exit(1);
 }
 
@@ -42,7 +46,10 @@ const realError = console.error;
 console.error = (...args: unknown[]) => {
   const line = args[0];
   if (typeof line === "string" && line.startsWith("[rule-profile] ")) {
-    const d = JSON.parse(line.slice("[rule-profile] ".length)) as { ruleId: string; durationUs: number };
+    const d = JSON.parse(line.slice("[rule-profile] ".length)) as {
+      ruleId: string;
+      durationUs: number;
+    };
     let list = samples.get(d.ruleId);
     if (!list) samples.set(d.ruleId, (list = []));
     list.push(d.durationUs / 1000);
@@ -54,7 +61,10 @@ console.error = (...args: unknown[]) => {
 const dir = mkdtempSync(join(tmpdir(), "squirrelscan-rule-time-"));
 try {
   const dbPath = join(dir, "golden.sqlite");
-  const { storage: writer, crawlId } = await writeCrawlToStorage(buildGoldenBaselineModel(), dbPath);
+  const { storage: writer, crawlId } = await writeCrawlToStorage(
+    buildGoldenBaselineModel(),
+    dbPath
+  );
   await run(writer.close());
 
   for (let i = 0; i < Number(values.runs); i++) {
@@ -71,20 +81,39 @@ try {
 }
 console.error = realError;
 
-const pct = (sorted: number[], p: number) => sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)];
+const pct = (sorted: number[], p: number) =>
+  sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)];
 const rows = [...samples].map(([ruleId, list]) => {
   const s = list.toSorted((a, b) => a - b);
-  return { ruleId, n: s.length, p50: pct(s, 50), p99: pct(s, 99), max: s[s.length - 1] };
+  return {
+    ruleId,
+    n: s.length,
+    p50: pct(s, 50),
+    p99: pct(s, 99),
+    max: s[s.length - 1],
+  };
 });
 rows.sort((a, b) => b.p99 - a.p99);
 
 const all = [...samples.values()].flat().toSorted((a, b) => a - b);
 console.log(`rule runs: ${all.length}, rules: ${rows.length}`);
-console.log(`all rules: p50 ${pct(all, 50).toFixed(3)} ms, p99 ${pct(all, 99).toFixed(3)} ms, max ${all[all.length - 1].toFixed(1)} ms`);
+console.log(
+  `all rules: p50 ${pct(all, 50).toFixed(3)} ms, p99 ${pct(all, 99).toFixed(3)} ms, max ${all[all.length - 1].toFixed(1)} ms`
+);
 console.log("");
-console.log("rule".padEnd(44) + "n".padStart(6) + "p50 ms".padStart(10) + "p99 ms".padStart(10) + "max ms".padStart(10));
+console.log(
+  "rule".padEnd(44) +
+    "n".padStart(6) +
+    "p50 ms".padStart(10) +
+    "p99 ms".padStart(10) +
+    "max ms".padStart(10)
+);
 for (const r of rows.slice(0, Number(values.top))) {
   console.log(
-    r.ruleId.padEnd(44) + String(r.n).padStart(6) + r.p50.toFixed(3).padStart(10) + r.p99.toFixed(3).padStart(10) + r.max.toFixed(1).padStart(10),
+    r.ruleId.padEnd(44) +
+      String(r.n).padStart(6) +
+      r.p50.toFixed(3).padStart(10) +
+      r.p99.toFixed(3).padStart(10) +
+      r.max.toFixed(1).padStart(10)
   );
 }

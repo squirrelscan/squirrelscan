@@ -2,14 +2,18 @@
 // (v2) gives it no DOM and it reads ctx.collectedSignals. v1 and v2 must agree.
 // The fixture server is crawled for real; the rule sends no request of its own.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -29,16 +33,25 @@ function serve(): { origin: string; hits: string[] } {
       const page = (head: string, body = "") =>
         new Response(
           `<!doctype html><html lang="en"><head><title>Fixture page</title>${head}</head><body><h1>Fixture</h1>${body}</body></html>`,
-          { headers: { "content-type": "text/html" } },
+          { headers: { "content-type": "text/html" } }
         );
       const alt = (l: string, p: string) =>
         `<link rel="alternate" hreflang="${l}" href="${B}${p}">`;
       if (url.pathname === "/old-de")
-        return new Response(null, { status: 301, headers: { location: "/de" } });
+        return new Response(null, {
+          status: 301,
+          headers: { location: "/de" },
+        });
       if (url.pathname === "/old-fi")
-        return new Response(null, { status: 301, headers: { location: "/fi" } });
+        return new Response(null, {
+          status: 301,
+          headers: { location: "/fi" },
+        });
       if (url.pathname === "/gone")
-        return new Response("gone", { status: 404, headers: { "content-type": "text/html" } });
+        return new Response("gone", {
+          status: 404,
+          headers: { "content-type": "text/html" },
+        });
       if (url.pathname === "/en") {
         return page(
           alt("en", "/en") +
@@ -48,16 +61,32 @@ function serve(): { origin: string; hits: string[] } {
             alt("it", "/it") +
             alt("pt", "/pt") +
             alt("fi", "/fi") +
-            alt("sv", "/sv"),
+            alt("sv", "/sv")
         );
       }
-      if (url.pathname === "/de") return page(alt("de", "/de") + alt("en", "/en"));
+      if (url.pathname === "/de")
+        return page(alt("de", "/de") + alt("en", "/en"));
       if (url.pathname === "/es")
-        return page('<meta name="robots" content="noindex">' + alt("es", "/es") + alt("en", "/en"));
+        return page(
+          '<meta name="robots" content="noindex">' +
+            alt("es", "/es") +
+            alt("en", "/en")
+        );
       // /it names other versions but not /en.
-      if (url.pathname === "/it") return page(alt("it", "/it") + alt("de", "/de"));
-      if (url.pathname === "/pt") return page(alt("pt", "/pt") + alt("en", "/en"), "");
-      const links = ["/en", "/de", "/old-de", "/gone", "/es", "/it", "/pt", "/old-fi"]
+      if (url.pathname === "/it")
+        return page(alt("it", "/it") + alt("de", "/de"));
+      if (url.pathname === "/pt")
+        return page(alt("pt", "/pt") + alt("en", "/en"), "");
+      const links = [
+        "/en",
+        "/de",
+        "/old-de",
+        "/gone",
+        "/es",
+        "/it",
+        "/pt",
+        "/old-fi",
+      ]
         .map((p) => `<a href="${p}">${p}</a>`)
         .join(" ");
       return page("", links);
@@ -91,9 +120,11 @@ async function audit(engine: "v1" | "v2") {
         incremental: false,
         useCacheControl: false,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const storage = crawler.storage as SQLiteStorage;
   const hitsAfterCrawl = hits.length;
   const ran = await Effect.runPromise(
@@ -102,12 +133,23 @@ async function audit(engine: "v1" | "v2") {
       if (engine === "v1") {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, pre.assets);
+        return yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          pre.assets
+        );
       }
       return yield* runStreamingRules(storage, crawlId, CONFIG, pre.assets);
-    }) as unknown as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
+    }) as unknown as Effect.Effect<
+      { ruleResultsMap: Map<string, { checks: CheckResult[] }> },
+      never,
+      never
+    >
   );
-  const checks = (ran.ruleResultsMap.get("i18n/hreflang-targets")?.checks ?? []) as CheckResult[];
+  const checks = (ran.ruleResultsMap.get("i18n/hreflang-targets")?.checks ??
+    []) as CheckResult[];
   const ids = (name: string) =>
     (checks.find((c) => c.name === name)?.items ?? [])
       .map((i) => i.id.replaceAll(origin, ""))
@@ -129,7 +171,11 @@ for (const engine of ["v1", "v2"] as const) {
       expect(r.ids("hreflang-to-broken")).toEqual(["/en -> /gone"]);
       expect(r.ids("hreflang-to-non-indexable")).toEqual(["/en -> /es"]);
       // /en names /old-de, not /de, so /de has no return link to /en either.
-      expect(r.ids("hreflang-no-return-link")).toEqual(["/de -> /en", "/en -> /it", "/it -> /de"]);
+      expect(r.ids("hreflang-no-return-link")).toEqual([
+        "/de -> /en",
+        "/en -> /it",
+        "/it -> /de",
+      ]);
     }, 30_000);
 
     test("sends no request of its own", () => {

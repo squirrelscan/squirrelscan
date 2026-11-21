@@ -54,7 +54,9 @@ export const altTextRule: Rule = {
     }
 
     // Whitespace-only alt is a sloppy spelling of alt="", not a description.
-    const decorative = images.filter((img) => img.alt !== null && img.alt.trim() === "");
+    const decorative = images.filter(
+      (img) => img.alt !== null && img.alt.trim() === ""
+    );
     const describedCount = images.length - decorative.length;
 
     if (decorative.length === 0) {

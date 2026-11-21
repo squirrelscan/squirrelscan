@@ -34,11 +34,15 @@
 // minority spellings; fail when TERM_FAIL_GROUPS or more groups do (the site has no single voice for
 // its own interface words). Light enough that it cannot dominate the content category.
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
 import type { Element } from "linkedom";
 
-import { collectTextExcluding, tagExcluder } from "@squirrelscan/parser/extractors";
+import {
+  collectTextExcluding,
+  tagExcluder,
+} from "@squirrelscan/parser/extractors";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
@@ -81,7 +85,8 @@ interface TermGroup {
 
 const W_START = String.raw`(?<![\p{L}\p{N}_-])`;
 const W_END = String.raw`(?![\p{L}\p{N}_])`;
-const re = (source: string, flags = "giu"): RegExp => new RegExp(`${W_START}${source}${W_END}`, flags);
+const re = (source: string, flags = "giu"): RegExp =>
+  new RegExp(`${W_START}${source}${W_END}`, flags);
 
 /** The shipped variant table. The brand group is handled apart: its words come from the page. */
 export const TERM_GROUPS: readonly TermGroup[] = [
@@ -89,7 +94,11 @@ export const TERM_GROUPS: readonly TermGroup[] = [
     id: "signin",
     label: "sign in",
     variants: [
-      { key: "sign_in", label: "Sign in", pattern: re(String.raw`sign[\s-]+in`) },
+      {
+        key: "sign_in",
+        label: "Sign in",
+        pattern: re(String.raw`sign[\s-]+in`),
+      },
       { key: "log_in", label: "Log in", pattern: re(String.raw`log[\s-]+in`) },
       { key: "login", label: "Login", pattern: re("login") },
       { key: "signin", label: "Signin", pattern: re("signin") },
@@ -107,7 +116,11 @@ export const TERM_GROUPS: readonly TermGroup[] = [
     id: "signup",
     label: "sign up",
     variants: [
-      { key: "sign_up", label: "Sign up", pattern: re(String.raw`sign[\s-]+up`) },
+      {
+        key: "sign_up",
+        label: "Sign up",
+        pattern: re(String.raw`sign[\s-]+up`),
+      },
       { key: "signup", label: "Signup", pattern: re("signup") },
       { key: "register", label: "Register", pattern: re("register") },
       {
@@ -139,24 +152,57 @@ const BRAND_SHAPES: readonly { key: string; label: string }[] = [
 const BRAND_GROUP: TermGroup = {
   id: "brand",
   label: "product name casing",
-  variants: BRAND_SHAPES.map((s) => ({ key: s.key, label: s.label, pattern: /(?!)/u })),
+  variants: BRAND_SHAPES.map((s) => ({
+    key: s.key,
+    label: s.label,
+    pattern: /(?!)/u,
+  })),
 };
 
 const ALL_GROUPS: readonly TermGroup[] = [...TERM_GROUPS, BRAND_GROUP];
 
 /** Every storage key the column can hold: its bound. */
-export const TERM_KEYS: readonly string[] = ALL_GROUPS.flatMap((g) => g.variants.map((v) => `${g.id}.${v.key}`));
+export const TERM_KEYS: readonly string[] = ALL_GROUPS.flatMap((g) =>
+  g.variants.map((v) => `${g.id}.${v.key}`)
+);
 export const TERM_KEY_COUNT = TERM_KEYS.length;
 
 const BRAND_TOKEN = /^[\p{L}\p{N}]{4,30}$/u;
 
 // Inline formatting does not break a phrase: `Sign <b>in</b>` is still "Sign in". Every other
 // element (links, buttons, cells, blocks) is a boundary, so `<a>Sign in</a><a>Log in</a>` does not glue.
-const INLINE = new Set(["span", "b", "strong", "em", "i", "u", "small", "mark", "abbr", "sub", "sup", "wbr", "font"]);
-const isNonText = tagExcluder(new Set(["script", "style", "noscript", "code", "pre", "samp", "kbd", "template"]));
-const isBoundary = (el: Element): boolean => !INLINE.has(el.tagName.toLowerCase());
+const INLINE = new Set([
+  "span",
+  "b",
+  "strong",
+  "em",
+  "i",
+  "u",
+  "small",
+  "mark",
+  "abbr",
+  "sub",
+  "sup",
+  "wbr",
+  "font",
+]);
+const isNonText = tagExcluder(
+  new Set([
+    "script",
+    "style",
+    "noscript",
+    "code",
+    "pre",
+    "samp",
+    "kbd",
+    "template",
+  ])
+);
+const isBoundary = (el: Element): boolean =>
+  !INLINE.has(el.tagName.toLowerCase());
 
-const URL_LIKE = /\b(?:https?:\/\/|www\.)\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b[\w-]+(?:\.[\w-]+)+\/\S*/giu;
+const URL_LIKE =
+  /\b(?:https?:\/\/|www\.)\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b[\w-]+(?:\.[\w-]+)+\/\S*/giu;
 
 function countMatches(text: string, pattern: RegExp): number {
   let n = 0;
@@ -184,11 +230,19 @@ function escapeRegExp(s: string): string {
  * The one computation behind the stored `page_features.terminology_variants` and the legacy path.
  */
 export function pageTerminologyVariants(
-  parsed: { document?: Document | null; og?: { siteName?: string | null } | null } | null | undefined,
+  parsed:
+    | { document?: Document | null; og?: { siteName?: string | null } | null }
+    | null
+    | undefined
 ): Record<string, number> | null {
   const body = parsed?.document?.querySelector("body");
   if (!body) return null;
-  const raw = collectTextExcluding(body as unknown as Element, isNonText, "\n", isBoundary);
+  const raw = collectTextExcluding(
+    body as unknown as Element,
+    isNonText,
+    "\n",
+    isBoundary
+  );
   const text = raw.replace(URL_LIKE, " ");
   const out: Record<string, number> = {};
   const add = (key: string, n: number): void => {
@@ -196,13 +250,17 @@ export function pageTerminologyVariants(
   };
 
   for (const group of TERM_GROUPS) {
-    for (const v of group.variants) add(`${group.id}.${v.key}`, countMatches(text, v.pattern));
+    for (const v of group.variants)
+      add(`${group.id}.${v.key}`, countMatches(text, v.pattern));
   }
 
   const brand = parsed?.og?.siteName?.trim();
   if (brand && BRAND_TOKEN.test(brand) && brandShape(brand) !== null) {
     // Not part of a hostname or address: "acme.com" or "@acme" says nothing about the name's casing.
-    const pattern = new RegExp(`(?<![.@/])${W_START}${escapeRegExp(brand)}${W_END}(?!\\.[\\p{L}\\p{N}])`, "giu");
+    const pattern = new RegExp(
+      `(?<![.@/])${W_START}${escapeRegExp(brand)}${W_END}(?!\\.[\\p{L}\\p{N}])`,
+      "giu"
+    );
     const shapes: Record<string, number> = {};
     for (const m of text.matchAll(pattern)) {
       const idx = m.index ?? 0;
@@ -212,7 +270,9 @@ export function pageTerminologyVariants(
       // brand's own casing, so a Title-case match there is not counted (camelCase or UPPER still is).
       // Element boundaries are newlines in the collected text.
       const before = text.slice(Math.max(0, idx - 8), idx);
-      const sentenceStart = (idx < 8 && before.trim() === "") || /(?:[.!?]\s+|\n[^\S\n]*)$/u.test(before);
+      const sentenceStart =
+        (idx < 8 && before.trim() === "") ||
+        /(?:[.!?]\s+|\n[^\S\n]*)$/u.test(before);
       if (sentenceStart && shape === "title") continue;
       shapes[shape] = (shapes[shape] ?? 0) + 1;
     }
@@ -242,7 +302,12 @@ interface TermRollup {
 }
 
 function emptyRollup(): TermRollup {
-  return { pageCount: 0, skippedNoindexPages: 0, tallies: new Map(), groupPages: new Map() };
+  return {
+    pageCount: 0,
+    skippedNoindexPages: 0,
+    tallies: new Map(),
+    groupPages: new Map(),
+  };
 }
 
 function accumulatePage(rollup: TermRollup, record: TermPageRecord): void {
@@ -265,7 +330,8 @@ function accumulatePage(rollup: TermRollup, record: TermPageRecord): void {
       seenGroups.add(group.id);
     }
   }
-  for (const id of seenGroups) rollup.groupPages.set(id, (rollup.groupPages.get(id) ?? 0) + 1);
+  for (const id of seenGroups)
+    rollup.groupPages.set(id, (rollup.groupPages.get(id) ?? 0) + 1);
 }
 
 function skip(message: string, rollup?: TermRollup): CheckResult {
@@ -273,7 +339,9 @@ function skip(message: string, rollup?: TermRollup): CheckResult {
     name: CHECK_NAME,
     status: "skipped",
     message,
-    ...(rollup ? { details: { skippedNoindexPages: rollup.skippedNoindexPages } } : {}),
+    ...(rollup
+      ? { details: { skippedNoindexPages: rollup.skippedNoindexPages } }
+      : {}),
   };
 }
 
@@ -293,10 +361,17 @@ const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 function judgeGroup(rollup: TermRollup, group: TermGroup): GroupVerdict {
   let uses = 0;
-  for (const v of group.variants) uses += rollup.tallies.get(`${group.id}.${v.key}`)?.uses ?? 0;
+  for (const v of group.variants)
+    uses += rollup.tallies.get(`${group.id}.${v.key}`)?.uses ?? 0;
   const pages = rollup.groupPages.get(group.id) ?? 0;
-  const base = { group, uses, pages, minorities: [] as GroupVerdict["minorities"] };
-  if (uses < TERM_MIN_OCCURRENCES || pages < TERM_MIN_GROUP_PAGES) return { ...base, state: "insufficient" };
+  const base = {
+    group,
+    uses,
+    pages,
+    minorities: [] as GroupVerdict["minorities"],
+  };
+  if (uses < TERM_MIN_OCCURRENCES || pages < TERM_MIN_GROUP_PAGES)
+    return { ...base, state: "insufficient" };
 
   let dominant = group.variants[0]!;
   let best = -1;
@@ -308,33 +383,57 @@ function judgeGroup(rollup: TermRollup, group: TermGroup): GroupVerdict {
     }
   }
   const share = best / uses;
-  if (share < TERM_MIN_AGREEMENT) return { ...base, state: "no-norm", dominant, share };
+  if (share < TERM_MIN_AGREEMENT)
+    return { ...base, state: "no-norm", dominant, share };
 
   const minorities: GroupVerdict["minorities"] = [];
   for (const v of group.variants) {
     if (v === dominant) continue;
     const tally = rollup.tallies.get(`${group.id}.${v.key}`);
     if (!tally) continue;
-    minorities.push({ variant: v, uses: tally.uses, urls: [...tally.urls].sort(cmp) });
+    minorities.push({
+      variant: v,
+      uses: tally.uses,
+      urls: [...tally.urls].sort(cmp),
+    });
   }
-  return { ...base, state: minorities.length > 0 ? "deviant" : "consistent", dominant, share, minorities };
+  return {
+    ...base,
+    state: minorities.length > 0 ? "deviant" : "consistent",
+    dominant,
+    share,
+    minorities,
+  };
 }
 
 function buildChecks(rollup: TermRollup, sitePageCount: number): CheckResult[] {
   if (sitePageCount < TERM_MIN_PAGES) {
     return [
-      skip(`Only ${sitePageCount} page(s) crawled; ${TERM_MIN_PAGES} needed to establish the site's terminology`, rollup),
+      skip(
+        `Only ${sitePageCount} page(s) crawled; ${TERM_MIN_PAGES} needed to establish the site's terminology`,
+        rollup
+      ),
     ];
   }
 
   const verdicts = ALL_GROUPS.map((g) => judgeGroup(rollup, g));
   const judged = verdicts.filter((v) => v.state !== "insufficient");
   if (judged.length === 0) {
-    return [skip("Too little sign-in, email, sign-up, FAQ or product-name wording to establish a site convention", rollup)];
+    return [
+      skip(
+        "Too little sign-in, email, sign-up, FAQ or product-name wording to establish a site convention",
+        rollup
+      ),
+    ];
   }
   const deviants = verdicts.filter((v) => v.state === "deviant");
   if (deviants.length === 0 && judged.every((v) => v.state === "no-norm")) {
-    return [skip("The site's wording does not settle on one spelling for any concept, so no page is a deviant", rollup)];
+    return [
+      skip(
+        "The site's wording does not settle on one spelling for any concept, so no page is a deviant",
+        rollup
+      ),
+    ];
   }
 
   const details: Record<string, unknown> = {
@@ -343,7 +442,12 @@ function buildChecks(rollup: TermRollup, sitePageCount: number): CheckResult[] {
       state: v.state,
       uses: v.uses,
       pages: v.pages,
-      ...(v.dominant ? { dominant: v.dominant.label, agreement: Math.round((v.share ?? 0) * 100) } : {}),
+      ...(v.dominant
+        ? {
+            dominant: v.dominant.label,
+            agreement: Math.round((v.share ?? 0) * 100),
+          }
+        : {}),
     })),
     skippedNoindexPages: rollup.skippedNoindexPages,
   };
@@ -370,13 +474,19 @@ function buildChecks(rollup: TermRollup, sitePageCount: number): CheckResult[] {
         id: `${v.group.id}.${m.variant.key}`,
         label: `Uses "${m.variant.label}" where the site mostly says "${v.dominant!.label}" (${pct}% of ${v.uses} uses)`,
         sourcePages: m.urls.slice(0, TERM_MAX_URLS),
-        meta: { dominant: v.dominant!.label, minority: m.variant.label, pages: m.urls.length, uses: m.uses },
+        meta: {
+          dominant: v.dominant!.label,
+          minority: m.variant.label,
+          pages: m.urls.length,
+          uses: m.uses,
+        },
       });
     }
   }
   const first = deviants[0]!;
   const firstMinor = first.minorities[0]!;
-  const more = deviants.length > 1 ? ` and ${deviants.length - 1} more concept(s)` : "";
+  const more =
+    deviants.length > 1 ? ` and ${deviants.length - 1} more concept(s)` : "";
   return [
     {
       name: CHECK_NAME,
@@ -389,7 +499,10 @@ function buildChecks(rollup: TermRollup, sitePageCount: number): CheckResult[] {
   ];
 }
 
-async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
+async function runViaSiteQuery(
+  siteQuery: SiteQuery,
+  skipNoindex: boolean
+): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {
@@ -406,7 +519,8 @@ export const terminologyConsistencyRule: Rule = {
   meta: {
     id: "content/terminology-consistency",
     name: "Terminology Consistency",
-    description: "Finds pages that use a different word for the same thing than the rest of the site (sign in vs log in, email vs e-mail)",
+    description:
+      "Finds pages that use a different word for the same thing than the rest of the site (sign in vs log in, email vs e-mail)",
     solution:
       "A site that says 'Sign in' on one page, 'Log in' on another and 'Login' in the footer makes it harder for visitors, and for an agent asked to 'log in', to find the control. Pick one spelling for each concept, usually the one the site already uses most, and change the minority uses to match: button labels, links, headings and body copy. The same applies to 'email' against 'e-mail', 'sign up' against 'register' or 'create account', 'FAQ' against 'FAQs' or 'Faq', and the casing of your product name. 'Login' is also a noun ('the login page'), so a deliberate noun use is fine; the rule only reports when one spelling clearly dominates.",
     category: "content",

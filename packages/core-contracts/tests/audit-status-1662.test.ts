@@ -2,9 +2,16 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { auditStatusToLifecycle, isAuditFailed, isScoreless, type AuditStatus } from "../src/index";
+import {
+  auditStatusToLifecycle,
+  isAuditFailed,
+  isScoreless,
+  type AuditStatus,
+} from "../src/index";
 
-const table: Array<[AuditStatus | null | undefined, boolean, "completed" | "failed"]> = [
+const table: Array<
+  [AuditStatus | null | undefined, boolean, "completed" | "failed"]
+> = [
   ["completed", false, "completed"],
   ["partial", false, "completed"],
   ["failed", true, "failed"],

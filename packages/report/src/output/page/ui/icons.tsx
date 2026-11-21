@@ -1,8 +1,9 @@
+import type { SVGProps } from "react";
+
 // Pixel-art icons drawn behind the report header (DecorativeHeader).
 // Copied from the squirrelscan design system; MIT, like the rest of this package.
 // Classic JSX in the CLI build needs React in scope.
 import React from "react";
-import type { SVGProps } from "react";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   className?: string;
@@ -212,13 +213,55 @@ export function IconNut(props: IconProps) {
       <rect x="6" y="4" width="12" height="2" fill="currentColor" />
       <rect x="4" y="6" width="16" height="4" fill="currentColor" />
       {/* Cap texture */}
-      <rect x="6" y="6" width="2" height="2" fill="var(--background)" fillOpacity={0.35} />
-      <rect x="10" y="6" width="2" height="2" fill="var(--background)" fillOpacity={0.35} />
-      <rect x="14" y="6" width="2" height="2" fill="var(--background)" fillOpacity={0.35} />
+      <rect
+        x="6"
+        y="6"
+        width="2"
+        height="2"
+        fill="var(--background)"
+        fillOpacity={0.35}
+      />
+      <rect
+        x="10"
+        y="6"
+        width="2"
+        height="2"
+        fill="var(--background)"
+        fillOpacity={0.35}
+      />
+      <rect
+        x="14"
+        y="6"
+        width="2"
+        height="2"
+        fill="var(--background)"
+        fillOpacity={0.35}
+      />
       {/* Nut Body */}
-      <rect x="6" y="10" width="12" height="8" fill="currentColor" fillOpacity={0.65} />
-      <rect x="8" y="18" width="8" height="2" fill="currentColor" fillOpacity={0.65} />
-      <rect x="10" y="20" width="4" height="2" fill="currentColor" fillOpacity={0.65} />
+      <rect
+        x="6"
+        y="10"
+        width="12"
+        height="8"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
+      <rect
+        x="8"
+        y="18"
+        width="8"
+        height="2"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
+      <rect
+        x="10"
+        y="20"
+        width="4"
+        height="2"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
     </PixelBase>
   );
 }
@@ -233,15 +276,64 @@ export function IconCrackedNut(props: IconProps) {
       <rect x="14" y="4" width="6" height="2" fill="currentColor" />
       <rect x="14" y="6" width="8" height="4" fill="currentColor" />
       {/* Left body */}
-      <rect x="2" y="10" width="8" height="6" fill="currentColor" fillOpacity={0.65} />
-      <rect x="4" y="16" width="4" height="2" fill="currentColor" fillOpacity={0.65} />
+      <rect
+        x="2"
+        y="10"
+        width="8"
+        height="6"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
+      <rect
+        x="4"
+        y="16"
+        width="4"
+        height="2"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
       {/* Right body */}
-      <rect x="14" y="10" width="8" height="6" fill="currentColor" fillOpacity={0.65} />
-      <rect x="16" y="16" width="4" height="2" fill="currentColor" fillOpacity={0.65} />
+      <rect
+        x="14"
+        y="10"
+        width="8"
+        height="6"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
+      <rect
+        x="16"
+        y="16"
+        width="4"
+        height="2"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
       {/* Debris */}
-      <rect x="11" y="14" width="2" height="2" fill="currentColor" fillOpacity={0.65} />
-      <rect x="10" y="18" width="2" height="2" fill="currentColor" fillOpacity={0.65} />
-      <rect x="12" y="20" width="2" height="2" fill="currentColor" fillOpacity={0.65} />
+      <rect
+        x="11"
+        y="14"
+        width="2"
+        height="2"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
+      <rect
+        x="10"
+        y="18"
+        width="2"
+        height="2"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
+      <rect
+        x="12"
+        y="20"
+        width="2"
+        height="2"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
     </PixelBase>
   );
 }
@@ -258,7 +350,14 @@ export function IconTree(props: IconProps) {
       <rect x="4" y="12" width="16" height="2" fill="currentColor" />
       <rect x="6" y="14" width="12" height="2" fill="currentColor" />
       {/* Trunk */}
-      <rect x="10" y="16" width="4" height="6" fill="currentColor" fillOpacity={0.65} />
+      <rect
+        x="10"
+        y="16"
+        width="4"
+        height="6"
+        fill="currentColor"
+        fillOpacity={0.65}
+      />
     </PixelBase>
   );
 }

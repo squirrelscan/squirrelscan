@@ -35,9 +35,13 @@ const malformed: string[] = [];
 /** Pages that declare more than one Rule ID. */
 const multiple: string[] = [];
 
-for (const path of [...new Bun.Glob("**/*.mdx").scanSync({ cwd: RULES_DIR })].sort()) {
+for (const path of [
+  ...new Bun.Glob("**/*.mdx").scanSync({ cwd: RULES_DIR }),
+].sort()) {
   const file = `rules/${path}`;
-  const lines: string[] = readFileSync(join(RULES_DIR, path), "utf8").split("\n");
+  const lines: string[] = readFileSync(join(RULES_DIR, path), "utf8").split(
+    "\n"
+  );
   const ids: string[] = [];
   for (const [index, line] of lines.entries()) {
     if (!line.includes("**Rule ID**")) continue;
@@ -60,7 +64,7 @@ describe("docs rule pages match the rule loader", () => {
       .filter((id) => !pagesById.has(id))
       .map(
         (id) =>
-          `${id}: no page under docs/rules declares **Rule ID** \`${id}\` (expected docs/rules/${id}.mdx)`,
+          `${id}: no page under docs/rules declares **Rule ID** \`${id}\` (expected docs/rules/${id}.mdx)`
       );
     expect(missing).toEqual([]);
   });
@@ -68,7 +72,10 @@ describe("docs rule pages match the rule loader", () => {
   test("every docs rule page names a rule the loader has", () => {
     const orphans: string[] = rulePages
       .filter((page) => !knownIds.has(page.ruleId))
-      .map((page) => `docs/${page.file}: **Rule ID** \`${page.ruleId}\` is not a loaded rule`);
+      .map(
+        (page) =>
+          `docs/${page.file}: **Rule ID** \`${page.ruleId}\` is not a loaded rule`
+      );
     expect(orphans).toEqual([]);
   });
 
@@ -77,7 +84,7 @@ describe("docs rule pages match the rule loader", () => {
       .filter((page) => page.file !== `rules/${page.ruleId}.mdx`)
       .map(
         (page) =>
-          `docs/${page.file}: declares \`${page.ruleId}\`, expected docs/rules/${page.ruleId}.mdx`,
+          `docs/${page.file}: declares \`${page.ruleId}\`, expected docs/rules/${page.ruleId}.mdx`
       );
     expect(misplaced).toEqual([]);
   });
@@ -85,7 +92,10 @@ describe("docs rule pages match the rule loader", () => {
   test("each Rule ID is declared by one page, once", () => {
     const duplicated: string[] = [...pagesById.entries()]
       .filter(([, pages]) => pages.length > 1)
-      .map(([id, pages]) => `${id}: ${pages.map((page) => `docs/${page.file}`).join(", ")}`);
+      .map(
+        ([id, pages]) =>
+          `${id}: ${pages.map((page) => `docs/${page.file}`).join(", ")}`
+      );
     expect(duplicated).toEqual([]);
     expect(multiple).toEqual([]);
   });

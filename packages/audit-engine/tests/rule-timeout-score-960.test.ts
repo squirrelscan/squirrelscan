@@ -3,14 +3,18 @@
 // tallies and no change to the health score, as if that page were left unchecked
 // for that rule. Runs the real RuleRunner and the real scorer.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { RuleRunner } from "@squirrelscan/rules";
 import type { RuleNamespace } from "@squirrelscan/rules";
 import type { PageData, Rule, RuleRunResult } from "@squirrelscan/rules/types";
 
-import { addChecksToTally, calculateHealthScore, emptyTally } from "../src/scoring";
+import { RuleRunner } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
+
+import {
+  addChecksToTally,
+  calculateHealthScore,
+  emptyTally,
+} from "../src/scoring";
 
 const BUDGET_MS = 50;
 
@@ -47,7 +51,9 @@ function page(path: string): PageData {
 }
 
 /** One audit: every page through a fresh runner, results merged per rule. */
-async function audit(paths: string[]): Promise<{ checks: CheckResult[]; results: Map<string, RuleRunResult> }> {
+async function audit(
+  paths: string[]
+): Promise<{ checks: CheckResult[]; results: Map<string, RuleRunResult> }> {
   const ns: RuleNamespace = { name: "test", rules: [probe] };
   const runner = new RuleRunner({
     config: { rule_options: {}, rules: { enable: ["test/probe"] } },
@@ -66,7 +72,12 @@ async function audit(paths: string[]): Promise<{ checks: CheckResult[]; results:
     checks.push(...result.checks);
     merged.checks.push(...(result.ruleResults.get("test/probe")?.checks ?? []));
   }
-  const site = await runner.runSiteRules({ baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null });
+  const site = await runner.runSiteRules({
+    baseUrl: "https://example.com",
+    pages: [],
+    robotsTxt: null,
+    sitemaps: null,
+  });
   checks.push(...site.checks);
   return { checks, results: new Map([["test/probe", merged]]) };
 }
@@ -80,12 +91,23 @@ describe("a timed-out rule is not evaluated, never a fail (pub#960)", () => {
       const withTimeout = await audit(paths);
       const unchecked = await audit(fast);
 
-      const timeouts = withTimeout.checks.filter((c) => c.name === "test/probe-error");
+      const timeouts = withTimeout.checks.filter(
+        (c) => c.name === "test/probe-error"
+      );
       expect(timeouts).toHaveLength(1);
-      expect(timeouts[0]).toMatchObject({ status: "skipped", skipReason: "rule-timed-out" });
-      expect(timeouts[0]!.details).toMatchObject({ timedOut: true, budgetMs: BUDGET_MS, pages: 1 });
+      expect(timeouts[0]).toMatchObject({
+        status: "skipped",
+        skipReason: "rule-timed-out",
+      });
+      expect(timeouts[0]!.details).toMatchObject({
+        timedOut: true,
+        budgetMs: BUDGET_MS,
+        pages: 1,
+      });
       // The info row that says the page was not checked is still there.
-      expect(withTimeout.checks.find((c) => c.name === "test/probe-timeouts")).toMatchObject({
+      expect(
+        withTimeout.checks.find((c) => c.name === "test/probe-timeouts")
+      ).toMatchObject({
         status: "info",
         details: { pagesNotChecked: 1 },
       });

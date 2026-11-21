@@ -9,7 +9,7 @@
 // gap by the one outcome table, and be listed as not checked. This drives the
 // real rule into the real capper and asserts all three.
 
-import { describe, expect, test } from "bun:test";
+import type { ParsedPage, RuleContext } from "@squirrelscan/rules/types";
 
 import {
   STRICT_PROBE_UNANSWERED_SKIP_REASON,
@@ -17,9 +17,9 @@ import {
   type MarkdownProbeData,
 } from "@squirrelscan/core-contracts";
 import { classifyRuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
-import { loadAllRules } from "@squirrelscan/rules";
-import type { ParsedPage, RuleContext } from "@squirrelscan/rules/types";
 import { notCheckedRules } from "@squirrelscan/report/not-checked";
+import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import { capReportForPublish } from "../src/publish-cap";
 
@@ -40,9 +40,17 @@ function probe(over: Partial<MarkdownProbeData>): MarkdownProbeData {
   };
 }
 
-async function publishedChecks(markdownResponse: MarkdownProbeData): Promise<CheckResult[]> {
+async function publishedChecks(
+  markdownResponse: MarkdownProbeData
+): Promise<CheckResult[]> {
   const ctx: RuleContext = {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: {
       baseUrl: "https://example.com",
@@ -67,7 +75,7 @@ const negotiation = (checks: CheckResult[]) =>
 describe("strict probe unanswered keeps the finding open (repo#1322)", () => {
   test("audit 1: a strict 500 publishes the failing finding", async () => {
     const checks = await publishedChecks(
-      probe({ strictNegotiatedStatus: 500, strictNegotiationAnswered: true }),
+      probe({ strictNegotiatedStatus: 500, strictNegotiationAnswered: true })
     );
     expect(negotiation(checks)?.status).toBe("fail");
   });
@@ -76,7 +84,7 @@ describe("strict probe unanswered keeps the finding open (repo#1322)", () => {
   // (crawler/tests/markdown-strict-negotiation-1322.test.ts), so one state covers all three.
   test("audit 2: strict unanswered (429, 403, timeout) publishes a not-checked gap, never a silence", async () => {
     const checks = await publishedChecks(
-      probe({ strictNegotiatedStatus: null, strictNegotiationAnswered: false }),
+      probe({ strictNegotiatedStatus: null, strictNegotiationAnswered: false })
     );
     const row = negotiation(checks);
     // The capper kept it: a missing row is what read as "fixed".
@@ -93,12 +101,14 @@ describe("strict probe unanswered keeps the finding open (repo#1322)", () => {
 
   test("a healthy strict answer publishes a verdict, so the finding can resolve", async () => {
     const checks = await publishedChecks(
-      probe({ strictNegotiatedStatus: 200, strictNegotiationAnswered: true }),
+      probe({ strictNegotiatedStatus: 200, strictNegotiationAnswered: true })
     );
     const row = negotiation(checks);
     expect(row === undefined || classifyRuleOutcome(row) === "ran").toBe(true);
-    expect(notCheckedRules({ ruleResults: { [RULE_ID]: { meta: rule.meta, checks } } })).toEqual(
-      [],
-    );
+    expect(
+      notCheckedRules({
+        ruleResults: { [RULE_ID]: { meta: rule.meta, checks } },
+      })
+    ).toEqual([]);
   });
 });

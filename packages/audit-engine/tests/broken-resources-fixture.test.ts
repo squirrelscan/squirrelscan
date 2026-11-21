@@ -8,10 +8,8 @@
 // Then the third-party probe's limits: no request to a private, loopback or
 // metadata address (on any redirect hop), and none of the audit's custom headers.
 
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { parseDocument } from "@squirrelscan/parser";
 import { reliability } from "@squirrelscan/rules";
 import {
@@ -19,6 +17,15 @@ import {
   RESOURCE_SIZE_LIMITS,
   SQUIRRELSCAN_USER_AGENT,
 } from "@squirrelscan/utils/constants";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { Effect } from "effect";
 
 import {
   absorbResourceOccurrences,
@@ -31,7 +38,9 @@ import { checkResourceSizes } from "../src/resource-checker";
 
 type Storage = Parameters<typeof fetchAssetsFromOccurrences>[0];
 type Config = Parameters<typeof fetchAssetsFromOccurrences>[3];
-type ParsedPage = Parameters<typeof absorbResourceOccurrences>[1][number]["parsed"];
+type ParsedPage = Parameters<
+  typeof absorbResourceOccurrences
+>[1][number]["parsed"];
 type Overrides = Parameters<typeof fetchAssetsFromOccurrences>[4];
 
 // No sitemap, cache or robots.txt rows: the fetch phase only needs the URLs it is given, and
@@ -46,7 +55,11 @@ function storageFor(siteBase: string): Storage {
 }
 
 /** Fake credentials an audit sends its own host; a third-party probe must carry none. */
-const AUDIT_HEADERS = { "Signature-Input": "sig1=fake", Authorization: "Bearer t", Cookie: "c=1" };
+const AUDIT_HEADERS = {
+  "Signature-Input": "sig1=fake",
+  Authorization: "Bearer t",
+  Cookie: "c=1",
+};
 
 /** Every rule on, as the config schema's default `enable = ["*"]` has it. */
 const ALL_RULES = { enable: ["*"], disable: [] };
@@ -70,18 +83,27 @@ beforeAll(() => {
         return text("ok", 200, "text/javascript");
       }
       if (pathname.startsWith("/probe/")) {
-        probeHits.push({ path: pathname, method: req.method, headers: req.headers });
+        probeHits.push({
+          path: pathname,
+          method: req.method,
+          headers: req.headers,
+        });
         // Redirects a status probe must not follow: to the metadata address, to
         // a private IP, and to a public-looking name that resolves privately.
         if (pathname === "/probe/to-metadata") {
           return redirect("http://169.254.169.254/latest/meta-data/iam");
         }
-        if (pathname === "/probe/to-private-ip") return redirect("http://10.0.0.7/x");
+        if (pathname === "/probe/to-private-ip")
+          return redirect("http://10.0.0.7/x");
         if (pathname === "/probe/to-private-name") {
-          return redirect(`http://inside.public.example.com:${server.port}/probe/never`);
+          return redirect(
+            `http://inside.public.example.com:${server.port}/probe/never`
+          );
         }
         if (pathname === "/probe/to-public") {
-          return redirect(`http://cdn.public.example.com:${server.port}/probe/landed`);
+          return redirect(
+            `http://cdn.public.example.com:${server.port}/probe/landed`
+          );
         }
         // HEAD refused, so the probe falls back to a GET; and a same-host hop.
         if (pathname === "/probe/head-405" && req.method === "HEAD") {
@@ -101,12 +123,19 @@ beforeAll(() => {
       if (pathname === "/waf.js") {
         return new Response("<html>Just a moment...</html>", {
           status: 403,
-          headers: { "content-type": "text/html", server: "cloudflare", "cf-ray": "abc123-LHR" },
+          headers: {
+            "content-type": "text/html",
+            server: "cloudflare",
+            "cf-ray": "abc123-LHR",
+          },
         });
       }
       // Throttled (503 + Retry-After) and a bare outage (503).
       if (pathname === "/busy.css") {
-        return new Response("busy", { status: 503, headers: { "retry-after": "1" } });
+        return new Response("busy", {
+          status: 503,
+          headers: { "retry-after": "1" },
+        });
       }
       if (pathname === "/down.css") return text("down", 503, "text/css");
       return text("not found", 404);
@@ -167,7 +196,10 @@ function pagesFor(urls: string[], markup: (url: string) => string) {
   return urls.map((url) => ({
     url,
     finalUrl: url,
-    parsed: { document: parseDocument(markup(url)), images: [] } as unknown as ParsedPage,
+    parsed: {
+      document: parseDocument(markup(url)),
+      images: [],
+    } as unknown as ParsedPage,
     hasCsp: false,
   }));
 }
@@ -176,7 +208,10 @@ async function assetsFor(
   urls: string[],
   markup: (url: string) => string,
   overrides?: Overrides,
-  { siteBase = base, config = NO_CONFIG }: { siteBase?: string; config?: Config } = {},
+  {
+    siteBase = base,
+    config = NO_CONFIG,
+  }: { siteBase?: string; config?: Config } = {}
 ) {
   const occurrences = emptySiteAssetOccurrences();
   absorbResourceOccurrences(occurrences, pagesFor(urls, markup), siteBase);
@@ -187,14 +222,23 @@ async function assetsFor(
       "fixture-crawl",
       occurrences,
       config,
-      overrides,
-    ),
+      overrides
+    )
   );
 }
 
-function ruleChecks(assets: Awaited<ReturnType<typeof assetsFor>>, siteBase = base): CheckResult[] {
+function ruleChecks(
+  assets: Awaited<ReturnType<typeof assetsFor>>,
+  siteBase = base
+): CheckResult[] {
   const result = reliability.brokenResourcesRule.run({
-    page: { url: `${siteBase}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${siteBase}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as never,
     site: {
       baseUrl: siteBase,
@@ -231,7 +275,9 @@ describe("reliability/broken-resources over real HTTP (no render)", () => {
     // The third-party script and the font are warnings, never errors.
     const warn = named(checks, "unreachable-resources");
     expect(warn?.status).toBe("warn");
-    expect(warn?.items?.some((i) => i.id === `${thirdParty}/third.js`)).toBe(true);
+    expect(warn?.items?.some((i) => i.id === `${thirdParty}/third.js`)).toBe(
+      true
+    );
     expect(warn?.items?.some((i) => i.id === `${base}/f.woff2`)).toBe(true);
     expect(fail?.items?.some((i) => i.id.includes("third.js"))).toBe(false);
     expect(fail?.items?.some((i) => i.id.includes("f.woff2"))).toBe(false);
@@ -251,12 +297,14 @@ describe("reliability/broken-resources over real HTTP (no render)", () => {
 
     // A script answered with a WAF challenge, on a first-party URL.
     const wafAssets = await assetsFor([`${base}/`], () =>
-      challenged.replace("<head>", `<head><script src="/waf.js"></script>`),
+      challenged.replace("<head>", `<head><script src="/waf.js"></script>`)
     );
     const wafChecks = ruleChecks(wafAssets);
     expect(named(wafChecks, "broken-resources")).toBeUndefined();
     const wafUnverified = named(wafChecks, "unverified-resources");
-    expect(wafUnverified?.items?.some((i) => i.id === `${base}/waf.js`)).toBe(true);
+    expect(wafUnverified?.items?.some((i) => i.id === `${base}/waf.js`)).toBe(
+      true
+    );
   });
 
   test("a stylesheet fetch cap drops referenced URLs and the result says the check was partial", async () => {
@@ -271,7 +319,7 @@ describe("reliability/broken-resources over real HTTP (no render)", () => {
     expect(partial?.status).toBe("info");
     expect(partial?.message).toContain("asset fetch cap");
     expect(named(checks, "broken-resources")?.message).toBe(
-      "No broken resources among the 1 checked",
+      "No broken resources among the 1 checked"
     );
   });
 
@@ -279,7 +327,7 @@ describe("reliability/broken-resources over real HTTP (no render)", () => {
     const limit = RESOURCE_SIZE_LIMITS.MAX_EXTERNAL_ASSETS_TO_CHECK;
     const scripts = Array.from(
       { length: limit + 1 },
-      (_, n) => `<script src="${thirdParty}/ext-${n}"></script>`,
+      (_, n) => `<script src="${thirdParty}/ext-${n}"></script>`
     ).join("");
     const markup = () =>
       `<!doctype html><html><head><title>x</title>${scripts}</head><body><p>x</p></body></html>`;
@@ -292,15 +340,17 @@ describe("reliability/broken-resources over real HTTP (no render)", () => {
 
     const checks = ruleChecks(assets);
     expect(named(checks, "unchecked-resources")?.message).toContain(
-      "1 referenced resource(s) were not fetched (asset fetch cap)",
+      "1 referenced resource(s) were not fetched (asset fetch cap)"
     );
     expect(named(checks, "broken-resources")?.message).toBe(
-      `No broken resources among the ${limit} checked`,
+      `No broken resources among the ${limit} checked`
     );
 
     // A caller cap below the third-party cap wins.
     extHits.clear();
-    const capped = await assetsFor([`${base}/`], markup, { resourceCheckMaxItems: 3 });
+    const capped = await assetsFor([`${base}/`], markup, {
+      resourceCheckMaxItems: 3,
+    });
     expect(capped.externalAssets?.scripts).toHaveLength(3);
     expect(capped.assetCapDropped?.externalScripts).toBe(limit + 1 - 3);
     expect(extHits.size).toBe(3);
@@ -324,7 +374,9 @@ describe("third-party probes stay off private networks and carry no credentials 
 
     probeHits.length = 0;
     spyOnFetch();
-    const assets = await assetsFor([`${siteBase}/`], markup, undefined, { siteBase });
+    const assets = await assetsFor([`${siteBase}/`], markup, undefined, {
+      siteBase,
+    });
 
     // Not one request left the process, and none reached the local server.
     expect(sent).toEqual([]);
@@ -343,7 +395,7 @@ describe("third-party probes stay off private networks and carry no credentials 
     expect(named(checks, "broken-resources")).toBeUndefined();
     expect(named(checks, "unreachable-resources")).toBeUndefined();
     expect(named(checks, "unchecked-resources")?.message).toContain(
-      "6 referenced resource(s) were not requested (a private, loopback or metadata address, or another site in an offline audit)",
+      "6 referenced resource(s) were not requested (a private, loopback or metadata address, or another site in an offline audit)"
     );
   });
 
@@ -352,30 +404,47 @@ describe("third-party probes stay off private networks and carry no credentials 
     // Every *.public.example.com name resolves publicly except inside.public.example.com.
     const resolve = async (host: string) =>
       host === "inside.public.example.com" ? ["10.0.0.8"] : [PUBLIC_STAND_IN];
-    const files = ["to-metadata", "to-private-ip", "to-private-name", "to-public"];
+    const files = [
+      "to-metadata",
+      "to-private-ip",
+      "to-private-name",
+      "to-public",
+    ];
 
     probeHits.length = 0;
     spyOnFetch();
     const results = await Effect.runPromise(
       checkResourceSizes(
-        files.map((file) => `http://cdn.public.example.com:${port}/probe/${file}`),
-        { statusOnly: true, egress: { allowPrivateNetwork: false, resolve }, concurrency: 1 },
-      ),
+        files.map(
+          (file) => `http://cdn.public.example.com:${port}/probe/${file}`
+        ),
+        {
+          statusOnly: true,
+          egress: { allowPrivateNetwork: false, resolve },
+          concurrency: 1,
+        }
+      )
     );
 
     const byPath = new Map(results.map((r) => [new URL(r.url).pathname, r]));
     for (const file of ["to-metadata", "to-private-ip", "to-private-name"]) {
-      expect(byPath.get(`/probe/${file}`)?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
+      expect(byPath.get(`/probe/${file}`)?.error).toBe(
+        ASSET_FETCH_REFUSED_ERROR
+      );
     }
     // A redirect between public hosts is still followed.
     expect(byPath.get("/probe/to-public")?.status).toBe(200);
     // The refused hops were never sent: every request went to the pinned public
     // address, one per refused probe to its public first hop, and nothing to
     // the private targets.
-    expect(sent.every((u) => new URL(u).hostname === PUBLIC_STAND_IN)).toBe(true);
+    expect(sent.every((u) => new URL(u).hostname === PUBLIC_STAND_IN)).toBe(
+      true
+    );
     expect(probeHits.map((h) => h.path)).not.toContain("/probe/never");
     expect(
-      probeHits.filter((h) => h.path !== "/probe/landed" && h.path !== "/probe/to-public"),
+      probeHits.filter(
+        (h) => h.path !== "/probe/landed" && h.path !== "/probe/to-public"
+      )
     ).toHaveLength(3);
     // Pinned by address, addressed by name: each hop kept its own Host header.
     for (const hit of probeHits)
@@ -385,23 +454,28 @@ describe("third-party probes stay off private networks and carry no credentials 
   test("a refused probe is not a tarpit strike against its host", async () => {
     const port = server.port;
     const resolve = async () => [PUBLIC_STAND_IN];
-    const budget = createFetchBudget({ tarpitLatencyMs: 60_000, tarpitStrikes: 1 });
+    const budget = createFetchBudget({
+      tarpitLatencyMs: 60_000,
+      tarpitStrikes: 1,
+    });
     spyOnFetch();
     await Effect.runPromise(
       checkResourceSizes(
         ["to-metadata", "to-private-ip"].map(
-          (f) => `http://cdn.public.example.com:${port}/probe/${f}`,
+          (f) => `http://cdn.public.example.com:${port}/probe/${f}`
         ),
         {
           statusOnly: true,
           egress: { allowPrivateNetwork: false, resolve },
           concurrency: 1,
           budget,
-        },
-      ),
+        }
+      )
     );
     expect(budget.summary().tarpitHosts).toEqual([]);
-    expect(budget.shouldSkip(`http://cdn.public.example.com:${port}/probe/landed`)).toBe(false);
+    expect(
+      budget.shouldSkip(`http://cdn.public.example.com:${port}/probe/landed`)
+    ).toBe(false);
   });
 
   test("a site on a private network may probe private hosts, never the metadata address", async () => {
@@ -413,10 +487,15 @@ describe("third-party probes stay off private networks and carry no credentials 
     const assets = await assetsFor([`${base}/`], markup);
 
     const rows = new Map(
-      (assets.externalAssets?.scripts ?? []).map((r) => [new URL(r.url).pathname, r]),
+      (assets.externalAssets?.scripts ?? []).map((r) => [
+        new URL(r.url).pathname,
+        r,
+      ])
     );
     expect(rows.get("/probe/ok")?.status).toBe(200);
-    expect(rows.get("/probe/to-metadata")?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
+    expect(rows.get("/probe/to-metadata")?.error).toBe(
+      ASSET_FETCH_REFUSED_ERROR
+    );
     expect(sent.some((u) => u.includes("169.254.169.254"))).toBe(false);
   });
 
@@ -435,7 +514,8 @@ describe("third-party probes stay off private networks and carry no credentials 
 
     const own = probeHits.filter((h) => h.path === "/probe/own.css");
     expect(own.length).toBeGreaterThan(0);
-    for (const hit of own) expect(hit.headers.get("signature-input")).toBe("sig1=fake");
+    for (const hit of own)
+      expect(hit.headers.get("signature-input")).toBe("sig1=fake");
 
     // Status only: one HEAD, and only User-Agent and Accept of the audit's own.
     const third = probeHits.filter((h) => h.path === "/probe/third");
@@ -459,14 +539,19 @@ describe("third-party probes stay off private networks and carry no credentials 
     const fallback = probeHits.filter((h) => h.path === "/probe/head-405");
     expect(fallback.map((h) => h.method)).toEqual(["HEAD", "GET"]);
     const hops = probeHits.filter((h) => h.path.startsWith("/probe/hop"));
-    expect(hops.map((h) => h.path)).toEqual(["/probe/hop", "/probe/hop-landed"]);
+    expect(hops.map((h) => h.path)).toEqual([
+      "/probe/hop",
+      "/probe/hop-landed",
+    ]);
     for (const hit of [...fallback, ...hops]) expectNoCredentials(hit.headers);
     const rows = assets.externalAssets?.scripts ?? [];
     expect(rows.every((r) => r.status === 200)).toBe(true);
   });
 
   test("with the rule disabled, no third-party request is sent", async () => {
-    const config = { rules: { enable: ["*"], disable: ["reliability/*"] } } as unknown as Config;
+    const config = {
+      rules: { enable: ["*"], disable: ["reliability/*"] },
+    } as unknown as Config;
     const markup = () =>
       `<!doctype html><html><head><title>x</title><script src="${thirdParty}/probe/rule-off"></script></head><body><p>x</p></body></html>`;
 
@@ -483,10 +568,14 @@ describe("third-party probes stay off private networks and carry no credentials 
       `<!doctype html><html><head><title>x</title><script src="${thirdParty}/probe/no-base"></script></head><body><p>x</p></body></html>`;
 
     probeHits.length = 0;
-    const assets = await assetsFor([`${base}/`], markup, undefined, { siteBase: "" });
+    const assets = await assetsFor([`${base}/`], markup, undefined, {
+      siteBase: "",
+    });
 
     expect(probeHits).toEqual([]);
-    expect(assets.externalAssets?.scripts.map((r) => r.error)).toEqual([ASSET_FETCH_REFUSED_ERROR]);
+    expect(assets.externalAssets?.scripts.map((r) => r.error)).toEqual([
+      ASSET_FETCH_REFUSED_ERROR,
+    ]);
   });
 });
 
@@ -514,8 +603,8 @@ describe("assetCapDroppedOf", () => {
           externalScripts: rows(50),
           externalCss: rows(0),
           externalFonts: rows(1),
-        },
-      ),
+        }
+      )
     ).toEqual({
       scripts: 10,
       css: 0,

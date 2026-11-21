@@ -89,7 +89,8 @@ export const graphqlGetMutationsRule: Rule = {
     let graphqlAnswers = 0;
     let errored = 0;
     let budgetStopped = false;
-    const executed: Array<{ candidate: GraphqlCandidate; typename: string }> = [];
+    const executed: Array<{ candidate: GraphqlCandidate; typename: string }> =
+      [];
     for (const candidate of selection.candidates) {
       const outcome = await sendGraphqlProbe(ctx.probe, candidate.url, {
         op: "noop-mutation",
@@ -107,7 +108,9 @@ export const graphqlGetMutationsRule: Rule = {
       const body = parseGraphqlBody(outcome.response);
       if (!body) continue;
       graphqlAnswers++;
-      const typename = isSuccessStatus(outcome.response.status) ? executedMutationType(body) : null;
+      const typename = isSuccessStatus(outcome.response.status)
+        ? executedMutationType(body)
+        : null;
       if (typename) executed.push({ candidate, typename });
     }
 
@@ -116,7 +119,8 @@ export const graphqlGetMutationsRule: Rule = {
         name: CHECK,
         status: "skipped",
         skipReason: "probe-budget",
-        message: "The probe budget ran out before any GraphQL endpoint was probed",
+        message:
+          "The probe budget ran out before any GraphQL endpoint was probed",
         details,
       });
       return { checks };

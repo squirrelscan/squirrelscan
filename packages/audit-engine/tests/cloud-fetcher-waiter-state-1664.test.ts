@@ -7,12 +7,15 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const SOURCE = readFileSync(join(import.meta.dir, "../src/cloud-fetcher.ts"), "utf8");
+const SOURCE = readFileSync(
+  join(import.meta.dir, "../src/cloud-fetcher.ts"),
+  "utf8"
+);
 
 describe("cloud-fetcher waiter state (#1664)", () => {
   test("the union names the four legal states", () => {
     expect(SOURCE).toContain(
-      'export type WaiterState = "queued" | "dispatched" | "racing" | "settled";',
+      'export type WaiterState = "queued" | "dispatched" | "racing" | "settled";'
     );
   });
 

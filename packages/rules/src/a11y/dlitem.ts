@@ -1,6 +1,7 @@
 // a11y/dlitem - dt/dd elements are in definition lists
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const dlitemRule: Rule = {

@@ -17,7 +17,10 @@ export function Metrics({ items }: { items: Metric[] }) {
           key={item.label}
           className={`flex-1 px-3 py-3 text-center ${i > 0 ? "border-l border-border" : ""}`}
         >
-          <div className="text-lg font-bold leading-snug" style={{ color: item.color }}>
+          <div
+            className="text-lg font-bold leading-snug"
+            style={{ color: item.color }}
+          >
             {item.value}
           </div>
           <div className="text-xs text-muted-foreground">{item.label}</div>

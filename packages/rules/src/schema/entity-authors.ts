@@ -1,11 +1,11 @@
 // schema/entity-authors — bylines with no Person entity behind them.
 
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import {
   isIdentifiedEntity,
   judgedPeople,
 } from "@squirrelscan/core-contracts/entity-map-findings";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
@@ -44,9 +44,13 @@ export const entityAuthorsRule: Rule = {
     // brochure site with no Person node is not missing anything.
     const articles = map.nodes.filter((node) =>
       node.types.some((type) =>
-        ["Article", "NewsArticle", "BlogPosting", "TechArticle", "ScholarlyArticle"].includes(
-          type
-        )
+        [
+          "Article",
+          "NewsArticle",
+          "BlogPosting",
+          "TechArticle",
+          "ScholarlyArticle",
+        ].includes(type)
       )
     );
 
@@ -69,7 +73,9 @@ export const entityAuthorsRule: Rule = {
       // absence of a Person is only a finding when nothing is named as author
       // at all.
       const authored = new Set(
-        map.edges.filter((edge) => edge.predicate === "author").map((edge) => edge.target)
+        map.edges
+          .filter((edge) => edge.predicate === "author")
+          .map((edge) => edge.target)
       );
       if (authored.size > 0) {
         return {
@@ -116,7 +122,9 @@ export const entityAuthorsRule: Rule = {
       };
     }
 
-    const anonymous = judged.filter((node) => !isIdentifiedEntity(node)).sort(byReach);
+    const anonymous = judged
+      .filter((node) => !isIdentifiedEntity(node))
+      .sort(byReach);
     if (anonymous.length === 0) {
       return {
         checks: [
@@ -129,7 +137,9 @@ export const entityAuthorsRule: Rule = {
       };
     }
 
-    const { items, hidden } = cappedItems(anonymous.map((node) => entityItem(node)));
+    const { items, hidden } = cappedItems(
+      anonymous.map((node) => entityItem(node))
+    );
 
     return {
       checks: [

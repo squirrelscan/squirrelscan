@@ -9,8 +9,9 @@
 //   bun run scripts/build-real-fixture.ts --page /path/page.html --db /tmp/real.sqlite --pages 150
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { parseHtmlForRules } from "../src/adapter";
 import { Effect } from "effect";
+
+import { parseHtmlForRules } from "../src/adapter";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -41,11 +42,15 @@ const BASE = "https://www.drscholls.com";
 const base = await Bun.file(PAGE).text();
 
 /** The ONE path function: page records and the nav links both go through it. */
-const pathFor = (i: number): string => (i === 0 ? "/" : `/p/${String(i).padStart(4, "0")}`);
+const pathFor = (i: number): string =>
+  i === 0 ? "/" : `/p/${String(i).padStart(4, "0")}`;
 
 /** What the crawler persists: the parsed scalars, minus the live document. */
 function serializeParsed(html: string, url: string): string {
-  const parsed = parseHtmlForRules(html, url) as unknown as Record<string, unknown>;
+  const parsed = parseHtmlForRules(html, url) as unknown as Record<
+    string,
+    unknown
+  >;
   const { document: _document, ...rest } = parsed;
   return JSON.stringify(rest);
 }
@@ -61,10 +66,17 @@ const crawlId = await run(
     status: "completed",
     config: {},
     stats: {
-      pagesTotal: N, pagesFetched: N, pagesFailed: 0, pagesSkipped: 0,
-      pagesUnchanged: 0, linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0,
+      pagesTotal: N,
+      pagesFetched: N,
+      pagesFailed: 0,
+      pagesSkipped: 0,
+      pagesUnchanged: 0,
+      linksTotal: 0,
+      imagesTotal: 0,
+      bytesTotal: 0,
+      avgLoadTimeMs: 0,
     },
-  } as never),
+  } as never)
 );
 
 for (let i = 0; i < N; i++) {
@@ -87,13 +99,13 @@ for (let i = 0; i < N; i++) {
             { length: 6 },
             (_, k) =>
               `<a href="https://partner-${i}-${k}.example.com/ref/${i}">` +
-              `Partner link for product ${i} variant ${k}</a>`,
+              `Partner link for product ${i} variant ${k}</a>`
           ).join("\n") +
           Array.from(
             { length: 12 },
             (_, k) =>
               `<img src="https://cdn.example.com/i/${i}/${k}/product-${i}-${k}.jpg" ` +
-              `alt="Product ${i} view ${k}">`,
+              `alt="Product ${i} view ${k}">`
           ).join("\n"),
       }
     : { head: "", body: "" };
@@ -119,18 +131,36 @@ for (let i = 0; i < N; i++) {
       html,
       parsedData: STORE_PARSED ? serializeParsed(html, url) : null,
       headers: {
-        contentType: "text/html", contentEncoding: "gzip", cacheControl: null, vary: null,
-        etag: null, server: "cloudflare", lastModified: null, link: null, serverTiming: null,
-        age: null, xCache: null, cfCacheStatus: "HIT", xVercelCache: null, altSvc: null,
+        contentType: "text/html",
+        contentEncoding: "gzip",
+        cacheControl: null,
+        vary: null,
+        etag: null,
+        server: "cloudflare",
+        lastModified: null,
+        link: null,
+        serverTiming: null,
+        age: null,
+        xCache: null,
+        cfCacheStatus: "HIT",
+        xVercelCache: null,
+        altSvc: null,
         acceptRanges: null,
       },
       securityHeaders: {
-        hsts: null, csp: null, xFrameOptions: null, xContentTypeOptions: null,
-        referrerPolicy: null, permissionsPolicy: null, xRobotsTag: null,
+        hsts: null,
+        csp: null,
+        xFrameOptions: null,
+        xContentTypeOptions: null,
+        referrerPolicy: null,
+        permissionsPolicy: null,
+        xRobotsTag: null,
       },
-    } as never),
+    } as never)
   );
 }
 
-console.log(`built ${DB}: ${N} pages of ${(base.length / 1024).toFixed(0)} KB real html`);
+console.log(
+  `built ${DB}: ${N} pages of ${(base.length / 1024).toFixed(0)} KB real html`
+);
 await run(storage.close());

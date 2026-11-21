@@ -6,16 +6,21 @@
 // deviants the per-page url rules already own. The positive cases pin the one thing
 // it is for: a minority form standing against a clear dominant one.
 
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import {
   slugConventionRule,
   SLUG_NORM_MIN_AGREEMENT,
   SLUG_NORM_MIN_PAGES,
 } from "../src/url/slug-convention";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 interface PageSpec {
   path: string;
@@ -41,7 +46,13 @@ function pad(i: number): string {
 }
 
 const baseCtx = {
-  page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: "https://example.com/",
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as ParsedPage,
   options: {},
 };
@@ -128,7 +139,12 @@ function siteQueryCtx(specs: PageSpec[]): RuleContext {
   return {
     ...baseCtx,
     // EMPTY pages — the streaming path must not read them.
-    site: { baseUrl: "https://example.com/", pages: [], robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: "https://example.com/",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    },
     siteQuery,
   };
 }
@@ -181,7 +197,9 @@ describe("url/slug-convention — silence guards", () => {
     // invent one, while the other dimensions are uniform.
     const check = await bothPaths(template((i) => `/p${pad(i)}`, 12));
     expect(check.status).toBe("pass");
-    const dims = (check.details?.norms as { dimension: string }[]).map((n) => n.dimension);
+    const dims = (check.details?.norms as { dimension: string }[]).map(
+      (n) => n.dimension
+    );
     expect(dims).not.toContain("separator");
   });
 
@@ -205,7 +223,10 @@ describe("url/slug-convention — silence guards", () => {
       ...template((i) => `/x/y/z/p-${pad(i)}`, 6, null),
     ];
     const check = await bothPaths(specs);
-    const norms = check.details?.norms as { dimension: string; pageType: string | null }[];
+    const norms = check.details?.norms as {
+      dimension: string;
+      pageType: string | null;
+    }[];
     expect(norms.every((n) => n.pageType === null)).toBe(true);
   });
 });
@@ -215,7 +236,9 @@ describe("url/slug-convention — the no-false-positive fixtures", () => {
     // The non-default convention IS this site's convention. url/hyphens will have
     // its say per page; the site is not internally inconsistent, so this rule
     // reports nothing.
-    const check = await bothPaths(template((i) => `/blog/post_number_${pad(i)}`, 20));
+    const check = await bothPaths(
+      template((i) => `/blog/post_number_${pad(i)}`, 20)
+    );
     expect(check.status).toBe("pass");
     const norms = check.details?.norms as { dimension: string; norm: string }[];
     expect(norms.find((n) => n.dimension === "separator")?.norm).toBe("snake");
@@ -225,7 +248,9 @@ describe("url/slug-convention — the no-false-positive fixtures", () => {
     const check = await bothPaths(template((i) => `/blog/post-${pad(i)}/`, 20));
     expect(check.status).toBe("pass");
     const norms = check.details?.norms as { dimension: string; norm: string }[];
-    expect(norms.find((n) => n.dimension === "trailing-slash")?.norm).toBe("slash");
+    expect(norms.find((n) => n.dimension === "trailing-slash")?.norm).toBe(
+      "slash"
+    );
   });
 
   test("template-uniform siblings sit inside the norm", async () => {
@@ -261,7 +286,9 @@ describe("url/slug-convention — findings", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
-    const item = itemFor(check, "separator") as { meta: Record<string, unknown> } | undefined;
+    const item = itemFor(check, "separator") as
+      | { meta: Record<string, unknown> }
+      | undefined;
     expect(item?.meta.value).toBe("camel");
     expect(item?.meta.norm).toBe("kebab");
     expect(item?.meta.pageCount).toBe(3);
@@ -302,7 +329,9 @@ describe("url/slug-convention — findings", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
-    const item = itemFor(check, "depth") as { meta: Record<string, unknown> } | undefined;
+    const item = itemFor(check, "depth") as
+      | { meta: Record<string, unknown> }
+      | undefined;
     expect(item?.meta.value).toBe("4");
     expect(item?.meta.norm).toBe("2");
   });
@@ -323,7 +352,9 @@ describe("url/slug-convention — findings", () => {
       ...template((i) => `/blog/post-slashed-${pad(i)}/`, 3),
     ];
     const check = await bothPaths(specs);
-    expect(check.items?.[0]?.label).toContain("3 of 23 page(s) use a trailing slash");
+    expect(check.items?.[0]?.label).toContain(
+      "3 of 23 page(s) use a trailing slash"
+    );
     expect(check.items?.[0]?.label).toContain("norm is no trailing slash");
   });
 
@@ -368,7 +399,9 @@ describe("url/slug-convention — precedence over the per-page url rules", () =>
       ...template((i) => `/blog/post-number-${pad(i)}`, 3),
     ];
     const check = await bothPaths(specs);
-    const item = itemFor(check, "separator") as { meta: Record<string, unknown> } | undefined;
+    const item = itemFor(check, "separator") as
+      | { meta: Record<string, unknown> }
+      | undefined;
     expect(item?.meta.value).toBe("kebab");
     expect(item?.meta.norm).toBe("snake");
   });

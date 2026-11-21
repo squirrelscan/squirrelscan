@@ -62,7 +62,9 @@ export function entityMap(options: MapOptions = {}): EntityMap {
   const edges = options.edges ?? [];
   const pageUrls =
     options.pageUrls ??
-    [...new Set(nodes.flatMap((n) => n.pages))].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    [...new Set(nodes.flatMap((n) => n.pages))].sort((a, b) =>
+      a < b ? -1 : a > b ? 1 : 0
+    );
 
   const declaresByPage = new Map<string, string[]>();
   for (const n of nodes) {
@@ -84,7 +86,8 @@ export function entityMap(options: MapOptions = {}): EntityMap {
       edgeCount: edges.length,
       danglingCount: edges.filter((e) => e.dangling).length,
       pagesTotal: pageUrls.length,
-      pagesWithoutEntities: pageUrls.filter((url) => !declaresByPage.has(url)).length,
+      pagesWithoutEntities: pageUrls.filter((url) => !declaresByPage.has(url))
+        .length,
       nodesWithStableId: withId,
       stableIdShare: nodes.length === 0 ? 0 : withId / nodes.length,
       pageLocalCount: nodes.filter((n) => n.pageLocal).length,
@@ -98,7 +101,9 @@ export function entityMap(options: MapOptions = {}): EntityMap {
     edges,
     pages: pageUrls.map((url) => ({
       url,
-      declares: (declaresByPage.get(url) ?? []).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+      declares: (declaresByPage.get(url) ?? []).sort((a, b) =>
+        a < b ? -1 : a > b ? 1 : 0
+      ),
       references: [],
       entityCount: (declaresByPage.get(url) ?? []).length,
     })),
@@ -107,7 +112,9 @@ export function entityMap(options: MapOptions = {}): EntityMap {
 
 /** `n` page urls under example.com, in the order a crawl would list them. */
 export function pages(n: number, prefix = "https://example.com/p"): string[] {
-  return Array.from({ length: n }, (_, i) => (i === 0 ? "https://example.com/" : `${prefix}${i}`));
+  return Array.from({ length: n }, (_, i) =>
+    i === 0 ? "https://example.com/" : `${prefix}${i}`
+  );
 }
 
 /** A site-scope context carrying the map and nothing else a rule should need. */
@@ -132,13 +139,19 @@ export function ctxWith(map: EntityMap | undefined): RuleContext {
   };
 }
 
-export async function runRule(rule: Rule, map: EntityMap | undefined): Promise<CheckResult[]> {
+export async function runRule(
+  rule: Rule,
+  map: EntityMap | undefined
+): Promise<CheckResult[]> {
   const result = await Promise.resolve(rule.run(ctxWith(map)));
   return result.checks;
 }
 
 /** The single check every entity rule emits, with a readable failure. */
-export async function oneCheck(rule: Rule, map: EntityMap | undefined): Promise<CheckResult> {
+export async function oneCheck(
+  rule: Rule,
+  map: EntityMap | undefined
+): Promise<CheckResult> {
   const checks = await runRule(rule, map);
   if (checks.length !== 1) {
     throw new Error(

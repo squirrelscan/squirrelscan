@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { sitemapGateFromFrontier } from "../src/core/sitemap-gate";
+
 import type { FrontierRecord } from "../src/storage/types";
+
+import { sitemapGateFromFrontier } from "../src/core/sitemap-gate";
 
 const entry = (over: Partial<FrontierRecord>): FrontierRecord => ({
   normalizedUrl: "https://example.com/",

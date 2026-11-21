@@ -45,7 +45,12 @@ describe("parseCacheControl", () => {
 describe("calculateFreshness", () => {
   test("max-age: fresh within lifetime (skip request)", () => {
     const r = calculateFreshness(
-      { cacheControl: "max-age=3600", expires: null, age: null, fetchedAt: now - 1800 * SEC },
+      {
+        cacheControl: "max-age=3600",
+        expires: null,
+        age: null,
+        fetchedAt: now - 1800 * SEC,
+      },
       { now }
     );
     expect(r.state).toBe("fresh");
@@ -54,7 +59,12 @@ describe("calculateFreshness", () => {
 
   test("max-age: stale past lifetime → conditional GET", () => {
     const r = calculateFreshness(
-      { cacheControl: "max-age=3600", expires: null, age: null, fetchedAt: now - 7200 * SEC },
+      {
+        cacheControl: "max-age=3600",
+        expires: null,
+        age: null,
+        fetchedAt: now - 7200 * SEC,
+      },
       { now }
     );
     expect(r.state).toBe("stale");
@@ -63,7 +73,12 @@ describe("calculateFreshness", () => {
   test("Age header counts toward current age", () => {
     // max-age=100, stored 60s ago, but response Age was 80 → total 140 > 100.
     const r = calculateFreshness(
-      { cacheControl: "max-age=100", expires: null, age: 80, fetchedAt: now - 60 * SEC },
+      {
+        cacheControl: "max-age=100",
+        expires: null,
+        age: 80,
+        fetchedAt: now - 60 * SEC,
+      },
       { now }
     );
     expect(r.state).toBe("stale");
@@ -72,7 +87,12 @@ describe("calculateFreshness", () => {
   test("no-store / no-cache always revalidate", () => {
     expect(
       calculateFreshness(
-        { cacheControl: "no-store, max-age=3600", expires: null, age: null, fetchedAt: now },
+        {
+          cacheControl: "no-store, max-age=3600",
+          expires: null,
+          age: null,
+          fetchedAt: now,
+        },
         { now }
       ).state
     ).toBe("stale");
@@ -163,7 +183,12 @@ describe("calculateFreshness", () => {
   test("s-maxage takes precedence over max-age", () => {
     // max-age=10 (stale), s-maxage=10000 (fresh) → fresh via s-maxage.
     const r = calculateFreshness(
-      { cacheControl: "max-age=10, s-maxage=10000", expires: null, age: null, fetchedAt: now - 100 * SEC },
+      {
+        cacheControl: "max-age=10, s-maxage=10000",
+        expires: null,
+        age: null,
+        fetchedAt: now - 100 * SEC,
+      },
       { now }
     );
     expect(r.state).toBe("fresh");

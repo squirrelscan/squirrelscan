@@ -69,13 +69,21 @@ describe("stripControlCharsPreservingSgr", () => {
   });
 
   test("strips the hijack while keeping colour around it", () => {
-    const out = stripControlCharsPreservingSgr(`${ESC}[31mFAIL${ESC}[0m ${HIJACK}forged`);
+    const out = stripControlCharsPreservingSgr(
+      `${ESC}[31mFAIL${ESC}[0m ${HIJACK}forged`
+    );
     expect(out).toBe(`${ESC}[31mFAIL${ESC}[0m [2J[1;1Hforged`);
   });
 
   test("cursor and screen escapes never survive", () => {
     // The whole security property: colour may pass, movement may not.
-    for (const seq of [`${ESC}[2J`, `${ESC}[1;1H`, `${ESC}[A`, `${ESC}]0;title\x07`, `${ESC}]52;c;x\x07`]) {
+    for (const seq of [
+      `${ESC}[2J`,
+      `${ESC}[1;1H`,
+      `${ESC}[A`,
+      `${ESC}]0;title\x07`,
+      `${ESC}]52;c;x\x07`,
+    ]) {
       const out = stripControlCharsPreservingSgr(`before${seq}after`);
       expect(out).not.toContain(ESC);
     }
@@ -83,7 +91,9 @@ describe("stripControlCharsPreservingSgr", () => {
 
   test("SGR carried by page content is allowed but is only colour", () => {
     // Page content recolouring its own text is harmless; that is the trade.
-    const out = stripControlCharsPreservingSgr(`page said ${ESC}[32mgreen${ESC}[0m`);
+    const out = stripControlCharsPreservingSgr(
+      `page said ${ESC}[32mgreen${ESC}[0m`
+    );
     expect(out).toContain(`${ESC}[32m`);
   });
 
@@ -93,7 +103,9 @@ describe("stripControlCharsPreservingSgr", () => {
   });
 
   test("handles adjacent sequences and text after the last one", () => {
-    const out = stripControlCharsPreservingSgr(`${ESC}[1m${ESC}[31mx${ESC}[0mtail\x07`);
+    const out = stripControlCharsPreservingSgr(
+      `${ESC}[1m${ESC}[31mx${ESC}[0mtail\x07`
+    );
     expect(out).toBe(`${ESC}[1m${ESC}[31mx${ESC}[0mtail`);
   });
 

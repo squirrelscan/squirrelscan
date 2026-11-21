@@ -3,11 +3,14 @@
 // carried-pages rollups, per-URL provenance, and the "clean on every page
 // checked this run, only carried pages still red" mixed note.
 
-import { describe, expect, test } from "bun:test";
 import type { ReportRuleResult } from "@squirrelscan/core-contracts";
 
-import { groupIssuesByCategory } from "../src/grouping";
-import { ruleAffectedPageCount, ruleCarriedPageCount } from "../src/affected-pages";
+import { describe, expect, test } from "bun:test";
+
+import {
+  ruleAffectedPageCount,
+  ruleCarriedPageCount,
+} from "../src/affected-pages";
 import {
   carriedTag,
   checkCarriedLabel,
@@ -15,8 +18,12 @@ import {
   coverageLine,
   ruleCarriedRollupLine,
 } from "../src/coverage";
+import { groupIssuesByCategory } from "../src/grouping";
 
-function rule(id: string, checks: ReportRuleResult["checks"]): ReportRuleResult {
+function rule(
+  id: string,
+  checks: ReportRuleResult["checks"]
+): ReportRuleResult {
   return {
     meta: {
       id,
@@ -111,7 +118,10 @@ describe("carried-page provenance (#1135)", () => {
           // Site-scope check: no pageUrl/pages — affected pages live under
           // item.sourcePages (case 2 in affected-pages.ts).
           items: [
-            { id: "Duplicate Title", sourcePages: ["https://e.com/a", "https://e.com/b"] },
+            {
+              id: "Duplicate Title",
+              sourcePages: ["https://e.com/a", "https://e.com/b"],
+            },
           ],
           provenance: "carried",
           lastSeenAt: 1,
@@ -122,7 +132,9 @@ describe("carried-page provenance (#1135)", () => {
     expect(check.pages).toEqual([]);
     // Without the checkAffectedPages fix these would be empty (undercounting
     // relative to ruleAffectedPageCount, which DOES read item.sourcePages).
-    expect(new Set(check.carriedPages)).toEqual(new Set(["https://e.com/a", "https://e.com/b"]));
+    expect(new Set(check.carriedPages)).toEqual(
+      new Set(["https://e.com/a", "https://e.com/b"])
+    );
     expect(ruleCarriedPageCount(grouped[0].rules[0].checks)).toBe(2);
     expect(ruleAffectedPageCount(grouped[0].rules[0].checks)).toBe(2);
   });
@@ -153,7 +165,7 @@ describe("carried-page provenance (#1135)", () => {
     expect(carried).toBe(2);
     expect(total).toBe(3);
     expect(ruleCarriedRollupLine(carried, total)).toBe(
-      "2 of 3 pages carried from previous crawls.",
+      "2 of 3 pages carried from previous crawls."
     );
   });
 
@@ -184,7 +196,7 @@ describe("carried-page provenance (#1135)", () => {
       ]),
     });
     expect(grouped[0].rules[0].mixedProvenanceNote).toBe(
-      "Fixed on all 75 pages checked this run; 28 pages pending re-check.",
+      "Fixed on all 75 pages checked this run; 28 pages pending re-check."
     );
   });
 
@@ -249,7 +261,7 @@ describe("carried-page provenance (#1135)", () => {
     });
     // Only page B is truly clean; page A is pending (carried), not double-counted.
     expect(grouped[0].rules[0].mixedProvenanceNote).toBe(
-      "Fixed on all 1 page checked this run; 1 page pending re-check.",
+      "Fixed on all 1 page checked this run; 1 page pending re-check."
     );
   });
 });
@@ -322,15 +334,22 @@ describe("unrendered provenance (#1652)", () => {
   test("coverageLine reports the two counts separately", () => {
     expect(
       coverageLine({
-        coverage: { auditedPages: 100, knownPages: 100, carriedFindings: 0, unrenderedFindings: 4925 },
-      } as never),
+        coverage: {
+          auditedPages: 100,
+          knownPages: 100,
+          carriedFindings: 0,
+          unrenderedFindings: 4925,
+        },
+      } as never)
     ).toBe(
-      "Coverage: audited 100 of 100 known pages (4925 findings on pages not yet rendered).",
+      "Coverage: audited 100 of 100 known pages (4925 findings on pages not yet rendered)."
     );
     expect(
       coverageLine({
         coverage: { auditedPages: 10, knownPages: 100, carriedFindings: 90 },
-      } as never),
-    ).toBe("Coverage: audited 10 of 100 known pages (90 findings carried forward).");
+      } as never)
+    ).toBe(
+      "Coverage: audited 10 of 100 known pages (90 findings carried forward)."
+    );
   });
 });

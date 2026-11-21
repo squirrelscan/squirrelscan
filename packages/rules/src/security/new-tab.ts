@@ -43,12 +43,16 @@ export const newTabRule: Rule = {
 
         // rel is a case-insensitive, whitespace-separated token list.
         const tokens = new Set(
-          (link.getAttribute("rel") || "").toLowerCase().split(/\s+/).filter(Boolean),
+          (link.getAttribute("rel") || "")
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(Boolean)
         );
         const hasNoreferrer = tokens.has("noreferrer");
         // target=_blank implies noopener unless rel=opener is set, and
         // noreferrer implies noopener (HTML Standard, link types).
-        const isolated = hasNoreferrer || tokens.has("noopener") || !tokens.has("opener");
+        const isolated =
+          hasNoreferrer || tokens.has("noopener") || !tokens.has("opener");
 
         if (!isolated) {
           exposedOpener.push(href);

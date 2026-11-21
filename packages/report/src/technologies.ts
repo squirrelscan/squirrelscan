@@ -17,7 +17,7 @@ export const TECH_ICON_BASE_URL = "https://squirrelscan.com/tech-icons";
  */
 export function techIconUrl(
   icon?: string | null,
-  baseUrl: string = TECH_ICON_BASE_URL,
+  baseUrl: string = TECH_ICON_BASE_URL
 ): string | null {
   if (!icon) return null;
   const slug = icon.toLowerCase().replace(/[^a-z0-9._-]/g, "");
@@ -132,7 +132,10 @@ export function groupTechnologies(items: ReportTechnology[]): TechGroup[] {
     }));
 }
 
-const TRUNCATION_REASON_TEXT: Record<NonNullable<ReportTechnologies["truncated"]>["reasons"][number], string> = {
+const TRUNCATION_REASON_TEXT: Record<
+  NonNullable<ReportTechnologies["truncated"]>["reasons"][number],
+  string
+> = {
   "bundle-bytes": "a script was longer than `[tech_detect] bundle_bytes`",
   "page-bytes": "the page's script budget ran out",
   "audit-bytes": "the audit's script budget ran out",
@@ -149,7 +152,8 @@ export function techTruncationReasons(tech: ReportTechnologies): string[] {
   const reasons: unknown = tech.truncated?.reasons;
   if (!Array.isArray(reasons)) return [];
   return reasons.filter(
-    (r): r is string => typeof r === "string" && Object.hasOwn(TRUNCATION_REASON_TEXT, r),
+    (r): r is string =>
+      typeof r === "string" && Object.hasOwn(TRUNCATION_REASON_TEXT, r)
   );
 }
 
@@ -157,7 +161,9 @@ export function techTruncationReasons(tech: ReportTechnologies): string[] {
 export function techTruncationNote(tech: ReportTechnologies): string | null {
   if (!tech.truncated) return null;
   const why = techTruncationReasons(tech)
-    .map((r) => TRUNCATION_REASON_TEXT[r as keyof typeof TRUNCATION_REASON_TEXT])
+    .map(
+      (r) => TRUNCATION_REASON_TEXT[r as keyof typeof TRUNCATION_REASON_TEXT]
+    )
     .join("; ");
   return `Detection was cut short (${why}), so technologies the site runs may be missing`;
 }
@@ -191,7 +197,9 @@ export function techOriginAttr(t: Pick<ReportTechnology, "origin">): string {
 export function techLocalOnlyNote(tech: ReportTechnologies): string | null {
   if (tech.source === "local") return null;
   const count = tech.items.filter(isLocalOnlyTech).length;
-  return count === 0 ? null : `${count} found only by the local scan of the crawled bundles (no scan history)`;
+  return count === 0
+    ? null
+    : `${count} found only by the local scan of the crawled bundles (no scan history)`;
 }
 
 /** A loaded report is raw JSON: only a real array has a length worth printing, never an object that claims one. */
@@ -202,7 +210,8 @@ function listCount(v: unknown): number {
 function techChangeSummaryBase(tech: ReportTechnologies): string | null {
   // A local scan keeps no history, so "no changes" or "first scan" would claim a diff
   // nobody computed (#1263): it says where the list came from instead.
-  if (tech.source === "local") return "Detected locally from the crawled pages (no scan history)";
+  if (tech.source === "local")
+    return "Detected locally from the crawled pages (no scan history)";
   if (tech.firstScan) return "First recorded scan of this domain";
   const parts: string[] = [];
   const added = listCount(tech.added);
@@ -224,11 +233,20 @@ export function techNameMap(items: ReportTechnology[]): Map<string, string> {
  * `added` and `removed`, which would claim a diff nobody computed; any other section
  * keeps them, with `source` when it has one.
  */
-export function techOpenTag(name: string, tech: ReportTechnologies, indent: string): string {
+export function techOpenTag(
+  name: string,
+  tech: ReportTechnologies,
+  indent: string
+): string {
   // Only closed-set values reach the markup: a stored report is not validated, so `source`, the
   // truncation reasons and `first-scan` are never interpolated as they were read.
-  const source = tech.source === "local" || tech.source === "cloud" ? ` source="${tech.source}"` : "";
-  const cut = tech.truncated ? ` truncated="${techTruncationReasons(tech).join(" ")}"` : "";
+  const source =
+    tech.source === "local" || tech.source === "cloud"
+      ? ` source="${tech.source}"`
+      : "";
+  const cut = tech.truncated
+    ? ` truncated="${techTruncationReasons(tech).join(" ")}"`
+    : "";
   if (tech.source === "local") return `${indent}<${name}${source}${cut}>`;
   return `${indent}<${name}${source}${cut} first-scan="${tech.firstScan === true}" added="${listCount(tech.added)}" removed="${listCount(tech.removed)}">`;
 }

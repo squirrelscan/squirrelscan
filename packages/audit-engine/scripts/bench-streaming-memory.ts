@@ -29,12 +29,14 @@
 // size and the in-process sample is the number the container's own heartbeat
 // would have reported. Both are printed; they should agree closely.
 
-import { rmSync } from "node:fs";
-
 import { getDefaultConfig, type Config } from "@squirrelscan/config";
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { Effect } from "effect";
+import { rmSync } from "node:fs";
 
 import {
   buildSiteContext,
@@ -78,7 +80,10 @@ function benchConfig(): Config {
     external_links: { ...base.external_links, enabled: false },
     integrity: {
       ...base.integrity,
-      soft404_confirm: { ...(base.integrity?.soft404_confirm ?? {}), enabled: false },
+      soft404_confirm: {
+        ...(base.integrity?.soft404_confirm ?? {}),
+        enabled: false,
+      },
     },
   } as Config;
 }
@@ -109,7 +114,11 @@ const EMPTY_ASSETS: PreFetchedAssets = {
  * prints the achieved per-page DOM cost so this can be checked rather than
  * assumed.
  */
-function fillerMarkup(kb: number, seed: string, scriptShare = SCRIPT_SHARE): string {
+function fillerMarkup(
+  kb: number,
+  seed: string,
+  scriptShare = SCRIPT_SHARE
+): string {
   const targetBytes = kb * 1024;
   const parts: string[] = [];
   let size = 0;
@@ -168,7 +177,10 @@ async function build(): Promise<void> {
     if (batch.length === 0) break;
     for (const page of batch) {
       if (!page.html) continue;
-      const filler = fillerMarkup(INFLATE_KB, page.normalizedUrl.slice(-8).replace(/\W/g, ""));
+      const filler = fillerMarkup(
+        INFLATE_KB,
+        page.normalizedUrl.slice(-8).replace(/\W/g, "")
+      );
       const html = page.html.replace("</body>", `${filler}</body>`);
       await run(storage.upsertPage(crawlId, { ...page, html }));
       inflated++;
@@ -189,19 +201,27 @@ async function build(): Promise<void> {
   // the honest memory number is the end-to-end peak each mode prints, not a
   // synthetic per-page figure.
   const probe = await run(storage.getPages(crawlId, { limit: 5, offset: 0 }));
-  const htmlAvg = probe.reduce((n, pg) => n + (pg.html?.length ?? 0), 0) / Math.max(1, probe.length);
+  const htmlAvg =
+    probe.reduce((n, pg) => n + (pg.html?.length ?? 0), 0) /
+    Math.max(1, probe.length);
   const first = probe[0];
   const nodes = first?.html
-    ? (parseHtmlForRules(first.html, first.normalizedUrl).document?.querySelectorAll("*").length ?? 0)
+    ? (parseHtmlForRules(
+        first.html,
+        first.normalizedUrl
+      ).document?.querySelectorAll("*").length ?? 0)
     : 0;
   console.log(
     `built ${DB}: crawl=${crawlId} pages inflated=${inflated}\n` +
-      `  avg html=${(htmlAvg / 1024).toFixed(0)} KB  nodes/page=${nodes}`,
+      `  avg html=${(htmlAvg / 1024).toFixed(0)} KB  nodes/page=${nodes}`
   );
   await run(storage.close());
 }
 
-async function openCrawl(): Promise<{ storage: SQLiteStorage; crawlId: string }> {
+async function openCrawl(): Promise<{
+  storage: SQLiteStorage;
+  crawlId: string;
+}> {
   const storage = new SQLiteStorage(DB);
   await run(storage.init());
   const crawls = await run(storage.listCrawls(1));
@@ -224,13 +244,17 @@ async function main(): Promise<void> {
   const timer = setInterval(sample, 100);
   const mark = (label: string) => {
     sample();
-    console.log(`  ${label.padEnd(22)} rss=${fmt(process.memoryUsage().rss)} peak=${fmt(peak)}`);
+    console.log(
+      `  ${label.padEnd(22)} rss=${fmt(process.memoryUsage().rss)} peak=${fmt(peak)}`
+    );
   };
 
   const { storage, crawlId } = await openCrawl();
   const config = benchConfig();
   const started = Date.now();
-  console.log(`mode=${MODE} db=${DB} batch=${MODE === "new" ? BATCH : "unbounded"}`);
+  console.log(
+    `mode=${MODE} db=${DB} batch=${MODE === "new" ? BATCH : "unbounded"}`
+  );
 
   if (MODE === "old") {
     const pages = await run(storage.getPages(crawlId));
@@ -238,42 +262,70 @@ async function main(): Promise<void> {
     const siteContext = await run(buildSiteContext(pages));
     mark("buildSiteContext");
     const assets = await run(
-      fetchResourceAssets(storage, crawlId, siteContext, config, RESOURCE_OVERRIDES),
+      fetchResourceAssets(
+        storage,
+        crawlId,
+        siteContext,
+        config,
+        RESOURCE_OVERRIDES
+      )
     );
     mark("fetchResourceAssets");
     const rules = await run(
-      runRulesOnStorage(storage, crawlId, siteContext, config, assets, undefined),
+      runRulesOnStorage(
+        storage,
+        crawlId,
+        siteContext,
+        config,
+        assets,
+        undefined
+      )
     );
     mark("runRulesOnStorage");
     const report = await run(
-      generateReportFromStorage(storage, crawlId, rules, { batchSize: UNBOUNDED_BATCH }),
+      generateReportFromStorage(storage, crawlId, rules, {
+        batchSize: UNBOUNDED_BATCH,
+      })
     );
     mark("report");
-    console.log(`  report pages=${report.pages.length} score=${report.healthScore.overall}`);
+    console.log(
+      `  report pages=${report.pages.length} score=${report.healthScore.overall}`
+    );
   } else {
     const pre = await run(
       runStreamingPreRules(storage, crawlId, config, {
         batchSize: BATCH,
         resourceOverrides: RESOURCE_OVERRIDES,
-      }),
+      })
     );
     mark(`preRules(${pre.pageCount})`);
     const rules = await run(
-      runStreamingRules(storage, crawlId, config, pre.assets ?? EMPTY_ASSETS, undefined, {
-        batchSize: BATCH,
-      }),
+      runStreamingRules(
+        storage,
+        crawlId,
+        config,
+        pre.assets ?? EMPTY_ASSETS,
+        undefined,
+        {
+          batchSize: BATCH,
+        }
+      )
     );
     mark("runStreamingRules");
     const report = await run(
-      generateReportFromStorage(storage, crawlId, rules, { batchSize: BATCH }),
+      generateReportFromStorage(storage, crawlId, rules, { batchSize: BATCH })
     );
     mark("report");
-    console.log(`  report pages=${report.pages.length} score=${report.healthScore.overall}`);
+    console.log(
+      `  report pages=${report.pages.length} score=${report.healthScore.overall}`
+    );
   }
 
   clearInterval(timer);
   await run(storage.close());
-  console.log(`PEAK_RSS_MB=${(peak / MB).toFixed(0)} elapsed=${Math.round((Date.now() - started) / 1000)}s`);
+  console.log(
+    `PEAK_RSS_MB=${(peak / MB).toFixed(0)} elapsed=${Math.round((Date.now() - started) / 1000)}s`
+  );
 }
 
 await main();

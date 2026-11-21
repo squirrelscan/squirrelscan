@@ -22,10 +22,7 @@
 // - Every request goes through the caller's egress policy (repo#2830): a hop
 //   to a link-local or cloud metadata address is never sent.
 
-import { Effect } from "effect";
-
 import { LINK_PROBE_HEAD_UNRELIABLE_ERROR } from "@squirrelscan/core-contracts";
-
 import {
   EgressRefusedError,
   egressGuardedSend,
@@ -34,12 +31,16 @@ import {
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+import { Effect } from "effect";
 
 import type { FetchBudget } from "./fetch-budget";
 
 // The action and token rules live in @squirrelscan/utils/link-actions, shared
 // with the external link checker and usable from the cloud (repo#2759).
-export { linkTextLooksLikeAnAction, looksLikeAnAction } from "@squirrelscan/utils/link-actions";
+export {
+  linkTextLooksLikeAnAction,
+  looksLikeAnAction,
+} from "@squirrelscan/utils/link-actions";
 
 export interface LinkTargetProbeOptions {
   /** The crawl's user agent. */
@@ -84,10 +85,12 @@ async function requestStatus(
   url: string,
   method: "HEAD" | "GET",
   options: LinkTargetProbeOptions,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<Response> {
   const plainSend = options.send ?? fetchUndecoded;
-  const send = options.egress ? egressGuardedSend(plainSend, options.egress) : plainSend;
+  const send = options.egress
+    ? egressGuardedSend(plainSend, options.egress)
+    : plainSend;
   let current = url;
   let previous: Response | null = null;
   for (let hop = 0; ; hop++) {
@@ -112,7 +115,9 @@ async function requestStatus(
     }
     response.body?.cancel().catch(() => {});
     const location =
-      response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+      response.status >= 300 && response.status < 400
+        ? response.headers.get("location")
+        : null;
     if (!location || hop + 1 >= MAX_HOPS) return response;
     let next: string;
     try {
@@ -126,9 +131,14 @@ async function requestStatus(
   }
 }
 
-async function probeOne(url: string, options: LinkTargetProbeOptions): Promise<LinkTargetProbeResult> {
-  if (!options.mayRequest(url)) return { url, status: null, error: "not requested" };
-  if (options.budget?.shouldSkip(url)) return { url, status: null, error: "skipped" };
+async function probeOne(
+  url: string,
+  options: LinkTargetProbeOptions
+): Promise<LinkTargetProbeResult> {
+  if (!options.mayRequest(url))
+    return { url, status: null, error: "not requested" };
+  if (options.budget?.shouldSkip(url))
+    return { url, status: null, error: "skipped" };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs);
   const started = Date.now();
@@ -140,18 +150,39 @@ async function probeOne(url: string, options: LinkTargetProbeOptions): Promise<L
       response = await requestStatus(url, "GET", options, controller.signal);
     }
     // A 5xx strikes like an error, so an erroring host trips the budget too.
-    options.budget?.record(url, Date.now() - started, response.status >= 500 ? "error" : "ok");
-    const rateLimited = isRateLimitedResponse(response.status, response.headers.get("retry-after"));
-    return { url, status: response.status, error: null, ...(rateLimited ? { rateLimited } : {}) };
+    options.budget?.record(
+      url,
+      Date.now() - started,
+      response.status >= 500 ? "error" : "ok"
+    );
+    const rateLimited = isRateLimitedResponse(
+      response.status,
+      response.headers.get("retry-after")
+    );
+    return {
+      url,
+      status: response.status,
+      error: null,
+      ...(rateLimited ? { rateLimited } : {}),
+    };
   } catch (error) {
     // The target itself was refused by the egress policy: never sent.
-    if (error instanceof EgressRefusedError) return { url, status: null, error: "not requested" };
+    if (error instanceof EgressRefusedError)
+      return { url, status: null, error: "not requested" };
     const timedOut = controller.signal.aborted;
-    options.budget?.record(url, Date.now() - started, timedOut ? "timeout" : "error");
+    options.budget?.record(
+      url,
+      Date.now() - started,
+      timedOut ? "timeout" : "error"
+    );
     return {
       url,
       status: null,
-      error: timedOut ? "timeout" : error instanceof Error ? error.message : String(error),
+      error: timedOut
+        ? "timeout"
+        : error instanceof Error
+          ? error.message
+          : String(error),
     };
   } finally {
     clearTimeout(timer);
@@ -170,7 +201,7 @@ export interface LinkTargetProbe {
 /** Status-check each URL as described at the top of this file, in input order. */
 export function probeLinkTargets(
   urls: string[],
-  options: LinkTargetProbeOptions,
+  options: LinkTargetProbeOptions
 ): Effect.Effect<LinkTargetProbe, never, never> {
   const unique = [...new Set(urls)];
   return Effect.gen(function* () {
@@ -186,21 +217,25 @@ export function probeLinkTargets(
             ...options,
             mayRequest: (url) => url === controlUrl || options.mayRequest(url),
             budget: undefined,
-          }),
+          })
         )
       : null;
     const headUnreliable = control?.status != null && control.status >= 400;
     const results = yield* Effect.all(
       unique.map((url) => Effect.promise(() => probeOne(url, options))),
-      { concurrency: Math.max(1, options.concurrency) },
+      { concurrency: Math.max(1, options.concurrency) }
     );
     if (!headUnreliable) return { results, headUnreliable };
     return {
       headUnreliable,
       results: results.map((r) =>
         r.status !== null && r.status >= 400
-          ? { url: r.url, status: null, error: LINK_PROBE_HEAD_UNRELIABLE_ERROR }
-          : r,
+          ? {
+              url: r.url,
+              status: null,
+              error: LINK_PROBE_HEAD_UNRELIABLE_ERROR,
+            }
+          : r
       ),
     };
   });

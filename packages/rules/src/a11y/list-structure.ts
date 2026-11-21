@@ -1,8 +1,9 @@
 // a11y/list-structure - Lists contain only allowed elements
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const listStructureRule: Rule = {
   meta: {
@@ -52,7 +53,10 @@ export const listStructureRule: Rule = {
       if (hasInvalidChild) {
         const tagName = list.tagName.toLowerCase();
         const id = list.getAttribute("id");
-        const cls = list.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
+        const cls = list
+          .getAttribute("class")
+          ?.split(CLASS_SPLIT)
+          .find(Boolean);
         invalidLists.push(
           id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName
         );

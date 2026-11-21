@@ -32,13 +32,19 @@ export interface SrcsetCandidate {
 }
 
 /** The candidates of a `srcset` value, in order. Bounded: a hostile value cannot cost more than its prefix. */
-export function parseSrcset(value: string | null | undefined): SrcsetCandidate[] {
+export function parseSrcset(
+  value: string | null | undefined
+): SrcsetCandidate[] {
   if (!value) return [];
-  const text = value.length > MAX_SRCSET_LENGTH ? value.slice(0, MAX_SRCSET_LENGTH) : value;
+  const text =
+    value.length > MAX_SRCSET_LENGTH
+      ? value.slice(0, MAX_SRCSET_LENGTH)
+      : value;
   const out: SrcsetCandidate[] = [];
   let i = 0;
   while (i < text.length && out.length < MAX_SRCSET_CANDIDATES) {
-    while (i < text.length && (text[i] === "," || /\s/.test(text[i] ?? ""))) i++;
+    while (i < text.length && (text[i] === "," || /\s/.test(text[i] ?? "")))
+      i++;
     if (i >= text.length) break;
     const urlStart = i;
     while (i < text.length && !/\s/.test(text[i] ?? "")) i++;
@@ -122,9 +128,13 @@ function evaluateLength(source: string): number | null {
   if (text.length === 0 || text.length > 200) return null;
   const inner = /^calc\((.*)\)$/is.exec(text)?.[1] ?? text;
   const tokens = inner.match(
-    /\(|\)|[*/]|\s[+-]\s|-?\d{1,6}(?:\.\d{1,4})?[a-z%]{0,4}|[a-z-]{1,20}\(/gi,
+    /\(|\)|[*/]|\s[+-]\s|-?\d{1,6}(?:\.\d{1,4})?[a-z%]{0,4}|[a-z-]{1,20}\(/gi
   );
-  if (!tokens || tokens.join("").replace(/\s/g, "") !== inner.replace(/\s/g, "")) return null;
+  if (
+    !tokens ||
+    tokens.join("").replace(/\s/g, "") !== inner.replace(/\s/g, "")
+  )
+    return null;
   let pos = 0;
   let steps = 0;
   const peek = (): string | undefined => tokens[pos]?.trim();
@@ -139,7 +149,9 @@ function evaluateLength(source: string): number | null {
       return value;
     }
     const match = /^(-?\d{1,6}(?:\.\d{1,4})?)([a-z]{0,4})$/i.exec(token);
-    return match?.[1] !== undefined ? unitValue(Number(match[1]), match[2] ?? "") : null;
+    return match?.[1] !== undefined
+      ? unitValue(Number(match[1]), match[2] ?? "")
+      : null;
   };
   const term = (): CalcValue | null => {
     let left = factor();
@@ -166,12 +178,20 @@ function evaluateLength(source: string): number | null {
       const op = tokens[pos++]?.trim();
       const right = term();
       if (!right || right.unit !== left.unit) return null;
-      left = { v: op === "+" ? left.v + right.v : left.v - right.v, unit: left.unit };
+      left = {
+        v: op === "+" ? left.v + right.v : left.v - right.v,
+        unit: left.unit,
+      };
     }
     return left;
   };
   const result = expression();
-  if (!result || pos !== tokens.length || result.unit !== "px" || !Number.isFinite(result.v))
+  if (
+    !result ||
+    pos !== tokens.length ||
+    result.unit !== "px" ||
+    !Number.isFinite(result.v)
+  )
     return null;
   return result.v;
 }
@@ -181,14 +201,20 @@ function mediaMatches(condition: string): boolean {
   const terms = condition.split(/\band\b/i);
   if (terms.length > 8) return false;
   for (const raw of terms) {
-    const term = /^\s*\(\s*(min|max)-width\s*:\s*(\d{1,6}(?:\.\d{1,4})?)(px|em|rem)\s*\)\s*$/i.exec(
-      raw,
-    );
+    const term =
+      /^\s*\(\s*(min|max)-width\s*:\s*(\d{1,6}(?:\.\d{1,4})?)(px|em|rem)\s*\)\s*$/i.exec(
+        raw
+      );
     if (!term?.[1] || !term[2] || !term[3]) return false;
     const limit =
-      term[3].toLowerCase() === "px" ? Number(term[2]) : Number(term[2]) * DEFAULT_FONT_PX;
+      term[3].toLowerCase() === "px"
+        ? Number(term[2])
+        : Number(term[2]) * DEFAULT_FONT_PX;
     const min = term[1].toLowerCase() === "min";
-    if (min ? REFERENCE_VIEWPORT_WIDTH < limit : REFERENCE_VIEWPORT_WIDTH > limit) return false;
+    if (
+      min ? REFERENCE_VIEWPORT_WIDTH < limit : REFERENCE_VIEWPORT_WIDTH > limit
+    )
+      return false;
   }
   return true;
 }
@@ -198,7 +224,9 @@ function mediaMatches(condition: string): boolean {
  * parentheses as balanced groups: the source size is the trailing length or function
  * (`370px`, `calc((100vw - 130px) / 2)`), the condition is whatever precedes it.
  */
-function splitSizeEntry(entry: string): { media: string | null; value: string } | null {
+function splitSizeEntry(
+  entry: string
+): { media: string | null; value: string } | null {
   const text = entry.trim();
   if (text.length === 0 || text.length > 400) return null;
   let start = text.length;
@@ -267,14 +295,21 @@ export function selectImageCandidate(img: {
   if (widths.length > 0) {
     const needed = sourceSizePx(img.sizes);
     const sorted = [...widths].sort((a, b) => (a.w ?? 0) - (b.w ?? 0));
-    if (needed === null) return sorted[sorted.length - 1]?.url ?? img.src ?? null;
+    if (needed === null)
+      return sorted[sorted.length - 1]?.url ?? img.src ?? null;
     const target = needed * REFERENCE_DPR;
-    return (sorted.find((c) => (c.w ?? 0) >= target) ?? sorted[sorted.length - 1])?.url ?? null;
+    return (
+      (sorted.find((c) => (c.w ?? 0) >= target) ?? sorted[sorted.length - 1])
+        ?.url ?? null
+    );
   }
 
   const sorted = [...candidates].sort((a, b) => (a.x ?? 1) - (b.x ?? 1));
   return (
-    (sorted.find((c) => (c.x ?? 1) >= REFERENCE_DPR) ?? sorted[sorted.length - 1])?.url ?? null
+    (
+      sorted.find((c) => (c.x ?? 1) >= REFERENCE_DPR) ??
+      sorted[sorted.length - 1]
+    )?.url ?? null
   );
 }
 
@@ -288,7 +323,10 @@ function declaredPx(value: string | null | undefined): number | null {
  * Without layout this is the only evidence of size there is; an image with no
  * declared size is never an icon here, so it keeps its place in the budget.
  */
-export function isIconSized(img: { width?: string | null; height?: string | null }): boolean {
+export function isIconSized(img: {
+  width?: string | null;
+  height?: string | null;
+}): boolean {
   const w = declaredPx(img.width);
   const h = declaredPx(img.height);
   if (w === null || h === null) return false;
@@ -303,7 +341,7 @@ export function isIconSized(img: { width?: string | null; height?: string | null
  */
 export function initialViewportFlags(
   images: ReadonlyArray<{ width?: string | null; height?: string | null }>,
-  budget: number = ABOVE_FOLD_IMAGE_BUDGET,
+  budget: number = ABOVE_FOLD_IMAGE_BUDGET
 ): boolean[] {
   let used = 0;
   return images.map((img) => {

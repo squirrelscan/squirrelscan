@@ -6,8 +6,15 @@
 // code sample, a host that merely ENDS with a dev label (`notdev.example.com`),
 // and an audit whose own seed is a preview deploy.
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type {
+  CheckResult,
+  ParsedPage,
+  RuleContext,
+  SiteData,
+} from "../src/types";
 
 import {
   classifyHost,
@@ -26,17 +33,23 @@ import {
   type SiteOrigin,
 } from "../src/content/dev-leakage";
 import { loadAllRules } from "../src/loader";
-import type { CheckResult, ParsedPage, RuleContext, SiteData } from "../src/types";
 
-const page = (body: string) => `<html><head><title>t</title></head><body>${body}</body></html>`;
+const page = (body: string) =>
+  `<html><head><title>t</title></head><body>${body}</body></html>`;
 
 // Every real page opens with chrome. Fixtures that start at the body's first
 // byte hide the left-boundary bug the host patterns depend on.
-const NAV = '<header><nav><a href="/">Home</a><a href="/pricing">Pricing</a></nav></header>';
+const NAV =
+  '<header><nav><a href="/">Home</a><a href="/pricing">Pricing</a></nav></header>';
 
 async function run(
   body: string,
-  opts: { url?: string; baseUrl?: string; finalUrl?: string; head?: string } = {},
+  opts: {
+    url?: string;
+    baseUrl?: string;
+    finalUrl?: string;
+    head?: string;
+  } = {}
 ): Promise<CheckResult[]> {
   const url = opts.url ?? "https://example.com/about";
   const html = opts.head
@@ -53,7 +66,9 @@ async function run(
       ...(opts.finalUrl ? { finalUrl: opts.finalUrl } : {}),
     },
     parsed: { document } as unknown as ParsedPage,
-    ...(opts.baseUrl ? { site: { baseUrl: opts.baseUrl } as unknown as SiteData } : {}),
+    ...(opts.baseUrl
+      ? { site: { baseUrl: opts.baseUrl } as unknown as SiteData }
+      : {}),
     options: {},
   };
   return (await devLeakageRule.run(ctx)).checks;
@@ -131,13 +146,17 @@ describe("dev subdomains resolve through the registrable domain, not a suffix te
     expect(isDevSubdomainOf("staging.example.com", "example.com")).toBe(true);
     expect(isDevSubdomainOf("test.example.com", "example.com")).toBe(true);
     // Deeper tiers still belong to the same apex.
-    expect(isDevSubdomainOf("staging.app.example.com", "example.com")).toBe(true);
+    expect(isDevSubdomainOf("staging.app.example.com", "example.com")).toBe(
+      true
+    );
   });
 
   test("a host that merely ends with the dev label does not", () => {
     expect(isDevSubdomainOf("notdev.example.com", "example.com")).toBe(false);
     expect(isDevSubdomainOf("webdev.example.com", "example.com")).toBe(false);
-    expect(isDevSubdomainOf("development.example.com", "example.com")).toBe(false);
+    expect(isDevSubdomainOf("development.example.com", "example.com")).toBe(
+      false
+    );
     expect(isDevSubdomainOf("latest.example.com", "example.com")).toBe(false);
   });
 
@@ -160,11 +179,15 @@ describe("dev subdomains resolve through the registrable domain, not a suffix te
 describe("preview ownership", () => {
   test("a preview carrying the site's own name is the site's own", () => {
     expect(looksLikeOwnPreview("acme.vercel.app", "acme")).toBe(true);
-    expect(looksLikeOwnPreview("acme-git-main-acme.vercel.app", "acme")).toBe(true);
+    expect(looksLikeOwnPreview("acme-git-main-acme.vercel.app", "acme")).toBe(
+      true
+    );
   });
 
   test("an unrelated tenant of the same platform is not", () => {
-    expect(looksLikeOwnPreview("someones-portfolio.vercel.app", "acme")).toBe(false);
+    expect(looksLikeOwnPreview("someones-portfolio.vercel.app", "acme")).toBe(
+      false
+    );
   });
 
   test("a label that merely CONTAINS the apex label is not", () => {
@@ -172,18 +195,25 @@ describe("preview ownership", () => {
     // these as the site's own deployment and escalates the finding to `fail`.
     expect(looksLikeOwnPreview("sandbox-demo.vercel.app", "box")).toBe(false);
     expect(looksLikeOwnPreview("shopify-theme.vercel.app", "shop")).toBe(false);
-    expect(looksLikeOwnPreview("my-nextjs-demo.vercel.app", "next")).toBe(false);
+    expect(looksLikeOwnPreview("my-nextjs-demo.vercel.app", "next")).toBe(
+      false
+    );
     expect(looksLikeOwnPreview("moneyapp.vercel.app", "one")).toBe(false);
-    expect(looksLikeOwnPreview("blog-application.pages.dev", "app")).toBe(false);
+    expect(looksLikeOwnPreview("blog-application.pages.dev", "app")).toBe(
+      false
+    );
     // The segment itself still matches.
     expect(looksLikeOwnPreview("blog-app.pages.dev", "app")).toBe(true);
   });
 
   test("a stranger's preview warns rather than fails, even on a short apex", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="https://sandbox-demo.vercel.app/">Partner demo</a></main>`, {
-        url: "https://box.com/x",
-      })),
+      await run(
+        `${NAV}<main><a href="https://sandbox-demo.vercel.app/">Partner demo</a></main>`,
+        {
+          url: "https://box.com/x",
+        }
+      )
     );
     expect(check.status).toBe("warn");
   });
@@ -196,9 +226,18 @@ describe("preview ownership", () => {
 describe("classifyHost", () => {
   test("names the family and whether it is this site's own artifact", () => {
     const s = site("acme.com");
-    expect(classifyHost("localhost", s)).toEqual({ kind: "localhost", own: true });
-    expect(classifyHost("10.0.0.5", s)).toEqual({ kind: "private-ip", own: true });
-    expect(classifyHost("dev.acme.com", s)).toEqual({ kind: "dev-subdomain", own: true });
+    expect(classifyHost("localhost", s)).toEqual({
+      kind: "localhost",
+      own: true,
+    });
+    expect(classifyHost("10.0.0.5", s)).toEqual({
+      kind: "private-ip",
+      own: true,
+    });
+    expect(classifyHost("dev.acme.com", s)).toEqual({
+      kind: "dev-subdomain",
+      own: true,
+    });
     expect(classifyHost("acme-git-main.vercel.app", s)).toEqual({
       kind: "preview-host",
       own: true,
@@ -218,29 +257,51 @@ describe("classifyHost", () => {
 
 describe("findDevHostsInText", () => {
   test("a dev URL written out in copy", () => {
-    expect(textKinds("Point your client at http://localhost:3000/api")).toContain("localhost");
-    expect(textKinds("Internal only: 192.168.1.10/admin")).toContain("private-ip");
-    expect(textKinds("Preview at acme-git-main.vercel.app")).toContain("preview-host");
-    expect(textKinds("Copy is drafted on staging.example.com first")).toContain("dev-subdomain");
+    expect(
+      textKinds("Point your client at http://localhost:3000/api")
+    ).toContain("localhost");
+    expect(textKinds("Internal only: 192.168.1.10/admin")).toContain(
+      "private-ip"
+    );
+    expect(textKinds("Preview at acme-git-main.vercel.app")).toContain(
+      "preview-host"
+    );
+    expect(textKinds("Copy is drafted on staging.example.com first")).toContain(
+      "dev-subdomain"
+    );
   });
 
   test("a bare `localhost` in a sentence is not a leak; a qualified one is", () => {
     // "run it on localhost" is a sentence people write on purpose.
-    expect(textKinds("The app also runs on localhost during development")).toHaveLength(0);
+    expect(
+      textKinds("The app also runs on localhost during development")
+    ).toHaveLength(0);
     expect(textKinds("Open localhost:5173 to see it")).toContain("localhost");
     expect(textKinds("Open http://localhost to see it")).toContain("localhost");
-    expect(textKinds("Try api.acme.localhost for the internal build")).toContain("localhost");
+    expect(
+      textKinds("Try api.acme.localhost for the internal build")
+    ).toContain("localhost");
   });
 
   test("a bare 10.x quad is a version number as often as an address", () => {
-    expect(textKinds("Requires Contoso Server 10.0.0.1 or later")).toHaveLength(0);
-    expect(textKinds("Requires Contoso Server v10.0.0.1 or later")).toHaveLength(0);
+    expect(textKinds("Requires Contoso Server 10.0.0.1 or later")).toHaveLength(
+      0
+    );
+    expect(
+      textKinds("Requires Contoso Server v10.0.0.1 or later")
+    ).toHaveLength(0);
     // With URL context it is unmistakably a host.
-    expect(textKinds("Hit http://10.0.0.1 from the VPN")).toContain("private-ip");
+    expect(textKinds("Hit http://10.0.0.1 from the VPN")).toContain(
+      "private-ip"
+    );
     expect(textKinds("Hit 10.0.0.1:8080 from the VPN")).toContain("private-ip");
     // The other two blocks and loopback have no second reading.
-    expect(textKinds("Bound to 192.168.1.10 on the office LAN")).toContain("private-ip");
-    expect(textKinds("Bound to 127.0.0.1 on the office LAN")).toContain("localhost");
+    expect(textKinds("Bound to 192.168.1.10 on the office LAN")).toContain(
+      "private-ip"
+    );
+    expect(textKinds("Bound to 127.0.0.1 on the office LAN")).toContain(
+      "localhost"
+    );
   });
 
   test("ordinary prose full of dotted words stays clean", () => {
@@ -249,8 +310,8 @@ describe("findDevHostsInText", () => {
     expect(
       textKinds(
         "See e.g. the notes in README.md and config.yaml, or our partners at " +
-          "acme.io, shop.co.uk and example.com. Docs live at https://example.com/docs.",
-      ),
+          "acme.io, shop.co.uk and example.com. Docs live at https://example.com/docs."
+      )
     ).toHaveLength(0);
   });
 
@@ -263,8 +324,12 @@ describe("findDevHostsInText", () => {
     // The most common way copy mentions a host is with a full stop after it.
     expect(textKinds("Bound to 192.168.1.10.")).toContain("private-ip");
     expect(textKinds("Bound to 127.0.0.1.")).toContain("localhost");
-    expect(textKinds("Preview at acme-git-main.vercel.app.")).toContain("preview-host");
-    expect(textKinds("Draft on staging.example.com.")).toContain("dev-subdomain");
+    expect(textKinds("Preview at acme-git-main.vercel.app.")).toContain(
+      "preview-host"
+    );
+    expect(textKinds("Draft on staging.example.com.")).toContain(
+      "dev-subdomain"
+    );
     expect(textKinds("(see acme.vercel.app)")).toContain("preview-host");
   });
 
@@ -274,21 +339,30 @@ describe("findDevHostsInText", () => {
   });
 
   test("the sentence's full stop stays out of the reported sample", () => {
-    const hits = findDevHostsInText("Old links point at http://localhost. Next.", site());
+    const hits = findDevHostsInText(
+      "Old links point at http://localhost. Next.",
+      site()
+    );
     expect(hits).toHaveLength(1);
     expect(hits[0]?.host).toBe("localhost");
     expect(hits[0]?.sample).toBe("http://localhost");
   });
 
   test("the left boundary keeps lookalike hosts out", () => {
-    expect(textKinds("Visit notdev.example.com for the writeup")).toHaveLength(0);
+    expect(textKinds("Visit notdev.example.com for the writeup")).toHaveLength(
+      0
+    );
     expect(textKinds("Our mylocalhost.com mirror is fine")).toHaveLength(0);
     expect(textKinds("Build 1.10.0.0.1 shipped")).toHaveLength(0);
   });
 
   test("an http link to the site's own host, or anyone else's, is not dev leakage", () => {
-    expect(textKinds("Old bookmarks point at http://example.com/pricing")).toHaveLength(0);
-    expect(textKinds("See http://other.com/pricing for theirs")).toHaveLength(0);
+    expect(
+      textKinds("Old bookmarks point at http://example.com/pricing")
+    ).toHaveLength(0);
+    expect(textKinds("See http://other.com/pricing for theirs")).toHaveLength(
+      0
+    );
   });
 
   test("a dev host reachable over http is reported once, as what it is", () => {
@@ -297,7 +371,10 @@ describe("findDevHostsInText", () => {
   });
 
   test("the sample is the URL as written, flattened to one line", () => {
-    const hits = findDevHostsInText("Point at http://localhost:3000/api/v1 now", site());
+    const hits = findDevHostsInText(
+      "Point at http://localhost:3000/api/v1 now",
+      site()
+    );
     expect(hits[0]?.sample).toBe("http://localhost:3000/api/v1");
   });
 });
@@ -308,7 +385,8 @@ describe("findDevHostsInText", () => {
 
 describe("classifyUrlAttribute", () => {
   const s = site("example.com");
-  const at = (raw: string) => classifyUrlAttribute(raw, "https://example.com/about", s);
+  const at = (raw: string) =>
+    classifyUrlAttribute(raw, "https://example.com/about", s);
 
   test("an absolute dev URL is a hit and reports the canonical form", () => {
     expect(at("http://localhost:3000/api")).toMatchObject({
@@ -357,18 +435,20 @@ describe("classifyUrlAttribute", () => {
 describe("devLeakageRule outcomes", () => {
   test("pass: an ordinary production page", async () => {
     const check = only(
-      (await run(
+      await run(
         `${NAV}<main><h1>Pricing</h1><p>Plans start at ten dollars.</p>` +
           `<a href="/contact">Contact us</a><img src="/img/hero.png" alt="hero">` +
-          `<a href="https://example.com/docs">Docs</a></main>`,
-      )),
+          `<a href="https://example.com/docs">Docs</a></main>`
+      )
     );
     expect(check.status).toBe("pass");
   });
 
   test("fail: a live href at a localhost origin", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="http://localhost:3000/api/health">Health check</a></main>`)),
+      await run(
+        `${NAV}<main><a href="http://localhost:3000/api/health">Health check</a></main>`
+      )
     );
     expect(check.status).toBe("fail");
     expect(check.message).toContain("localhost");
@@ -376,22 +456,33 @@ describe("devLeakageRule outcomes", () => {
   });
 
   test("fail: an img src on a private address", async () => {
-    const check = only(await run(`${NAV}<main><img src="http://192.168.1.10/logo.png" alt=""></main>`));
+    const check = only(
+      await run(
+        `${NAV}<main><img src="http://192.168.1.10/logo.png" alt=""></main>`
+      )
+    );
     expect(check.status).toBe("fail");
     expect(check.message).toContain("private-ip");
   });
 
   test("fail: a link to the site's own staging tier", async () => {
-    const check = only(await run(`${NAV}<main><a href="https://staging.example.com/x">Draft</a></main>`));
+    const check = only(
+      await run(
+        `${NAV}<main><a href="https://staging.example.com/x">Draft</a></main>`
+      )
+    );
     expect(check.status).toBe("fail");
     expect(check.message).toContain("dev-subdomain");
   });
 
   test("fail: an asset served from the site's own preview deployment", async () => {
     const check = only(
-      (await run(`${NAV}<main><img src="https://example-git-main.vercel.app/a.png" alt=""></main>`, {
-        url: "https://example.com/about",
-      })),
+      await run(
+        `${NAV}<main><img src="https://example-git-main.vercel.app/a.png" alt=""></main>`,
+        {
+          url: "https://example.com/about",
+        }
+      )
     );
     expect(check.status).toBe("fail");
     expect(check.message).toContain("preview-host");
@@ -399,7 +490,9 @@ describe("devLeakageRule outcomes", () => {
 
   test("warn: a preview host that could belong to anyone", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="https://someones-portfolio.vercel.app/">A friend</a></main>`)),
+      await run(
+        `${NAV}<main><a href="https://someones-portfolio.vercel.app/">A friend</a></main>`
+      )
     );
     expect(check.status).toBe("warn");
     expect(check.message).toContain("preview-host");
@@ -407,7 +500,9 @@ describe("devLeakageRule outcomes", () => {
 
   test("warn: a dev host mentioned in copy but never linked", async () => {
     const check = only(
-      (await run(`${NAV}<main><p>The API also listens on http://localhost:3000 in development.</p></main>`)),
+      await run(
+        `${NAV}<main><p>The API also listens on http://localhost:3000 in development.</p></main>`
+      )
     );
     expect(check.status).toBe("warn");
     expect(check.message).toContain("localhost");
@@ -415,14 +510,18 @@ describe("devLeakageRule outcomes", () => {
 
   test("pass: the site's own http:// logo is mixed content, not a dev host (#1758)", async () => {
     const check = only(
-      (await run(`${NAV}<main><img src="http://example.com/img/logo.png" alt="Logo"></main>`)),
+      await run(
+        `${NAV}<main><img src="http://example.com/img/logo.png" alt="Logo"></main>`
+      )
     );
     expect(check.status).toBe("pass");
   });
 
   test("fail: an http://localhost:3000 asset is still reported (#1758)", async () => {
     const check = only(
-      (await run(`${NAV}<main><img src="http://localhost:3000/img/logo.png" alt="Logo"></main>`)),
+      await run(
+        `${NAV}<main><img src="http://localhost:3000/img/logo.png" alt="Logo"></main>`
+      )
     );
     expect(check.status).toBe("fail");
     expect(check.message).toContain("localhost");
@@ -430,10 +529,13 @@ describe("devLeakageRule outcomes", () => {
 
   test("skipped: the seed is itself a preview deploy", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="https://acme.vercel.app/pricing">Pricing</a></main>`, {
-        url: "https://acme.vercel.app/about",
-        baseUrl: "https://acme.vercel.app/",
-      })),
+      await run(
+        `${NAV}<main><a href="https://acme.vercel.app/pricing">Pricing</a></main>`,
+        {
+          url: "https://acme.vercel.app/about",
+          baseUrl: "https://acme.vercel.app/",
+        }
+      )
     );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("non-production-origin");
@@ -441,9 +543,12 @@ describe("devLeakageRule outcomes", () => {
 
   test("skipped: the audit is of a local dev server", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
-        url: "http://localhost:3000/about",
-      })),
+      await run(
+        `${NAV}<main><a href="http://localhost:3000/api">API</a></main>`,
+        {
+          url: "http://localhost:3000/about",
+        }
+      )
     );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("non-production-origin");
@@ -451,10 +556,13 @@ describe("devLeakageRule outcomes", () => {
 
   test("skipped: the seed is a staging tier even when this page redirected onto the apex", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="https://staging.example.com/x">Draft</a></main>`, {
-        url: "https://example.com/about",
-        baseUrl: "https://staging.example.com/",
-      })),
+      await run(
+        `${NAV}<main><a href="https://staging.example.com/x">Draft</a></main>`,
+        {
+          url: "https://example.com/about",
+          baseUrl: "https://staging.example.com/",
+        }
+      )
     );
     expect(check.status).toBe("skipped");
   });
@@ -463,12 +571,12 @@ describe("devLeakageRule outcomes", () => {
     // A canonical at localhost de-indexes the page; a stylesheet or script at
     // localhost breaks it outright. Body copy here is entirely clean.
     const check = only(
-      (await run(`${NAV}<main><p>Plans start at ten dollars.</p></main>`, {
+      await run(`${NAV}<main><p>Plans start at ten dollars.</p></main>`, {
         head:
           '<link rel="canonical" href="http://localhost:3000/about">' +
           '<link rel="stylesheet" href="http://localhost:3000/a.css">' +
           '<script src="http://localhost:3000/app.js"></script>',
-      })),
+      })
     );
     expect(check.status).toBe("fail");
     expect(check.value).toBe(3);
@@ -476,10 +584,10 @@ describe("devLeakageRule outcomes", () => {
 
   test("skipped: the page redirected onto a preview host", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="/pricing">Pricing</a></main>`, {
+      await run(`${NAV}<main><a href="/pricing">Pricing</a></main>`, {
         url: "https://example.com/about",
         finalUrl: "https://example-git-main.vercel.app/about",
-      })),
+      })
     );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("non-production-origin");
@@ -487,17 +595,26 @@ describe("devLeakageRule outcomes", () => {
 
   test("an unparseable finalUrl falls back to the page URL rather than disabling the rule", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
-        url: "https://example.com/about",
-        finalUrl: "not a url",
-      })),
+      await run(
+        `${NAV}<main><a href="http://localhost:3000/api">API</a></main>`,
+        {
+          url: "https://example.com/about",
+          finalUrl: "not a url",
+        }
+      )
     );
     expect(check.status).toBe("fail");
   });
 
   test("skipped: no document", async () => {
     const ctx = {
-      page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: "https://example.com/",
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: { document: null } as unknown as ParsedPage,
       options: {},
     } as RuleContext;
@@ -506,7 +623,9 @@ describe("devLeakageRule outcomes", () => {
   });
 
   test("skipped: the page URL will not parse", async () => {
-    const check = only(await run(`${NAV}<main><p>hi</p></main>`, { url: "not a url" }));
+    const check = only(
+      await run(`${NAV}<main><p>hi</p></main>`, { url: "not a url" })
+    );
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("unparseable-page-url");
   });
@@ -519,20 +638,20 @@ describe("devLeakageRule outcomes", () => {
 describe("code samples stay clean", () => {
   test("a production page whose code sample mentions localhost passes", async () => {
     const check = only(
-      (await run(
+      await run(
         `${NAV}<main><h1>Getting started</h1>` +
           `<p>Start the dev server, then open the address it prints.</p>` +
           `<pre><code>bun run dev\n# Listening on http://localhost:5173</code></pre>` +
           `<p>Set <code>BASE_URL=http://127.0.0.1:8080</code> to point at the API.</p>` +
-          `</main>`,
-      )),
+          `</main>`
+      )
     );
     expect(check.status).toBe("pass");
   });
 
   test("a highlighted block, a CodeMirror editor and an inert template are code too", async () => {
     const check = only(
-      (await run(
+      await run(
         `${NAV}<main>` +
           // What Rouge and Chroma emit: a wrapper div around a real <pre>.
           `<div class="highlight"><pre><code>curl http://localhost:9000/health</code></pre></div>` +
@@ -541,8 +660,8 @@ describe("code samples stay clean", () => {
           `<div class="language-bash"><div>curl http://10.1.2.3:9000/health</div></div>` +
           // Inert: the browser never renders it, so a visitor never reads it.
           `<template><span>http://staging.example.com</span></template>` +
-          `</main>`,
-      )),
+          `</main>`
+      )
     );
     expect(check.status).toBe("pass");
   });
@@ -551,7 +670,9 @@ describe("code samples stay clean", () => {
     // Excluding code from the PROSE scan must not excuse a real anchor: a
     // clickable link is a clickable link wherever it sits in the markup.
     const check = only(
-      (await run(`${NAV}<main><pre><a href="http://localhost:3000/x">run</a></pre></main>`)),
+      await run(
+        `${NAV}<main><pre><a href="http://localhost:3000/x">run</a></pre></main>`
+      )
     );
     expect(check.status).toBe("fail");
   });
@@ -564,16 +685,19 @@ describe("code samples stay clean", () => {
 describe("reporting", () => {
   test("kinds are folded to one row each, counted, and lead with the live reference", async () => {
     const check = only(
-      (await run(
+      await run(
         `${NAV}<main>` +
           `<p>Mentioned once: http://localhost:4000 and again http://localhost:4001.</p>` +
           `<a href="http://192.168.1.10/admin">Admin</a>` +
-          `</main>`,
-      )),
+          `</main>`
+      )
     );
     expect(check.status).toBe("fail");
     expect(check.value).toBe(3);
-    const rows = (check.details?.kinds ?? []) as Array<{ kind: string; count: number }>;
+    const rows = (check.details?.kinds ?? []) as Array<{
+      kind: string;
+      count: number;
+    }>;
     expect(rows.find((r) => r.kind === "localhost")?.count).toBe(2);
     expect(rows.find((r) => r.kind === "private-ip")?.count).toBe(1);
     // The example line is the clickable one, not whichever mention came first.
@@ -585,7 +709,9 @@ describe("reporting", () => {
     // the audited site, which would both inflate the affected-page count and
     // suppress the row as redundant.
     const check = only(
-      (await run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`)),
+      await run(
+        `${NAV}<main><a href="http://localhost:3000/api">API</a></main>`
+      )
     );
     expect(check.items).toEqual([
       {
@@ -601,9 +727,9 @@ describe("reporting", () => {
     // Canonicalizing is not enough: new URL() leaves brackets and parentheses
     // alone, and the renderer would turn them into a clickable attacker link.
     const check = only(
-      (await run(
-        `${NAV}<main><a href="http://localhost/[click here](https://evil.example/pwn)">x</a></main>`,
-      )),
+      await run(
+        `${NAV}<main><a href="http://localhost/[click here](https://evil.example/pwn)">x</a></main>`
+      )
     );
     const sample = (check.items?.[0]?.snippet ?? "") as string;
     expect(sample).not.toContain("[");
@@ -623,7 +749,13 @@ describe("reporting", () => {
 
   test("summarize prefers an attribute sample over an earlier text one", () => {
     const rows = summarize([
-      { kind: "localhost", source: "text", host: "localhost", sample: "localhost:1", own: true },
+      {
+        kind: "localhost",
+        source: "text",
+        host: "localhost",
+        sample: "localhost:1",
+        own: true,
+      },
       {
         kind: "localhost",
         source: "attribute",
@@ -633,7 +765,12 @@ describe("reporting", () => {
       },
     ]);
     expect(rows).toEqual([
-      { kind: "localhost", sample: "http://localhost:2/", count: 2, inAttribute: true },
+      {
+        kind: "localhost",
+        sample: "http://localhost:2/",
+        count: 2,
+        inAttribute: true,
+      },
     ]);
   });
 });
@@ -672,9 +809,12 @@ describe("seed classification", () => {
 
   test("the rule still runs on a site hosted at dev.to", async () => {
     const check = only(
-      (await run(`${NAV}<main><a href="http://localhost:3000/api">API</a></main>`, {
-        url: "https://dev.to/some-post",
-      })),
+      await run(
+        `${NAV}<main><a href="http://localhost:3000/api">API</a></main>`,
+        {
+          url: "https://dev.to/some-post",
+        }
+      )
     );
     expect(check.status).toBe("fail");
   });
@@ -685,14 +825,16 @@ describe("tier labels at any position (repo#1858)", () => {
     expect(devTierOf("app.dev.example.com", "example.com")).toBe("high");
     expect(devTierOf("www.staging.example.com", "example.com")).toBe("high");
     expect(isDevSubdomainOf("app.dev.example.com", "example.com")).toBe(true);
-    expect(isDevSubdomainOf("www.staging.example.com", "example.com")).toBe(true);
+    expect(isDevSubdomainOf("www.staging.example.com", "example.com")).toBe(
+      true
+    );
   });
 
   test.each(["staging", "dev", "test", "qa", "uat", "preprod", "local", "int"])(
     "%s is high confidence",
     (label) => {
       expect(devTierOf(`${label}.example.com`, "example.com")).toBe("high");
-    },
+    }
   );
 
   test.each(["demo", "sandbox"])("%s is low confidence", (label) => {
@@ -727,7 +869,11 @@ describe("tier labels at any position (repo#1858)", () => {
 
   test("demo and sandbox links warn, a qa link fails", async () => {
     const warnOf = async (host: string) =>
-      (await run(`${NAV}<a href="https://${host}/x">x</a>`, { url: "https://example.com/" }))[0]!;
+      (
+        await run(`${NAV}<a href="https://${host}/x">x</a>`, {
+          url: "https://example.com/",
+        })
+      )[0]!;
     expect((await warnOf("demo.example.com")).status).toBe("warn");
     expect((await warnOf("sandbox.example.com")).status).toBe("warn");
     expect((await warnOf("app.qa.example.com")).status).toBe("fail");
@@ -750,10 +896,13 @@ describe("tier labels at any position (repo#1858)", () => {
   });
 
   test("auditing a qa origin is skipped", async () => {
-    const [check] = await run(`${NAV}<a href="https://dev.example.com/x">x</a>`, {
-      url: "https://qa.example.com/",
-      baseUrl: "https://qa.example.com/",
-    });
+    const [check] = await run(
+      `${NAV}<a href="https://dev.example.com/x">x</a>`,
+      {
+        url: "https://qa.example.com/",
+        baseUrl: "https://qa.example.com/",
+      }
+    );
     expect(check!.status).toBe("skipped");
     expect(check!.skipReason).toBe("non-production-origin");
   });

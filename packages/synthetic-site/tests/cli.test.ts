@@ -8,7 +8,11 @@ import { join } from "node:path";
 
 const CLI_PATH = join(import.meta.dir, "..", "src", "cli.ts");
 
-function runCli(args: string[]): { exitCode: number; stdout: string; stderr: string } {
+function runCli(args: string[]): {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+} {
   const proc = Bun.spawnSync(["bun", "run", CLI_PATH, ...args]);
   return {
     exitCode: proc.exitCode,

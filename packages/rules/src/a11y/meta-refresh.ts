@@ -1,9 +1,12 @@
 // a11y/meta-refresh - No meta refresh redirect
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import {
+  getAttrCI,
+  querySelectorAllOutsideNoscript,
+} from "@squirrelscan/utils";
 
-import { getAttrCI, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** A refresh sent in the `Refresh` response header, read like the browser reads it. */
 export interface RefreshHeader {
@@ -37,10 +40,13 @@ export function parseRefreshHeader(raw: string): RefreshHeader | null {
 }
 
 /** The `Refresh` header, whatever its letter case. Null when absent or unparseable. */
-export function readRefreshHeader(headers: Record<string, string> | undefined): RefreshHeader | null {
+export function readRefreshHeader(
+  headers: Record<string, string> | undefined
+): RefreshHeader | null {
   if (!headers) return null;
   for (const [name, value] of Object.entries(headers)) {
-    if (name.toLowerCase() === "refresh" && typeof value === "string") return parseRefreshHeader(value);
+    if (name.toLowerCase() === "refresh" && typeof value === "string")
+      return parseRefreshHeader(value);
   }
   return null;
 }
@@ -81,7 +87,10 @@ export function gradeRefreshHeader(h: RefreshHeader): {
     name: "refresh-header-reload",
     status: h.delay < 20 ? "fail" : "warn",
     message: `Page reloads every ${h.delay} seconds (Refresh header)`,
-    issue: h.delay < 20 ? "Frequent refresh disrupts screen reader users" : "Provide user control over refresh",
+    issue:
+      h.delay < 20
+        ? "Frequent refresh disrupts screen reader users"
+        : "Provide user control over refresh",
   };
 }
 
@@ -89,7 +98,8 @@ export const metaRefreshRule: Rule = {
   meta: {
     id: "a11y/meta-refresh",
     name: "Meta Refresh",
-    description: "Checks for meta refresh tags and Refresh headers that can disorient users",
+    description:
+      "Checks for meta refresh tags and Refresh headers that can disorient users",
     solution:
       "Avoid using <meta http-equiv='refresh'> or a Refresh response header for redirects or auto-refresh. They can disorient users, especially those using screen readers, and search engines treat them as a weaker signal than a real redirect. Use a server-side redirect instead: 301 or 308 for a permanent move, 302 or 307 for a temporary one. If content must refresh, provide a user control and warn users beforehand.",
     category: "a11y",
@@ -191,7 +201,10 @@ export const metaRefreshRule: Rule = {
           ? {
               // One finding for a page that sends both, naming both sources.
               name: "refresh-header-and-meta",
-              status: metaCheck.status === "fail" || graded.status === "fail" ? "fail" : "warn",
+              status:
+                metaCheck.status === "fail" || graded.status === "fail"
+                  ? "fail"
+                  : "warn",
               message: `Refresh header (${graded.message}) and meta refresh (${metaCheck.message})`,
               value: `Refresh: ${header.raw}; meta: ${metaCheck.value ?? ""}`,
               details: { sources: ["header", "meta"], issue: graded.issue },
@@ -202,7 +215,7 @@ export const metaRefreshRule: Rule = {
               message: graded.message,
               value: `Refresh: ${header.raw}`,
               details: { source: "header", issue: graded.issue },
-            },
+            }
       );
     }
 

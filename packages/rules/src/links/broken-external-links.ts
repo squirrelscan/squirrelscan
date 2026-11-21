@@ -45,7 +45,10 @@ import {
  * written before the column existed, and for a cloud bulk result that carried
  * only a status.
  */
-function isRateLimitedLink(link: { status: number | null; rateLimited?: boolean }): boolean {
+function isRateLimitedLink(link: {
+  status: number | null;
+  rateLimited?: boolean;
+}): boolean {
   return link.rateLimited === true || isRateLimitStatus(link.status);
 }
 
@@ -74,15 +77,20 @@ function archiveSuggestion(link: {
   if (!isConfirmedBroken(link) || !link.archive) return null;
   try {
     const u = new URL(link.archive.url);
-    if (u.protocol !== "https:" || u.hostname !== "web.archive.org") return null;
+    if (u.protocol !== "https:" || u.hostname !== "web.archive.org")
+      return null;
   } catch {
     return null;
   }
   return link.archive;
 }
 
-function isConfirmedBroken(link: { status: number | null; error: string | null }): boolean {
-  if (link.error) return isDeadHostError(link.error) || isTlsFailure(link.error);
+function isConfirmedBroken(link: {
+  status: number | null;
+  error: string | null;
+}): boolean {
+  if (link.error)
+    return isDeadHostError(link.error) || isTlsFailure(link.error);
   return link.status === 404 || link.status === 410;
 }
 
@@ -92,13 +100,21 @@ function isTlsFailure(error: string): boolean {
 
 /** A host that cannot be reached by any visitor: it does not exist, or sits under a suffix that never resolves. */
 function isDeadHostError(error: string): boolean {
-  return error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR || error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR;
+  return (
+    error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR ||
+    error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR
+  );
 }
 
 /** What a confirmed-broken link answered, for the message and the label. */
-function brokenReason(link: { status: number | null; error: string | null }): string {
-  if (link.error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR) return "no such domain suffix";
-  if (link.error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR) return "domain does not exist";
+function brokenReason(link: {
+  status: number | null;
+  error: string | null;
+}): string {
+  if (link.error === EXTERNAL_LINK_INVALID_SUFFIX_ERROR)
+    return "no such domain suffix";
+  if (link.error === EXTERNAL_LINK_HOST_UNRESOLVED_ERROR)
+    return "domain does not exist";
   if (link.error && isTlsFailure(link.error)) return "TLS failure";
   return String(link.status);
 }
@@ -111,7 +127,12 @@ function countExternalLinks(pages: SiteData["pages"] | undefined): number {
   const hrefs = new Set<string>();
   for (const page of pages ?? []) {
     for (const link of page.parsed?.links ?? []) {
-      if (!link.isInternal && link.url && !link.error && /^https?:/i.test(link.url)) {
+      if (
+        !link.isInternal &&
+        link.url &&
+        !link.error &&
+        /^https?:/i.test(link.url)
+      ) {
         hrefs.add(link.url);
       }
     }
@@ -124,7 +145,10 @@ interface ExternalPlacement {
   /** Sections of every link to it, or undefined when none had a known section. */
   sections(href: string): SectionCounts | undefined;
   /** Per page of `sourcePages` the audited pages show: its links to `href` and their sections. */
-  sources(href: string, sourcePages: readonly string[]): CheckItemSource[] | undefined;
+  sources(
+    href: string,
+    sourcePages: readonly string[]
+  ): CheckItemSource[] | undefined;
   /** Audited pages linking it, per section (pub#846), or undefined when none placed it. */
   regions(href: string): SectionCounts | undefined;
   /** Per page: the link's chrome placement, only where the markup or a confident model placed it (#1772). */
@@ -164,12 +188,15 @@ function externalPlacement(
     for (const page of pages ?? []) {
       for (const link of page.parsed?.links ?? []) {
         if (link.isInternal || !link.url) continue;
-        if (wanted.has(link.url)) count(link.url, page.url, link.section, chromeSectionOf(link));
+        if (wanted.has(link.url))
+          count(link.url, page.url, link.section, chromeSectionOf(link));
         if (wantedMasked.size === 0) continue;
         let key = masked.get(link.url);
-        if (key === undefined) masked.set(link.url, (key = maskLinkTokens(link.url)));
+        if (key === undefined)
+          masked.set(link.url, (key = maskLinkTokens(link.url)));
         // A link written without a token masks to itself and was counted above.
-        if (key !== link.url && wantedMasked.has(key)) count(key, page.url, link.section, chromeSectionOf(link));
+        if (key !== link.url && wantedMasked.has(key))
+          count(key, page.url, link.section, chromeSectionOf(link));
       }
     }
   }
@@ -180,7 +207,9 @@ function externalPlacement(
   return {
     sections(href) {
       const sections = fieldsOf(href)?.sections;
-      return sections && Object.keys(sections).length > 0 ? sections : undefined;
+      return sections && Object.keys(sections).length > 0
+        ? sections
+        : undefined;
     },
     sources(href, sourcePages) {
       const all = fieldsOf(href)?.sources;
@@ -214,7 +243,9 @@ function placementItemFields(
   const sections = placement.sections(href);
   const sources = placement.sources(href, sourcePages);
   return {
-    ...(sections ? { label: withSection(href, sections), meta: { sections } } : {}),
+    ...(sections
+      ? { label: withSection(href, sections), meta: { sections } }
+      : {}),
     ...(sources ? { sources } : {}),
     ...regionsField(placement.regions(href)),
   };
@@ -242,7 +273,7 @@ function notChecked(message: string, found: number): CheckResult {
  */
 function notRequestedCheck(
   linkCheck: NonNullable<SiteData["externalLinkCheck"]>,
-  placement: ExternalPlacement,
+  placement: ExternalPlacement
 ): CheckResult | null {
   const count = linkCheck.notRequested ?? 0;
   if (count === 0) return null;
@@ -276,7 +307,7 @@ function notRequestedCheck(
  */
 function refusedCheck(
   linkCheck: NonNullable<SiteData["externalLinkCheck"]>,
-  placement: ExternalPlacement,
+  placement: ExternalPlacement
 ): CheckResult | null {
   const count = linkCheck.refused ?? 0;
   if (count === 0) return null;
@@ -309,8 +340,13 @@ function refusedCheck(
  * token links (repo#2759), or refused on their URL alone, never took a slot
  * under the limit, so they are not over it.
  */
-function overCapCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): CheckResult | null {
-  const eligible = linkCheck.found - (linkCheck.notRequested ?? 0) - (linkCheck.refusedByUrl ?? 0);
+function overCapCheck(
+  linkCheck: NonNullable<SiteData["externalLinkCheck"]>
+): CheckResult | null {
+  const eligible =
+    linkCheck.found -
+    (linkCheck.notRequested ?? 0) -
+    (linkCheck.refusedByUrl ?? 0);
   const overCap = eligible - linkCheck.checked;
   if (overCap <= 0) return null;
   return {
@@ -319,7 +355,11 @@ function overCapCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): Ch
     message: `${overCap} of ${eligible} external link(s) were not checked: over this audit's limit of ${linkCheck.cap}, which checks the most-linked first`,
     skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
     value: overCap,
-    details: { externalLinksFound: linkCheck.found, externalLinksChecked: linkCheck.checked, cap: linkCheck.cap },
+    details: {
+      externalLinksFound: linkCheck.found,
+      externalLinksChecked: linkCheck.checked,
+      cap: linkCheck.cap,
+    },
   };
 }
 
@@ -329,7 +369,9 @@ function overCapCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): Ch
  * over the limit: their status is unknown, so they hold this rule's open
  * issues open rather than resolving them.
  */
-function outOfTimeCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): CheckResult | null {
+function outOfTimeCheck(
+  linkCheck: NonNullable<SiteData["externalLinkCheck"]>
+): CheckResult | null {
   const count = linkCheck.outOfTime ?? 0;
   if (count === 0) return null;
   return {
@@ -381,8 +423,8 @@ export const brokenExternalLinksRule: Rule = {
           found > 0
             ? `External link checking was off for this audit, so ${found} external link(s) on the audited pages were not checked`
             : "External link checking was off for this audit, so external links were not checked",
-          found,
-        ),
+          found
+        )
       );
       return { checks };
     }
@@ -393,23 +435,39 @@ export const brokenExternalLinksRule: Rule = {
     const wanted = new Set<string>();
     const wantedMasked = new Set<string>();
     // Reported masked when a token-like value was found, as written when not: both forms.
-    for (const l of [...(linkCheck?.notRequestedLinks ?? []), ...(linkCheck?.refusedLinks ?? [])]) {
+    for (const l of [
+      ...(linkCheck?.notRequestedLinks ?? []),
+      ...(linkCheck?.refusedLinks ?? []),
+    ]) {
       wanted.add(l.href);
       wantedMasked.add(l.href);
     }
     for (const l of externalLinks) {
-      if (l.error || l.wafBlocked || isRateLimitedLink(l) || (l.status ?? 0) >= 400) wanted.add(l.href);
+      if (
+        l.error ||
+        l.wafBlocked ||
+        isRateLimitedLink(l) ||
+        (l.status ?? 0) >= 400
+      )
+        wanted.add(l.href);
     }
     const placement = externalPlacement(ctx.site?.pages, wanted, wantedMasked);
-    const notRequested = linkCheck ? notRequestedCheck(linkCheck, placement) : null;
+    const notRequested = linkCheck
+      ? notRequestedCheck(linkCheck, placement)
+      : null;
     const refused = linkCheck ? refusedCheck(linkCheck, placement) : null;
 
     if (externalLinks.length === 0) {
       // Every external link was one the checker never requests, as an action
       // or token link (repo#2759) or for its address (pub#770): say that, and
       // nothing about the rest, of which there are none.
-      const neverRequested = (linkCheck?.notRequested ?? 0) + (linkCheck?.refused ?? 0);
-      if ((notRequested || refused) && linkCheck && neverRequested >= linkCheck.found) {
+      const neverRequested =
+        (linkCheck?.notRequested ?? 0) + (linkCheck?.refused ?? 0);
+      if (
+        (notRequested || refused) &&
+        linkCheck &&
+        neverRequested >= linkCheck.found
+      ) {
         if (notRequested) checks.push(notRequested);
         if (refused) checks.push(refused);
         return { checks };
@@ -432,14 +490,16 @@ export const brokenExternalLinksRule: Rule = {
       // reported above, not counted here.
       const found = Math.max(
         0,
-        countExternalLinks(ctx.site?.pages) - (linkCheck?.notRequested ?? 0) - (linkCheck?.refused ?? 0),
+        countExternalLinks(ctx.site?.pages) -
+          (linkCheck?.notRequested ?? 0) -
+          (linkCheck?.refused ?? 0)
       );
       if (found > 0) {
         checks.push(
           notChecked(
             `No external link check results for the ${found} external link(s) on the audited pages, so they were not checked`,
-            found,
-          ),
+            found
+          )
         );
         return { checks };
       }
@@ -471,13 +531,21 @@ export const brokenExternalLinksRule: Rule = {
     // Links nobody could verify either way (status unverifiable)
     // #1739: a first failure still waiting for its confirming check is likely broken, not blocked: its own
     // check, as a warning, until the second check confirms it (then it is a 404 and moves to the failing check).
-    const isAwaiting = (link: { wafBlocked?: boolean; unverifiedReason?: string }) =>
-      link.wafBlocked === true && link.unverifiedReason === "awaiting-confirmation";
+    const isAwaiting = (link: {
+      wafBlocked?: boolean;
+      unverifiedReason?: string;
+    }) =>
+      link.wafBlocked === true &&
+      link.unverifiedReason === "awaiting-confirmation";
     const awaitingLinks = externalLinks.filter(isAwaiting);
-    const wafBlockedLinks = externalLinks.filter((link) => isPossiblyBlockedLink(link) && !isAwaiting(link));
+    const wafBlockedLinks = externalLinks.filter(
+      (link) => isPossiblyBlockedLink(link) && !isAwaiting(link)
+    );
 
     // Same bucket, different cause: throttled targets (#1829).
-    const rateLimitedLinks = externalLinks.filter((link) => isRateLimitedLink(link));
+    const rateLimitedLinks = externalLinks.filter((link) =>
+      isRateLimitedLink(link)
+    );
 
     const checkedCount = externalLinks.filter(
       (l) => l.status !== null || l.error !== null
@@ -497,7 +565,7 @@ export const brokenExternalLinksRule: Rule = {
         !l.wafBlocked &&
         !isRateLimitedLink(l) &&
         l.status !== null &&
-        l.status < 400,
+        l.status < 400
     ).length;
 
     const brokenItems = (links: typeof brokenLinks) =>
@@ -505,7 +573,8 @@ export const brokenExternalLinksRule: Rule = {
         const sections = placement.sections(l.href);
         const sources = placement.sources(l.href, l.sourcePages);
         const deadHost = l.error !== null && isDeadHostError(l.error);
-        const confirmedError = l.error !== null && (deadHost || isTlsFailure(l.error));
+        const confirmedError =
+          l.error !== null && (deadHost || isTlsFailure(l.error));
         const archive = archiveSuggestion(l);
         const lookedUpEmpty = l.archive === null && isConfirmedBroken(l);
         return {
@@ -521,7 +590,7 @@ export const brokenExternalLinksRule: Rule = {
                 : lookedUpEmpty
                   ? ", no archived copy found"
                   : ""),
-            sections,
+            sections
           ),
           sourcePages: l.sourcePages,
           ...(sources ? { sources } : {}),
@@ -542,8 +611,8 @@ export const brokenExternalLinksRule: Rule = {
       checks.push(
         notChecked(
           `None of the ${externalLinks.length} external link(s) could be checked this audit`,
-          externalLinks.length,
-        ),
+          externalLinks.length
+        )
       );
     } else if (brokenLinks.length === 0) {
       const unverified = found - verifiedWorking;
@@ -575,13 +644,17 @@ export const brokenExternalLinksRule: Rule = {
             byReason.set(key, (byReason.get(key) ?? 0) + 1);
           }
           return [...byReason]
-            .map(([reason, n]) => (/^\d+$/.test(reason) ? `${n} with ${reason}` : `${n} ${reason}`))
+            .map(([reason, n]) =>
+              /^\d+$/.test(reason) ? `${n} with ${reason}` : `${n} ${reason}`
+            )
             .join(", ");
         };
         const detailsOf = (list: typeof all) => ({
           totalBroken: list.length,
           totalChecked: checkedCount,
-          deadHosts: list.filter((b) => b.link.error !== null && isDeadHostError(b.link.error)).length,
+          deadHosts: list.filter(
+            (b) => b.link.error !== null && isDeadHostError(b.link.error)
+          ).length,
           verifiedWorking,
           totalFound: found,
         });
@@ -603,7 +676,7 @@ export const brokenExternalLinksRule: Rule = {
             status: "fail",
             message: `${sitewideMessageHead(
               "external",
-              sitewide.map((b) => b.reach),
+              sitewide.map((b) => b.reach)
             )}: ${reasons(sitewide)}`,
             items: sitewide.map((b) => b.item),
             details: detailsOf(sitewide),
@@ -617,7 +690,7 @@ export const brokenExternalLinksRule: Rule = {
           byStatus.set(key, (byStatus.get(key) ?? 0) + 1);
         }
         const parts = [...byStatus].map(([status, n]) =>
-          status === "error" ? `${n} failed` : `${n} with ${status}`,
+          status === "error" ? `${n} failed` : `${n} with ${status}`
         );
         checks.push({
           name: "possibly-broken-external-links",
@@ -654,11 +727,17 @@ export const brokenExternalLinksRule: Rule = {
           const sources = placement.sources(l.href, l.sourcePages);
           return {
             id: l.href,
-            label: withSection(`${l.href} (failed once, being confirmed)`, sections),
+            label: withSection(
+              `${l.href} (failed once, being confirmed)`,
+              sections
+            ),
             sourcePages: l.sourcePages,
             ...(sources ? { sources } : {}),
             ...regionsField(placement.regions(l.href)),
-            meta: { unverifiedReason: "awaiting-confirmation", ...sectionMeta(sections) },
+            meta: {
+              unverifiedReason: "awaiting-confirmation",
+              ...sectionMeta(sections),
+            },
           };
         }),
         details: { totalAwaitingConfirmation: awaitingLinks.length },
@@ -687,7 +766,7 @@ export const brokenExternalLinksRule: Rule = {
                 : l.wafProvider && l.wafProvider !== "unknown"
                   ? `${l.href} (unverified: ${l.wafProvider})`
                   : `${l.href} (unverified)`,
-              sections,
+              sections
             ),
             sourcePages: l.sourcePages,
             ...(sources ? { sources } : {}),
@@ -696,7 +775,9 @@ export const brokenExternalLinksRule: Rule = {
               // A numeric status only: a link that never answered keeps the meta shape consumers read (pub#783).
               ...(typeof l.status === "number" ? { status: l.status } : {}),
               wafProvider: l.wafProvider,
-              ...(l.unverifiedReason ? { unverifiedReason: l.unverifiedReason } : {}),
+              ...(l.unverifiedReason
+                ? { unverifiedReason: l.unverifiedReason }
+                : {}),
               ...sectionMeta(sections),
             },
           };
@@ -716,11 +797,18 @@ export const brokenExternalLinksRule: Rule = {
           const sources = placement.sources(l.href, l.sourcePages);
           return {
             id: l.href,
-            label: withSection(`${l.href} (${l.status ?? "rate limited"})`, sections),
+            label: withSection(
+              `${l.href} (${l.status ?? "rate limited"})`,
+              sections
+            ),
             sourcePages: l.sourcePages,
             ...(sources ? { sources } : {}),
             ...regionsField(placement.regions(l.href)),
-            meta: { status: l.status, rateLimited: true, ...sectionMeta(sections) },
+            meta: {
+              status: l.status,
+              rateLimited: true,
+              ...sectionMeta(sections),
+            },
           };
         }),
       });

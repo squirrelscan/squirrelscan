@@ -14,15 +14,15 @@
 // LocalBusiness homepage with a visible badge and a Product page whose rating
 // matches its on-page reviews must stay silent.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
-import { ratingScopeRule } from "../src/schema/rating-scope";
-import { rules as schemaRules } from "../src/schema";
 import type { ParsedPage, Rule, RuleContext } from "../src/types";
+
+import { rules as schemaRules } from "../src/schema";
+import { ratingScopeRule } from "../src/schema/rating-scope";
 import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 function pageCtx(html: string, url = "https://example.com/"): RuleContext {
@@ -45,7 +45,7 @@ function check(checks: CheckResult[], name: string): CheckResult | undefined {
 
 function page(schema: unknown, body: string, head = ""): string {
   return `<html><head><title>Page</title>${head}<script type="application/ld+json">${JSON.stringify(
-    schema,
+    schema
   )}</script></head><body>${body}</body></html>`;
 }
 
@@ -54,7 +54,11 @@ const SITEWIDE_BUSINESS = {
   "@context": "https://schema.org",
   "@type": "LocalBusiness",
   name: "Northgate Auto Repair",
-  aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", ratingCount: "18" },
+  aggregateRating: {
+    "@type": "AggregateRating",
+    ratingValue: "4.9",
+    ratingCount: "18",
+  },
 };
 
 const LEGAL_BODY =
@@ -64,7 +68,10 @@ const LEGAL_BODY =
 describe("schema/rating-scope — visibility", () => {
   test("privacy policy carrying the sitewide rating with nothing visible → warns", async () => {
     const html = page(SITEWIDE_BUSINESS, LEGAL_BODY);
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/privacy")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/privacy")
+    );
     const visible = check(checks, "rating-visible");
 
     expect(visible?.status).toBe("warn");
@@ -81,7 +88,10 @@ describe("schema/rating-scope — visibility", () => {
   test("rating value that exists ONLY in the JSON-LD is not counted as visible", async () => {
     // 4.9 appears in the markup; the visible text never says it.
     const html = page(SITEWIDE_BUSINESS, LEGAL_BODY);
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/privacy")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/privacy")
+    );
 
     expect(check(checks, "rating-visible")?.status).toBe("warn");
   });
@@ -89,9 +99,12 @@ describe("schema/rating-scope — visibility", () => {
   test("visible star badge on a LocalBusiness homepage → no warning", async () => {
     const html = page(
       SITEWIDE_BUSINESS,
-      '<h1>Northgate Auto Repair</h1><div class="badge">★★★★★ 4.9 from 18 reviews</div>',
+      '<h1>Northgate Auto Repair</h1><div class="badge">★★★★★ 4.9 from 18 reviews</div>'
     );
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/")
+    );
 
     expect(check(checks, "rating-visible")?.status).toBe("pass");
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
@@ -103,19 +116,32 @@ describe("schema/rating-scope — visibility", () => {
         "@context": "https://schema.org",
         "@type": "Product",
         name: "Trail Runner 3",
-        aggregateRating: { "@type": "AggregateRating", ratingValue: "4.6", reviewCount: "23" },
+        aggregateRating: {
+          "@type": "AggregateRating",
+          ratingValue: "4.6",
+          reviewCount: "23",
+        },
       },
-      "<h1>Trail Runner 3</h1><p>4.6 out of 5 stars based on 23 reviews</p>",
+      "<h1>Trail Runner 3</h1><p>4.6 out of 5 stars based on 23 reviews</p>"
     );
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/products/trail-runner-3")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/products/trail-runner-3")
+    );
 
     expect(check(checks, "rating-visible")?.status).toBe("pass");
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
   });
 
   test("decimal rating printed verbatim in the copy counts as visible", async () => {
-    const html = page(SITEWIDE_BUSINESS, "<h1>Northgate Auto Repair</h1><p>Our customers score us 4.9.</p>");
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/")));
+    const html = page(
+      SITEWIDE_BUSINESS,
+      "<h1>Northgate Auto Repair</h1><p>Our customers score us 4.9.</p>"
+    );
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/")
+    );
 
     expect(check(checks, "rating-visible")?.status).toBe("pass");
   });
@@ -123,9 +149,12 @@ describe("schema/rating-scope — visibility", () => {
   test("badge rendered as an image → alt text counts as visible", async () => {
     const html = page(
       SITEWIDE_BUSINESS,
-      '<h1>Northgate Auto Repair</h1><img src="/stars.svg" alt="Rated 4.9 out of 5 by our customers">',
+      '<h1>Northgate Auto Repair</h1><img src="/stars.svg" alt="Rated 4.9 out of 5 by our customers">'
     );
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/")
+    );
 
     expect(check(checks, "rating-visible")?.status).toBe("pass");
   });
@@ -134,9 +163,12 @@ describe("schema/rating-scope — visibility", () => {
     const html = page(
       SITEWIDE_BUSINESS,
       '<h1>Northgate Auto Repair</h1><div class="trustpilot-widget" data-businessunit-id="x"></div>',
-      '<script src="https://widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js"></script>',
+      '<script src="https://widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js"></script>'
     );
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/")
+    );
 
     expect(check(checks, "rating-visible")?.status).toBe("pass");
     expect(check(checks, "rating-visible")?.message).toContain("review widget");
@@ -144,11 +176,18 @@ describe("schema/rating-scope — visibility", () => {
 
   test("no AggregateRating anywhere → one skipped check, no finding (#1741)", async () => {
     const html = page(
-      { "@context": "https://schema.org", "@type": "Organization", name: "Northgate" },
-      "<h1>Northgate</h1><p>We fix cars.</p>",
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: "Northgate",
+      },
+      "<h1>Northgate</h1><p>We fix cars.</p>"
     );
 
-    const out = (await run(ratingScopeRule, pageCtx(html, "https://example.com/")));
+    const out = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/")
+    );
     expect(out.map((c) => [c.name, c.status, c.skipReason])).toEqual([
       ["rating-visible", "skipped", "not-applicable"],
     ]);
@@ -160,21 +199,31 @@ describe("schema/rating-scope — visibility", () => {
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
         name: "Northgate Auto Repair",
-        aggregateRating: [{ "@type": "AggregateRating", ratingValue: "4.9", ratingCount: "18" }],
+        aggregateRating: [
+          { "@type": "AggregateRating", ratingValue: "4.9", ratingCount: "18" },
+        ],
       },
-      LEGAL_BODY,
+      LEGAL_BODY
     );
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/privacy")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/privacy")
+    );
 
     expect(check(checks, "rating-visible")?.status).toBe("warn");
-    expect(check(checks, "rating-visible")?.message).toContain("AggregateRating 4.9 from 18 reviews");
+    expect(check(checks, "rating-visible")?.message).toContain(
+      "AggregateRating 4.9 from 18 reviews"
+    );
   });
 });
 
 describe("schema/rating-scope — page subject", () => {
   test("privacy policy carrying the sitewide business rating → warns on scope", async () => {
     const html = page(SITEWIDE_BUSINESS, LEGAL_BODY);
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/privacy")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/privacy")
+    );
     const subject = check(checks, "rating-subject");
 
     expect(subject?.status).toBe("warn");
@@ -188,8 +237,14 @@ describe("schema/rating-scope — page subject", () => {
 
   test("privacy policy showing a visible badge still warns on scope", async () => {
     // Visibility is not the excuse here: a policy page has no rateable subject.
-    const html = page(SITEWIDE_BUSINESS, `${LEGAL_BODY}<footer>★★★★★ 4.9 from 18 reviews</footer>`);
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/privacy")));
+    const html = page(
+      SITEWIDE_BUSINESS,
+      `${LEGAL_BODY}<footer>★★★★★ 4.9 from 18 reviews</footer>`
+    );
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/privacy")
+    );
 
     expect(check(checks, "rating-visible")?.status).toBe("pass");
     expect(check(checks, "rating-subject")?.status).toBe("warn");
@@ -198,9 +253,12 @@ describe("schema/rating-scope — page subject", () => {
   test("terms page carrying the sitewide business rating → warns", async () => {
     const html = page(
       SITEWIDE_BUSINESS,
-      "<h1>Terms and Conditions</h1><p>These terms govern your use of the site.</p>",
+      "<h1>Terms and Conditions</h1><p>These terms govern your use of the site.</p>"
     );
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/terms-and-conditions")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/terms-and-conditions")
+    );
 
     expect(check(checks, "rating-subject")?.status).toBe("warn");
     expect(check(checks, "rating-subject")?.message).toContain("terms page");
@@ -219,9 +277,12 @@ describe("schema/rating-scope — page subject", () => {
           SITEWIDE_BUSINESS,
         ],
       },
-      "<h1>Five signs your brakes need attention</h1><p>Grinding, pulling, a soft pedal.</p>",
+      "<h1>Five signs your brakes need attention</h1><p>Grinding, pulling, a soft pedal.</p>"
     );
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/news/brake-signs")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/news/brake-signs")
+    );
     const subject = check(checks, "rating-subject");
 
     expect(subject?.status).toBe("warn");
@@ -240,22 +301,37 @@ describe("schema/rating-scope — page subject", () => {
           {
             "@type": "Product",
             name: "Trail Runner 3",
-            aggregateRating: { "@type": "AggregateRating", ratingValue: "4.6", ratingCount: "23" },
+            aggregateRating: {
+              "@type": "AggregateRating",
+              ratingValue: "4.6",
+              ratingCount: "23",
+            },
           },
         ],
       },
-      "<h1>Trail Runner 3 reviewed</h1><p>Readers rate it 4.6 out of 5 across 23 reviews.</p>",
+      "<h1>Trail Runner 3 reviewed</h1><p>Readers rate it 4.6 out of 5 across 23 reviews.</p>"
     );
-    const checks = (await run(ratingScopeRule, pageCtx(html, "https://example.com/blog/trail-runner-3")));
+    const checks = await run(
+      ratingScopeRule,
+      pageCtx(html, "https://example.com/blog/trail-runner-3")
+    );
 
     expect(check(checks, "rating-subject")?.status).toBe("pass");
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
   });
 
   test("home and product pages get no subject check at all", async () => {
-    const html = page(SITEWIDE_BUSINESS, "<h1>Northgate Auto Repair</h1><p>★★★★★ 4.9 from 18 reviews</p>");
+    const html = page(
+      SITEWIDE_BUSINESS,
+      "<h1>Northgate Auto Repair</h1><p>★★★★★ 4.9 from 18 reviews</p>"
+    );
 
-    expect(check(await run(ratingScopeRule, pageCtx(html, "https://example.com/")), "rating-subject")).toBeUndefined();
+    expect(
+      check(
+        await run(ratingScopeRule, pageCtx(html, "https://example.com/")),
+        "rating-subject"
+      )
+    ).toBeUndefined();
   });
 });
 
@@ -274,8 +350,23 @@ describe("schema/rating-scope — registration", () => {
 describe("schema/rating-scope identity (#231)", () => {
   test("the check message does not carry the rated entity's name", async () => {
     const other = { ...SITEWIDE_BUSINESS, name: "Southside Tyres" };
-    const a = check(await run(ratingScopeRule, pageCtx(page(SITEWIDE_BUSINESS, LEGAL_BODY), "https://example.com/privacy")), "rating-visible");
-    const b = check(await run(ratingScopeRule, pageCtx(page(other, LEGAL_BODY), "https://example.com/privacy")), "rating-visible");
+    const a = check(
+      await run(
+        ratingScopeRule,
+        pageCtx(
+          page(SITEWIDE_BUSINESS, LEGAL_BODY),
+          "https://example.com/privacy"
+        )
+      ),
+      "rating-visible"
+    );
+    const b = check(
+      await run(
+        ratingScopeRule,
+        pageCtx(page(other, LEGAL_BODY), "https://example.com/privacy")
+      ),
+      "rating-visible"
+    );
     expect(a?.message).toBe(b?.message);
   });
 });

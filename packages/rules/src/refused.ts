@@ -6,9 +6,12 @@
 // otherwise assert an absence reports it as not checked instead, with the
 // refusal named, as an info check that never counts as a failure.
 
-import { describeRefusedFetch } from "@squirrelscan/core-contracts";
+import type {
+  RefusedFetch,
+  RefusedResource,
+} from "@squirrelscan/core-contracts";
 
-import type { RefusedFetch, RefusedResource } from "@squirrelscan/core-contracts";
+import { describeRefusedFetch } from "@squirrelscan/core-contracts";
 
 import type { CheckResult, SiteData } from "./types";
 
@@ -18,9 +21,11 @@ export const REFUSED = "refused";
 /** The refusals recorded for `resource`, in crawl order. */
 export function refusedFor(
   site: Pick<SiteData, "refusedFetches"> | undefined,
-  resource: RefusedResource,
+  resource: RefusedResource
 ): RefusedFetch[] {
-  return (site?.refusedFetches ?? []).filter((refusal) => refusal.resource === resource);
+  return (site?.refusedFetches ?? []).filter(
+    (refusal) => refusal.resource === resource
+  );
 }
 
 /** `HTTP 403 (Cloudflare)`, or the distinct statuses when the refusals differ. */
@@ -28,7 +33,9 @@ export function refusalReason(refusals: readonly RefusedFetch[]): string {
   const first = refusals[0];
   if (!first) return "refused";
   const statuses = [...new Set(refusals.map((refusal) => refusal.status))];
-  const providers = [...new Set(refusals.flatMap((refusal) => refusal.provider ?? []))];
+  const providers = [
+    ...new Set(refusals.flatMap((refusal) => refusal.provider ?? [])),
+  ];
   const by = providers.length > 0 ? ` (${providers.join(", ")})` : "";
   return `HTTP ${statuses.join("/")}${by}`;
 }
@@ -38,7 +45,7 @@ export function refusedCheck(
   name: string,
   subject: string,
   refusals: readonly RefusedFetch[],
-  asProbe = false,
+  asProbe = false
 ): CheckResult {
   return {
     name,

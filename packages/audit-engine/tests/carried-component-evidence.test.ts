@@ -8,9 +8,13 @@
 // carried replay reads it back, and the replayed check must reach the SAME fix
 // group id as the fresh one it is standing in for.
 
-import { expect, test } from "bun:test";
-import type { CheckResult, ComponentOccurrence } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  ComponentOccurrence,
+} from "@squirrelscan/core-contracts";
+
 import { componentFixGroups } from "@squirrelscan/report";
+import { expect, test } from "bun:test";
 
 import { flattenChecks } from "../src/merge-core";
 import { carriedFindingToCheck } from "../src/scoring";
@@ -27,9 +31,17 @@ function occurrence(pageUrl: string): ComponentOccurrence {
     confidence: "observed",
     region: { role: "footer", nestedIn: "none", structuralSignature: "s128:r" },
     family: { key: "s128:f", structuralSignature: "s128:f" },
-    variant: { key: "s128:v", structuralSignature: "s128:v", contentHash: "s128:c" },
+    variant: {
+      key: "s128:v",
+      structuralSignature: "s128:v",
+      contentHash: "s128:c",
+    },
     element: { locator: "footer:1>footer>p:1", structuralSignature: "s128:e" },
-    defect: { kind: "stale-copyright", values: { year: 2019 }, valueHashes: { year: "s128:y" } },
+    defect: {
+      kind: "stale-copyright",
+      values: { year: 2019 },
+      valueHashes: { year: "s128:y" },
+    },
   };
 }
 
@@ -62,7 +74,7 @@ function replayAsCarried(pageUrl: string): CheckResult {
       payload: row!.payload,
       lastSeenAt: 1,
     },
-    pageUrl,
+    pageUrl
   );
 }
 
@@ -70,10 +82,14 @@ test("a carried finding restores its component evidence from the stored payload"
   const carried = replayAsCarried("https://example.test/carried");
 
   expect(carried.provenance).toBe("carried");
-  expect(carried.componentOccurrences).toEqual([occurrence("https://example.test/carried")]);
+  expect(carried.componentOccurrences).toEqual([
+    occurrence("https://example.test/carried"),
+  ]);
   // The legacy replay is unaffected: page-level message/value/expected still
   // come back exactly as the fresh check had them.
-  expect(carried.message).toBe(freshCheck("https://example.test/carried").message);
+  expect(carried.message).toBe(
+    freshCheck("https://example.test/carried").message
+  );
   // Legacy round-trip stringifies these; asserted as-is rather than "fixed".
   expect(carried.value).toBe("2019");
   expect(carried.expected).toBe("2026");
@@ -91,7 +107,10 @@ test("a payload-limit omission marker survives the carried replay", () => {
   // `componentEvidence` stores `null`.
   const many = Array.from({ length: 400 }, (_, i) => ({
     ...occurrence("https://example.test/marked"),
-    element: { locator: `footer:1>footer>p:${i}`, structuralSignature: `s128:e${i}` },
+    element: {
+      locator: `footer:1>footer>p:${i}`,
+      structuralSignature: `s128:e${i}`,
+    },
   }));
   const check: CheckResult = {
     ...freshCheck("https://example.test/marked"),
@@ -100,7 +119,9 @@ test("a payload-limit omission marker survives the carried replay", () => {
   };
   const rows = flattenChecks("https://example.test/marked", RULE_ID, [check]);
   const owner = rows.at(-1)!;
-  expect(JSON.parse(owner.payload!).componentEvidence.reason).toBe("payload-limit");
+  expect(JSON.parse(owner.payload!).componentEvidence.reason).toBe(
+    "payload-limit"
+  );
 
   const carried = carriedFindingToCheck(
     {
@@ -114,7 +135,7 @@ test("a payload-limit omission marker survives the carried replay", () => {
       payload: owner.payload,
       lastSeenAt: 1,
     },
-    "https://example.test/marked",
+    "https://example.test/marked"
   );
   expect(carried.componentOccurrences).toBeUndefined();
   expect(carried.componentEvidence).toEqual({
@@ -138,7 +159,10 @@ test("a carried page joins the SAME fix group as a freshly crawled one", () => {
 
   // The group identity must not depend on how the page was obtained: an
   // all-fresh pair has to produce the identical id.
-  const allFresh = componentFixGroups(RULE_ID, [fresh, freshCheck("https://example.test/carried")]);
+  const allFresh = componentFixGroups(RULE_ID, [
+    fresh,
+    freshCheck("https://example.test/carried"),
+  ]);
   expect(allFresh).toHaveLength(1);
   expect(mixed[0]!.id).toBe(allFresh[0]!.id);
 });

@@ -1,8 +1,8 @@
 // perf/critical-request-chains - Identifies chains of dependent resources delaying render
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { findCssImports } from "../shared/css-imports";
 import { scriptLoading } from "./cwv";
@@ -46,7 +46,10 @@ export const criticalRequestChainsRule: Rule = {
     );
 
     // Find render-blocking JS (classic script without async/defer in head)
-    const blockingJs = querySelectorAllOutsideNoscript(head, "script[src]").filter(
+    const blockingJs = querySelectorAllOutsideNoscript(
+      head,
+      "script[src]"
+    ).filter(
       (script) =>
         script.getAttribute("src") && scriptLoading(script) === "blocking"
     );
@@ -60,7 +63,10 @@ export const criticalRequestChainsRule: Rule = {
     }
 
     // Check for preload hints
-    const preloads = querySelectorAllOutsideNoscript(head, 'link[rel="preload"]');
+    const preloads = querySelectorAllOutsideNoscript(
+      head,
+      'link[rel="preload"]'
+    );
 
     const chainMembers: string[] = [];
 
@@ -98,7 +104,8 @@ export const criticalRequestChainsRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "Resource dependencies and actual browser request timing were not measured.",
+          uncertainty:
+            "Resource dependencies and actual browser request timing were not measured.",
         },
       });
     } else {
@@ -110,7 +117,8 @@ export const criticalRequestChainsRule: Rule = {
         observation: {
           mode: "static",
           applicability: "applicable",
-          uncertainty: "Resource dependencies and actual browser request timing were not measured.",
+          uncertainty:
+            "Resource dependencies and actual browser request timing were not measured.",
         },
       });
     }

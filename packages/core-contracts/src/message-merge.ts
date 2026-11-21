@@ -65,7 +65,11 @@ const SAFE_DIGITS = 15;
  * So a value that is not a count, such as an HTTP status, must never be
  * written alone in parentheses: `(HTTP 404)`, not `(404)`.
  */
-export function isCountToken(message: string, start: number, end: number): boolean {
+export function isCountToken(
+  message: string,
+  start: number,
+  end: number
+): boolean {
   const text = message.slice(start, end);
   if (text.length > SAFE_DIGITS) return false;
   // `007` is a code, not a count: widening it would drop the padding too.
@@ -73,8 +77,15 @@ export function isCountToken(message: string, start: number, end: number): boole
   // A four-digit year is indistinguishable from a count of that many things,
   // and getting it wrong writes a false date, so it is never widened.
   // A four-digit value alone in parentheses with a unit after it (`(1200ms)`) is not a year.
-  const measured = message[start - 1] === "(" && MEASUREMENT_UNIT_RE.test(message.slice(end));
-  if (!measured && text.length === 4 && Number(text) >= 1000 && Number(text) <= 2999) return false;
+  const measured =
+    message[start - 1] === "(" && MEASUREMENT_UNIT_RE.test(message.slice(end));
+  if (
+    !measured &&
+    text.length === 4 &&
+    Number(text) >= 1000 &&
+    Number(text) <= 2999
+  )
+    return false;
   // Only the character BEFORE needs testing against the glue set: the two
   // positive tests below already demand a space or a `)` after the run, so a
   // `.`, `-`, `:`, `/`, `,` or letter on the right can never reach them. The
@@ -120,7 +131,8 @@ export function shapeOf(message: string): MessageShape {
 export function renderMergedMessage(shape: MessageShape): string {
   let out = shape.parts[0] ?? "";
   for (const [index, count] of shape.counts.entries()) {
-    out += count.min === count.max ? count.text : `${count.min} to ${count.max}`;
+    out +=
+      count.min === count.max ? count.text : `${count.min} to ${count.max}`;
     out += shape.parts[index + 1] ?? "";
   }
   return out;

@@ -3,13 +3,19 @@
 // `[rules] disable`) keeps /swagger.json and the rest off the wire with no
 // other setting, and `[crawler] disable_discovery_probes = true` turns them all off.
 
+import {
+  DISCOVERY_PROBES,
+  type DiscoveryProbe,
+} from "@squirrelscan/core-contracts/storage";
 import { describe, expect, test } from "bun:test";
 
-import { DISCOVERY_PROBES, type DiscoveryProbe } from "@squirrelscan/core-contracts/storage";
-
-import { configuredPagePaths, selectDiscoveryProbes } from "../src/discovery-probes";
-import { loadAllRules } from "../src/loader";
 import type { Rule } from "../src/types";
+
+import {
+  configuredPagePaths,
+  selectDiscoveryProbes,
+} from "../src/discovery-probes";
+import { loadAllRules } from "../src/loader";
 
 const ALL = { enable: ["*"], disable: [] };
 const API_PATHS = [
@@ -24,10 +30,15 @@ const API_PATHS = [
 describe("selectDiscoveryProbes (#409)", () => {
   test("every probe has a reader, so a default audit still sends all of them", () => {
     const declared = new Set(
-      [...loadAllRules().values()].flatMap((rule) => rule.meta.discoveryProbes ?? []),
+      [...loadAllRules().values()].flatMap(
+        (rule) => rule.meta.discoveryProbes ?? []
+      )
     );
-    for (const probe of DISCOVERY_PROBES) expect(declared.has(probe)).toBe(true);
-    expect(selectDiscoveryProbes({ enabled: true, rules: ALL })).toEqual([...DISCOVERY_PROBES]);
+    for (const probe of DISCOVERY_PROBES)
+      expect(declared.has(probe)).toBe(true);
+    expect(selectDiscoveryProbes({ enabled: true, rules: ALL })).toEqual([
+      ...DISCOVERY_PROBES,
+    ]);
   });
 
   test("disable_discovery_probes = true sends none, whatever the rules", () => {
@@ -38,18 +49,33 @@ describe("selectDiscoveryProbes (#409)", () => {
   // they stay on when only ax is excluded.
   test("excluding the ax category sends only the security.txt probes and the configured-pages probe", () => {
     // `configured-pages` is read by eeat/about-page and eeat/privacy-policy (#1428).
-    const securityTxt: DiscoveryProbe[] = ["/.well-known/security.txt", "/security.txt", "configured-pages"];
-    expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ax/*"] } })).toEqual(
-      securityTxt,
-    );
+    const securityTxt: DiscoveryProbe[] = [
+      "/.well-known/security.txt",
+      "/security.txt",
+      "configured-pages",
+    ];
+    expect(
+      selectDiscoveryProbes({
+        enabled: true,
+        rules: { enable: ["*"], disable: ["ax/*"] },
+      })
+    ).toEqual(securityTxt);
     // The legacy `ai` code is an alias of `ax`.
-    expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ai/*"] } })).toEqual(
-      securityTxt,
-    );
+    expect(
+      selectDiscoveryProbes({
+        enabled: true,
+        rules: { enable: ["*"], disable: ["ai/*"] },
+      })
+    ).toEqual(securityTxt);
   });
 
   test("including only other categories sends none", () => {
-    expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["core/*", "perf/*"] } })).toEqual([]);
+    expect(
+      selectDiscoveryProbes({
+        enabled: true,
+        rules: { enable: ["core/*", "perf/*"] },
+      })
+    ).toEqual([]);
   });
 
   test("excluding ax/api-discovery drops only the paths it reads", () => {
@@ -74,7 +100,10 @@ describe("selectDiscoveryProbes (#409)", () => {
     const both = selectDiscoveryProbes({
       enabled: true,
       rules: ALL,
-      ruleOptions: { "ax/agent-blocking": { enabled: false }, "ax/pay-per-crawl": { enabled: false } },
+      ruleOptions: {
+        "ax/agent-blocking": { enabled: false },
+        "ax/pay-per-crawl": { enabled: false },
+      },
     });
     expect(both).not.toContain("agent-access");
   });
@@ -98,12 +127,17 @@ describe("selectDiscoveryProbes (#409)", () => {
         enabled: true,
         rules: { enable: ["*"], disable: ["ax/*", "security/*", "eeat/*"] },
         additionalNamespaces: [{ name: "acme", rules: [pluginRule] }],
-      }),
+      })
     ).toEqual(["/openapi.json"]);
   });
 
   test("a single rule gets exactly its own probes", () => {
-    expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["ax/agents-md"] } })).toEqual([
+    expect(
+      selectDiscoveryProbes({
+        enabled: true,
+        rules: { enable: ["ax/agents-md"] },
+      })
+    ).toEqual([
       "llms-txt",
       "/AGENTS.md",
       "/agents.md",
@@ -117,10 +151,22 @@ describe("configuredPagePaths (#1428)", () => {
   test("only a pattern that names one path can be requested", () => {
     expect(
       configuredPagePaths({
-        "eeat/about-page": { paths: ["/agentur", "agentur", "regex:^/a", "//evil.test/x", "/with space", "/a?b=1", "/ok/"] },
-        "eeat/privacy-policy": { paths: ["/policies/privacy-policy", "/agentur"] },
+        "eeat/about-page": {
+          paths: [
+            "/agentur",
+            "agentur",
+            "regex:^/a",
+            "//evil.test/x",
+            "/with space",
+            "/a?b=1",
+            "/ok/",
+          ],
+        },
+        "eeat/privacy-policy": {
+          paths: ["/policies/privacy-policy", "/agentur"],
+        },
         "eeat/contact-page": { paths: ["/kontakt"] },
-      }),
+      })
     ).toEqual(["/agentur", "/ok/", "/policies/privacy-policy"]);
   });
 

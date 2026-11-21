@@ -17,7 +17,12 @@ export const EXPOSED_FILE_READ_CAP = 16 * 1024;
 /** Bump when the list or a signature changes, so two audits can say which list they ran. */
 export const EXPOSED_FILES_LIST_VERSION = 1;
 
-export type ExposedFileGroup = "vcs" | "secrets" | "server" | "cruft" | "backup";
+export type ExposedFileGroup =
+  | "vcs"
+  | "secrets"
+  | "server"
+  | "cruft"
+  | "backup";
 
 /** `high` fails the check (secrets, source, data); `medium` warns (metadata, listings). */
 export type ExposureSeverity = "high" | "medium";
@@ -54,7 +59,11 @@ export interface SensitiveFile {
 
 // ── helpers ─────────────────────────────────────────────────────────
 
-function startsWithBytes(bytes: Uint8Array, magic: readonly number[], offset = 0): boolean {
+function startsWithBytes(
+  bytes: Uint8Array,
+  magic: readonly number[],
+  offset = 0
+): boolean {
   if (bytes.byteLength < offset + magic.length) return false;
   return magic.every((b, i) => bytes[offset + i] === b);
 }
@@ -63,7 +72,11 @@ function startsWithBytes(bytes: Uint8Array, magic: readonly number[], offset = 0
 export function looksLikeHtml(answer: ProbeAnswer): boolean {
   if (answer.contentType.includes("html")) return true;
   const head = answer.text.slice(0, 1024).trimStart().toLowerCase();
-  return head.startsWith("<!doctype html") || head.startsWith("<html") || /<(head|body|script|div)[\s>]/i.test(head);
+  return (
+    head.startsWith("<!doctype html") ||
+    head.startsWith("<html") ||
+    /<(head|body|script|div)[\s>]/i.test(head)
+  );
 }
 
 function nonHtmlText(answer: ProbeAnswer): string | null {
@@ -80,7 +93,8 @@ function contentLines(text: string): string[] {
 }
 
 const ENV_LINE_RE = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_.]*)\s*=/;
-const SECRET_NAME_RE = /(KEY|SECRET|TOKEN|PASS|PWD|PRIVATE|CREDENTIAL|AUTH|DSN|DATABASE_URL|_URI$|_URL$)/i;
+const SECRET_NAME_RE =
+  /(KEY|SECRET|TOKEN|PASS|PWD|PRIVATE|CREDENTIAL|AUTH|DSN|DATABASE_URL|_URI$|_URL$)/i;
 
 /** A dotenv file: every content line is KEY=VALUE. Counts names, never reads values. */
 export function matchDotenv(answer: ProbeAnswer): SignatureMatch | null {
@@ -89,7 +103,10 @@ export function matchDotenv(answer: ProbeAnswer): SignatureMatch | null {
   const lines = contentLines(text);
   if (lines.length === 0) return null;
   // The last line of a cut body may be partial; judge the complete ones.
-  const judged = answer.bytes.byteLength >= EXPOSED_FILE_READ_CAP && lines.length > 1 ? lines.slice(0, -1) : lines;
+  const judged =
+    answer.bytes.byteLength >= EXPOSED_FILE_READ_CAP && lines.length > 1
+      ? lines.slice(0, -1)
+      : lines;
   let secretLooking = 0;
   for (const line of judged) {
     const m = ENV_LINE_RE.exec(line);
@@ -106,7 +123,8 @@ export function matchDotenv(answer: ProbeAnswer): SignatureMatch | null {
 
 // ── the list ────────────────────────────────────────────────────────
 
-const VCS_SOURCE = "version control metadata from which the site's source code and history can be rebuilt";
+const VCS_SOURCE =
+  "version control metadata from which the site's source code and history can be rebuilt";
 
 export const SENSITIVE_FILES: readonly SensitiveFile[] = [
   // VCS
@@ -120,7 +138,9 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     match(a) {
       const text = nonHtmlText(a)?.trim();
       if (!text) return null;
-      return /^ref: refs\/\S+$/.test(text) || /^[0-9a-f]{40}$/.test(text) ? {} : null;
+      return /^ref: refs\/\S+$/.test(text) || /^[0-9a-f]{40}$/.test(text)
+        ? {}
+        : null;
     },
   },
   {
@@ -128,14 +148,18 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "vcs",
     severity: "high",
-    reveals: "Git repository configuration: remote URLs, sometimes with embedded credentials",
+    reveals:
+      "Git repository configuration: remote URLs, sometimes with embedded credentials",
     signature: "git config [core] section",
     match(a) {
       const text = nonHtmlText(a);
       if (!text) return null;
       if (!/^\s*\[core\]\s*$/m.test(text)) return null;
-      if (!/^\s*(repositoryformatversion|filemode|bare)\s*=/m.test(text)) return null;
-      return /^\s*\[remote\s+"/m.test(text) ? { detail: "names remote repositories" } : {};
+      if (!/^\s*(repositoryformatversion|filemode|bare)\s*=/m.test(text))
+        return null;
+      return /^\s*\[remote\s+"/m.test(text)
+        ? { detail: "names remote repositories" }
+        : {};
     },
   },
   {
@@ -166,7 +190,11 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
       const text = nonHtmlText(a);
       if (!text) return null;
       const lines = contentLines(text);
-      if (lines.length === 0 || !lines.every((l) => /^[a-z0-9][a-z0-9.-]*$/.test(l))) return null;
+      if (
+        lines.length === 0 ||
+        !lines.every((l) => /^[a-z0-9][a-z0-9.-]*$/.test(l))
+      )
+        return null;
       return lines.includes("revlogv1") || lines.includes("store") ? {} : null;
     },
   },
@@ -176,7 +204,8 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "secrets",
     severity: "high",
-    reveals: "environment variables, typically API keys, database URLs and other secrets",
+    reveals:
+      "environment variables, typically API keys, database URLs and other secrets",
     signature: "KEY=VALUE lines",
     match: matchDotenv,
   },
@@ -185,7 +214,8 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "secrets",
     severity: "high",
-    reveals: "local environment variables, typically API keys, database URLs and other secrets",
+    reveals:
+      "local environment variables, typically API keys, database URLs and other secrets",
     signature: "KEY=VALUE lines",
     match: matchDotenv,
   },
@@ -203,7 +233,8 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "secrets",
     severity: "high",
-    reveals: "WordPress configuration source: database credentials and authentication salts",
+    reveals:
+      "WordPress configuration source: database credentials and authentication salts",
     signature: "PHP source with configuration",
     match: matchPhpConfig,
   },
@@ -212,13 +243,17 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "secrets",
     severity: "high",
-    reveals: "ASP.NET application settings, often connection strings and API keys",
+    reveals:
+      "ASP.NET application settings, often connection strings and API keys",
     signature: "appsettings.json sections",
     match(a) {
       const text = nonHtmlText(a);
       if (!text || !text.trimStart().startsWith("{")) return null;
-      if (!/"(ConnectionStrings|Logging|AllowedHosts|Kestrel)"\s*:/.test(text)) return null;
-      return /"ConnectionStrings"\s*:/.test(text) ? { detail: "has a ConnectionStrings section" } : {};
+      if (!/"(ConnectionStrings|Logging|AllowedHosts|Kestrel)"\s*:/.test(text))
+        return null;
+      return /"ConnectionStrings"\s*:/.test(text)
+        ? { detail: "has a ConnectionStrings section" }
+        : {};
     },
   },
   // Server status and debug pages
@@ -227,10 +262,14 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "server",
     severity: "medium",
-    reveals: "Apache mod_status: live requests, client addresses and the URLs being served",
+    reveals:
+      "Apache mod_status: live requests, client addresses and the URLs being served",
     signature: "Apache mod_status page",
     match(a) {
-      return /Apache Server Status for/i.test(a.text) && /Server (Version|uptime)/i.test(a.text) ? {} : null;
+      return /Apache Server Status for/i.test(a.text) &&
+        /Server (Version|uptime)/i.test(a.text)
+        ? {}
+        : null;
     },
   },
   {
@@ -241,7 +280,10 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     reveals: "Apache mod_info: the server's modules and full configuration",
     signature: "Apache mod_info page",
     match(a) {
-      return /Apache Server Information/i.test(a.text) && /(Server Settings|Module Name)/i.test(a.text) ? {} : null;
+      return /Apache Server Information/i.test(a.text) &&
+        /(Server Settings|Module Name)/i.test(a.text)
+        ? {}
+        : null;
     },
   },
   {
@@ -249,10 +291,13 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "server",
     severity: "high",
-    reveals: "PHP configuration, file paths and environment variables, which can include secrets",
+    reveals:
+      "PHP configuration, file paths and environment variables, which can include secrets",
     signature: "phpinfo() page",
     match(a) {
-      return /phpinfo\(\)/i.test(a.text) && /PHP Version/i.test(a.text) ? {} : null;
+      return /phpinfo\(\)/i.test(a.text) && /PHP Version/i.test(a.text)
+        ? {}
+        : null;
     },
   },
   {
@@ -266,10 +311,14 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
       const text = nonHtmlText(a);
       if (!text) return null;
       const lines = contentLines(text);
-      const directives = lines.filter((l) => HTACCESS_DIRECTIVE_RE.test(l)).length;
+      const directives = lines.filter((l) =>
+        HTACCESS_DIRECTIVE_RE.test(l)
+      ).length;
       // Most lines must be directives, not one stray `Options` in a prose page.
       if (directives === 0 || directives * 2 < lines.length) return null;
-      return /^\s*AuthUserFile\b/im.test(text) ? { detail: "names a password file" } : {};
+      return /^\s*AuthUserFile\b/im.test(text)
+        ? { detail: "names a password file" }
+        : {};
     },
   },
   {
@@ -277,14 +326,22 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "server",
     severity: "medium",
-    reveals: "IIS / ASP.NET configuration: handlers, rewrites and sometimes connection strings",
+    reveals:
+      "IIS / ASP.NET configuration: handlers, rewrites and sometimes connection strings",
     signature: "web.config <configuration> sections",
     match(a) {
       if (a.bytes.byteLength === 0) return null;
       const text = a.text;
       if (!/<configuration[\s>]/.test(text)) return null;
-      if (!/<(system\.webServer|system\.web|appSettings|connectionStrings)[\s>]/.test(text)) return null;
-      return /<connectionStrings[\s>]/.test(text) ? { detail: "has a connectionStrings section" } : {};
+      if (
+        !/<(system\.webServer|system\.web|appSettings|connectionStrings)[\s>]/.test(
+          text
+        )
+      )
+        return null;
+      return /<connectionStrings[\s>]/.test(text)
+        ? { detail: "has a connectionStrings section" }
+        : {};
     },
   },
   // Editor and OS cruft
@@ -293,10 +350,16 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "cruft",
     severity: "medium",
-    reveals: "a macOS folder index: the names of files and folders in the web root, including unlinked ones",
+    reveals:
+      "a macOS folder index: the names of files and folders in the web root, including unlinked ones",
     signature: ".DS_Store magic (Bud1)",
     match(a) {
-      return startsWithBytes(a.bytes, [0x00, 0x00, 0x00, 0x01, 0x42, 0x75, 0x64, 0x31]) ? {} : null;
+      return startsWithBytes(
+        a.bytes,
+        [0x00, 0x00, 0x00, 0x01, 0x42, 0x75, 0x64, 0x31]
+      )
+        ? {}
+        : null;
     },
   },
   {
@@ -304,7 +367,8 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "cruft",
     severity: "medium",
-    reveals: "a Windows thumbnail cache: previews of images in the folder, including deleted ones",
+    reveals:
+      "a Windows thumbnail cache: previews of images in the folder, including deleted ones",
     signature: "OLE compound file magic",
     match: matchOle,
   },
@@ -314,10 +378,12 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "backup",
     severity: "high",
-    reveals: "a site backup archive: source code, configuration and possibly data",
+    reveals:
+      "a site backup archive: source code, configuration and possibly data",
     signature: "zip magic (PK)",
     match(a) {
-      return startsWithBytes(a.bytes, [0x50, 0x4b, 0x03, 0x04]) || startsWithBytes(a.bytes, [0x50, 0x4b, 0x05, 0x06])
+      return startsWithBytes(a.bytes, [0x50, 0x4b, 0x03, 0x04]) ||
+        startsWithBytes(a.bytes, [0x50, 0x4b, 0x05, 0x06])
         ? {}
         : null;
     },
@@ -327,12 +393,15 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "backup",
     severity: "high",
-    reveals: "a site backup archive: source code, configuration and possibly data",
+    reveals:
+      "a site backup archive: source code, configuration and possibly data",
     signature: "gzip or tar magic",
     match(a) {
       // A server that labels the file Content-Encoding: gzip has it decoded on the way in, leaving the tar.
       if (startsWithBytes(a.bytes, [0x1f, 0x8b])) return {};
-      return startsWithBytes(a.bytes, [0x75, 0x73, 0x74, 0x61, 0x72], 257) ? {} : null;
+      return startsWithBytes(a.bytes, [0x75, 0x73, 0x74, 0x61, 0x72], 257)
+        ? {}
+        : null;
     },
   },
   {
@@ -340,7 +409,8 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "backup",
     severity: "high",
-    reveals: "a database dump: table structure and stored data, often user records and password hashes",
+    reveals:
+      "a database dump: table structure and stored data, often user records and password hashes",
     signature: "SQL dump header",
     match: matchSqlDump,
   },
@@ -349,7 +419,8 @@ export const SENSITIVE_FILES: readonly SensitiveFile[] = [
     method: "GET",
     group: "backup",
     severity: "high",
-    reveals: "a database dump: table structure and stored data, often user records and password hashes",
+    reveals:
+      "a database dump: table structure and stored data, often user records and password hashes",
     signature: "SQL dump header",
     match: matchSqlDump,
   },
@@ -365,19 +436,34 @@ function matchPhpConfig(a: ProbeAnswer): SignatureMatch | null {
   const defines = /\bdefine\s*\(\s*['"][A-Z_]+['"]/.test(text);
   const assigns = /^\s*\$[A-Za-z_]\w*(\[[^\]]*\])*\s*=/m.test(text);
   if (!defines && !assigns) return null;
-  return /DB_PASSWORD|password/i.test(text) ? { detail: "sets a database password" } : {};
+  return /DB_PASSWORD|password/i.test(text)
+    ? { detail: "sets a database password" }
+    : {};
 }
 
 function matchOle(a: ProbeAnswer): SignatureMatch | null {
-  return startsWithBytes(a.bytes, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]) ? {} : null;
+  return startsWithBytes(
+    a.bytes,
+    [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]
+  )
+    ? {}
+    : null;
 }
 
 function matchSqlDump(a: ProbeAnswer): SignatureMatch | null {
   const text = nonHtmlText(a);
   if (!text) return null;
   const head = text.slice(0, 4096);
-  const header = /^-- (MySQL dump|MariaDB dump|PostgreSQL database dump|phpMyAdmin SQL Dump)/m.test(head);
-  const statements = /^\s*(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS|COPY \S+ \(|SET NAMES)\b/im.test(head);
+  const header =
+    /^-- (MySQL dump|MariaDB dump|PostgreSQL database dump|phpMyAdmin SQL Dump)/m.test(
+      head
+    );
+  const statements =
+    /^\s*(CREATE TABLE|INSERT INTO|DROP TABLE IF EXISTS|COPY \S+ \(|SET NAMES)\b/im.test(
+      head
+    );
   if (!header && !statements) return null;
-  return /^\s*(INSERT INTO|COPY \S+ \()/im.test(text) ? { detail: "has table data" } : {};
+  return /^\s*(INSERT INTO|COPY \S+ \()/im.test(text)
+    ? { detail: "has table data" }
+    : {};
 }

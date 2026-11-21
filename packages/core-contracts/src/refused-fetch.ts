@@ -10,7 +10,12 @@
  */
 
 /** Which root resource the refused request was for. */
-export const REFUSED_RESOURCES = ["robots.txt", "sitemap", "llms.txt", "markdown"] as const;
+export const REFUSED_RESOURCES = [
+  "robots.txt",
+  "sitemap",
+  "llms.txt",
+  "markdown",
+] as const;
 
 export type RefusedResource = (typeof REFUSED_RESOURCES)[number];
 
@@ -45,7 +50,9 @@ export function describeRefusedFetch(refusal: RefusedFetch): string {
  * the same thing bury the one fact. A group of one reads as
  * {@link describeRefusedFetch}; a larger group names its count and first URL.
  */
-export function summarizeRefusedFetches(refusals: readonly RefusedFetch[]): string[] {
+export function summarizeRefusedFetches(
+  refusals: readonly RefusedFetch[]
+): string[] {
   const groups = new Map<string, RefusedFetch[]>();
   for (const refusal of refusals) {
     const key = `${refusal.resource}|${refusal.status}|${refusal.provider ?? ""}`;

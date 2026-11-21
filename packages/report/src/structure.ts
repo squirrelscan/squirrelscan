@@ -69,7 +69,9 @@ export interface StructureSource {
  * One page's contribution, or undefined when the page carries neither a link section nor a
  * classification, so an old parse adds nothing rather than a row of zeros.
  */
-export function extractPageStructure(page: StructureSource): PageStructureScalars | undefined {
+export function extractPageStructure(
+  page: StructureSource
+): PageStructureScalars | undefined {
   const sections: Partial<Record<LinkSection, number>> = {};
   let chromeInternal = 0;
   let contentInternal = 0;
@@ -91,23 +93,31 @@ export function extractPageStructure(page: StructureSource): PageStructureScalar
     chromeInternal,
     contentInternal,
     pageType: answer
-      ? { label: answer.label, confidence: answer.confidence, source: answer.source }
+      ? {
+          label: answer.label,
+          confidence: answer.confidence,
+          source: answer.source,
+        }
       : null,
     degraded: Boolean(classification?.degraded),
   };
 }
 
 function count(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : 0;
 }
 
 /** A page type label the report may print: lowercase words, no markup, and not the no-answer label. */
 function standingLabel(scalars: PageStructureScalars): string | null {
   const answer = scalars.pageType;
   if (!answer || typeof answer.label !== "string") return null;
-  if (answer.label === "unknown" || !LABEL_PATTERN.test(answer.label)) return null;
+  if (answer.label === "unknown" || !LABEL_PATTERN.test(answer.label))
+    return null;
   if (answer.source === "model") return answer.label;
-  if (answer.source === "rules" && answer.confidence >= MIN_RULES_CONFIDENCE) return answer.label;
+  if (answer.source === "rules" && answer.confidence >= MIN_RULES_CONFIDENCE)
+    return answer.label;
   return null;
 }
 
@@ -159,13 +169,19 @@ export function createStructureBuilder(): StructureBuilder {
 
     build() {
       if (pages === 0) return undefined;
-      const sections: ReportStructureSection[] = SECTIONS.filter((s) => sectionLinks.has(s))
+      const sections: ReportStructureSection[] = SECTIONS.filter((s) =>
+        sectionLinks.has(s)
+      )
         .map((section) => ({
           section,
           pages: sectionPages.get(section) ?? 0,
           links: sectionLinks.get(section) ?? 0,
         }))
-        .sort((a, b) => b.links - a.links || SECTIONS.indexOf(a.section) - SECTIONS.indexOf(b.section));
+        .sort(
+          (a, b) =>
+            b.links - a.links ||
+            SECTIONS.indexOf(a.section) - SECTIONS.indexOf(b.section)
+        );
       let totalLinks = unknownLinks;
       for (const row of sections) totalLinks += row.links;
       const counts: ReportStructurePageType[] = [...labelPages]
@@ -180,7 +196,10 @@ export function createStructureBuilder(): StructureBuilder {
         chrome: {
           links: chromeLinks,
           contentLinks,
-          share: placedInternal > 0 ? Math.round((chromeLinks / placedInternal) * 1000) / 1000 : null,
+          share:
+            placedInternal > 0
+              ? Math.round((chromeLinks / placedInternal) * 1000) / 1000
+              : null,
         },
         pageTypes: { counts, notClassified, byModel, degraded },
       };
@@ -211,7 +230,9 @@ const SECTION_NAME: Record<PlacedSection, string> = {
 
 /** The display name of a section, e.g. "Related content"; undefined for a name this version does not know. */
 export function structureSectionName(section: string): string | undefined {
-  return SECTION_SET.has(section) ? SECTION_NAME[section as PlacedSection] : undefined;
+  return SECTION_SET.has(section)
+    ? SECTION_NAME[section as PlacedSection]
+    : undefined;
 }
 
 const PAGE_TYPE_NOUN: Record<string, [singular: string, plural: string]> = {
@@ -249,7 +270,10 @@ export function structureNumber(n: number): string {
  * words, so a newer classifier's label still prints. A label that is not plain lowercase words
  * (a report file someone edited) returns undefined rather than reaching an output.
  */
-export function pageTypePhrase(label: unknown, pages: number): string | undefined {
+export function pageTypePhrase(
+  label: unknown,
+  pages: number
+): string | undefined {
   if (typeof label !== "string" || !LABEL_PATTERN.test(label)) return undefined;
   const words = label.replace(/_/g, " ");
   // An own-property lookup: "constructor" is a plain label to this pattern, not a table entry.
@@ -263,7 +287,9 @@ export function pageTypePhrase(label: unknown, pages: number): string | undefine
  * "Page types: 20 product pages, 6 blog posts; 30 not classified." Null when the classifier
  * labelled no page, because "30 not classified" alone says nothing a reader can act on.
  */
-export function structurePageTypesLine(structure: ReportStructure): string | null {
+export function structurePageTypesLine(
+  structure: ReportStructure
+): string | null {
   const { counts, notClassified } = structure.pageTypes;
   if (counts.length === 0) return null;
   const phrases = counts.flatMap((c) => pageTypePhrase(c.label, c.pages) ?? []);
@@ -282,7 +308,7 @@ export function structureChromeLine(structure: ReportStructure): string | null {
 
 /** Table rows: section, pages, links, most links first. Sections with no links are not rows. */
 export function structureRows(
-  structure: ReportStructure,
+  structure: ReportStructure
 ): Array<{ section: string; pages: number; links: number }> {
   return structure.sections.flatMap((s) => {
     const section = structureSectionName(s.section);
@@ -291,7 +317,10 @@ export function structureRows(
 }
 
 /** "3,784 links on 88 pages", "1 link on 1 page": one row of the table as a phrase. */
-export function structureRowDetail(row: { pages: number; links: number }): string {
+export function structureRowDetail(row: {
+  pages: number;
+  links: number;
+}): string {
   const links = `${structureNumber(row.links)} ${row.links === 1 ? "link" : "links"}`;
   const pages = `${structureNumber(row.pages)} ${row.pages === 1 ? "page" : "pages"}`;
   return `${links} on ${pages}`;
@@ -308,7 +337,9 @@ export function structureTotalsLine(structure: ReportStructure): string | null {
 }
 
 /** "3 pages fell back to the markup rules for part of their classification." Null when none did. */
-export function structureDegradedLine(structure: ReportStructure): string | null {
+export function structureDegradedLine(
+  structure: ReportStructure
+): string | null {
   const n = structure.pageTypes.degraded;
   if (n === 0) return null;
   return `${structureNumber(n)} ${n === 1 ? "page" : "pages"} fell back to the markup rules for part of the classification.`;

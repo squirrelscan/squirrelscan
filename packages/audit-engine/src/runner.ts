@@ -29,12 +29,18 @@ export interface AuditRunnerDeps {
   buildUsageEvents?(input: AuditRunInput, report: AuditReport): UsageEvent[];
 }
 
-function buildSnapshot(input: AuditRunInput, report: AuditReport): AuditHistorySnapshot {
+function buildSnapshot(
+  input: AuditRunInput,
+  report: AuditReport
+): AuditHistorySnapshot {
   return {
     runId: input.runId,
     siteKey: input.siteKey,
     url: report.baseUrl || input.url,
-    score: typeof report.healthScore?.overall === "number" ? report.healthScore.overall : null,
+    score:
+      typeof report.healthScore?.overall === "number"
+        ? report.healthScore.overall
+        : null,
     issuesFound: report.failed + report.warnings,
     auditedAt: report.timestamp,
     createdAt: new Date().toISOString(),
@@ -44,7 +50,7 @@ function buildSnapshot(input: AuditRunInput, report: AuditReport): AuditHistoryS
 
 export async function runAuditWithComposition(
   input: AuditRunInput,
-  deps: AuditRunnerDeps,
+  deps: AuditRunnerDeps
 ): Promise<AuditRunOutput> {
   let quotaDecision: QuotaDecision | null = null;
   if (deps.usageStore) {

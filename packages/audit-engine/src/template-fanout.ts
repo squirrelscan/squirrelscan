@@ -88,12 +88,13 @@
 // it is capped: past {@link DEFAULT_MAX_CLUSTERS} new clusters stop being cached
 // and their pages run the ordinary path. The cap changes cost, never output.
 
-import { detachFromPage } from "./detach";
-import { fnv1a64 } from "./fingerprint";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { Rule, RuleRunResult, RuleRunner } from "@squirrelscan/rules";
+
 import { mayFanOutAcrossTemplate } from "@squirrelscan/rules";
+
+import { detachFromPage } from "./detach";
+import { fnv1a64 } from "./fingerprint";
 
 /**
  * Clusters whose verdicts are kept. A real site has tens (13 on gymshark, 12 on
@@ -113,7 +114,9 @@ export const DEFAULT_MAX_CLUSTERS = 1_000;
  * Read per pass rather than at module load so a test (or a support session) can
  * flip it between runs in one process.
  */
-export function templateFanoutEnabled(env: Record<string, string | undefined> = process.env): boolean {
+export function templateFanoutEnabled(
+  env: Record<string, string | undefined> = process.env
+): boolean {
   const raw = env.SQUIRREL_TEMPLATE_FANOUT;
   if (raw === undefined) return true;
   const v = raw.trim().toLowerCase();
@@ -171,8 +174,10 @@ export const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
  */
 export function fanoutInputSignature(
   doc: {
-    querySelectorAll(selector: string): ArrayLike<{ getAttribute(name: string): string | null }>;
-  } | null,
+    querySelectorAll(
+      selector: string
+    ): ArrayLike<{ getAttribute(name: string): string | null }>;
+  } | null
 ): string | null {
   if (!doc) return null;
   // `security/sri` reads whether each cross-origin script and stylesheet carries an
@@ -180,11 +185,13 @@ export function fanoutInputSignature(
   // counts them must not inherit a verdict from a page with fewer.
   const scripts = Array.from(
     doc.querySelectorAll("script[src]"),
-    (el) => `${el.getAttribute("src") ?? ""}|${el.getAttribute("integrity") ? "sri" : ""}`,
+    (el) =>
+      `${el.getAttribute("src") ?? ""}|${el.getAttribute("integrity") ? "sri" : ""}`
   );
   const stylesheets = Array.from(
     doc.querySelectorAll('link[rel~="stylesheet"][href]'),
-    (el) => `${el.getAttribute("href") ?? ""}|${el.getAttribute("integrity") ? "sri" : ""}`,
+    (el) =>
+      `${el.getAttribute("href") ?? ""}|${el.getAttribute("integrity") ? "sri" : ""}`
   );
   const metas = Array.from(doc.querySelectorAll("meta"), (el) => {
     const name = el.getAttribute("name");
@@ -217,16 +224,16 @@ export function fanoutInputSignature(
         el.getAttribute("lang"),
         el.getAttribute("xml:lang"),
         el.getAttribute("aria-hidden"),
-      ]),
+      ])
     ),
     ...Array.from(doc.querySelectorAll("body"), (el) =>
-      JSON.stringify(["body", el.getAttribute("aria-hidden")]),
+      JSON.stringify(["body", el.getAttribute("aria-hidden")])
     ),
   ];
   // A JSON pair, so a `|` in either value cannot forge a boundary, and kept in
   // document order: `core/favicon` lists the formats in the order it finds them.
   const icons = Array.from(doc.querySelectorAll('link[rel*="icon"]'), (el) =>
-    JSON.stringify([el.getAttribute("rel"), el.getAttribute("href")]),
+    JSON.stringify([el.getAttribute("rel"), el.getAttribute("href")])
   );
   // JSON, not a join, so a value containing a delimiter cannot forge a boundary.
   const canonical = JSON.stringify([
@@ -256,7 +263,7 @@ export function fanoutInputSignature(
 export function fanoutClusterKey(
   templateKey: string | null,
   pageUrl: string,
-  inputSignature: string | null,
+  inputSignature: string | null
 ): string | null {
   // A page whose inputs could not be read never groups, rather than grouping on "".
   if (!templateKey || inputSignature === null) return null;
@@ -278,7 +285,9 @@ export interface TemplateFanout {
    *
    * `clusterKey` is {@link fanoutClusterKey}'s output, not the raw template key.
    */
-  take(clusterKey: string | null): ReadonlyMap<string, CheckResult[]> | undefined;
+  take(
+    clusterKey: string | null
+  ): ReadonlyMap<string, CheckResult[]> | undefined;
   /**
    * Keep this page's declared-template verdicts as the cluster's representative.
    * Call it with the results of a page that really ran, BEFORE `pageUrl` is
@@ -287,7 +296,7 @@ export interface TemplateFanout {
   record(
     clusterKey: string | null,
     ruleResults: ReadonlyMap<string, RuleRunResult>,
-    repKey?: string | null,
+    repKey?: string | null
   ): void;
   /**
    * The identity (the representative's rule-cache page key, #296) the cluster's recorded verdicts came
@@ -305,13 +314,15 @@ export interface TemplateFanout {
  * that declare none of the per-page gates (`skipOnSoft404`, `skipOnNoindex`, `skipOnPageType`).
  * Exported so the disqualification is testable without a crawl.
  */
-export function fannableRules<R extends { meta: Rule["meta"] }>(rules: readonly R[]): R[] {
+export function fannableRules<R extends { meta: Rule["meta"] }>(
+  rules: readonly R[]
+): R[] {
   return rules.filter(
     (r) =>
       mayFanOutAcrossTemplate(r.meta) &&
       !r.meta.skipOnSoft404 &&
       !r.meta.skipOnNoindex &&
-      !r.meta.skipOnPageType?.length,
+      !r.meta.skipOnPageType?.length
   );
 }
 
@@ -334,14 +345,14 @@ export function fannableRules<R extends { meta: Rule["meta"] }>(rules: readonly 
  */
 export function createTemplateFanout(
   runner: RuleRunner,
-  opts?: { maxClusters?: number },
+  opts?: { maxClusters?: number }
 ): TemplateFanout {
   const maxClusters = Math.max(0, opts?.maxClusters ?? DEFAULT_MAX_CLUSTERS);
   const fannable = new Set(
     fannableRules(runner.getEnabledRules())
       // `[[ignore]]` entries with urls (#1262) are decided per page, like the gates.
       .filter((r) => !runner.ignoresByPage(r.meta.id))
-      .map((r) => r.meta.id),
+      .map((r) => r.meta.id)
   );
 
   /**
@@ -409,7 +420,8 @@ export function createTemplateFanout(
     },
 
     unidentify(clusterKey, repKey) {
-      if (clusterKey && reps.get(clusterKey) === repKey) reps.set(clusterKey, null);
+      if (clusterKey && reps.get(clusterKey) === repKey)
+        reps.set(clusterKey, null);
     },
 
     stats() {

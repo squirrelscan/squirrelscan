@@ -62,7 +62,11 @@ export const cspRule: Rule = {
       { name: "csp-self-proxy-script", outcome: "problem" },
       { name: "csp-no-frame-ancestors", outcome: "problem" },
       { name: "csp-no-object-src", outcome: "problem" },
-      { name: "csp-present", outcome: "clean", clears: ["csp-missing", "csp-report-only"] },
+      {
+        name: "csp-present",
+        outcome: "clean",
+        clears: ["csp-missing", "csp-report-only"],
+      },
       { name: "csp", outcome: "skipped" },
     ],
   },
@@ -83,7 +87,9 @@ export const cspRule: Rule = {
       };
     }
 
-    return { checks: judgeHeaderPages(ctx, pages, (page) => judgeCsp(ctx, page)) };
+    return {
+      checks: judgeHeaderPages(ctx, pages, (page) => judgeCsp(ctx, page)),
+    };
   },
 };
 
@@ -95,7 +101,10 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
   const cspReportOnly = headers["content-security-policy-report-only"];
   // #1735: every check names the page the header was read from and the header it read, as
   // structured evidence (`pages` is what affectedPages() counts; the header is what it says).
-  const headerName = csp || !cspReportOnly ? "content-security-policy" : "content-security-policy-report-only";
+  const headerName =
+    csp || !cspReportOnly
+      ? "content-security-policy"
+      : "content-security-policy-report-only";
   const evidence = (extra: Record<string, unknown> = {}) => ({
     pages: [page.url],
     details: { pageUrl: page.url, header: headerName, ...extra },
@@ -182,7 +191,8 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
 
   // #1735: which directive carries each weak source, with its value, as structured details.
   const carriers = weakCarriers(directives, elemSrc, attrSrc, scriptSrc);
-  const carrier = (source: string) => carriers.find((c) => c.sources.includes(source));
+  const carrier = (source: string) =>
+    carriers.find((c) => c.sources.includes(source));
 
   if (weakValues.length > 0) {
     // unsafe-inline and unsafe-eval are critical weaknesses
@@ -198,10 +208,12 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
         expected: "Use nonces or hashes instead of unsafe-inline",
         ...evidence({
           // The directive carrying 'unsafe-inline' (else 'unsafe-eval') and its value.
-          ...(carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'")
+          ...((carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))
             ? {
-                directive: (carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))!.directive,
-                value: (carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))!.value,
+                directive: (carrier("'unsafe-inline'") ??
+                  carrier("'unsafe-eval'"))!.directive,
+                value: (carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))!
+                  .value,
               }
             : {}),
           directives: carriers,
@@ -218,7 +230,9 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
         value: "Scripts can load from any domain",
         expected: "Restrict to specific trusted domains",
         ...evidence({
-          ...(carrier("*") ? { directive: carrier("*")!.directive, value: carrier("*")!.value } : {}),
+          ...(carrier("*")
+            ? { directive: carrier("*")!.directive, value: carrier("*")!.value }
+            : {}),
           directives: carriers,
         }),
       });
@@ -243,8 +257,10 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
         name: "csp-self-proxy-script",
         status: "info",
         message: `CSP 'self' allows a possible first-party proxy path ${paths.join(", ")}`,
-        value: "A same-origin path of this kind may proxy third-party code that runs under 'self'",
-        expected: "Confirm the proxied script is trusted, or pin it with a nonce or hash",
+        value:
+          "A same-origin path of this kind may proxy third-party code that runs under 'self'",
+        expected:
+          "Confirm the proxied script is trusted, or pin it with a nonce or hash",
         ...evidence({ paths }),
       });
     }
@@ -292,10 +308,14 @@ function weakCarriers(
   directives: Map<string, string>,
   elemSrc: string,
   attrSrc: string,
-  scriptSrc: string,
+  scriptSrc: string
 ): Array<{ directive: string; value: string; sources: string[] }> {
   const named = (specific: string) =>
-    directives.has(specific) ? specific : directives.has("script-src") ? "script-src" : "default-src";
+    directives.has(specific)
+      ? specific
+      : directives.has("script-src")
+        ? "script-src"
+        : "default-src";
   const rows = new Map<string, Set<string>>();
   const add = (directive: string, sources: string[]) => {
     if (sources.length === 0) return;
@@ -303,9 +323,18 @@ function weakCarriers(
     for (const source of sources) set.add(source);
     rows.set(directive, set);
   };
-  add(named("script-src-elem"), weakScriptSources(elemSrc).filter((v) => v !== "'unsafe-eval'"));
-  add(named("script-src-attr"), weakScriptSources(attrSrc).filter((v) => v === "'unsafe-inline'"));
-  add(named("script-src"), weakScriptSources(scriptSrc).filter((v) => v === "'unsafe-eval'"));
+  add(
+    named("script-src-elem"),
+    weakScriptSources(elemSrc).filter((v) => v !== "'unsafe-eval'")
+  );
+  add(
+    named("script-src-attr"),
+    weakScriptSources(attrSrc).filter((v) => v === "'unsafe-inline'")
+  );
+  add(
+    named("script-src"),
+    weakScriptSources(scriptSrc).filter((v) => v === "'unsafe-eval'")
+  );
   return [...rows].map(([directive, sources]) => ({
     directive,
     value: (directives.get(directive) ?? "").slice(0, MAX_DIRECTIVE_VALUE),
@@ -352,7 +381,8 @@ function weakScriptSources(scriptSrc: string): string[] {
   // purpose this still warns when that second policy is itself strict.
   const ownSources = sourceTokens(scriptSrc.split(",", 1)[0] ?? "");
   const strictDynamic = ownSources.has("'strict-dynamic'");
-  const inlineIgnored = strictDynamic || [...ownSources].some(isNonceOrHashSource);
+  const inlineIgnored =
+    strictDynamic || [...ownSources].some(isNonceOrHashSource);
   return WEAK_VALUES.filter((v) => {
     if (v === "*") return !strictDynamic && [...sources].some(isAnyHostSource);
     if (v === "'unsafe-inline'" && inlineIgnored) return false;

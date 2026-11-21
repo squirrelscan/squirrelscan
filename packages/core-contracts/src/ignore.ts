@@ -63,7 +63,9 @@ export function readIgnoredDetails(details: unknown): IgnoredDetails | null {
   const count = (v: unknown): number =>
     typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
   const list = Array.isArray(entries)
-    ? entries.filter((n): n is number => Number.isInteger(n) && n >= 0).slice(0, 200)
+    ? entries
+        .filter((n): n is number => Number.isInteger(n) && n >= 0)
+        .slice(0, 200)
     : [];
   const out: IgnoredDetails = { entries: list };
   if (count(items) > 0) out.items = count(items);

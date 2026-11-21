@@ -3,9 +3,11 @@
 // and the render-prefetch per-page skip set (renderedPageUrlsFrom). Pin both here so a refactor can't quietly
 // drop the derivation and re-render every page (the dead-gate class #673 hit — see the adapter doc comment).
 
+import {
+  isRenderedFetch,
+  renderedPageUrlsFrom,
+} from "@squirrelscan/audit-engine";
 import { describe, expect, test } from "bun:test";
-
-import { isRenderedFetch, renderedPageUrlsFrom } from "@squirrelscan/audit-engine";
 
 describe("isRenderedFetch", () => {
   test("true only for the browser-render fetcher ids", () => {
@@ -23,7 +25,9 @@ describe("isRenderedFetch", () => {
 });
 
 describe("renderedPageUrlsFrom", () => {
-  const pg = (url: string, fetcherId?: string | null) => ({ page: { url, fetcherId } });
+  const pg = (url: string, fetcherId?: string | null) => ({
+    page: { url, fetcherId },
+  });
 
   test("mixed crawl: only the browser-rendered page urls (an auto hybrid)", () => {
     const set = renderedPageUrlsFrom([
@@ -33,13 +37,17 @@ describe("renderedPageUrlsFrom", () => {
       pg("https://example.com/d", "fetch"),
       pg("https://example.com/e"), // undefined ⇒ raw
     ]);
-    expect(set).toEqual(new Set(["https://example.com/a", "https://example.com/c"]));
+    expect(set).toEqual(
+      new Set(["https://example.com/a", "https://example.com/c"])
+    );
   });
 
   test("all raw (pure HTTP crawl) ⇒ empty set ⇒ gate submits every page", () => {
     expect(
-      renderedPageUrlsFrom([pg("https://example.com/a", "fetch"), pg("https://example.com/b")])
-        .size,
+      renderedPageUrlsFrom([
+        pg("https://example.com/a", "fetch"),
+        pg("https://example.com/b"),
+      ]).size
     ).toBe(0);
   });
 

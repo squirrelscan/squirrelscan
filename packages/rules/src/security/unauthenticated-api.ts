@@ -62,7 +62,13 @@ import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
 import type { EndpointCandidate } from "../endpoint-surface";
 import type { ProbeBudget } from "../probe-budget";
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
 
 import { AUTH_ENDPOINT_DISCLOSURE_RULE_ID } from "./auth-endpoint-disclosure";
 import { isGraphqlPath, isStateChangingPath } from "./graphql-probe";
@@ -183,7 +189,11 @@ export function isSideEffectPath(pathname: string): boolean {
   const words = pathWords(pathname);
   for (let i = 0; i < words.length; i++) {
     if (SIDE_EFFECT_WORDS.has(words[i]!)) return true;
-    if (i + 1 < words.length && SIDE_EFFECT_PAIRS.has(`${words[i]} ${words[i + 1]}`)) return true;
+    if (
+      i + 1 < words.length &&
+      SIDE_EFFECT_PAIRS.has(`${words[i]} ${words[i + 1]}`)
+    )
+      return true;
   }
   return false;
 }
@@ -224,7 +234,8 @@ function originOf(url: string): string | null {
 function candidateRank(c: EndpointCandidate): number {
   if (c.source === "convention") return 3;
   if (c.discoveredVia === "string-literal") return 2;
-  if (c.discoveredVia === "link-href" || c.discoveredVia === "form-action") return 1;
+  if (c.discoveredVia === "link-href" || c.discoveredVia === "form-action")
+    return 1;
   return 0;
 }
 
@@ -260,7 +271,12 @@ export function selectApiCandidates(
   // A path with a GET call site is probed even when other call sites POST to
   // it (a REST list and create share a path). A method-less literal is probed
   // only when no call site states another method for the same path.
-  const keyed: Array<{ c: EndpointCandidate; u: URL; url: string; method: string | undefined }> = [];
+  const keyed: Array<{
+    c: EndpointCandidate;
+    u: URL;
+    url: string;
+    method: string | undefined;
+  }> = [];
   const getPaths = new Set<string>();
   const otherPaths = new Set<string>();
   for (const { c } of ranked) {
@@ -306,7 +322,11 @@ export function selectApiCandidates(
       selection.skippedCap++;
       continue;
     }
-    selection.candidates.push({ url, source: c.source, discoveredVia: c.discoveredVia });
+    selection.candidates.push({
+      url,
+      source: c.source,
+      discoveredVia: c.discoveredVia,
+    });
   }
   return selection;
 }
@@ -330,7 +350,10 @@ export type ApiProbeOutcome =
   | { sent: true; error: string };
 
 /** The exact URL and init for one probe. Exported so tests can pin what is sent. */
-export function buildApiProbe(endpointUrl: string): { url: string; init: RequestInit } {
+export function buildApiProbe(endpointUrl: string): {
+  url: string;
+  init: RequestInit;
+} {
   // The same anonymous GET security/auth-endpoint-disclosure sends: one answer
   // per endpoint per audit serves both rules (squirrelscan#1886).
   return buildAnonymousGet(endpointUrl);
@@ -351,7 +374,12 @@ export function sendApiProbe(
 // ── reading ─────────────────────────────────────────────────────────
 
 /** Field classes, most serious first. */
-export type FieldClass = "credential" | "personal" | "internal" | "user" | "public";
+export type FieldClass =
+  | "credential"
+  | "personal"
+  | "internal"
+  | "user"
+  | "public";
 
 const CREDENTIAL_EXACT = new Set([
   "pwd",
@@ -372,10 +400,22 @@ const CREDENTIAL_EXACT = new Set([
   "passwordhash",
   "pwhash",
 ]);
-const CREDENTIAL_PARTS = ["password", "secret", "apikey", "accesskey", "privatekey"];
+const CREDENTIAL_PARTS = [
+  "password",
+  "secret",
+  "apikey",
+  "accesskey",
+  "privatekey",
+];
 const CREDENTIAL_SUFFIXES = ["token", "tokenhash"];
 // Pagination cursors end in "token" too, and are not credentials.
-const NOT_CREDENTIAL = new Set(["pagetoken", "nextpagetoken", "nexttoken", "continuationtoken", "cursortoken"]);
+const NOT_CREDENTIAL = new Set([
+  "pagetoken",
+  "nextpagetoken",
+  "nexttoken",
+  "continuationtoken",
+  "cursortoken",
+]);
 
 const PERSONAL_EXACT = new Set([
   "phone",
@@ -529,12 +569,13 @@ export function classifyField(name: string): FieldClass | null {
   if (
     !NOT_CREDENTIAL.has(n) &&
     (CREDENTIAL_EXACT.has(n) ||
-    CREDENTIAL_PARTS.some((p) => n.includes(p)) ||
+      CREDENTIAL_PARTS.some((p) => n.includes(p)) ||
       CREDENTIAL_SUFFIXES.some((s) => n.endsWith(s)))
   ) {
     return "credential";
   }
-  if (n === "email" || n.endsWith("email") || n.endsWith("emailaddress")) return "personal";
+  if (n === "email" || n.endsWith("email") || n.endsWith("emailaddress"))
+    return "personal";
   if (PERSONAL_EXACT.has(n)) return "personal";
   if (INTERNAL_EXACT.has(n) || n.startsWith("internal")) return "internal";
   if (USER_EXACT.has(n)) return "user";
@@ -548,7 +589,9 @@ const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$.-]{0,63}$/;
 const DATA_LIKE_RE = /^[0-9a-f]{8,}$|^[0-9a-f]{8}-[0-9a-f]{4}-|\d{4,}/i;
 
 function isReportableField(name: string): boolean {
-  return IDENTIFIER_RE.test(name) && !DATA_LIKE_RE.test(name) && !name.includes("@");
+  return (
+    IDENTIFIER_RE.test(name) && !DATA_LIKE_RE.test(name) && !name.includes("@")
+  );
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -613,8 +656,11 @@ function objectsOf(arr: unknown[]): Record<string, unknown>[] | null {
 function isSingleRecord(obj: Record<string, unknown>): boolean {
   const keys = Object.keys(obj);
   if (keys.length < 3) return false;
-  if (keys.every((k) => ENVELOPE_ONLY_KEYS.has(normalizeField(k)))) return false;
-  return keys.some((k) => ID_KEY_RE.test(k) && obj[k] !== null && obj[k] !== "");
+  if (keys.every((k) => ENVELOPE_ONLY_KEYS.has(normalizeField(k))))
+    return false;
+  return keys.some(
+    (k) => ID_KEY_RE.test(k) && obj[k] !== null && obj[k] !== ""
+  );
 }
 
 export interface RecordSet {
@@ -626,7 +672,11 @@ export interface RecordSet {
   at: string;
 }
 
-function findRecordsIn(value: unknown, at: string, depth: number): RecordSet | null {
+function findRecordsIn(
+  value: unknown,
+  at: string,
+  depth: number
+): RecordSet | null {
   if (Array.isArray(value)) {
     const objects = objectsOf(value);
     return objects ? { records: objects, count: value.length, at } : null;
@@ -689,7 +739,9 @@ export interface FieldSummary {
  * objects (JSON:API `attributes`, `author.email`), plus the first object of a
  * nested list. Reads names only, never values.
  */
-export function summarizeFields(records: Record<string, unknown>[]): FieldSummary {
+export function summarizeFields(
+  records: Record<string, unknown>[]
+): FieldSummary {
   const fields: string[] = [];
   const seen = new Set<string>();
   let unreportable = 0;
@@ -705,7 +757,11 @@ export function summarizeFields(records: Record<string, unknown>[]): FieldSummar
   for (const record of records.slice(0, MAX_RECORDS_SCANNED)) {
     for (const [key, v] of Object.entries(record)) {
       add(key, key);
-      const nested = isPlainObject(v) ? v : Array.isArray(v) && isPlainObject(v[0]) ? v[0] : null;
+      const nested = isPlainObject(v)
+        ? v
+        : Array.isArray(v) && isPlainObject(v[0])
+          ? v[0]
+          : null;
       if (nested && isReportableField(key)) {
         for (const inner of Object.keys(nested)) add(inner, `${key}.${inner}`);
       }
@@ -734,7 +790,8 @@ export function summarizeFields(records: Record<string, unknown>[]): FieldSummar
     parts.push(`${key}: ${typeName(v)}`);
   }
   let sample = `{${parts.join(", ")}}`;
-  if (sample.length > MAX_SAMPLE_CHARS) sample = `${sample.slice(0, MAX_SAMPLE_CHARS - 4)}...}`;
+  if (sample.length > MAX_SAMPLE_CHARS)
+    sample = `${sample.slice(0, MAX_SAMPLE_CHARS - 4)}...}`;
   return { fields, sensitive, publicFields, unreportable, sample };
 }
 
@@ -780,9 +837,11 @@ export type ApiVerdict =
 export function readApiResponse(response: ApiProbeResponse): ApiVerdict {
   const { status } = response;
   if (status < 200 || status >= 300) return { kind: "no-records", status };
-  if (response.contentType.includes("html")) return { kind: "no-records", status };
+  if (response.contentType.includes("html"))
+    return { kind: "no-records", status };
   const text = response.body.trim();
-  if (!text.startsWith("{") && !text.startsWith("[")) return { kind: "no-records", status };
+  if (!text.startsWith("{") && !text.startsWith("["))
+    return { kind: "no-records", status };
 
   if (response.truncated) {
     const record = recordsFromPrefix(text);
@@ -807,7 +866,14 @@ export function readApiResponse(response: ApiProbeResponse): ApiVerdict {
   if (!set) return { kind: "no-records", status };
   const summary = summarizeFields(set.records);
   if (summary.fields.length === 0) return { kind: "no-records", status };
-  return { kind: "records", status, count: set.count, at: set.at, summary, truncated: false };
+  return {
+    kind: "records",
+    status,
+    count: set.count,
+    at: set.at,
+    summary,
+    truncated: false,
+  };
 }
 
 export type Tier = "sensitive" | "data" | "public";
@@ -815,12 +881,14 @@ export type Tier = "sensitive" | "data" | "public";
 /** The finding tier for a set of fields: sensitive, data, or plainly public. */
 export function tierOf(summary: FieldSummary): Tier {
   const s = summary.sensitive;
-  if (s.credential?.length || s.personal?.length || s.internal?.length) return "sensitive";
+  if (s.credential?.length || s.personal?.length || s.internal?.length)
+    return "sensitive";
   if (s.user?.length) return "data";
   // Plainly public: at least two content fields, and they are a real share of
   // the record, not two incidental names on an otherwise opaque object.
   const pub = summary.publicFields.length;
-  if (pub >= 2 && pub * 3 >= Math.min(summary.fields.length, 12)) return "public";
+  if (pub >= 2 && pub * 3 >= Math.min(summary.fields.length, 12))
+    return "public";
   return "data";
 }
 
@@ -834,13 +902,20 @@ interface Flagged {
 
 function listedFields(summary: FieldSummary, tier: Tier): string[] {
   if (tier === "sensitive") return sensitiveFields(summary.sensitive);
-  const ordered = tier === "public" ? summary.publicFields : [...(summary.sensitive.user ?? []), ...summary.fields];
+  const ordered =
+    tier === "public"
+      ? summary.publicFields
+      : [...(summary.sensitive.user ?? []), ...summary.fields];
   return [...new Set(ordered)].slice(0, MAX_LISTED_FIELDS);
 }
 
 /** The credential, personal and internal fields listed for a sensitive finding. Reads an item's meta too, which carries them. */
 function sensitiveFields(s: FieldSummary["sensitive"]): string[] {
-  const ordered = [...(s.credential ?? []), ...(s.personal ?? []), ...(s.internal ?? [])];
+  const ordered = [
+    ...(s.credential ?? []),
+    ...(s.personal ?? []),
+    ...(s.internal ?? []),
+  ];
   return [...new Set(ordered)].slice(0, MAX_LISTED_FIELDS);
 }
 
@@ -864,7 +939,9 @@ function itemFor(f: Flagged): CheckItem {
       fieldCount: verdict.summary.fields.length,
       ...verdict.summary.sensitive,
       ...(verdict.summary.sample ? { sample: verdict.summary.sample } : {}),
-      ...(verdict.summary.unreportable > 0 ? { unreportableFields: verdict.summary.unreportable } : {}),
+      ...(verdict.summary.unreportable > 0
+        ? { unreportableFields: verdict.summary.unreportable }
+        : {}),
       ...(verdict.truncated ? { truncated: true, confidence: "lower" } : {}),
       source: candidate.source,
       discoveredVia: candidate.discoveredVia,
@@ -874,7 +951,12 @@ function itemFor(f: Flagged): CheckItem {
 
 const TIER_CHECKS: Record<
   Tier,
-  { name: string; status: CheckResult["status"]; severity: string; message: (n: number, first: CheckItem) => string }
+  {
+    name: string;
+    status: CheckResult["status"];
+    severity: string;
+    message: (n: number, first: CheckItem) => string;
+  }
 > = {
   sensitive: {
     name: CHECK_SENSITIVE,
@@ -906,7 +988,11 @@ const TIERS: readonly Tier[] = ["sensitive", "data", "public"];
  * a check rebuilt after the runner's dedupe says exactly what a run that found
  * those endpoints alone would have said (squirrelscan#2082).
  */
-function tierCheck(tier: Tier, items: CheckItem[], probed: number): CheckResult {
+function tierCheck(
+  tier: Tier,
+  items: CheckItem[],
+  probed: number
+): CheckResult {
   const spec = TIER_CHECKS[tier];
   return {
     name: spec.name,
@@ -936,7 +1022,11 @@ export const unauthenticatedApiRule: Rule = {
       { name: CHECK_SENSITIVE, outcome: "problem" },
       { name: CHECK_DATA, outcome: "problem" },
       { name: CHECK_PUBLIC, outcome: "problem" },
-      { name: CHECK_CLEAN, outcome: "clean", clears: [CHECK_SENSITIVE, CHECK_DATA, CHECK_PUBLIC] },
+      {
+        name: CHECK_CLEAN,
+        outcome: "clean",
+        clears: [CHECK_SENSITIVE, CHECK_DATA, CHECK_PUBLIC],
+      },
       { name: CHECK_UNCHECKED, outcome: "skipped" },
     ],
   },
@@ -999,7 +1089,11 @@ export const unauthenticatedApiRule: Rule = {
         continue;
       }
       const { response } = outcome;
-      const reply = { status: response.status, headers: response.headers, text: response.body };
+      const reply = {
+        status: response.status,
+        headers: response.headers,
+        text: response.body,
+      };
       // Throttled or challenged: the answer says nothing about the endpoint,
       // and the site is pushing back, so no further probe is sent (#1920).
       if (isThrottledOrChallenged(reply)) {
@@ -1055,15 +1149,28 @@ export const unauthenticatedApiRule: Rule = {
           `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`
         );
       }
-      if (budgetStopped) why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
-      if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
-      if (serverErrors > 0) why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
-      const onlyBudget = budgetStopped && !pushback && errored === 0 && serverErrors === 0;
-      const onlyErrors = !pushback && !budgetStopped && serverErrors === 0 && errored === probed;
+      if (budgetStopped)
+        why.push(
+          `the probe budget ran out after ${probed} of ${total} endpoint(s)`
+        );
+      if (errored > 0)
+        why.push(`${errored} probe(s) failed with a network error or timeout`);
+      if (serverErrors > 0)
+        why.push(
+          `${serverErrors} endpoint(s) answered with a server error (5xx)`
+        );
+      const onlyBudget =
+        budgetStopped && !pushback && errored === 0 && serverErrors === 0;
+      const onlyErrors =
+        !pushback && !budgetStopped && serverErrors === 0 && errored === probed;
       checks.push({
         name: CHECK_UNCHECKED,
         status: "skipped",
-        skipReason: onlyBudget ? "probe-budget" : onlyErrors ? "probe-errors" : PROBE_INCOMPLETE_SKIP_REASON,
+        skipReason: onlyBudget
+          ? "probe-budget"
+          : onlyErrors
+            ? "probe-errors"
+            : PROBE_INCOMPLETE_SKIP_REASON,
         message: `Unauthenticated API check incomplete: ${why.join("; ")}. ${unverified} of ${total} API endpoint(s) were not checked and may be exposed`,
         value: "not-checked",
         details: runDetails,
@@ -1081,7 +1188,9 @@ export const unauthenticatedApiRule: Rule = {
 };
 
 /** The tier a problem check reports, by check name. */
-const TIER_BY_CHECK: ReadonlyMap<string, Tier> = new Map(TIERS.map((t) => [TIER_CHECKS[t].name, t]));
+const TIER_BY_CHECK: ReadonlyMap<string, Tier> = new Map(
+  TIERS.map((t) => [TIER_CHECKS[t].name, t])
+);
 
 /**
  * This rule's checks with every finding on an endpoint in `reported` taken out,
@@ -1130,7 +1239,11 @@ export function dropEndpointsReportedElsewhere(
       name: CHECK_CLEAN,
       status: "pass",
       message: `No other API endpoint returned records without authentication (${probed ?? 0} endpoint(s) probed; ${dropped} reported by ${AUTH_ENDPOINT_DISCLOSURE_RULE_ID})`,
-      details: { probed: probed ?? 0, reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID, reportedElsewhere: dropped },
+      details: {
+        probed: probed ?? 0,
+        reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+        reportedElsewhere: dropped,
+      },
     });
   }
   return out;

@@ -8,10 +8,10 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import { Effect } from "effect";
 import { unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { Effect } from "effect";
 
 import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
 
@@ -56,14 +56,34 @@ describe("is_news_sitemap round trip", () => {
     const store = new SQLiteStorage(tmpDbPath());
     await run(store.init());
     const crawlId = await run(store.createCrawl(crawlMeta));
-    const base = { type: "urlset" as const, urlCount: 3, childSitemaps: [], errors: [], fetchedAt: 1 };
-    await run(store.addSitemap(crawlId, { ...base, url: "https://example.com/news.xml", isNewsSitemap: true }));
-    await run(store.addSitemap(crawlId, { ...base, url: "https://example.com/sitemap.xml", isNewsSitemap: false }));
+    const base = {
+      type: "urlset" as const,
+      urlCount: 3,
+      childSitemaps: [],
+      errors: [],
+      fetchedAt: 1,
+    };
+    await run(
+      store.addSitemap(crawlId, {
+        ...base,
+        url: "https://example.com/news.xml",
+        isNewsSitemap: true,
+      })
+    );
+    await run(
+      store.addSitemap(crawlId, {
+        ...base,
+        url: "https://example.com/sitemap.xml",
+        isNewsSitemap: false,
+      })
+    );
 
     const got = await run(store.getSitemaps(crawlId));
     const byUrl = new Map(got.map((s) => [s.url, s]));
     expect(byUrl.get("https://example.com/news.xml")?.isNewsSitemap).toBe(true);
-    expect(byUrl.get("https://example.com/sitemap.xml")?.isNewsSitemap).toBe(false);
+    expect(byUrl.get("https://example.com/sitemap.xml")?.isNewsSitemap).toBe(
+      false
+    );
     await run(store.close());
   });
 
@@ -79,9 +99,11 @@ describe("is_news_sitemap round trip", () => {
         childSitemaps: [],
         errors: [],
         fetchedAt: 1,
-      }),
+      })
     );
-    expect((await run(store.getSitemaps(crawlId)))[0]?.isNewsSitemap).toBe(false);
+    expect((await run(store.getSitemaps(crawlId)))[0]?.isNewsSitemap).toBe(
+      false
+    );
     await run(store.close());
   });
 
@@ -116,10 +138,14 @@ describe("is_news_sitemap round trip", () => {
 
     const check = new Database(path);
     const cols = (
-      check.prepare("PRAGMA table_info(sitemaps)").all() as Array<{ name: string }>
+      check.prepare("PRAGMA table_info(sitemaps)").all() as Array<{
+        name: string;
+      }>
     ).map((c) => c.name);
     expect(cols).toContain("is_news_sitemap");
-    const v = check.prepare("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
+    const v = check
+      .prepare("SELECT version FROM schema_version LIMIT 1")
+      .get() as { version: number };
     expect(v.version).toBe(SCHEMA_VERSION);
     check.close();
   });

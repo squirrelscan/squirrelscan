@@ -1,14 +1,16 @@
 // links/anchor-target-conflict: one anchor text, several destinations (#1372).
 
+import type { LinkData } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
+
+import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
 import { AnchorGraphBuilder } from "../src/links/anchor-mismatch";
 import {
   anchorTargetConflictRule,
   evaluateAnchorConflicts,
 } from "../src/links/anchor-target-conflict";
-import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
-import type { LinkData } from "@squirrelscan/core-contracts";
 
 const BASE = "https://example.com/";
 
@@ -53,10 +55,15 @@ async function check(pages: PageSpec[]): Promise<CheckResult> {
 }
 
 // A site of `n` article pages plus the targets, each article carrying `linksFor(i)`.
-function site(n: number, linksFor: (i: number) => LinkData[], targets: string[]): PageSpec[] {
+function site(
+  n: number,
+  linksFor: (i: number) => LinkData[],
+  targets: string[]
+): PageSpec[] {
   const pages: PageSpec[] = [{ url: BASE }];
   for (const t of targets) pages.push({ url: `https://example.com${t}` });
-  for (let i = 0; i < n; i++) pages.push({ url: `https://example.com/a${i}`, links: linksFor(i) });
+  for (let i = 0; i < n; i++)
+    pages.push({ url: `https://example.com/a${i}`, links: linksFor(i) });
   return pages;
 }
 
@@ -64,7 +71,10 @@ describe("links/anchor-target-conflict: anchor to several URLs", () => {
   test("warns, naming the deviating destination and example source pages", async () => {
     // 9 pages say Pricing -> /pricing, 2 say Pricing -> /plans.
     const c = await check(
-      site(11, (i) => [body(i < 9 ? "/pricing" : "/plans", "Pricing")], ["/pricing", "/plans"]),
+      site(11, (i) => [body(i < 9 ? "/pricing" : "/plans", "Pricing")], [
+        "/pricing",
+        "/plans",
+      ])
     );
     expect(c.status).toBe("warn");
     expect(c.items).toHaveLength(1);
@@ -78,7 +88,10 @@ describe("links/anchor-target-conflict: anchor to several URLs", () => {
 
   test("an even split has no norm and is not reported", async () => {
     const c = await check(
-      site(10, (i) => [body(i < 5 ? "/pricing" : "/plans", "Pricing")], ["/pricing", "/plans"]),
+      site(10, (i) => [body(i < 5 ? "/pricing" : "/plans", "Pricing")], [
+        "/pricing",
+        "/plans",
+      ])
     );
     expect(c.status).toBe("pass");
   });
@@ -87,18 +100,27 @@ describe("links/anchor-target-conflict: anchor to several URLs", () => {
     const c = await check(
       site(
         11,
-        (i) => [body(i < 9 ? "/pricing" : "/plans", i % 2 ? "Pricing" : "  pricing ")],
-        ["/pricing", "/plans"],
-      ),
+        (i) => [
+          body(i < 9 ? "/pricing" : "/plans", i % 2 ? "Pricing" : "  pricing "),
+        ],
+        ["/pricing", "/plans"]
+      )
     );
     expect(c.status).toBe("warn");
   });
 
   test("fails once findings reach the fail threshold", async () => {
-    const names = Array.from({ length: 10 }, (_, k) => `Topic${String.fromCharCode(97 + k)}`);
+    const names = Array.from(
+      { length: 10 },
+      (_, k) => `Topic${String.fromCharCode(97 + k)}`
+    );
     const targets = names.flatMap((_, k) => [`/t${k}`, `/u${k}`]);
     const c = await check(
-      site(12, (i) => names.map((n, k) => body(i < 10 ? `/t${k}` : `/u${k}`, n)), targets),
+      site(
+        12,
+        (i) => names.map((n, k) => body(i < 10 ? `/t${k}` : `/u${k}`, n)),
+        targets
+      )
     );
     expect(c.status).toBe("fail");
     expect(c.details?.total).toBe(10);
@@ -106,7 +128,12 @@ describe("links/anchor-target-conflict: anchor to several URLs", () => {
 });
 
 describe("links/anchor-target-conflict: URL with divergent anchors", () => {
-  const anchors = ["Pricing", "Buy now", "Subscription costs", "Plans and tiers"];
+  const anchors = [
+    "Pricing",
+    "Buy now",
+    "Subscription costs",
+    "Plans and tiers",
+  ];
   const pages = (): PageSpec[] =>
     site(12, (i) => [body("/pricing", anchors[i % 4]!)], ["/pricing"]);
 
@@ -120,7 +147,9 @@ describe("links/anchor-target-conflict: URL with divergent anchors", () => {
 
   test("anchors that share a word are one variant", async () => {
     const related = ["Pricing", "Pricing plans", "Our pricing", "Pricing page"];
-    const c = await check(site(12, (i) => [body("/pricing", related[i % 4]!)], ["/pricing"]));
+    const c = await check(
+      site(12, (i) => [body("/pricing", related[i % 4]!)], ["/pricing"])
+    );
     expect(c.status).toBe("pass");
   });
 
@@ -141,26 +170,29 @@ describe("links/anchor-target-conflict: no false positives", () => {
           body(`/p${(i + 2) % 3}`, "Click here"),
           body(`/p${i % 3}`, "Weiterlesen"),
         ],
-        ["/p0", "/p1", "/p2"],
-      ),
+        ["/p0", "/p1", "/p2"]
+      )
     );
     expect(c.status).toBe("skipped");
   });
 
   test("chrome links are ignored", async () => {
     const c = await check(
-      site(
-        11,
-        (i) => [chrome(i < 5 ? "/pricing" : "/plans", "Pricing")],
-        ["/pricing", "/plans"],
-      ),
+      site(11, (i) => [chrome(i < 5 ? "/pricing" : "/plans", "Pricing")], [
+        "/pricing",
+        "/plans",
+      ])
     );
     expect(c.status).toBe("skipped");
   });
 
   test("a consistent site passes", async () => {
     const c = await check(
-      site(12, (i) => [body("/pricing", "Pricing"), body("/about", `Team ${i % 2}`)], ["/pricing", "/about"]),
+      site(
+        12,
+        (i) => [body("/pricing", "Pricing"), body("/about", `Team ${i % 2}`)],
+        ["/pricing", "/about"]
+      )
     );
     expect(c.status).toBe("pass");
   });
@@ -168,12 +200,16 @@ describe("links/anchor-target-conflict: no false positives", () => {
 
 describe("links/anchor-target-conflict: skipped", () => {
   test("fewer than 10 pages skips", async () => {
-    const c = await check(site(3, () => [body("/pricing", "Pricing")], ["/pricing"]));
+    const c = await check(
+      site(3, () => [body("/pricing", "Pricing")], ["/pricing"])
+    );
     expect(c.status).toBe("skipped");
   });
 
   test("a missing site skips", async () => {
-    const r = await anchorTargetConflictRule.run({ site: undefined } as unknown as RuleContext);
+    const r = await anchorTargetConflictRule.run({
+      site: undefined,
+    } as unknown as RuleContext);
     expect((r as { checks: CheckResult[] }).checks[0]!.status).toBe("skipped");
   });
 });
@@ -186,7 +222,11 @@ describe("links/anchor-target-conflict: bounded graph", () => {
         builder.addPage(`https://example.com/p${i}`, {
           status: 200,
           contentType: "text/html",
-          links: [body("/p0", "Alpha"), body("/p1", "Beta"), body("/p2", "Gamma")],
+          links: [
+            body("/p0", "Alpha"),
+            body("/p1", "Beta"),
+            body("/p2", "Gamma"),
+          ],
         });
       }
       return evaluateAnchorConflicts(builder.build(), BASE, []);

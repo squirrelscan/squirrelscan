@@ -1,11 +1,18 @@
 // links/click-depth: indexable pages more than N clicks from the homepage (#1688).
 
+import type { LinkData } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import { clickDepthRule, shortestDepths } from "../src/links/click-depth";
+import type {
+  CheckResult,
+  ParsedPage,
+  RuleContext,
+  RuleResult,
+} from "../src/types";
+
 import { rules as linkRules } from "../src/links";
-import type { CheckResult, ParsedPage, RuleContext, RuleResult } from "../src/types";
-import type { LinkData } from "@squirrelscan/core-contracts";
+import { clickDepthRule, shortestDepths } from "../src/links/click-depth";
 
 const BASE = "https://example.com/";
 
@@ -24,7 +31,7 @@ interface Spec {
 function ctx(
   pages: Spec[],
   options: Record<string, unknown> = {},
-  site: Record<string, unknown> = {},
+  site: Record<string, unknown> = {}
 ): RuleContext {
   return {
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -37,7 +44,9 @@ function ctx(
         statusCode: p.status ?? 200,
         headers: p.headers,
         parsed: {
-          links: (p.links ?? []).map((l) => (typeof l === "string" ? link(l) : l)),
+          links: (p.links ?? []).map((l) =>
+            typeof l === "string" ? link(l) : l
+          ),
           meta: { robots: p.robots },
         } as unknown as ParsedPage,
       })),
@@ -67,7 +76,7 @@ const CHAIN: Spec[] = [
 
 describe("links/click-depth", () => {
   test("lists pages deeper than 3 with depth, deepest first, total and deepest stated", async () => {
-    const c = (await run(ctx(CHAIN)));
+    const c = await run(ctx(CHAIN));
     expect(c.status).toBe("warn");
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("e"), P("d")]);
     expect((c.items ?? []).map((i) => i.meta?.depth)).toEqual([5, 4]);
@@ -77,7 +86,7 @@ describe("links/click-depth", () => {
   });
 
   test("the threshold option changes the listing and is stated", async () => {
-    const c = (await run(ctx(CHAIN, { maxDepth: 4 })));
+    const c = await run(ctx(CHAIN, { maxDepth: 4 }));
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("e")]);
     expect(c.message).toContain("more than 4 clicks");
     expect(c.details?.threshold).toBe(4);
@@ -93,7 +102,7 @@ describe("links/click-depth", () => {
       { url: P("a"), links: ["/b"] },
       { url: BASE, links: ["/a", "/deep"] },
     ];
-    const c = (await run(ctx(pages, { maxDepth: 1 })));
+    const c = await run(ctx(pages, { maxDepth: 1 }));
     expect((c.items ?? []).map((i) => [i.id, i.meta?.depth])).toEqual([
       [P("c"), 3],
       [P("b"), 2],
@@ -101,7 +110,9 @@ describe("links/click-depth", () => {
   });
 
   test("a sitemap-only page with no link path gets no depth", async () => {
-    const c = (await run(ctx([...CHAIN, { url: P("sitemap-only") }], { maxDepth: 1 })));
+    const c = await run(
+      ctx([...CHAIN, { url: P("sitemap-only") }], { maxDepth: 1 })
+    );
     expect((c.items ?? []).map((i) => i.id)).not.toContain(P("sitemap-only"));
   });
 
@@ -115,7 +126,7 @@ describe("links/click-depth", () => {
       { url: P("gone"), status: 404 },
       { url: P("ok") },
     ];
-    const c = (await run(ctx(pages, { maxDepth: 2 })));
+    const c = await run(ctx(pages, { maxDepth: 2 }));
     expect((c.items ?? []).map((i) => i.id)).toEqual([P("ok")]);
   });
 
@@ -125,7 +136,9 @@ describe("links/click-depth", () => {
       { url: P("hub"), robots: "noindex", links: ["/x"] },
       { url: P("x") },
     ];
-    expect((await run(ctx(pages, { maxDepth: 1 }))).items?.map((i) => i.id)).toEqual([P("x")]);
+    expect(
+      (await run(ctx(pages, { maxDepth: 1 }))).items?.map((i) => i.id)
+    ).toEqual([P("x")]);
   });
 
   test("nofollow, external and unparsable links are not edges", async () => {
@@ -145,7 +158,9 @@ describe("links/click-depth", () => {
   });
 
   test("a capped crawl says depths are a lower bound", async () => {
-    const c = (await run(ctx(CHAIN, {}, { crawlLimits: { pagesCrawled: 6, maxPages: 6 } })));
+    const c = await run(
+      ctx(CHAIN, {}, { crawlLimits: { pagesCrawled: 6, maxPages: 6 } })
+    );
     expect(c.status).toBe("warn");
     expect(c.message).toContain("lower bound");
     expect(c.details?.lowerBound).toBe(true);
@@ -153,13 +168,13 @@ describe("links/click-depth", () => {
   });
 
   test("a single-page audit is skipped with a reason", async () => {
-    const c = (await run(ctx([{ url: BASE }])));
+    const c = await run(ctx([{ url: BASE }]));
     expect(c.status).toBe("skipped");
     expect(c.skipReason).toBeTruthy();
   });
 
   test("skips when the homepage was not crawled", async () => {
-    const c = (await run(ctx([{ url: P("a") }, { url: P("b") }])));
+    const c = await run(ctx([{ url: P("a") }, { url: P("b") }]));
     expect(c.status).toBe("skipped");
   });
 
@@ -169,9 +184,13 @@ describe("links/click-depth", () => {
       { url: P("a"), links: ["/b"] },
       { url: P("b") },
     ];
-    const c = (await run(
-      ctx(pages, { maxDepth: 1 }, { baseUrl: "https://example.com/", entryUrls: [P("en/")] }),
-    ));
+    const c = await run(
+      ctx(
+        pages,
+        { maxDepth: 1 },
+        { baseUrl: "https://example.com/", entryUrls: [P("en/")] }
+      )
+    );
     expect(c.items?.map((i) => i.id)).toEqual([P("b")]);
   });
 
@@ -183,9 +202,10 @@ describe("links/click-depth", () => {
 
   test("a cycle does not loop and a large chain stays fast", async () => {
     const pages: Spec[] = [{ url: BASE, links: ["/p0"] }];
-    for (let i = 0; i < 2000; i++) pages.push({ url: P(`p${i}`), links: [`/p${i + 1}`, "/"] });
+    for (let i = 0; i < 2000; i++)
+      pages.push({ url: P(`p${i}`), links: [`/p${i + 1}`, "/"] });
     pages.push({ url: P("p2000") });
-    const c = (await run(ctx(pages)));
+    const c = await run(ctx(pages));
     expect(c.details?.deepest).toBe(2001);
   }, 20_000);
 
@@ -204,7 +224,10 @@ describe("links/click-depth", () => {
       pagesMatching: async function* () {},
     } as unknown as RuleContext["siteQuery"];
     const c = ctx([], {}, { entryUrls: [BASE] });
-    const result = (await clickDepthRule.run({ ...c, siteQuery })) as RuleResult;
+    const result = (await clickDepthRule.run({
+      ...c,
+      siteQuery,
+    })) as RuleResult;
     const check = result.checks[0]!;
     expect(check.status).toBe("warn");
     expect(check.details).toMatchObject({
@@ -212,7 +235,9 @@ describe("links/click-depth", () => {
       lowerBound: true,
       searchTruncated: "maxDepth",
     });
-    expect(check.message).toContain("click-depth search stopped at its 50-click limit");
+    expect(check.message).toContain(
+      "click-depth search stopped at its 50-click limit"
+    );
   });
 
   test("is registered, site scope, advisory weight", () => {

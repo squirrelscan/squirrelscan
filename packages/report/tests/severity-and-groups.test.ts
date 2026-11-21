@@ -10,13 +10,14 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, ReportRuleResult } from "../src/types";
+
 import { groupIssuesByCategory } from "../src/grouping";
-import { renderText } from "../src/output/text";
-import { renderMarkdown } from "../src/output/markdown";
-import { renderLlm } from "../src/output/llm";
-import { renderJson } from "../src/output/json";
-import { renderXml } from "../src/output/xml";
 import { renderHtml } from "../src/output/html";
+import { renderJson } from "../src/output/json";
+import { renderLlm } from "../src/output/llm";
+import { renderMarkdown } from "../src/output/markdown";
+import { renderText } from "../src/output/text";
+import { renderXml } from "../src/output/xml";
 
 function rule(
   id: string,
@@ -26,19 +27,39 @@ function rule(
   weight = 5
 ): ReportRuleResult {
   return {
-    meta: { id, name: id, description: "", category, scope: "page", severity, weight },
+    meta: {
+      id,
+      name: id,
+      description: "",
+      category,
+      scope: "page",
+      severity,
+      weight,
+    },
     checks,
   };
 }
 
-const fail = (msg: string) => ({ name: "c", status: "fail" as const, message: msg });
-const warn = (msg: string) => ({ name: "c", status: "warn" as const, message: msg });
+const fail = (msg: string) => ({
+  name: "c",
+  status: "fail" as const,
+  message: msg,
+});
+const warn = (msg: string) => ({
+  name: "c",
+  status: "warn" as const,
+  message: msg,
+});
 
 describe("groupIssuesByCategory severity-first ordering (#4)", () => {
   test("error leads, then recommendation (info), then warning — equal weight/subcategory", () => {
     const results: Record<string, ReportRuleResult> = {
-      "core/warn-rule": rule("core/warn-rule", "core", "warning", [warn("slow")]),
-      "core/info-rule": rule("core/info-rule", "core", "info", [warn("could improve")]),
+      "core/warn-rule": rule("core/warn-rule", "core", "warning", [
+        warn("slow"),
+      ]),
+      "core/info-rule": rule("core/info-rule", "core", "info", [
+        warn("could improve"),
+      ]),
       "core/err-rule": rule("core/err-rule", "core", "error", [fail("broken")]),
     };
     const grouped = groupIssuesByCategory(results);
@@ -47,17 +68,36 @@ describe("groupIssuesByCategory severity-first ordering (#4)", () => {
       "core/info-rule",
       "core/warn-rule",
     ]);
-    expect(grouped[0].rules.map((r) => r.severity)).toEqual(["error", "info", "warning"]);
+    expect(grouped[0].rules.map((r) => r.severity)).toEqual([
+      "error",
+      "info",
+      "warning",
+    ]);
   });
 
   test("severity is the PRIMARY key — outranks weight", () => {
     const results: Record<string, ReportRuleResult> = {
       // Higher-weight warning must still sort after a lower-weight info rule.
-      "core/heavy-warn": rule("core/heavy-warn", "core", "warning", [warn("x")], 20),
-      "core/light-info": rule("core/light-info", "core", "info", [warn("y")], 1),
+      "core/heavy-warn": rule(
+        "core/heavy-warn",
+        "core",
+        "warning",
+        [warn("x")],
+        20
+      ),
+      "core/light-info": rule(
+        "core/light-info",
+        "core",
+        "info",
+        [warn("y")],
+        1
+      ),
     };
     const grouped = groupIssuesByCategory(results);
-    expect(grouped[0].rules.map((r) => r.id)).toEqual(["core/light-info", "core/heavy-warn"]);
+    expect(grouped[0].rules.map((r) => r.id)).toEqual([
+      "core/light-info",
+      "core/heavy-warn",
+    ]);
   });
 
   test("existing tiebreakers (subcategory, weight, id) still apply within a severity", () => {
@@ -68,7 +108,11 @@ describe("groupIssuesByCategory severity-first ordering (#4)", () => {
       "core/zzz": rule("core/zzz", "core", "error", failCheck, 9),
     };
     const grouped = groupIssuesByCategory(results);
-    expect(grouped[0].rules.map((r) => r.id)).toEqual(["core/zzz", "core/aaa", "core/bbb"]);
+    expect(grouped[0].rules.map((r) => r.id)).toEqual([
+      "core/zzz",
+      "core/aaa",
+      "core/bbb",
+    ]);
   });
 });
 
@@ -77,8 +121,12 @@ describe("groupIssuesByCategory categories are severity-ordered (#1017)", () => 
     // "gaps" (priority 15) has an error; "content" (priority 80) has only a
     // warning. Severity must win over the topic-priority table.
     const results: Record<string, ReportRuleResult> = {
-      "content/warn-rule": rule("content/warn-rule", "content", "warning", [warn("thin")]),
-      "gaps/err-rule": rule("gaps/err-rule", "gaps", "error", [fail("missing")]),
+      "content/warn-rule": rule("content/warn-rule", "content", "warning", [
+        warn("thin"),
+      ]),
+      "gaps/err-rule": rule("gaps/err-rule", "gaps", "error", [
+        fail("missing"),
+      ]),
     };
     const grouped = groupIssuesByCategory(results);
     expect(grouped.map((c) => c.code)).toEqual(["gaps", "content"]);
@@ -87,8 +135,12 @@ describe("groupIssuesByCategory categories are severity-ordered (#1017)", () => 
   test("a recommendation-only (info) category outranks a warning-only category", () => {
     // Matches the rule-level rank: error → recommendation/info → warning.
     const results: Record<string, ReportRuleResult> = {
-      "content/warn-rule": rule("content/warn-rule", "content", "warning", [warn("thin")]),
-      "gaps/info-rule": rule("gaps/info-rule", "gaps", "info", [warn("could improve")]),
+      "content/warn-rule": rule("content/warn-rule", "content", "warning", [
+        warn("thin"),
+      ]),
+      "gaps/info-rule": rule("gaps/info-rule", "gaps", "info", [
+        warn("could improve"),
+      ]),
     };
     const grouped = groupIssuesByCategory(results);
     expect(grouped.map((c) => c.code)).toEqual(["gaps", "content"]);
@@ -98,8 +150,12 @@ describe("groupIssuesByCategory categories are severity-ordered (#1017)", () => 
     // Both categories have an error present; "core" (95) must still lead
     // "gaps" (15) since severity is tied.
     const results: Record<string, ReportRuleResult> = {
-      "gaps/err-rule": rule("gaps/err-rule", "gaps", "error", [fail("missing")]),
-      "core/err-rule": rule("core/err-rule", "core", "error", [fail("missing title")]),
+      "gaps/err-rule": rule("gaps/err-rule", "gaps", "error", [
+        fail("missing"),
+      ]),
+      "core/err-rule": rule("core/err-rule", "core", "error", [
+        fail("missing title"),
+      ]),
     };
     const grouped = groupIssuesByCategory(results);
     expect(grouped.map((c) => c.code)).toEqual(["core", "gaps"]);
@@ -117,15 +173,29 @@ function reportAcrossSeverities(): AuditReport {
     warnings: 2,
     failed: 1,
     ruleResults: {
-      "core/err-rule": rule("core/err-rule", "core", "error", [fail("broken title")]),
-      "core/info-rule": rule("core/info-rule", "core", "info", [warn("could add schema")]),
-      "core/warn-rule": rule("core/warn-rule", "core", "warning", [warn("slow image")]),
+      "core/err-rule": rule("core/err-rule", "core", "error", [
+        fail("broken title"),
+      ]),
+      "core/info-rule": rule("core/info-rule", "core", "info", [
+        warn("could add schema"),
+      ]),
+      "core/warn-rule": rule("core/warn-rule", "core", "warning", [
+        warn("slow image"),
+      ]),
     },
     healthScore: {
       overall: 60,
       categories: [],
       groups: [
-        { group: "seo", name: "SEO", score: 55, passed: 0, warnings: 2, failed: 1, total: 3 },
+        {
+          group: "seo",
+          name: "SEO",
+          score: 55,
+          passed: 0,
+          warnings: 2,
+          failed: 1,
+          total: 3,
+        },
         {
           group: "performance",
           name: "Performance",
@@ -144,7 +214,15 @@ function reportAcrossSeverities(): AuditReport {
           failed: 0,
           total: 1,
         },
-        { group: "ai", name: "AI Readiness", score: 40, passed: 0, warnings: 1, failed: 0, total: 1 },
+        {
+          group: "ai",
+          name: "AI Readiness",
+          score: 40,
+          passed: 0,
+          warnings: 1,
+          failed: 0,
+          total: 1,
+        },
       ],
       errorCount: 1,
       warningCount: 2,
@@ -178,7 +256,9 @@ describe("Recommendation label for info severity — human renderers only (#4)",
 
   test("json: keeps the raw info severity value", () => {
     const parsed = JSON.parse(renderJson(reportAcrossSeverities()));
-    const infoIssue = parsed.issues.find((i: { ruleId: string }) => i.ruleId === "core/info-rule");
+    const infoIssue = parsed.issues.find(
+      (i: { ruleId: string }) => i.ruleId === "core/info-rule"
+    );
     expect(infoIssue.severity).toBe("info");
     expect(JSON.stringify(parsed)).not.toContain("recommendation");
   });

@@ -172,34 +172,55 @@ export interface CloudServicesClient {
   /** Classify a batch of pages (page type + parsability). */
   aiParse(req: AiParseRequest, opts?: CallOpts): Promise<AiParseResponse>;
   /** Authority signals for a batch of pages. */
-  authoritySignals(req: AuthorityRequest, opts?: CallOpts): Promise<AuthorityResponse>;
+  authoritySignals(
+    req: AuthorityRequest,
+    opts?: CallOpts
+  ): Promise<AuthorityResponse>;
   /** Check a batch of external URLs against the shared dead-link cache + live fetch. */
   deadLinks(req: DeadLinksRequest, opts?: CallOpts): Promise<DeadLinksResponse>;
   /** Match URLs/selectors against server-side EasyList/EasyPrivacy. */
-  blocklistCheck(req: BlocklistCheckRequest, opts?: CallOpts): Promise<BlocklistCheckResponse>;
+  blocklistCheck(
+    req: BlocklistCheckRequest,
+    opts?: CallOpts
+  ): Promise<BlocklistCheckResponse>;
   /** Keyword gap analysis for the site (single run). */
-  keywordGaps(req: KeywordGapsRequest, opts?: CallOpts): Promise<KeywordGapsResponse>;
+  keywordGaps(
+    req: KeywordGapsRequest,
+    opts?: CallOpts
+  ): Promise<KeywordGapsResponse>;
   /** Content gap analysis for the site (single run). */
-  contentGaps(req: ContentGapsRequest, opts?: CallOpts): Promise<ContentGapsResponse>;
+  contentGaps(
+    req: ContentGapsRequest,
+    opts?: CallOpts
+  ): Promise<ContentGapsResponse>;
   /**
    * Fingerprint the site's technology stack (single run). Idempotent — the
    * server derives the key from the payload, so a transport retry is deduped.
    * Returns the current stack + added/removed diff vs the org's prior scan.
    */
-  detectTechnologies(req: TechDetectRequest, opts?: CallOpts): Promise<TechDetectResponse>;
+  detectTechnologies(
+    req: TechDetectRequest,
+    opts?: CallOpts
+  ): Promise<TechDetectResponse>;
   /**
    * Resolve the durable per-domain "site profile" (Stage 0 of the cloud
    * pipeline). Idempotent — the server derives the key from the payload + a
    * coarse 30-day refresh nonce, so a transport retry is deduped and a repeat
    * audit of the same domain in-window is a 0-credit cache hit.
    */
-  siteMetadata(req: SiteMetadataRequest, opts?: CallOpts): Promise<SiteMetadataResponse>;
+  siteMetadata(
+    req: SiteMetadataRequest,
+    opts?: CallOpts
+  ): Promise<SiteMetadataResponse>;
   /**
    * Generate the credited editor's audit summary (single run). Idempotent — the
    * server derives the key from the audit + ranked-issue payload, so a transport
    * retry is deduped. Any signed-in plan runs it; out of credits → 402 (#684).
    */
-  editorSummary(req: EditorSummaryRequest, opts?: CallOpts): Promise<EditorSummaryResponse>;
+  editorSummary(
+    req: EditorSummaryRequest,
+    opts?: CallOpts
+  ): Promise<EditorSummaryResponse>;
   /**
    * Fetch credited domain-level SEO stats (single run). Idempotent — the server
    * derives the key from the audit + domain payload, so a transport retry is
@@ -207,8 +228,14 @@ export interface CloudServicesClient {
    * hit. Any signed-in plan runs it (out of credits → 402, #684); a domain with
    * no SEO footprint gets 404 `no_data` (uncharged). Both degrade silently.
    */
-  domainStats(req: DomainStatsRequest, opts?: CallOpts): Promise<DomainStatsResponse>;
-  archiveIndexing(req: ArchiveIndexingRequest, opts?: CallOpts): Promise<ArchiveIndexingResponse>;
+  domainStats(
+    req: DomainStatsRequest,
+    opts?: CallOpts
+  ): Promise<DomainStatsResponse>;
+  archiveIndexing(
+    req: ArchiveIndexingRequest,
+    opts?: CallOpts
+  ): Promise<ArchiveIndexingResponse>;
   /**
    * Submit a cloud render job (202 — poll renderResult). Debits on submit.
    * Sent AT MOST ONCE (pins `maxAttempts: 1`) — non-idempotent, so a transport
@@ -216,7 +243,10 @@ export interface CloudServicesClient {
    */
   render(req: RenderRequest, opts?: CallOpts): Promise<RenderJobResponse>;
   /** Poll a render job. Free. */
-  renderResult(jobId: string, opts?: Pick<CallOpts, "signal">): Promise<RenderResultResponse>;
+  renderResult(
+    jobId: string,
+    opts?: Pick<CallOpts, "signal">
+  ): Promise<RenderResultResponse>;
 }
 
 /** Build the combined timeout + caller abort signal. */
@@ -235,12 +265,20 @@ function buildSignal(timeoutMs: number, caller?: AbortSignal): AbortSignal {
  * releasing the socket instead of leaving a pending read holding the connection
  * open, which would block container exit on event-loop drain.
  */
-async function readJson<T>(res: Response, signal: AbortSignal, path: string): Promise<T> {
+async function readJson<T>(
+  res: Response,
+  signal: AbortSignal,
+  path: string
+): Promise<T> {
   // No body stream (empty/consumed) — keep res.json()'s native error shape.
   if (!res.body) return (await res.json()) as T;
   const reader = res.body.getReader();
   const abortError = () =>
-    new CloudClientError("network_error", 0, `Cloud response from ${path} aborted mid-body`);
+    new CloudClientError(
+      "network_error",
+      0,
+      `Cloud response from ${path} aborted mid-body`
+    );
   if (signal.aborted) {
     await reader.cancel().catch(() => {});
     throw abortError();
@@ -273,7 +311,7 @@ async function readJson<T>(res: Response, signal: AbortSignal, path: string): Pr
           "network_error",
           0,
           `Cloud response from ${path} failed mid-body: ${(error as Error)?.message ?? "unknown"}`,
-          { cause: error },
+          { cause: error }
         );
   } finally {
     signal.removeEventListener("abort", onAbort);
@@ -313,7 +351,8 @@ function extractErrorCode(body: unknown): string | undefined {
 
 /** Exponential backoff with jitter so concurrent CLI runs don't retry in lockstep against a recovering API. */
 function backoff(attempt: number): Promise<void> {
-  const delay = Math.min(1000 * 2 ** (attempt - 1), 10_000) + Math.random() * 250;
+  const delay =
+    Math.min(1000 * 2 ** (attempt - 1), 10_000) + Math.random() * 250;
   // setTimeout (not Bun.sleep): cloud-client is also imported by worker-agent's workerd surface.
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
@@ -324,7 +363,9 @@ function isRetryableStatus(status: number): boolean {
   return status >= 500 || status === 408;
 }
 
-export function createCloudClient(config: CloudClientConfig): CloudServicesClient {
+export function createCloudClient(
+  config: CloudClientConfig
+): CloudServicesClient {
   let baseEnd = config.apiUrl.length;
   while (baseEnd > 0 && config.apiUrl[baseEnd - 1] === "/") baseEnd--;
   const base = config.apiUrl.slice(0, baseEnd);
@@ -349,7 +390,7 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
     init: RequestInit,
     signal: AbortSignal,
     attempts: number,
-    retryStatus?: (status: number) => boolean,
+    retryStatus?: (status: number) => boolean
   ): Promise<Response> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -373,9 +414,14 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
       } catch (error) {
         // Abort (caller cancel or the per-request timeout) is terminal — every further attempt fails instantly on the same signal.
         if (signal.aborted) {
-          throw new CloudClientError("network_error", 0, `Cloud request to ${path} aborted`, {
-            cause: error,
-          });
+          throw new CloudClientError(
+            "network_error",
+            0,
+            `Cloud request to ${path} aborted`,
+            {
+              cause: error,
+            }
+          );
         }
         lastError = error;
         if (attempt < attempts) await backoff(attempt);
@@ -385,12 +431,16 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
       "network_error",
       0,
       `Cloud request to ${path} failed: ${(lastError as Error)?.message ?? "unknown"}`,
-      { cause: lastError },
+      { cause: lastError }
     );
   }
 
   /** POST JSON and parse a typed 2xx body, or throw a mapped CloudClientError. */
-  async function postJson<T>(path: string, body: unknown, opts?: CallOpts): Promise<T> {
+  async function postJson<T>(
+    path: string,
+    body: unknown,
+    opts?: CallOpts
+  ): Promise<T> {
     const signal = buildSignal(timeoutMs, opts?.signal);
     const res = await send(
       path,
@@ -401,7 +451,7 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
       },
       signal,
       // Per-call override (render pins 1 — non-idempotent charge-on-submit). No retryStatus: never retry HTTP responses.
-      opts?.maxAttempts ?? maxAttempts,
+      opts?.maxAttempts ?? maxAttempts
     );
     return parse<T>(res, path, signal);
   }
@@ -414,12 +464,16 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
       { method: "GET", headers: headers() },
       combined,
       maxAttempts,
-      isRetryableStatus,
+      isRetryableStatus
     );
     return parse<T>(res, path, combined);
   }
 
-  async function parse<T>(res: Response, path: string, signal: AbortSignal): Promise<T> {
+  async function parse<T>(
+    res: Response,
+    path: string,
+    signal: AbortSignal
+  ): Promise<T> {
     // Body reads are bounded + cancellable via the per-request signal (#1214)
     // so a stalled stream can't outlive timeoutMs — see readJson.
     if (res.ok) return await readJson<T>(res, signal, path);
@@ -436,7 +490,9 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
     // RUN_NOT_ACTIVE and DUPLICATE_REQUEST are both 409 — split on the envelope
     // code so a reaped-run charge isn't reported as a replay (#475).
     const code =
-      extractErrorCode(body) === "RUN_NOT_ACTIVE" ? "run_inactive" : codeForStatus(res.status);
+      extractErrorCode(body) === "RUN_NOT_ACTIVE"
+        ? "run_inactive"
+        : codeForStatus(res.status);
     throw new CloudClientError(code, res.status, message, {
       required: extractRequired(body),
     });
@@ -448,33 +504,47 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
         opts?.cta ? `/v1/credits?cta=${opts.cta}` : "/v1/credits",
         opts?.signal
       ),
-    aiParse: (req, opts) => postJson<AiParseResponse>("/v1/services/ai-parse", req, opts),
+    aiParse: (req, opts) =>
+      postJson<AiParseResponse>("/v1/services/ai-parse", req, opts),
     authoritySignals: (req, opts) =>
       postJson<AuthorityResponse>("/v1/services/authority-signals", req, opts),
-    deadLinks: (req, opts) => postJson<DeadLinksResponse>("/v1/services/dead-links", req, opts),
+    deadLinks: (req, opts) =>
+      postJson<DeadLinksResponse>("/v1/services/dead-links", req, opts),
     blocklistCheck: (req, opts) =>
-      postJson<BlocklistCheckResponse>("/v1/services/blocklist-check", req, opts),
+      postJson<BlocklistCheckResponse>(
+        "/v1/services/blocklist-check",
+        req,
+        opts
+      ),
     keywordGaps: (req, opts) =>
       postJson<KeywordGapsResponse>("/v1/services/keyword-gaps", req, opts),
     contentGaps: (req, opts) =>
       postJson<ContentGapsResponse>("/v1/services/content-gaps", req, opts),
     detectTechnologies: (req, opts) =>
       postJson<TechDetectResponse>("/v1/services/technologies", req, opts),
-    siteMetadata: (req, opts) => postJson<SiteMetadataResponse>("/v1/services/metadata", req, opts),
+    siteMetadata: (req, opts) =>
+      postJson<SiteMetadataResponse>("/v1/services/metadata", req, opts),
     editorSummary: (req, opts) =>
       postJson<EditorSummaryResponse>("/v1/services/editor-summary", req, opts),
     domainStats: (req, opts) =>
       postJson<DomainStatsResponse>("/v1/services/domain-stats", req, opts),
     archiveIndexing: (req, opts) =>
-      postJson<ArchiveIndexingResponse>("/v1/services/archive-indexing", req, opts),
+      postJson<ArchiveIndexingResponse>(
+        "/v1/services/archive-indexing",
+        req,
+        opts
+      ),
     // render is charge-on-submit + non-idempotent: send AT MOST once so a
     // transport retry can never double-charge (lost response → per-url fallback).
     render: (req, opts) =>
-      postJson<RenderJobResponse>("/v1/services/render", req, { ...opts, maxAttempts: 1 }),
+      postJson<RenderJobResponse>("/v1/services/render", req, {
+        ...opts,
+        maxAttempts: 1,
+      }),
     renderResult: (jobId, opts) =>
       getJson<RenderResultResponse>(
         `/v1/services/render/${encodeURIComponent(jobId)}`,
-        opts?.signal,
+        opts?.signal
       ),
   };
 }

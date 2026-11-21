@@ -91,10 +91,15 @@ describe("scanJsComments — genuine comments are still counted", () => {
     expect(count("outer:// genuine comment\nfor(;;)break outer;")).toBe(1);
     // Even a label named after a scheme: a URL has a host right after the
     // slashes, so anything else there means this is a comment.
-    const src = Array.from({ length: 4 }, (_, i) => `http:// real comment ${i}`).join("\n");
+    const src = Array.from(
+      { length: 4 },
+      (_, i) => `http:// real comment ${i}`
+    ).join("\n");
     const r = scanJsComments(src);
     expect(r.lineComments).toBe(4);
-    expect(r.commentBytes).toBe((src.match(/\/\/[^\n]*/g) ?? []).join("").length);
+    expect(r.commentBytes).toBe(
+      (src.match(/\/\/[^\n]*/g) ?? []).join("").length
+    );
     // The host check must not depend on an ASCII-only whitespace test.
     expect(count("http:// real comment\n0;")).toBe(1);
     // A real URL still suppresses the guard.
@@ -115,19 +120,25 @@ describe("scanJsComments — genuine comments are still counted", () => {
 // `//` of a real comment. Each case below is checked against the byte total the
 // old `/\/\/[^\n]*/g` produced, which was correct for these inputs.
 describe("scanJsComments — division is not a regex opener", () => {
-  const x4 = (line: string) => Array.from({ length: 4 }, (_, i) => `${line} ${i}`).join("\n");
+  const x4 = (line: string) =>
+    Array.from({ length: 4 }, (_, i) => `${line} ${i}`).join("\n");
 
   test.each([
     ["postfix increment", "i++ / n // real"],
     ["postfix decrement", "i-- / n // real"],
     ["object literal", "const q = {} / n // real"],
     ["regex literal with no flags", "var r=/a/ / n // real"],
-  ])("`/` after %s divides, so the comment behind it is still counted", (_label, line) => {
-    const src = x4(line);
-    const r = scanJsComments(src);
-    expect(r.lineComments).toBe(4);
-    expect(r.commentBytes).toBe((src.match(/\/\/[^\n]*/g) ?? []).join("").length);
-  });
+  ])(
+    "`/` after %s divides, so the comment behind it is still counted",
+    (_label, line) => {
+      const src = x4(line);
+      const r = scanJsComments(src);
+      expect(r.lineComments).toBe(4);
+      expect(r.commentBytes).toBe(
+        (src.match(/\/\/[^\n]*/g) ?? []).join("").length
+      );
+    }
+  );
 
   test("a regex is never closed on a comment opener", () => {
     // `/ n //` is division then a comment, not a regex body ending at the `//`.
@@ -168,11 +179,17 @@ describe("scanJsComments — division is not a regex opener", () => {
     ["IDEOGRAPHIC SPACE", "\u3000"],
     ["BOM", "\ufeff"],
     ["NARROW NO-BREAK SPACE", "\u202f"],
-  ])("%s between the keyword and its `(` is whitespace, not a token", (_label, space) => {
-    const src = Array.from({ length: 4 }, (_, i) => `if${space}(ok)/[//]/.test(s${i});`).join("\n");
-    // Four of these crossed COMMENT_COUNT_THRESHOLD and flagged comment-free code.
-    expect(count(src)).toBe(0);
-  });
+  ])(
+    "%s between the keyword and its `(` is whitespace, not a token",
+    (_label, space) => {
+      const src = Array.from(
+        { length: 4 },
+        (_, i) => `if${space}(ok)/[//]/.test(s${i});`
+      ).join("\n");
+      // Four of these crossed COMMENT_COUNT_THRESHOLD and flagged comment-free code.
+      expect(count(src)).toBe(0);
+    }
+  );
 
   test("the open-paren stack is capped, so unmatched `(` cannot grow memory", () => {
     const before = process.memoryUsage().heapUsed;
@@ -209,13 +226,20 @@ describe("scanJsComments — accepted misreadings", () => {
 // for a keyword. Both misread the `/` that follows and swallowed or invented a
 // comment. Byte totals are checked against the old regex, which was right here.
 describe("scanJsComments — keyword lookup", () => {
-  const x4 = (line: string) => Array.from({ length: 4 }, (_, i) => `${line} // ${i}`).join("\n");
+  const x4 = (line: string) =>
+    Array.from({ length: 4 }, (_, i) => `${line} // ${i}`).join("\n");
 
   test("`for await (` is a control flow head", () => {
-    expect(count("async function f(){for await(const x of xs)/[//]/.test(x);}")).toBe(0);
-    expect(count("async function f(){for await (const x of xs)/[//]/.test(x);}")).toBe(0);
+    expect(
+      count("async function f(){for await(const x of xs)/[//]/.test(x);}")
+    ).toBe(0);
+    expect(
+      count("async function f(){for await (const x of xs)/[//]/.test(x);}")
+    ).toBe(0);
     // The comment between the two keywords is stepped over, and is the only one.
-    expect(count("async function f(){for/*c*/await(const x of xs)/[//]/.test(x);}")).toBe(1);
+    expect(
+      count("async function f(){for/*c*/await(const x of xs)/[//]/.test(x);}")
+    ).toBe(1);
   });
 
   test("plain `await (` is grouping, so the `/` after it divides", () => {
@@ -244,12 +268,15 @@ describe("scanJsComments — keyword lookup", () => {
   });
 
   test("a private name is never a keyword", () => {
-    const src = "class C { #return = 1; m() { return this.#return /[/* c */ 1] / 2; } }";
+    const src =
+      "class C { #return = 1; m() { return this.#return /[/* c */ 1] / 2; } }";
     const r = scanJsComments(src);
     expect(r.blockComments).toBe(1);
     expect(r.commentBytes).toBe("/* c */".length);
     // A space may sit between the dot and the hash, so the hash alone decides.
-    expect(count("class C { m() { this. #return /[/* c */ 1] / 2; } }")).toBe(1);
+    expect(count("class C { m() { this. #return /[/* c */ 1] / 2; } }")).toBe(
+      1
+    );
     expect(count("class C { m() { this.#if(x) /[/* c */ 1] / 2; } }")).toBe(1);
   });
 
@@ -281,17 +308,25 @@ describe("scanJsComments — deliberately not counted", () => {
 
 describe("scanCssComments", () => {
   test("`/* */` inside a CSS string is not a comment", () => {
-    expect(scanCssComments('a::before{content:"/* x */"}').blockComments).toBe(0);
-    expect(scanCssComments("a::before{content:'/* x */'}").blockComments).toBe(0);
+    expect(scanCssComments('a::before{content:"/* x */"}').blockComments).toBe(
+      0
+    );
+    expect(scanCssComments("a::before{content:'/* x */'}").blockComments).toBe(
+      0
+    );
   });
 
   test("real comments are counted with their delimiters", () => {
-    const r = scanCssComments('/* one */a{color:red}b::after{content:"/* no */"}/* two */');
+    const r = scanCssComments(
+      '/* one */a{color:red}b::after{content:"/* no */"}/* two */'
+    );
     expect(r.blockComments).toBe(2);
     expect(r.commentBytes).toBe("/* one */".length + "/* two */".length);
   });
 
   test("a backslash before CRLF continues a CSS string", () => {
-    expect(scanCssComments('a{content:"x\\\r\n/* still string */"}').blockComments).toBe(0);
+    expect(
+      scanCssComments('a{content:"x\\\r\n/* still string */"}').blockComments
+    ).toBe(0);
   });
 });

@@ -1,10 +1,10 @@
 // a11y/tabindex - Tabindex values are appropriate
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
-import { getAttrCI, querySelectorAllByAttrCI } from "@squirrelscan/utils";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+import { getAttrCI, querySelectorAllByAttrCI } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const tabindexRule: Rule = {
   meta: {

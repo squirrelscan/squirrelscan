@@ -1,7 +1,8 @@
 // Detaching retained values from the page they came from (#1860).
 
-import { schemaCollectionFromJSON } from "@squirrelscan/parser";
 import type { ParsedPage } from "@squirrelscan/rules";
+
+import { schemaCollectionFromJSON } from "@squirrelscan/parser";
 
 import { logger } from "./adapter-logger";
 
@@ -30,7 +31,10 @@ export interface DetachCounts {
   readonly fallbacks: number;
 }
 
-const counts = new Map<DetachBoundary, { detached: number; fallbacks: number }>();
+const counts = new Map<
+  DetachBoundary,
+  { detached: number; fallbacks: number }
+>();
 /** Log the first few fallbacks per boundary; a broken page shape would hit every page. */
 const MAX_LOGGED_FALLBACKS = 3;
 
@@ -86,7 +90,7 @@ export function detachFromPage<T>(value: T, boundary: DetachBoundary): T {
       // that value is page content.
       const kind = error instanceof Error ? error.name : typeof error;
       logger.warn(
-        `detach fallback at ${boundary} (${kind}): this page stays attached to its HTML (#1860)`,
+        `detach fallback at ${boundary} (${kind}): this page stays attached to its HTML (#1860)`
       );
     }
     return value;
@@ -144,7 +148,7 @@ export function detachParsedPage(parsed: ParsedPage): ParsedPage {
     if (seen <= MAX_LOGGED_FALLBACKS) {
       const kind = error instanceof Error ? error.name : typeof error;
       logger.warn(
-        `detach fallback at parsed-universe (${kind}): this page stays attached to its HTML (#1860)`,
+        `detach fallback at parsed-universe (${kind}): this page stays attached to its HTML (#1860)`
       );
     }
     return parsed;

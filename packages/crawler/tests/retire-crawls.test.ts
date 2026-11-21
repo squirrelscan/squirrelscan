@@ -5,11 +5,13 @@
 // conditional-GET cache or the sub-resource records, which would turn every
 // re-audit into a cold crawl and cost users far more than the disk they saved.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { CrawlMetadata, PageRecord } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -100,12 +102,20 @@ async function twoCrawls(): Promise<TwoCrawls> {
     [recent, 2_000, "v2"],
   ] as const) {
     for (const path of ["/a", "/b"]) {
-      await run(store.upsertPage(crawlId, pageRecord(`https://e.test${path}`, at, tag)));
-      await run(store.saveRuleResults(crawlId, `https://e.test${path}`, "seo/title", [check]));
+      await run(
+        store.upsertPage(crawlId, pageRecord(`https://e.test${path}`, at, tag))
+      );
+      await run(
+        store.saveRuleResults(crawlId, `https://e.test${path}`, "seo/title", [
+          check,
+        ])
+      );
     }
   }
   // A page only the OLD crawl ever saw.
-  await run(store.upsertPage(old, pageRecord("https://e.test/gone", 1_000, "v1")));
+  await run(
+    store.upsertPage(old, pageRecord("https://e.test/gone", 1_000, "v1"))
+  );
   return { store, old, recent };
 }
 
@@ -227,9 +237,7 @@ describe("retireCrawls", () => {
     const at = 1_700_000_000_000;
     await run(store.retireCrawls([old], at));
 
-    const byId = new Map(
-      (await run(store.listCrawls())).map((c) => [c.id, c])
-    );
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
     // The stamp is what lets `report` say "reclaimed on <date>" instead of
     // rebuilding an empty report from the pages that survive.
     expect(byId.get(old)?.retiredAt).toBe(at);
@@ -244,7 +252,9 @@ describe("retireCrawls", () => {
     // rollback would leave one of the two applied.
     const { store, old } = await twoCrawls();
     const db = (
-      store as unknown as { getDb(): { transaction(fn: () => void): () => void } }
+      store as unknown as {
+        getDb(): { transaction(fn: () => void): () => void };
+      }
     ).getDb();
 
     expect(() =>
@@ -282,6 +292,8 @@ describe("retireCrawls", () => {
     await run(store.retireCrawls([old]));
     await run(store.vacuum());
     expect((await run(store.getRuleResultsByPage(recent))).size).toBe(2);
-    expect((await run(store.getCachedPage("https://e.test/a")))?.etag).toBe("v2");
+    expect((await run(store.getCachedPage("https://e.test/a")))?.etag).toBe(
+      "v2"
+    );
   });
 });

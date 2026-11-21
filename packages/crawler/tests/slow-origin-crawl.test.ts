@@ -15,8 +15,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 
 const PAGE = `<!doctype html><html><head><title>t</title></head><body>
 <a href="/one">one</a><a href="/two">two</a></body></html>`;
@@ -63,10 +64,12 @@ function stalledBodyResponse() {
   return new Response(
     new ReadableStream({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode("<!doctype html><html><body>"));
+        controller.enqueue(
+          new TextEncoder().encode("<!doctype html><html><body>")
+        );
       },
     }),
-    { headers: { "content-type": "text/html" } },
+    { headers: { "content-type": "text/html" } }
   );
 }
 
@@ -87,14 +90,18 @@ async function crawl(origin: string, config = CONFIG): Promise<CrawlOutcome> {
     Stream.runForEach(crawler.events, (event: CrawlerEvent) =>
       Effect.sync(() => {
         if (event.type === "started") startedAfterMs = Date.now() - startedAt;
-      }),
-    ),
+      })
+    )
   );
 
   try {
     const crawlId = await Effect.runPromise(crawler.start(origin, origin));
     const pages = await Effect.runPromise(crawler.storage.getPages(crawlId));
-    return { startedAfterMs, pages: pages.length, totalMs: Date.now() - startedAt };
+    return {
+      startedAfterMs,
+      pages: pages.length,
+      totalMs: Date.now() - startedAt,
+    };
   } finally {
     await Effect.runPromise(Fiber.interrupt(events));
   }
@@ -140,7 +147,7 @@ describe("slow origin does not wedge the crawl (#1699)", () => {
               controller.enqueue(new TextEncoder().encode("<!-- x -->"));
             },
           }),
-          { headers: { "content-type": "text/html" } },
+          { headers: { "content-type": "text/html" } }
         );
       }
       return htmlResponse();
@@ -180,7 +187,7 @@ describe("slow origin does not wedge the crawl (#1699)", () => {
       const path = new URL(req.url).pathname;
       if (path === "/") {
         return htmlResponse(
-          `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/second"></head><body>x</body></html>`,
+          `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/second"></head><body>x</body></html>`
         );
       }
       if (path === "/second") return stalledBodyResponse();
@@ -202,7 +209,7 @@ describe("slow origin does not wedge the crawl (#1699)", () => {
       const path = new URL(req.url).pathname;
       if (path === "/dead") await new Promise(() => {});
       return htmlResponse(
-        `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/dead"></head><body>x</body></html>`,
+        `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/dead"></head><body>x</body></html>`
       );
     });
 
@@ -222,14 +229,14 @@ describe("slow origin does not wedge the crawl (#1699)", () => {
       await Bun.sleep(HOP_DELAY_MS);
       const n = Number(new URL(req.url).pathname.replace("/m", "")) || 0;
       return htmlResponse(
-        `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/m${n + 1}"></head><body>x</body></html>`,
+        `<!doctype html><html><head><meta http-equiv="refresh" content="0; url=/m${n + 1}"></head><body>x</body></html>`
       );
     });
 
     // hop deadline 600ms (> HOP_DELAY_MS, so no hop times out on its own);
     // chain budget = 3 × 600ms = 1800ms, i.e. ~6 hops of 300ms.
     const crawler = await Effect.runPromise(
-      createCrawler({ config: { ...CONFIG, timeoutMs: 600 } }),
+      createCrawler({ config: { ...CONFIG, timeoutMs: 600 } })
     );
     await Effect.runPromise(crawler.detectRedirects(`${origin}m0`));
 

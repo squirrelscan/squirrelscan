@@ -30,11 +30,52 @@ export const MIN_PUNCTUATED_HINT_CHARS = 3;
  * run equal to one is not used as a hint.
  */
 const COMMON_WORDS = new Set([
-  "config", "init", "account", "install", "window[", "window.", "document.", "track", "push", "load",
-  "send", "page", "data", "name", "type", "start", "create", "options", "script", "client", "event",
-  "events", "user", "users", "error", "version", "token", "key", "value", "props", "state", "class",
-  "style", "false", "true", "null", "undefined", "function", "return", "object", "string", "number",
-  "this.", "self.", "global.", "exports.",
+  "config",
+  "init",
+  "account",
+  "install",
+  "window[",
+  "window.",
+  "document.",
+  "track",
+  "push",
+  "load",
+  "send",
+  "page",
+  "data",
+  "name",
+  "type",
+  "start",
+  "create",
+  "options",
+  "script",
+  "client",
+  "event",
+  "events",
+  "user",
+  "users",
+  "error",
+  "version",
+  "token",
+  "key",
+  "value",
+  "props",
+  "state",
+  "class",
+  "style",
+  "false",
+  "true",
+  "null",
+  "undefined",
+  "function",
+  "return",
+  "object",
+  "string",
+  "number",
+  "this.",
+  "self.",
+  "global.",
+  "exports.",
 ]);
 
 /** Characters that, escaped, stand for themselves. */
@@ -88,7 +129,11 @@ export function alternatives(source: string): string[] {
 }
 
 /** Index just past the arguments of the escape whose letter `kind` sits at `at`: a hex digit pair or run, a braced or angled name, a control letter, or the digits after a digit escape. */
-function skipEscapeArguments(source: string, at: number, kind: string | undefined): number {
+function skipEscapeArguments(
+  source: string,
+  at: number,
+  kind: string | undefined
+): number {
   const after = at + 1;
   const hex = /^[0-9a-fA-F]/;
   const take = (re: RegExp, max: number): number => {
@@ -120,7 +165,9 @@ function skipEscapeArguments(source: string, at: number, kind: string | undefine
     }
     default:
       // \0-\9: a back-reference (\12) or a legacy octal escape (\012) reads every digit that follows.
-      return kind !== undefined && /^[0-9]$/.test(kind) ? take(/^[0-9]$/, source.length) : after;
+      return kind !== undefined && /^[0-9]$/.test(kind)
+        ? take(/^[0-9]$/, source.length)
+        : after;
   }
 }
 
@@ -171,7 +218,14 @@ function literalRuns(alternative: string): string[] {
       end();
       continue;
     }
-    if (c === "." || c === "^" || c === "$" || c === ")" || c === "]" || c === "}") {
+    if (
+      c === "." ||
+      c === "^" ||
+      c === "$" ||
+      c === ")" ||
+      c === "]" ||
+      c === "}"
+    ) {
       end();
       continue;
     }
@@ -201,7 +255,10 @@ function usable(run: string): boolean {
  * bare common word. For a case-insensitive pattern they are lower-cased, and the caller searches a
  * lower-cased copy.
  */
-export function deriveHints(pattern: RegExp): { hints: string[]; caseInsensitive: boolean } {
+export function deriveHints(pattern: RegExp): {
+  hints: string[];
+  caseInsensitive: boolean;
+} {
   const caseInsensitive = pattern.flags.includes("i");
   const hints = new Set<string>();
   for (const alternative of alternatives(pattern.source)) {

@@ -5,9 +5,12 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, ReportRuleResult } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 
-function baseReport(ruleResults: Record<string, ReportRuleResult>): AuditReport {
+function baseReport(
+  ruleResults: Record<string, ReportRuleResult>
+): AuditReport {
   return {
     baseUrl: "https://example.com",
     timestamp: "2026-06-16T14:30:00.000Z",
@@ -19,7 +22,10 @@ function baseReport(ruleResults: Record<string, ReportRuleResult>): AuditReport 
   };
 }
 
-function rule(id: string, checks: ReportRuleResult["checks"]): ReportRuleResult {
+function rule(
+  id: string,
+  checks: ReportRuleResult["checks"]
+): ReportRuleResult {
   return {
     meta: {
       id,
@@ -48,7 +54,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
             lastSeenAt: Date.now() - 3 * 86_400_000,
           },
         ]),
-      }),
+      })
     );
     expect(html).toContain("carried-badge");
     expect(html).toContain("Not re-checked this run");
@@ -75,7 +81,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
             provenance: "fresh",
           },
         ]),
-      }),
+      })
     );
     expect(html).toContain("1 of 2 pages carried from previous crawls.");
     expect(html).not.toContain("carried-badge");
@@ -98,12 +104,21 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
         lastSeenAt: 1,
       },
     ];
-    const html = renderHtml(baseReport({ "legal/cookie-consent": rule("legal/cookie-consent", checks) }));
-    expect(html).toContain("Fixed on all 5 pages checked this run; 1 page pending re-check.");
+    const html = renderHtml(
+      baseReport({
+        "legal/cookie-consent": rule("legal/cookie-consent", checks),
+      })
+    );
+    expect(html).toContain(
+      "Fixed on all 5 pages checked this run; 1 page pending re-check."
+    );
   });
 
   test("a long affected-pages list caps inline and offers a 'show all' + copy textarea", () => {
-    const pages = Array.from({ length: 60 }, (_, i) => `https://example.com/p${i}`);
+    const pages = Array.from(
+      { length: 60 },
+      (_, i) => `https://example.com/p${i}`
+    );
     const html = renderHtml(
       baseReport({
         "images/alt-text": rule("images/alt-text", [
@@ -115,7 +130,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
             details: { aggregated: true, occurrences: 60 },
           },
         ]),
-      }),
+      })
     );
     expect(html).toContain("+10 more</summary>");
     expect(html).toContain("Copy as text");
@@ -128,9 +143,14 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
     const html = renderHtml(
       baseReport({
         "images/alt-text": rule("images/alt-text", [
-          { name: "alt", status: "warn", message: "missing alt", pageUrl: "https://example.com/a" },
+          {
+            name: "alt",
+            status: "warn",
+            message: "missing alt",
+            pageUrl: "https://example.com/a",
+          },
         ]),
-      }),
+      })
     );
     expect(html).not.toContain("Copy as text");
   });
@@ -141,7 +161,10 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
   // affected pages would blow up a PUBLIC report's HTML. This must stay
   // bounded regardless of how large the underlying check is.
   test("a check with 1,000+ affected pages stays bounded (hard cap, disclosed, no unbounded duplication)", () => {
-    const pages = Array.from({ length: 1_043 }, (_, i) => `https://example.com/p${i}`);
+    const pages = Array.from(
+      { length: 1_043 },
+      (_, i) => `https://example.com/p${i}`
+    );
     const html = renderHtml(
       baseReport({
         "images/alt-text": rule("images/alt-text", [
@@ -153,7 +176,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
             details: { aggregated: true, occurrences: 1_043 },
           },
         ]),
-      }),
+      })
     );
     // Truncation is disclosed with the real total, never silently dropped.
     expect(html).toContain("Showing 200 of 1,043 affected pages.");
@@ -162,11 +185,13 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
     // plain text in the copy textarea, so each page URL appears at most
     // twice. Page #250 (well past the cap) must not appear anywhere.
     expect(html).not.toContain("https://example.com/p250");
-    const occurrencesOfP0 = html.split("https://example.com/p0\"").length - 1; // href="...p0"
+    const occurrencesOfP0 = html.split('https://example.com/p0"').length - 1; // href="...p0"
     expect(occurrencesOfP0).toBe(1);
     // Bound the total count of materialized page-URL occurrences: 200 as
     // hrefs + 200 as textarea plain text = 400, not ~2,086 (1,043 x 2).
-    const totalUrlOccurrences = (html.match(/https:\/\/example\.com\/p\d+/g) ?? []).length;
+    const totalUrlOccurrences = (
+      html.match(/https:\/\/example\.com\/p\d+/g) ?? []
+    ).length;
     expect(totalUrlOccurrences).toBeLessThanOrEqual(400);
     expect(totalUrlOccurrences).toBeGreaterThan(200); // sanity: not over-truncated either
   });
@@ -176,7 +201,10 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
   // items[].sourcePages, not check.pages — before this fix such a check got
   // NO expand/copy affordance, just a 3-item preview with a dead "+N more".
   test("a site-scope check (pages only via item.sourcePages) gets the full PagesList affordance", () => {
-    const sourcePages = Array.from({ length: 12 }, (_, i) => `https://example.com/dup-${i}`);
+    const sourcePages = Array.from(
+      { length: 12 },
+      (_, i) => `https://example.com/dup-${i}`
+    );
     const html = renderHtml(
       baseReport({
         "seo/duplicate-title": rule("seo/duplicate-title", [
@@ -186,10 +214,12 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
             message: "Duplicate title across pages",
             // No `pages`/`pageUrl` at all — pure site-scope, case 2 (resource +
             // sourcePages) per affected-pages.ts.
-            items: [{ id: "Home | Example", sourcePages, label: "Home | Example" }],
+            items: [
+              { id: "Home | Example", sourcePages, label: "Home | Example" },
+            ],
           },
         ]),
-      }),
+      })
     );
     // The rule/check now reports the real affected-page count...
     expect(html).toContain("12 pages affected");
@@ -213,11 +243,12 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
             items: [{ id: "https://example.com/gone" }],
           },
         ]),
-      }),
+      })
     );
     // Covered once via the unified PagesList...
     expect(html).toContain("1 page affected");
-    const linkOccurrences = html.split('href="https://example.com/gone"').length - 1;
+    const linkOccurrences =
+      html.split('href="https://example.com/gone"').length - 1;
     expect(linkOccurrences).toBe(1);
     // ...and the (now fully redundant) items block is suppressed entirely.
     expect(html).not.toContain("1 item");
@@ -237,10 +268,12 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
             name: "blocked-resource",
             status: "warn",
             message: "Resource blocked, no known referring page",
-            items: [{ id: "https://cdn.example.com/blocked.js", sourcePages: [] }],
+            items: [
+              { id: "https://cdn.example.com/blocked.js", sourcePages: [] },
+            ],
           },
         ]),
-      }),
+      })
     );
     // Contributes 0 pages (an unattributed resource is not itself a page) —
     // PagesList must not render for this check.

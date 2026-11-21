@@ -12,9 +12,9 @@
 // the same cases. One site, because the test doubles hold one; the key's site half
 // is the SQLite store's own site-scoping test.
 
-import { describe, expect, test } from "bun:test";
-
 import type { SitePageRecord } from "@squirrelscan/core-contracts";
+
+import { describe, expect, test } from "bun:test";
 
 /** The two methods the contract is about, Promise-shaped. */
 export interface SitePageStoreUnderTest {
@@ -26,7 +26,7 @@ const SITE = "web_contract";
 
 function page(
   normalizedUrl: string,
-  over: Partial<SitePageRecord> = {},
+  over: Partial<SitePageRecord> = {}
 ): SitePageRecord {
   return {
     siteKey: SITE,
@@ -43,7 +43,11 @@ function page(
 async function rowsOf(store: SitePageStoreUnderTest) {
   const rows = await store.getSitePages(SITE);
   return [...rows].sort((a, b) =>
-    a.normalizedUrl < b.normalizedUrl ? -1 : a.normalizedUrl > b.normalizedUrl ? 1 : 0,
+    a.normalizedUrl < b.normalizedUrl
+      ? -1
+      : a.normalizedUrl > b.normalizedUrl
+        ? 1
+        : 0
   );
 }
 
@@ -54,7 +58,7 @@ async function rowsOf(store: SitePageStoreUnderTest) {
 export function describeSitePagesContract<S extends SitePageStoreUnderTest>(
   name: string,
   open: () => S | Promise<S>,
-  close?: (store: S) => void | Promise<void>,
+  close?: (store: S) => void | Promise<void>
 ): void {
   describe(`upsertSitePages keyed-upsert contract: ${name}`, () => {
     const withStore = async (body: (store: S) => Promise<void>) => {
@@ -69,7 +73,9 @@ export function describeSitePagesContract<S extends SitePageStoreUnderTest>(
     test("a second upsert of a different row keeps the first", async () => {
       await withStore(async (store) => {
         const a = page("https://contract.test/a");
-        const b = page("https://contract.test/b", { lastSeenCrawlId: "audit_2" });
+        const b = page("https://contract.test/b", {
+          lastSeenCrawlId: "audit_2",
+        });
         await store.upsertSitePages([a]);
         await store.upsertSitePages([b]);
         expect(await rowsOf(store)).toEqual([a, b]);
@@ -96,14 +102,19 @@ export function describeSitePagesContract<S extends SitePageStoreUnderTest>(
       await withStore(async (store) => {
         const seeded = [
           page("https://contract.test/a"),
-          page("https://contract.test/b", { state: "removed", lastStatus: 404 }),
+          page("https://contract.test/b", {
+            state: "removed",
+            lastStatus: 404,
+          }),
           page("https://contract.test/c"),
         ];
         await store.upsertSitePages(seeded);
 
         // An empty call, then a call naming one new page only.
         await store.upsertSitePages([]);
-        const d = page("https://contract.test/d", { lastSeenCrawlId: "audit_3" });
+        const d = page("https://contract.test/d", {
+          lastSeenCrawlId: "audit_3",
+        });
         await store.upsertSitePages([d]);
 
         expect(await rowsOf(store)).toEqual([...seeded, d]);

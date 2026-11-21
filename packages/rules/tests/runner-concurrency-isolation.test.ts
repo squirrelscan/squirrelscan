@@ -9,14 +9,15 @@
 // `ctx.cloudResults`. This test runs two audits concurrently with interleaved
 // awaits and asserts each rule only ever observed its OWN run's state.
 
-import { describe, expect, test } from "bun:test";
-
 import type { SiteMetadata } from "@squirrelscan/core-contracts";
 
-import { readCloudResult, type CloudResultStore } from "../src/cloud";
+import { describe, expect, test } from "bun:test";
+
 import type { RuleNamespace } from "../src/loader";
-import { RuleRunner, type RulesConfig } from "../src/runner";
 import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
+
+import { readCloudResult, type CloudResultStore } from "../src/cloud";
+import { RuleRunner, type RulesConfig } from "../src/runner";
 
 // What a single rule invocation saw of its run's per-run state.
 interface Observation {
@@ -111,7 +112,11 @@ function makeSiteData(): SiteData {
   return {
     baseUrl: "https://example.com",
     pages: [
-      { url: "https://example.com/", statusCode: 200, parsed: {} as ParsedPage },
+      {
+        url: "https://example.com/",
+        statusCode: 200,
+        parsed: {} as ParsedPage,
+      },
     ],
     robotsTxt: null,
     sitemaps: null,
@@ -181,7 +186,9 @@ describe("runner per-run state isolation (concurrent audits)", () => {
       };
     });
 
-    await Promise.all(runners.map((r) => r.runner.runSiteRules(makeSiteData())));
+    await Promise.all(
+      runners.map((r) => r.runner.runSiteRules(makeSiteData()))
+    );
 
     expect(observations.length).toBe(N);
     for (let i = 0; i < N; i++) {

@@ -4,12 +4,12 @@
 // the stored HEADERS with it, so core/robots-meta reported "noindex via
 // X-Robots-Tag header" from a response the site no longer sent.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { runStreamingRules } from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -37,11 +37,16 @@ const CONFIG = {
  * without it every refetch is a 200 whose body matches the stored one.
  */
 function site(opts: { etag: boolean }) {
-  const state = { robots: "noindex, nofollow" as string | null, notModified: 0 };
+  const state = {
+    robots: "noindex, nofollow" as string | null,
+    notModified: 0,
+  };
   const server = Bun.serve({
     port: 0,
     fetch(req) {
-      const headers: Record<string, string> = { "content-type": "text/html; charset=utf-8" };
+      const headers: Record<string, string> = {
+        "content-type": "text/html; charset=utf-8",
+      };
       if (state.robots) headers["x-robots-tag"] = state.robots;
       if (opts.etag) {
         headers.etag = ETAG;
@@ -74,23 +79,32 @@ async function audit(storage: SQLiteStorage, origin: string) {
         incremental: true,
         useCacheControl: false,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const ran = await Effect.runPromise(
     Effect.gen(function* () {
       const pre = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
       return yield* runStreamingRules(storage, crawlId, CONFIG, pre.assets);
-    }) as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
+    }) as Effect.Effect<
+      { ruleResultsMap: Map<string, { checks: CheckResult[] }> },
+      never,
+      never
+    >
   );
-  const checks = (ran.ruleResultsMap.get("core/robots-meta")?.checks ?? []) as CheckResult[];
+  const checks = (ran.ruleResultsMap.get("core/robots-meta")?.checks ??
+    []) as CheckResult[];
   const stats = await Effect.runPromise(storage.getStats(crawlId));
   const [page] = await Effect.runPromise(storage.getPages(crawlId));
   return { checks, stats, page };
 }
 
 const viaHeader = (checks: CheckResult[]) =>
-  checks.filter((c) => c.status !== "pass" && /X-Robots-Tag/.test(c.message ?? ""));
+  checks.filter(
+    (c) => c.status !== "pass" && /X-Robots-Tag/.test(c.message ?? "")
+  );
 
 describe("core/robots-meta after a site drops its X-Robots-Tag (repo#4765)", () => {
   test("200 with an unchanged body (hash match): audit 2 has no noindex finding", async () => {

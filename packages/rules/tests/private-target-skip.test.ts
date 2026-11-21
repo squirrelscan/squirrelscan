@@ -7,15 +7,23 @@
 // `skipped` check instead, decided from the audit URL by the classifier the CLI's
 // cloud preflight already used. Public hosts run exactly as before.
 
+import {
+  type CheckResult,
+  PRIVATE_TARGET_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
-import { type CheckResult, PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
+import type { PageData, SiteData } from "../src/types";
 
 import { loadAllRules } from "../src/loader";
 import { RuleRunner, type RulesConfig } from "../src/runner";
-import type { PageData, SiteData } from "../src/types";
 
-const PAGE_GATED = ["security/https", "perf/http2", "perf/compression", "perf/cache-headers"];
+const PAGE_GATED = [
+  "security/https",
+  "perf/http2",
+  "perf/compression",
+  "perf/cache-headers",
+];
 const SITE_GATED = [
   "security/hsts",
   "security/tls-certificate",
@@ -52,7 +60,13 @@ const HTML = `<!doctype html><html lang="en"><head><title>Acme Studio: dependabl
 const DEV_HEADERS = { "content-type": "text/html; charset=utf-8" };
 
 function pageData(url: string): PageData {
-  return { url, html: HTML, statusCode: 200, loadTime: 12, headers: DEV_HEADERS };
+  return {
+    url,
+    html: HTML,
+    statusCode: 200,
+    loadTime: 12,
+    headers: DEV_HEADERS,
+  };
 }
 
 function site(baseUrl: string): SiteData {
@@ -78,17 +92,18 @@ function makeRunner(enable: string[]): RuleRunner {
 }
 
 async function runPage(url: string, siteData?: SiteData) {
-  const { ruleResults } = await makeRunner([...PAGE_GATED, ...UNGATED_PAGE]).runPageRules(
-    pageData(url),
-    siteData,
-  );
+  const { ruleResults } = await makeRunner([
+    ...PAGE_GATED,
+    ...UNGATED_PAGE,
+  ]).runPageRules(pageData(url), siteData);
   return (id: string): CheckResult[] => ruleResults.get(id)?.checks ?? [];
 }
 
 async function runSite(baseUrl: string) {
-  const { ruleResults } = await makeRunner([...SITE_GATED, ...UNGATED_SITE]).runSiteRules(
-    site(baseUrl),
-  );
+  const { ruleResults } = await makeRunner([
+    ...SITE_GATED,
+    ...UNGATED_SITE,
+  ]).runSiteRules(site(baseUrl));
   return (id: string): CheckResult[] => ruleResults.get(id)?.checks ?? [];
 }
 
@@ -138,12 +153,15 @@ describe("runner private-target gate: page rules", () => {
     ["http://[fec0::1]/"],
     ["http://203.0.113.10/"],
     ["http://192.0.2.1/"],
-  ])("%s: every gated rule emits exactly one private-target skip", async (url) => {
-    const checks = await runPage(url);
-    for (const id of PAGE_GATED) {
-      expect(checks(id)).toEqual([{ ...PRIVATE_SKIP, name: id }]);
+  ])(
+    "%s: every gated rule emits exactly one private-target skip",
+    async (url) => {
+      const checks = await runPage(url);
+      for (const id of PAGE_GATED) {
+        expect(checks(id)).toEqual([{ ...PRIVATE_SKIP, name: id }]);
+      }
     }
-  });
+  );
 
   test("the ungated rules still run on a private target", async () => {
     const checks = await runPage("http://localhost:3000/");
@@ -179,11 +197,17 @@ describe("runner private-target gate: page rules", () => {
   test("the audit URL decides, not the page url", async () => {
     // Pages share the audited host in practice; when site data is present its
     // base url is the one classified.
-    const onPrivateSite = await runPage("http://acme.example.com/", site("http://localhost:3000"));
+    const onPrivateSite = await runPage(
+      "http://acme.example.com/",
+      site("http://localhost:3000")
+    );
     for (const id of PAGE_GATED) {
       expect(onPrivateSite(id)).toEqual([{ ...PRIVATE_SKIP, name: id }]);
     }
-    const onPublicSite = await runPage("http://localhost:3000/", site("http://acme.example.com"));
+    const onPublicSite = await runPage(
+      "http://localhost:3000/",
+      site("http://acme.example.com")
+    );
     for (const id of PAGE_GATED) {
       expect(onPublicSite(id).some(isPrivateSkip)).toBe(false);
     }
@@ -200,13 +224,16 @@ describe("runner private-target gate: the audit URL", () => {
 
   test("one runner reused for a public then a private site classifies each", async () => {
     const runner = makeRunner(PAGE_GATED);
-    const at = (base: string) => runner.runPageRules(pageData(`${base}/`), site(base));
+    const at = (base: string) =>
+      runner.runPageRules(pageData(`${base}/`), site(base));
     const pub = await at("http://acme.example.com");
     const priv = await at("http://localhost:3000");
     const again = await at("http://acme.example.com");
     for (const id of PAGE_GATED) {
       expect(pub.ruleResults.get(id)?.checks.some(isPrivateSkip)).toBe(false);
-      expect(priv.ruleResults.get(id)?.checks).toEqual([{ ...PRIVATE_SKIP, name: id }]);
+      expect(priv.ruleResults.get(id)?.checks).toEqual([
+        { ...PRIVATE_SKIP, name: id },
+      ]);
       expect(again.ruleResults.get(id)?.checks.some(isPrivateSkip)).toBe(false);
     }
   });
@@ -233,14 +260,16 @@ describe("runner private-target gate: site rules", () => {
         expect(checks(id).length).toBeGreaterThan(0);
         expect(checks(id).some(isPrivateSkip)).toBe(false);
       }
-    },
+    }
   );
 
   test("a public IP literal runs them (the wide classifier does not call a public address private)", async () => {
     const checks = await runSite("http://93.184.216.34");
-    for (const id of SITE_GATED) expect(checks(id).some(isPrivateSkip)).toBe(false);
+    for (const id of SITE_GATED)
+      expect(checks(id).some(isPrivateSkip)).toBe(false);
     const page = await runPage("http://[2606:4700::1111]/");
-    for (const id of PAGE_GATED) expect(page(id).some(isPrivateSkip)).toBe(false);
+    for (const id of PAGE_GATED)
+      expect(page(id).some(isPrivateSkip)).toBe(false);
   });
 
   test("a public host runs them", async () => {
@@ -254,7 +283,8 @@ describe("runner private-target gate: site rules", () => {
     // It judged the pages. The freshness check is info since pub#633
     // (perf/cache-headers scores it), so read the verdict from its message.
     expect(
-      checks("perf/bad-caching").find((c) => c.name === "bad-caching-freshness")?.message
+      checks("perf/bad-caching").find((c) => c.name === "bad-caching-freshness")
+        ?.message
     ).toContain("set no caching policy");
   });
 });

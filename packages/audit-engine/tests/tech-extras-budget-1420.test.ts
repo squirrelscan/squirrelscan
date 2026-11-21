@@ -22,9 +22,11 @@ function crowd(count: number): string {
   const key = ["eyJ", "x".repeat(40)].join("");
   const lines: string[] = [];
   for (let i = 0; i < count; i++) {
-    lines.push(`var s${i}=mk("https://p${String(i).padStart(19, "0")}.supabase.co","${key}");`);
     lines.push(
-      `var f${i}={authDomain:"app${i}.firebaseapp.com",storageBucket:"app${i}.appspot.com"};`,
+      `var s${i}=mk("https://p${String(i).padStart(19, "0")}.supabase.co","${key}");`
+    );
+    lines.push(
+      `var f${i}={authDomain:"app${i}.firebaseapp.com",storageBucket:"app${i}.appspot.com"};`
     );
   }
   return lines.join("\n");
@@ -32,7 +34,7 @@ function crowd(count: number): string {
 
 function detect(
   content: string,
-  limits = DEFAULT_TECH_BUNDLE_LIMITS,
+  limits = DEFAULT_TECH_BUNDLE_LIMITS
 ): { ids: string[]; bodyBytes: number } {
   const inputs = buildTechInputs(
     [
@@ -43,7 +45,7 @@ function detect(
       },
     ],
     [{ url: "https://example.com/a.js", content, sourcePages: [HOME] }],
-    limits,
+    limits
   );
   const body = inputs[0]!.scripts?.find((s) => s.content)?.content ?? "";
   return {
@@ -56,7 +58,9 @@ describe("unhinted detectors past the head, at the cloud payload caps (#1420)", 
   test("Sentry.init near the end of a big bundle is found with hundreds of earlier hint windows", () => {
     const content = `${filler(250_000)}\n${crowd(400)}\n${filler(100_000)}\nSentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});\n${filler(100_000)}`;
     const { ids, bodyBytes } = detect(content);
-    expect(bodyBytes).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes);
+    expect(bodyBytes).toBeLessThanOrEqual(
+      DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes
+    );
     expect(ids).toContain("sentry");
   });
 
@@ -88,13 +92,38 @@ describe("a loader in a small script survives the string tracker, at both caps (
   const lostLine = (loader: string): string =>
     `x=a}/'/.test(c);${filler(1_500).replaceAll("\n", "")}${loader}${filler(1_000).replaceAll("\n", "")}\n`;
   const cases = [
-    { name: "ttq.load( at 21 KB of 26 KB", loader: "ttq.load('ABCDEFGH');ttq.page();", id: "tiktok-pixel", before: 20_000, rest: 3_500 },
-    { name: "fbq( 2 KB from the end of 121 KB", loader: "fbq('init','1234567890');", id: "facebook-pixel", before: 116_000, rest: 1_500 },
-    { name: "posthog.init at 19 KB of 34 KB", loader: "window.posthog||[]);posthog.init('phc_x',{});", id: "posthog", before: 17_000, rest: 14_000 },
+    {
+      name: "ttq.load( at 21 KB of 26 KB",
+      loader: "ttq.load('ABCDEFGH');ttq.page();",
+      id: "tiktok-pixel",
+      before: 20_000,
+      rest: 3_500,
+    },
+    {
+      name: "fbq( 2 KB from the end of 121 KB",
+      loader: "fbq('init','1234567890');",
+      id: "facebook-pixel",
+      before: 116_000,
+      rest: 1_500,
+    },
+    {
+      name: "posthog.init at 19 KB of 34 KB",
+      loader: "window.posthog||[]);posthog.init('phc_x',{});",
+      id: "posthog",
+      before: 17_000,
+      rest: 14_000,
+    },
   ];
   const caps = [
     { cap: "cloud", limits: DEFAULT_TECH_BUNDLE_LIMITS },
-    { cap: "24 KB bundle", limits: { bundleBytes: 24 * 1024, pageBytes: 512 * 1024, auditBytes: 1024 * 1024 } },
+    {
+      cap: "24 KB bundle",
+      limits: {
+        bundleBytes: 24 * 1024,
+        pageBytes: 512 * 1024,
+        auditBytes: 1024 * 1024,
+      },
+    },
   ];
   for (const c of cases) {
     for (const { cap, limits } of caps) {
@@ -105,7 +134,6 @@ describe("a loader in a small script survives the string tracker, at both caps (
     }
   }
 });
-
 
 // #1445: the page budget is shared by every bundle of a page. Early small scripts' whole remainders
 // used the room that a later bundle's hint windows needed, so the loader literal there was never sent.
@@ -118,16 +146,19 @@ describe("hint windows are allocated across all of a page's bundles before whole
   const HTML = `<!doctype html><div id="root"></div>`;
   function detectPage(
     scripts: Array<{ url: string; content: string }>,
-    limits = DEFAULT_TECH_BUNDLE_LIMITS,
+    limits = DEFAULT_TECH_BUNDLE_LIMITS
   ): string[] {
     const inputs = buildTechInputs(
       [{ url: HOME, headers: {}, html: HTML }],
       scripts.map((s) => ({ ...s, sourcePages: [HOME] })),
-      limits,
+      limits
     );
     return detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
   }
-  const small = (n: number) => ({ url: `https://example.com/s${n}.js`, content: plain(40_000) });
+  const small = (n: number) => ({
+    url: `https://example.com/s${n}.js`,
+    content: plain(40_000),
+  });
   const late = (loader: string, before = 150_000) => ({
     url: "https://example.com/late.js",
     content: `${plain(before)}\n${loader}\n${plain(50_000)}`,
@@ -144,8 +175,14 @@ describe("hint windows are allocated across all of a page's bundles before whole
     return lines.join("").slice(0, bytes);
   };
 
-  const expectEachMarkerOnce = (body: string, script: number, label: string): void => {
-    const markers = [...body.matchAll(new RegExp(`q_1534_${script}_(\\d+)\\*/`, "g"))].map((m) => m[0]);
+  const expectEachMarkerOnce = (
+    body: string,
+    script: number,
+    label: string
+  ): void => {
+    const markers = [
+      ...body.matchAll(new RegExp(`q_1534_${script}_(\\d+)\\*/`, "g")),
+    ].map((m) => m[0]);
     expect(new Set(markers).size, label).toBe(markers.length);
   };
 
@@ -169,43 +206,63 @@ describe("hint windows are allocated across all of a page's bundles before whole
     const inputs = buildTechInputs(
       [{ url: HOME, headers: {}, html: HTML }],
       [...early, last].map((script) => ({ ...script, sourcePages: [HOME] })),
-      DEFAULT_TECH_BUNDLE_LIMITS,
+      DEFAULT_TECH_BUNDLE_LIMITS
     );
     const bodies = inputs[0]!.scripts ?? [];
     expect(bodies).toHaveLength(8);
     for (let n = 0; n < 7; n++) {
-      const body = bodies.find((script) => script.url === early[n]!.url)?.content ?? "";
+      const body =
+        bodies.find((script) => script.url === early[n]!.url)?.content ?? "";
       expectEachMarkerOnce(body, n, `script ${n}`);
     }
-    const sizes = bodies.map((script) => Buffer.byteLength(script.content ?? ""));
-    expect(sizes.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
-    for (const size of sizes) expect(size).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes);
-    const ids = detectReportTechnologiesMulti(inputs).items.map((technology) => technology.id);
+    const sizes = bodies.map((script) =>
+      Buffer.byteLength(script.content ?? "")
+    );
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(
+      DEFAULT_TECH_BUNDLE_LIMITS.pageBytes
+    );
+    for (const size of sizes)
+      expect(size).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes);
+    const ids = detectReportTechnologiesMulti(inputs).items.map(
+      (technology) => technology.id
+    );
     expect(ids).toContain("posthog");
     expect(ids).toContain("supabase");
   });
 
   test("25 scripts at the 512 KB page cap: a loader in the last bundle's window is found beside the early remainders", () => {
-    const scripts = [...Array.from({ length: 24 }, (_, n) => small(n)), late('posthog.init("phc_x",{api_host:"https://eu.i.posthog.com"});')];
+    const scripts = [
+      ...Array.from({ length: 24 }, (_, n) => small(n)),
+      late('posthog.init("phc_x",{api_host:"https://eu.i.posthog.com"});'),
+    ];
     expect(detectPage(scripts)).toContain("posthog");
   });
 
   test("fewer, bigger early scripts: the same loader is found", () => {
-    const scripts = [...Array.from({ length: 20 }, (_, n) => small(n)), late('var st=Stripe("pk_test_x");')];
+    const scripts = [
+      ...Array.from({ length: 20 }, (_, n) => small(n)),
+      late('var st=Stripe("pk_test_x");'),
+    ];
     expect(detectPage(scripts)).toContain("stripe");
   });
 
   // The issue's page: 34 scripts at the 512 KB page cap (12 under the 16 KB floor, 21 of 40 KB, then the late
   // bundle), 472 KB of heads and about 40 KB of room, with the loader literal in the last bundle's window.
   const thirtyFour = (loader: string) => [
-    ...Array.from({ length: 12 }, (_, n) => ({ url: `https://example.com/t${n}.js`, content: plain(10_000) })),
+    ...Array.from({ length: 12 }, (_, n) => ({
+      url: `https://example.com/t${n}.js`,
+      content: plain(10_000),
+    })),
     ...Array.from({ length: 21 }, (_, n) => small(n)),
     late(loader),
   ];
 
   test("34 scripts at the 512 KB page cap: the loader in the last bundle's window is found, whichever vendor", () => {
     for (const [loader, id] of [
-      ['posthog.init("phc_x",{api_host:"https://eu.i.posthog.com"});', "posthog"],
+      [
+        'posthog.init("phc_x",{api_host:"https://eu.i.posthog.com"});',
+        "posthog",
+      ],
       ['var st=Stripe("pk_test_x");', "stripe"],
       ['Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});', "sentry"],
     ] as const) {
@@ -228,18 +285,31 @@ describe("hint windows are allocated across all of a page's bundles before whole
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       };
     };
-    const LOADERS = ['posthog.init("phc_x",{});', 'var st=Stripe("pk_test_x");', 'Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});', "fbq('init','1234567890');", "ttq.load('ABCDEFGH');"];
+    const LOADERS = [
+      'posthog.init("phc_x",{});',
+      'var st=Stripe("pk_test_x");',
+      'Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});',
+      "fbq('init','1234567890');",
+      "ttq.load('ABCDEFGH');",
+    ];
     const CAPS = [
       DEFAULT_TECH_BUNDLE_LIMITS,
       { bundleBytes: 24 * 1024, pageBytes: 256 * 1024, auditBytes: 512 * 1024 },
-      { bundleBytes: 128 * 1024, pageBytes: 1024 * 1024, auditBytes: 2 * 1024 * 1024 },
+      {
+        bundleBytes: 128 * 1024,
+        pageBytes: 1024 * 1024,
+        auditBytes: 2 * 1024 * 1024,
+      },
     ];
     for (let seed = 1; seed <= 200; seed++) {
       const r = rng(seed);
       const count = 5 + Math.floor(r() * 32);
       const scripts = Array.from({ length: count }, (_, n) => {
         const size = 1_000 + Math.floor(r() * 47_000);
-        const loaders = Array.from({ length: Math.floor(r() * 3) }, () => LOADERS[Math.floor(r() * LOADERS.length)]!);
+        const loaders = Array.from(
+          { length: Math.floor(r() * 3) },
+          () => LOADERS[Math.floor(r() * LOADERS.length)]!
+        );
         let content = uniqueLines(size, seed * 100 + n);
         for (const loader of loaders) {
           const at = Math.floor(r() * content.length);
@@ -249,17 +319,37 @@ describe("hint windows are allocated across all of a page's bundles before whole
       });
       const limits = CAPS[seed % CAPS.length]!;
       const build = () =>
-        buildTechInputs([{ url: HOME, headers: {}, html: HTML }], scripts.map((x) => ({ ...x, sourcePages: [HOME] })), limits);
+        buildTechInputs(
+          [{ url: HOME, headers: {}, html: HTML }],
+          scripts.map((x) => ({ ...x, sourcePages: [HOME] })),
+          limits
+        );
       const first = build();
-      expect(JSON.stringify(build()), `seed ${seed}`).toBe(JSON.stringify(first));
-      const sizes = (first[0]!.scripts ?? []).map((x) => Buffer.byteLength(x.content ?? ""));
+      expect(JSON.stringify(build()), `seed ${seed}`).toBe(
+        JSON.stringify(first)
+      );
+      const sizes = (first[0]!.scripts ?? []).map((x) =>
+        Buffer.byteLength(x.content ?? "")
+      );
       const total = sizes.reduce((sum, n) => sum + n, 0);
       expect(total, `seed ${seed} page`).toBeLessThanOrEqual(limits.pageBytes);
-      expect(total, `seed ${seed} audit`).toBeLessThanOrEqual(limits.auditBytes);
-      for (const n of sizes) expect(n, `seed ${seed} bundle`).toBeLessThanOrEqual(limits.bundleBytes);
+      expect(total, `seed ${seed} audit`).toBeLessThanOrEqual(
+        limits.auditBytes
+      );
+      for (const n of sizes)
+        expect(n, `seed ${seed} bundle`).toBeLessThanOrEqual(
+          limits.bundleBytes
+        );
       for (let n = 0; n < scripts.length; n++) {
-        const body = first[0]!.scripts?.find((script) => script.url === scripts[n]!.url)?.content;
-        if (body) expectEachMarkerOnce(body, seed * 100 + n, `seed ${seed} script ${n}`);
+        const body = first[0]!.scripts?.find(
+          (script) => script.url === scripts[n]!.url
+        )?.content;
+        if (body)
+          expectEachMarkerOnce(
+            body,
+            seed * 100 + n,
+            `seed ${seed} script ${n}`
+          );
       }
     }
   }, 120_000);
@@ -268,30 +358,55 @@ describe("hint windows are allocated across all of a page's bundles before whole
     const build = () =>
       buildTechInputs(
         [{ url: HOME, headers: {}, html: HTML }],
-        thirtyFour('posthog.init("phc_x",{});').map((s) => ({ ...s, sourcePages: [HOME] })),
-        DEFAULT_TECH_BUNDLE_LIMITS,
+        thirtyFour('posthog.init("phc_x",{});').map((s) => ({
+          ...s,
+          sourcePages: [HOME],
+        })),
+        DEFAULT_TECH_BUNDLE_LIMITS
       );
     const first = build();
     const second = build();
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
     // and the page budget holds
     const bytes = (inputs: ReturnType<typeof build>): number =>
-      (inputs[0]!.scripts ?? []).reduce((sum, x) => sum + Buffer.byteLength(x.content ?? ""), 0);
-    expect(bytes(first)).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
+      (inputs[0]!.scripts ?? []).reduce(
+        (sum, x) => sum + Buffer.byteLength(x.content ?? ""),
+        0
+      );
+    expect(bytes(first)).toBeLessThanOrEqual(
+      DEFAULT_TECH_BUNDLE_LIMITS.pageBytes
+    );
   });
 
   test("a loader inside an early small script's remainder is still found", () => {
-    const early = { url: "https://example.com/early.js", content: `${plain(20_000)}\nposthog.init("phc_x",{});\n${plain(10_000)}` };
-    const scripts = [early, ...Array.from({ length: 25 }, (_, n) => small(n)), late("var st=Stripe('pk_test_x');")];
+    const early = {
+      url: "https://example.com/early.js",
+      content: `${plain(20_000)}\nposthog.init("phc_x",{});\n${plain(10_000)}`,
+    };
+    const scripts = [
+      early,
+      ...Array.from({ length: 25 }, (_, n) => small(n)),
+      late("var st=Stripe('pk_test_x');"),
+    ];
     const ids = detectPage(scripts);
     expect(ids).toContain("posthog");
     expect(ids).toContain("stripe");
   });
 
   test("the page budget still holds", () => {
-    const scripts = [...Array.from({ length: 24 }, (_, n) => small(n)), late('Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});')];
-    const inputs = buildTechInputs([{ url: HOME, headers: {}, html: HTML }], scripts.map((s) => ({ ...s, sourcePages: [HOME] })), DEFAULT_TECH_BUNDLE_LIMITS);
-    const bytes = (inputs[0]!.scripts ?? []).reduce((sum, s) => sum + Buffer.byteLength(s.content ?? ""), 0);
+    const scripts = [
+      ...Array.from({ length: 24 }, (_, n) => small(n)),
+      late('Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});'),
+    ];
+    const inputs = buildTechInputs(
+      [{ url: HOME, headers: {}, html: HTML }],
+      scripts.map((s) => ({ ...s, sourcePages: [HOME] })),
+      DEFAULT_TECH_BUNDLE_LIMITS
+    );
+    const bytes = (inputs[0]!.scripts ?? []).reduce(
+      (sum, s) => sum + Buffer.byteLength(s.content ?? ""),
+      0
+    );
     expect(bytes).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
   });
 });
@@ -302,13 +417,17 @@ describe("the budget steps of a page (#1445)", () => {
     const unit = "var q=(a<<3)+b;if(q>9){q-=9}\n";
     return unit.repeat(Math.ceil(bytes / unit.length)).slice(0, bytes);
   };
-  const page = (scripts: Array<{ url: string; content: string }>, limits: typeof DEFAULT_TECH_BUNDLE_LIMITS) =>
+  const page = (
+    scripts: Array<{ url: string; content: string }>,
+    limits: typeof DEFAULT_TECH_BUNDLE_LIMITS
+  ) =>
     buildTechInputs(
       [{ url: HOME, headers: {}, html: HTML }],
       scripts.map((s) => ({ ...s, sourcePages: [HOME] })),
-      limits,
+      limits
     );
-  const ids = (inputs: ReturnType<typeof page>): string[] => detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
+  const ids = (inputs: ReturnType<typeof page>): string[] =>
+    detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
 
   // Eight copies of six loaders: about 48 qualifying windows (over 18 KB) before the file's end.
   const LOADERS = [
@@ -317,82 +436,139 @@ describe("the budget steps of a page (#1445)", () => {
     'Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});',
     "fbq('init','1234567890');",
     "ttq.load('ABCDEFGH');",
-    'window.__REACT_DEVTOOLS_GLOBAL_HOOK__=window.__REACT_DEVTOOLS_GLOBAL_HOOK__||{};',
+    "window.__REACT_DEVTOOLS_GLOBAL_HOOK__=window.__REACT_DEVTOOLS_GLOBAL_HOOK__||{};",
   ];
   // Each copy sits in different text, so the windows are all distinct.
   const unique = (bytes: number, seed: number): string =>
-    Array.from({ length: Math.ceil(bytes / 30) }, (_, n) => `var q${seed}_${n}=(a<<3)+b;\n`).join("").slice(0, bytes);
+    Array.from(
+      { length: Math.ceil(bytes / 30) },
+      (_, n) => `var q${seed}_${n}=(a<<3)+b;\n`
+    )
+      .join("")
+      .slice(0, bytes);
   const heavy = (): string =>
-    LOADERS.flatMap((l, i) => Array.from({ length: 8 }, (_, k) => `${unique(2_500, i * 10 + k)}\n${l}\n`)).join("");
+    LOADERS.flatMap((l, i) =>
+      Array.from(
+        { length: 8 },
+        (_, k) => `${unique(2_500, i * 10 + k)}\n${l}\n`
+      )
+    ).join("");
 
   test("a window-heavy bundle still sends its tail (the reserve holds)", () => {
     // adobe-analytics has no literal to search for: only the end of the file can carry it.
     const content = `${plain(20_000)}\n${heavy()}${plain(40_000)}\nvar u="https://x.sc.omtrdc.net/b/ss/y";\n${plain(1_500)}`;
-    const found = ids(page([{ url: "https://example.com/a.js", content }], DEFAULT_TECH_BUNDLE_LIMITS));
+    const found = ids(
+      page(
+        [{ url: "https://example.com/a.js", content }],
+        DEFAULT_TECH_BUNDLE_LIMITS
+      )
+    );
     expect(found).toContain("adobe-analytics");
   });
 
   test("windows are given out in rounds: bundles with many windows cannot take the room from a later one", () => {
     // Room for about 30 KB of extras after six floors. Each of five bundles holds far more windows than that.
-    const limits = { bundleBytes: 64 * 1024, pageBytes: 6 * 16 * 1024 + 30 * 1024, auditBytes: 1024 * 1024 };
+    const limits = {
+      bundleBytes: 64 * 1024,
+      pageBytes: 6 * 16 * 1024 + 30 * 1024,
+      auditBytes: 1024 * 1024,
+    };
     const crowded = Array.from({ length: 5 }, (_, n) => ({
       url: `https://example.com/crowd${n}.js`,
       content: `${unique(20_000, 100 + n)}\n${heavy()}${unique(10_000, 110 + n)}`,
     }));
     // A vendor only the last bundle holds.
-    const last = { url: "https://example.com/last.js", content: `${unique(60_000, 120)}\nmixpanel.init("tok",{});\n${unique(10_000, 121)}` };
+    const last = {
+      url: "https://example.com/last.js",
+      content: `${unique(60_000, 120)}\nmixpanel.init("tok",{});\n${unique(10_000, 121)}`,
+    };
     expect(ids(page([...crowded, last], limits))).toContain("mixpanel");
   });
 
   test("the room a bundle already holds is given back before its windows grow", () => {
-    const limits = { bundleBytes: 64 * 1024, pageBytes: 16 * 1024 + 5 * 1024, auditBytes: 1024 * 1024 };
+    const limits = {
+      bundleBytes: 64 * 1024,
+      pageBytes: 16 * 1024 + 5 * 1024,
+      auditBytes: 1024 * 1024,
+    };
     const content = `${unique(20_000, 300)}\n${heavy()}${unique(10_000, 301)}`;
     const inputs = page([{ url: "https://example.com/a.js", content }], limits);
-    const bytes = (inputs[0]!.scripts ?? []).reduce((sum, s) => sum + Buffer.byteLength(s.content ?? ""), 0);
+    const bytes = (inputs[0]!.scripts ?? []).reduce(
+      (sum, s) => sum + Buffer.byteLength(s.content ?? ""),
+      0
+    );
     expect(bytes).toBeLessThanOrEqual(limits.pageBytes);
     // The whole 5 KB of extras is used, not only what is left after the first 2 KB round.
     expect(bytes).toBeGreaterThan(limits.pageBytes - 600);
     const body = inputs[0]!.scripts?.[0]?.content ?? "";
-    expect(LOADERS.reduce((n, l) => n + body.split(l).length - 1, 0)).toBeGreaterThanOrEqual(8);
+    expect(
+      LOADERS.reduce((n, l) => n + body.split(l).length - 1, 0)
+    ).toBeGreaterThanOrEqual(8);
   });
 
   test("a page of window-heavy bundles spends its budget to the byte: windows are charged once", () => {
-    const limits = { bundleBytes: 64 * 1024, pageBytes: 6 * 16 * 1024 + 30 * 1024, auditBytes: 1024 * 1024 };
+    const limits = {
+      bundleBytes: 64 * 1024,
+      pageBytes: 6 * 16 * 1024 + 30 * 1024,
+      auditBytes: 1024 * 1024,
+    };
     const crowded = Array.from({ length: 6 }, (_, n) => ({
       url: `https://example.com/crowd${n}.js`,
       content: `${unique(20_000, 200 + n)}\n${heavy()}${unique(10_000, 210 + n)}`,
     }));
     const inputs = page(crowded, limits);
-    const bytes = (inputs[0]!.scripts ?? []).reduce((sum, s) => sum + Buffer.byteLength(s.content ?? ""), 0);
+    const bytes = (inputs[0]!.scripts ?? []).reduce(
+      (sum, s) => sum + Buffer.byteLength(s.content ?? ""),
+      0
+    );
     expect(bytes).toBeLessThanOrEqual(limits.pageBytes);
     expect(bytes).toBeGreaterThan(limits.pageBytes - 4 * 1024);
   });
 
   test("the page budget is spent, not wasted: whole remainders fill what the windows left", () => {
-    const small = Array.from({ length: 24 }, (_, n) => ({ url: `https://example.com/s${n}.js`, content: plain(40_000) }));
+    const small = Array.from({ length: 24 }, (_, n) => ({
+      url: `https://example.com/s${n}.js`,
+      content: plain(40_000),
+    }));
     const inputs = page(small, DEFAULT_TECH_BUNDLE_LIMITS);
-    const bytes = (inputs[0]!.scripts ?? []).reduce((sum, s) => sum + Buffer.byteLength(s.content ?? ""), 0);
+    const bytes = (inputs[0]!.scripts ?? []).reduce(
+      (sum, s) => sum + Buffer.byteLength(s.content ?? ""),
+      0
+    );
     expect(bytes).toBeLessThanOrEqual(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes);
     // 24 bundles of 40 KB would be 960 KB: the page cap is reached, not left a long way off.
-    expect(bytes).toBeGreaterThan(DEFAULT_TECH_BUNDLE_LIMITS.pageBytes - 8 * 1024);
+    expect(bytes).toBeGreaterThan(
+      DEFAULT_TECH_BUNDLE_LIMITS.pageBytes - 8 * 1024
+    );
   });
 });
 
 describe("the window scan is bounded and shared fairly (#1445)", () => {
   const MB = 1024 * 1024;
   const HTML = `<!doctype html><div id="root"></div>`;
-  const code = (chars: number): string => "var q=(a<<3)+b;if(q>9){q-=9}\n".repeat(Math.ceil(chars / 29)).slice(0, chars);
-  const page = (scripts: Array<{ url: string; content: string }>, limits = DEFAULT_TECH_BUNDLE_LIMITS) =>
+  const code = (chars: number): string =>
+    "var q=(a<<3)+b;if(q>9){q-=9}\n"
+      .repeat(Math.ceil(chars / 29))
+      .slice(0, chars);
+  const page = (
+    scripts: Array<{ url: string; content: string }>,
+    limits = DEFAULT_TECH_BUNDLE_LIMITS
+  ) =>
     buildTechInputs(
       [{ url: HOME, headers: {}, html: HTML }],
       scripts.map((s) => ({ ...s, sourcePages: [HOME] })),
-      limits,
+      limits
     );
-  const ids = (inputs: ReturnType<typeof page>): string[] => detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
+  const ids = (inputs: ReturnType<typeof page>): string[] =>
+    detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
 
   test("the allowances stay within the cap, give small bundles their whole length and large ones an equal share", () => {
-    const thirty = windowScanAllowances(Array.from({ length: 30 }, () => 3 * MB));
-    expect(thirty.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(12 * MB + 30 * 64 * 1024);
+    const thirty = windowScanAllowances(
+      Array.from({ length: 30 }, () => 3 * MB)
+    );
+    expect(thirty.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(
+      12 * MB + 30 * 64 * 1024
+    );
     expect(Math.min(...thirty)).toBeGreaterThan(300 * 1024);
     const mixed = windowScanAllowances([100_000, 200_000, 10 * MB, 10 * MB]);
     expect(mixed.slice(0, 2)).toEqual([100_000, 200_000]);
@@ -406,45 +582,100 @@ describe("the window scan is bounded and shared fairly (#1445)", () => {
   });
 
   test("every bundle gets a floor even when the page has far more than the cap", () => {
-    const many = windowScanAllowances(Array.from({ length: 400 }, () => 2 * MB));
+    const many = windowScanAllowances(
+      Array.from({ length: 400 }, () => 2 * MB)
+    );
     expect(Math.min(...many)).toBeGreaterThanOrEqual(64 * 1024);
   });
 
   test("six 3 MB bundles: a loader 0.8 MB into the last one is found (first-fit used to skip it)", () => {
-    const scripts = Array.from({ length: 5 }, (_, n) => ({ url: `https://example.com/b${n}.js`, content: code(3 * MB) }));
-    scripts.push({ url: "https://example.com/last.js", content: `${code(0.8 * MB)}\nposthog.init("phc_x",{});\n${code(2 * MB)}` });
+    const scripts = Array.from({ length: 5 }, (_, n) => ({
+      url: `https://example.com/b${n}.js`,
+      content: code(3 * MB),
+    }));
+    scripts.push({
+      url: "https://example.com/last.js",
+      content: `${code(0.8 * MB)}\nposthog.init("phc_x",{});\n${code(2 * MB)}`,
+    });
     expect(ids(page(scripts))).toContain("posthog");
   }, 60_000);
 
   test("one 18 MB body is searched: a loader 2 MB in is found", () => {
     const body = `${code(2 * MB)}\nvar st=Stripe("pk_test_x");\n${code(16 * MB)}`;
-    expect(ids(page([{ url: "https://example.com/huge.js", content: body }]))).toContain("stripe");
+    expect(
+      ids(page([{ url: "https://example.com/huge.js", content: body }]))
+    ).toContain("stripe");
   }, 60_000);
 
   test("the scan is bounded by the page's share: 40 bundles of 600 KB search 300 KB each", () => {
-    const filler = Array.from({ length: 39 }, (_, n) => ({ url: `https://example.com/f${n}.js`, content: code(600_000) }));
-    const near = { url: "https://example.com/near.js", content: `${code(100_000)}\nposthog.init("phc_x",{});\n${code(500_000)}` };
-    const far = { url: "https://example.com/far.js", content: `${code(550_000)}\nvar st=Stripe("pk_test_x");\n${code(50_000)}` };
-    const found = ids(page([...filler, near, far], { bundleBytes: 128 * 1024, pageBytes: 8 * MB, auditBytes: 32 * MB }));
+    const filler = Array.from({ length: 39 }, (_, n) => ({
+      url: `https://example.com/f${n}.js`,
+      content: code(600_000),
+    }));
+    const near = {
+      url: "https://example.com/near.js",
+      content: `${code(100_000)}\nposthog.init("phc_x",{});\n${code(500_000)}`,
+    };
+    const far = {
+      url: "https://example.com/far.js",
+      content: `${code(550_000)}\nvar st=Stripe("pk_test_x");\n${code(50_000)}`,
+    };
+    const found = ids(
+      page([...filler, near, far], {
+        bundleBytes: 128 * 1024,
+        pageBytes: 8 * MB,
+        auditBytes: 32 * MB,
+      })
+    );
     expect(found).toContain("posthog");
     // Past the share (about 300 KB of each) is not searched; the tail is not sent either for a prefixed scan.
     expect(found).not.toContain("stripe");
   }, 90_000);
 
   test("a tail under 420 bytes is still sent when that is all the room there is", () => {
-    const limits = { bundleBytes: 64 * 1024, pageBytes: 16 * 1024 + 300, auditBytes: 1024 * 1024 };
+    const limits = {
+      bundleBytes: 64 * 1024,
+      pageBytes: 16 * 1024 + 300,
+      auditBytes: 1024 * 1024,
+    };
     const content = `${code(40_000)}\nvar u="https://x.sc.omtrdc.net/b/ss/y";\n${code(40)}`;
-    expect(ids(page([{ url: "https://example.com/a.js", content }], limits))).toContain("adobe-analytics");
+    expect(
+      ids(page([{ url: "https://example.com/a.js", content }], limits))
+    ).toContain("adobe-analytics");
   });
 
   test("the tail reserve holds on a page: windows alone never take the room of a tail", () => {
     // 8 KB of extras: the windows may take 6 KB, so the last 1.5 KB of the file is sent.
-    const limits = { bundleBytes: 16 * 1024 + 8 * 1024, pageBytes: 1024 * 1024, auditBytes: 4 * 1024 * 1024 };
+    const limits = {
+      bundleBytes: 16 * 1024 + 8 * 1024,
+      pageBytes: 1024 * 1024,
+      auditBytes: 4 * 1024 * 1024,
+    };
     const unique = (bytes: number, seed: number): string =>
-      Array.from({ length: Math.ceil(bytes / 30) }, (_, n) => `var q${seed}_${n}=(a<<3)+b;\n`).join("").slice(0, bytes);
-    const loaders = ['posthog.init("phc_x",{});', 'var st=Stripe("pk_test_x");', 'Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});', "fbq('init','1234567890');", "ttq.load('ABCDEFGH');"];
-    const crowd = loaders.flatMap((l, i) => Array.from({ length: 8 }, (_, k) => `${unique(2_500, i * 10 + k)}\n${l}\n`)).join("");
+      Array.from(
+        { length: Math.ceil(bytes / 30) },
+        (_, n) => `var q${seed}_${n}=(a<<3)+b;\n`
+      )
+        .join("")
+        .slice(0, bytes);
+    const loaders = [
+      'posthog.init("phc_x",{});',
+      'var st=Stripe("pk_test_x");',
+      'Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});',
+      "fbq('init','1234567890');",
+      "ttq.load('ABCDEFGH');",
+    ];
+    const crowd = loaders
+      .flatMap((l, i) =>
+        Array.from(
+          { length: 8 },
+          (_, k) => `${unique(2_500, i * 10 + k)}\n${l}\n`
+        )
+      )
+      .join("");
     const content = `${unique(20_000, 900)}\n${crowd}${unique(40_000, 901)}\nvar u="https://x.sc.omtrdc.net/b/ss/y";\n${unique(1_000, 902)}`;
-    expect(ids(page([{ url: "https://example.com/a.js", content }], limits))).toContain("adobe-analytics");
+    expect(
+      ids(page([{ url: "https://example.com/a.js", content }], limits))
+    ).toContain("adobe-analytics");
   });
 });

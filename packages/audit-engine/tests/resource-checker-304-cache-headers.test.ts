@@ -4,10 +4,10 @@
 // 304's own Expires and Date, never a stale or missing value, on both the HEAD
 // path and the ranged-GET path.
 
-import { Effect } from "effect";
-import { afterAll, describe, expect, test } from "bun:test";
-
 import type { CachedResourceRecord } from "@squirrelscan/core-contracts";
+
+import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { checkResourceSizes } from "../src/resource-checker";
 
@@ -20,10 +20,17 @@ const server = Bun.serve({
     if (req.headers.get("if-none-match") === '"v1"') {
       return new Response(null, {
         status: 304,
-        headers: { etag: '"v1"', "cache-control": "max-age=0", expires: EXPIRES, date: DATE },
+        headers: {
+          etag: '"v1"',
+          "cache-control": "max-age=0",
+          expires: EXPIRES,
+          date: DATE,
+        },
       });
     }
-    return new Response("body{}", { headers: { "content-type": "text/css", etag: '"v1"' } });
+    return new Response("body{}", {
+      headers: { "content-type": "text/css", etag: '"v1"' },
+    });
   },
 });
 afterAll(() => server.stop(true));
@@ -55,15 +62,30 @@ function prior(url: string): Map<string, CachedResourceRecord> {
 describe("a 304 keeps the revalidation's own Expires and Date (repo#4492)", () => {
   test("HEAD path", async () => {
     const url = `${base}/a.css`;
-    const [r] = await Effect.runPromise(checkResourceSizes([url], { priorByUrl: prior(url) }));
-    expect(r).toMatchObject({ cacheReason: "304", cacheControl: "max-age=0", expires: EXPIRES, date: DATE });
+    const [r] = await Effect.runPromise(
+      checkResourceSizes([url], { priorByUrl: prior(url) })
+    );
+    expect(r).toMatchObject({
+      cacheReason: "304",
+      cacheControl: "max-age=0",
+      expires: EXPIRES,
+      date: DATE,
+    });
   });
 
   test("ranged-GET path", async () => {
     const url = `${base}/b.png`;
     const [r] = await Effect.runPromise(
-      checkResourceSizes([url], { priorByUrl: prior(url), readImageHeader: true })
+      checkResourceSizes([url], {
+        priorByUrl: prior(url),
+        readImageHeader: true,
+      })
     );
-    expect(r).toMatchObject({ cacheReason: "304", cacheControl: "max-age=0", expires: EXPIRES, date: DATE });
+    expect(r).toMatchObject({
+      cacheReason: "304",
+      cacheControl: "max-age=0",
+      expires: EXPIRES,
+      date: DATE,
+    });
   });
 });

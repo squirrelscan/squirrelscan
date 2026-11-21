@@ -29,7 +29,7 @@ const ARTICLE_TYPES = new Set(
     "ScholarlyArticle",
     "SocialMediaPosting",
     "TechArticle",
-  ].map((t) => t.toLowerCase()),
+  ].map((t) => t.toLowerCase())
 );
 
 /**
@@ -55,7 +55,7 @@ const PAGE_TYPES = new Set(
     "SearchResultsPage",
     "Recipe",
     "HowTo",
-  ].map((t) => t.toLowerCase()),
+  ].map((t) => t.toLowerCase())
 );
 
 /** `@type` values as authored; generators array-wrap `@type` freely. */
@@ -74,7 +74,10 @@ export function typeNames(node: Record<string, unknown>): string[] {
 function typeTerm(type: string): string {
   // One alternation, not two passes: stripping in sequence would reduce the
   // nonsense `https://schema.org/schema:Article` to a type it does not name.
-  return type.trim().replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, "").toLowerCase();
+  return type
+    .trim()
+    .replace(/^(?:https?:\/\/schema\.org\/|schema:)/i, "")
+    .toLowerCase();
 }
 
 /** Whether a `@type` (as authored) is a dated piece of content rather than a page shell. */
@@ -112,7 +115,7 @@ export function documentTypes(node: Record<string, unknown>): string[] {
  */
 export function schemaDateString(
   value: unknown,
-  accept: (date: string) => boolean = () => true,
+  accept: (date: string) => boolean = () => true
 ): string | null {
   if (typeof value === "string") {
     const trimmed = value.trim();

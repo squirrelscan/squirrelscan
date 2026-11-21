@@ -3,10 +3,12 @@
 // `<style>` blocks it can read plainly; anything else is "not read", never a
 // guess.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../src/types";
 
 import {
   fontShorthandSize,
@@ -14,7 +16,6 @@ import {
   sizeToPx,
   splitSelectorList,
 } from "../src/mobile/input-zoom";
-import type { RuleContext } from "../src/types";
 
 async function run(head: string, body: string): Promise<CheckResult[]> {
   const html = `<!doctype html><html lang="en"><head><title>Form</title>${head}</head><body><form>${body}</form></body></html>`;
@@ -34,9 +35,13 @@ function only(checks: CheckResult[]): CheckResult {
 
 describe("mobile/input-zoom (#708)", () => {
   test("an inline 14px email field is a warning naming the field and its size", async () => {
-    const check = only(await run("", '<input type="email" name="email" style="font-size:14px">'));
+    const check = only(
+      await run("", '<input type="email" name="email" style="font-size:14px">')
+    );
     expect(check.status).toBe("warn");
-    expect(check.message).toBe("1 form field(s) under 16px make iOS Safari zoom in on focus.");
+    expect(check.message).toBe(
+      "1 form field(s) under 16px make iOS Safari zoom in on focus."
+    );
     expect(check.items).toEqual([
       { id: 'input type="email" name="email"', label: "14px (inline style)" },
     ]);
@@ -44,10 +49,10 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("a <style> block at 0.875rem on a 16px root warns for each matching field", async () => {
     const check = only(
-      (await run(
+      await run(
         "<style>html { font-size: 16px } input, select { font-size: 0.875rem }</style>",
-        '<input name="q"><select name="country"><option>AU</option></select>',
-      )),
+        '<input name="q"><select name="country"><option>AU</option></select>'
+      )
     );
     expect(check.status).toBe("warn");
     expect(check.items).toEqual([
@@ -59,10 +64,10 @@ describe("mobile/input-zoom (#708)", () => {
   test("the same fields at 16px or 1rem pass", async () => {
     for (const size of ["16px", "1rem", "medium", "12pt"]) {
       const check = only(
-        (await run(
+        await run(
           `<style>input, select, textarea { font-size: ${size} }</style>`,
-          "<input><select></select><textarea></textarea>",
-        )),
+          "<input><select></select><textarea></textarea>"
+        )
       );
       expect([size, check.status]).toEqual([size, "pass"]);
     }
@@ -81,13 +86,18 @@ describe("mobile/input-zoom (#708)", () => {
       "reset",
       "image",
     ];
-    const body = types.map((t) => `<input type="${t}" style="font-size:12px">`).join("");
+    const body = types
+      .map((t) => `<input type="${t}" style="font-size:12px">`)
+      .join("");
     expect(await run("", body)).toEqual([]);
   });
 
   test("fields styled only by an external stylesheet are not warned about, and are reported as not read", async () => {
     const check = only(
-      (await run('<link rel="stylesheet" href="/app.css">', '<input class="text-sm" name="email">')),
+      await run(
+        '<link rel="stylesheet" href="/app.css">',
+        '<input class="text-sm" name="email">'
+      )
     );
     expect(check.status).toBe("info");
     expect(check.message).toContain("1 more field(s) were not read");
@@ -96,10 +106,10 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("a zoom-blocking viewport still gets the warning, and the finding names the workaround", async () => {
     const check = only(
-      (await run(
+      await run(
         '<meta name="viewport" content="width=device-width, maximum-scale=1">',
-        '<input type="email" style="font-size:14px">',
-      )),
+        '<input type="email" style="font-size:14px">'
+      )
     );
     expect(check.status).toBe("warn");
     expect(check.message).toContain("maximum-scale=1");
@@ -120,7 +130,10 @@ describe("mobile/input-zoom (#708)", () => {
         "@media (max-width: 600px) { input { font-size: 16px } } input { font-size: 14px }",
         "<input>",
       ],
-      ["input { font-size: 14px } .field { font-size: 16px }", '<input class="field">'],
+      [
+        "input { font-size: 14px } .field { font-size: 16px }",
+        '<input class="field">',
+      ],
       ["input { font-size: 0.875em }", "<input>"],
       ["input { font-size: var(--field) }", "<input>"],
       ["input:focus { font-size: 16px } input { font-size: 14px }", "<input>"],
@@ -134,7 +147,10 @@ describe("mobile/input-zoom (#708)", () => {
     for (const [head, body] of [
       ["<style>input, select, textarea { font: inherit }</style>", "<input>"],
       ["<style>input { all: unset }</style>", "<input>"],
-      ['<style media="(max-width: 600px)">input { font-size: 12px }</style>', "<input>"],
+      [
+        '<style media="(max-width: 600px)">input { font-size: 12px }</style>',
+        "<input>",
+      ],
       ["<style>input { font-size: 100% }</style>", "<input>"],
     ] as const) {
       const check = only(await run(head, body));
@@ -145,61 +161,73 @@ describe("mobile/input-zoom (#708)", () => {
   test("the cascade order: !important rules beat inline, an !important inline size beats both", async () => {
     expect(
       only(
-        (await run(
+        await run(
           "<style>input { font-size: 16px !important }</style>",
-          '<input style="font-size:14px">',
-        )),
-      ).status,
+          '<input style="font-size:14px">'
+        )
+      ).status
     ).toBe("pass");
     expect(
       only(
-        (await run(
+        await run(
           "<style>input { font-size: 16px !important }</style>",
-          '<input style="font-size:14px !important">',
-        )),
-      ).status,
+          '<input style="font-size:14px !important">'
+        )
+      ).status
     ).toBe("warn");
     // A plain media-query rule loses to the inline size, so it does not matter.
     expect(
       only(
-        (await run(
+        await run(
           "<style>@media (max-width: 600px) { input { font-size: 16px } }</style>",
-          '<input style="font-size:14px">',
-        )),
-      ).status,
+          '<input style="font-size:14px">'
+        )
+      ).status
     ).toBe("warn");
     // The later of `font` and `font-size` in one block wins.
-    const later = only(await run("<style>input { font: inherit; font-size: 14px }</style>", "<input>"));
-    expect(later.items).toEqual([{ id: 'input type="text"', label: "14px (<style>: input)" }]);
+    const later = only(
+      await run(
+        "<style>input { font: inherit; font-size: 14px }</style>",
+        "<input>"
+      )
+    );
+    expect(later.items).toEqual([
+      { id: 'input type="text"', label: "14px (<style>: input)" },
+    ]);
   });
 
   test("rem resolves against the page's root size, and is not read when an external sheet may set it", async () => {
     const tenPxRoot = only(
-      (await run("<style>html { font-size: 62.5% } input { font-size: 1.4rem }</style>", "<input>")),
+      await run(
+        "<style>html { font-size: 62.5% } input { font-size: 1.4rem }</style>",
+        "<input>"
+      )
     );
-    expect(tenPxRoot.items).toEqual([{ id: 'input type="text"', label: "14px (<style>: input)" }]);
+    expect(tenPxRoot.items).toEqual([
+      { id: 'input type="text"', label: "14px (<style>: input)" },
+    ]);
     const unknownRoot = only(
-      (await run(
+      await run(
         '<link rel="stylesheet" href="/app.css"><style>input { font-size: 0.875rem }</style>',
-        "<input>",
-      )),
+        "<input>"
+      )
     );
     expect(unknownRoot.status).toBe("info");
     const mediaRoot = only(
-      (await run(
+      await run(
         "<style>@media (max-width: 600px) { html { font-size: 14px } } input { font-size: 1rem }</style>",
-        "<input>",
-      )),
+        "<input>"
+      )
     );
     expect(mediaRoot.status).toBe("info");
   });
 
   test("an unstyled field on a page with no external CSS gets iOS's own 11px and is reported", async () => {
     const check = only(
-      (await run(
+      await run(
         "<style>body { font-size: 18px }</style>",
-        '<input name="q"><textarea name="msg"></textarea>',
-      )),
+        '<input name="q"><textarea name="msg"></textarea>'
+      )
     );
     expect(check.status).toBe("warn");
     expect(check.items).toEqual([
@@ -211,21 +239,32 @@ describe("mobile/input-zoom (#708)", () => {
   test("past 200 fields the focusable rest are counted as not read, the unfocusable ones not at all", async () => {
     const fields = Array.from(
       { length: 205 },
-      (_, i) => `<input name="f${i}" style="font-size:16px">`,
+      (_, i) => `<input name="f${i}" style="font-size:16px">`
     ).join("");
-    const disabled = Array.from({ length: 10 }, (_, i) => `<input disabled name="d${i}">`).join("");
+    const disabled = Array.from(
+      { length: 10 },
+      (_, i) => `<input disabled name="d${i}">`
+    ).join("");
     const check = only(await run("", fields + disabled));
     expect(check.status).toBe("info");
-    expect(check.details).toMatchObject({ fields: 205, under16px: 0, notRead: 5 });
+    expect(check.details).toMatchObject({
+      fields: 205,
+      under16px: 0,
+      notRead: 5,
+    });
   });
 
   test("past 2,000 text fields the rest are counted unchecked", async () => {
     const fields = Array.from(
       { length: 2_100 },
-      (_, i) => `<input name="f${i}" style="font-size:16px">`,
+      (_, i) => `<input name="f${i}" style="font-size:16px">`
     ).join("");
     const check = only(await run("", fields));
-    expect(check.details).toMatchObject({ fields: 2_100, under16px: 0, notRead: 1_900 });
+    expect(check.details).toMatchObject({
+      fields: 2_100,
+      under16px: 0,
+      notRead: 1_900,
+    });
   });
 
   test("a print, <noscript> or <template> style block does not size a field", async () => {
@@ -247,7 +286,10 @@ describe("mobile/input-zoom (#708)", () => {
   test('a <style media="screen"> or "all" block applies like a plain one', async () => {
     for (const media of ["screen", "all"]) {
       const check = only(
-        (await run(`<style media="${media}">input { font-size: 14px }</style>`, "<input>")),
+        await run(
+          `<style media="${media}">input { font-size: 14px }</style>`,
+          "<input>"
+        )
       );
       expect([media, check.status]).toEqual([media, "warn"]);
     }
@@ -255,10 +297,10 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("a stylesheet preloaded and switched on by script counts as external CSS", async () => {
     const check = only(
-      (await run(
+      await run(
         '<link rel="preload" as="style" href="/app.css" onload="this.rel=\'stylesheet\'">',
-        "<input>",
-      )),
+        "<input>"
+      )
     );
     expect(check.status).toBe("info");
   });
@@ -287,48 +329,79 @@ describe("mobile/input-zoom (#708)", () => {
 
   test("a field a <style> rule hides is not read, and a hidden field part does not count", async () => {
     const hidden = only(
-      (await run(
+      await run(
         "<style>.hp { display: none }</style>",
-        '<div class="hp"><input name="trap"></div><input style="font-size:14px">',
-      )),
+        '<div class="hp"><input name="trap"></div><input style="font-size:14px">'
+      )
     );
-    expect(hidden.details).toMatchObject({ fields: 2, under16px: 1, notRead: 1 });
+    expect(hidden.details).toMatchObject({
+      fields: 2,
+      under16px: 1,
+      notRead: 1,
+    });
     const part = only(
-      (await run(
+      await run(
         "<style>input::-webkit-search-cancel-button { display: none } input { font-size: 14px }</style>",
-        '<input type="search">',
-      )),
+        '<input type="search">'
+      )
     );
     expect(part.status).toBe("warn");
   });
 
   test("an external stylesheet may outrank a <style> rule, so only inline sizes are judged with one", async () => {
     const styled = only(
-      (await run(
+      await run(
         '<link rel="stylesheet" href="/app.css"><style>input { font-size: 14px }</style>',
-        "<input>",
-      )),
+        "<input>"
+      )
     );
     expect(styled.status).toBe("info");
     const inline = only(
-      (await run('<link rel="stylesheet" href="/app.css">', '<input style="font-size:14px">')),
+      await run(
+        '<link rel="stylesheet" href="/app.css">',
+        '<input style="font-size:14px">'
+      )
     );
     expect(inline.status).toBe("warn");
   });
 
   test("declarations are read in order with their own !important, past comments", async () => {
     for (const [head, body, status] of [
-      ["<style>input { /* brand */ font-size: 16px }</style>", "<input>", "pass"],
-      ["<style>input { font-size: 16px !important; font-size: 12px }</style>", "<input>", "pass"],
-      ["<style>input { font-size: 12px; font-size: 16px }</style>", "<input>", "pass"],
+      [
+        "<style>input { /* brand */ font-size: 16px }</style>",
+        "<input>",
+        "pass",
+      ],
+      [
+        "<style>input { font-size: 16px !important; font-size: 12px }</style>",
+        "<input>",
+        "pass",
+      ],
+      [
+        "<style>input { font-size: 12px; font-size: 16px }</style>",
+        "<input>",
+        "pass",
+      ],
       // An incomplete shorthand is invalid in a browser; it is not read here.
       ["", '<input style="font-size:16px; font:12px">', "info"],
-      ["", '<input style="font-size:16px; font:12px/banana sans-serif">', "info"],
-      ["", '<input style="font-size:16px; font:italic italic 12px sans-serif">', "info"],
+      [
+        "",
+        '<input style="font-size:16px; font:12px/banana sans-serif">',
+        "info",
+      ],
+      [
+        "",
+        '<input style="font-size:16px; font:italic italic 12px sans-serif">',
+        "info",
+      ],
       // A comment separates tokens: this is not 12px.
       ["", '<input style="font-size:16px; font-size:1/**/2px">', "info"],
       // Nested rules are not followed, so no size or default is trusted next to one.
-      ["<style>input { font-size: 14px; &:focus { font-size: 16px } }</style>", "<input>", "info"],
+      [
+        "<style>input { font-size: 14px; &:focus { font-size: 16px } }</style>",
+        "<input>",
+        "info",
+      ],
       [
         "<style>.wrapper { input { font-size: 16px } }</style>",
         '<div class="wrapper"><input></div>',
@@ -357,19 +430,21 @@ describe("mobile/input-zoom (#708)", () => {
       // The root size is decided by specificity this read does not compute.
       ":root { font-size: 32px } html { font-size: 16px } input { font-size: 0.5rem }",
     ]) {
-      const check = only(await run(`<style>${style}</style>`, '<input name="q">'));
+      const check = only(
+        await run(`<style>${style}</style>`, '<input name="q">')
+      );
       expect([style, check.status]).toEqual([style, "info"]);
     }
   });
 
   test("helpers", () => {
-    expect(splitSelectorList("input, :is(select, textarea), [data-x='a,b']")).toEqual([
-      "input",
-      ":is(select, textarea)",
-      "[data-x='a,b']",
-    ]);
+    expect(
+      splitSelectorList("input, :is(select, textarea), [data-x='a,b']")
+    ).toEqual(["input", ":is(select, textarea)", "[data-x='a,b']"]);
     expect(fontShorthandSize("italic 14px/1.4 Inter, sans-serif")).toBe("14px");
-    expect(fontShorthandSize('400 1rem/normal "Helvetica Neue", system-ui')).toBe("1rem");
+    expect(
+      fontShorthandSize('400 1rem/normal "Helvetica Neue", system-ui')
+    ).toBe("1rem");
     expect(fontShorthandSize("inherit")).toBeNull();
     expect(fontShorthandSize("12px")).toBeNull();
     expect(fontShorthandSize("14px var(--font-sans)")).toBeNull();
@@ -384,9 +459,12 @@ describe("mobile/input-zoom (#708)", () => {
   test("a hostile stylesheet stays within budget", async () => {
     const rules = Array.from(
       { length: 5000 },
-      (_, i) => `.c${i} input, form .c${i} > select { font-size: 14px }`,
+      (_, i) => `.c${i} input, form .c${i} > select { font-size: 14px }`
     ).join("\n");
-    const fields = Array.from({ length: 300 }, (_, i) => `<input name="f${i}">`).join("");
+    const fields = Array.from(
+      { length: 300 },
+      (_, i) => `<input name="f${i}">`
+    ).join("");
     const started = performance.now();
     const check = only(await run(`<style>${rules}</style>`, fields));
     expect(performance.now() - started).toBeLessThan(5000);
@@ -395,7 +473,10 @@ describe("mobile/input-zoom (#708)", () => {
 
   describe("hostile pages: every path is capped", () => {
     // The page is parsed outside the timing: only the rule's own work is bounded.
-    async function timed(head: string, body: string): Promise<{ ms: number; check: CheckResult }> {
+    async function timed(
+      head: string,
+      body: string
+    ): Promise<{ ms: number; check: CheckResult }> {
       const html = `<!doctype html><html><head><title>x</title>${head}</head><body><form>${body}</form></body></html>`;
       const url = "https://shop.example/x";
       const ctx = {
@@ -404,11 +485,15 @@ describe("mobile/input-zoom (#708)", () => {
         options: {},
       } as unknown as RuleContext;
       const started = performance.now();
-      const checks = ((await inputZoomRule.run(ctx)) as { checks: CheckResult[] }).checks;
+      const checks = (
+        (await inputZoomRule.run(ctx)) as { checks: CheckResult[] }
+      ).checks;
       return { ms: performance.now() - started, check: only(checks) };
     }
 
-    const cases: Array<[string, () => [string, string], Record<string, number>]> = [
+    const cases: Array<
+      [string, () => [string, string], Record<string, number>]
+    > = [
       [
         "50,000 inputs",
         () => ["", '<input name="q">'.repeat(50_000)],
@@ -432,7 +517,10 @@ describe("mobile/input-zoom (#708)", () => {
       ],
       [
         "fields 3,000 elements deep",
-        () => ["", `${"<div>".repeat(3_000)}${"<input>".repeat(2_000)}${"</div>".repeat(3_000)}`],
+        () => [
+          "",
+          `${"<div>".repeat(3_000)}${"<input>".repeat(2_000)}${"</div>".repeat(3_000)}`,
+        ],
         { notRead: 2_000 },
       ],
       [
@@ -469,7 +557,10 @@ describe("mobile/input-zoom (#708)", () => {
       ],
       [
         "a 100,000-digit font size",
-        () => [`<style>input{font-size:${"1".repeat(100_000)}}</style>`, "<input>"],
+        () => [
+          `<style>input{font-size:${"1".repeat(100_000)}}</style>`,
+          "<input>",
+        ],
         { notRead: 1 },
       ],
       [
@@ -490,12 +581,20 @@ describe("mobile/input-zoom (#708)", () => {
       ],
       [
         "500 KB field styles",
-        () => ["", `<input style="${"color:red;".repeat(50_000)}font-size:14px">`.repeat(200)],
+        () => [
+          "",
+          `<input style="${"color:red;".repeat(50_000)}font-size:14px">`.repeat(
+            200
+          ),
+        ],
         { notRead: 200 },
       ],
       [
         "20,000 style blocks",
-        () => ["<style>input{font-size:14px}</style>".repeat(20_000), "<input>"],
+        () => [
+          "<style>input{font-size:14px}</style>".repeat(20_000),
+          "<input>",
+        ],
         { notRead: 1 },
       ],
       [
@@ -510,7 +609,7 @@ describe("mobile/input-zoom (#708)", () => {
     for (const [name, make, expected] of cases) {
       test(name, async () => {
         const [head, body] = make();
-        const { ms, check } = (await timed(head, body));
+        const { ms, check } = await timed(head, body);
         expect(ms).toBeLessThan(1000);
         expect(check.details).toMatchObject(expected);
         expect((check.items ?? []).length).toBeLessThanOrEqual(20);
@@ -518,7 +617,10 @@ describe("mobile/input-zoom (#708)", () => {
     }
 
     test("a 1 MB name attribute is cut in the item", async () => {
-      const { check } = (await timed("", `<input name="${"n".repeat(1_000_000)}" style="font-size:12px">`));
+      const { check } = await timed(
+        "",
+        `<input name="${"n".repeat(1_000_000)}" style="font-size:12px">`
+      );
       expect(check.status).toBe("warn");
       expect(check.items![0]!.id.length).toBeLessThan(120);
     });

@@ -8,10 +8,15 @@
 // format stays with the caller of the `*Line` helpers; the outcome renderers
 // below escape their own.
 
-import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import type { SeedRedirectedOutcome } from "@squirrelscan/core-contracts/seed-redirect";
 
-import { chainText, printableReportUrl as printable, safeChain } from "./coverage";
+import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
+
+import {
+  chainText,
+  printableReportUrl as printable,
+  safeChain,
+} from "./coverage";
 
 // ---------------------------------------------------------------------------
 // A run stopped by a redirect: no crawl, no score.
@@ -31,7 +36,8 @@ function safeOutcome(outcome: SeedRedirectedOutcome): SeedRedirectedOutcome {
   const originalUrl = printable(outcome.originalUrl);
   const finalUrl = printable(outcome.finalUrl);
   const rerunCommand =
-    outcome.rerunCommand && stripControlChars(outcome.rerunCommand) === outcome.rerunCommand
+    outcome.rerunCommand &&
+    stripControlChars(outcome.rerunCommand) === outcome.rerunCommand
       ? outcome.rerunCommand
       : null;
   return {
@@ -45,7 +51,7 @@ function safeOutcome(outcome: SeedRedirectedOutcome): SeedRedirectedOutcome {
       // Replacer functions: a `$&` or `$'` in a URL is text, not a replacement pattern.
       outcome.message
         .replace(outcome.originalUrl, () => originalUrl)
-        .replace(outcome.finalUrl, () => finalUrl),
+        .replace(outcome.finalUrl, () => finalUrl)
     ),
   };
 }
@@ -70,7 +76,7 @@ function escapeMarkdown(value: string): string {
  */
 export function renderRedirectedOutcome(
   input: SeedRedirectedOutcome,
-  format: RedirectedOutcomeFormat,
+  format: RedirectedOutcomeFormat
 ): string {
   const outcome = safeOutcome(input);
   const chain = outcome.redirectChain;
@@ -85,11 +91,13 @@ export function renderRedirectedOutcome(
         `  <final-url>${escapeXml(outcome.finalUrl)}</final-url>`,
         "  <redirect-chain>",
         ...chain.map(
-          (hop) => `    <hop status="${hop.status}">${escapeXml(hop.url)}</hop>`,
+          (hop) => `    <hop status="${hop.status}">${escapeXml(hop.url)}</hop>`
         ),
         "  </redirect-chain>",
         ...(outcome.rerunCommand
-          ? [`  <rerun-command>${escapeXml(outcome.rerunCommand)}</rerun-command>`]
+          ? [
+              `  <rerun-command>${escapeXml(outcome.rerunCommand)}</rerun-command>`,
+            ]
           : []),
         `  <note>${escapeXml(outcome.message)} No audit ran and there is no score.</note>`,
         "</audit>",
@@ -106,9 +114,13 @@ export function renderRedirectedOutcome(
         "<ul>",
         `<li>Original URL: <code>${e(outcome.originalUrl)}</code></li>`,
         `<li>Final URL: <code>${e(outcome.finalUrl)}</code></li>`,
-        ...chain.map((hop) => `<li>${hop.status || "?"} <code>${e(hop.url)}</code></li>`),
+        ...chain.map(
+          (hop) => `<li>${hop.status || "?"} <code>${e(hop.url)}</code></li>`
+        ),
         "</ul>",
-        ...(outcome.rerunCommand ? [`<p>Re-run: <code>${e(outcome.rerunCommand)}</code></p>`] : []),
+        ...(outcome.rerunCommand
+          ? [`<p>Re-run: <code>${e(outcome.rerunCommand)}</code></p>`]
+          : []),
         "</body></html>",
       ].join("\n");
     }
@@ -121,10 +133,15 @@ export function renderRedirectedOutcome(
         `- Original URL: \`${outcome.originalUrl}\``,
         `- Final URL: \`${outcome.finalUrl}\``,
         ...(chain.length > 0
-          ? ["- Chain:", ...chain.map((hop) => `  - ${hop.status || "?"} \`${hop.url}\``)]
+          ? [
+              "- Chain:",
+              ...chain.map((hop) => `  - ${hop.status || "?"} \`${hop.url}\``),
+            ]
           : []),
         // The command carries the URL the user typed, which may hold a backtick.
-        ...(outcome.rerunCommand ? ["", `Re-run: ${escapeMarkdown(outcome.rerunCommand)}`] : []),
+        ...(outcome.rerunCommand
+          ? ["", `Re-run: ${escapeMarkdown(outcome.rerunCommand)}`]
+          : []),
       ];
       return lines.join("\n");
     }

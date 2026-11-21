@@ -13,7 +13,10 @@
 // `pages-not-fetched` for the same reason: the page it failed to fetch is the one that may still
 // answer 5xx. A targeted run never gets here (the runner skips site rules with `targeted-run`).
 
-import { CRAWL_CAPPED_SKIP_REASON, PAGES_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import {
+  CRAWL_CAPPED_SKIP_REASON,
+  PAGES_NOT_FETCHED_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -21,7 +24,8 @@ export const serverErrorsRule: Rule = {
   meta: {
     id: "crawl/server-errors",
     name: "Server Errors",
-    description: "Reports crawled pages whose final response is a 5xx server error",
+    description:
+      "Reports crawled pages whose final response is a 5xx server error",
     solution:
       "A page that answers 5xx is broken for visitors and for search engines, which drop it from the index if the error persists. Check the server or application logs for the failing URL, fix the underlying fault (an unhandled exception, an exhausted database or upstream, a bad deploy), then re-run the audit to confirm the page returns 200.",
     category: "crawl",
@@ -73,7 +77,9 @@ export const serverErrorsRule: Rule = {
         status: "fail",
         pageUrl: url,
         message: `${url} answers with a ${statusCode} server error`,
-        items: [{ id: url, label: `${url} (${statusCode})`, meta: { statusCode } }],
+        items: [
+          { id: url, label: `${url} (${statusCode})`, meta: { statusCode } },
+        ],
         details: { statusCode },
       });
     }
@@ -92,7 +98,8 @@ export const serverErrorsRule: Rule = {
     // The site-level verdict is a claim about every page, so it is made only when the crawl
     // reached every page it knew of.
     const limits = ctx.site?.crawlLimits;
-    const capped = limits !== undefined && limits.pagesCrawled >= limits.maxPages;
+    const capped =
+      limits !== undefined && limits.pagesCrawled >= limits.maxPages;
     const queued = ctx.site?.unfetchedPages ?? 0;
     const failed = ctx.site?.failedFetches ?? 0;
     if (capped || queued > 0) {

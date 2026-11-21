@@ -121,8 +121,10 @@ const MAY_SET = /display|visibility|\ball\b|animation|\\/i;
 const LEADING_CSS_SPACE = /^[\t\n\f\r ]+/;
 /** Style text that may matter here at all. */
 const MAY_MATTER = /display|visibility|\ball\b|animation|@import|\\/i;
-const UNICODE_SPACE = /[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]/;
-const KEYFRAME_SELECTOR = /^(?:from|to|\d+(?:\.\d+)?%)(?:\s*,\s*(?:from|to|\d+(?:\.\d+)?%))*$/i;
+const UNICODE_SPACE =
+  /[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]/;
+const KEYFRAME_SELECTOR =
+  /^(?:from|to|\d+(?:\.\d+)?%)(?:\s*,\s*(?:from|to|\d+(?:\.\d+)?%))*$/i;
 /** Bounds on hostile input: style text read per page, and rules per page. */
 const MAX_STYLE_CHARS = 256 * 1024;
 const MAX_RULES = 5000;
@@ -149,7 +151,9 @@ const HEX = /[0-9a-fA-F]/;
 const WS = /[\t\n\f\r ]/;
 
 function isIdentChar(ch: string | undefined): boolean {
-  return ch !== undefined && (/[-_a-zA-Z0-9]/.test(ch) || ch.charCodeAt(0) >= 0x80);
+  return (
+    ch !== undefined && (/[-_a-zA-Z0-9]/.test(ch) || ch.charCodeAt(0) >= 0x80)
+  );
 }
 
 function isNameStart(ch: string | undefined): boolean {
@@ -158,7 +162,11 @@ function isNameStart(ch: string | undefined): boolean {
 
 /** A backslash before a newline (or the end) escapes nothing. */
 function isEscape(sel: string, i: number): boolean {
-  return sel[i] === "\\" && i + 1 < sel.length && !/[\n\r\f]/.test(sel[i + 1] as string);
+  return (
+    sel[i] === "\\" &&
+    i + 1 < sel.length &&
+    !/[\n\r\f]/.test(sel[i + 1] as string)
+  );
 }
 
 /** Whether an identifier starts at `i`: `.123`, `#1a` and `-2x` are not selectors. */
@@ -178,13 +186,15 @@ function readIdent(sel: string, i: number): { value: string; end: number } {
       if (!isEscape(sel, i)) break;
       let j = i + 1;
       let hex = "";
-      while (j < sel.length && hex.length < 6 && HEX.test(sel[j] as string)) hex += sel[j++];
+      while (j < sel.length && hex.length < 6 && HEX.test(sel[j] as string))
+        hex += sel[j++];
       if (hex) {
         // One whitespace ends the escape; CRLF counts as one.
         if (sel[j] === "\r" && sel[j + 1] === "\n") j += 2;
         else if (j < sel.length && WS.test(sel[j] as string)) j++;
         const code = Number.parseInt(hex, 16);
-        const bad = code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff);
+        const bad =
+          code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff);
         value += bad ? "\ufffd" : String.fromCodePoint(code);
         i = j;
       } else {
@@ -231,13 +241,18 @@ function skipBlock(sel: string, i: number): number {
  * else. Names and unquoted values are identifiers (`-2` is a number, not one),
  * and a quoted value holds no newline.
  */
-function readPlainAttr(inner: string): { name: string; value: string | null } | null {
+function readPlainAttr(
+  inner: string
+): { name: string; value: string | null } | null {
   const m =
     /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)[\t\n\f\r ]*(?:=[\t\n\f\r ]*(?:"([^"\\\n\r\f]*)"|'([^'\\\n\r\f]*)'|((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*))[\t\n\f\r ]*)?$/.exec(
-      inner,
+      inner
     );
   if (!m) return null;
-  return { name: asciiLower(m[1] as string), value: m[2] ?? m[3] ?? m[4] ?? null };
+  return {
+    name: asciiLower(m[1] as string),
+    value: m[2] ?? m[3] ?? m[4] ?? null,
+  };
 }
 
 /**
@@ -246,11 +261,11 @@ function readPlainAttr(inner: string): { name: string; value: string | null } | 
  * superset of what a browser matches. Null for anything else.
  */
 function readOperatorAttr(
-  inner: string,
+  inner: string
 ): { name: string; value: string; op: AttrOperator } | null {
   const m =
     /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)[\t\n\f\r ]*([~|^$*]=)[\t\n\f\r ]*(?:"([^"\\\n\r\f]*)"|'([^'\\\n\r\f]*)'|((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*))(?:[\t\n\f\r ]*[iIsS])?[\t\n\f\r ]*$/.exec(
-      inner,
+      inner
     );
   if (!m) return null;
   return {
@@ -267,7 +282,10 @@ function readOperatorAttr(
  * or anything that is not plainly a name followed by `]` or an operator.
  */
 function readAttrName(inner: string): string | null {
-  const m = /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)(?:[\t\n\f\r ]*(?:[~|^$*]?=|$))/.exec(inner);
+  const m =
+    /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)(?:[\t\n\f\r ]*(?:[~|^$*]?=|$))/.exec(
+      inner
+    );
   return m ? asciiLower(m[1] as string) : null;
 }
 
@@ -296,7 +314,10 @@ export function parseSelector(sel: string): ParsedSelector {
   let typed = false;
   let i = 0;
   const atCompoundStart = () =>
-    !typed && compound.id === null && compound.classes.length === 0 && compound.attrs.length === 0;
+    !typed &&
+    compound.id === null &&
+    compound.classes.length === 0 &&
+    compound.attrs.length === 0;
 
   while (i < sel.length) {
     const ch = sel[i] as string;
@@ -304,13 +325,17 @@ export function parseSelector(sel: string): ParsedSelector {
       // A combinator: what follows is the compound the selector styles.
       let j = i;
       let explicit = 0;
-      while (j < sel.length && (WS.test(sel[j] as string) || ">+~".includes(sel[j] as string))) {
+      while (
+        j < sel.length &&
+        (WS.test(sel[j] as string) || ">+~".includes(sel[j] as string))
+      ) {
         if (!WS.test(sel[j] as string)) explicit++;
         j++;
       }
       // A selector cannot start or end with a combinator, nor hold two in a
       // row: a browser drops such a rule, so it can hide nothing.
-      if (i === 0 || explicit > 1 || (j >= sel.length && explicit > 0)) return invalid;
+      if (i === 0 || explicit > 1 || (j >= sel.length && explicit > 0))
+        return invalid;
       if (j >= sel.length) break;
       complex = true;
       compound = emptyCompound();
@@ -362,7 +387,8 @@ export function parseSelector(sel: string): ParsedSelector {
       // `:is()`, `:where()`, `:has()`, `:nth-child()` and friends only narrow
       // the compound (pub#951): the plain parts beside them still must match,
       // so the subject stays those parts. With none, it could be any element.
-      if (!doubled && asciiLower(value) === "root" && sel[end] !== "(") root = true;
+      if (!doubled && asciiLower(value) === "root" && sel[end] !== "(")
+        root = true;
       i = sel[end] === "(" ? skipBlock(sel, end) : end;
       continue;
     }
@@ -409,7 +435,10 @@ function splitSelectorList(prelude: string): string[] {
       continue;
     }
     if (ch === "(" || ch === "[" || ch === '"' || ch === "'") {
-      i = ch === '"' || ch === "'" ? skipQuoted(prelude, i) : skipBlock(prelude, i);
+      i =
+        ch === '"' || ch === "'"
+          ? skipQuoted(prelude, i)
+          : skipBlock(prelude, i);
       continue;
     }
     if (ch === ",") {
@@ -454,7 +483,7 @@ const SHOWN_DISPLAY = new Set(
     // one only shows an element; an engine that does not know one drops it.
     "-webkit-box -webkit-inline-box -webkit-flex -webkit-inline-flex " +
     "-ms-flexbox -ms-inline-flexbox -ms-grid -ms-inline-grid -moz-box -moz-inline-box"
-  ).split(" "),
+  ).split(" ")
 );
 
 /**
@@ -504,7 +533,9 @@ function skipWholeString(text: string, start: number): number {
  * outside a string: it can spell a property name (`d\69splay`) or a `url(`
  * (`u\72l(`), whose token ends at its first `)` whatever opened inside it.
  */
-function splitDeclarationBlock(block: string): Array<{ text: string; colon: number }> | null {
+function splitDeclarationBlock(
+  block: string
+): Array<{ text: string; colon: number }> | null {
   const out: Array<{ text: string; colon: number }> = [];
   const closers: string[] = [];
   let start = 0;
@@ -560,7 +591,10 @@ export function scanDeclarations(style: string | null): {
   let unknown = false;
   let mayAnimate = false;
   const engines = { pending: false };
-  const out: { display?: Declared<DisplayValue>; visibility?: Declared<VisibilityValue> } = {};
+  const out: {
+    display?: Declared<DisplayValue>;
+    visibility?: Declared<VisibilityValue>;
+  } = {};
   for (const { text, colon } of parts) {
     if (colon === -1) {
       // No property at all: a browser drops it. Without its comments it may still name one.
@@ -585,7 +619,12 @@ export function scanDeclarations(style: string | null): {
       unknown = true;
       continue;
     }
-    const read = readHidingDeclaration(out, prop, text.slice(colon + 1), engines);
+    const read = readHidingDeclaration(
+      out,
+      prop,
+      text.slice(colon + 1),
+      engines
+    );
     if (!read) unknown = true;
   }
   // An engine-dependent `display` nothing later overrode: the engines differ.
@@ -603,10 +642,13 @@ export function readDeclarations(style: string | null): Declarations {
  * when it is not a value this module reads.
  */
 function readHidingDeclaration(
-  out: { display?: Declared<DisplayValue>; visibility?: Declared<VisibilityValue> },
+  out: {
+    display?: Declared<DisplayValue>;
+    visibility?: Declared<VisibilityValue>;
+  },
   prop: "display" | "visibility",
   raw: string,
-  engines: { pending: boolean },
+  engines: { pending: boolean }
 ): boolean {
   const split = splitImportant(asciiLower(raw.trim()));
   if (split.value.includes("!") || split.value === "") return false;
@@ -636,8 +678,11 @@ function readHidingDeclaration(
       important: split.important,
       ...(MIXED_DISPLAY.has(v) ? { mixed: true as const } : {}),
     };
-  }
-  else out.visibility = { value: value as VisibilityValue, important: split.important };
+  } else
+    out.visibility = {
+      value: value as VisibilityValue,
+      important: split.important,
+    };
   return true;
 }
 
@@ -670,7 +715,8 @@ const incomplete = (): PageStyles => ({
 function indexKey(compound: Compound | null): string {
   if (!compound) return "*";
   if (compound.id !== null) return `#${asciiLower(compound.id)}`;
-  if (compound.classes.length > 0) return `.${asciiLower(compound.classes[0] as string)}`;
+  if (compound.classes.length > 0)
+    return `.${asciiLower(compound.classes[0] as string)}`;
   if (compound.tag !== null) return asciiLower(compound.tag);
   const attr = compound.attrs[0];
   return attr ? `[${attr.name}` : "*";
@@ -689,8 +735,10 @@ function addTo<T>(index: Map<string, T[]>, key: string, entry: T): void {
 function dropCdoCdc(prelude: string): string {
   let rest = prelude.replace(LEADING_CSS_SPACE, "");
   for (;;) {
-    if (rest.startsWith("<!--")) rest = rest.slice(4).replace(LEADING_CSS_SPACE, "");
-    else if (rest.startsWith("-->")) rest = rest.slice(3).replace(LEADING_CSS_SPACE, "");
+    if (rest.startsWith("<!--"))
+      rest = rest.slice(4).replace(LEADING_CSS_SPACE, "");
+    else if (rest.startsWith("-->"))
+      rest = rest.slice(3).replace(LEADING_CSS_SPACE, "");
     else return rest;
   }
 }
@@ -717,8 +765,14 @@ export function readPageStyles(doc: Document): PageStyles {
     if (rel.includes("stylesheet") || as === "style") complete = false;
   }
 
-  const decidable: PageStyles["decidable"] = { display: new Map(), visibility: new Map() };
-  const uncertain: PageStyles["uncertain"] = { display: new Map(), visibility: new Map() };
+  const decidable: PageStyles["decidable"] = {
+    display: new Map(),
+    visibility: new Map(),
+  };
+  const uncertain: PageStyles["uncertain"] = {
+    display: new Map(),
+    visibility: new Map(),
+  };
   let entries = 0;
   let chars = 0;
   let ruleCount = 0;
@@ -773,14 +827,22 @@ export function readPageStyles(doc: Document): PageStyles {
       // A nested rule (`& .x { … }`) could style any descendant.
       if (rule.body.includes("{")) return incomplete();
       const { decls, mayAnimate: animates } = scanDeclarations(rule.body);
-      if (!animates && decls !== "unknown" && !decls.display && !decls.visibility) continue;
+      if (
+        !animates &&
+        decls !== "unknown" &&
+        !decls.display &&
+        !decls.visibility
+      )
+        continue;
       const display = decls === "unknown" || decls.display !== undefined;
       const visibility = decls === "unknown" || decls.visibility !== undefined;
       // An `@keyframes` frame styles an animation step, not an element. What
       // it sets reaches whatever element runs the animation.
       if (rule.conditional && hasKeyframes) animatesVisibility ||= visibility;
       if (rule.conditional && KEYFRAME_SELECTOR.test(rule.selector)) continue;
-      const selector = rule.conditional ? rule.selector : dropCdoCdc(rule.selector);
+      const selector = rule.conditional
+        ? rule.selector
+        : dropCdoCdc(rule.selector);
       const selectors = splitSelectorList(selector).map(parseSelector);
       if (animates) {
         for (const s of selectors) {
@@ -803,8 +865,10 @@ export function readPageStyles(doc: Document): PageStyles {
             ...(decls.display ? { display: decls.display } : {}),
             ...(decls.visibility ? { visibility: decls.visibility } : {}),
           };
-          if (entry.display) addTo(decidable.display, indexKey(s.compound), entry);
-          if (entry.visibility) addTo(decidable.visibility, indexKey(s.compound), entry);
+          if (entry.display)
+            addTo(decidable.display, indexKey(s.compound), entry);
+          if (entry.visibility)
+            addTo(decidable.visibility, indexKey(s.compound), entry);
         }
         continue;
       }
@@ -812,7 +876,12 @@ export function readPageStyles(doc: Document): PageStyles {
       // apply is kept with the widths it covers, so the cascade can tell
       // "hidden at some widths" from "may be hidden".
       const widths =
-        rule.conditional && !sometimes && rule.at && decls !== "unknown" && !animates && allSimple
+        rule.conditional &&
+        !sometimes &&
+        rule.at &&
+        decls !== "unknown" &&
+        !animates &&
+        allSimple
           ? readAtRuleWidths(rule.at)
           : null;
       const widthHide =
@@ -827,19 +896,27 @@ export function readPageStyles(doc: Document): PageStyles {
         if (++entries > MAX_ENTRIES) return incomplete();
         const subject = s.kind === "simple" ? s.compound : s.subject;
         const key = indexKey(subject);
-        const important = (prop: Prop) => decls === "unknown" || decls[prop]?.important === true;
+        const important = (prop: Prop) =>
+          decls === "unknown" || decls[prop]?.important === true;
         // An animation on the same rule may hide what it shows, so it is not show-only.
         const shows = (prop: Prop): { shows?: true } => {
           if (animates || decls === "unknown") return {};
           const decl = decls[prop];
           if (!decl || ("mixed" in decl && decl.mixed)) return {};
-          return decl.value === "shown" || decl.value === "visible" ? { shows: true } : {};
+          return decl.value === "shown" || decl.value === "visible"
+            ? { shows: true }
+            : {};
         };
         if (display && widthHide && widths && s.kind === "simple") {
           addTo(uncertain.display, key, {
             subject,
             important: important("display"),
-            width: { ranges: widths, compound: s.compound, specificity: s.specificity, order: order++ },
+            width: {
+              ranges: widths,
+              compound: s.compound,
+              specificity: s.specificity,
+              order: order++,
+            },
           });
         } else if (display) {
           addTo(uncertain.display, key, {
@@ -871,13 +948,21 @@ export function readPageStyles(doc: Document): PageStyles {
     }
   }
 
-  return { complete, decidable, uncertain, steps: { left: MAX_STEPS }, animatesVisibility };
+  return {
+    complete,
+    decidable,
+    uncertain,
+    steps: { left: MAX_STEPS },
+    animatesVisibility,
+  };
 }
 
 const pageStylesCache = new WeakMap<Document, PageStyles>();
 
 /** The page's stylesheets, read once per document. */
-export function pageStylesFor(doc: Document | null | undefined): PageStyles | null {
+export function pageStylesFor(
+  doc: Document | null | undefined
+): PageStyles | null {
   if (!doc) return null;
   let styles = pageStylesCache.get(doc);
   if (!styles) {
@@ -924,7 +1009,11 @@ function isForeign(el: Element): boolean {
     }
     const ns = at.namespaceURI;
     const tag = asciiLower(at.localName || "");
-    if ((ns !== null && ns !== "http://www.w3.org/1999/xhtml") || tag === "svg" || tag === "math") {
+    if (
+      (ns !== null && ns !== "http://www.w3.org/1999/xhtml") ||
+      tag === "svg" ||
+      tag === "math"
+    ) {
       result = true;
       break;
     }
@@ -937,7 +1026,10 @@ function isForeign(el: Element): boolean {
 }
 
 /** An element's attributes, names lower-cased, read from the DOM once per element. */
-const attributesCache = new WeakMap<Element, Array<{ name: string; value: string }>>();
+const attributesCache = new WeakMap<
+  Element,
+  Array<{ name: string; value: string }>
+>();
 
 function attributesOf(el: Element): Array<{ name: string; value: string }> {
   let list = attributesCache.get(el);
@@ -1012,16 +1104,25 @@ function compoundMatches(compound: Compound, view: ElementView): Match {
 /** Whether `subject` could match the element on a case-blind reading of its tag, id and classes. */
 function couldMatch(subject: Compound | null, view: ElementView): boolean {
   if (subject === null) return true;
-  if (subject.tag !== null && view.tag !== asciiLower(subject.tag)) return false;
-  if (subject.id !== null && asciiLower(view.id ?? "") !== asciiLower(subject.id)) return false;
-  if (!subject.classes.every((cls) => view.lowerClasses.has(asciiLower(cls)))) return false;
+  if (subject.tag !== null && view.tag !== asciiLower(subject.tag))
+    return false;
+  if (
+    subject.id !== null &&
+    asciiLower(view.id ?? "") !== asciiLower(subject.id)
+  )
+    return false;
+  if (!subject.classes.every((cls) => view.lowerClasses.has(asciiLower(cls))))
+    return false;
   return subject.attrs.every((attr) => {
     // HTML keeps `aK` and `ak` apart while a selector matches names ASCII
     // case-blind, so any attribute of that name may satisfy the test.
     // A presence test needs no value; the list is read once per element.
     const own = attributesOf(view.el).filter((a) => a.name === attr.name);
     if (own.length > 0) {
-      return attr.value === null || own.some((a) => attrValueCouldMatch(attr, a.value));
+      return (
+        attr.value === null ||
+        own.some((a) => attrValueCouldMatch(attr, a.value))
+      );
     }
     // linkedom lists no attribute: fall back to the case-blind read.
     if (attributesOf(view.el).length > 0) return false;
@@ -1033,7 +1134,7 @@ function couldMatch(subject: Compound | null, view: ElementView): boolean {
 /** Whether an attribute's value could satisfy the test, compared case-insensitively. */
 function attrValueCouldMatch(
   attr: { value: string | null; op?: AttrOperator },
-  actual: string,
+  actual: string
 ): boolean {
   if (attr.value === null) return true;
   // A browser turns a literal NUL into U+FFFD while parsing; this DOM keeps it.
@@ -1051,7 +1152,11 @@ function attrValueCouldMatch(
     case "*=":
       return want !== "" && have.includes(want);
     case "~=":
-      return want !== "" && !/[\t\n\f\r ]/.test(want) && have.split(/[\t\n\f\r ]+/).includes(want);
+      return (
+        want !== "" &&
+        !/[\t\n\f\r ]/.test(want) &&
+        have.split(/[\t\n\f\r ]+/).includes(want)
+      );
     case "|=":
       return have === want || have.startsWith(`${want}-`);
   }
@@ -1060,7 +1165,10 @@ function attrValueCouldMatch(
 /** Where the winning declaration came from. */
 export type Source = "inline" | "sheet";
 
-export type CascadeResult<V extends string> = { value: V; source: Source } | "unknown" | undefined;
+export type CascadeResult<V extends string> =
+  | { value: V; source: Source }
+  | "unknown"
+  | undefined;
 
 /**
  * The author value of one property for `el`: the inline declaration and the
@@ -1080,17 +1188,35 @@ export function cascade<P extends "display" | "visibility">(
   el: Element,
   styles: PageStyles,
   prop: P,
-  inline: Declared<P extends "display" ? DisplayValue : VisibilityValue> | undefined,
-  reach?: { shows: boolean; hideWidths?: WidthSet },
+  inline:
+    | Declared<P extends "display" ? DisplayValue : VisibilityValue>
+    | undefined,
+  reach?: { shows: boolean; hideWidths?: WidthSet }
 ): CascadeResult<P extends "display" ? DisplayValue : VisibilityValue> {
   type V = P extends "display" ? DisplayValue : VisibilityValue;
   const view = viewOf(el);
   const keys = elementKeys(view);
-  let best: { decl: Declared<V>; inline: boolean; specificity: number; order: number } | null =
-    inline ? { decl: inline, inline: true, specificity: 0, order: Number.MAX_SAFE_INTEGER } : null;
+  let best: {
+    decl: Declared<V>;
+    inline: boolean;
+    specificity: number;
+    order: number;
+  } | null = inline
+    ? {
+        decl: inline,
+        inline: true,
+        specificity: 0,
+        order: Number.MAX_SAFE_INTEGER,
+      }
+    : null;
   const beats = (
-    a: { decl: Declared<V>; inline: boolean; specificity: number; order: number },
-    b: typeof a,
+    a: {
+      decl: Declared<V>;
+      inline: boolean;
+      specificity: number;
+      order: number;
+    },
+    b: typeof a
   ): boolean => {
     if (a.decl.important !== b.decl.important) return a.decl.important;
     if (a.inline !== b.inline) return a.inline;
@@ -1107,7 +1233,12 @@ export function cascade<P extends "display" | "visibility">(
       const match = compoundMatches(rule.compound, view);
       if (match === "no") continue;
       if (match === "case") return "unknown";
-      const candidate = { decl, inline: false, specificity: rule.specificity, order: rule.order };
+      const candidate = {
+        decl,
+        inline: false,
+        specificity: rule.specificity,
+        order: rule.order,
+      };
       if (!best || beats(candidate, best)) best = candidate;
     }
   }
@@ -1121,7 +1252,12 @@ export function cascade<P extends "display" | "visibility">(
       ? winner?.decl.important === true
       : winner?.inline === true && (winner.decl.important || !important);
   const animated = /animation/i.test(getAttrCI(el, "style") ?? "");
-  if (prop === "visibility" && styles.animatesVisibility && animated && !outranked(false, true)) {
+  if (
+    prop === "visibility" &&
+    styles.animatesVisibility &&
+    animated &&
+    !outranked(false, true)
+  ) {
     return "unknown";
   }
   for (const key of keys) {
@@ -1135,7 +1271,8 @@ export function cascade<P extends "display" | "visibility">(
         if (match === "no") continue;
         if (match === "case") return "unknown";
         // A decided hide, or a value that hides some elements, beside it: not settled by widths.
-        if (best && (best.decl.value === "none" || best.decl.mixed)) return "unknown";
+        if (best && (best.decl.value === "none" || best.decl.mixed))
+          return "unknown";
         const candidate = {
           decl: { value: "none", important: rule.important } as Declared<V>,
           inline: false,
@@ -1144,7 +1281,10 @@ export function cascade<P extends "display" | "visibility">(
         };
         // A decidable `display` that outranks it keeps the element shown at these widths.
         if (!best || beats(candidate, best)) {
-          reach.hideWidths = unionWidths(reach.hideWidths ?? [], rule.width.ranges);
+          reach.hideWidths = unionWidths(
+            reach.hideWidths ?? [],
+            rule.width.ranges
+          );
         }
         continue;
       }

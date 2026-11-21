@@ -16,10 +16,11 @@
 // Both paths feed ONE accumulator and ONE check builder: the streaming path reads the page-time
 // signal (`ctx.collectedSignals`), the legacy path derives it with the same extractor.
 
-import { z } from "zod";
-import type { Document } from "linkedom";
 import type { CheckItem } from "@squirrelscan/core-contracts";
+import type { Document } from "linkedom";
+
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -72,7 +73,9 @@ export const optionsSchema = z.object({
     .int()
     .min(1)
     .default(FONT_DEFAULT_MAX_FAMILIES)
-    .describe("Most distinct primary font families the site may use before the rule warns"),
+    .describe(
+      "Most distinct primary font families the site may use before the rule warns"
+    ),
 });
 
 /** One `@font-face` rule as declared in an inline style. */
@@ -160,15 +163,28 @@ function cleanName(raw: string): string {
 }
 
 function isCountable(name: string): boolean {
-  return name !== "" && !GENERIC.has(name) && !name.includes("var(") && !name.includes("(") && !ICON_FONT.test(name);
+  return (
+    name !== "" &&
+    !GENERIC.has(name) &&
+    !name.includes("var(") &&
+    !name.includes("(") &&
+    !ICON_FONT.test(name)
+  );
 }
 
 const FONT_FACE_BLOCK = /@font-face\s*\{([^}]*)\}/gi;
 const FONT_FAMILY_DECL = /(?:^|[;{\s])font-family\s*:\s*([^;}]+)/gi;
 
 function declValue(block: string, prop: string): string | null {
-  const m = new RegExp(`(?:^|[;{\\s])${prop}\\s*:\\s*([^;}]+)`, "i").exec(block);
-  return m ? m[1]!.replace(/!important/i, "").trim().toLowerCase() : null;
+  const m = new RegExp(`(?:^|[;{\\s])${prop}\\s*:\\s*([^;}]+)`, "i").exec(
+    block
+  );
+  return m
+    ? m[1]!
+        .replace(/!important/i, "")
+        .trim()
+        .toLowerCase()
+    : null;
 }
 
 interface Acc {
@@ -178,7 +194,9 @@ interface Acc {
 }
 
 function scanCss(raw: string, acc: Acc): void {
-  const css = stripComments(raw.length > MAX_STYLE_CHARS ? raw.slice(0, MAX_STYLE_CHARS) : raw);
+  const css = stripComments(
+    raw.length > MAX_STYLE_CHARS ? raw.slice(0, MAX_STYLE_CHARS) : raw
+  );
   for (const m of css.matchAll(FONT_FACE_BLOCK)) {
     if (acc.faces.size >= MAX_FACES_PER_PAGE) break;
     const body = m[1] ?? "";
@@ -192,16 +210,29 @@ function scanCss(raw: string, acc: Acc): void {
   const usage = css.replace(FONT_FACE_BLOCK, " ");
   for (const m of usage.matchAll(FONT_FAMILY_DECL)) {
     const names = splitStack(m[1] ?? "").map(cleanName);
-    for (const n of names) if (n && acc.referenced.size < MAX_FAMILIES_PER_PAGE * 4) acc.referenced.add(n);
+    for (const n of names)
+      if (n && acc.referenced.size < MAX_FAMILIES_PER_PAGE * 4)
+        acc.referenced.add(n);
     const primary = names[0];
-    if (primary && isCountable(primary) && acc.families.size < MAX_FAMILIES_PER_PAGE) acc.families.add(primary);
+    if (
+      primary &&
+      isCountable(primary) &&
+      acc.families.size < MAX_FAMILIES_PER_PAGE
+    )
+      acc.families.add(primary);
   }
 }
 
 /** The page's font signal from its live document. Shared by the collector and the legacy path. */
-export function extractFontUsage(doc: Document | null | undefined): FontUsageSignal {
+export function extractFontUsage(
+  doc: Document | null | undefined
+): FontUsageSignal {
   if (!doc) return { ...EMPTY_FONT_USAGE };
-  const acc: Acc = { families: new Set(), referenced: new Set(), faces: new Map() };
+  const acc: Acc = {
+    families: new Set(),
+    referenced: new Set(),
+    faces: new Map(),
+  };
   for (const style of querySelectorAllOutsideNoscript(doc, "style")) {
     scanCss(style.textContent || "", acc);
   }
@@ -211,7 +242,12 @@ export function extractFontUsage(doc: Document | null | undefined): FontUsageSig
   }
   let linked = false;
   for (const link of querySelectorAllOutsideNoscript(doc, "link[href]")) {
-    if ((link.getAttribute("rel") || "").toLowerCase().split(/\s+/).includes("stylesheet")) {
+    if (
+      (link.getAttribute("rel") || "")
+        .toLowerCase()
+        .split(/\s+/)
+        .includes("stylesheet")
+    ) {
       linked = true;
       break;
     }
@@ -246,10 +282,15 @@ function emptyRollup(): FontRollup {
   };
 }
 
-function accumulate(rollup: FontRollup, url: string, sig: FontUsageSignal): void {
+function accumulate(
+  rollup: FontRollup,
+  url: string,
+  sig: FontUsageSignal
+): void {
   rollup.pageCount += 1;
   if (sig.linkedStylesheets) rollup.pagesWithLinkedCss += 1;
-  if (sig.families.length > 0 || sig.faces.length > 0) rollup.pagesWithFonts += 1;
+  if (sig.families.length > 0 || sig.faces.length > 0)
+    rollup.pagesWithFonts += 1;
   for (const f of sig.families) {
     const urls = rollup.familyPages.get(f);
     if (urls) urls.push(url);
@@ -258,25 +299,43 @@ function accumulate(rollup: FontRollup, url: string, sig: FontUsageSignal): void
   for (const r of sig.referenced) rollup.referenced.add(r);
   for (const face of sig.faces) {
     const labels = rollup.faces.get(face.family) ?? new Set<string>();
-    labels.add(`${face.weight}${face.style === "normal" ? "" : ` ${face.style}`}`);
+    labels.add(
+      `${face.weight}${face.style === "normal" ? "" : ` ${face.style}`}`
+    );
     rollup.faces.set(face.family, labels);
   }
 }
 
 function skip(message: string, details?: Record<string, unknown>): CheckResult {
-  return { name: CHECK_NAME, status: "skipped", message, ...(details ? { details } : {}) };
+  return {
+    name: CHECK_NAME,
+    status: "skipped",
+    message,
+    ...(details ? { details } : {}),
+  };
 }
 
 /** Build the checks. `sitePageCount` is the crawl's page count (the norm floor reads it). */
-export function buildChecks(rollup: FontRollup, sitePageCount: number, maxFamilies: number): CheckResult[] {
+export function buildChecks(
+  rollup: FontRollup,
+  sitePageCount: number,
+  maxFamilies: number
+): CheckResult[] {
   if (sitePageCount < FONT_MIN_PAGES) {
-    return [skip(`Only ${sitePageCount} page(s) crawled; ${FONT_MIN_PAGES} needed to judge font consistency`)];
+    return [
+      skip(
+        `Only ${sitePageCount} page(s) crawled; ${FONT_MIN_PAGES} needed to judge font consistency`
+      ),
+    ];
   }
   if (rollup.pagesWithFonts === 0) {
     return [
       skip(
         "No font declarations found in inline styles; linked stylesheets are not read, so this is not a clean pass",
-        { coverage: "inline-only", pagesWithLinkedStylesheets: rollup.pagesWithLinkedCss },
+        {
+          coverage: "inline-only",
+          pagesWithLinkedStylesheets: rollup.pagesWithLinkedCss,
+        }
       ),
     ];
   }
@@ -309,7 +368,9 @@ export function buildChecks(rollup: FontRollup, sitePageCount: number, maxFamili
 
   // A family used on exactly one page is only "rogue" once enough pages declare fonts to form a norm.
   if (rollup.pagesWithFonts >= FONT_MIN_PAGES_WITH_FONTS) {
-    const rogue = families.filter((f) => rollup.familyPages.get(f)!.length === 1);
+    const rogue = families.filter(
+      (f) => rollup.familyPages.get(f)!.length === 1
+    );
     if (rogue.length > 0) {
       checks.push({
         name: "rogue-font-family",
@@ -326,7 +387,9 @@ export function buildChecks(rollup: FontRollup, sitePageCount: number, maxFamili
     }
   }
 
-  const unreferenced = [...rollup.faces.keys()].filter((f) => !rollup.referenced.has(f)).sort();
+  const unreferenced = [...rollup.faces.keys()]
+    .filter((f) => !rollup.referenced.has(f))
+    .sort();
   if (unreferenced.length > 0) {
     checks.push({
       name: "unreferenced-font-face",
@@ -357,7 +420,8 @@ export const fontConsistencyRule: Rule = {
   meta: {
     id: "content/font-consistency",
     name: "Font Consistency",
-    description: "Finds font sprawl, families used on one page only, and @font-face families nothing uses",
+    description:
+      "Finds font sprawl, families used on one page only, and @font-face families nothing uses",
     solution:
       "Too many font families make a site look unfinished and cost bytes. Pick one family for text, optionally one for headings and one for code, and remove the rest. A family used on a single page usually came from a pasted snippet or a one-off template: switch it to a site font. An @font-face family that no font-family names can be deleted along with its files. This rule reads inline styles only, so check linked stylesheets by hand before removing anything. Icon fonts are not counted.",
     category: "content",
@@ -373,12 +437,15 @@ export const fontConsistencyRule: Rule = {
     const rollup = emptyRollup();
     let pageCount: number;
     if (ctx.collectedSignals) {
-      for (const s of ctx.collectedSignals.pages) accumulate(rollup, s.url, s.fontUsage ?? EMPTY_FONT_USAGE);
+      for (const s of ctx.collectedSignals.pages)
+        accumulate(rollup, s.url, s.fontUsage ?? EMPTY_FONT_USAGE);
       pageCount = ctx.siteQuery?.pageCount() ?? rollup.pageCount;
     } else {
       const pages = ctx.site?.pages ?? [];
-      if (pages.length === 0) return { checks: [skip("No pages available for analysis")] };
-      for (const p of pages) accumulate(rollup, p.url, extractFontUsage(p.parsed?.document));
+      if (pages.length === 0)
+        return { checks: [skip("No pages available for analysis")] };
+      for (const p of pages)
+        accumulate(rollup, p.url, extractFontUsage(p.parsed?.document));
       pageCount = rollup.pageCount;
     }
     return { checks: buildChecks(rollup, pageCount, opts.max_families) };

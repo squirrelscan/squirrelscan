@@ -4,9 +4,9 @@
 // the collector and the fold (including technology detection); the pass has no
 // other code path, so it is the whole pass.
 
-import { afterEach, describe, expect, test } from "bun:test";
-
 import type { PageRecord } from "@squirrelscan/core-contracts";
+
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { buildHeadersMap, parseHtmlForRules } from "../src/adapter";
 import {
@@ -19,7 +19,11 @@ import {
 
 const ORIGIN = "https://example.com";
 
-function pageOf(path: string, html: string, headers: Record<string, string> = {}): PageRecord {
+function pageOf(
+  path: string,
+  html: string,
+  headers: Record<string, string> = {}
+): PageRecord {
   const url = `${ORIGIN}${path}`;
   return {
     url,
@@ -32,8 +36,14 @@ function pageOf(path: string, html: string, headers: Record<string, string> = {}
   } as unknown as PageRecord;
 }
 
-function collect(collector: ReturnType<typeof createEndpointCollector>, page: PageRecord) {
-  return collector.collect(page, parseHtmlForRules(page.html ?? "", page.finalUrl));
+function collect(
+  collector: ReturnType<typeof createEndpointCollector>,
+  page: PageRecord
+) {
+  return collector.collect(
+    page,
+    parseHtmlForRules(page.html ?? "", page.finalUrl)
+  );
 }
 
 const realFetch = globalThis.fetch;
@@ -52,7 +62,9 @@ describe("endpoint discovery collector", () => {
       )
     );
     const surface = c.finish({ baseUrl: `${ORIGIN}/`, scripts: [] });
-    const conventions = surface.candidates.filter((x) => x.source === "convention");
+    const conventions = surface.candidates.filter(
+      (x) => x.source === "convention"
+    );
     expect(conventions.map((x) => x.discoveredVia)).toEqual([
       "convention:nextjs",
       "convention:nextjs",
@@ -66,7 +78,9 @@ describe("endpoint discovery collector", () => {
   test("a site with no recognised stack gets no convention paths", () => {
     const c = createEndpointCollector({ headersOf: buildHeadersMap });
     collect(c, pageOf("/", "<html><body>plain</body></html>"));
-    expect(c.finish({ baseUrl: `${ORIGIN}/`, scripts: [] }).candidates).toEqual([]);
+    expect(c.finish({ baseUrl: `${ORIGIN}/`, scripts: [] }).candidates).toEqual(
+      []
+    );
   });
 
   test("extracts from page HTML and from served scripts into one deduped list", () => {
@@ -88,7 +102,13 @@ describe("endpoint discovery collector", () => {
         },
       ] as never,
     });
-    expect(surface.candidates.map((x) => `${x.method ?? "-"} ${x.url} ${x.source} ${x.probeEligible}`).sort()).toEqual(
+    expect(
+      surface.candidates
+        .map(
+          (x) => `${x.method ?? "-"} ${x.url} ${x.source} ${x.probeEligible}`
+        )
+        .sort()
+    ).toEqual(
       [
         "GET https://example.com/api/inline static-js true",
         "GET https://api.vendor.io/v1/x static-js false",
@@ -113,14 +133,19 @@ describe("endpoint discovery collector", () => {
     const next = `<html><head><script id="__NEXT_DATA__" type="application/json">{}</script></head><body></body></html>`;
     const c = createEndpointCollector({ headersOf: buildHeadersMap });
     // The first page seen is not the entry page and shows no stack.
-    c.replay!(pageOf("/deep", "<html></html>"), { pageUrl: `${ORIGIN}/deep`, refs: [] });
+    c.replay!(pageOf("/deep", "<html></html>"), {
+      pageUrl: `${ORIGIN}/deep`,
+      refs: [],
+    });
     c.replay!(pageOf("/", next), {
       pageUrl: `${ORIGIN}/`,
       refs: [],
       techIds: ["nextjs"],
     });
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
-    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain(
+      "convention:nextjs"
+    );
   });
 
   test("detection finds the stack when the entry page is not the first page collected (v1 order)", () => {
@@ -130,42 +155,70 @@ describe("endpoint discovery collector", () => {
     collect(c, pageOf("/deep", "<html></html>"));
     collect(c, pageOf("/", next));
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
-    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain(
+      "convention:nextjs"
+    );
   });
 
   test("the entry page is chosen by URL: a reversed page map still detects the stack, and no match keeps the order", () => {
     const next = `<html><head><script id="__NEXT_DATA__" type="application/json">{}</script></head><body></body></html>`;
     // More non-entry pages than the fallback window, with the entry page LAST.
-    const others = Array.from({ length: MAX_DETECTION_ATTEMPTS + 4 }, (_, i) => ({
-      page: pageOf(`/p${i}`, "<html></html>"),
-      parsed: parseHtmlForRules("<html></html>", `${ORIGIN}/p${i}`),
-    }));
-    const entry = { page: pageOf("/", next), parsed: parseHtmlForRules(next, `${ORIGIN}/`) };
-    const reversedMap = new Map([...others, entry].map((e) => [e.page.normalizedUrl, e]));
+    const others = Array.from(
+      { length: MAX_DETECTION_ATTEMPTS + 4 },
+      (_, i) => ({
+        page: pageOf(`/p${i}`, "<html></html>"),
+        parsed: parseHtmlForRules("<html></html>", `${ORIGIN}/p${i}`),
+      })
+    );
+    const entry = {
+      page: pageOf("/", next),
+      parsed: parseHtmlForRules(next, `${ORIGIN}/`),
+    };
+    const reversedMap = new Map(
+      [...others, entry].map((e) => [e.page.normalizedUrl, e])
+    );
 
     // Without the entry URL, the fallback window never reaches the entry page.
     const blind = createEndpointCollector({ headersOf: buildHeadersMap });
-    for (const { page, parsed } of reversedMap.values()) blind.collect(page, parsed);
+    for (const { page, parsed } of reversedMap.values())
+      blind.collect(page, parsed);
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
-    expect(blind.finish(site).candidates.map((x) => x.discoveredVia)).not.toContain("convention:nextjs");
+    expect(
+      blind.finish(site).candidates.map((x) => x.discoveredVia)
+    ).not.toContain("convention:nextjs");
 
     // With it, the entry page is collected first and detected wherever it sits.
     const ordered = entryFirst(reversedMap.values(), `${ORIGIN}`);
     expect(ordered[0].page.normalizedUrl).toBe(`${ORIGIN}/`);
-    const c = createEndpointCollector({ headersOf: buildHeadersMap, entryUrl: `${ORIGIN}` });
-    for (const { page, parsed } of reversedMap.values()) c.collect(page, parsed);
-    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+    const c = createEndpointCollector({
+      headersOf: buildHeadersMap,
+      entryUrl: `${ORIGIN}`,
+    });
+    for (const { page, parsed } of reversedMap.values())
+      c.collect(page, parsed);
+    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain(
+      "convention:nextjs"
+    );
 
     // No page matches the entry URL: order unchanged, first page stands in.
     const none = entryFirst(reversedMap.values(), "https://elsewhere.example/");
-    expect(none.map((e) => e.page.normalizedUrl)).toEqual([...reversedMap.keys()]);
+    expect(none.map((e) => e.page.normalizedUrl)).toEqual([
+      ...reversedMap.keys(),
+    ]);
   });
 
   test("detection stops after MAX_DETECTION_ATTEMPTS pages with no stack, so a large crawl pays for at most that many", () => {
     const c = createEndpointCollector({ headersOf: buildHeadersMap });
-    const results = Array.from({ length: MAX_DETECTION_ATTEMPTS + 3 }, (_, i) => collect(c, pageOf(`/p${i}`, "<html></html>")).techIds);
-    expect(results.slice(0, MAX_DETECTION_ATTEMPTS)).toEqual(Array(MAX_DETECTION_ATTEMPTS).fill([]));
-    expect(results.slice(MAX_DETECTION_ATTEMPTS).every((r) => r === undefined)).toBe(true);
+    const results = Array.from(
+      { length: MAX_DETECTION_ATTEMPTS + 3 },
+      (_, i) => collect(c, pageOf(`/p${i}`, "<html></html>")).techIds
+    );
+    expect(results.slice(0, MAX_DETECTION_ATTEMPTS)).toEqual(
+      Array(MAX_DETECTION_ATTEMPTS).fill([])
+    );
+    expect(
+      results.slice(MAX_DETECTION_ATTEMPTS).every((r) => r === undefined)
+    ).toBe(true);
   });
 
   test("a ref that is cross-origin on one page and same-origin on another is retained once, as same-origin, in either order", () => {
@@ -174,7 +227,14 @@ describe("endpoint discovery collector", () => {
       for (const path of order) {
         const html = `<html><body><script>fetch("https://api.other.io/v1/x")</script></body></html>`;
         // /a lives on example.com, /b lives on other.io: same ref, different page origin.
-        const page = path === "/a" ? pageOf("/a", html) : ({ ...pageOf("/b", html), normalizedUrl: "https://api.other.io/b", finalUrl: "https://api.other.io/b" } as PageRecord);
+        const page =
+          path === "/a"
+            ? pageOf("/a", html)
+            : ({
+                ...pageOf("/b", html),
+                normalizedUrl: "https://api.other.io/b",
+                finalUrl: "https://api.other.io/b",
+              } as PageRecord);
         collect(c, page);
       }
       return c.retained();
@@ -191,7 +251,9 @@ describe("endpoint discovery collector", () => {
     c.replay!(pageOf("/", next), { pageUrl: `${ORIGIN}/`, refs: [] });
     collect(c, pageOf("/blog", next));
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
-    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain(
+      "convention:nextjs"
+    );
   });
 
   test("a method-carrying ref is kept ahead of bare literals once the retained cap is spent", () => {
@@ -199,22 +261,51 @@ describe("endpoint discovery collector", () => {
     // 2,500 bare literals first (25 pages at the 100-per-page extractor cap), then
     // one fetch call site with a lexically late URL.
     for (let p = 0; p < 25; p++) {
-      const bare = Array.from({ length: 100 }, (_, i) => `var a${i} = "/api/a${String(p * 100 + i).padStart(4, "0")}";`).join("");
-      collect(c, pageOf(p === 0 ? "/" : `/b${p}`, `<html><body><script>${bare}</script></body></html>`));
+      const bare = Array.from(
+        { length: 100 },
+        (_, i) => `var a${i} = "/api/a${String(p * 100 + i).padStart(4, "0")}";`
+      ).join("");
+      collect(
+        c,
+        pageOf(
+          p === 0 ? "/" : `/b${p}`,
+          `<html><body><script>${bare}</script></body></html>`
+        )
+      );
     }
-    collect(c, pageOf("/late", `<html><body><script>fetch("/api/zzz")</script></body></html>`));
+    collect(
+      c,
+      pageOf(
+        "/late",
+        `<html><body><script>fetch("/api/zzz")</script></body></html>`
+      )
+    );
     const kept = c.retained();
     expect(kept.length).toBe(MAX_RETAINED_REFS);
-    expect(kept.some((r) => r.method === "GET" && r.url === "https://example.com/api/zzz")).toBe(true);
+    expect(
+      kept.some(
+        (r) => r.method === "GET" && r.url === "https://example.com/api/zzz"
+      )
+    ).toBe(true);
   });
 
   test("the retained set and the surface do not depend on crawl order or cache replay split", () => {
     // 60 pages, 3,000 distinct same-origin refs (past the 2,000 cap) and 500
     // cross-origin refs (past the 300 cap), each page carrying a slice of both.
     const pagesHtml = Array.from({ length: 60 }, (_, p) => {
-      const same = Array.from({ length: 50 }, (_, i) => `fetch("/api/s${String(p * 50 + i).padStart(4, "0")}");`);
-      const other = Array.from({ length: 9 }, (_, i) => `fetch("https://api.vendor.io/v1/c${String(p * 9 + i).padStart(4, "0")}");`);
-      return { path: p === 0 ? "/" : `/p${p}`, html: `<html><body><script>${[...same, ...other].join("")}</script></body></html>` };
+      const same = Array.from(
+        { length: 50 },
+        (_, i) => `fetch("/api/s${String(p * 50 + i).padStart(4, "0")}");`
+      );
+      const other = Array.from(
+        { length: 9 },
+        (_, i) =>
+          `fetch("https://api.vendor.io/v1/c${String(p * 9 + i).padStart(4, "0")}");`
+      );
+      return {
+        path: p === 0 ? "/" : `/p${p}`,
+        html: `<html><body><script>${[...same, ...other].join("")}</script></body></html>`,
+      };
     });
     const run = (order: number[], replayFrom?: Map<string, unknown>) => {
       const c = createEndpointCollector({ headersOf: buildHeadersMap });
@@ -231,15 +322,20 @@ describe("endpoint discovery collector", () => {
     const reversed = [...forward].reverse();
     // A seeded shuffle, so the test is reproducible.
     let seed = 12345;
-    const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const rand = () =>
+      (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
     const shuffled = [...forward].sort(() => rand() - 0.5);
 
     const base = run(forward);
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
     const baseRefs = base.retained();
     const baseSurface = base.finish(site);
-    expect(baseRefs.filter((r) => new URL(r.url).hostname === "api.vendor.io").length).toBe(MAX_RETAINED_CROSS_ORIGIN_REFS);
-    expect(baseRefs.length).toBe(MAX_RETAINED_REFS + MAX_RETAINED_CROSS_ORIGIN_REFS);
+    expect(
+      baseRefs.filter((r) => new URL(r.url).hostname === "api.vendor.io").length
+    ).toBe(MAX_RETAINED_CROSS_ORIGIN_REFS);
+    expect(baseRefs.length).toBe(
+      MAX_RETAINED_REFS + MAX_RETAINED_CROSS_ORIGIN_REFS
+    );
 
     for (const order of [reversed, shuffled]) {
       const other = run(order);
@@ -250,7 +346,14 @@ describe("endpoint discovery collector", () => {
     // Half the pages replay from cached snapshots, the rest run fresh.
     const snaps = new Map<string, unknown>();
     for (const [i, pg] of pagesHtml.entries()) {
-      if (i % 2 === 0) snaps.set(pg.path, collect(createEndpointCollector({ headersOf: buildHeadersMap }), pageOf(pg.path, pg.html)));
+      if (i % 2 === 0)
+        snaps.set(
+          pg.path,
+          collect(
+            createEndpointCollector({ headersOf: buildHeadersMap }),
+            pageOf(pg.path, pg.html)
+          )
+        );
     }
     const mixed = run(shuffled, snaps);
     expect(mixed.retained()).toEqual(baseRefs);
@@ -260,12 +363,20 @@ describe("endpoint discovery collector", () => {
   test("retained refs are capped across the crawl", () => {
     const c = createEndpointCollector({ headersOf: buildHeadersMap });
     for (let p = 0; p < 40; p++) {
-      const calls = Array.from({ length: 90 }, (_, i) => `fetch("/api/p${p}/r${i}");`).join("");
-      collect(c, pageOf(`/p${p}`, `<html><body><script>${calls}</script></body></html>`));
+      const calls = Array.from(
+        { length: 90 },
+        (_, i) => `fetch("/api/p${p}/r${i}");`
+      ).join("");
+      collect(
+        c,
+        pageOf(`/p${p}`, `<html><body><script>${calls}</script></body></html>`)
+      );
     }
     const retained = c.retained().length;
     expect(retained).toBeLessThanOrEqual(MAX_RETAINED_REFS);
-    expect(c.finish({ baseUrl: `${ORIGIN}/`, scripts: [] }).candidates.length).toBeLessThanOrEqual(200);
+    expect(
+      c.finish({ baseUrl: `${ORIGIN}/`, scripts: [] }).candidates.length
+    ).toBeLessThanOrEqual(200);
   });
 
   test("the pass makes no network request", () => {
@@ -288,7 +399,9 @@ describe("endpoint discovery collector", () => {
     }
     c.finish({
       baseUrl: `${ORIGIN}/`,
-      scripts: [{ url: `${ORIGIN}/a.js`, content: `fetch("/graphql")` }] as never,
+      scripts: [
+        { url: `${ORIGIN}/a.js`, content: `fetch("/graphql")` },
+      ] as never,
     });
     expect(calls).toBe(0);
   });
@@ -300,7 +413,10 @@ describe("render-time request capture (repo#4188)", () => {
     finalUrl: "https://example.com/",
     html: "<html></html>",
   } as unknown as PageRecord;
-  const parsed = parseHtmlForRules("<html><body></body></html>", "https://example.com/");
+  const parsed = parseHtmlForRules(
+    "<html><body></body></html>",
+    "https://example.com/"
+  );
   const make = (requests?: { url: string; method?: string }[]) =>
     createEndpointCollector({
       headersOf: () => ({}),

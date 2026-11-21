@@ -11,14 +11,15 @@
 // page-type classifier is deliberately not used: its pricing, service and
 // product classes are not certified yet.
 
-import { getPathname } from "@squirrelscan/utils";
-import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
   SCAN_TRUNCATED_SKIP_REASON,
 } from "@squirrelscan/core-contracts/resolution";
+import { getPathname } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { htmlReadState } from "../shared/structured-nodes";
 
 const CHECK = "conversion-path";
@@ -31,8 +32,18 @@ const MONEY_PATH_RE =
 const EDITORIAL_PATH_RE =
   /\/(?:blog|news|articles?|posts?|press|docs?|documentation|help|support|learn|guides?|changelog|stories|case-studies)(?:\/|$)/i;
 
-const MONEY_SCHEMA_TYPES = ["Product", "Offer", "AggregateOffer", "Service"] as const;
-const EDITORIAL_SCHEMA_TYPES = ["Article", "BlogPosting", "NewsArticle", "TechArticle"] as const;
+const MONEY_SCHEMA_TYPES = [
+  "Product",
+  "Offer",
+  "AggregateOffer",
+  "Service",
+] as const;
+const EDITORIAL_SCHEMA_TYPES = [
+  "Article",
+  "BlogPosting",
+  "NewsArticle",
+  "TechArticle",
+] as const;
 
 const SOCIAL_HOSTS = [
   "linkedin.com",
@@ -84,7 +95,8 @@ const MAX_SAMPLES = 5;
 const hostMatches = (host: string, list: readonly string[]): boolean =>
   list.some((h) => host === h || host.endsWith(`.${h}`));
 
-const bareHost = (host: string): string => host.toLowerCase().replace(/^www\./, "");
+const bareHost = (host: string): string =>
+  host.toLowerCase().replace(/^www\./, "");
 
 function parseHref(href: string, base: string): URL | null {
   try {
@@ -94,15 +106,24 @@ function parseHref(href: string, base: string): URL | null {
   }
 }
 
-export function isMoneyPage(url: string, schemaTypes: readonly string[]): boolean {
+export function isMoneyPage(
+  url: string,
+  schemaTypes: readonly string[]
+): boolean {
   const path = getPathname(url);
   if (EDITORIAL_PATH_RE.test(path)) return false;
-  if (schemaTypes.some((t) => (EDITORIAL_SCHEMA_TYPES as readonly string[]).includes(t))) {
+  if (
+    schemaTypes.some((t) =>
+      (EDITORIAL_SCHEMA_TYPES as readonly string[]).includes(t)
+    )
+  ) {
     return false;
   }
   return (
     MONEY_PATH_RE.test(path) ||
-    schemaTypes.some((t) => (MONEY_SCHEMA_TYPES as readonly string[]).includes(t))
+    schemaTypes.some((t) =>
+      (MONEY_SCHEMA_TYPES as readonly string[]).includes(t)
+    )
   );
 }
 
@@ -185,7 +206,10 @@ export const conversionPathRule: Rule = {
     // "not a money page" is only a verdict when the page was read whole or the path already settles it.
     const readState = htmlReadState(ctx);
     if (!isMoneyPage(ctx.page.url, schemaTypes)) {
-      if (readState !== "complete" && !EDITORIAL_PATH_RE.test(getPathname(ctx.page.url))) {
+      if (
+        readState !== "complete" &&
+        !EDITORIAL_PATH_RE.test(getPathname(ctx.page.url))
+      ) {
         checks.push({
           name: CHECK,
           status: "skipped",
@@ -223,7 +247,10 @@ export const conversionPathRule: Rule = {
     let hasForm = false;
     for (const form of body.querySelectorAll("form")) {
       if (form.getAttribute("role")?.toLowerCase() === "search") continue;
-      if (form.querySelector('input[type="search"]') && !form.querySelector("textarea, select")) {
+      if (
+        form.querySelector('input[type="search"]') &&
+        !form.querySelector("textarea, select")
+      ) {
         continue;
       }
       hasForm = true;
@@ -247,9 +274,16 @@ export const conversionPathRule: Rule = {
         continue;
       }
       const target = parseHref(href, ctx.page.url);
-      if (!target || (target.protocol !== "http:" && target.protocol !== "https:")) continue;
+      if (
+        !target ||
+        (target.protocol !== "http:" && target.protocol !== "https:")
+      )
+        continue;
       const kind = classify(target, pageHost);
-      if (kind === "onsite" && ONSITE_PATH_RES.some((re) => re.test(target.pathname))) {
+      if (
+        kind === "onsite" &&
+        ONSITE_PATH_RES.some((re) => re.test(target.pathname))
+      ) {
         hasOnsitePath = true;
       }
       if (ctaKinds.length < MAX_CTAS && isButtonStyled(a) && !inChrome(a)) {
@@ -270,7 +304,8 @@ export const conversionPathRule: Rule = {
       checks.push({
         name: CHECK,
         status: "info",
-        message: "Calls to action not checked: the page was not read completely",
+        message:
+          "Calls to action not checked: the page was not read completely",
         details: { ...details, inconclusive: true },
       });
       return { checks };
@@ -283,7 +318,11 @@ export const conversionPathRule: Rule = {
         status: "skipped",
         message: `Calls to action not checked: the page has more than ${MAX_LINKS} links and none of the first ${MAX_LINKS} was a call to action`,
         skipReason: SCAN_TRUNCATED_SKIP_REASON,
-        details: { ...details, foldKey: SCAN_TRUNCATED_SKIP_REASON, linkCap: MAX_LINKS },
+        details: {
+          ...details,
+          foldKey: SCAN_TRUNCATED_SKIP_REASON,
+          linkCap: MAX_LINKS,
+        },
       });
       return { checks };
     }
@@ -298,7 +337,12 @@ export const conversionPathRule: Rule = {
       return { checks };
     }
 
-    if (hasForm || hasDirectContact || hasOnsitePath || ctaKinds.some((c) => c.kind === "onsite")) {
+    if (
+      hasForm ||
+      hasDirectContact ||
+      hasOnsitePath ||
+      ctaKinds.some((c) => c.kind === "onsite")
+    ) {
       checks.push({
         name: CHECK,
         status: "pass",
@@ -308,7 +352,10 @@ export const conversionPathRule: Rule = {
       return { checks };
     }
 
-    const hosts = [...new Set(ctaKinds.map((c) => c.host))].slice(0, MAX_SAMPLES);
+    const hosts = [...new Set(ctaKinds.map((c) => c.host))].slice(
+      0,
+      MAX_SAMPLES
+    );
     const booking = ctaKinds.some((c) => c.kind === "booking");
     if (booking) {
       checks.push({
@@ -334,7 +381,8 @@ export const conversionPathRule: Rule = {
     checks.push({
       name: CHECK,
       status: "pass",
-      message: "Calls to action lead to a site or tool that is not a social profile",
+      message:
+        "Calls to action lead to a site or tool that is not a social profile",
       details: { ...details, hosts },
     });
     return { checks };

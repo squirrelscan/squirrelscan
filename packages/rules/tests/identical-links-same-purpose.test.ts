@@ -1,11 +1,11 @@
 // a11y/identical-links-same-purpose keeps repeated menu labels separate by context (#1043).
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext } from "../src/types";
 
 import { identicalLinksSamePurposeRule } from "../src/a11y/identical-links-same-purpose";
-import type { CheckResult, RuleContext } from "../src/types";
 
 async function run(body: string): Promise<CheckResult | undefined> {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Shop</title></head><body>${body}</body></html>`;
@@ -16,7 +16,9 @@ async function run(body: string): Promise<CheckResult | undefined> {
     options: {},
   } as unknown as RuleContext;
   const result = await identicalLinksSamePurposeRule.run(ctx);
-  return result.checks.find((check) => check.name === "identical-links-same-purpose");
+  return result.checks.find(
+    (check) => check.name === "identical-links-same-purpose"
+  );
 }
 
 describe("a11y/identical-links-same-purpose context", () => {
@@ -55,7 +57,9 @@ describe("a11y/identical-links-same-purpose context", () => {
     `);
 
     expect(result?.status).toBe("warn");
-    expect(result?.items?.[0]?.id).toBe('"learn more" in "products" → 2 different URLs');
+    expect(result?.items?.[0]?.id).toBe(
+      '"learn more" in "products" → 2 different URLs'
+    );
   });
 
   test("aria-labelledby gives repeated link text distinct contexts", async () => {
@@ -83,15 +87,20 @@ describe("a11y/identical-links-same-purpose context", () => {
   test("a labelled context shared by thousands of links completes", async () => {
     const labels = Array.from(
       { length: 8 },
-      (_, index) => `<span id="label-${index}">Section ${index}</span>`,
+      (_, index) => `<span id="label-${index}">Section ${index}</span>`
     ).join("");
     const links = Array.from(
       { length: 5_000 },
-      () => '<li><a href="/catalog">Catalog</a></li>',
+      () => '<li><a href="/catalog">Catalog</a></li>'
     ).join("");
-    const labelledBy = Array.from({ length: 8 }, (_, index) => `label-${index}`).join(" ");
+    const labelledBy = Array.from(
+      { length: 8 },
+      (_, index) => `label-${index}`
+    ).join(" ");
 
-    const result = await run(`${labels}<ul aria-labelledby="${labelledBy}">${links}</ul>`);
+    const result = await run(
+      `${labels}<ul aria-labelledby="${labelledBy}">${links}</ul>`
+    );
 
     expect(result?.status).toBe("pass");
   });

@@ -1,10 +1,13 @@
 // eeat/content-dates - Published and updated date signals
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { flattenJsonLdNodes } from "@squirrelscan/utils";
 
-import { bylineConsistencyDeviants, defersToBylineConsistency } from "./byline-consistency";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  bylineConsistencyDeviants,
+  defersToBylineConsistency,
+} from "./byline-consistency";
 
 export const contentDatesRule: Rule = {
   meta: {
@@ -21,7 +24,9 @@ export const contentDatesRule: Rule = {
     // Published / modified dates matter for time-sensitive editorial content;
     // they're noise on a SaaS marketing site, ecommerce store, or landing page.
     // Gate to content-publishing types. Offline / no-metadata runs as today.
-    appliesWhen: { siteTypes: ["blog", "news", "healthcare_provider", "education"] },
+    appliesWhen: {
+      siteTypes: ["blog", "news", "healthcare_provider", "education"],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -144,7 +149,11 @@ export const contentDatesRule: Rule = {
 
     if (deferredPages > 0) {
       const check = checks.find((c) => c.name === "date-published");
-      if (check) check.details = { ...check.details, deferredToBylineConsistency: deferredPages };
+      if (check)
+        check.details = {
+          ...check.details,
+          deferredToBylineConsistency: deferredPages,
+        };
     }
 
     return { checks };

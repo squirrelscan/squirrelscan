@@ -59,7 +59,10 @@ export function parseCacheControl(cacheControl: string | null): CacheControl {
   for (const directive of directives) {
     if (directive === "no-cache") result.noCache = true;
     else if (directive === "no-store") result.noStore = true;
-    else if (directive === "must-revalidate" || directive === "proxy-revalidate")
+    else if (
+      directive === "must-revalidate" ||
+      directive === "proxy-revalidate"
+    )
       result.mustRevalidate = true;
     else if (directive === "immutable") result.immutable = true;
     else {
@@ -81,7 +84,9 @@ export function parseCacheControl(cacheControl: string | null): CacheControl {
  * Note: this is the Cache-Control lifetime only — callers that also honor the
  * legacy Expires header should fall back to {@link expiresLifetimeSeconds}.
  */
-export function cacheControlLifetimeSeconds(cc: CacheControl): number | undefined {
+export function cacheControlLifetimeSeconds(
+  cc: CacheControl
+): number | undefined {
   return cc.sMaxAge ?? cc.maxAge;
 }
 

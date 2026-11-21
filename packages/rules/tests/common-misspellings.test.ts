@@ -3,15 +3,16 @@
 // page that quotes a misspelling in code, a brand, or another language must stay
 // clean.
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 import {
   commonMisspellingsRule,
   scanPageForMisspellings,
 } from "../src/content/common-misspellings";
 import { COMMON_MISSPELLINGS } from "../src/content/data/common-misspellings-data";
-import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const page = (url: string, head: string, body: string) => {
   const html = `<!doctype html><html lang="en"><head><title>T</title>${head}</head><body>${body}</body></html>`;
@@ -20,19 +21,29 @@ const page = (url: string, head: string, body: string) => {
 
 async function audit(
   pages: Array<{ url: string; html: string }>,
-  options: Record<string, unknown> = {},
+  options: Record<string, unknown> = {}
 ) {
   const site = {
     baseUrl: pages[0]!.url,
     pages: pages.map((p) => {
       const { document } = parseHTML(p.html);
-      return { url: p.url, statusCode: 200, parsed: { document } as unknown as ParsedPage };
+      return {
+        url: p.url,
+        statusCode: 200,
+        parsed: { document } as unknown as ParsedPage,
+      };
     }),
     robotsTxt: null,
     sitemaps: null,
   } as unknown as SiteData;
   const ctx = {
-    page: { url: pages[0]!.url, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: pages[0]!.url,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site,
     options,
@@ -40,19 +51,26 @@ async function audit(
   return (await commonMisspellingsRule.run(ctx)).checks;
 }
 
-const named = <T extends { name: string }>(checks: T[], name: string) => checks.filter((c) => c.name === name);
+const named = <T extends { name: string }>(checks: T[], name: string) =>
+  checks.filter((c) => c.name === name);
 
 describe("content/common-misspellings", () => {
   test("a misspelling in a paragraph is an info finding with the URL and a context snippet", async () => {
     const checks = await audit([
-      page("https://example.com/a", "", "<p>We will recieve your order soon.</p>"),
+      page(
+        "https://example.com/a",
+        "",
+        "<p>We will recieve your order soon.</p>"
+      ),
     ]);
     const finding = named(checks, "misspelling:recieve");
     expect(finding).toHaveLength(1);
     expect(finding[0]!.status).toBe("info");
     expect(finding[0]!.message).toContain('"recieve" → "receive" on 1 page');
     expect(finding[0]!.items![0]!.id).toBe("https://example.com/a");
-    expect(finding[0]!.items![0]!.snippet).toContain("We will recieve your order");
+    expect(finding[0]!.items![0]!.snippet).toContain(
+      "We will recieve your order"
+    );
   });
 
   test("the same misspelling in a title or an h2 is a warning, not info", async () => {
@@ -80,7 +98,9 @@ describe("content/common-misspellings", () => {
       page("https://example.com/g", "", "<p>She had had enough.</p>"),
     ]);
     expect(named(grammatical, "doubled-word:had had")).toHaveLength(0);
-    expect(grammatical.some((c) => c.name.startsWith("doubled-word"))).toBe(false);
+    expect(grammatical.some((c) => c.name.startsWith("doubled-word"))).toBe(
+      false
+    );
 
     // "What it is is", "as as", "in in", "it it", "on on" and "at at" can be
     // grammatical, so these six are never reported.
@@ -89,7 +109,7 @@ describe("content/common-misspellings", () => {
         "https://example.com/q",
         "",
         "<p>What it is is simple. Keep as as small as you can. Log in in seconds. Make it it. " +
-          "Turn it on on startup. Look at at least two.</p>",
+          "Turn it on on startup. Look at at least two.</p>"
       ),
     ]);
     expect(allowed.some((c) => c.name.startsWith("doubled-word"))).toBe(false);
@@ -113,7 +133,11 @@ describe("content/common-misspellings", () => {
     expect(noLang.some((c) => c.name.startsWith("misspelling"))).toBe(false);
 
     const span = await audit([
-      page("https://example.com/s", "", '<p>Bonjour. <span lang="fr">recieve</span></p>'),
+      page(
+        "https://example.com/s",
+        "",
+        '<p>Bonjour. <span lang="fr">recieve</span></p>'
+      ),
     ]);
     expect(span.some((c) => c.name.startsWith("misspelling"))).toBe(false);
   });
@@ -124,7 +148,7 @@ describe("content/common-misspellings", () => {
         "https://example.com/x",
         "",
         "<p><code>recieve</code> <pre>recieve</pre> <kbd>recieve</kbd></p>" +
-          '<p translate="no">recieve</p><p spellcheck="false">recieve</p>',
+          '<p translate="no">recieve</p><p spellcheck="false">recieve</p>'
       ),
     ]);
     expect(checks.some((c) => c.name.startsWith("misspelling"))).toBe(false);
@@ -136,7 +160,7 @@ describe("content/common-misspellings", () => {
         "https://example.com/y",
         "",
         "<p>See https://example.com/recieve and mail recieve@example.com.</p>" +
-          "<p>The RECIEVE button, the iRecieve app and visit Recieve Street.</p>",
+          "<p>The RECIEVE button, the iRecieve app and visit Recieve Street.</p>"
       ),
     ]);
     expect(checks.some((c) => c.name.startsWith("misspelling"))).toBe(false);
@@ -147,7 +171,7 @@ describe("content/common-misspellings", () => {
       page(
         "https://example.com/u",
         "",
-        "<p>(https://example.com/recieve), <recieve@example.com> and www.recieve.example.</p>",
+        "<p>(https://example.com/recieve), <recieve@example.com> and www.recieve.example.</p>"
       ),
     ]);
     expect(checks.some((c) => c.name.startsWith("misspelling"))).toBe(false);
@@ -157,7 +181,9 @@ describe("content/common-misspellings", () => {
     // 160 KB with no space: the old `\S+@\S+` span regex took seconds on this.
     const run = "a".repeat(160_000);
     const started = performance.now();
-    const checks = await audit([page("https://example.com/long", "", `<p>${run} recieve</p>`)]);
+    const checks = await audit([
+      page("https://example.com/long", "", `<p>${run} recieve</p>`),
+    ]);
     expect(performance.now() - started).toBeLessThan(1000);
     expect(named(checks, "misspelling:recieve")).toHaveLength(1);
   });
@@ -199,7 +225,11 @@ describe("content/common-misspellings", () => {
 
   test("a capitalised word after an opening bracket is a name, not a sentence start", async () => {
     const checks = await audit([
-      page("https://example.com/b", "", "<p>See the portrait (Teh Collection) here.</p>"),
+      page(
+        "https://example.com/b",
+        "",
+        "<p>See the portrait (Teh Collection) here.</p>"
+      ),
     ]);
     expect(checks.some((c) => c.name.startsWith("misspelling"))).toBe(false);
   });
@@ -225,27 +255,33 @@ describe("content/common-misspellings", () => {
       .map((line) => line.split(" ")[0]!);
     // Spread over pages so the per-page occurrence cap does not hide any.
     const pages = words.map((w, n) =>
-      page(`https://example.com/w${n}`, "", `<p>The ${w} here.</p>`),
+      page(`https://example.com/w${n}`, "", `<p>The ${w} here.</p>`)
     );
     const checks = await audit(pages);
-    expect(checks.filter((c) => c.name.startsWith("misspelling:"))).toHaveLength(50);
+    expect(
+      checks.filter((c) => c.name.startsWith("misspelling:"))
+    ).toHaveLength(50);
     const note = named(checks, "common-misspellings-truncated")[0];
     expect(note?.status).toBe("info");
     expect(note?.message).toContain(
-      `${words.length - 50} more misspelled or doubled word(s) not listed`,
+      `${words.length - 50} more misspelled or doubled word(s) not listed`
     );
   });
 
   test("British and American spelling variants are not reported", async () => {
     const checks = await audit([
-      page("https://example.com/v", "", "<p>Our colour palette and how we organise work.</p>"),
+      page(
+        "https://example.com/v",
+        "",
+        "<p>Our colour palette and how we organise work.</p>"
+      ),
     ]);
     expect(checks.some((c) => c.name.startsWith("misspelling"))).toBe(false);
   });
 
   test("the same misspelling on several pages is one finding with a page count and capped examples", async () => {
     const pages = [1, 2, 3, 4, 5].map((n) =>
-      page(`https://example.com/p${n}`, "", "<p>We will recieve it.</p>"),
+      page(`https://example.com/p${n}`, "", "<p>We will recieve it.</p>")
     );
     const checks = await audit(pages);
     const finding = named(checks, "misspelling:recieve");
@@ -255,7 +291,9 @@ describe("content/common-misspellings", () => {
   });
 
   test("a word in ignore_words is never reported", async () => {
-    const pages = [page("https://example.com/i", "", "<p>We will recieve it.</p>")];
+    const pages = [
+      page("https://example.com/i", "", "<p>We will recieve it.</p>"),
+    ];
     const checks = await audit(pages, { ignore_words: ["recieve"] });
     expect(checks.some((c) => c.name.startsWith("misspelling"))).toBe(false);
   });
@@ -272,15 +310,22 @@ describe("content/common-misspellings", () => {
 
 describe("content/common-misspellings on the streamed path", () => {
   test("the rule aggregates the page-time scan from collectedSignals, with no DOM", async () => {
-    const { scanPageForMisspellings } = await import("../src/content/common-misspellings");
+    const { scanPageForMisspellings } =
+      await import("../src/content/common-misspellings");
     const english = parseHTML(
-      page("https://example.com/s1", "", "<p>We will recieve it.</p>").html,
+      page("https://example.com/s1", "", "<p>We will recieve it.</p>").html
     ).document;
     const german = parseHTML(
-      `<!doctype html><html lang="de"><head><title>T</title></head><body><p>recieve</p></body></html>`,
+      `<!doctype html><html lang="de"><head><title>T</title></head><body><p>recieve</p></body></html>`
     ).document;
     const ctx = {
-      page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: "https://example.com/",
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: {} as ParsedPage,
       site: {
         baseUrl: "https://example.com/",
@@ -290,8 +335,14 @@ describe("content/common-misspellings on the streamed path", () => {
       } as unknown as SiteData,
       collectedSignals: {
         pages: [
-          { url: "https://example.com/s1", misspellings: scanPageForMisspellings(english) },
-          { url: "https://example.com/de", misspellings: scanPageForMisspellings(german) },
+          {
+            url: "https://example.com/s1",
+            misspellings: scanPageForMisspellings(english),
+          },
+          {
+            url: "https://example.com/de",
+            misspellings: scanPageForMisspellings(german),
+          },
         ],
       },
       options: {},
@@ -314,8 +365,8 @@ describe("content/common-misspellings per-page caps", () => {
   const scan = (head: string, body: string) =>
     scanPageForMisspellings(
       parseHTML(
-        `<!doctype html><html lang="en"><head><title>T</title>${head}</head><body>${body}</body></html>`,
-      ).document,
+        `<!doctype html><html lang="en"><head><title>T</title>${head}</head><body>${body}</body></html>`
+      ).document
     ).occurrences;
 
   test("misspelt headings past their quota stop scanning and cannot crowd out the body", () => {
@@ -332,7 +383,9 @@ describe("content/common-misspellings per-page caps", () => {
     expect(found.filter((o) => o.prominent)).toHaveLength(25);
     // Thirty misspelt headings, yet exactly the ten body words are body findings:
     // the headings past their quota are not read again as body copy.
-    expect(found.filter((o) => !o.prominent).map((o) => o.word)).toEqual(words.slice(30));
+    expect(found.filter((o) => !o.prominent).map((o) => o.word)).toEqual(
+      words.slice(30)
+    );
   });
 
   test("sixty misspelt headings leave the body's whole quota to the body", () => {
@@ -347,14 +400,21 @@ describe("content/common-misspellings per-page caps", () => {
       .join("");
     const found = scan("", headings + body);
     expect(found).toHaveLength(35);
-    expect(found.filter((o) => !o.prominent).map((o) => o.word)).toEqual(words.slice(60));
+    expect(found.filter((o) => !o.prominent).map((o) => o.word)).toEqual(
+      words.slice(60)
+    );
   });
 
   test("the cap is strict: recording stops at exactly the quota, doubled words included", () => {
     const words = listed(24);
-    const found = scan("", `<p>${words.map((w) => `we ${w}`).join(" ")} the the end and and</p>`);
+    const found = scan(
+      "",
+      `<p>${words.map((w) => `we ${w}`).join(" ")} the the end and and</p>`
+    );
     expect(found).toHaveLength(25);
-    expect(found.filter((o) => o.kind === "doubled").map((o) => o.word)).toEqual(["the the"]);
+    expect(
+      found.filter((o) => o.kind === "doubled").map((o) => o.word)
+    ).toEqual(["the the"]);
   });
 
   test("a word repeated on a page counts once against the quota", () => {
@@ -368,21 +428,27 @@ describe("content/common-misspellings per-page caps", () => {
   test("code and foreign-language text inside a heading are not judged", () => {
     const found = scan(
       "",
-      '<h2>Use <code>teh</code> flag</h2><h3>Le <span lang="fr">recieve</span></h3><h2>We recieve</h2>',
+      '<h2>Use <code>teh</code> flag</h2><h3>Le <span lang="fr">recieve</span></h3><h2>We recieve</h2>'
     );
-    expect(found).toEqual([expect.objectContaining({ word: "recieve", prominent: true })]);
+    expect(found).toEqual([
+      expect.objectContaining({ word: "recieve", prominent: true }),
+    ]);
     expect(found[0]!.context).toBe("We recieve");
   });
 
   test("a word in the title and the body is one prominent occurrence", () => {
     const found = scan("", "<p>We recieve it.</p>");
-    expect(found).toEqual([expect.objectContaining({ word: "recieve", prominent: false })]);
+    expect(found).toEqual([
+      expect.objectContaining({ word: "recieve", prominent: false }),
+    ]);
     const both = scanPageForMisspellings(
       parseHTML(
-        `<!doctype html><html lang="en"><head><title>Recieve</title></head><body><p>We recieve it.</p></body></html>`,
-      ).document,
+        `<!doctype html><html lang="en"><head><title>Recieve</title></head><body><p>We recieve it.</p></body></html>`
+      ).document
     ).occurrences;
-    expect(both).toEqual([expect.objectContaining({ word: "recieve", prominent: true })]);
+    expect(both).toEqual([
+      expect.objectContaining({ word: "recieve", prominent: true }),
+    ]);
   });
 });
 
@@ -402,7 +468,7 @@ describe("content/common-misspellings bundled data", () => {
     // Every runtime that imports the rules (compiled CLI, test runner, a Workers
     // bundle) loads a string literal the same way; an import attribute is not.
     const source = await Bun.file(
-      new URL("../src/content/common-misspellings.ts", import.meta.url),
+      new URL("../src/content/common-misspellings.ts", import.meta.url)
     ).text();
     expect(source).not.toMatch(/\bwith\s*\{\s*type:/);
     expect(source).not.toMatch(/from\s+["'][^"']*\.json["']/);

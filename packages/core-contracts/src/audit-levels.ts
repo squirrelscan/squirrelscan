@@ -82,7 +82,9 @@ export const AUDIT_SETTING_KEYS = [
 // not narrowed to one branch.
 export const EXTERNAL_LINKS_DEFAULT_ON: boolean = true;
 
-export const AUDIT_LEVEL_PRESETS: Readonly<Record<AuditLevel, Readonly<AuditSettings>>> = {
+export const AUDIT_LEVEL_PRESETS: Readonly<
+  Record<AuditLevel, Readonly<AuditSettings>>
+> = {
   quick: {
     pages: COVERAGE_PAGE_LIMITS.quick,
     crawlStrategy: "seed-and-sitemap",
@@ -121,7 +123,8 @@ export const AUDIT_LEVEL_COPY: Readonly<
   },
   surface: {
     label: "Surface",
-    summary: "One page per URL pattern, with the cloud checks. The default for most sites.",
+    summary:
+      "One page per URL pattern, with the cloud checks. The default for most sites.",
   },
   full: {
     label: "Full",
@@ -134,7 +137,9 @@ export const AUDIT_LEVEL_COPY: Readonly<
 };
 
 /** Words for each setting, for any surface that lists or names one. */
-export const AUDIT_SETTING_COPY: Readonly<Record<AuditSettingKey, { label: string }>> = {
+export const AUDIT_SETTING_COPY: Readonly<
+  Record<AuditSettingKey, { label: string }>
+> = {
   pages: { label: "Pages" },
   crawlStrategy: { label: "Crawl strategy" },
   cloudChecks: { label: "Cloud checks" },
@@ -177,10 +182,17 @@ export interface ResolvedAuditSettings {
  * settings that ran, not the level's defaults. Offline is a limit on the run, so
  * `level`, `basedOn` and `changes` keep describing what was asked for.
  */
-export function offlineAuditSettings(resolved: ResolvedAuditSettings): ResolvedAuditSettings {
+export function offlineAuditSettings(
+  resolved: ResolvedAuditSettings
+): ResolvedAuditSettings {
   return {
     ...resolved,
-    settings: { ...resolved.settings, cloudChecks: false, render: "off", externalLinks: false },
+    settings: {
+      ...resolved.settings,
+      cloudChecks: false,
+      render: "off",
+      externalLinks: false,
+    },
     offline: true,
   };
 }
@@ -190,23 +202,28 @@ export function offlineAuditSettings(resolved: ResolvedAuditSettings): ResolvedA
  * only the URLs it was given and checks the links on them like any audit (#1778), so the settings are
  * unchanged: `externalLinks` is what the level and flags say.
  */
-export function targetedAuditSettings(resolved: ResolvedAuditSettings): ResolvedAuditSettings {
+export function targetedAuditSettings(
+  resolved: ResolvedAuditSettings
+): ResolvedAuditSettings {
   return { ...resolved, targeted: true };
 }
 
 /** Settings of a level with overrides applied. Pages are clamped to 1..AUDIT_MAX_PAGES. */
 export function resolveAuditSettings(
   basedOn: AuditLevel,
-  overrides: Partial<AuditSettings> = {},
+  overrides: Partial<AuditSettings> = {}
 ): ResolvedAuditSettings {
   const preset = AUDIT_LEVEL_PRESETS[basedOn];
   const merged: AuditSettings = { ...preset };
   for (const key of AUDIT_SETTING_KEYS) {
     const value = overrides[key];
-    if (value !== undefined) (merged as unknown as Record<string, unknown>)[key] = value;
+    if (value !== undefined)
+      (merged as unknown as Record<string, unknown>)[key] = value;
   }
   merged.pages = clampAuditPages(merged.pages);
-  const changes = AUDIT_SETTING_KEYS.filter((key) => merged[key] !== preset[key]);
+  const changes = AUDIT_SETTING_KEYS.filter(
+    (key) => merged[key] !== preset[key]
+  );
   return {
     level: changes.length === 0 ? basedOn : "custom",
     basedOn,
@@ -236,13 +253,15 @@ export function crawlStrategyCoverageMode(strategy: CrawlStrategy): AuditLevel {
 export function levelOfSettings(settings: AuditSettings): AuditLevelId {
   for (const level of AUDIT_LEVELS) {
     const preset = AUDIT_LEVEL_PRESETS[level];
-    if (AUDIT_SETTING_KEYS.every((key) => settings[key] === preset[key])) return level;
+    if (AUDIT_SETTING_KEYS.every((key) => settings[key] === preset[key]))
+      return level;
   }
   return "custom";
 }
 
 export function clampAuditPages(pages: number): number {
-  if (!Number.isFinite(pages)) return AUDIT_LEVEL_PRESETS[DEFAULT_AUDIT_LEVEL].pages;
+  if (!Number.isFinite(pages))
+    return AUDIT_LEVEL_PRESETS[DEFAULT_AUDIT_LEVEL].pages;
   return Math.min(AUDIT_MAX_PAGES, Math.max(1, Math.trunc(pages)));
 }
 
@@ -254,12 +273,22 @@ export function clampAuditPages(pages: number): number {
 export function parseAuditLevel(raw: string): AuditLevel | null {
   const value = raw.trim().toLowerCase();
   const aliased = value === "fast" ? "quick" : value;
-  return (AUDIT_LEVELS as readonly string[]).includes(aliased) ? (aliased as AuditLevel) : null;
+  return (AUDIT_LEVELS as readonly string[]).includes(aliased)
+    ? (aliased as AuditLevel)
+    : null;
 }
 
-const CRAWL_STRATEGIES: readonly CrawlStrategy[] = ["seed-and-sitemap", "sampled", "all"];
+const CRAWL_STRATEGIES: readonly CrawlStrategy[] = [
+  "seed-and-sitemap",
+  "sampled",
+  "all",
+];
 const RENDER_POLICIES: readonly RenderPolicy[] = ["off", "auto", "all"];
-const PROBE_INTENSITIES: readonly ProbeIntensity[] = ["passive", "active", "aggressive"];
+const PROBE_INTENSITIES: readonly ProbeIntensity[] = [
+  "passive",
+  "active",
+  "aggressive",
+];
 
 /**
  * Read a stored snapshot (a report's `auditLevel`) back, or null when it is not
@@ -269,29 +298,41 @@ const PROBE_INTENSITIES: readonly ProbeIntensity[] = ["passive", "active", "aggr
  * `changes` are kept only when they are valid values, else recomputed. Every
  * string that comes back is one of this module's own words.
  */
-export function parseResolvedAuditSettings(value: unknown): ResolvedAuditSettings | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+export function parseResolvedAuditSettings(
+  value: unknown
+): ResolvedAuditSettings | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return null;
   const v = value as Record<string, unknown>;
-  const basedOn = typeof v.basedOn === "string" ? parseAuditLevel(v.basedOn) : null;
+  const basedOn =
+    typeof v.basedOn === "string" ? parseAuditLevel(v.basedOn) : null;
   if (basedOn === null) return null;
   const raw =
-    typeof v.settings === "object" && v.settings !== null && !Array.isArray(v.settings)
+    typeof v.settings === "object" &&
+    v.settings !== null &&
+    !Array.isArray(v.settings)
       ? (v.settings as Record<string, unknown>)
       : {};
   const overrides: Partial<AuditSettings> = {};
-  if (typeof raw.pages === "number" && Number.isFinite(raw.pages)) overrides.pages = raw.pages;
+  if (typeof raw.pages === "number" && Number.isFinite(raw.pages))
+    overrides.pages = raw.pages;
   if (CRAWL_STRATEGIES.includes(raw.crawlStrategy as CrawlStrategy)) {
     overrides.crawlStrategy = raw.crawlStrategy as CrawlStrategy;
   }
-  if (typeof raw.cloudChecks === "boolean") overrides.cloudChecks = raw.cloudChecks;
-  if (RENDER_POLICIES.includes(raw.render as RenderPolicy)) overrides.render = raw.render as RenderPolicy;
-  if (typeof raw.externalLinks === "boolean") overrides.externalLinks = raw.externalLinks;
+  if (typeof raw.cloudChecks === "boolean")
+    overrides.cloudChecks = raw.cloudChecks;
+  if (RENDER_POLICIES.includes(raw.render as RenderPolicy))
+    overrides.render = raw.render as RenderPolicy;
+  if (typeof raw.externalLinks === "boolean")
+    overrides.externalLinks = raw.externalLinks;
   if (PROBE_INTENSITIES.includes(raw.probe as ProbeIntensity)) {
     overrides.probe = raw.probe as ProbeIntensity;
   }
   const resolved = resolveAuditSettings(basedOn, overrides);
   const level =
-    v.level === "custom" || (typeof v.level === "string" && (AUDIT_LEVELS as readonly string[]).includes(v.level))
+    v.level === "custom" ||
+    (typeof v.level === "string" &&
+      (AUDIT_LEVELS as readonly string[]).includes(v.level))
       ? (v.level as AuditLevelId)
       : resolved.level;
   const changes = Array.isArray(v.changes)
@@ -316,11 +357,20 @@ export function parseResolvedAuditSettings(value: unknown): ResolvedAuditSetting
  * checks them, and pays for them, unless its owner turned them off. They are
  * `custom` settings by construction, except where they happen to equal a level.
  */
-export const LEGACY_CLOUD_DEPTH_PROFILES = ["fast", "surface", "deep", "full"] as const;
-export type LegacyCloudDepthProfile = (typeof LEGACY_CLOUD_DEPTH_PROFILES)[number];
+export const LEGACY_CLOUD_DEPTH_PROFILES = [
+  "fast",
+  "surface",
+  "deep",
+  "full",
+] as const;
+export type LegacyCloudDepthProfile =
+  (typeof LEGACY_CLOUD_DEPTH_PROFILES)[number];
 
 const LEGACY_CLOUD_DEPTHS: Readonly<
-  Record<LegacyCloudDepthProfile, { basedOn: AuditLevel; settings: AuditSettings }>
+  Record<
+    LegacyCloudDepthProfile,
+    { basedOn: AuditLevel; settings: AuditSettings }
+  >
 > = {
   fast: {
     basedOn: "quick",
@@ -369,7 +419,9 @@ const LEGACY_CLOUD_DEPTHS: Readonly<
 };
 
 /** Parse an old cloud depth name, or null. */
-export function parseLegacyCloudDepth(raw: string): LegacyCloudDepthProfile | null {
+export function parseLegacyCloudDepth(
+  raw: string
+): LegacyCloudDepthProfile | null {
   const value = raw.trim().toLowerCase();
   return (LEGACY_CLOUD_DEPTH_PROFILES as readonly string[]).includes(value)
     ? (value as LegacyCloudDepthProfile)
@@ -377,7 +429,9 @@ export function parseLegacyCloudDepth(raw: string): LegacyCloudDepthProfile | nu
 }
 
 /** The settings an old cloud depth name stood for, and the level it was closest to. */
-export function legacyCloudDepthSettings(profile: LegacyCloudDepthProfile): ResolvedAuditSettings {
+export function legacyCloudDepthSettings(
+  profile: LegacyCloudDepthProfile
+): ResolvedAuditSettings {
   const { basedOn, settings } = LEGACY_CLOUD_DEPTHS[profile];
   return resolveAuditSettings(basedOn, settings);
 }
@@ -412,7 +466,7 @@ function wholePageLimit(limit: number): number {
  */
 export function effectiveAuditSettings(
   settings: AuditSettings,
-  limits: AuditLimits = {},
+  limits: AuditLimits = {}
 ): EffectiveAuditSettings {
   let pages = clampAuditPages(settings.pages);
   let pagesLimitedBy: AuditPageLimitedBy | null = null;
@@ -422,9 +476,16 @@ export function effectiveAuditSettings(
     pages = wholePageLimit(limits.planMaxPages);
     pagesLimitedBy = "plan";
   }
-  if (limits.affordablePages !== undefined && !(pages <= limits.affordablePages)) {
+  if (
+    limits.affordablePages !== undefined &&
+    !(pages <= limits.affordablePages)
+  ) {
     pages = wholePageLimit(limits.affordablePages);
     pagesLimitedBy = "balance";
   }
-  return { settings: { ...settings, pages }, requestedPages: settings.pages, pagesLimitedBy };
+  return {
+    settings: { ...settings, pages },
+    requestedPages: settings.pages,
+    pagesLimitedBy,
+  };
 }

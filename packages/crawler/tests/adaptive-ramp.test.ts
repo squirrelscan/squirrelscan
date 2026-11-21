@@ -5,7 +5,11 @@ import { createHostBackoff } from "../src/host-backoff";
 
 const HOST = "origin.example.com";
 
-function feed(registry: ReturnType<typeof createHostBackoff>, n: number, rampAllowed = true) {
+function feed(
+  registry: ReturnType<typeof createHostBackoff>,
+  n: number,
+  rampAllowed = true
+) {
   for (let i = 0; i < n; i++) registry.noteSuccess(HOST, { rampAllowed });
 }
 

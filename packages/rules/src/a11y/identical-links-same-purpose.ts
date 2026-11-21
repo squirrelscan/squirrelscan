@@ -1,6 +1,7 @@
 // a11y/identical-links-same-purpose - Identical links go to same destination
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const MAX_CONTEXT_ANCESTORS = 64;
@@ -40,7 +41,7 @@ function accessibleName(link: Element, doc: Document): string {
 function elementContext(
   element: Element,
   doc: Document,
-  cache: Map<Element, ElementContext>,
+  cache: Map<Element, ElementContext>
 ): ElementContext {
   const cached = cache.get(element);
   if (cached) return cached;
@@ -66,14 +67,18 @@ function elementContext(
 function linkContext(
   link: Element,
   doc: Document,
-  contextCache: Map<Element, ElementContext>,
+  contextCache: Map<Element, ElementContext>
 ): string {
   let ancestor = link.parentElement;
 
   for (let depth = 0; ancestor && depth < MAX_CONTEXT_ANCESTORS; depth++) {
     const context = elementContext(ancestor, doc, contextCache);
     if (context.label) return context.label;
-    if (context.leadingLink && context.leadingLink !== link && context.leadingLinkLabel) {
+    if (
+      context.leadingLink &&
+      context.leadingLink !== link &&
+      context.leadingLinkLabel
+    ) {
       return context.leadingLinkLabel;
     }
 
@@ -106,7 +111,10 @@ export const identicalLinksSamePurposeRule: Rule = {
     const checks: CheckResult[] = [];
 
     const links = doc.querySelectorAll("a[href]");
-    const linkGroups = new Map<string, { text: string; context: string; hrefs: Set<string> }>();
+    const linkGroups = new Map<
+      string,
+      { text: string; context: string; hrefs: Set<string> }
+    >();
     const contextCache = new Map<Element, ElementContext>();
 
     for (const link of links) {
@@ -141,7 +149,9 @@ export const identicalLinksSamePurposeRule: Rule = {
         // Same text, different destinations
         const destinations = Array.from(hrefs);
         const contextLabel = context ? ` in "${context}"` : "";
-        inconsistentLinks.push(`"${text}"${contextLabel} → ${destinations.length} different URLs`);
+        inconsistentLinks.push(
+          `"${text}"${contextLabel} → ${destinations.length} different URLs`
+        );
       }
     }
 
@@ -153,7 +163,9 @@ export const identicalLinksSamePurposeRule: Rule = {
         items: inconsistentLinks.slice(0, 10).map((id) => ({ id })),
         details: {
           suggestion: "Make link text unique to differentiate destinations",
-          ...(inconsistentLinks.length > 10 ? { additional: inconsistentLinks.length - 10 } : {}),
+          ...(inconsistentLinks.length > 10
+            ? { additional: inconsistentLinks.length - 10 }
+            : {}),
         },
       });
     } else if (links.length > 0) {

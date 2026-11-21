@@ -33,7 +33,11 @@
  * Keys that resolve to `Object.prototype` (or repoint a prototype) when used
  * with bracket notation on an object that inherits from `Object.prototype`.
  */
-export const UNSAFE_OBJECT_KEYS: readonly string[] = ["__proto__", "constructor", "prototype"];
+export const UNSAFE_OBJECT_KEYS: readonly string[] = [
+  "__proto__",
+  "constructor",
+  "prototype",
+];
 
 const UNSAFE_OBJECT_KEY_SET: ReadonlySet<string> = new Set(UNSAFE_OBJECT_KEYS);
 

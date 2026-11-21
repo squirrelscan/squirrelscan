@@ -2,13 +2,16 @@
 // without serialising the rest, must be exactly the first characters of
 // `innerHTML`. a11y/skip-link's early-heading test reads them.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { skipLinkRule } from "../src/a11y/skip-link";
-import { serializeChildren, serializedPrefix } from "../src/shared/serialized-prefix";
-import type { ParsedPage, RuleContext } from "../src/types";
+import {
+  serializeChildren,
+  serializedPrefix,
+} from "../src/shared/serialized-prefix";
 import { CASES } from "./security/leaked-secrets/cases";
 
 const URL_ = "https://example.com/";
@@ -39,7 +42,8 @@ describe("serializedPrefix", () => {
       const body = bodyOf(html);
       expect(body).not.toBeNull();
       const full = body!.innerHTML;
-      for (const n of LENGTHS) expect(serializedPrefix(body!, n).slice(0, n)).toBe(full.slice(0, n));
+      for (const n of LENGTHS)
+        expect(serializedPrefix(body!, n).slice(0, n)).toBe(full.slice(0, n));
     }
   });
 
@@ -73,7 +77,9 @@ describe("a11y/skip-link early heading, read from the prefix", () => {
       parsed: parsePage(html, URL_) as ParsedPage,
       options: {},
     };
-    return skipLinkRule.run(ctx) as { checks: Array<{ status: string; details?: Record<string, unknown> }> };
+    return skipLinkRule.run(ctx) as {
+      checks: Array<{ status: string; details?: Record<string, unknown> }>;
+    };
   };
 
   test("a heading behind a large inline script in the first 2000 characters still counts", () => {
@@ -86,7 +92,9 @@ describe("a11y/skip-link early heading, read from the prefix", () => {
   test("a heading past 2000 characters does not", () => {
     const html = `<!doctype html><html><body><main><script>${"x".repeat(2500)}</script><h1>Title</h1></main></body></html>`;
     const [check] = run(html).checks;
-    expect(check?.details?.methods ?? check?.details?.found).not.toContain("early heading");
+    expect(check?.details?.methods ?? check?.details?.found).not.toContain(
+      "early heading"
+    );
   });
 });
 
@@ -99,8 +107,14 @@ describe("serializeChildren", () => {
       pages++;
       expect(serializeChildren(doc)).toBe(doc.toString());
       // Taking apart every element that holds a script, each script's text put back as it is, changes nothing either.
-      const scripts = new Map(Array.from(doc.querySelectorAll("script")).map((s) => [s, s.textContent ?? ""] as const));
-      expect(serializeChildren(doc, { replaceText: scripts })).toBe(doc.toString());
+      const scripts = new Map(
+        Array.from(doc.querySelectorAll("script")).map(
+          (s) => [s, s.textContent ?? ""] as const
+        )
+      );
+      expect(serializeChildren(doc, { replaceText: scripts })).toBe(
+        doc.toString()
+      );
     }
     expect(pages).toBeGreaterThan(1000);
   });
@@ -109,7 +123,9 @@ describe("serializeChildren", () => {
     const html = `<!doctype html><html><head><script type="a" data-x="q">var a=1;</script><style>.x{}</style></head><body><script>var b=2;</script><p>t</p></body></html>`;
     const doc = parsePage(html, URL_).document!;
     const scripts = Array.from(doc.querySelectorAll("script"));
-    const out = serializeChildren(doc, { replaceText: new Map([[scripts[1]!, "XX"]]) });
+    const out = serializeChildren(doc, {
+      replaceText: new Map([[scripts[1]!, "XX"]]),
+    });
     expect(out).toBe(doc.toString().replace("var b=2;", "XX"));
   });
 });

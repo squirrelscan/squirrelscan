@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderJson } from "../src/output/json";
 
 const report = (targeted: unknown): AuditReport =>
@@ -15,7 +16,13 @@ const report = (targeted: unknown): AuditReport =>
     warnings: 0,
     failed: 0,
     ruleResults: {},
-    scanScope: { origin: "cli", maxPages: 50, pagesCrawled: 2, capped: false, targeted },
+    scanScope: {
+      origin: "cli",
+      maxPages: 50,
+      pagesCrawled: 2,
+      capped: false,
+      targeted,
+    },
   }) as unknown as AuditReport;
 
 const meta = (r: AuditReport) =>
@@ -32,16 +39,24 @@ describe("meta.targeted", () => {
         requested: 4,
         audited: 2,
         unaudited: [
-          { url: "https://example.com/old", reason: "redirected", destination: "https://example.com/new" },
+          {
+            url: "https://example.com/old",
+            reason: "redirected",
+            destination: "https://example.com/new",
+          },
           { url: "https://example.com/private", reason: "robots_disallowed" },
         ],
-      }),
+      })
     );
     expect(m.targeted).toEqual({
       requested: 4,
       audited: 2,
       unaudited: [
-        { url: "https://example.com/old", reason: "redirected", destination: "https://example.com/new" },
+        {
+          url: "https://example.com/old",
+          reason: "redirected",
+          destination: "https://example.com/new",
+        },
         { url: "https://example.com/private", reason: "robots_disallowed" },
       ],
     });
@@ -54,13 +69,24 @@ describe("meta.targeted", () => {
         audited: 1,
         unaudited: [
           { url: 7, reason: "x" },
-          { url: "https://example.com/a", reason: "a long free text reason with <script> and symbols!!" },
-          ...Array.from({ length: 150 }, (_, i) => ({ url: `https://example.com/${i}`, reason: "over_max_pages" })),
+          {
+            url: "https://example.com/a",
+            reason: "a long free text reason with <script> and symbols!!",
+          },
+          ...Array.from({ length: 150 }, (_, i) => ({
+            url: `https://example.com/${i}`,
+            reason: "over_max_pages",
+          })),
         ],
-      }),
+      })
     ) as { targeted: { unaudited: Array<{ url: string; reason: string }> } };
     expect(m.targeted.unaudited).toHaveLength(100);
-    expect(m.targeted.unaudited[0]).toEqual({ url: "https://example.com/a", reason: "other" });
-    expect(meta(report({ requested: "3", audited: 1 }))).not.toHaveProperty("targeted");
+    expect(m.targeted.unaudited[0]).toEqual({
+      url: "https://example.com/a",
+      reason: "other",
+    });
+    expect(meta(report({ requested: "3", audited: 1 }))).not.toHaveProperty(
+      "targeted"
+    );
   });
 });

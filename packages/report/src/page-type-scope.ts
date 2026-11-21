@@ -41,7 +41,11 @@ export interface PageTypeScopeCheck {
  * region or page-type counts would compare two populations (pub#857, pub#860).
  */
 export function hasCarriedPages(check: PageTypeScopeCheck): boolean {
-  return (check.carriedPages?.length ?? 0) > 0 || (check.carriedCount ?? 0) > 0 || check.provenance === "carried";
+  return (
+    (check.carriedPages?.length ?? 0) > 0 ||
+    (check.carriedCount ?? 0) > 0 ||
+    check.provenance === "carried"
+  );
 }
 
 export interface PageTypeScope {
@@ -54,10 +58,15 @@ export interface PageTypeScope {
 }
 
 const count = (value: unknown): number =>
-  typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : 0;
 
 /** Audited pages the report counts under the label; 0 when it counts none or has no structure. */
-function typePagesOf(structure: ReportStructure | undefined, label: string): number {
+function typePagesOf(
+  structure: ReportStructure | undefined,
+  label: string
+): number {
   const counts = structure?.pageTypes?.counts;
   if (!Array.isArray(counts)) return 0;
   return count(counts.find((row) => row?.label === label)?.pages);
@@ -79,16 +88,18 @@ function typePagesOf(structure: ReportStructure | undefined, label: string): num
 export function checkPageTypeScope(
   check: PageTypeScopeCheck,
   pages: number,
-  structure: ReportStructure | undefined,
+  structure: ReportStructure | undefined
 ): PageTypeScope | undefined {
   // Findings carried from earlier audits sit on pages this audit did not look at, so they are
   // not in `structure.pageTypes` and the share would compare two populations: never scoped.
   if (hasCarriedPages(check)) return undefined;
   const details = check.details;
-  if (!details || details.pageTypeSource !== PAGE_TYPE_SCOPE_SOURCE) return undefined;
+  if (!details || details.pageTypeSource !== PAGE_TYPE_SCOPE_SOURCE)
+    return undefined;
   const pageType = details.pageType;
   // A label the report may print: plain lowercase words, as pageTypePhrase accepts.
-  if (typeof pageType !== "string" || pageTypePhrase(pageType, 1) === undefined) return undefined;
+  if (typeof pageType !== "string" || pageTypePhrase(pageType, 1) === undefined)
+    return undefined;
   const affected = count(pages);
   if (affected < PAGE_TYPE_SCOPE_MIN_PAGES) return undefined;
   const typePages = typePagesOf(structure, pageType);
@@ -99,7 +110,9 @@ export function checkPageTypeScope(
 
 /** "On all 9 documentation pages", or "On 9 of 11 documentation pages". */
 export function pageTypeScopeLine(scope: PageTypeScope): string {
-  const named = pageTypePhrase(scope.pageType, scope.typePages) ?? `${scope.typePages} pages`;
+  const named =
+    pageTypePhrase(scope.pageType, scope.typePages) ??
+    `${scope.typePages} pages`;
   return scope.pages === scope.typePages
     ? `On all ${named}`
     : `On ${structureNumber(scope.pages)} of ${named}`;
@@ -107,5 +120,9 @@ export function pageTypeScopeLine(scope: PageTypeScope): string {
 
 /** The scope as data for JSON and XML: `{ pageType, pages, typePages }`. */
 export function pageTypeScopeData(scope: PageTypeScope): PageTypeScope {
-  return { pageType: scope.pageType, pages: scope.pages, typePages: scope.typePages };
+  return {
+    pageType: scope.pageType,
+    pages: scope.pages,
+    typePages: scope.typePages,
+  };
 }

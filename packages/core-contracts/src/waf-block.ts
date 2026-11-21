@@ -73,10 +73,14 @@ export interface WafSuspectSummary {
 /** Fold one suspect page into a summary, never growing the list past its cap. */
 export function addWafSuspectPage(
   summary: WafSuspectSummary | undefined,
-  page: WafSuspectPage,
+  page: WafSuspectPage
 ): WafSuspectSummary {
   const next: WafSuspectSummary = summary
-    ? { ...summary, pages: [...summary.pages], providers: [...summary.providers] }
+    ? {
+        ...summary,
+        pages: [...summary.pages],
+        providers: [...summary.providers],
+      }
     : { total: 0, pages: [], providers: [] };
   if (
     next.pages.length < MAX_WAF_BLOCKED_PAGES &&
@@ -85,7 +89,8 @@ export function addWafSuspectPage(
     next.pages.push(page);
   }
   next.total += 1;
-  if (page.provider && !next.providers.includes(page.provider)) next.providers.push(page.provider);
+  if (page.provider && !next.providers.includes(page.provider))
+    next.providers.push(page.provider);
   return next;
 }
 
@@ -114,10 +119,14 @@ export function wafBlockedPage(input: {
 export function addWafBlockedPage(
   summary: WafBlockedSummary | undefined,
   page: WafBlockedPage,
-  isSeed: boolean,
+  isSeed: boolean
 ): WafBlockedSummary {
   const next: WafBlockedSummary = summary
-    ? { ...summary, pages: [...summary.pages], providers: [...summary.providers] }
+    ? {
+        ...summary,
+        pages: [...summary.pages],
+        providers: [...summary.providers],
+      }
     : { total: 0, pages: [], providers: [] };
   if (isSeed) {
     // The seed is one page however many URLs reach it (the URL the user gave, and where
@@ -131,7 +140,8 @@ export function addWafBlockedPage(
     next.pages.push(page);
   }
   next.total += 1;
-  if (page.provider && !next.providers.includes(page.provider)) next.providers.push(page.provider);
+  if (page.provider && !next.providers.includes(page.provider))
+    next.providers.push(page.provider);
   return next;
 }
 
@@ -179,9 +189,10 @@ export function wafBlockHeadline(page: WafBlockedPage): string {
 /** The coverage line for blocked pages that did not stop the audit. */
 export function wafBlockedPagesNotice(
   summary: Pick<WafBlockedSummary, "total" | "providers">,
-  pagesAudited: number,
+  pagesAudited: number
 ): string {
-  const by = summary.providers.length > 0 ? ` by ${summary.providers.join(", ")}` : "";
+  const by =
+    summary.providers.length > 0 ? ` by ${summary.providers.join(", ")}` : "";
   const of = pagesAudited + summary.total;
   return `${summary.total} of ${of} pages blocked${by}. Blocked pages were not audited and do not count in the score.`;
 }

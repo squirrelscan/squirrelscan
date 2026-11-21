@@ -18,16 +18,30 @@ type Node =
 const EMPTY: Node = { t: "lit", s: "" };
 const SAFE = [..."abcxyz019_- "];
 
-function hexChar(src: string, at: number, len: number): { s: string; next: number } {
+function hexChar(
+  src: string,
+  at: number,
+  len: number
+): { s: string; next: number } {
   const digits = src.slice(at, at + len);
-  return { s: String.fromCodePoint(Number.parseInt(digits, 16)), next: at + len };
+  return {
+    s: String.fromCodePoint(Number.parseInt(digits, 16)),
+    next: at + len,
+  };
 }
 
 /** An escape after the backslash at `i`: its node (or a literal) and the index after it. */
-function parseEscape(src: string, i: number, inClass: boolean): { node: Node; next: number } {
+function parseEscape(
+  src: string,
+  i: number,
+  inClass: boolean
+): { node: Node; next: number } {
   const c = src[i + 1]!;
   let at = i + 2;
-  const lit = (s: string): { node: Node; next: number } => ({ node: { t: "lit", s }, next: at });
+  const lit = (s: string): { node: Node; next: number } => ({
+    node: { t: "lit", s },
+    next: at,
+  });
   switch (c) {
     case "d":
       return lit("7");
@@ -59,13 +73,24 @@ function parseEscape(src: string, i: number, inClass: boolean): { node: Node; ne
     case "u": {
       if (src[at] === "{") {
         const close = src.indexOf("}", at);
-        return { node: { t: "lit", s: String.fromCodePoint(Number.parseInt(src.slice(at + 1, close), 16)) }, next: close + 1 };
+        return {
+          node: {
+            t: "lit",
+            s: String.fromCodePoint(
+              Number.parseInt(src.slice(at + 1, close), 16)
+            ),
+          },
+          next: close + 1,
+        };
       }
       const r = hexChar(src, at, 4);
       return { node: { t: "lit", s: r.s }, next: r.next };
     }
     case "c":
-      return { node: { t: "lit", s: String.fromCharCode(src.charCodeAt(at) % 32) }, next: at + 1 };
+      return {
+        node: { t: "lit", s: String.fromCharCode(src.charCodeAt(at) % 32) },
+        next: at + 1,
+      };
     case "p":
     case "P": {
       const close = src.indexOf("}", at);
@@ -124,7 +149,10 @@ function parseSeq(src: string, from: number): { node: Node; next: number } {
         else if (src[j + 1] === "=" || src[j + 1] === "!") {
           look = true;
           j += 2;
-        } else if (src[j + 1] === "<" && (src[j + 2] === "=" || src[j + 2] === "!")) {
+        } else if (
+          src[j + 1] === "<" &&
+          (src[j + 2] === "=" || src[j + 2] === "!")
+        ) {
           look = true;
           j += 3;
         } else if (src[j + 1] === "<") j = src.indexOf(">", j) + 1;
@@ -140,7 +168,7 @@ function parseSeq(src: string, from: number): { node: Node; next: number } {
       const e = parseEscape(src, i, false);
       atom = e.node;
       i = e.next;
-    } else if (c === "." ) {
+    } else if (c === ".") {
       atom = { t: "lit", s: "a" };
       i++;
     } else if (c === "^" || c === "$") {
@@ -166,8 +194,13 @@ function parseSeq(src: string, from: number): { node: Node; next: number } {
         i = close + 1;
       }
     }
-    if (src[i] === "?" && (q === "*" || q === "+" || q === "}" || q === "?")) i++;
-    items.push(min === 1 && max === 1 ? atom : { t: "rep", n: atom, min, max: Math.min(max, min + 2) });
+    if (src[i] === "?" && (q === "*" || q === "+" || q === "}" || q === "?"))
+      i++;
+    items.push(
+      min === 1 && max === 1
+        ? atom
+        : { t: "rep", n: atom, min, max: Math.min(max, min + 2) }
+    );
   }
   return { node: { t: "seq", items }, next: i };
 }
@@ -200,15 +233,31 @@ function makeRng(seed: number): () => number {
 function generate(node: Node, rng: () => number, ci: boolean): string {
   switch (node.t) {
     case "lit":
-      return ci ? [...node.s].map((ch) => (rng() < 0.3 ? (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase()) : ch)).join("") : node.s;
+      return ci
+        ? [...node.s]
+            .map((ch) =>
+              rng() < 0.3
+                ? ch === ch.toLowerCase()
+                  ? ch.toUpperCase()
+                  : ch.toLowerCase()
+                : ch
+            )
+            .join("")
+        : node.s;
     case "set": {
-      const pool = node.negated ? SAFE.filter((ch) => !node.chars.includes(ch)) : node.chars;
+      const pool = node.negated
+        ? SAFE.filter((ch) => !node.chars.includes(ch))
+        : node.chars;
       return pool.length === 0 ? "" : pool[Math.floor(rng() * pool.length)]!;
     }
     case "seq":
       return node.items.map((n) => generate(n, rng, ci)).join("");
     case "alt":
-      return generate(node.opts[Math.floor(rng() * node.opts.length)]!, rng, ci);
+      return generate(
+        node.opts[Math.floor(rng() * node.opts.length)]!,
+        rng,
+        ci
+      );
     case "rep": {
       const count = node.min + Math.floor(rng() * (node.max - node.min + 1));
       let out = "";
@@ -222,7 +271,10 @@ function generate(node: Node, rng: () => number, ci: boolean): string {
  * Strings the pattern matches (generated, then checked with the pattern itself) in which the hint
  * derived for the alternative is missing. Empty when the derivation is sound for the samples tried.
  */
-function violations(pattern: RegExp, samples = 40): { checked: number; missing: string[] } {
+function violations(
+  pattern: RegExp,
+  samples = 40
+): { checked: number; missing: string[] } {
   const ci = pattern.flags.includes("i");
   const missing: string[] = [];
   let checked = 0;
@@ -237,7 +289,10 @@ function violations(pattern: RegExp, samples = 40): { checked: number; missing: 
       if (!re.test(sample)) continue;
       checked++;
       const haystack = ci ? sample.toLowerCase() : sample;
-      if (!hints.some((h) => haystack.includes(h))) missing.push(`${JSON.stringify(sample)} lacks ${JSON.stringify(hints)} (${alt})`);
+      if (!hints.some((h) => haystack.includes(h)))
+        missing.push(
+          `${JSON.stringify(sample)} lacks ${JSON.stringify(hints)} (${alt})`
+        );
     }
   }
   return { checked, missing };
@@ -262,13 +317,25 @@ describe("derived hints are sound against strings the pattern matches", () => {
 
   test("escapes with arguments do not leak the argument into the literal", () => {
     expect(deriveHints(/\x60foobar/).hints).toEqual(["foobar"]);
-    expect(deriveHints(new RegExp(String.raw`\u0041bcdef`)).hints).toEqual(["bcdef"]);
-    expect(deriveHints(new RegExp(String.raw`\u{41}bcdef`, "u")).hints).toEqual(["bcdef"]);
+    expect(deriveHints(new RegExp(String.raw`\u0041bcdef`)).hints).toEqual([
+      "bcdef",
+    ]);
+    expect(deriveHints(new RegExp(String.raw`\u{41}bcdef`, "u")).hints).toEqual(
+      ["bcdef"]
+    );
     expect(deriveHints(/ab\cJcdef/).hints).toEqual(["cdef"]);
     expect(deriveHints(/(?<n>x)\k<n>abcdef/).hints).toEqual(["abcdef"]);
-    expect(deriveHints(new RegExp(String.raw`(a)\12bcde`)).hints).toEqual(["bcde"]);
+    expect(deriveHints(new RegExp(String.raw`(a)\12bcde`)).hints).toEqual([
+      "bcde",
+    ]);
     expect(deriveHints(/\p{L}abcde/u).hints).toEqual(["abcde"]);
-    for (const re of [/\x60foobar/, new RegExp(String.raw`\u0041bcdef`), new RegExp(String.raw`\u{41}bcdef`, "u"), /ab\cJcdef/, /\p{L}abcde/u]) {
+    for (const re of [
+      /\x60foobar/,
+      new RegExp(String.raw`\u0041bcdef`),
+      new RegExp(String.raw`\u{41}bcdef`, "u"),
+      /ab\cJcdef/,
+      /\p{L}abcde/u,
+    ]) {
       const result = violations(re, 20);
       expect(result.missing).toEqual([]);
       expect([re.source, result.checked > 0]).toEqual([re.source, true]);
@@ -278,7 +345,11 @@ describe("derived hints are sound against strings the pattern matches", () => {
   test("the check itself catches a literal the match lacks", () => {
     // A hint the pattern's matches do not contain: the generator has to notice.
     const fake = /\x60foobar/;
-    const generated = generate(parseAlt(fake.source, 0).node, makeRng(1), false);
+    const generated = generate(
+      parseAlt(fake.source, 0).node,
+      makeRng(1),
+      false
+    );
     expect(generated).toBe("`foobar");
     expect(generated.includes("60foobar")).toBe(false);
   });

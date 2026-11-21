@@ -11,8 +11,11 @@ import type { Document, Element, Node } from "linkedom";
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 
-import { collectTextExcluding, tagExcluder } from "@squirrelscan/parser/extractors";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+import {
+  collectTextExcluding,
+  tagExcluder,
+} from "@squirrelscan/parser/extractors";
 
 const SCRIPT_LIKE_TAGS = ["script", "style", "noscript"] as const;
 
@@ -25,7 +28,9 @@ const SCRIPT_LIKE_TAGS = ["script", "style", "noscript"] as const;
 const CODE_LIKE_TAGS = ["code", "pre", "samp", "kbd"] as const;
 
 const isScriptLike = tagExcluder(new Set<string>(SCRIPT_LIKE_TAGS));
-const isScriptOrCodeLike = tagExcluder(new Set<string>([...SCRIPT_LIKE_TAGS, ...CODE_LIKE_TAGS]));
+const isScriptOrCodeLike = tagExcluder(
+  new Set<string>([...SCRIPT_LIKE_TAGS, ...CODE_LIKE_TAGS])
+);
 
 /**
  * `element`'s text with `<script>`/`<style>`/`<noscript>` subtrees excluded —
@@ -58,7 +63,11 @@ const SKIPPED_SUBTREE_BOUNDARY = "\n";
  * it had written that string by accident.
  */
 export function getProseTextExcludingCode(element: Element): string {
-  return collectTextExcluding(element, isScriptOrCodeLike, SKIPPED_SUBTREE_BOUNDARY);
+  return collectTextExcluding(
+    element,
+    isScriptOrCodeLike,
+    SKIPPED_SUBTREE_BOUNDARY
+  );
 }
 
 /**
@@ -93,10 +102,15 @@ const CODE_CONTAINER_CLASSES = new Set([
 const CODE_CONTAINER_PREFIXES = ["language-", "cm-", "monaco-"] as const;
 
 const isCodeContainerClass = (token: string): boolean =>
-  CODE_CONTAINER_CLASSES.has(token) || CODE_CONTAINER_PREFIXES.some((p) => token.startsWith(p));
+  CODE_CONTAINER_CLASSES.has(token) ||
+  CODE_CONTAINER_PREFIXES.some((p) => token.startsWith(p));
 
 const isTagExcluded = tagExcluder(
-  new Set<string>([...SCRIPT_LIKE_TAGS, ...CODE_LIKE_TAGS, ...NON_RENDERED_TAGS]),
+  new Set<string>([
+    ...SCRIPT_LIKE_TAGS,
+    ...CODE_LIKE_TAGS,
+    ...NON_RENDERED_TAGS,
+  ])
 );
 
 function isScriptCodeOrUnrendered(el: Element): boolean {
@@ -115,11 +129,48 @@ function isScriptCodeOrUnrendered(el: Element): boolean {
  * is the single token `Authorundefined`.
  */
 const BLOCK_TAGS = new Set([
-  "address", "article", "aside", "blockquote", "br", "caption", "dd", "details",
-  "dialog", "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer",
-  "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hgroup", "hr", "li",
-  "main", "nav", "ol", "option", "p", "section", "summary", "table", "tbody",
-  "td", "tfoot", "th", "thead", "tr", "ul",
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "br",
+  "caption",
+  "dd",
+  "details",
+  "dialog",
+  "div",
+  "dl",
+  "dt",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hgroup",
+  "hr",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "option",
+  "p",
+  "section",
+  "summary",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "tr",
+  "ul",
 ]);
 
 const isBlockElement = tagExcluder(BLOCK_TAGS);
@@ -137,7 +188,7 @@ export function getRenderedProseText(element: Element): string {
     element,
     isScriptCodeOrUnrendered,
     SKIPPED_SUBTREE_BOUNDARY,
-    isBlockElement,
+    isBlockElement
   );
 }
 
@@ -157,7 +208,7 @@ export function getElementBoundaryProseText(element: Element): string {
     element,
     isScriptCodeOrUnrendered,
     SKIPPED_SUBTREE_BOUNDARY,
-    () => true,
+    () => true
   );
 }
 
@@ -180,7 +231,8 @@ export function getRenderedProseTextNodes(element: Element): string[] {
     } else if (node.nodeType === ELEMENT_NODE) {
       if (isScriptCodeOrUnrendered(node as unknown as Element)) continue;
       const children = node.childNodes;
-      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i] as Node);
+      for (let i = children.length - 1; i >= 0; i--)
+        stack.push(children[i] as Node);
     }
   }
   return out;
@@ -194,19 +246,19 @@ export function getRenderedProseTextNodes(element: Element): string[] {
  */
 export function getRenderedProseTextWhere(
   element: Element,
-  isExtraExcluded: (el: Element) => boolean,
+  isExtraExcluded: (el: Element) => boolean
 ): string {
   return collectTextExcluding(
     element,
     (el) => isScriptCodeOrUnrendered(el) || isExtraExcluded(el),
     SKIPPED_SUBTREE_BOUNDARY,
-    isBlockElement,
+    isBlockElement
   );
 }
 
 /** Tags `getSeparatedText` never reads: markup the browser does not render as text. */
 const isSeparatedTextSkipped = tagExcluder(
-  new Set<string>([...SCRIPT_LIKE_TAGS, ...NON_RENDERED_TAGS]),
+  new Set<string>([...SCRIPT_LIKE_TAGS, ...NON_RENDERED_TAGS])
 );
 
 /**
@@ -224,13 +276,17 @@ const isSeparatedTextSkipped = tagExcluder(
  * `<script>`/`<style>`/`<noscript>`/`<template>`; pass `new Set(["a"])` to read
  * what a block says in its own voice, without the text of its links.
  */
-export function getSeparatedText(element: Element, skipTags?: ReadonlySet<string>): string {
-  const isSkippedTag = skipTags && skipTags.size > 0 ? tagExcluder(skipTags) : null;
+export function getSeparatedText(
+  element: Element,
+  skipTags?: ReadonlySet<string>
+): string {
+  const isSkippedTag =
+    skipTags && skipTags.size > 0 ? tagExcluder(skipTags) : null;
   return collectTextExcluding(
     element,
     (el) => isSeparatedTextSkipped(el) || (isSkippedTag?.(el) ?? false),
     " ",
-    () => true,
+    () => true
   );
 }
 
@@ -269,7 +325,11 @@ export function getPageSeparatedText(doc: Document): string {
  * is judged by the same "is this a literal sample" test as the text around it.
  */
 export function isInsideCodeOrUnrendered(element: Element): boolean {
-  for (let el: Element | null = element; el; el = el.parentElement as Element | null) {
+  for (
+    let el: Element | null = element;
+    el;
+    el = el.parentElement as Element | null
+  ) {
     if (isScriptCodeOrUnrendered(el)) return true;
   }
   return false;

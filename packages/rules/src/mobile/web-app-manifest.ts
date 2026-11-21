@@ -17,11 +17,22 @@
 // does not load or parse is a single error, because nothing inside it can be
 // judged.
 
-import type { CheckItem, CheckResult, CheckStatus } from "@squirrelscan/core-contracts";
+import type {
+  CheckItem,
+  CheckResult,
+  CheckStatus,
+} from "@squirrelscan/core-contracts";
+
 import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
 
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  WebAppManifestData,
+} from "../types";
+
 import { notCheckedCheck } from "../ax/discovery-probe-state";
-import type { Rule, RuleContext, RuleResult, WebAppManifestData } from "../types";
 
 const CHECK_NAME = "web-app-manifest";
 
@@ -76,7 +87,9 @@ interface ManifestIcon {
 }
 
 /** Parse a manifest body. Null for anything that is not a JSON object. */
-export function parseWebAppManifest(content: string | null): Record<string, unknown> | null {
+export function parseWebAppManifest(
+  content: string | null
+): Record<string, unknown> | null {
   if (content === null) return null;
   let value: unknown;
   try {
@@ -113,7 +126,10 @@ function parseSizes(value: unknown): Array<[number, number]> {
   return out;
 }
 
-function readIcons(manifest: Record<string, unknown>, manifestUrl: string): ManifestIcon[] {
+function readIcons(
+  manifest: Record<string, unknown>,
+  manifestUrl: string
+): ManifestIcon[] {
   if (!Array.isArray(manifest.icons)) return [];
   const icons: ManifestIcon[] = [];
   for (const entry of manifest.icons.slice(0, ICON_SCAN_LIMIT)) {
@@ -126,7 +142,10 @@ function readIcons(manifest: Record<string, unknown>, manifestUrl: string): Mani
       url,
       sizes: parseSizes(icon.sizes),
       type: nonEmptyString(icon.type)?.toLowerCase() ?? null,
-      purposes: (nonEmptyString(icon.purpose) ?? "").toLowerCase().split(/\s+/).filter(Boolean),
+      purposes: (nonEmptyString(icon.purpose) ?? "")
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean),
     });
   }
   return icons;
@@ -147,10 +166,15 @@ function isPngIcon(icon: ManifestIcon): boolean {
  * WEB_APP_MANIFEST_ICON_LIMIT. The engine fetches these to read their sizes;
  * the rule reads the same list, so the two never disagree on an icon's URL.
  */
-export function listWebAppManifestIconUrls(content: string | null, manifestUrl: string): string[] {
+export function listWebAppManifestIconUrls(
+  content: string | null,
+  manifestUrl: string
+): string[] {
   const manifest = parseWebAppManifest(content);
   if (!manifest) return [];
-  const urls = [...new Set(readIcons(manifest, manifestUrl).map((icon) => icon.url))];
+  const urls = [
+    ...new Set(readIcons(manifest, manifestUrl).map((icon) => icon.url)),
+  ];
   return urls.slice(0, WEB_APP_MANIFEST_ICON_LIMIT);
 }
 
@@ -158,7 +182,9 @@ export function listWebAppManifestIconUrls(content: string | null, manifestUrl: 
 function normalizeColor(value: string): string {
   const v = value.trim().toLowerCase();
   const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(v);
-  return short ? `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}` : v;
+  return short
+    ? `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`
+    : v;
 }
 
 function mediaType(contentType: string | null): string | null {
@@ -170,7 +196,9 @@ function mediaType(contentType: string | null): string | null {
 function describePages(pages: string[]): string {
   if (pages.length === 0) return "no page";
   const named = pages.slice(0, PAGES_NAMED).join(", ");
-  return pages.length > PAGES_NAMED ? `${named} and ${pages.length - PAGES_NAMED} more` : named;
+  return pages.length > PAGES_NAMED
+    ? `${named} and ${pages.length - PAGES_NAMED} more`
+    : named;
 }
 
 interface Problem {
@@ -180,12 +208,19 @@ interface Problem {
   pages?: string[];
 }
 
-const STATUS_RANK: Record<string, number> = { pass: 0, skipped: 0, info: 1, warn: 2, fail: 3 };
+const STATUS_RANK: Record<string, number> = {
+  pass: 0,
+  skipped: 0,
+  info: 1,
+  warn: 2,
+  fail: 3,
+};
 
 function worstStatus(problems: Problem[]): CheckStatus {
   let worst: CheckStatus = "pass";
   for (const problem of problems) {
-    if ((STATUS_RANK[problem.status] ?? 0) > (STATUS_RANK[worst] ?? 0)) worst = problem.status;
+    if ((STATUS_RANK[problem.status] ?? 0) > (STATUS_RANK[worst] ?? 0))
+      worst = problem.status;
   }
   return worst;
 }
@@ -198,7 +233,8 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
   if (manifest.content === null) {
     // Throttled or answered by a WAF: the status says nothing about the file.
     const withheld = manifest.headersWithheld === true;
-    const unverifiable = manifest.rateLimited === true || manifest.wafBlocked === true || withheld;
+    const unverifiable =
+      manifest.rateLimited === true || manifest.wafBlocked === true || withheld;
     if (!unverifiable && manifest.status !== null && manifest.status >= 400) {
       return {
         name: CHECK_NAME,
@@ -249,13 +285,24 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
     });
   }
 
-  if (nonEmptyString(parsed.name) === null && nonEmptyString(parsed.short_name) === null) {
-    problems.push({ id: "name", status: "warn", message: 'missing both "name" and "short_name"' });
+  if (
+    nonEmptyString(parsed.name) === null &&
+    nonEmptyString(parsed.short_name) === null
+  ) {
+    problems.push({
+      id: "name",
+      status: "warn",
+      message: 'missing both "name" and "short_name"',
+    });
   }
 
   const startUrl = nonEmptyString(parsed.start_url);
   if (startUrl === null) {
-    problems.push({ id: "start_url", status: "warn", message: 'missing "start_url"' });
+    problems.push({
+      id: "start_url",
+      status: "warn",
+      message: 'missing "start_url"',
+    });
   } else {
     const resolved = resolveUrl(startUrl, manifest.url);
     if (resolved === null) {
@@ -274,7 +321,11 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
   }
 
   if (nonEmptyString(parsed.display) === null) {
-    problems.push({ id: "display", status: "warn", message: 'missing "display"' });
+    problems.push({
+      id: "display",
+      status: "warn",
+      message: 'missing "display"',
+    });
   }
 
   const icons = readIcons(parsed, manifest.url);
@@ -284,10 +335,18 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
     for (const [w, h] of icon.sizes) pngSizes.add(`${w}x${h}`);
   }
   if (!pngSizes.has("192x192")) {
-    problems.push({ id: "icon-192", status: "warn", message: "no 192x192 PNG icon declared" });
+    problems.push({
+      id: "icon-192",
+      status: "warn",
+      message: "no 192x192 PNG icon declared",
+    });
   }
   if (!pngSizes.has("512x512")) {
-    problems.push({ id: "icon-512", status: "warn", message: "no 512x512 PNG icon declared" });
+    problems.push({
+      id: "icon-512",
+      status: "warn",
+      message: "no 512x512 PNG icon declared",
+    });
   }
 
   const checked = new Map(manifest.icons.map((check) => [check.url, check]));
@@ -304,7 +363,11 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
       continue;
     }
     // A throttled or WAF-challenged icon request says nothing about the icon.
-    if (check.rateLimited === true || check.wafBlocked === true || check.headersWithheld === true) {
+    if (
+      check.rateLimited === true ||
+      check.wafBlocked === true ||
+      check.headersWithheld === true
+    ) {
       problems.push({
         id: "icon-unverified",
         status: "info",
@@ -332,7 +395,11 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
       });
       continue;
     }
-    if (check.naturalWidth === null || check.naturalHeight === null || icon.sizes.length === 0)
+    if (
+      check.naturalWidth === null ||
+      check.naturalHeight === null ||
+      icon.sizes.length === 0
+    )
       continue;
     const real = `${check.naturalWidth}x${check.naturalHeight}`;
     const declared = icon.sizes.map(([w, h]) => `${w}x${h}`);
@@ -360,11 +427,15 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
     });
   }
 
-  if (icons.length > 0 && !icons.some((icon) => icon.purposes.includes("maskable"))) {
+  if (
+    icons.length > 0 &&
+    !icons.some((icon) => icon.purposes.includes("maskable"))
+  ) {
     problems.push({
       id: "maskable",
       status: "info",
-      message: 'no icon with purpose "maskable"; Android crops the others into a circle',
+      message:
+        'no icon with purpose "maskable"; Android crops the others into a circle',
     });
   }
 
@@ -375,9 +446,12 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
     const wanted = normalizeColor(themeColor);
     const mismatched = pages.filter((page) => {
       const metas = (manifest.themeColorsByPage[page] ?? []).filter((meta) =>
-        HEX_COLOR.test(meta.content.trim()),
+        HEX_COLOR.test(meta.content.trim())
       );
-      return metas.length > 0 && !metas.some((meta) => normalizeColor(meta.content) === wanted);
+      return (
+        metas.length > 0 &&
+        !metas.some((meta) => normalizeColor(meta.content) === wanted)
+      );
     });
     if (mismatched.length > 0) {
       problems.push({
@@ -435,7 +509,16 @@ export const webAppManifestRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const manifests = ctx.site?.webAppManifests;
     if (manifests === undefined) {
-      return { checks: [notCheckedCheck(CHECK_NAME, "Web app manifest", undefined, "no-result")] };
+      return {
+        checks: [
+          notCheckedCheck(
+            CHECK_NAME,
+            "Web app manifest",
+            undefined,
+            "no-result"
+          ),
+        ],
+      };
     }
     if (manifests.length === 0) {
       return {
@@ -450,7 +533,9 @@ export const webAppManifestRule: Rule = {
         ],
       };
     }
-    const sorted = [...manifests].sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+    const sorted = [...manifests].sort((a, b) =>
+      a.url < b.url ? -1 : a.url > b.url ? 1 : 0
+    );
     const checks = sorted.map(checkManifest);
     const dropped = ctx.site?.webAppManifestsDropped ?? 0;
     if (dropped > 0) {

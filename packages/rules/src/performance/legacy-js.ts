@@ -1,12 +1,12 @@
 // performance/legacy-js - Legacy JavaScript detection
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import {
   isInsideNoscript,
   querySelectorAllByAttrCI,
   querySelectorAllOutsideNoscript,
 } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Patterns that indicate legacy JavaScript or polyfills
 const legacyPatterns = [
@@ -79,7 +79,10 @@ export const legacyJsRule: Rule = {
     }
 
     // Check inline scripts for ES5 patterns
-    const inlineScripts = querySelectorAllOutsideNoscript(doc, "script:not([src])");
+    const inlineScripts = querySelectorAllOutsideNoscript(
+      doc,
+      "script:not([src])"
+    );
     for (const script of inlineScripts) {
       const content = script.textContent || "";
       if (content.length < 500) continue; // Skip small scripts
@@ -99,10 +102,15 @@ export const legacyJsRule: Rule = {
     }
 
     // Check for module/nomodule differential serving
-    const moduleScripts = querySelectorAllOutsideNoscript(doc, 'script[type="module"]');
-    const nomoduleScripts = querySelectorAllByAttrCI(doc, "script", "nomodule").filter(
-      (script) => !isInsideNoscript(script)
+    const moduleScripts = querySelectorAllOutsideNoscript(
+      doc,
+      'script[type="module"]'
     );
+    const nomoduleScripts = querySelectorAllByAttrCI(
+      doc,
+      "script",
+      "nomodule"
+    ).filter((script) => !isInsideNoscript(script));
     const hasDifferentialServing =
       moduleScripts.length > 0 && nomoduleScripts.length > 0;
 

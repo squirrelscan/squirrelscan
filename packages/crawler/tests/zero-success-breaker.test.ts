@@ -12,24 +12,42 @@
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect, Fiber, Stream } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
-import { createTestStorage } from "../src/storage";
-import type { CrawlStorage } from "../src/storage/types";
-import { StorageError } from "../src/storage/types";
-import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
+import type { CrawlStorage } from "../src/storage/types";
+
+import { createCrawler } from "../src/core/crawler";
+import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
+import { createTestStorage } from "../src/storage";
+import { StorageError } from "../src/storage/types";
 
 const ORIGIN = "https://example.com";
 
 const EMPTY_RESPONSE_HEADERS = {
-  contentType: null, contentEncoding: null, cacheControl: null, expires: null,
-  vary: null, etag: null, server: null, lastModified: null, link: null,
-  serverTiming: null, age: null, xCache: null, cfCacheStatus: null,
-  xVercelCache: null, altSvc: null, acceptRanges: null,
+  contentType: null,
+  contentEncoding: null,
+  cacheControl: null,
+  expires: null,
+  vary: null,
+  etag: null,
+  server: null,
+  lastModified: null,
+  link: null,
+  serverTiming: null,
+  age: null,
+  xCache: null,
+  cfCacheStatus: null,
+  xVercelCache: null,
+  altSvc: null,
+  acceptRanges: null,
 } as const;
 const EMPTY_SECURITY_HEADERS = {
-  hsts: null, csp: null, xFrameOptions: null, xContentTypeOptions: null,
-  referrerPolicy: null, permissionsPolicy: null, xRobotsTag: null,
+  hsts: null,
+  csp: null,
+  xFrameOptions: null,
+  xContentTypeOptions: null,
+  referrerPolicy: null,
+  permissionsPolicy: null,
+  xRobotsTag: null,
 } as const;
 
 // A root linking to `n` leaf pages so the frontier stays full (> breaker
@@ -40,7 +58,8 @@ function hubSite(n: number): Record<string, string> {
   const site: Record<string, string> = {
     [`${ORIGIN}/`]: `<!doctype html><html><body>${anchors}</body></html>`,
   };
-  for (const h of links) site[`${ORIGIN}${h}`] = "<!doctype html><html><body></body></html>";
+  for (const h of links)
+    site[`${ORIGIN}${h}`] = "<!doctype html><html><body></body></html>";
   return site;
 }
 
@@ -51,12 +70,29 @@ function fixtureFetcher(site: Record<string, string>): CrawlFetcher {
       const status = site[url] !== undefined ? 200 : 404;
       yield* applyStatusGuards(url, status, new Headers(), body);
       return {
-        url, finalUrl: url, status, loadTime: 1, ttfb: 1, downloadTime: 1,
+        url,
+        finalUrl: url,
+        status,
+        loadTime: 1,
+        ttfb: 1,
+        downloadTime: 1,
         headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html" },
-        securityHeaders: EMPTY_SECURITY_HEADERS, contentType: "text/html",
-        body, sizeBytes: body.length,
-        redirectChain: { sourceUrl: url, finalUrl: url, hops: [], chainLength: 0, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false },
-        fetcherId: undefined, fallbackReason: undefined,
+        securityHeaders: EMPTY_SECURITY_HEADERS,
+        contentType: "text/html",
+        body,
+        sizeBytes: body.length,
+        redirectChain: {
+          sourceUrl: url,
+          finalUrl: url,
+          hops: [],
+          chainLength: 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+        fetcherId: undefined,
+        fallbackReason: undefined,
       };
     });
 }
@@ -68,7 +104,10 @@ function failingUpsertStorage(base: CrawlStorage): CrawlStorage {
   return new Proxy(base, {
     get(target, prop, recv) {
       if (prop === "upsertPage") {
-        return () => Effect.fail(StorageError.write(new Error("synthetic upsertPage failure")));
+        return () =>
+          Effect.fail(
+            StorageError.write(new Error("synthetic upsertPage failure"))
+          );
       }
       return Reflect.get(target, prop, recv);
     },
@@ -76,10 +115,18 @@ function failingUpsertStorage(base: CrawlStorage): CrawlStorage {
 }
 
 const BASE_CONFIG: Partial<CrawlerConfig> = {
-  perHostConcurrency: 1, delayMs: 0, perHostDelayMs: 0, timeoutMs: 1000,
-  userAgent: "test", respectRobots: false, incremental: false,
-  useCacheControl: false, breadthFirst: false, disableLinkDiscovery: false,
-  coverageMode: "full", maxPages: 100,
+  perHostConcurrency: 1,
+  delayMs: 0,
+  perHostDelayMs: 0,
+  timeoutMs: 1000,
+  userAgent: "test",
+  respectRobots: false,
+  incremental: false,
+  useCacheControl: false,
+  breadthFirst: false,
+  disableLinkDiscovery: false,
+  coverageMode: "full",
+  maxPages: 100,
 };
 
 interface BreakerOutcome {
@@ -95,8 +142,16 @@ interface BreakerOutcome {
 function runBreakerCrawl(concurrency: number): Promise<BreakerOutcome> {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
-    const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : (input as Request).url;
+    const res = new Response("", {
+      status: 404,
+      headers: { "content-type": "text/plain" },
+    });
     Object.defineProperty(res, "url", { value: url, configurable: true });
     return Promise.resolve(res);
   }) as typeof globalThis.fetch;
@@ -118,7 +173,7 @@ function runBreakerCrawl(concurrency: number): Promise<BreakerOutcome> {
         Effect.sync(() => {
           if (e.type === "page:fetching") fetchingEvents++;
           if (e.type === "completed") completed = true;
-        }),
+        })
     ).pipe(Effect.fork);
     yield* Effect.yieldNow();
 
@@ -129,11 +184,18 @@ function runBreakerCrawl(concurrency: number): Promise<BreakerOutcome> {
       .pipe(Effect.timeout(Duration.seconds(10)), Effect.either);
     const crawlId = crawler.currentCrawlId!;
 
-    yield* Fiber.join(collector).pipe(Effect.timeout(Duration.seconds(2)), Effect.ignore);
+    yield* Fiber.join(collector).pipe(
+      Effect.timeout(Duration.seconds(2)),
+      Effect.ignore
+    );
     yield* Fiber.interrupt(collector);
 
-    const crawl = yield* base.getCrawl(crawlId).pipe(Effect.orElseSucceed(() => null));
-    const pageCount = yield* base.getPageCount(crawlId).pipe(Effect.orElseSucceed(() => -1));
+    const crawl = yield* base
+      .getCrawl(crawlId)
+      .pipe(Effect.orElseSucceed(() => null));
+    const pageCount = yield* base
+      .getPageCount(crawlId)
+      .pipe(Effect.orElseSucceed(() => -1));
 
     return {
       fetchingEvents,

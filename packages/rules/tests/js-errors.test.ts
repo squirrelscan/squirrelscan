@@ -1,21 +1,22 @@
 // reliability/js-errors - JavaScript errors and failed runtime requests on rendered pages (#704).
 // Render results are hand-built: the cloud renderer does not record runtime data yet (tracked privately).
 
-import { describe, expect, test } from "bun:test";
-
-import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
-import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
-import { classifyRuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
 import type {
   CheckResult,
   RenderResultItem,
   RenderRuntimeDiagnostics,
 } from "@squirrelscan/core-contracts";
 
+import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { classifyRuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
+import { describe, expect, test } from "bun:test";
+
 import type { CloudResultEnvelope, CloudResultStore } from "../src/cloud";
+import type { ParsedPage, RuleContext, SiteData } from "../src/types";
+
 import { loadAllRules } from "../src/loader";
 import { jsErrorsRule } from "../src/reliability/js-errors";
-import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const SITE = "https://example.com";
 
@@ -261,7 +262,10 @@ describe("reliability/js-errors", () => {
 
   test("a run where every rendered page was a WAF or bot challenge is a coded gap (unread-page), not a does-not-apply skip", async () => {
     const checks = await run({
-      [`${SITE}/a`]: render({ pageErrors: [{ message: "TypeError: c" }] }, { status: 403 }),
+      [`${SITE}/a`]: render(
+        { pageErrors: [{ message: "TypeError: c" }] },
+        { status: 403 }
+      ),
       [`${SITE}/b`]: render({}, { headers: { "cf-mitigated": "challenge" } }),
     });
     expect(checks).toHaveLength(1);
@@ -298,7 +302,13 @@ describe("reliability/js-errors", () => {
   test("a partial run still reports the errors it saw, beside the gap", async () => {
     const checks = await run({
       [`${SITE}/a`]: render({
-        pageErrors: [{ message: "TypeError: x is undefined", sourceUrl: `${SITE}/app.js`, line: 3 }],
+        pageErrors: [
+          {
+            message: "TypeError: x is undefined",
+            sourceUrl: `${SITE}/app.js`,
+            line: 3,
+          },
+        ],
       }),
       [`${SITE}/b`]: render(undefined),
       [`${SITE}/c`]: render({}, { status: 403 }),

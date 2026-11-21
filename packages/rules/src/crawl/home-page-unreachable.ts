@@ -17,6 +17,7 @@
 // a gap that never resolves a stored finding.
 
 import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
+
 import { ENTRY_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { normalizeUrl } from "@squirrelscan/utils";
 
@@ -36,7 +37,8 @@ export const homePageUnreachableRule: Rule = {
   meta: {
     id: "crawl/home-page-unreachable",
     name: "Home Page Unreachable",
-    description: "Reports when the home page (the audited URL) fails to load: DNS, connection, TLS, timeout or a 5xx",
+    description:
+      "Reports when the home page (the audited URL) fails to load: DNS, connection, TLS, timeout or a 5xx",
     solution:
       "Visitors, search engines and AI agents all fail at the same point: the home page does not load. Check the cause named in the finding. For DNS, confirm the domain's records and nameservers. For TLS, check the certificate (expiry, chain, hostname). For a connection or timeout failure, check the server, firewall and CDN origin. For a 5xx, read the origin's error logs. Then run the audit again.",
     category: "crawl",
@@ -46,7 +48,11 @@ export const homePageUnreachableRule: Rule = {
     weight: 10,
     checks: [
       { name: "home-page-unreachable", outcome: "problem" },
-      { name: "home-page-unreachable", outcome: "clean", clears: ["home-page-unreachable"] },
+      {
+        name: "home-page-unreachable",
+        outcome: "clean",
+        clears: ["home-page-unreachable"],
+      },
       { name: "home-page-unreachable", outcome: "skipped" },
     ],
   },
@@ -56,14 +62,18 @@ export const homePageUnreachableRule: Rule = {
     if (!site) return NOT_APPLICABLE;
     const entryUrl = site.entryUrls?.[0] ?? site.baseUrl;
     const failure = site.entryFailure;
-    if (failure && (failure.source ?? "entry") !== "entry") return NOT_APPLICABLE;
+    if (failure && (failure.source ?? "entry") !== "entry")
+      return NOT_APPLICABLE;
 
     if (failure && failure.code !== "unknown") {
       const cause = REPORTED[failure.code];
       // A 4xx, a robots.txt refusal or a redirect is an answer, handled elsewhere.
       if (!cause) return NOT_APPLICABLE;
       const host = failure.host ?? site.baseUrl;
-      const status = failure.code === "http_5xx" && failure.status ? ` (${failure.status})` : "";
+      const status =
+        failure.code === "http_5xx" && failure.status
+          ? ` (${failure.status})`
+          : "";
       return {
         checks: [
           {
@@ -86,7 +96,12 @@ export const homePageUnreachableRule: Rule = {
     if (!failure && entryPageLoaded(site)) {
       return {
         checks: [
-          { name: "home-page-unreachable", status: "pass", message: "The home page loaded", pageUrl: entryUrl },
+          {
+            name: "home-page-unreachable",
+            status: "pass",
+            message: "The home page loaded",
+            pageUrl: entryUrl,
+          },
         ],
       };
     }
@@ -108,12 +123,15 @@ export const homePageUnreachableRule: Rule = {
 
 /** A page record for the entry URL, its redirect target or the base URL, that loaded (2xx or 3xx). */
 function entryPageLoaded(site: NonNullable<RuleContext["site"]>): boolean {
-  const entries = new Set([...(site.entryUrls ?? []), site.baseUrl].map((url) => normalizeUrl(url)));
+  const entries = new Set(
+    [...(site.entryUrls ?? []), site.baseUrl].map((url) => normalizeUrl(url))
+  );
   return site.pages.some(
     (page) =>
       !page.redirectSource &&
       page.statusCode >= 200 &&
       page.statusCode < 400 &&
-      (entries.has(normalizeUrl(page.url)) || (!!page.finalUrl && entries.has(normalizeUrl(page.finalUrl)))),
+      (entries.has(normalizeUrl(page.url)) ||
+        (!!page.finalUrl && entries.has(normalizeUrl(page.finalUrl))))
   );
 }

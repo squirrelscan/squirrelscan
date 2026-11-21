@@ -11,12 +11,12 @@
 // refuses on the URL alone, so the control can see the probe run without any
 // request leaving the machine.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -108,13 +108,15 @@ function audit(ownSiteOnly: boolean, engine: Engine = "v1", html = HOME) {
         { sitemapUrl: SITEMAP, loc: `${BASE}/` },
         { sitemapUrl: SITEMAP, loc: OFF_SITE },
       ]);
-      const siteContext = yield* buildSiteContext(yield* storage.getPages(crawlId));
+      const siteContext = yield* buildSiteContext(
+        yield* storage.getPages(crawlId)
+      );
       const assets = yield* fetchResourceAssets(
         storage,
         crawlId,
         siteContext,
         CONFIG,
-        ownSiteOnly ? { ownSiteOnly: true } : undefined,
+        ownSiteOnly ? { ownSiteOnly: true } : undefined
       );
       const ran = (yield* engine === "v1"
         ? runRulesOnStorage(storage, crawlId, siteContext, CONFIG, assets)
@@ -127,7 +129,7 @@ function audit(ownSiteOnly: boolean, engine: Engine = "v1", html = HOME) {
         brokenResources: checksOf("reliability/broken-resources"),
         sitemap4xx: checksOf("crawl/sitemap-4xx"),
       };
-    }).pipe(Effect.orDie, Effect.ensuring(storage.close().pipe(Effect.orDie))),
+    }).pipe(Effect.orDie, Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
@@ -138,7 +140,10 @@ describe("an own-site-only (--offline) audit and third-party assets (pub#807)", 
       ...(assets.externalAssets?.css ?? []),
       ...(assets.externalAssets?.scripts ?? []),
     ].map((a) => a.url);
-    expect(urls.sort()).toEqual(["https://cdn.invalid/site.css", "https://widgets.invalid/w.js"]);
+    expect(urls.sort()).toEqual([
+      "https://cdn.invalid/site.css",
+      "https://widgets.invalid/w.js",
+    ]);
     expect(assets.sitemapUrlStatuses.map((s) => s.url)).toEqual([OFF_SITE]);
     expect(assets.sitemapOffSiteSkipped).toBeUndefined();
   });
@@ -147,21 +152,29 @@ describe("an own-site-only (--offline) audit and third-party assets (pub#807)", 
     const { assets, brokenResources } = await audit(true);
     expect(assets.externalAssets).toBeUndefined();
 
-    const unchecked = brokenResources.find((c) => c.name === "unchecked-resources");
-    expect(unchecked?.message).toContain("third-party resources were not measured this audit");
+    const unchecked = brokenResources.find(
+      (c) => c.name === "unchecked-resources"
+    );
+    expect(unchecked?.message).toContain(
+      "third-party resources were not measured this audit"
+    );
     // Not measured is not a pass: no broken-resources row at all.
-    expect(brokenResources.some((c) => c.name === "broken-resources")).toBe(false);
+    expect(brokenResources.some((c) => c.name === "broken-resources")).toBe(
+      false
+    );
   });
 
   test("pages with no third-party reference leave nothing unmeasured", async () => {
     const { assets, brokenResources } = await audit(
       true,
       "v1",
-      `<!doctype html><html lang="en"><head><title>Home</title></head><body><p>Home</p></body></html>`,
+      `<!doctype html><html lang="en"><head><title>Home</title></head><body><p>Home</p></body></html>`
     );
     expect(assets.externalAssets).toEqual({ scripts: [], css: [], fonts: [] });
     expect(
-      brokenResources.some((c) => c.message.includes("third-party resources were not measured")),
+      brokenResources.some((c) =>
+        c.message.includes("third-party resources were not measured")
+      )
     ).toBe(false);
   });
 
@@ -171,10 +184,16 @@ describe("an own-site-only (--offline) audit and third-party assets (pub#807)", 
       expect(assets.sitemapUrlStatuses).toEqual([]);
       expect(assets.sitemapOffSiteSkipped).toBe(1);
 
-      expect(sitemap4xx.find((c) => c.name === "sitemap-4xx")?.status).toBe("skipped");
-      const offSite = sitemap4xx.find((c) => c.name === "sitemap-off-site-not-checked");
+      expect(sitemap4xx.find((c) => c.name === "sitemap-4xx")?.status).toBe(
+        "skipped"
+      );
+      const offSite = sitemap4xx.find(
+        (c) => c.name === "sitemap-off-site-not-checked"
+      );
       expect(offSite?.status).toBe("info");
-      expect(offSite?.message).toBe("1 sitemap URL(s) on another site not checked this audit");
+      expect(offSite?.message).toBe(
+        "1 sitemap URL(s) on another site not checked this audit"
+      );
     });
   }
 });

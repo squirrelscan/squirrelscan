@@ -2,7 +2,10 @@
 
 import type { Document } from "linkedom";
 
-import { getHostname, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import {
+  getHostname,
+  querySelectorAllOutsideNoscript,
+} from "@squirrelscan/utils";
 
 export interface ScriptRef {
   src: string;
@@ -67,13 +70,17 @@ export function isSameDomainScript(
  * here, so the audit fetches them too (security/csp-blocks-own-resources reads
  * the third-party URLs inside). Resolved against `baseUrl`, deduplicated.
  */
-export function extractPreloadedScriptUrls(doc: Document, baseUrl: string): string[] {
+export function extractPreloadedScriptUrls(
+  doc: Document,
+  baseUrl: string
+): string[] {
   const found = new Set<string>();
   for (const link of querySelectorAllOutsideNoscript(doc, "link[href]")) {
     const rel = (link.getAttribute("rel") || "").toLowerCase().split(/\s+/);
     const isScript =
       rel.includes("modulepreload") ||
-      (rel.includes("preload") && link.getAttribute("as")?.toLowerCase() === "script");
+      (rel.includes("preload") &&
+        link.getAttribute("as")?.toLowerCase() === "script");
     const href = link.getAttribute("href")?.trim();
     if (!isScript || !href || href.startsWith("data:")) continue;
     try {

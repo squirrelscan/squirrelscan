@@ -22,9 +22,9 @@
 // redundancy on them and any sizing done there is wrong in the flattering
 // direction.
 
-import { fnv1a64 } from "./fingerprint";
-
 import type { PageFingerprint } from "@squirrelscan/rules";
+
+import { fnv1a64 } from "./fingerprint";
 
 /**
  * Canonical, injective encoding of a fingerprint's chrome markers.
@@ -70,7 +70,9 @@ function canonicalize(fp: PageFingerprint): string {
  * normalized_url)` by the crawl that produces them, nothing compares keys across
  * crawls, and no reader treats a pre-existing null as meaningful.
  */
-export function templateFingerprintKey(fp: PageFingerprint | null): string | null {
+export function templateFingerprintKey(
+  fp: PageFingerprint | null
+): string | null {
   if (!fp) return null;
   return fnv1a64(new TextEncoder().encode(canonicalize(fp)), 0n);
 }
@@ -98,7 +100,7 @@ export function templateFingerprintKey(fp: PageFingerprint | null): string | nul
  */
 export function templateVerdictKey(
   checks: ReadonlyArray<Record<string, unknown>>,
-  pageUrl: string,
+  pageUrl: string
 ): string {
   let path = pageUrl;
   try {

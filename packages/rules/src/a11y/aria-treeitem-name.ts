@@ -1,8 +1,10 @@
 // a11y/aria-treeitem-name - Treeitems have accessible names
 
-import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
   // Check aria-label
@@ -69,12 +71,19 @@ export const ariaTreeitemNameRule: Rule = {
         status: "fail",
         message: `${missingNames.length} treeitem(s) without accessible names`,
         items: missingNames.slice(0, 10).map((id) => ({ id })),
-        details: missingNames.length > 10 ? { additional: missingNames.length - 10 } : undefined,
+        details:
+          missingNames.length > 10
+            ? { additional: missingNames.length - 10 }
+            : undefined,
       });
     }
     if (unnamed.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow("aria-treeitem-name", "treeitem(s) without accessible names", unnamed.unconfirmed),
+        unconfirmedRow(
+          "aria-treeitem-name",
+          "treeitem(s) without accessible names",
+          unnamed.unconfirmed
+        )
       );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
@@ -86,7 +95,9 @@ export const ariaTreeitemNameRule: Rule = {
             unnamed.hidden > 0
               ? "All treeitems in the accessibility tree have accessible names"
               : `${treeitems.length} treeitem(s) have accessible names`,
-          ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+          ...(unnamed.hidden > 0
+            ? { details: { hiddenWithoutName: unnamed.hidden } }
+            : {}),
         });
       } else {
         checks.push({

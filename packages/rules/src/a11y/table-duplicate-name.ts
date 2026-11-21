@@ -2,6 +2,8 @@
 
 import { hasAttrCI } from "@squirrelscan/utils";
 
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import {
   type ControlItem,
   createStaticVisibility,
@@ -9,7 +11,6 @@ import {
   unconfirmedItem,
   unconfirmedRow,
 } from "../shared/static-hidden";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** Whether `inert` on the table or an ancestor takes it out of the accessibility tree. */
 function isInert(el: Element): boolean {
@@ -159,7 +160,11 @@ export const tableDuplicateNameRule: Rule = {
     }
     if (unconfirmedNames.length > 0) {
       checks.push(
-        unconfirmedRow("table-duplicate-name", "duplicate table name(s)", unconfirmedNames)
+        unconfirmedRow(
+          "table-duplicate-name",
+          "duplicate table name(s)",
+          unconfirmedNames
+        )
       );
     }
 

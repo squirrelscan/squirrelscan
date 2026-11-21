@@ -131,7 +131,9 @@ const ORDER: Record<SeedPageOutcome, number> = {
  * Classify every known page with open findings and count the outcomes. Null when
  * there are no such pages, so a report without any is byte-identical to before.
  */
-export function summarizeSeedVerification(input: SeedVerificationInput): SeedVerification | null {
+export function summarizeSeedVerification(
+  input: SeedVerificationInput
+): SeedVerification | null {
   const carried = new Set(input.carriedPages);
   if (carried.size === 0) return null;
   const seeded = new Set<string>();
@@ -142,7 +144,8 @@ export function summarizeSeedVerification(input: SeedVerificationInput): SeedVer
     if (carried.has(page.normalizedUrl)) pages.set(page.normalizedUrl, page);
   const frontier = new Map<string, SeedVerificationFrontier>();
   for (const entry of input.frontier ?? []) {
-    if (carried.has(entry.normalizedUrl)) frontier.set(entry.normalizedUrl, entry);
+    if (carried.has(entry.normalizedUrl))
+      frontier.set(entry.normalizedUrl, entry);
   }
 
   const rows: SeedPageVerification[] = [];
@@ -154,7 +157,9 @@ export function summarizeSeedVerification(input: SeedVerificationInput): SeedVer
           url,
           outcome: "redirected",
           status: page.status,
-          ...(page.finalUrl && page.finalUrl !== url ? { destination: page.finalUrl } : {}),
+          ...(page.finalUrl && page.finalUrl !== url
+            ? { destination: page.finalUrl }
+            : {}),
         });
       } else if (GONE_STATUSES.has(page.status)) {
         rows.push({ url, outcome: "gone", status: page.status });
@@ -167,14 +172,21 @@ export function summarizeSeedVerification(input: SeedVerificationInput): SeedVer
     }
     const entry = frontier.get(url);
     if (entry) {
-      rows.push({ url, outcome: isBudgetSkip(entry) ? "skipped-budget" : "unverified" });
+      rows.push({
+        url,
+        outcome: isBudgetSkip(entry) ? "skipped-budget" : "unverified",
+      });
     } else {
       // Seeded but never queued means the crawl refused the URL (scope, robots, length).
-      rows.push({ url, outcome: seeded.has(url) ? "unverified" : "not-linked" });
+      rows.push({
+        url,
+        outcome: seeded.has(url) ? "unverified" : "not-linked",
+      });
     }
   }
 
-  const count = (outcome: SeedPageOutcome) => rows.filter((r) => r.outcome === outcome).length;
+  const count = (outcome: SeedPageOutcome) =>
+    rows.filter((r) => r.outcome === outcome).length;
   const live = count("live");
   const gone = count("gone");
   const redirected = count("redirected");
@@ -182,7 +194,9 @@ export function summarizeSeedVerification(input: SeedVerificationInput): SeedVer
   const noLongerLinked = count("not-linked");
   const unverified = count("unverified");
   rows.sort(
-    (a, b) => ORDER[a.outcome] - ORDER[b.outcome] || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0),
+    (a, b) =>
+      ORDER[a.outcome] - ORDER[b.outcome] ||
+      (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)
   );
   const clipped = rows.length > SEED_VERIFICATION_MAX_PAGES;
   return {
@@ -208,14 +222,16 @@ export function summarizeSeedVerification(input: SeedVerificationInput): SeedVer
  * read as zero and no URL is printed.
  */
 export function seedVerificationLine(
-  value: Partial<SeedVerification> | null | undefined,
+  value: Partial<SeedVerification> | null | undefined
 ): string | null {
   if (!value || typeof value !== "object") return null;
-  const n = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : 0);
+  const n = (v: unknown) =>
+    typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : 0;
   const reverified = n(value.reverified);
   const left = n(value.leftCarried);
   if (reverified + left === 0) return null;
-  const part = (count: number, label: string) => (count > 0 ? `${count} ${label}` : "");
+  const part = (count: number, label: string) =>
+    count > 0 ? `${count} ${label}` : "";
   const join = (parts: string[]) => parts.filter(Boolean).join(", ");
   const re = join([
     part(n(value.gone), "gone"),

@@ -23,7 +23,7 @@ export class CloudClientError extends Error {
     code: CloudErrorCode,
     status: number,
     message: string,
-    opts?: { required?: number; cause?: unknown },
+    opts?: { required?: number; cause?: unknown }
   ) {
     super(message, opts?.cause ? { cause: opts.cause } : undefined);
     this.name = "CloudClientError";

@@ -77,7 +77,9 @@ Crawl-delay: 10
 `;
     const result = parseRobotsTxt(content, "https://example.com/robots.txt");
 
-    expect(result.rules).toEqual([{ userAgent: "*", rules: [], crawlDelay: 10 }]);
+    expect(result.rules).toEqual([
+      { userAgent: "*", rules: [], crawlDelay: 10 },
+    ]);
   });
 
   // #1145: only a real delay is stored. A negative one, or one past a double
@@ -89,17 +91,21 @@ Crawl-delay: 10
     (delay) => {
       const alone = parseRobotsTxt(
         `User-agent: *\nCrawl-delay: ${delay}\n`,
-        "https://example.com/robots.txt",
+        "https://example.com/robots.txt"
       );
       expect(alone.rules).toEqual([]);
       const withRules = parseRobotsTxt(
         `User-agent: *\nCrawl-delay: ${delay}\nDisallow: /x\n`,
-        "https://example.com/robots.txt",
+        "https://example.com/robots.txt"
       );
       expect(withRules.rules).toEqual([
-        { userAgent: "*", rules: [{ type: "disallow", path: "/x" }], crawlDelay: undefined },
+        {
+          userAgent: "*",
+          rules: [{ type: "disallow", path: "/x" }],
+          crawlDelay: undefined,
+        },
       ]);
-    },
+    }
   );
 
   it.each([
@@ -109,9 +115,11 @@ Crawl-delay: 10
   ])("keeps a Crawl-delay of %s", (delay, expected) => {
     const result = parseRobotsTxt(
       `User-agent: *\nCrawl-delay: ${delay}\n`,
-      "https://example.com/robots.txt",
+      "https://example.com/robots.txt"
     );
-    expect(result.rules).toEqual([{ userAgent: "*", rules: [], crawlDelay: expected }]);
+    expect(result.rules).toEqual([
+      { userAgent: "*", rules: [], crawlDelay: expected },
+    ]);
   });
 
   it("applies one group's directives to every stacked user agent", () => {
@@ -187,22 +195,25 @@ Disallow: /
     ["a Sitemap", "Sitemap: https://example.com/sitemap.xml"],
     ["a Crawl-delay", "Crawl-delay: 5"],
     ["an unknown record", "Host: example.com"],
-  ])("%s between user-agent lines does not split their group", (_name, record) => {
-    const result = parseRobotsTxt(
-      `User-agent: GPTBot\n${record}\nUser-agent: CCBot\nDisallow: /\n`,
-      "https://example.com/robots.txt",
-    );
+  ])(
+    "%s between user-agent lines does not split their group",
+    (_name, record) => {
+      const result = parseRobotsTxt(
+        `User-agent: GPTBot\n${record}\nUser-agent: CCBot\nDisallow: /\n`,
+        "https://example.com/robots.txt"
+      );
 
-    expect(result.rules.map((g) => [g.userAgent, g.rules])).toEqual([
-      ["GPTBot", [{ type: "disallow", path: "/" }]],
-      ["CCBot", [{ type: "disallow", path: "/" }]],
-    ]);
-  });
+      expect(result.rules.map((g) => [g.userAgent, g.rules])).toEqual([
+        ["GPTBot", [{ type: "disallow", path: "/" }]],
+        ["CCBot", [{ type: "disallow", path: "/" }]],
+      ]);
+    }
+  );
 
   it("a Crawl-delay before stacked user agents applies to the whole group", () => {
     const result = parseRobotsTxt(
       "User-agent: BingBot\nCrawl-delay: 10\nUser-agent: AhrefsBot\nDisallow: /slow/\n",
-      "https://example.com/robots.txt",
+      "https://example.com/robots.txt"
     );
 
     expect(result.rules.map((g) => [g.userAgent, g.crawlDelay])).toEqual([
@@ -214,7 +225,7 @@ Disallow: /
   it("a user-agent after an Allow or Disallow still starts a new group", () => {
     const result = parseRobotsTxt(
       "User-agent: A\nDisallow: /\nSitemap: https://example.com/s.xml\nUser-agent: B\nAllow: /\n",
-      "https://example.com/robots.txt",
+      "https://example.com/robots.txt"
     );
 
     expect(result.rules).toEqual([
@@ -228,7 +239,7 @@ Disallow: /
     for (const eol of ["\r", "\r\n"]) {
       const result = parseRobotsTxt(
         `User-agent: *${eol}Disallow: /private/${eol}Sitemap: https://example.com/s.xml${eol}`,
-        "https://example.com/robots.txt",
+        "https://example.com/robots.txt"
       );
 
       expect(result.rules).toEqual([

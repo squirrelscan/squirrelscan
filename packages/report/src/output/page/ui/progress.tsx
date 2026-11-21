@@ -1,5 +1,6 @@
 // Classic JSX in the CLI build needs React in scope.
 import React from "react";
+
 import { cn } from "./utils";
 
 interface ProgressProps {

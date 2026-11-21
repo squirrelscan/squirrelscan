@@ -15,7 +15,6 @@ import { describe, expect, test } from "bun:test";
 
 import { loadAllRules } from "../src/loader";
 import { mayFanOutAcrossTemplate, type RuleMeta } from "../src/types";
-
 import measured from "./fixtures/template-invariance-measured.json";
 
 const rules = [...loadAllRules().values()];
@@ -33,7 +32,7 @@ describe("verdictScope declarations", () => {
     (_id, meta) => {
       expect(meta.verdictScope).toBeDefined();
       expect(["template", "page"]).toContain(meta.verdictScope!);
-    },
+    }
   );
 
   test.each(siteRules.map((r) => [r.meta.id, r.meta] as const))(
@@ -42,7 +41,7 @@ describe("verdictScope declarations", () => {
       // A site rule runs once for the whole crawl; there is no cluster to fan it
       // across, so a declaration here would be a claim about nothing.
       expect(meta.verdictScope).toBeUndefined();
-    },
+    }
   );
 });
 
@@ -53,13 +52,25 @@ describe("mayFanOutAcrossTemplate", () => {
   });
 
   test("a site rule does not fan out even if it declares template", () => {
-    const meta = { id: "x/y", scope: "site", verdictScope: "template" } as unknown as RuleMeta;
+    const meta = {
+      id: "x/y",
+      scope: "site",
+      verdictScope: "template",
+    } as unknown as RuleMeta;
     expect(mayFanOutAcrossTemplate(meta)).toBe(false);
   });
 
   test("only an explicit page + template declaration fans out", () => {
-    const yes = { id: "x/y", scope: "page", verdictScope: "template" } as unknown as RuleMeta;
-    const no = { id: "x/y", scope: "page", verdictScope: "page" } as unknown as RuleMeta;
+    const yes = {
+      id: "x/y",
+      scope: "page",
+      verdictScope: "template",
+    } as unknown as RuleMeta;
+    const no = {
+      id: "x/y",
+      scope: "page",
+      verdictScope: "page",
+    } as unknown as RuleMeta;
     expect(mayFanOutAcrossTemplate(yes)).toBe(true);
     expect(mayFanOutAcrossTemplate(no)).toBe(false);
   });
@@ -88,24 +99,30 @@ describe("declared template rules vs the measurement on two real crawls", () => 
   const corpora = Object.entries(measured.corpora) as Array<
     [string, { constantRules: string[]; varyingRules: string[] }]
   >;
-  const constantIn = new Map(corpora.map(([name, c]) => [name, new Set(c.constantRules)]));
+  const constantIn = new Map(
+    corpora.map(([name, c]) => [name, new Set(c.constantRules)])
+  );
 
   test("the recorded measurement is intact", () => {
     expect(corpora.length).toBe(2);
     for (const [, c] of corpora) {
-      expect(c.constantRules.length + c.varyingRules.length).toBe(pageRules.length);
+      expect(c.constantRules.length + c.varyingRules.length).toBe(
+        pageRules.length
+      );
     }
   });
 
   test.each(
-    pageRules.filter((r) => mayFanOutAcrossTemplate(r.meta)).map((r) => [r.meta.id] as const),
-  )('%s is constant on both measured corpora', (ruleId) => {
+    pageRules
+      .filter((r) => mayFanOutAcrossTemplate(r.meta))
+      .map((r) => [r.meta.id] as const)
+  )("%s is constant on both measured corpora", (ruleId) => {
     for (const [name, ids] of constantIn) {
       if (!ids.has(ruleId)) {
         throw new Error(
           `${ruleId} declares verdictScope "template" but VARIED inside a cluster on ${name}. ` +
             "Either its inputs changed and it is now page-scoped, or the measurement is stale — " +
-            "re-run apps/cli/scripts/template-rule-invariance.ts.",
+            "re-run apps/cli/scripts/template-rule-invariance.ts."
         );
       }
     }
@@ -117,10 +134,12 @@ describe("declared template rules vs the measurement on two real crawls", () => 
     // parsed.links/images/schemas/meta reader, and every rule reading per-page site
     // data an offline probe leaves empty. Those are classified "page" by hand and
     // this asserts that judgement was actually exercised rather than skipped.
-    const declared = pageRules.filter((r) => mayFanOutAcrossTemplate(r.meta)).length;
+    const declared = pageRules.filter((r) =>
+      mayFanOutAcrossTemplate(r.meta)
+    ).length;
     const supported = [...constantIn.values()].reduce(
       (acc, ids) => new Set([...acc].filter((id) => ids.has(id))),
-      new Set(pageRules.map((r) => r.meta.id)),
+      new Set(pageRules.map((r) => r.meta.id))
     ).size;
     expect(declared).toBeGreaterThan(20);
     expect(declared).toBeLessThan(supported / 2);

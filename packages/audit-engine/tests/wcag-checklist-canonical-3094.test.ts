@@ -3,15 +3,23 @@
 // passed in; a rule that ran and found nothing to check (a11y/autocomplete-tokens, not applicable on every
 // page) answered, so a normal full audit has no "Rules did not run" row.
 
-import { describe, expect, test } from "bun:test";
-
-import { buildWcagChecklist, renderMarkdown, wcagChecklistCounts } from "@squirrelscan/report";
-import { SQLiteStorage } from "@squirrelscan/crawler";
-import { loadAllRules } from "@squirrelscan/rules";
-
 import type { FullAuditReport } from "@squirrelscan/audit-engine";
 
-import { canonicalFixtureDb, getGoldenBaselineConfig, run, runV1Pipeline } from "./helpers/golden-baseline";
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import {
+  buildWcagChecklist,
+  renderMarkdown,
+  wcagChecklistCounts,
+} from "@squirrelscan/report";
+import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
+
+import {
+  canonicalFixtureDb,
+  getGoldenBaselineConfig,
+  run,
+  runV1Pipeline,
+} from "./helpers/golden-baseline";
 
 const CAPTURE_BUDGET_MS = 180_000;
 
@@ -23,7 +31,8 @@ function canonicalReport(): Promise<FullAuditReport> {
       await run(storage.init());
       const crawlId = (await run(storage.listCrawls(1)))[0]?.id;
       if (!crawlId) throw new Error("no crawl in the canonical fixture");
-      return (await runV1Pipeline(storage, crawlId, getGoldenBaselineConfig())).report;
+      return (await runV1Pipeline(storage, crawlId, getGoldenBaselineConfig()))
+        .report;
     } finally {
       await run(storage.close());
     }
@@ -32,7 +41,10 @@ function canonicalReport(): Promise<FullAuditReport> {
 }
 
 const wcagRules = () =>
-  [...loadAllRules({ includeOptIn: true }).values()].map((rule) => ({ id: rule.meta.id, wcag: rule.meta.wcag }));
+  [...loadAllRules({ includeOptIn: true }).values()].map((rule) => ({
+    id: rule.meta.id,
+    wcag: rule.meta.wcag,
+  }));
 
 describe("accessibility checklist on the canonical fixture (repo#3094)", () => {
   test(
@@ -50,16 +62,20 @@ describe("accessibility checklist on the canonical fixture (repo#3094)", () => {
       expect(md).toContain("## Accessibility checklist");
       expect(md).not.toContain("| Rules did not run |");
     },
-    CAPTURE_BUDGET_MS,
+    CAPTURE_BUDGET_MS
   );
 
   test(
     "the engine's report carries no meta.wcag, so without the declarations there is no checklist",
     async () => {
       const report = await canonicalReport();
-      expect(Object.values(report.ruleResults).some((r) => "wcag" in (r.meta ?? {}))).toBe(false);
-      expect(renderMarkdown(report)).not.toContain("## Accessibility checklist");
+      expect(
+        Object.values(report.ruleResults).some((r) => "wcag" in (r.meta ?? {}))
+      ).toBe(false);
+      expect(renderMarkdown(report)).not.toContain(
+        "## Accessibility checklist"
+      );
     },
-    CAPTURE_BUDGET_MS,
+    CAPTURE_BUDGET_MS
   );
 });

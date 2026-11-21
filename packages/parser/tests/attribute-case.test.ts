@@ -66,9 +66,9 @@ describe("HTML attribute lookup ignores case (#1507)", () => {
     // insensitivity is ASCII only, so a browser leaves this name as authored.
     // Spelled as a code point: as a literal it is indistinguishable from "K".
     const kelvin = "\u212A";
-    const el = parse(`<div id="a" ${kelvin}="kelvin" ASCII-K="plain"></div>`).getElementById(
-      "a",
-    )!;
+    const el = parse(
+      `<div id="a" ${kelvin}="kelvin" ASCII-K="plain"></div>`
+    ).getElementById("a")!;
 
     expect(el.getAttribute("k")).toBeNull();
     expect(el.getAttribute(kelvin)).toBe("kelvin");
@@ -108,7 +108,9 @@ describe("HTML attribute lookup ignores case (#1507)", () => {
   });
 
   test("the first spelling wins when a document repeats an attribute in two cases", () => {
-    const el = parse(`<div id="a" DATA-Foo="1" DATA-FOO="2"></div>`).getElementById("a")!;
+    const el = parse(
+      `<div id="a" DATA-Foo="1" DATA-FOO="2"></div>`
+    ).getElementById("a")!;
 
     expect(el.getAttribute("data-foo")).toBe("1");
   });
@@ -118,7 +120,9 @@ describe("HTML attribute lookup ignores case (#1507)", () => {
     // differ only in case, so it would answer "1". Resolving that here would
     // mean indexing every attribute of every element on every lookup, to be
     // exact about markup that is invalid to begin with.
-    const el = parse(`<div id="a" DATA-Foo="1" data-foo="2"></div>`).getElementById("a")!;
+    const el = parse(
+      `<div id="a" DATA-Foo="1" data-foo="2"></div>`
+    ).getElementById("a")!;
 
     expect(el.getAttribute("data-foo")).toBe("2");
   });
@@ -127,7 +131,7 @@ describe("HTML attribute lookup ignores case (#1507)", () => {
 describe("SVG keeps case-sensitive attribute names", () => {
   const svg = () =>
     parse(
-      `<svg id="s" viewBox="0 0 10 10" preserveAspectRatio="xMidYMid"><path d="M0 0"/></svg>`,
+      `<svg id="s" viewBox="0 0 10 10" preserveAspectRatio="xMidYMid"><path d="M0 0"/></svg>`
     ).getElementById("s")!;
 
   test("viewBox and preserveAspectRatio match only their exact spelling", () => {
@@ -141,7 +145,11 @@ describe("SVG keeps case-sensitive attribute names", () => {
   });
 
   test("getAttributeNames leaves foreign names alone", () => {
-    expect(svg().getAttributeNames()).toEqual(["id", "viewBox", "preserveAspectRatio"]);
+    expect(svg().getAttributeNames()).toEqual([
+      "id",
+      "viewBox",
+      "preserveAspectRatio",
+    ]);
   });
 
   test("known gap: MathML gets the HTML rules, because linkedom has no MathML", () => {
@@ -152,7 +160,9 @@ describe("SVG keeps case-sensitive attribute names", () => {
     // tree-construction context linkedom never recorded. definitionURL is the
     // only camelCase name the HTML parser produces for MathML, and no rule
     // reads it. Pinned so the gap is visible if that changes.
-    const math = parse(`<math id="m" definitionURL="http://x"></math>`).getElementById("m")!;
+    const math = parse(
+      `<math id="m" definitionURL="http://x"></math>`
+    ).getElementById("m")!;
 
     expect(math.namespaceURI).toBe("http://www.w3.org/1999/xhtml");
     expect(math.getAttribute("definitionurl")).toBe("http://x");
@@ -189,7 +199,11 @@ describe("no attribute is ever renamed", () => {
   test("el.attributes still reports the author's spelling", () => {
     const el = parse(SOURCE).getElementById("c")!;
 
-    expect([...el.attributes].map((a) => a.name)).toEqual(["id", "DATA-Foo", "aria-LABEL"]);
+    expect([...el.attributes].map((a) => a.name)).toEqual([
+      "id",
+      "DATA-Foo",
+      "aria-LABEL",
+    ]);
     expect(el.getAttributeNode("data-foo")!.name).toBe("DATA-Foo");
   });
 });
@@ -203,7 +217,10 @@ describe("mutation keeps the lookup index honest", () => {
     el.setAttribute("DATA-Bar", "2");
 
     expect(el.getAttribute("data-bar")).toBe("2");
-    expect([...el.attributes].map((a) => a.name).sort()).toEqual(["data-bar", "id"]);
+    expect([...el.attributes].map((a) => a.name).sort()).toEqual([
+      "data-bar",
+      "id",
+    ]);
   });
 
   test("writing a mixed-case class keeps className and class selectors in step", () => {
@@ -236,7 +253,10 @@ describe("mutation keeps the lookup index honest", () => {
     const el = parse(`<div id="a"></div>`).getElementById("a")!;
     el.setAttributeNS(null, "DATA-X", "v");
 
-    expect([...el.attributes].map((a) => a.name).sort()).toEqual(["DATA-X", "id"]);
+    expect([...el.attributes].map((a) => a.name).sort()).toEqual([
+      "DATA-X",
+      "id",
+    ]);
     expect(el.getAttribute("DATA-X")).toBe("v");
     // A browser would answer null here, having lowercased the argument and
     // found no `data-x`. Reaching a mixed-case stored name by its lowercase
@@ -328,7 +348,9 @@ describe("mutation keeps the lookup index honest", () => {
   });
 
   test("removing a foreign attribute still needs its exact spelling", () => {
-    const el = parse(`<svg id="s" viewBox="0 0 10 10"></svg>`).getElementById("s")!;
+    const el = parse(`<svg id="s" viewBox="0 0 10 10"></svg>`).getElementById(
+      "s"
+    )!;
     el.removeAttribute("viewbox");
 
     expect(el.getAttribute("viewBox")).toBe("0 0 10 10");
@@ -337,7 +359,8 @@ describe("mutation keeps the lookup index honest", () => {
 
 // Every way a module specifier can be named: static, side-effect, dynamic and
 // require, in either quote, bare or with a subpath.
-const SPECIFIER_RE = /(?:from|import|require)\s*\(?\s*(['"])linkedom(?:\/[\w./-]+)?\1/g;
+const SPECIFIER_RE =
+  /(?:from|import|require)\s*\(?\s*(['"])linkedom(?:\/[\w./-]+)?\1/g;
 
 // Everything a type-only statement may hold between its keyword and `from`.
 // Only the `import type` / `export type` form counts: `import { type X }`
@@ -379,7 +402,15 @@ function importsLinkedomAtRuntime(source: string): boolean {
 }
 
 // Bun.Glob brace expansion silently matches nothing, so scan one at a time.
-const SOURCE_GLOBS = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.mjs", "**/*.cjs"];
+const SOURCE_GLOBS = [
+  "**/*.ts",
+  "**/*.tsx",
+  "**/*.mts",
+  "**/*.cts",
+  "**/*.js",
+  "**/*.mjs",
+  "**/*.cjs",
+];
 
 // dom.ts is the door. This file describes the patterns it looks for, in
 // comments and in the two regexes above, so it cannot scan itself.
@@ -400,14 +431,38 @@ describe("linkedom is reachable through one door", () => {
     [true, "require", `const l = require("linkedom");`],
     [true, "a subpath", `import { DOMParser } from "linkedom/worker";`],
     [true, "a re-export", `export { parseHTML } from "linkedom";`],
-    [true, "a value import after a semicolonless type import", `import type { X } from "other"\nimport { parseHTML } from "linkedom"`],
-    [true, "require after a semicolonless type import", `import type { Y } from "other"\nconst l = require("linkedom")`],
-    [true, "an inline type specifier, which still emits the import", `import { type Document } from "linkedom";`],
+    [
+      true,
+      "a value import after a semicolonless type import",
+      `import type { X } from "other"\nimport { parseHTML } from "linkedom"`,
+    ],
+    [
+      true,
+      "require after a semicolonless type import",
+      `import type { Y } from "other"\nconst l = require("linkedom")`,
+    ],
+    [
+      true,
+      "an inline type specifier, which still emits the import",
+      `import { type Document } from "linkedom";`,
+    ],
     [false, "a type import", `import type { Document } from "linkedom";`],
-    [false, "a multiline type import", `import type {\n  Document,\n  Element,\n} from "linkedom";`],
-    [false, "a type import after another import", `import { a } from "b";\nimport type { Document } from "linkedom";`],
+    [
+      false,
+      "a multiline type import",
+      `import type {\n  Document,\n  Element,\n} from "linkedom";`,
+    ],
+    [
+      false,
+      "a type import after another import",
+      `import { a } from "b";\nimport type { Document } from "linkedom";`,
+    ],
     [false, "a type re-export", `export type { Document } from "linkedom";`],
-    [false, "a type import whose binding contains the word import", `import type { important } from "linkedom";`],
+    [
+      false,
+      "a type import whose binding contains the word import",
+      `import type { important } from "linkedom";`,
+    ],
   ])("flags %p: %s", (flagged, _label, source) => {
     expect(importsLinkedomAtRuntime(source)).toBe(flagged);
   });
@@ -423,7 +478,8 @@ describe("linkedom is reachable through one door", () => {
 
     for (const pattern of SOURCE_GLOBS) {
       for await (const rel of new Glob(pattern).scan({ cwd: root })) {
-        if (rel.includes("node_modules") || EXEMPT.has(rel) || seen.has(rel)) continue;
+        if (rel.includes("node_modules") || EXEMPT.has(rel) || seen.has(rel))
+          continue;
         seen.add(rel);
 
         const source = await Bun.file(`${root}/${rel}`).text();

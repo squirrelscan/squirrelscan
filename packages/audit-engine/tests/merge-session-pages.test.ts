@@ -10,12 +10,15 @@
 // older audit saw removed, crawled and removed sets that overlap, and pages only
 // the unsampled signal crawled.
 
-import { describe, expect, test } from "bun:test";
-
 import type { SitePageRecord } from "@squirrelscan/core-contracts";
 
+import { describe, expect, test } from "bun:test";
+
 import { createMergeSession, type MergeSessionInput } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_497_pages";
@@ -33,7 +36,11 @@ function rng(seed: number): () => number {
 
 const url = (i: number) => `https://pages.test/p/${i}`;
 
-function page(normalizedUrl: string, state: SitePageRecord["state"], i: number): SitePageRecord {
+function page(
+  normalizedUrl: string,
+  state: SitePageRecord["state"],
+  i: number
+): SitePageRecord {
   return {
     siteKey: SITE,
     normalizedUrl,
@@ -50,7 +57,8 @@ function fixture(seed: number, withSignal: boolean): MergeSessionInput {
   for (let i = 0; i < 300; i++) {
     priorPages.push(page(url(i), r() < 0.8 ? "active" : "removed", i));
     // A url listed twice, in either order of states: the last row wins.
-    if (r() < 0.05) priorPages.push(page(url(i), r() < 0.5 ? "active" : "removed", i + 7));
+    if (r() < 0.05)
+      priorPages.push(page(url(i), r() < 0.5 ? "active" : "removed", i + 7));
   }
   // Pick from known pages and from pages no audit has had.
   const pick = (p: number) => {
@@ -90,8 +98,16 @@ function fixture(seed: number, withSignal: boolean): MergeSessionInput {
 
 /** The derivations as they were before #497, copied as the oracle. */
 function reference(input: MergeSessionInput) {
-  const { siteKey, crawlId, crawledUrls, removedUrls, statusByUrl, priorPages, now, resolution } =
-    input;
+  const {
+    siteKey,
+    crawlId,
+    crawledUrls,
+    removedUrls,
+    statusByUrl,
+    priorPages,
+    now,
+    resolution,
+  } = input;
   const everRendered = new Set<string>();
   for (const p of priorPages) everRendered.add(p.normalizedUrl);
   const sitePageMap = new Map<string, SitePageRecord>();
@@ -122,14 +138,15 @@ function reference(input: MergeSessionInput) {
   }
   const sitePages = Array.from(sitePageMap.values());
   const activePageUrls = new Set(
-    sitePages.filter((p) => p.state === "active").map((p) => p.normalizedUrl),
+    sitePages.filter((p) => p.state === "active").map((p) => p.normalizedUrl)
   );
   // runCloudSmartAudits' carried pages.
   const priorState = new Map<string, SitePageRecord["state"]>();
   for (const p of priorPages) priorState.set(p.normalizedUrl, p.state);
   const carriedPageUrls = new Set<string>();
   for (const [u, state] of priorState) {
-    if (state === "active" && !crawledUrls.has(u) && !removedUrls.has(u)) carriedPageUrls.add(u);
+    if (state === "active" && !crawledUrls.has(u) && !removedUrls.has(u))
+      carriedPageUrls.add(u);
   }
   return { everRendered, sitePages, activePageUrls, carriedPageUrls };
 }
@@ -144,12 +161,17 @@ describe("merge session site pages == the copies they replace (#497)", () => {
     test(`seed ${seed}${withSignal ? ", with the unsampled signal" : ""}`, () => {
       const input = fixture(seed, withSignal);
       const ref = reference(input);
-      const session = createMergeSession(input, { persist: () => {}, active: () => {} });
+      const session = createMergeSession(input, {
+        persist: () => {},
+        active: () => {},
+      });
       // The fixture has to exercise what it claims to.
-      expect(new Set(input.priorPages.map((p) => p.normalizedUrl)).size).toBeLessThan(
-        input.priorPages.length,
+      expect(
+        new Set(input.priorPages.map((p) => p.normalizedUrl)).size
+      ).toBeLessThan(input.priorPages.length);
+      expect([...input.crawledUrls].some((u) => input.removedUrls.has(u))).toBe(
+        true
       );
-      expect([...input.crawledUrls].some((u) => input.removedUrls.has(u))).toBe(true);
 
       expect(session.sitePages).toEqual(ref.sitePages);
       expect([...session.activePageUrls]).toEqual([...ref.activePageUrls]);
@@ -171,11 +193,13 @@ describe("merge session site pages == the copies they replace (#497)", () => {
       const stored = new Map<string, SitePageRecord>();
       for (const p of input.priorPages) stored.set(p.normalizedUrl, p);
       for (const p of session.changedSitePages) stored.set(p.normalizedUrl, p);
-      expect(new Map(stored)).toEqual(new Map(ref.sitePages.map((p) => [p.normalizedUrl, p])));
+      expect(new Map(stored)).toEqual(
+        new Map(ref.sitePages.map((p) => [p.normalizedUrl, p]))
+      );
       expect(session.changedSitePages.length).toBeLessThanOrEqual(
         input.crawledUrls.size +
           input.removedUrls.size +
-          (input.resolution?.crawledUrls.size ?? 0),
+          (input.resolution?.crawledUrls.size ?? 0)
       );
     });
   }
@@ -184,7 +208,7 @@ describe("merge session site pages == the copies they replace (#497)", () => {
 /** Site pages in a caller's map, recording every row it is handed. No findings. */
 function pageMapStore(
   pages: Map<string, SitePageRecord>,
-  upserted: SitePageRecord[] = [],
+  upserted: SitePageRecord[] = []
 ): SmartAuditStore {
   return {
     getFindings: async () => [],
@@ -203,7 +227,8 @@ function pageMapStore(
 describe("a publish writes the run's pages, not the site's (#497)", () => {
   test("5,000 known pages, 20 crawled, 2 removed: 20 page rows upserted", async () => {
     const pages = new Map<string, SitePageRecord>();
-    for (let i = 0; i < 5_000; i++) pages.set(url(i), page(url(i), i % 9 === 0 ? "removed" : "active", i));
+    for (let i = 0; i < 5_000; i++)
+      pages.set(url(i), page(url(i), i % 9 === 0 ? "removed" : "active", i));
     const upserted: SitePageRecord[] = [];
     const store = pageMapStore(pages, upserted);
     const crawled = Array.from({ length: 20 }, (_, i) => url(i * 250 + 1));
@@ -228,14 +253,23 @@ describe("a publish writes the run's pages, not the site's (#497)", () => {
 
     expect(upserted.map((p) => p.normalizedUrl)).toEqual(crawled);
     for (const p of upserted) {
-      expect(p).toMatchObject({ state: "active", lastSeenCrawlId: CRAWL, lastSeenAt: NOW });
+      expect(p).toMatchObject({
+        state: "active",
+        lastSeenCrawlId: CRAWL,
+        lastSeenAt: NOW,
+      });
     }
     // Every other row is as it was.
-    for (const [u, p] of pages) if (!crawled.includes(u)) expect(p).toBe(before.get(u)!);
+    for (const [u, p] of pages)
+      if (!crawled.includes(u)) expect(p).toBe(before.get(u)!);
     // Known pages: the prior actives, less the removed active one, plus the
     // crawled pages an older audit had seen removed.
-    const priorActive = [...before.values()].filter((p) => p.state === "active").length;
-    const revived = crawled.filter((u) => before.get(u)?.state === "removed").length;
+    const priorActive = [...before.values()].filter(
+      (p) => p.state === "active"
+    ).length;
+    const revived = crawled.filter(
+      (u) => before.get(u)?.state === "removed"
+    ).length;
     expect(revived).toBeGreaterThan(0);
     expect(result.coverage.knownPages).toBe(priorActive - 1 + revived);
     expect(result.coverage.auditedPages).toBe(20);
@@ -255,7 +289,8 @@ class KeyedUpsertStore implements SmartAuditStore {
     return `${siteKey}\u0000${normalizedUrl}`;
   }
   seed(pages: readonly SitePageRecord[]) {
-    for (const p of pages) this.rows.set(this.key(p.siteKey, p.normalizedUrl), p);
+    for (const p of pages)
+      this.rows.set(this.key(p.siteKey, p.normalizedUrl), p);
   }
   async getFindings() {
     return [];
@@ -266,15 +301,25 @@ class KeyedUpsertStore implements SmartAuditStore {
   async upsertFindings() {}
   async upsertSitePages(pages: SitePageRecord[]) {
     this.upserted += pages.length;
-    for (const p of pages) this.rows.set(this.key(p.siteKey, p.normalizedUrl), { ...p });
+    for (const p of pages)
+      this.rows.set(this.key(p.siteKey, p.normalizedUrl), { ...p });
   }
-  async markPageRemoved(siteKey: string, normalizedUrl: string, crawlId: string, lastStatus: number) {
-    await this.markPagesRemoved(siteKey, [{ normalizedUrl, lastStatus }], crawlId);
+  async markPageRemoved(
+    siteKey: string,
+    normalizedUrl: string,
+    crawlId: string,
+    lastStatus: number
+  ) {
+    await this.markPagesRemoved(
+      siteKey,
+      [{ normalizedUrl, lastStatus }],
+      crawlId
+    );
   }
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ) {
     for (const { normalizedUrl, lastStatus } of pages) {
       this.rows.set(this.key(siteKey, normalizedUrl), {
@@ -292,7 +337,9 @@ class KeyedUpsertStore implements SmartAuditStore {
   }
   /** Every row, in key order, so two stores compare by content alone. */
   snapshot() {
-    return [...this.rows.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return [...this.rows.entries()].sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0
+    );
   }
 }
 
@@ -300,9 +347,11 @@ describe("upsertSitePages as a keyed upsert: changed rows only == every row (#49
   for (const seed of [1, 2, 3, 4, 5, 6]) {
     test(`seed ${seed}`, async () => {
       const input = fixture(seed, false);
-      const otherSite = input.priorPages
-        .slice(0, 40)
-        .map((p) => ({ ...p, siteKey: "web_other", lastSeenCrawlId: "audit_other" }));
+      const otherSite = input.priorPages.slice(0, 40).map((p) => ({
+        ...p,
+        siteKey: "web_other",
+        lastSeenCrawlId: "audit_other",
+      }));
       const crawled = [...input.crawledUrls];
       const removed = [...input.removedUrls];
       const pageStatuses = [
@@ -321,7 +370,10 @@ describe("upsertSitePages as a keyed upsert: changed rows only == every row (#49
         ruleResults: {},
         pageStatuses,
         now: NOW,
-        completeStore: { crawledUrls: crawled, openPages: (async function* () {})() },
+        completeStore: {
+          crawledUrls: crawled,
+          openPages: (async function* () {})(),
+        },
       });
 
       // Before #497: the same scope, every merged page written back. These are the
@@ -341,14 +393,19 @@ describe("upsertSitePages as a keyed upsert: changed rows only == every row (#49
           statusByUrl,
           priorPages: await full.getSitePages(SITE),
         },
-        { persist: () => {}, active: () => {} },
+        { persist: () => {}, active: () => {} }
       );
       await full.markPagesRemoved(
         SITE,
-        removed.map((u) => ({ normalizedUrl: u, lastStatus: statusByUrl.get(u) ?? 404 })),
-        CRAWL,
+        removed.map((u) => ({
+          normalizedUrl: u,
+          lastStatus: statusByUrl.get(u) ?? 404,
+        })),
+        CRAWL
       );
-      await full.upsertSitePages(session.sitePages.filter((p) => !removedUrls.has(p.normalizedUrl)));
+      await full.upsertSitePages(
+        session.sitePages.filter((p) => !removedUrls.has(p.normalizedUrl))
+      );
 
       expect(delta.snapshot()).toEqual(full.snapshot());
       // And it got there writing the run's pages, not the site's.
@@ -358,5 +415,10 @@ describe("upsertSitePages as a keyed upsert: changed rows only == every row (#49
   }
 });
 
-describeSitePagesContract("merge-session-pages.test.ts pageMapStore", () => pageMapStore(new Map()));
-describeSitePagesContract("merge-session-pages.test.ts KeyedUpsertStore", () => new KeyedUpsertStore());
+describeSitePagesContract("merge-session-pages.test.ts pageMapStore", () =>
+  pageMapStore(new Map())
+);
+describeSitePagesContract(
+  "merge-session-pages.test.ts KeyedUpsertStore",
+  () => new KeyedUpsertStore()
+);

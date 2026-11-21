@@ -6,13 +6,22 @@
 // divergent provider, a divergent legal identifier. Identity is never inferred from names.
 // Fixtures use invented hosts and text.
 
+import type {
+  HreflangAlternate,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { HreflangAlternate, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  EntityMap,
+  ParsedPage,
+  RuleContext,
+} from "../src/types";
 
 import { entityConflictsRule } from "../src/schema/entity-conflicts";
-import type { CheckResult, EntityMap, ParsedPage, RuleContext } from "../src/types";
-
 import { ctxWith, edge, entityMap, node } from "./helpers/entity-map";
 
 const EN = "https://example.com/en/service";
@@ -60,7 +69,11 @@ function pagesContext(map: EntityMap, specs: PageSpec[]): RuleContext {
     ...ctx,
     site: {
       ...ctx.site!,
-      pages: specs.map((spec) => ({ url: spec.url, statusCode: 200, parsed: parsedOf(spec) })),
+      pages: specs.map((spec) => ({
+        url: spec.url,
+        statusCode: 200,
+        parsed: parsedOf(spec),
+      })),
     } as RuleContext["site"],
   };
 }
@@ -73,7 +86,7 @@ function siteQueryContext(map: EntityMap, specs: PageSpec[]): RuleContext {
         normalizedUrl: spec.url,
         canonical: spec.canonical ?? spec.url,
         hreflangAlternates: alternatesOf(spec),
-      }) as unknown as PageFeatureRow,
+      }) as unknown as PageFeatureRow
   );
   const unused = (): never => {
     throw new Error("entity-conflicts must not use this SiteQuery method");
@@ -109,7 +122,7 @@ const urlConflict = (...pairs: Array<[string, string[]]>) => ({
 /** One Service @id declared on both pages, differing only in `url`. */
 function serviceMap(
   overrides: Parameters<typeof node>[0] = {},
-  edges = providerEdges(),
+  edges = providerEdges()
 ): EntityMap {
   return entityMap({
     nodes: [
@@ -130,11 +143,14 @@ function serviceMap(
   });
 }
 
-const providerEdges = (pages = [DK, EN], target = "id:https://example.com/#provider") => [
-  edge({ source: SERVICE, predicate: "provider", target, pages }),
-];
+const providerEdges = (
+  pages = [DK, EN],
+  target = "id:https://example.com/#provider"
+) => [edge({ source: SERVICE, predicate: "provider", target, pages })];
 
-const BOTH_ENGINES: Array<[string, (map: EntityMap, specs: PageSpec[]) => RuleContext]> = [
+const BOTH_ENGINES: Array<
+  [string, (map: EntityMap, specs: PageSpec[]) => RuleContext]
+> = [
   ["pages (v1)", pagesContext],
   ["site query (streaming)", siteQueryContext],
 ];
@@ -170,7 +186,10 @@ for (const [engine, build] of BOTH_ENGINES) {
     });
 
     test("a page that canonicalises elsewhere is not an alternate and still warns", async () => {
-      const specs: PageSpec[] = [RECIPROCAL[0]!, { ...RECIPROCAL[1]!, canonical: EN }];
+      const specs: PageSpec[] = [
+        RECIPROCAL[0]!,
+        { ...RECIPROCAL[1]!, canonical: EN },
+      ];
       expect((await check(build(serviceMap(), specs))).status).toBe("warn");
     });
 
@@ -196,7 +215,7 @@ for (const [engine, build] of BOTH_ENGINES) {
           pages: [DE, EN],
           conflicts: [urlConflict([DE, [DE]], [EN, [EN]])],
         },
-        providerEdges([DE, EN]),
+        providerEdges([DE, EN])
       );
       expect((await check(build(map, specs))).status).toBe("pass");
     });
@@ -246,7 +265,9 @@ for (const [engine, build] of BOTH_ENGINES) {
     });
 
     test("a provider declared on only one of the pages still warns on url", async () => {
-      const result = await check(build(serviceMap({}, providerEdges([EN])), RECIPROCAL));
+      const result = await check(
+        build(serviceMap({}, providerEdges([EN])), RECIPROCAL)
+      );
       expect(result.status).toBe("warn");
     });
 
@@ -265,7 +286,10 @@ for (const [engine, build] of BOTH_ENGINES) {
       });
       const result = await check(build(map, RECIPROCAL));
       expect(result.status).toBe("warn");
-      expect(result.items!.map((item) => item.meta?.property).sort()).toEqual(["url", "vatID"]);
+      expect(result.items!.map((item) => item.meta?.property).sort()).toEqual([
+        "url",
+        "vatID",
+      ]);
     });
 
     test("identity is not inferred from names: a name that differs is a conflict, url included", async () => {
@@ -288,7 +312,9 @@ for (const [engine, build] of BOTH_ENGINES) {
 
     test("a url that is not the address of a declaring page is not an alias", async () => {
       const map = serviceMap({
-        conflicts: [urlConflict(["https://elsewhere.example/service", [DK]], [EN, [EN]])],
+        conflicts: [
+          urlConflict(["https://elsewhere.example/service", [DK]], [EN, [EN]]),
+        ],
       });
       expect((await check(build(map, RECIPROCAL))).status).toBe("warn");
     });
@@ -311,7 +337,10 @@ for (const [engine, build] of BOTH_ENGINES) {
 }
 
 /** Every page lists every page (itself included), except the pairs named in `except`. */
-function allToAll(urls: string[], except: Array<[string, string]> = []): PageSpec[] {
+function allToAll(
+  urls: string[],
+  except: Array<[string, string]> = []
+): PageSpec[] {
   const cut = (a: string, b: string) =>
     except.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
   return urls.map((url) => ({
@@ -340,11 +369,13 @@ for (const [engine, build] of BOTH_ENGINES) {
           occurrences: 3,
           conflicts: [urlConflict([L1, [L1]], [L2, [L2]], [L3, [L3]])],
         },
-        providerEdges([L1, L2, L3]),
+        providerEdges([L1, L2, L3])
       );
 
     test("three locales, all pairs reciprocal, pass", async () => {
-      expect((await check(build(threeLocales(), allToAll([L1, L2, L3])))).status).toBe("pass");
+      expect(
+        (await check(build(threeLocales(), allToAll([L1, L2, L3])))).status
+      ).toBe("pass");
     });
 
     test("three locales with one non-reciprocal pair still warn", async () => {
@@ -353,14 +384,19 @@ for (const [engine, build] of BOTH_ENGINES) {
     });
 
     test("more than 40 declaring pages are never excused", async () => {
-      const urls = Array.from({ length: 41 }, (_, i) => `https://example.com/l${i}/service`);
+      const urls = Array.from(
+        { length: 41 },
+        (_, i) => `https://example.com/l${i}/service`
+      );
       const map = serviceMap(
         {
           pages: urls,
           occurrences: 41,
-          conflicts: [urlConflict(...urls.map((u): [string, string[]] => [u, [u]]))],
+          conflicts: [
+            urlConflict(...urls.map((u): [string, string[]] => [u, [u]])),
+          ],
         },
-        providerEdges(urls),
+        providerEdges(urls)
       );
       expect((await check(build(map, allToAll(urls)))).status).toBe("warn");
       // The same shape at the cap is excused.
@@ -369,9 +405,11 @@ for (const [engine, build] of BOTH_ENGINES) {
         {
           pages: forty,
           occurrences: 40,
-          conflicts: [urlConflict(...forty.map((u): [string, string[]] => [u, [u]]))],
+          conflicts: [
+            urlConflict(...forty.map((u): [string, string[]] => [u, [u]])),
+          ],
         },
-        providerEdges(forty),
+        providerEdges(forty)
       );
       expect((await check(build(atCap, allToAll(forty)))).status).toBe("pass");
     });
@@ -407,7 +445,7 @@ for (const [engine, build] of BOTH_ENGINES) {
           pages: [DK, slashEn],
           conflicts: [urlConflict([DK, [DK]], [slashEn, [slashEn]])],
         },
-        providerEdges([DK, slashEn]),
+        providerEdges([DK, slashEn])
       );
       expect((await check(build(map, specs))).status).toBe("pass");
     });
@@ -427,15 +465,24 @@ for (const [engine, build] of BOTH_ENGINES) {
           pages: [DK, EN],
         }),
       ];
-      expect((await check(build(serviceMap({}, edges), RECIPROCAL))).status).toBe("pass");
+      expect(
+        (await check(build(serviceMap({}, edges), RECIPROCAL))).status
+      ).toBe("pass");
     });
 
     test("a member or worksFor edge on one page only still warns", async () => {
       for (const predicate of ["member", "worksFor"]) {
         const edges = [
-          edge({ source: SERVICE, predicate, target: "id:https://example.com/#x", pages: [EN] }),
+          edge({
+            source: SERVICE,
+            predicate,
+            target: "id:https://example.com/#x",
+            pages: [EN],
+          }),
         ];
-        expect((await check(build(serviceMap({}, edges), RECIPROCAL))).status).toBe("warn");
+        expect(
+          (await check(build(serviceMap({}, edges), RECIPROCAL))).status
+        ).toBe("warn");
       }
     });
 
@@ -460,14 +507,19 @@ for (const [engine, build] of BOTH_ENGINES) {
           pages: [EN],
         }),
       ];
-      expect((await check(build(serviceMap({}, edges), RECIPROCAL))).status).toBe("pass");
+      expect(
+        (await check(build(serviceMap({}, edges), RECIPROCAL))).status
+      ).toBe("pass");
     });
 
     test("an identity guard conflict from the builder (a literal provider that differs) blocks the excuse", async () => {
       const map = serviceMap({
         conflicts: [
           urlConflict([DK, [DK]], [EN, [EN]]),
-          identityGuard(["provider=text:acme gmbh", [EN]], ["provider=text:other ltd", [DK]]),
+          identityGuard(
+            ["provider=text:acme gmbh", [EN]],
+            ["provider=text:other ltd", [DK]]
+          ),
         ],
       });
       const result = await check(build(map, RECIPROCAL));

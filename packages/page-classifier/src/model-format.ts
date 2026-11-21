@@ -130,7 +130,8 @@ function decodeBase64(value: string): ArrayBuffer {
 export function decodeHead(json: HeadJson): Head {
   const buffer = decodeBase64(json.trees);
   const view = new DataView(buffer);
-  if (view.getUint32(0, true) !== MAGIC) throw new ArtifactError("bad tree-block magic");
+  if (view.getUint32(0, true) !== MAGIC)
+    throw new ArtifactError("bad tree-block magic");
   const version = view.getUint32(4, true);
   if (!TREE_BLOCK_VERSIONS.has(version)) {
     throw new ArtifactError(`unsupported tree-block version ${version}`);
@@ -144,9 +145,11 @@ export function decodeHead(json: HeadJson): Head {
   let offset = 16;
   const perInternal = new Int32Array(numTrees);
   const perLeaves = new Int32Array(numTrees);
-  for (let i = 0; i < numTrees; i++) perInternal[i] = view.getUint32(offset + i * 4, true);
+  for (let i = 0; i < numTrees; i++)
+    perInternal[i] = view.getUint32(offset + i * 4, true);
   offset += numTrees * 4;
-  for (let i = 0; i < numTrees; i++) perLeaves[i] = view.getUint32(offset + i * 4, true);
+  for (let i = 0; i < numTrees; i++)
+    perLeaves[i] = view.getUint32(offset + i * 4, true);
   offset += numTrees * 4;
 
   let totalInternal = 0;
@@ -178,7 +181,8 @@ export function decodeHead(json: HeadJson): Head {
     flags = new Uint8Array(buffer, offset, totalInternal);
     offset += totalInternal;
   }
-  if (offset > buffer.byteLength) throw new ArtifactError("tree block is truncated");
+  if (offset > buffer.byteLength)
+    throw new ArtifactError("tree block is truncated");
 
   const tokenStreams: TokenStream[] = json.tokenStreams ?? ["classid"];
   if (
@@ -187,7 +191,9 @@ export function decodeHead(json: HeadJson): Head {
     !tokenStreams.includes("classid") ||
     tokenStreams.some((stream) => !TOKEN_STREAMS.has(stream))
   ) {
-    throw new ArtifactError(`unsupported tokenStreams ${JSON.stringify(json.tokenStreams)}`);
+    throw new ArtifactError(
+      `unsupported tokenStreams ${JSON.stringify(json.tokenStreams)}`
+    );
   }
 
   const perClass = new Float64Array(numClass).fill(json.confidenceThreshold);
@@ -199,7 +205,9 @@ export function decodeHead(json: HeadJson): Head {
   }
 
   const platformThresholds = new Map<string, Float64Array>();
-  for (const [platform, overrides] of Object.entries(json.platformClassThresholds ?? {})) {
+  for (const [platform, overrides] of Object.entries(
+    json.platformClassThresholds ?? {}
+  )) {
     const row = Float64Array.from(perClass);
     for (const [name, value] of Object.entries(overrides)) {
       const index = json.classes.indexOf(name);
@@ -213,7 +221,9 @@ export function decodeHead(json: HeadJson): Head {
   return {
     classes: json.classes,
     classThresholds: perClass,
-    featureColumns: json.featureColumns ? Int32Array.from(json.featureColumns) : null,
+    featureColumns: json.featureColumns
+      ? Int32Array.from(json.featureColumns)
+      : null,
     confidenceThreshold: json.confidenceThreshold,
     numClass,
     numTrees,
@@ -236,8 +246,14 @@ export function decodeHead(json: HeadJson): Head {
 
 /** The per-class thresholds for a page of this platform bucket: the guard's
  *  override row when the artifact has one for it, the head's own otherwise. */
-export function thresholdsFor(head: Head, platform: string | null): Float64Array {
-  return (platform !== null && head.platformThresholds.get(platform)) || head.classThresholds;
+export function thresholdsFor(
+  head: Head,
+  platform: string | null
+): Float64Array {
+  return (
+    (platform !== null && head.platformThresholds.get(platform)) ||
+    head.classThresholds
+  );
 }
 
 /** Parse an artifact. Throws ArtifactError on anything it cannot trust. */
@@ -247,12 +263,16 @@ export function loadModel(json: unknown): Model {
     throw new ArtifactError("not a squirrel-dom-classifier artifact");
   }
   if (artifact.artifactVersion !== ARTIFACT_VERSION) {
-    throw new ArtifactError(`unsupported artifact version ${artifact.artifactVersion}`);
+    throw new ArtifactError(
+      `unsupported artifact version ${artifact.artifactVersion}`
+    );
   }
   const pageType = decodeHead(artifact.pageType);
   if (pageType.readsText) {
     // Page tokens have no text stream; a page-type head declaring one would be reading nothing it was trained on.
-    throw new ArtifactError("a page-type head cannot read the text token stream");
+    throw new ArtifactError(
+      "a page-type head cannot read the text token stream"
+    );
   }
   return {
     featurizerVersion: artifact.featurizerVersion,
@@ -272,13 +292,26 @@ export function loadModel(json: unknown): Model {
  * exporter, so this walk never needs to know about it; `featureColumns` is
  * retained only as metadata describing which columns the head actually uses.
  */
-export function scoreRow(head: Head, values: Float32Array, out: Float32Array): void {
+export function scoreRow(
+  head: Head,
+  values: Float32Array,
+  out: Float32Array
+): void {
   if (head.flags) {
     scoreRowMissing(head, head.flags, values, out);
     return;
   }
   out.fill(0);
-  const { feature, threshold, left, right, leaf, treeStart, leafStart, perInternal } = head;
+  const {
+    feature,
+    threshold,
+    left,
+    right,
+    leaf,
+    treeStart,
+    leafStart,
+    perInternal,
+  } = head;
   for (let tree = 0; tree < head.numTrees; tree++) {
     const cls = tree % head.numClass;
     const internal = perInternal[tree]!;
@@ -294,7 +327,10 @@ export function scoreRow(head: Head, values: Float32Array, out: Float32Array): v
       // value: an explicit Math.fround here was a no-op called ~3,850 times per
       // row. The exporter bakes the full-vector feature index into the tree, so
       // there is no column indirection either.
-      const next = values[feature[node]!]! <= threshold[node]! ? left[node]! : right[node]!;
+      const next =
+        values[feature[node]!]! <= threshold[node]!
+          ? left[node]!
+          : right[node]!;
       if (next < 0) {
         // The exporter re-bases child pointers into the CONCATENATED arrays, so
         // -next-1 is already the global leaf index. Adding leafStart here as
@@ -326,7 +362,7 @@ export function scoreRows(
   rows: Float32Array,
   width: number,
   count: number,
-  out: Float32Array,
+  out: Float32Array
 ): void {
   const k = head.numClass;
   if (head.flags) {
@@ -338,7 +374,16 @@ export function scoreRows(
     return;
   }
   out.fill(0, 0, count * k);
-  const { feature, threshold, left, right, leaf, treeStart, leafStart, perInternal } = head;
+  const {
+    feature,
+    threshold,
+    left,
+    right,
+    leaf,
+    treeStart,
+    leafStart,
+    perInternal,
+  } = head;
   let cls = 0;
   for (let tree = 0; tree < head.numTrees; tree++) {
     if (perInternal[tree]! === 0) {
@@ -350,7 +395,9 @@ export function scoreRows(
         let node = root;
         for (;;) {
           const next =
-            rows[base + feature[node]!]! <= threshold[node]! ? left[node]! : right[node]!;
+            rows[base + feature[node]!]! <= threshold[node]!
+              ? left[node]!
+              : right[node]!;
           if (next < 0) {
             out[r * k + cls]! += leaf[-next - 1]!;
             break;
@@ -372,10 +419,19 @@ function scoreRowMissing(
   head: Head,
   flags: Uint8Array,
   values: Float32Array,
-  out: Float32Array,
+  out: Float32Array
 ): void {
   out.fill(0);
-  const { feature, threshold, left, right, leaf, treeStart, leafStart, perInternal } = head;
+  const {
+    feature,
+    threshold,
+    left,
+    right,
+    leaf,
+    treeStart,
+    leafStart,
+    perInternal,
+  } = head;
   for (let tree = 0; tree < head.numTrees; tree++) {
     const cls = tree % head.numClass;
     if (perInternal[tree]! === 0) {
@@ -408,9 +464,13 @@ function scoreRowMissing(
 }
 
 /** Softmax in place, returning the argmax and its probability. */
-export function softmax(scores: Float32Array): { index: number; probability: number } {
+export function softmax(scores: Float32Array): {
+  index: number;
+  probability: number;
+} {
   let max = -Infinity;
-  for (let i = 0; i < scores.length; i++) if (scores[i]! > max) max = scores[i]!;
+  for (let i = 0; i < scores.length; i++)
+    if (scores[i]! > max) max = scores[i]!;
   let total = 0;
   for (let i = 0; i < scores.length; i++) {
     const value = Math.exp(scores[i]! - max);

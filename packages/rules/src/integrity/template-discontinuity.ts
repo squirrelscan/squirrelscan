@@ -17,11 +17,10 @@
 // to ask someone to look and not enough to zero a category or to tell them
 // their site is compromised.
 
+import { getPathname } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { getPathname } from "@squirrelscan/utils";
 
 import {
   buildBaseline,
@@ -147,7 +146,8 @@ export const templateDiscontinuityRule: Rule = {
     const entries: { url: string; fp: PageFingerprint }[] = [];
     if (collected) {
       for (const rec of collected.pages) {
-        if (rec.fingerprint) entries.push({ url: rec.url, fp: rec.fingerprint });
+        if (rec.fingerprint)
+          entries.push({ url: rec.url, fp: rec.fingerprint });
       }
     } else {
       for (const page of pages) {
@@ -242,7 +242,8 @@ export const templateDiscontinuityRule: Rule = {
     const pageFor = (url: string) => {
       if (!pageByUrl) {
         pageByUrl = new Map();
-        for (const p of pages) if (!pageByUrl.has(p.url)) pageByUrl.set(p.url, p);
+        for (const p of pages)
+          if (!pageByUrl.has(p.url)) pageByUrl.set(p.url, p);
       }
       return pageByUrl.get(url)!;
     };

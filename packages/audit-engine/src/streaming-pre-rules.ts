@@ -24,12 +24,15 @@
 // no second implementation to drift. `tests/streaming-pre-rules-golden.test.ts`
 // pins that by running both paths over one crawl and deep-comparing the outputs.
 
-import { Effect } from "effect";
-
 import type { ExternalLinksConfig, Config } from "@squirrelscan/config";
 import type { PageRecord } from "@squirrelscan/core-contracts";
-import { externalLinkCheckCap } from "@squirrelscan/core-contracts/limits";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
+
+import { externalLinkCheckCap } from "@squirrelscan/core-contracts/limits";
+import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
+import { Effect } from "effect";
+
+import type { ExternalCheckResult, LinkCache } from "./external-checker";
 
 import {
   absorbExternalLinkOccurrences,
@@ -45,12 +48,15 @@ import {
   type ResourceCheckOverrides,
   type SiteContextPage,
 } from "./adapter";
-import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
-
 import { collectDroppedBatch } from "./batch-gc";
-import { createCloudPrefetchCollector, type CloudPrefetchPayloadSet } from "./cloud-prefetch-run";
-import type { ExternalCheckResult, LinkCache } from "./external-checker";
-import { startLateLinkVerdicts, type LateLinkVerdicts } from "./late-link-verdicts";
+import {
+  createCloudPrefetchCollector,
+  type CloudPrefetchPayloadSet,
+} from "./cloud-prefetch-run";
+import {
+  startLateLinkVerdicts,
+  type LateLinkVerdicts,
+} from "./late-link-verdicts";
 
 /** Default page batch for the pre-rules walk. Smaller than STREAM_PAGE_BATCH
  * because this is the pass whose peak is `batchSize` live DOMs of the site's
@@ -81,7 +87,8 @@ export interface StreamPreRulesOptions {
      * as an unhandled throw from building the checker would have been.
      */
     resolveBulkChecker?: () => Promise<
-      ((urls: string[]) => Promise<Map<string, ExternalCheckResult>>) | undefined
+      | ((urls: string[]) => Promise<Map<string, ExternalCheckResult>>)
+      | undefined
     >;
     /**
      * Links to check ahead of the per-audit limit's most-linked order
@@ -176,7 +183,7 @@ export function runStreamingPreRules(
   storage: SQLiteStorage,
   crawlId: string,
   config: Config,
-  options?: StreamPreRulesOptions,
+  options?: StreamPreRulesOptions
 ): Effect.Effect<StreamPreRulesResult, never, never> {
   return Effect.gen(function* () {
     // Math.max, not `??` alone: `??` lets a 0 through, and SQLite reads
@@ -195,9 +202,10 @@ export function runStreamingPreRules(
       baseUrl,
       options?.resourceOverrides?.ownSiteOnly === true
         ? ownSiteHostMatcher({ baseUrl, domains: config.project?.domains })
-        : undefined,
+        : undefined
     );
-    const externalLinksEnabled = options?.externalLinks?.config.enabled === true;
+    const externalLinksEnabled =
+      options?.externalLinks?.config.enabled === true;
     const externalLinkOccurrences: ExternalLinkOccurrences = new Map();
     const prefetchCollector = options?.cloudPrefetchSiteUrl
       ? createCloudPrefetchCollector(options.cloudPrefetchSiteUrl)
@@ -235,11 +243,14 @@ export function runStreamingPreRules(
         }
       }
 
-      const ctx = yield* buildSiteContext(batch, undefined, { maxParseBytes: options?.maxParseBytes });
+      const ctx = yield* buildSiteContext(batch, undefined, {
+        maxParseBytes: options?.maxParseBytes,
+      });
       // Every absorb below runs with this batch's DOMs live; the batch is dropped
       // immediately after, which is the whole residency bound.
       assetCollector.absorb(ctx);
-      if (externalLinksEnabled) absorbExternalLinkOccurrences(externalLinkOccurrences, ctx);
+      if (externalLinksEnabled)
+        absorbExternalLinkOccurrences(externalLinkOccurrences, ctx);
       prefetchCollector?.absorb(ctx);
       // Caller-owned collectors run last, still inside the live-DOM window.
       options?.onBatchContext?.(ctx);
@@ -281,7 +292,8 @@ export function runStreamingPreRules(
             linkCache: options.externalLinks.linkCache ?? null,
             bulkChecker,
             priorityHrefs: options.externalLinks.priorityHrefs,
-            egressPinnedByTransport: options.resourceOverrides?.egressPinnedByTransport,
+            egressPinnedByTransport:
+              options.resourceOverrides?.egressPinnedByTransport,
             limits: options.externalLinks.limits,
             runDeadlineAt: lateBinding.runDeadlineAt,
             onProgress: options.externalLinks.onProgress,
@@ -290,27 +302,27 @@ export function runStreamingPreRules(
         : undefined;
     const externalLinkResults =
       options?.externalLinks && externalLinksConfig && !lateBinding
-      ? yield* checkCollectedExternalLinks(
-          storage,
-          crawlId,
-          externalLinkOccurrences,
-          externalLinksConfig,
-          options.externalLinks.onProgress,
-          options.externalLinks.linkCache ?? null,
-          bulkChecker,
-          options.externalLinks.priorityHrefs,
-          options.resourceOverrides?.egressPinnedByTransport,
-          options.externalLinks.limits,
-          options.resourceOverrides?.resolveHost,
-        )
-      : [];
+        ? yield* checkCollectedExternalLinks(
+            storage,
+            crawlId,
+            externalLinkOccurrences,
+            externalLinksConfig,
+            options.externalLinks.onProgress,
+            options.externalLinks.linkCache ?? null,
+            bulkChecker,
+            options.externalLinks.priorityHrefs,
+            options.resourceOverrides?.egressPinnedByTransport,
+            options.externalLinks.limits,
+            options.resourceOverrides?.resolveHost
+          )
+        : [];
 
     const assets = yield* fetchAssetsFromOccurrences(
       storage,
       crawlId,
       assetCollector.occurrences,
       config,
-      options?.resourceOverrides,
+      options?.resourceOverrides
     );
 
     return {
@@ -319,7 +331,9 @@ export function runStreamingPreRules(
       ...(linkVerdicts ? { linkVerdicts } : {}),
       techDetectPage,
       intelUrls: [...intelUrlSet],
-      cloudPrefetchPayloads: prefetchCollector ? prefetchCollector.build() : null,
+      cloudPrefetchPayloads: prefetchCollector
+        ? prefetchCollector.build()
+        : null,
       pageCount,
     };
   });

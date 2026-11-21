@@ -3,17 +3,30 @@
 // hop obeys the egress policy. Real loopback servers: a different port is a
 // different origin.
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-
 import { parsePage } from "@squirrelscan/parser";
 import { createHeaderScope } from "@squirrelscan/utils/headers";
-import { EgressRefusedError, type EgressPolicy } from "@squirrelscan/utils/public-egress";
+import {
+  EgressRefusedError,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 
 import { runCloakingProbe } from "../src/cloaking-probe";
 import { probeFetch } from "../src/lib/probe-fetch";
 import { confirmSoft404Candidates } from "../src/soft404-confirm";
 
-const SECRET = { "X-Api-Key": "audit-secret", Authorization: "Bearer audit-token" };
+const SECRET = {
+  "X-Api-Key": "audit-secret",
+  Authorization: "Bearer audit-token",
+};
 const SHELL_HTML = `<!doctype html><html id="__next_error__"><head><meta name="robots" content="noindex"><title>Page Not Found</title></head><body><main><h1>Page Not Found</h1></main></body></html>`;
 
 type Seen = { path: string; apiKey: string | null; auth: string | null };
@@ -25,7 +38,11 @@ let policy: EgressPolicy;
 
 const record = (log: Seen[], req: Request) => {
   const path = new URL(req.url).pathname;
-  log.push({ path, apiKey: req.headers.get("x-api-key"), auth: req.headers.get("authorization") });
+  log.push({
+    path,
+    apiKey: req.headers.get("x-api-key"),
+    auth: req.headers.get("authorization"),
+  });
 };
 
 beforeAll(() => {
@@ -34,7 +51,9 @@ beforeAll(() => {
     hostname: "127.0.0.1",
     fetch(req) {
       record(otherSeen, req);
-      return new Response(SHELL_HTML, { headers: { "content-type": "text/html" } });
+      return new Response(SHELL_HTML, {
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   site = Bun.serve({
@@ -65,9 +84,14 @@ beforeAll(() => {
         });
       }
       if (path === "/same") {
-        return new Response(null, { status: 302, headers: { location: "/final" } });
+        return new Response(null, {
+          status: 302,
+          headers: { location: "/final" },
+        });
       }
-      return new Response(SHELL_HTML, { headers: { "content-type": "text/html" } });
+      return new Response(SHELL_HTML, {
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   // A LAN audit: private addresses allowed, the site's own origin sent as-is.
@@ -99,7 +123,9 @@ beforeEach(() => {
     sent.push(url);
     const host = new URL(url).hostname;
     if (host === "169.254.169.254" || host === "93.184.215.14") {
-      return new Response(SHELL_HTML, { headers: { "content-type": "text/html" } });
+      return new Response(SHELL_HTML, {
+        headers: { "content-type": "text/html" },
+      });
     }
     if (host !== "127.0.0.1") throw new Error(`unexpected request to ${url}`);
     return realFetch(input, init);
@@ -108,7 +134,8 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = realFetch;
 });
-const sentTo = (host: string) => sent.filter((url) => new URL(url).hostname === host);
+const sentTo = (host: string) =>
+  sent.filter((url) => new URL(url).hostname === host);
 
 describe("probeFetch", () => {
   for (const [label, egress] of [
@@ -120,7 +147,7 @@ describe("probeFetch", () => {
       const res = await probeFetch(
         `http://127.0.0.1:${site.port}/cross`,
         { headers: SECRET },
-        typeof egress === "function" ? egress() : egress,
+        typeof egress === "function" ? egress() : egress
       );
       await res.text();
       expect(siteSeen[0]?.apiKey).toBe("audit-secret");
@@ -134,7 +161,7 @@ describe("probeFetch", () => {
       const res = await probeFetch(
         `http://127.0.0.1:${site.port}/same`,
         { headers: SECRET },
-        typeof egress === "function" ? egress() : egress,
+        typeof egress === "function" ? egress() : egress
       );
       await res.text();
       const final = siteSeen.find((s) => s.path === "/final");
@@ -146,7 +173,11 @@ describe("probeFetch", () => {
   test("a redirect to a metadata address is refused by the egress policy, never requested", async () => {
     reset();
     await expect(
-      probeFetch(`http://127.0.0.1:${site.port}/meta`, { headers: SECRET }, policy),
+      probeFetch(
+        `http://127.0.0.1:${site.port}/meta`,
+        { headers: SECRET },
+        policy
+      )
     ).rejects.toBeInstanceOf(EgressRefusedError);
     expect(siteSeen.map((s) => s.path)).toEqual(["/meta"]);
     expect(sentTo("169.254.169.254")).toEqual([]);
@@ -154,7 +185,11 @@ describe("probeFetch", () => {
 
   test("control: a redirect to a public address off the site is followed", async () => {
     reset();
-    const res = await probeFetch(`http://127.0.0.1:${site.port}/public`, {}, policy);
+    const res = await probeFetch(
+      `http://127.0.0.1:${site.port}/public`,
+      {},
+      policy
+    );
     expect(res.status).toBe(200);
     expect(sentTo("93.184.215.14")).toEqual(["http://93.184.215.14/elsewhere"]);
   });
@@ -176,7 +211,7 @@ describe("cloaking probe", () => {
     reset();
     await runCloakingProbe(
       [{ url: `http://127.0.0.1:${site.port}/cross`, reason: "orphan" }],
-      opts(policy),
+      opts(policy)
     );
     expect(siteSeen.length).toBeGreaterThan(0);
     expect(otherSeen.length).toBeGreaterThan(0);
@@ -190,7 +225,7 @@ describe("cloaking probe", () => {
     reset();
     await runCloakingProbe(
       [{ url: `http://127.0.0.1:${site.port}/same`, reason: "orphan" }],
-      opts(policy),
+      opts(policy)
     );
     const finals = siteSeen.filter((s) => s.path === "/final");
     expect(finals.length).toBeGreaterThan(0);
@@ -201,7 +236,7 @@ describe("cloaking probe", () => {
     reset();
     const [probe] = await runCloakingProbe(
       [{ url: `http://127.0.0.1:${site.port}/meta`, reason: "orphan" }],
-      opts(policy),
+      opts(policy)
     );
     expect(probe?.defaultStatus).toBe(0);
     // The redirect was asked for, and its target never was.
@@ -213,7 +248,7 @@ describe("cloaking probe", () => {
     reset();
     const [probe] = await runCloakingProbe(
       [{ url: `http://127.0.0.1:${site.port}/public`, reason: "orphan" }],
-      opts(policy),
+      opts(policy)
     );
     expect(probe?.defaultStatus).toBe(200);
     expect(sentTo("93.184.215.14").length).toBeGreaterThan(0);
@@ -258,7 +293,9 @@ describe("soft-404 confirmation", () => {
   test("a LAN audit still confirms through a same-site redirect, headers kept", async () => {
     reset();
     const parsed = await run("/same");
-    expect(siteSeen.find((s) => s.path === "/final")?.apiKey).toBe("audit-secret");
+    expect(siteSeen.find((s) => s.path === "/final")?.apiKey).toBe(
+      "audit-secret"
+    );
     expect(parsed.soft404Confirmation).toBeDefined();
     expect(parsed.soft404Confirmation).not.toBe("unconfirmed");
   });

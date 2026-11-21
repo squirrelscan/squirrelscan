@@ -5,13 +5,19 @@
 // the class, and a map the real rule passes on must leave the class empty, so a
 // rule change that is not mirrored in the classifier fails here.
 
-import { describe, expect, test } from "bun:test";
-
 import {
   ENTITY_PROBLEM_CLASSES,
   entityProblemNodes,
   type EntityProblemClass,
 } from "@squirrelscan/core-contracts/entity-map-findings";
+import { describe, expect, test } from "bun:test";
+
+import type {
+  EntityMap,
+  EntityMapEdge,
+  EntityMapNode,
+  Rule,
+} from "../src/types";
 
 import { entityAuthorsRule } from "../src/schema/entity-authors";
 import { entityConflictsRule } from "../src/schema/entity-conflicts";
@@ -23,8 +29,6 @@ import { entityOrphanRule } from "../src/schema/entity-orphan";
 import { entityPublisherMismatchRule } from "../src/schema/entity-publisher-mismatch";
 import { entitySameAsMissingRule } from "../src/schema/entity-sameas-missing";
 import { entitySplitIdentityRule } from "../src/schema/entity-split-identity";
-import type { EntityMap, EntityMapEdge, EntityMapNode, Rule } from "../src/types";
-
 import { edge, entityMap, node, oneCheck, pages } from "./helpers/entity-map";
 
 const SAME_AS = ["https://x.com/example"];
@@ -97,17 +101,37 @@ const CASES: Case[] = [
     cls: "no-id",
     rules: [entityIdentityRule],
     bad: () =>
-      entityMap({ nodes: [quietOrg({ key: "anon:org", id: null, pages: [A, B], occurrences: 2 })] }),
+      entityMap({
+        nodes: [
+          quietOrg({
+            key: "anon:org",
+            id: null,
+            pages: [A, B],
+            occurrences: 2,
+          }),
+        ],
+      }),
     // One declaring page is ordinary.
     good: () =>
-      entityMap({ nodes: [quietOrg({ key: "anon:org", id: null, pages: [A], occurrences: 1 })] }),
+      entityMap({
+        nodes: [
+          quietOrg({ key: "anon:org", id: null, pages: [A], occurrences: 1 }),
+        ],
+      }),
   },
   {
     cls: "split-identity",
     rules: [entitySplitIdentityRule],
-    bad: () => entityMap({ nodes: twins([A, "https://example.com/c"], [A, B]) }),
+    bad: () =>
+      entityMap({ nodes: twins([A, "https://example.com/c"], [A, B]) }),
     // Same name and type, never declared together: two things, not a split.
-    good: () => entityMap({ nodes: twins([A, "https://example.com/c"], [B, "https://example.com/d"]) }),
+    good: () =>
+      entityMap({
+        nodes: twins(
+          [A, "https://example.com/c"],
+          [B, "https://example.com/d"]
+        ),
+      }),
   },
   {
     cls: "orphan",
@@ -128,7 +152,8 @@ const CASES: Case[] = [
   {
     cls: "sameas-missing",
     rules: [entitySameAsMissingRule],
-    bad: () => entityMap({ nodes: [quietOrg({ properties: { name: "Example Ltd" } })] }),
+    bad: () =>
+      entityMap({ nodes: [quietOrg({ properties: { name: "Example Ltd" } })] }),
     good: () => entityMap({ nodes: [quietOrg()] }),
   },
   {
@@ -147,7 +172,12 @@ const CASES: Case[] = [
       }),
     good: () =>
       entityMap({
-        nodes: [quietOrg(), person({ properties: { name: "Ada", url: "https://example.com/ada" } })],
+        nodes: [
+          quietOrg(),
+          person({
+            properties: { name: "Ada", url: "https://example.com/ada" },
+          }),
+        ],
       }),
   },
   {
@@ -168,7 +198,10 @@ function twins(pagesOne: string[], pagesTwo: string[]): EntityMapNode[] {
       occurrences: p.length,
       pages: p,
     });
-  return [twin("https://example.com/#org", pagesOne), twin("https://data.example.org/acme", pagesTwo)];
+  return [
+    twin("https://example.com/#org", pagesOne),
+    twin("https://data.example.org/acme", pagesTwo),
+  ];
 }
 
 function thing(key: string): EntityMapNode {
@@ -203,7 +236,15 @@ function publishers(main: number, stray: number): EntityMap {
     pages: [A],
   });
   const refs = (target: string, n: number): EntityMapEdge[] =>
-    n === 0 ? [] : [edge({ source: "id:https://example.com/#src", target, occurrences: n })];
+    n === 0
+      ? []
+      : [
+          edge({
+            source: "id:https://example.com/#src",
+            target,
+            occurrences: n,
+          }),
+        ];
   return entityMap({
     nodes: [quietOrg(), ...(stray > 0 ? [second] : [])],
     edges: [...refs(ORG_KEY, main), ...refs(second.key, stray)],
@@ -231,7 +272,7 @@ function localBusiness(declaredOn: number): EntityMap {
 describe("entityProblemNodes agrees with the rules", () => {
   test("every class has a case", () => {
     expect(CASES.map((c) => c.cls).sort()).toEqual(
-      [...ENTITY_PROBLEM_CLASSES].sort(),
+      [...ENTITY_PROBLEM_CLASSES].sort()
     );
   });
 
@@ -239,7 +280,9 @@ describe("entityProblemNodes agrees with the rules", () => {
     test(`${c.cls}: a map the rule reports on has nodes in the class`, async () => {
       const map = c.bad();
       for (const rule of c.rules) {
-        expect((await oneCheck(rule, map)).status).toMatch(/^(fail|warn|info)$/);
+        expect((await oneCheck(rule, map)).status).toMatch(
+          /^(fail|warn|info)$/
+        );
       }
       expect(entityProblemNodes(map)[c.cls]?.length ?? 0).toBeGreaterThan(0);
     });
@@ -275,18 +318,28 @@ describe("entityProblemNodes agrees with the rules", () => {
   test("a balanced 5/5 publisher split is described by the rule and reserves nothing", async () => {
     const map = publishers(5, 5);
     // The rule still speaks (info, not a warning)...
-    expect((await oneCheck(entityPublisherMismatchRule, map)).status).toBe("info");
+    expect((await oneCheck(entityPublisherMismatchRule, map)).status).toBe(
+      "info"
+    );
     // ...but a site that genuinely has two publishers has no finding to evidence.
     expect(entityProblemNodes(map)["publisher-mismatch"] ?? []).toEqual([]);
     // Control: a lopsided 9/1 split of the same shape does reserve the outlier.
-    expect(entityProblemNodes(publishers(9, 1))["publisher-mismatch"]?.length).toBe(1);
+    expect(
+      entityProblemNodes(publishers(9, 1))["publisher-mismatch"]?.length
+    ).toBe(1);
   });
 
   test("a node in several classes is listed under each", () => {
     const multi = quietOrg({
       danglingRefs: 1,
       conflicts: [
-        { property: "name", values: [{ value: "A", pages: [A], morePages: 0 }, { value: "B", pages: [B], morePages: 0 }] },
+        {
+          property: "name",
+          values: [
+            { value: "A", pages: [A], morePages: 0 },
+            { value: "B", pages: [B], morePages: 0 },
+          ],
+        },
       ],
     });
     const found = entityProblemNodes(entityMap({ nodes: [multi] }));
@@ -296,7 +349,10 @@ describe("entityProblemNodes agrees with the rules", () => {
 
   test("a sameAs array of empty strings still counts as identified for authors, as the rule always judged it", async () => {
     const map = entityMap({
-      nodes: [quietOrg(), person({ properties: { name: "Ada", sameAs: [""] } })],
+      nodes: [
+        quietOrg(),
+        person({ properties: { name: "Ada", sameAs: [""] } }),
+      ],
     });
     expect((await oneCheck(entityAuthorsRule, map)).status).toBe("pass");
     expect(entityProblemNodes(map).authors ?? []).toEqual([]);

@@ -26,7 +26,10 @@ const CHECK = "entity-type-drift";
 function readTypeSet(value: string): string {
   try {
     const parsed: unknown = JSON.parse(value);
-    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")) {
+    if (
+      Array.isArray(parsed) &&
+      parsed.every((entry) => typeof entry === "string")
+    ) {
       return parsed.join(", ");
     }
   } catch {
@@ -80,14 +83,19 @@ export const entityTypeDriftRule: Rule = {
 
     const { items, hidden } = cappedItems(
       offenders.map((node) => {
-        const drift = node.conflicts.find((conflict) => conflict.property === "@type");
+        const drift = node.conflicts.find(
+          (conflict) => conflict.property === "@type"
+        );
         return entityItem(node, {
-          declaredTypeSets: drift?.values.map((value) => readTypeSet(value.value)) ?? [],
+          declaredTypeSets:
+            drift?.values.map((value) => readTypeSet(value.value)) ?? [],
         });
       })
     );
     const worst = offenders[0]!;
-    const worstDrift = worst.conflicts.find((conflict) => conflict.property === "@type");
+    const worstDrift = worst.conflicts.find(
+      (conflict) => conflict.property === "@type"
+    );
 
     return {
       checks: [
@@ -95,7 +103,9 @@ export const entityTypeDriftRule: Rule = {
           name: CHECK,
           status: "warn",
           message: `${offenders.length} ${offenders.length === 1 ? "entity is" : "entities are"} declared with more than one @type set${moreSuffix(hidden)}`,
-          value: clipValue(`${entityLabel(worst)}: ${(worstDrift?.values ?? []).map((value) => readTypeSet(value.value)).join(" vs ")}`),
+          value: clipValue(
+            `${entityLabel(worst)}: ${(worstDrift?.values ?? []).map((value) => readTypeSet(value.value)).join(" vs ")}`
+          ),
           expected: "one @type set per @id",
           items,
         },

@@ -8,8 +8,9 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 // #211: these crawl a real localhost server through redirects, so under CPU
@@ -49,7 +50,7 @@ interface Site {
  * for the no-slash form gets the 301 a real origin would send.
  */
 function serveSlashCanonical(
-  options: { alsoLinkNoSlash?: boolean; linkMovedPage?: boolean } = {},
+  options: { alsoLinkNoSlash?: boolean; linkMovedPage?: boolean } = {}
 ): Site {
   const requested: string[] = [];
   const server = Bun.serve({
@@ -59,14 +60,23 @@ function serveSlashCanonical(
       requested.push(path);
 
       if (path !== "/" && !path.endsWith("/")) {
-        return new Response(null, { status: 301, headers: { location: `${path}/` } });
+        return new Response(null, {
+          status: 301,
+          headers: { location: `${path}/` },
+        });
       }
       if (path === MOVED) {
-        return new Response(null, { status: 301, headers: { location: MOVED_TARGET } });
+        return new Response(null, {
+          status: 301,
+          headers: { location: MOVED_TARGET },
+        });
       }
-      if (!PAGES.includes(path)) return new Response("not found", { status: 404 });
+      if (!PAGES.includes(path))
+        return new Response("not found", { status: 404 });
 
-      const hrefs = PAGES.filter((p) => p !== path).map((p) => `<a href="${p}">${p}</a>`);
+      const hrefs = PAGES.filter((p) => p !== path).map(
+        (p) => `<a href="${p}">${p}</a>`
+      );
       if (options.alsoLinkNoSlash) {
         hrefs.push(`<a href="/o-mnie">no-slash</a>`);
       }
@@ -75,7 +85,7 @@ function serveSlashCanonical(
       }
       return new Response(
         `<!doctype html><html><head><title>${path}</title></head><body>${hrefs.join("")}</body></html>`,
-        { headers: { "content-type": "text/html" } },
+        { headers: { "content-type": "text/html" } }
       );
     },
   });
@@ -103,7 +113,7 @@ async function crawl(seed: string) {
       const crawler = yield* createCrawler({ config: CONFIG, storage });
       const crawlId = yield* crawler.start(seed, seed);
       return yield* storage.getPages(crawlId);
-    }),
+    })
   );
 }
 
@@ -137,11 +147,15 @@ describe("a trailing-slash-canonical site", () => {
     // Crawled with the moved page linked, so there ARE multi-hop chains to
     // inspect — on a purely canonical site every chain is one hop and
     // `hops.slice(0, -1)` is empty, which would make this assertion vacuous.
-    const site = track(serveSlashCanonical({ linkMovedPage: true, alsoLinkNoSlash: true }));
+    const site = track(
+      serveSlashCanonical({ linkMovedPage: true, alsoLinkNoSlash: true })
+    );
 
     const pages = await crawl(`${site.origin}/`);
 
-    const nonFinalHops = pages.flatMap((p) => p.redirectChain?.hops.slice(0, -1) ?? []);
+    const nonFinalHops = pages.flatMap(
+      (p) => p.redirectChain?.hops.slice(0, -1) ?? []
+    );
     expect(nonFinalHops.length).toBeGreaterThan(0);
     for (const hop of nonFinalHops) {
       const is2xx = hop.statusCode >= 200 && hop.statusCode < 300;
@@ -198,7 +212,7 @@ describe("a NO-SLASH-canonical site (canonicalized the other way)", () => {
             : [`<a href="/o-mnie">b</a>`, `<a href="/o-mnie/">a</a>`];
         return new Response(
           `<!doctype html><html><head><title>${path}</title></head><body>${hrefs.join("")}</body></html>`,
-          { headers: { "content-type": "text/html" } },
+          { headers: { "content-type": "text/html" } }
         );
       },
     });
@@ -225,7 +239,7 @@ describe("a NO-SLASH-canonical site (canonicalized the other way)", () => {
       const canonical = pages.find((p) => p.url === `${site.origin}/o-mnie`);
       expect(canonical).toBeDefined();
       expect(canonical!.redirectChain?.chainLength ?? 0).toBe(0);
-    },
+    }
   );
 });
 

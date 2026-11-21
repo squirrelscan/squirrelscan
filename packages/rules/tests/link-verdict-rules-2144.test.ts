@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { LINK_VERDICT_RULE_IDS } from "../src/link-verdict-rules";
 
 const SRC = join(import.meta.dir, "..", "src");
-const READS = /\bsite\??\.(?:externalLinks|externalLinkCheck)\b|\{[^}]*\b(?:externalLinks|externalLinkCheck)\b[^}]*\}\s*=\s*(?:ctx\.)?site\b/;
+const READS =
+  /\bsite\??\.(?:externalLinks|externalLinkCheck)\b|\{[^}]*\b(?:externalLinks|externalLinkCheck)\b[^}]*\}\s*=\s*(?:ctx\.)?site\b/;
 const RULE_ID = /\bid:\s*"([a-z0-9-]+\/[a-z0-9-]+)"/g;
 
 async function readers(): Promise<{ files: string[]; ids: Set<string> }> {

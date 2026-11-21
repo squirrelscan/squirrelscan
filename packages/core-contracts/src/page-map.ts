@@ -36,7 +36,9 @@ export const PAGE_MAP_PUBLISH_LIMITS = {
 
 const Str = Type.String({ maxLength: PAGE_MAP_PUBLISH_LIMITS.maxStringLength });
 const NullableStr = Type.Union([Str, Type.Null()]);
-const List = Type.Array(Str, { maxItems: PAGE_MAP_PUBLISH_LIMITS.maxListItems });
+const List = Type.Array(Str, {
+  maxItems: PAGE_MAP_PUBLISH_LIMITS.maxListItems,
+});
 const Count = Type.Integer({ minimum: 0 });
 const NullableCount = Type.Union([Count, Type.Null()]);
 
@@ -86,7 +88,9 @@ export const PageMapSchema = Type.Object({
   stored: Count,
   /** True when `pages` is the first `stored` of `total` rows, not the whole crawl. */
   truncated: Type.Boolean(),
-  pages: Type.Array(PageMapRowSchema, { maxItems: PAGE_MAP_PUBLISH_LIMITS.maxRows }),
+  pages: Type.Array(PageMapRowSchema, {
+    maxItems: PAGE_MAP_PUBLISH_LIMITS.maxRows,
+  }),
 });
 
 export type PageMap = Static<typeof PageMapSchema>;

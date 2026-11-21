@@ -2,8 +2,9 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
-import { formSelector } from "../shared/form-fields";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import { formSelector } from "../shared/form-fields";
 
 type Method = "get" | "post" | "dialog";
 
@@ -23,7 +24,8 @@ function isSubmitControl(el: Element): boolean {
   if (el.hasAttribute("disabled")) return false;
   const tag = el.tagName.toLowerCase();
   const type = (el.getAttribute("type") ?? "").trim().toLowerCase();
-  if (tag === "button") return type !== "button" && type !== "reset" && type !== "menu";
+  if (tag === "button")
+    return type !== "button" && type !== "reset" && type !== "menu";
   if (tag === "input") return type === "submit" || type === "image";
   return false;
 }
@@ -62,7 +64,7 @@ export function submissions(form: Element, controls: Element[]): Submission[] {
   return submitters.map((el) =>
     el.hasAttribute("formmethod")
       ? { method: methodOf(el.getAttribute("formmethod")), explicit: true }
-      : formMethod,
+      : formMethod
   );
 }
 
@@ -79,7 +81,10 @@ export function submitMethods(form: Element, controls: Element[]): Method[] {
  */
 function scriptSubmits(form: Element, controls: Element[]): boolean {
   if (!hasNoUsableAction(form)) return false;
-  return form.hasAttribute("onsubmit") || controls.some((el) => el.hasAttribute("onclick"));
+  return (
+    form.hasAttribute("onsubmit") ||
+    controls.some((el) => el.hasAttribute("onclick"))
+  );
 }
 
 /** No `action`, an empty one, or a `javascript:` one (what React puts there for a form action function). */
@@ -162,7 +167,7 @@ export const passwordFormGetRule: Rule = {
         (el) =>
           el.tagName.toLowerCase() === "input" &&
           (el.getAttribute("type") ?? "").trim().toLowerCase() === "password" &&
-          !el.hasAttribute("disabled"),
+          !el.hasAttribute("disabled")
       );
       if (!hasPassword) return;
       assessed++;
@@ -184,8 +189,8 @@ export const passwordFormGetRule: Rule = {
         undetermined.push(
           item(
             `${position} (${action}) has a password field and no action, and a script may submit it: not determined`,
-            "script-submit",
-          ),
+            "script-submit"
+          )
         );
         return;
       }
@@ -197,16 +202,16 @@ export const passwordFormGetRule: Rule = {
         noMethod.push(
           item(
             `${position} (${action}) has a password field and no method: it falls back to GET, putting the password in the URL, if its script has not loaded or fails; method="post" removes the risk`,
-            "no-method",
-          ),
+            "no-method"
+          )
         );
         return;
       }
       failing.push(
         item(
           `${position} (${action}) sends its password field by GET, in the URL`,
-          "get-method",
-        ),
+          "get-method"
+        )
       );
     });
 

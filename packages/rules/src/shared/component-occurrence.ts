@@ -1,12 +1,13 @@
+import type { Element } from "linkedom";
+
 import {
   componentSiteOrigin,
   type ComponentOccurrence,
   type RootHint,
   type SubtreeCandidate,
 } from "@squirrelscan/core-contracts";
-import type { Element } from "linkedom";
-import { createHash } from "node:crypto";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+import { createHash } from "node:crypto";
 
 type RegionRole = ComponentOccurrence["region"]["role"];
 type NestedIn = ComponentOccurrence["region"]["nestedIn"];
@@ -63,7 +64,10 @@ const STATE_CLASS_TOKENS = new Set([
 /** True for `active`, `is-active`, `has-open`, `nav--current`, `menu_selected`… */
 function isStateClass(token: string): boolean {
   const segments = token.toLowerCase().split(/[-_]+/).filter(Boolean);
-  while (segments.length > 1 && (segments[0] === "is" || segments[0] === "has")) {
+  while (
+    segments.length > 1 &&
+    (segments[0] === "is" || segments[0] === "has")
+  ) {
     segments.shift();
   }
   const last = segments[segments.length - 1];
@@ -100,7 +104,14 @@ function buildStableAttributes(element: Element): string {
     .map((value) => `.${value}`);
   // `aria-current`/`aria-expanded` are the ARIA spelling of the same per-page
   // state as the class tokens above, and are excluded for the same reason.
-  const semantics = ["lang", "dir", "hidden", "aria-label", "aria-labelledby", "aria-hidden"]
+  const semantics = [
+    "lang",
+    "dir",
+    "hidden",
+    "aria-label",
+    "aria-labelledby",
+    "aria-hidden",
+  ]
     .map((name) => {
       const value = element.getAttribute(name);
       return value === null ? "" : `[${name}=${value}]`;
@@ -108,13 +119,20 @@ function buildStableAttributes(element: Element): string {
     .filter(Boolean);
   // This string is only ever fed to componentHash; no raw crawled attribute
   // value is attached to report evidence.
-  return [id ? `#${id}` : "", role ? `[role=${role}]` : "", ...classes, ...semantics]
+  return [
+    id ? `#${id}` : "",
+    role ? `[role=${role}]` : "",
+    ...classes,
+    ...semantics,
+  ]
     .filter(Boolean)
     .join("");
 }
 
 function isArticle(element: Element): boolean {
-  return tag(element) === "article" || element.getAttribute("role") === "article";
+  return (
+    tag(element) === "article" || element.getAttribute("role") === "article"
+  );
 }
 
 function isMain(element: Element): boolean {
@@ -155,11 +173,17 @@ const ROOT_STATE: AncestorState = { nesting: "none", roles: [] };
 /** The state a child of `element` inherits. Shared with the parent's when `element` changes nothing. */
 function childState(element: Element, state: AncestorState): AncestorState {
   const role = regionRole(element);
-  const nesting = isArticle(element) ? "article" : isMain(element) ? "main" : state.nesting;
+  const nesting = isArticle(element)
+    ? "article"
+    : isMain(element)
+      ? "main"
+      : state.nesting;
   if (!role && nesting === state.nesting) return state;
   return {
     nesting,
-    roles: role ? [role, ...state.roles].slice(0, MAX_ANCESTOR_WALK) : state.roles,
+    roles: role
+      ? [role, ...state.roles].slice(0, MAX_ANCESTOR_WALK)
+      : state.roles,
   };
 }
 
@@ -240,7 +264,8 @@ function indexRoot(root: Element): RootIndex {
     const size = (sizes.get(element) ?? 0) + 1;
     sizes.set(element, size);
     const parent = element.parentElement;
-    if (parent && element !== root) sizes.set(parent, (sizes.get(parent) ?? 0) + size);
+    if (parent && element !== root)
+      sizes.set(parent, (sizes.get(parent) ?? 0) + size);
   }
   return { landmarks, sizes };
 }
@@ -296,7 +321,11 @@ function structuralDigest(element: Element): string {
  * `\u2026>` instead of naming the rest, so one very deep element costs a bounded
  * string and a bounded walk, not its whole depth.
  */
-function elementPath(root: Element, element: Element, cache: ComponentOccurrenceCache): string {
+function elementPath(
+  root: Element,
+  element: Element,
+  cache: ComponentOccurrenceCache
+): string {
   const parts: string[] = [];
   let reachedRoot = true;
   for (
@@ -341,7 +370,10 @@ export class ComponentOccurrenceCache {
   readonly scopes = new WeakMap<Element, RegionScope>();
   readonly ladderRoots = new WeakMap<Element, Element>();
   /** Per-parent tag positions keep repeated sibling locators linear in the DOM size. */
-  readonly siblingTagPositions = new WeakMap<Element, WeakMap<Element, number>>();
+  readonly siblingTagPositions = new WeakMap<
+    Element,
+    WeakMap<Element, number>
+  >();
   /** Direct-child tag sequence per element; rebuilt per faulty element made a
    * 5,000-link nav quadratic (each link re-walked all 5,000 siblings). */
   readonly childTagSequences = new WeakMap<Element, string>();
@@ -357,7 +389,11 @@ export class ComponentOccurrenceCache {
 
   /** The topmost element above `element` (or `element` itself). */
   rootOf(element: Element): Element {
-    return this.resolveUp(this.roots, element, (current, parent, parentValue) => parentValue ?? current);
+    return this.resolveUp(
+      this.roots,
+      element,
+      (current, parent, parentValue) => parentValue ?? current
+    );
   }
 
   /**
@@ -365,28 +401,36 @@ export class ComponentOccurrenceCache {
    * outer bound for a page with no landmark at all.
    */
   ladderRoot(element: Element): Element {
-    return this.resolveUp(this.ladderRoots, element, (current, parent, parentValue) =>
-      tag(current) === "body" ? current : (parentValue ?? current),
+    return this.resolveUp(
+      this.ladderRoots,
+      element,
+      (current, parent, parentValue) =>
+        tag(current) === "body" ? current : (parentValue ?? current)
     );
   }
 
   /** The nearest landmark at or above `element`, and what lies between them. */
   regionScope(element: Element): RegionScope {
-    return this.resolveUp(this.scopes, element, (current, parent, parentScope) => {
-      if (regionRole(current)) return { region: current, below: undefined };
-      if (!parent || !parentScope || parentScope.region === null) return NO_REGION;
-      const region = parentScope.region;
-      const below =
-        parent === region
-          ? undefined
-          : isArticle(parent)
-            ? "article"
-            : isMain(parent)
-              ? "main"
-              : parentScope.below;
-      // Most elements add nothing to what their parent already says.
-      return parentScope.below === below ? parentScope : { region, below };
-    });
+    return this.resolveUp(
+      this.scopes,
+      element,
+      (current, parent, parentScope) => {
+        if (regionRole(current)) return { region: current, below: undefined };
+        if (!parent || !parentScope || parentScope.region === null)
+          return NO_REGION;
+        const region = parentScope.region;
+        const below =
+          parent === region
+            ? undefined
+            : isArticle(parent)
+              ? "article"
+              : isMain(parent)
+                ? "main"
+                : parentScope.below;
+        // Most elements add nothing to what their parent already says.
+        return parentScope.below === below ? parentScope : { region, below };
+      }
+    );
   }
 
   private rootIndex(element: Element): RootIndex {
@@ -447,13 +491,21 @@ export class ComponentOccurrenceCache {
   private resolveUp<T>(
     memo: WeakMap<Element, T>,
     element: Element,
-    compute: (current: Element, parent: Element | null, parentValue: T | undefined) => T,
+    compute: (
+      current: Element,
+      parent: Element | null,
+      parentValue: T | undefined
+    ) => T
   ): T {
     const known = memo.get(element);
     if (known !== undefined) return known;
     const chain: Element[] = [];
     let anchor: Element | null = null;
-    for (let current: Element | null = element; current; current = current.parentElement) {
+    for (
+      let current: Element | null = element;
+      current;
+      current = current.parentElement
+    ) {
       if (memo.has(current)) {
         anchor = current;
         break;
@@ -503,7 +555,9 @@ export class ComponentOccurrenceCache {
   textLength(element: Element): number {
     const cached = this.textLengths.get(element);
     if (cached !== undefined) return cached;
-    const value = (element.textContent ?? "").replace(/\s+/g, " ").trim().length;
+    const value = (element.textContent ?? "")
+      .replace(/\s+/g, " ")
+      .trim().length;
     this.textLengths.set(element, value);
     return value;
   }
@@ -515,7 +569,9 @@ export class ComponentOccurrenceCache {
   childTagSequence(element: Element): string {
     const cached = this.childTagSequences.get(element);
     if (cached !== undefined) return cached;
-    const value = [...(element.children as unknown as Iterable<Element>)].map(tag).join(",");
+    const value = [...(element.children as unknown as Iterable<Element>)]
+      .map(tag)
+      .join(",");
     this.childTagSequences.set(element, value);
     this.childTagSequenceBuilds++;
     return value;
@@ -548,7 +604,9 @@ export class ComponentOccurrenceCache {
     if (!this.spend(2 * this.subtreeSize(region))) return undefined;
     const evidence = {
       skeleton: structuralDigest(region),
-      contentHash: componentHash(region.textContent?.replace(/\s+/g, " ").trim() ?? ""),
+      contentHash: componentHash(
+        region.textContent?.replace(/\s+/g, " ").trim() ?? ""
+      ),
       slot: this.landmark(region).slot,
     };
     this.regionEvidence.set(region, evidence);
@@ -610,7 +668,10 @@ function stableId(value: string | null): string | undefined {
   if (!id || id.length > 40) return undefined;
   const tokens = id.split(/[-_]+/).filter(Boolean);
   if (tokens.length === 0) return undefined;
-  if (!tokens.every((token) => /^[A-Za-z]+$/.test(token) || /^\d+$/.test(token))) return undefined;
+  if (
+    !tokens.every((token) => /^[A-Za-z]+$/.test(token) || /^\d+$/.test(token))
+  )
+    return undefined;
   if (!tokens.some((token) => /^[A-Za-z]{2,}$/.test(token))) return undefined;
   return hintText(id);
 }
@@ -632,7 +693,9 @@ function rootHint(element: Element): RootHint | undefined {
   // fallback labelled a sticky product bar "Recent post". A wrong label is
   // worse than none, so there is no fallback.
   let heading: string | undefined;
-  for (const node of Array.from(element.querySelectorAll("h1,h2,h3,h4,h5,h6")) as Element[]) {
+  for (const node of Array.from(
+    element.querySelectorAll("h1,h2,h3,h4,h5,h6")
+  ) as Element[]) {
     heading = hintText(node.textContent);
     if (heading) break;
   }
@@ -660,7 +723,7 @@ function rootHint(element: Element): RootHint | undefined {
 function subtreeCandidates(
   element: Element,
   region: Element,
-  cache: ComponentOccurrenceCache,
+  cache: ComponentOccurrenceCache
 ): SubtreeCandidate[] {
   if (!cache.payLadder(region, 1)) return [];
   const regionText = cache.textLength(region);
@@ -669,7 +732,9 @@ function subtreeCandidates(
   // elementPath per level re-walks the chain each time, which is quadratic in
   // the ladder depth for every faulty element on the page.
   const ancestors: Element[] = [];
-  const segments: string[] = [`${tag(element)}:${cache.siblingTagIndex(element)}`];
+  const segments: string[] = [
+    `${tag(element)}:${cache.siblingTagIndex(element)}`,
+  ];
   for (
     let ancestor = element.parentElement;
     ancestor && ancestor !== region && ancestors.length < MAX_ANCESTOR_WALK;
@@ -681,7 +746,11 @@ function subtreeCandidates(
   // Nearest the element, then nearest the region root. Deduped and ordered, so
   // two elements at different depths still share the outer rungs.
   const chosen = new Set<number>();
-  for (let index = 0; index < Math.min(SUBTREE_NEAR_LEVELS, ancestors.length); index += 1)
+  for (
+    let index = 0;
+    index < Math.min(SUBTREE_NEAR_LEVELS, ancestors.length);
+    index += 1
+  )
     chosen.add(index);
   for (
     let index = Math.max(0, ancestors.length - SUBTREE_ROOT_LEVELS);
@@ -692,18 +761,25 @@ function subtreeCandidates(
   const candidates: SubtreeCandidate[] = [];
   const rungs = [...chosen].sort((left, right) => left - right);
   // A signature, a text length and a hint search each visit the ancestor's subtree.
-  for (const index of rungs) if (!cache.payLadder(ancestors[index]!, 3)) return [];
+  for (const index of rungs)
+    if (!cache.payLadder(ancestors[index]!, 3)) return [];
   for (const index of rungs) {
     const ancestor = ancestors[index]!;
     // The locator for this rung is the element's path through the ancestors
     // below it, rooted at that ancestor's tag.
-    const path = [tag(ancestor), ...segments.slice(0, index + 1).reverse()].join(">");
+    const path = [
+      tag(ancestor),
+      ...segments.slice(0, index + 1).reverse(),
+    ].join(">");
     candidates.push({
       level: index + 1,
       skeletonSignature: cache.subtreeSignature(ancestor),
       locatorFromRoot: path,
-      textShareOfRegion: Math.round((cache.textLength(ancestor) / regionText) * 100) / 100,
-      ...(cache.rootHint(ancestor) ? { rootHint: cache.rootHint(ancestor) } : {}),
+      textShareOfRegion:
+        Math.round((cache.textLength(ancestor) / regionText) * 100) / 100,
+      ...(cache.rootHint(ancestor)
+        ? { rootHint: cache.rootHint(ancestor) }
+        : {}),
     });
   }
   return candidates;
@@ -720,7 +796,7 @@ export function componentOccurrence(
     values: Record<string, string | number>;
     sensitiveValues?: Record<string, string>;
   },
-  cache = new ComponentOccurrenceCache(),
+  cache = new ComponentOccurrenceCache()
 ): ComponentOccurrence {
   const scope = cache.regionScope(input.element);
   let region = scope.region ?? undefined;
@@ -735,7 +811,8 @@ export function componentOccurrence(
   // Page-scoped, like an element with no landmark, and no ladder: a landmark under
   // dozens of landmarks (generated or hostile markup), or a page whose evidence
   // work is spent.
-  const unjudgeable = elementDigest === undefined || (region !== undefined && !regionEvidence);
+  const unjudgeable =
+    elementDigest === undefined || (region !== undefined && !regionEvidence);
   if (unjudgeable) {
     region = undefined;
     landmark = undefined;
@@ -748,7 +825,8 @@ export function componentOccurrence(
   // deliberately page-scoped rather than becoming a speculative component.
   const regionSkeleton = regionEvidence?.skeleton ?? tag(input.element);
   const elementSkeleton =
-    elementDigest ?? componentHash(`${tag(input.element)}${stableAttributes(input.element)}`);
+    elementDigest ??
+    componentHash(`${tag(input.element)}${stableAttributes(input.element)}`);
   // Ordered most-specific first, so the recorded reason names the actual cause
   // rather than whichever test happened to run first.
   const contentNested =
@@ -775,17 +853,20 @@ export function componentOccurrence(
   // full skeleton, does not move when a nested element changes.
   const childTagSequence = cache.childTagSequence(region ?? input.element);
   const familyStructure = `${role}|${nesting}|${ancestorContext}|${tag(region ?? input.element)}${stableAttributes(region ?? input.element)}|(${childTagSequence})`;
-  const familyKey = groupable ? componentHash(`${origin}|${familyStructure}`) : `page:${pageHash}`;
+  const familyKey = groupable
+    ? componentHash(`${origin}|${familyStructure}`)
+    : `page:${pageHash}`;
   // Variant is a STRUCTURAL identity. Region text is reported separately as
   // `contentHash`; folding it in here made any per-page string in a footer
   // (a date, a breadcrumb, a page number) split every page into its own variant.
   const variantStructure = `${familyStructure}|${regionStructure}`;
-  const variantKey = groupable ? componentHash(variantStructure) : `page:${pageHash}`;
+  const variantKey = groupable
+    ? componentHash(variantStructure)
+    : `page:${pageHash}`;
   const valueHashes = Object.fromEntries(
-    Object.entries({ ...input.values, ...input.sensitiveValues }).map(([key, value]) => [
-      key,
-      componentHash(String(value)),
-    ]),
+    Object.entries({ ...input.values, ...input.sensitiveValues }).map(
+      ([key, value]) => [key, componentHash(String(value))]
+    )
   );
 
   // Two cases the rule genuinely cannot judge from one page: an element inside
@@ -796,7 +877,11 @@ export function componentOccurrence(
     uncertainReason === "region-main" && region
       ? subtreeCandidates(input.element, region, cache)
       : uncertainReason === "no-region" && !unjudgeable
-        ? subtreeCandidates(input.element, cache.ladderRoot(input.element), cache)
+        ? subtreeCandidates(
+            input.element,
+            cache.ladderRoot(input.element),
+            cache
+          )
         : [];
 
   return {
@@ -807,9 +892,20 @@ export function componentOccurrence(
     groupable,
     confidence: groupable ? "observed" : "uncertain",
     ...(uncertainReason ? { uncertainReason } : {}),
-    region: { role, nestedIn: nesting, structuralSignature: componentHash(regionStructure) },
-    family: { key: familyKey, structuralSignature: componentHash(familyStructure) },
-    variant: { key: variantKey, structuralSignature: componentHash(variantStructure), contentHash },
+    region: {
+      role,
+      nestedIn: nesting,
+      structuralSignature: componentHash(regionStructure),
+    },
+    family: {
+      key: familyKey,
+      structuralSignature: componentHash(familyStructure),
+    },
+    variant: {
+      key: variantKey,
+      structuralSignature: componentHash(variantStructure),
+      contentHash,
+    },
     ...(candidates.length > 0 ? { subtreeCandidates: candidates } : {}),
     element: {
       // The region slot separates two otherwise-identical footer/navigation

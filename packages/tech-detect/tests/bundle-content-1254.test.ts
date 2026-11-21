@@ -22,12 +22,12 @@ const CLERK_LIVE_KEY = "pk_live_Y2xlcmsuZXhhbXBsZS5jb20k"; // pragma: allowlist 
 function detect(
   scripts: Array<{ url: string; content?: string }>,
   html = SHELL,
-  options: DetectOptions = {},
+  options: DetectOptions = {}
 ): string[] {
   return detectTechnologies(
     { url: "https://example.com/", headers: {}, html, scripts },
     undefined,
-    options,
+    options
   ).map((t) => t.id);
 }
 
@@ -37,14 +37,18 @@ const WHOLE = { maxScriptChars: 16 * 1024 * 1024, budgetMs: 30_000 };
 describe("bundle bodies reach script-content detection", () => {
   test("Vite SPA shell + a bundle calling createClient on a supabase.co ref", () => {
     const bundle = `var a=1;const sb=createClient("https://${REF}.supabase.co","anon-key-value");export{sb}`;
-    expect(detect([{ url: "https://example.com/assets/index-a1b2c3.js", content: bundle }])).toContain(
-      "supabase",
-    );
+    expect(
+      detect([
+        { url: "https://example.com/assets/index-a1b2c3.js", content: bundle },
+      ])
+    ).toContain("supabase");
   });
 
   test("the minified `(0,t.createClient)(...)` shape matches too", () => {
     const bundle = `x=(0,t.createClient)("https://${REF}.supabase.co",y,{auth:{persistSession:!0}})`;
-    expect(detect([{ url: "https://example.com/a.js", content: bundle }])).toContain("supabase");
+    expect(
+      detect([{ url: "https://example.com/a.js", content: bundle }])
+    ).toContain("supabase");
   });
 
   test("Next.js chunks: Firebase config in one, Clerk key in another", () => {
@@ -52,10 +56,16 @@ describe("bundle bodies reach script-content detection", () => {
     const clerk = `e.exports=n.createElement(ClerkProvider,{publishableKey:"${CLERK_TEST_KEY}"})`;
     const ids = detect(
       [
-        { url: "https://example.com/_next/static/chunks/app/layout-1.js", content: firebase },
-        { url: "https://example.com/_next/static/chunks/pages/_app-2.js", content: clerk },
+        {
+          url: "https://example.com/_next/static/chunks/app/layout-1.js",
+          content: firebase,
+        },
+        {
+          url: "https://example.com/_next/static/chunks/pages/_app-2.js",
+          content: clerk,
+        },
       ],
-      `<!doctype html><html><body><div id="__next"></div><script src="/_next/static/chunks/app/layout-1.js"></script></body></html>`,
+      `<!doctype html><html><body><div id="__next"></div><script src="/_next/static/chunks/app/layout-1.js"></script></body></html>`
     );
     expect(ids).toContain("firebase");
     expect(ids).toContain("clerk");
@@ -63,7 +73,9 @@ describe("bundle bodies reach script-content detection", () => {
 
   test("Firebase storageBucket config matches", () => {
     const bundle = `initializeApp({storageBucket:"demo-app.firebasestorage.app"})`;
-    expect(detect([{ url: "https://example.com/a.js", content: bundle }])).toContain("firebase");
+    expect(
+      detect([{ url: "https://example.com/a.js", content: bundle }])
+    ).toContain("firebase");
   });
 });
 
@@ -73,7 +85,8 @@ describe("mangled and indirect shapes", () => {
   const cases: Record<string, string> = {
     "a mangled call with a key literal": `uT=tg("https://${REF}.supabase.co","${KEY}")`,
     "a trailing slash": `a=f("https://${REF}.supabase.co/","${KEY}")`,
-    "a template literal URL": "a=f(`https://" + REF + ".supabase.co`,`" + KEY + "`)",
+    "a template literal URL":
+      "a=f(`https://" + REF + ".supabase.co`,`" + KEY + "`)",
     "a publishable key": `a=f("https://${REF}.supabase.co","sb_publishable_${"y".repeat(20)}")`,
     "a URL and key held in one declaration": `const u="https://${REF}.supabase.co",k="${KEY}";`,
     "a supabaseUrl property": `{supabaseUrl:"https://${REF}.supabase.co",x:1}`,
@@ -82,12 +95,16 @@ describe("mangled and indirect shapes", () => {
     "a clerk env fallback": `publishableKey:e.publishableKey||"${CLERK_LIVE_KEY}"`,
   };
   const vendor = (name: string) =>
-    name.includes("firebase") ? "firebase" : name.includes("clerk") ? "clerk" : "supabase";
+    name.includes("firebase")
+      ? "firebase"
+      : name.includes("clerk")
+        ? "clerk"
+        : "supabase";
   for (const [name, bundle] of Object.entries(cases)) {
     test(name, () => {
-      expect(detect([{ url: "https://example.com/a.js", content: bundle }])).toContain(
-        vendor(name),
-      );
+      expect(
+        detect([{ url: "https://example.com/a.js", content: bundle }])
+      ).toContain(vendor(name));
     });
   }
 });
@@ -108,7 +125,8 @@ describe("near misses do not match", () => {
     "a commented-out call": `// const sb = createClient("https://${REF}.supabase.co", key)\nvar a=1;`,
     "a block comment": `/* createClient("https://${REF}.supabase.co", key) */var a=1;`,
     "a docs string holding the call": `console.log('Usage: createClient("https://${REF}.supabase.co", key)')`,
-    "a template literal holding the call": "const doc=`createClient(\"https://" + REF + ".supabase.co\", key)`;",
+    "a template literal holding the call":
+      'const doc=`createClient("https://' + REF + '.supabase.co", key)`;',
     "the bare URL in a string": `const link="https://${REF}.supabase.co/docs";`,
     "a placeholder ref": `createClient("https://your${REF.slice(0, 16)}.supabase.co", key)`,
     "a 19-char ref": `createClient("https://${REF.slice(0, 19)}.supabase.co", key)`,
@@ -120,7 +138,9 @@ describe("near misses do not match", () => {
   };
   for (const [name, bundle] of Object.entries(cases)) {
     test(name, () => {
-      const ids = detect([{ url: "https://example.com/a.js", content: bundle }]);
+      const ids = detect([
+        { url: "https://example.com/a.js", content: bundle },
+      ]);
       expect(ids).not.toContain("supabase");
       expect(ids).not.toContain("firebase");
       expect(ids).not.toContain("clerk");
@@ -129,12 +149,16 @@ describe("near misses do not match", () => {
 
   test("a regex literal holding a quote does not flip string state for the code after it", () => {
     const bundle = `var q=/["']/g;var s=createClient("https://${REF}.supabase.co",key);`;
-    expect(detect([{ url: "https://example.com/a.js", content: bundle }])).toContain("supabase");
+    expect(
+      detect([{ url: "https://example.com/a.js", content: bundle }])
+    ).toContain("supabase");
   });
 
   test("a real call after a comment line still matches", () => {
     const bundle = `// see docs\nconst sb=createClient("https://${REF}.supabase.co","k");`;
-    expect(detect([{ url: "https://example.com/a.js", content: bundle }])).toContain("supabase");
+    expect(
+      detect([{ url: "https://example.com/a.js", content: bundle }])
+    ).toContain("supabase");
   });
 
   test("the product named only in the page HTML does not satisfy a bundle detector", () => {
@@ -148,9 +172,15 @@ describe("bounds", () => {
     const call = `createClient("https://${REF}.supabase.co","k");`;
     const pad = "a".repeat(3 * 1024 * 1024);
     const url = "https://example.com/a.js";
-    expect(detect([{ url, content: call + pad }], SHELL, WHOLE)).toContain("supabase");
-    expect(detect([{ url, content: `${pad}\n${call}` }], SHELL, WHOLE)).toContain("supabase");
-    expect(detect([{ url, content: `${pad}\n${call}\n${pad}` }], SHELL, WHOLE)).toContain("supabase");
+    expect(detect([{ url, content: call + pad }], SHELL, WHOLE)).toContain(
+      "supabase"
+    );
+    expect(
+      detect([{ url, content: `${pad}\n${call}` }], SHELL, WHOLE)
+    ).toContain("supabase");
+    expect(
+      detect([{ url, content: `${pad}\n${call}\n${pad}` }], SHELL, WHOLE)
+    ).toContain("supabase");
   });
 
   test("by default a script is matched only up to 256 KB: the cloud services keep their cap", () => {
@@ -159,9 +189,15 @@ describe("bounds", () => {
     const url = "https://example.com/a.js";
     expect(TECH_SCRIPT_CONTENT_LIMIT).toBe(256 * 1024);
     expect(detect([{ url, content: call + pad }])).toContain("supabase");
-    expect(detect([{ url, content: `${pad}\n${call}` }])).not.toContain("supabase");
+    expect(detect([{ url, content: `${pad}\n${call}` }])).not.toContain(
+      "supabase"
+    );
     // An explicit smaller cap is honoured too.
-    expect(detect([{ url, content: `${"a".repeat(1000)}\n${call}` }], SHELL, { maxScriptChars: 500 })).not.toContain("supabase");
+    expect(
+      detect([{ url, content: `${"a".repeat(1000)}\n${call}` }], SHELL, {
+        maxScriptChars: 500,
+      })
+    ).not.toContain("supabase");
   });
 
   test("a 1 MB hostile bundle finishes inside the per-page budget", () => {
@@ -178,7 +214,9 @@ describe("bounds", () => {
     expect(hostile.length).toBeGreaterThan(1_000_000);
     const started = performance.now();
     detect([{ url: "https://example.com/a.js", content: hostile }]);
-    expect(performance.now() - started).toBeLessThan(TECH_DETECT_PAGE_BUDGET_MS);
+    expect(performance.now() - started).toBeLessThan(
+      TECH_DETECT_PAGE_BUDGET_MS
+    );
   });
 
   // Each shape below was quadratic in scanJs: an opener whose closer is never reached searched to
@@ -189,7 +227,8 @@ describe("bounds", () => {
       "closed comments": (n) => "/**/".repeat(n / 4),
       "open comment openers": (n) => "/*".repeat(n / 2),
       "NUL-split openers, no closer": (n) => "/*\0".repeat(n / 3),
-      "NUL-split openers, one closer at the end": (n) => `${"/*\0".repeat(n / 3)}*/`,
+      "NUL-split openers, one closer at the end": (n) =>
+        `${"/*\0".repeat(n / 3)}*/`,
       "NUL-split line comments": (n) => "//\0\n".repeat(n / 4),
     };
     for (const [name, make] of Object.entries(shapes)) {
@@ -202,7 +241,11 @@ describe("bounds", () => {
           expect(scanned.code.length).toBe(hostile.length);
           expect(scanMs).toBeLessThan(2_000);
           const detectStart = performance.now();
-          detect([{ url: "https://example.com/a.js", content: hostile }], SHELL, WHOLE);
+          detect(
+            [{ url: "https://example.com/a.js", content: hostile }],
+            SHELL,
+            WHOLE
+          );
           expect(performance.now() - detectStart).toBeLessThan(5_000);
         }, 30_000);
       }
@@ -214,7 +257,7 @@ describe("bounds", () => {
     const found = detectTechnologies(
       { url: "https://example.com/", headers: {}, html: SHELL },
       undefined,
-      { budgetMs: -1, onBudgetExceeded: () => exceeded++ },
+      { budgetMs: -1, onBudgetExceeded: () => exceeded++ }
     );
     expect(exceeded).toBe(1);
     expect(found).toEqual([]);

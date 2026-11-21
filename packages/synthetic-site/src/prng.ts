@@ -37,7 +37,10 @@ export function hashStringHex(str: string): string {
 }
 
 /** Derive a fresh, independent seed string from a parent seed + a discriminator. */
-export function deriveSeed(seed: number | string, discriminator: string): string {
+export function deriveSeed(
+  seed: number | string,
+  discriminator: string
+): string {
   return `${seed}:${discriminator}`;
 }
 
@@ -81,7 +84,11 @@ export function shuffleInPlace<T>(rng: Rng, items: T[]): T[] {
 }
 
 /** Pick `count` distinct indices from [0, poolSize), deterministic, order-preserving. */
-export function pickIndices(rng: Rng, poolSize: number, count: number): number[] {
+export function pickIndices(
+  rng: Rng,
+  poolSize: number,
+  count: number
+): number[] {
   const bounded = Math.max(0, Math.min(count, poolSize));
   const pool = Array.from({ length: poolSize }, (_, i) => i);
   shuffleInPlace(rng, pool);
@@ -89,7 +96,11 @@ export function pickIndices(rng: Rng, poolSize: number, count: number): number[]
 }
 
 /** Pick `count` distinct elements from an arbitrary candidate list, deterministic. */
-export function pickSubset<T>(rng: Rng, items: readonly T[], count: number): T[] {
+export function pickSubset<T>(
+  rng: Rng,
+  items: readonly T[],
+  count: number
+): T[] {
   const bounded = Math.max(0, Math.min(count, items.length));
   const pool = [...items];
   shuffleInPlace(rng, pool);
@@ -109,7 +120,7 @@ export function pickFewExcluding(
   rng: Rng,
   pool: number[],
   exclude: number,
-  count: number,
+  count: number
 ): number[] {
   if (pool.length === 0 || count <= 0) return [];
   // +1 buffer: if `exclude` lands in the shuffled window, filtering it out

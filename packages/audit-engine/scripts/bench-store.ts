@@ -5,7 +5,10 @@
 // runs the `upsertSitePages` contract with the rest. `getSitePages` returns a
 // cached list until a write changes it, so the timed read is not a rebuild.
 
-import type { PageFindingRecord, SitePageRecord } from "@squirrelscan/core-contracts";
+import type {
+  PageFindingRecord,
+  SitePageRecord,
+} from "@squirrelscan/core-contracts";
 
 import type { SmartAuditStore } from "../src/merge-promise";
 
@@ -19,7 +22,8 @@ export class BenchStore implements SmartAuditStore {
   constructor(priorPages: readonly SitePageRecord[] = []) {
     for (const p of priorPages) this.pages.set(this.key(p), p);
     const siteKey = priorPages[0]?.siteKey;
-    if (siteKey !== undefined) this.cached = { siteKey, rows: this.rowsOf(siteKey) };
+    if (siteKey !== undefined)
+      this.cached = { siteKey, rows: this.rowsOf(siteKey) };
   }
 
   private rowsOf(siteKey: string): SitePageRecord[] {
@@ -36,7 +40,8 @@ export class BenchStore implements SmartAuditStore {
   }
   async getSitePages(siteKey: string): Promise<SitePageRecord[]> {
     this.storeCalls += 1;
-    if (this.cached?.siteKey !== siteKey) this.cached = { siteKey, rows: this.rowsOf(siteKey) };
+    if (this.cached?.siteKey !== siteKey)
+      this.cached = { siteKey, rows: this.rowsOf(siteKey) };
     return this.cached.rows;
   }
   async upsertFindings(rows: PageFindingRecord[]): Promise<void> {

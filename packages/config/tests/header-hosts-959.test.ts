@@ -5,7 +5,8 @@ import { describe, expect, test } from "bun:test";
 
 import { CrawlerConfigSchema } from "../src/schema";
 
-const parse = (header_hosts: string[]) => CrawlerConfigSchema.safeParse({ header_hosts });
+const parse = (header_hosts: string[]) =>
+  CrawlerConfigSchema.safeParse({ header_hosts });
 
 describe("header_hosts entries", () => {
   test.each([

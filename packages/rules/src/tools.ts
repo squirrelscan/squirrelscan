@@ -10,7 +10,10 @@
 import type { ZodType } from "zod";
 
 // HTTP request tool
-export type RequestAsyncFn = (url: string, options?: RequestInit) => Promise<Response>;
+export type RequestAsyncFn = (
+  url: string,
+  options?: RequestInit
+) => Promise<Response>;
 
 const NOT_INJECTED: RequestAsyncFn = () => {
   throw new Error("requestAsync not injected, call setRequestAsync() first");
@@ -32,7 +35,10 @@ export function hasRequestTool(): boolean {
   return _requestAsync !== NOT_INJECTED;
 }
 
-export function requestAsync(url: string, options?: RequestInit): Promise<Response> {
+export function requestAsync(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
   return _requestAsync(url, options);
 }
 
@@ -50,7 +56,10 @@ export function isLLMAvailable(): boolean {
 }
 
 // Overload: no schema → returns raw string
-export function llmCallWithSystem(system: string, prompt: string): Promise<string>;
+export function llmCallWithSystem(
+  system: string,
+  prompt: string
+): Promise<string>;
 // Overload: with schema → returns parsed result
 export function llmCallWithSystem<T>(
   system: string,
@@ -62,7 +71,9 @@ export async function llmCallWithSystem<T>(
   system: string,
   prompt: string,
   schema?: ZodType<T>
-): Promise<string | { success: true; data: T } | { success: false; error: string }> {
+): Promise<
+  string | { success: true; data: T } | { success: false; error: string }
+> {
   if (!_llmCall) throw new Error("LLM not injected, call setLlmCall() first");
   const raw = await _llmCall(system, prompt);
 
@@ -76,6 +87,9 @@ export async function llmCallWithSystem<T>(
     }
     return { success: false, error: result.error.message };
   } catch (e) {
-    return { success: false, error: `Failed to parse LLM response as JSON: ${(e as Error).message}` };
+    return {
+      success: false,
+      error: `Failed to parse LLM response as JSON: ${(e as Error).message}`,
+    };
   }
 }

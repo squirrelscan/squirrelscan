@@ -40,20 +40,19 @@
 // Both paths feed `evaluateAnchorGraph` the same `AnchorGraph` (built by the same
 // `AnchorGraphBuilder`), so the output is byte-identical.
 
-import { z } from "zod";
-
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import {
   type AnchorGraph,
   type AnchorGraphPage,
   type AnchorGraphPair,
   type LinkData,
 } from "@squirrelscan/core-contracts";
-
 import { MAX_ANCHOR_PART_LENGTH, MAX_ANCHOR_PARTS } from "@squirrelscan/parser";
 import { getPathname } from "@squirrelscan/utils";
-import { normalizePageUrl } from "@squirrelscan/utils/url";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { z } from "zod";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { frontDoorTest } from "../shared/front-door";
 import { isLegalPage } from "./no-contextual-inbound";
@@ -132,7 +131,8 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
 // Words in a script that is written with spaces between words. CJK, Thai and the Indic scripts
 // are not: splitting them on whitespace gives whole phrases or fragments, so a pair with such text
 // cannot be judged by shared words and is counted as not judged instead.
-const SPACED_WORD = /^[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}\p{N}]+$/u;
+const SPACED_WORD =
+  /^[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}\p{N}]+$/u;
 
 // Letters that do not decompose under NFD, folded to their usual ASCII spelling.
 const LATIN_FOLDS: Readonly<Record<string, string>> = {
@@ -154,7 +154,8 @@ function foldLatin(text: string): string {
 // Any letter outside Latin, Cyrillic and Greek: text in a script whose words this rule cannot
 // split on whitespace (Chinese, Japanese, Thai) or compare by prefix. A side that has one is not
 // judged at all, so a mixed pair never warns on the Latin words alone.
-const FOREIGN_LETTER = /(?![\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}])\p{L}/u;
+const FOREIGN_LETTER =
+  /(?![\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}])\p{L}/u;
 
 export function hasForeignScript(text: string): boolean {
   return FOREIGN_LETTER.test(text);
@@ -196,7 +197,7 @@ const MAX_TOKEN_LENGTH = 64;
  */
 export function tokenize(
   text: string,
-  options: { slug?: boolean } = {},
+  options: { slug?: boolean } = {}
 ): { tokens: string[]; joined: string[]; lost: boolean } {
   const tokens: string[] = [];
   let lost = false;
@@ -204,10 +205,11 @@ export function tokenize(
     text
       .normalize("NFD")
       .replace(/\p{M}+/gu, "")
-      .toLowerCase(),
+      .toLowerCase()
   );
   for (const raw of folded.split(/[^\p{L}\p{N}]+/u)) {
-    if (raw.length < 2 || STOP_WORDS.has(raw) || !SPACED_WORD.test(raw)) continue;
+    if (raw.length < 2 || STOP_WORDS.has(raw) || !SPACED_WORD.test(raw))
+      continue;
     if (raw.length > MAX_TOKEN_LENGTH) {
       lost = true;
       continue;
@@ -247,7 +249,11 @@ function hyphenJoins(folded: string, adjacent: boolean): string[] {
           forms.push(run[i]! + run[i + 1]!);
       }
       for (const form of forms) {
-        if (form.length >= 3 && form.length <= MAX_TOKEN_LENGTH && SPACED_WORD.test(form))
+        if (
+          form.length >= 3 &&
+          form.length <= MAX_TOKEN_LENGTH &&
+          SPACED_WORD.test(form)
+        )
           out.push(form);
       }
     }
@@ -255,7 +261,12 @@ function hyphenJoins(folded: string, adjacent: boolean): string[] {
   };
   for (const chunk of folded.split(/[^\p{L}\p{N}\-\u2010\u2011]+/u)) {
     if (out.length >= MAX_JOINS) break;
-    if (!chunk.includes("-") && !chunk.includes("\u2010") && !chunk.includes("\u2011")) continue;
+    if (
+      !chunk.includes("-") &&
+      !chunk.includes("\u2010") &&
+      !chunk.includes("\u2011")
+    )
+      continue;
     for (const part of chunk.split(HYPHEN)) {
       if (part === "") flush();
       else run.push(part);
@@ -277,7 +288,11 @@ function safeDecode(path: string): string {
 export function tokensMatch(a: string, b: string): boolean {
   if (a === b) return true;
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  return short.length >= 3 && long.length - short.length <= 3 && long.startsWith(short);
+  return (
+    short.length >= 3 &&
+    long.length - short.length <= 3 &&
+    long.startsWith(short)
+  );
 }
 
 // Not language-gated: the graph carries no page language, so English look-alikes ("Press" in
@@ -290,11 +305,16 @@ export function tokensMatch(a: string, b: string): boolean {
 const MIN_COMPOUND_PART = 5;
 const MIN_COMPOUND_PREFIX = 3;
 
-function sharesCompoundPart(anchor: readonly string[], target: readonly string[]): boolean {
+function sharesCompoundPart(
+  anchor: readonly string[],
+  target: readonly string[]
+): boolean {
   return anchor.some(
     (a) =>
       a.length >= MIN_COMPOUND_PART &&
-      target.some((t) => t.length - a.length >= MIN_COMPOUND_PREFIX && t.endsWith(a)),
+      target.some(
+        (t) => t.length - a.length >= MIN_COMPOUND_PREFIX && t.endsWith(a)
+      )
   );
 }
 
@@ -330,20 +350,28 @@ export function sharesStem(a: string, b: string): boolean {
   if (a.startsWith(b) || b.startsWith(a)) return false;
   // An inflection ending is short on both sides; a long tail is another word glued on.
   const prefix = commonPrefixLength(a, b);
-  if (prefix >= MIN_BARE_STEM && a.length - prefix <= MAX_ENDING && b.length - prefix <= MAX_ENDING)
+  if (
+    prefix >= MIN_BARE_STEM &&
+    a.length - prefix <= MAX_ENDING &&
+    b.length - prefix <= MAX_ENDING
+  )
     return true;
   for (const [x, y] of [
     [a, b],
     [b, a],
   ] as const) {
     const stem = elidedStem(x);
-    if (stem !== null && stem.length >= MIN_STEM && y.startsWith(stem)) return true;
+    if (stem !== null && stem.length >= MIN_STEM && y.startsWith(stem))
+      return true;
   }
   return false;
 }
 
 /** An inflected anchor word that ends a target compound whose last vowel the plural drops ("sadler" in "cykelsadel"). */
-function sharesInflectedCompound(anchor: readonly string[], target: readonly string[]): boolean {
+function sharesInflectedCompound(
+  anchor: readonly string[],
+  target: readonly string[]
+): boolean {
   return anchor.some((a) => {
     if (a.length < MIN_STEM_WORD + 1) return false;
     const stem = a.slice(0, -2);
@@ -358,7 +386,10 @@ function sharesInflectedCompound(anchor: readonly string[], target: readonly str
   });
 }
 
-function sharesInflection(anchor: readonly string[], target: readonly string[]): boolean {
+function sharesInflection(
+  anchor: readonly string[],
+  target: readonly string[]
+): boolean {
   return (
     anchor.some((a) => target.some((t) => sharesStem(a, t))) ||
     sharesInflectedCompound(anchor, target)
@@ -449,17 +480,24 @@ function stripLocaleSegment(path: string): string {
 }
 
 function isJudgeableTarget(page: AnchorGraphPage): boolean {
-  if (page.status === null || page.status < 200 || page.status > 299) return false;
+  if (page.status === null || page.status < 200 || page.status > 299)
+    return false;
   return !page.contentType || /html/i.test(page.contentType);
 }
 
 // Glued text may be separate words fused by CSS the parse cannot see ("Fridge" + "repairs" read
 // "Fridgerepairs"): a target word that sits inside an anchor word counts as shared.
-function sharesInsideGlue(anchor: readonly string[], target: readonly string[]): boolean {
+function sharesInsideGlue(
+  anchor: readonly string[],
+  target: readonly string[]
+): boolean {
   return target.some((t) => t.length >= 3 && anchor.some((a) => a.includes(t)));
 }
 
-function sharesToken(anchor: readonly string[], target: readonly string[]): boolean {
+function sharesToken(
+  anchor: readonly string[],
+  target: readonly string[]
+): boolean {
   return anchor.some((a) => target.some((t) => tokensMatch(a, t)));
 }
 
@@ -469,7 +507,7 @@ function sharesJoined(
   anchor: readonly string[],
   anchorJoined: readonly string[],
   target: readonly string[],
-  targetJoined: readonly string[],
+  targetJoined: readonly string[]
 ): boolean {
   return (
     anchorJoined.some((j) => target.includes(j) || targetJoined.includes(j)) ||
@@ -478,7 +516,9 @@ function sharesJoined(
 }
 
 function clipTitle(text: string | null): string | null {
-  return text !== null && text.length > MAX_TITLE_LENGTH ? text.slice(0, MAX_TITLE_LENGTH) : text;
+  return text !== null && text.length > MAX_TITLE_LENGTH
+    ? text.slice(0, MAX_TITLE_LENGTH)
+    : text;
 }
 
 function clip(text: string): string {
@@ -497,7 +537,8 @@ export function stripTrailingCount(text: string): string {
 
 /** A link that can carry anchor text to another crawled page: internal, followed, contextual. */
 function isContextualGraphLink(link: LinkData): boolean {
-  if (!link.isInternal || !link.url || link.isNofollow || link.isChrome) return false;
+  if (!link.isInternal || !link.url || link.isNofollow || link.isChrome)
+    return false;
   // rel=next/prev is pagination; a fragment link ("Authentication" -> /docs/api#authentication)
   // names a section, not the page.
   if (link.rel?.some((r) => r === "next" || r === "prev")) return false;
@@ -568,7 +609,7 @@ export class AnchorGraphBuilder {
     private readonly maxPairs: number = MAX_PAIRS,
     private readonly maxTotalTokens: number = MAX_TOTAL_TOKENS,
     private readonly crawled?: ReadonlySet<string>,
-    private readonly maxTotalTokenChars: number = MAX_TOTAL_TOKEN_CHARS,
+    private readonly maxTotalTokenChars: number = MAX_TOTAL_TOKEN_CHARS
   ) {}
 
   private intern(word: string): string {
@@ -612,7 +653,9 @@ export class AnchorGraphBuilder {
     }
     this.pages.set(key, {
       title: clipTitle(input.title?.trim() || null),
-      h1: (input.h1 ?? []).slice(0, MAX_H1).map((t) => clipTitle(t.trim()) ?? ""),
+      h1: (input.h1 ?? [])
+        .slice(0, MAX_H1)
+        .map((t) => clipTitle(t.trim()) ?? ""),
       status: input.status ?? null,
       contentType: input.contentType ?? null,
       hasHeading: heading !== "",
@@ -632,7 +675,8 @@ export class AnchorGraphBuilder {
       } catch {
         continue;
       }
-      if (target === key || (this.crawled && !this.crawled.has(target))) continue;
+      if (target === key || (this.crawled && !this.crawled.has(target)))
+        continue;
       let bySource = this.pairs.get(target);
       let pair = bySource?.get(key);
       if (!pair) {
@@ -640,7 +684,8 @@ export class AnchorGraphBuilder {
         if (this.pairCount >= this.maxPairs) {
           const dropKey = `${target}\u0000${key}`;
           if (this.droppedKeys.has(dropKey)) continue;
-          if (this.droppedKeys.size < MAX_DROPPED_KEYS) this.droppedKeys.add(dropKey);
+          if (this.droppedKeys.size < MAX_DROPPED_KEYS)
+            this.droppedKeys.add(dropKey);
           else this.droppedOverflow += 1;
           continue;
         }
@@ -656,7 +701,7 @@ export class AnchorGraphBuilder {
             truncated: false,
             unspaced: false,
             glued: false,
-          }),
+          })
         );
         this.pairCount += 1;
       }
@@ -681,7 +726,8 @@ export class AnchorGraphBuilder {
       }
       // A blank anchor (empty, or only stop words) is not a distinct anchor text: recording it
       // would hide the "only contextual anchor text" escalation.
-      if (found.tokens.length === 0 && !found.lost && !hasForeignScript(text)) continue;
+      if (found.tokens.length === 0 && !found.lost && !hasForeignScript(text))
+        continue;
       // Identity from the full text, display from the clipped one.
       const id = textKey(text);
       if (pair.keys.length < MAX_TEXTS_PER_PAIR && !pair.keys.includes(id)) {
@@ -695,7 +741,7 @@ export class AnchorGraphBuilder {
     pair: PairState,
     into: string[],
     tokens: readonly string[],
-    markTruncated: boolean,
+    markTruncated: boolean
   ): void {
     for (const token of tokens) {
       if (into.includes(token)) continue;
@@ -762,10 +808,12 @@ interface Mismatch {
  */
 function anchorFrontDoorTest(
   baseUrl: string,
-  entryUrls: readonly string[],
+  entryUrls: readonly string[]
 ): (url: string) => boolean {
   const shared = frontDoorTest(baseUrl, entryUrls);
-  const exact = new Set([baseUrl, ...entryUrls].map((u) => normalizePageUrl(u)));
+  const exact = new Set(
+    [baseUrl, ...entryUrls].map((u) => normalizePageUrl(u))
+  );
   return (url) => {
     let hasQuery = false;
     try {
@@ -782,7 +830,7 @@ export function evaluateAnchorGraph(
   graph: AnchorGraph,
   baseUrl: string,
   entryUrls: readonly string[],
-  capped: boolean,
+  capped: boolean
 ): CheckResult {
   const isFrontDoor = anchorFrontDoorTest(baseUrl, entryUrls);
   interface TargetWords {
@@ -797,12 +845,23 @@ export function evaluateAnchorGraph(
     if (cached !== undefined) return cached;
     let words: TargetWords | null = null;
     const page = graph.pages.get(target);
-    if (page && !isFrontDoor(target) && !isUtilityPage(target) && isJudgeableTarget(page)) {
+    if (
+      page &&
+      !isFrontDoor(target) &&
+      !isUtilityPage(target) &&
+      isJudgeableTarget(page)
+    ) {
       // A title or H1 in an unspaced script, or one that gives no word at all, leaves only the
       // slug to compare against: too thin to warn on.
-      const noWord = page.hasHeading && page.headingTokens.length === 0 && !page.headingTruncated;
+      const noWord =
+        page.hasHeading &&
+        page.headingTokens.length === 0 &&
+        !page.headingTruncated;
       if (!page.headingForeign && !noWord) {
-        const slug = tokenize(stripLocaleSegment(safeDecode(getPathname(target))), { slug: true });
+        const slug = tokenize(
+          stripLocaleSegment(safeDecode(getPathname(target))),
+          { slug: true }
+        );
         const all = [...page.headingTokens, ...slug.tokens];
         // A bare id (`/p/123`) is no topic: with no title or H1 there is nothing to compare.
         if (all.some((t) => /\p{L}/u.test(t)))
@@ -833,7 +892,8 @@ export function evaluateAnchorGraph(
     const target = targetWords?.tokens ?? null;
     // Utility pages and the front door are not targets at all: not counted either way.
     if (!target) {
-      if (!isFrontDoor(pair.target) && !isUtilityPage(pair.target)) notJudged += 1;
+      if (!isFrontDoor(pair.target) && !isUtilityPage(pair.target))
+        notJudged += 1;
       continue;
     }
     const anchor = pair.tokens;
@@ -896,7 +956,9 @@ export function evaluateAnchorGraph(
     };
   }
 
-  const only = new Set(mismatches.filter((m) => m.onlyAnchor).map((m) => m.target));
+  const only = new Set(
+    mismatches.filter((m) => m.onlyAnchor).map((m) => m.target)
+  );
   const targets = new Set(mismatches.map((m) => m.target));
   const escalation =
     only.size > 0
@@ -913,7 +975,11 @@ export function evaluateAnchorGraph(
       sourcePages: [m.source],
       label: `"${m.anchor}" -> ${m.target}${m.title ? ` (title: "${m.title}")` : ""}${m.onlyAnchor ? ", the only contextual anchor text this page receives" : ""}`,
     })),
-    details: { ...details, total: mismatches.length, onlyAnchorTargets: only.size },
+    details: {
+      ...details,
+      total: mismatches.length,
+      onlyAnchorTargets: only.size,
+    },
     value: mismatches
       .slice(0, 5)
       .map((m) => `"${m.anchor}" -> ${getPathname(m.target)}`)
@@ -946,7 +1012,9 @@ export const anchorMismatchRule: Rule = {
     if (ctx.siteQuery) {
       const graph = ctx.siteQuery.anchorGraph?.();
       if (!graph || graph.pages.size < 2) return { checks: [SKIP_CHECK] };
-      return { checks: [evaluateAnchorGraph(graph, baseUrl, entryUrls, capped)] };
+      return {
+        checks: [evaluateAnchorGraph(graph, baseUrl, entryUrls, capped)],
+      };
     }
 
     const pages = ctx.site?.pages;
@@ -955,7 +1023,7 @@ export const anchorMismatchRule: Rule = {
     const builder = new AnchorGraphBuilder(
       undefined,
       undefined,
-      new Set(pages.map((page) => normalizePageUrl(page.url))),
+      new Set(pages.map((page) => normalizePageUrl(page.url)))
     );
     for (const page of pages) {
       builder.addPage(page.url, {
@@ -963,9 +1031,14 @@ export const anchorMismatchRule: Rule = {
         h1: page.parsed.h1?.texts,
         links: page.parsed.links,
         status: page.statusCode,
-        contentType: page.headers?.["content-type"] ?? page.headers?.["Content-Type"],
+        contentType:
+          page.headers?.["content-type"] ?? page.headers?.["Content-Type"],
       });
     }
-    return { checks: [evaluateAnchorGraph(builder.build(), baseUrl, entryUrls, capped)] };
+    return {
+      checks: [
+        evaluateAnchorGraph(builder.build(), baseUrl, entryUrls, capped),
+      ],
+    };
   },
 };

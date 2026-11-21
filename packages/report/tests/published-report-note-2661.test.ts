@@ -6,14 +6,18 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { AuditReport, CheckResult } from "../src/types";
+
 import { publishedReportNote } from "../src/coverage";
 import { renderHtml } from "../src/output/html";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
-import type { AuditReport, CheckResult } from "../src/types";
 
-const SAMPLE = Array.from({ length: 10 }, (_, i) => `https://example.com/p${i}`);
+const SAMPLE = Array.from(
+  { length: 10 },
+  (_, i) => `https://example.com/p${i}`
+);
 
 function report(detail?: AuditReport["detail"]): AuditReport {
   const check: CheckResult = {
@@ -22,7 +26,12 @@ function report(detail?: AuditReport["detail"]): AuditReport {
     message: "Image is missing alt text",
     pages: SAMPLE,
     items: [{ id: "https://example.com/a.png", sourcePages: [SAMPLE[0]!] }],
-    details: { aggregated: true, pagesTruncated: 4_000, occurrences: 4_000, additional: 37 },
+    details: {
+      aggregated: true,
+      pagesTruncated: 4_000,
+      occurrences: 4_000,
+      additional: 37,
+    },
   };
   return {
     baseUrl: "https://example.com",
@@ -63,7 +72,9 @@ function reportWithItems(listed: number, leftOut: number): AuditReport {
   const r = report();
   const check = r.ruleResults["images/alt"]!.checks[0]!;
   check.pages = [SAMPLE[0]!];
-  check.items = Array.from({ length: listed }, (_, i) => ({ id: `https://example.com/i${i}.png` }));
+  check.items = Array.from({ length: listed }, (_, i) => ({
+    id: `https://example.com/i${i}.png`,
+  }));
   check.details = { additional: leftOut };
   return r;
 }
@@ -71,33 +82,55 @@ function reportWithItems(listed: number, leftOut: number): AuditReport {
 const STAMP = {
   capped: true,
   tier: 0,
-  caps: { pagesPerClass: 10, itemsPerClass: 5, sourcePagesPerItem: 1, messageChars: 500, classesPerRule: 25 },
+  caps: {
+    pagesPerClass: 10,
+    itemsPerClass: 5,
+    sourcePagesPerItem: 1,
+    messageChars: 500,
+    classesPerRule: 25,
+  },
 } as const;
 
-const NOTE = "This published report is a summary: each issue lists up to 10 example pages and 5 items beside its true counts.";
+const NOTE =
+  "This published report is a summary: each issue lists up to 10 example pages and 5 items beside its true counts.";
 
 describe("publishedReportNote", () => {
   test("points a CLI audit at squirrel report on that machine", () => {
-    expect(publishedReportNote({ detail: { ...STAMP, fullDetail: "local" } })).toBe(
-      `${NOTE} The complete list is in the project on the machine that ran the audit: \`squirrel report --format json\` there prints every page.`,
+    expect(
+      publishedReportNote({ detail: { ...STAMP, fullDetail: "local" } })
+    ).toBe(
+      `${NOTE} The complete list is in the project on the machine that ran the audit: \`squirrel report --format json\` there prints every page.`
     );
   });
 
   test("points a cloud audit at the CLI, not an unserved findings view", () => {
     for (const fullDetail of ["findings", undefined] as const) {
-      const note = publishedReportNote({ detail: { ...STAMP, ...(fullDetail ? { fullDetail } : {}) } });
+      const note = publishedReportNote({
+        detail: { ...STAMP, ...(fullDetail ? { fullDetail } : {}) },
+      });
       expect(note).toContain("audit the site with the squirrel CLI");
     }
   });
 
   test("says how many issues did not fit", () => {
-    expect(publishedReportNote({ detail: { ...STAMP, fullDetail: "local", classesDropped: 3 } })).toContain(
-      "beside its true counts. 3 more issues did not fit and are counted in the score only. The complete list",
+    expect(
+      publishedReportNote({
+        detail: { ...STAMP, fullDetail: "local", classesDropped: 3 },
+      })
+    ).toContain(
+      "beside its true counts. 3 more issues did not fit and are counted in the score only. The complete list"
     );
   });
 
   test("caps that are not finite numbers fall back to the full sample, never reach the copy", () => {
-    for (const bad of ["10<script>", Number.NaN, Number.POSITIVE_INFINITY, -3, { n: 1 }, null]) {
+    for (const bad of [
+      "10<script>",
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      -3,
+      { n: 1 },
+      null,
+    ]) {
       const note = publishedReportNote({
         detail: {
           ...STAMP,
@@ -119,7 +152,9 @@ describe("publishedReportNote", () => {
   });
 
   test("carries no em-dash", () => {
-    expect(publishedReportNote({ detail: { ...STAMP, fullDetail: "local" } })).not.toContain("—");
+    expect(
+      publishedReportNote({ detail: { ...STAMP, fullDetail: "local" } })
+    ).not.toContain("—");
   });
 });
 
@@ -148,9 +183,13 @@ describe("every renderer says it once on a capped report, never on an uncapped o
 
   test("llm escapes the note like every other value", () => {
     const out = renderLlm(capped);
-    const line = out.split("\n").find((l) => l.startsWith("<published-summary>"))!;
+    const line = out
+      .split("\n")
+      .find((l) => l.startsWith("<published-summary>"))!;
     expect(line).toEndWith("</published-summary>");
-    expect(line.slice("<published-summary>".length, -"</published-summary>".length)).not.toMatch(/[<>&]/);
+    expect(
+      line.slice("<published-summary>".length, -"</published-summary>".length)
+    ).not.toMatch(/[<>&]/);
   });
 
   // repo#2661: the hosted HTML, markdown and text said only how many items they
@@ -182,11 +221,15 @@ describe("every renderer says it once on a capped report, never on an uncapped o
   }
 
   test("one item left out is one item", () => {
-    expect(renderText(reportWithItems(0, 1))).toContain("        1 item not listed");
+    expect(renderText(reportWithItems(0, 1))).toContain(
+      "        1 item not listed"
+    );
   });
 
   test("thousands are grouped in the not-listed count", () => {
-    expect(renderText(reportWithItems(2, 1_142))).toContain("... and 1,142 more items not listed");
+    expect(renderText(reportWithItems(2, 1_142))).toContain(
+      "... and 1,142 more items not listed"
+    );
   });
 
   // `details.additional` counts items a check LEFT OUT of `items` (the fold's

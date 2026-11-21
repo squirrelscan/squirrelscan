@@ -25,9 +25,18 @@ const organization = (logo: string) => ({
 });
 
 const PAGES = [
-  { url: "https://example.com/c", raw: JSON.stringify(organization("https://example.com/c.png")) },
-  { url: "https://example.com/a", raw: JSON.stringify(organization("https://example.com/a.png")) },
-  { url: "https://example.com/b", raw: JSON.stringify(organization("https://example.com/b.png")) },
+  {
+    url: "https://example.com/c",
+    raw: JSON.stringify(organization("https://example.com/c.png")),
+  },
+  {
+    url: "https://example.com/a",
+    raw: JSON.stringify(organization("https://example.com/a.png")),
+  },
+  {
+    url: "https://example.com/b",
+    raw: JSON.stringify(organization("https://example.com/b.png")),
+  },
   { url: "https://example.com/empty", raw: null },
 ];
 
@@ -63,7 +72,9 @@ describe("incremental builder", () => {
   });
 
   test("the list wrapper and the streaming API agree byte for byte", () => {
-    const wrapped = JSON.stringify(buildEntityMap(PAGES, SITE, { generatedAt: AT }));
+    const wrapped = JSON.stringify(
+      buildEntityMap(PAGES, SITE, { generatedAt: AT })
+    );
     expect(streamed(PAGES)).toBe(wrapped);
   });
 
@@ -115,7 +126,9 @@ describe("collector", () => {
 
   test("a page with no parsed record still counts as a page", () => {
     const collector = createEntityMapCollector();
-    collector.absorb([{ page: { url: SITE, finalUrl: SITE, status: 200 }, parsed: null }]);
+    collector.absorb([
+      { page: { url: SITE, finalUrl: SITE, status: 200 }, parsed: null },
+    ]);
     const map = collector.build(SITE, { generatedAt: AT });
 
     expect(map.summary.pagesTotal).toBe(1);
@@ -156,9 +169,14 @@ describe("legal identifiers and the identity guard through the incremental build
     const conflicts = forward.nodes[0]!.conflicts;
     // `DE 123` and `de-123` are one number, so only url and the guard disagree.
     expect(conflicts.map((c) => c.property)).toEqual(["url", "@identity"]);
-    const withVat = built([service(EN, { vatID: "DE 123" }), service(DK, { vatID: "dk 9" })]);
+    const withVat = built([
+      service(EN, { vatID: "DE 123" }),
+      service(DK, { vatID: "dk 9" }),
+    ]);
     expect(
-      withVat.nodes[0]!.conflicts.find((c) => c.property === "vatID")!.values.map((v) => v.value),
+      withVat.nodes[0]!.conflicts.find(
+        (c) => c.property === "vatID"
+      )!.values.map((v) => v.value)
     ).toEqual(["DE 123", "dk 9"]);
   });
 });

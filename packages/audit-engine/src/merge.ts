@@ -12,9 +12,9 @@
 // the API's Promise wrapper (`./merge-promise`) shares EXACTLY the same logic.
 // This file just loads prior state via the Effect `CrawlStorage` and delegates.
 
-import { Effect } from "effect";
-
 import type { CrawlStorage, StorageError } from "@squirrelscan/core-contracts";
+
+import { Effect } from "effect";
 
 import {
   computeMerge,

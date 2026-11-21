@@ -31,9 +31,9 @@ describe("opt-in rules", () => {
   });
 
   test("rule_options enabled = true selects an opt-in rule", () => {
-    expect(
-      selected(["*"], { "gaps/content": { enabled: true } })
-    ).toContain("gaps/content");
+    expect(selected(["*"], { "gaps/content": { enabled: true } })).toContain(
+      "gaps/content"
+    );
   });
 
   test("the runner uses the same opt-in selection", () => {
@@ -41,7 +41,9 @@ describe("opt-in rules", () => {
       rules: { enable: ["*"], disable: [] },
       rule_options: {},
     });
-    const defaultIds = defaultRunner.getEnabledRules().map((rule) => rule.meta.id);
+    const defaultIds = defaultRunner
+      .getEnabledRules()
+      .map((rule) => rule.meta.id);
     expect(GAP_RULES.filter((id) => defaultIds.includes(id))).toEqual([]);
 
     const gapRunner = createRunner({

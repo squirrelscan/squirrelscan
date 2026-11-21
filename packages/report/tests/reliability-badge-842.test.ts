@@ -11,13 +11,31 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, ReportRuleResult } from "../src/types";
 
-import { getBadgeName, getBadgeTitle, getCategoryGroup } from "../src/categories";
+import {
+  getBadgeName,
+  getBadgeTitle,
+  getCategoryGroup,
+} from "../src/categories";
 import { renderHtml } from "../src/output/html";
 
 function rule(id: string, category: string): ReportRuleResult {
   return {
-    meta: { id, name: id, description: "", category, scope: "site", severity: "error", weight: 7 },
-    checks: [{ name: "c", status: "fail", message: "1 broken internal link(s) (4xx/5xx)" }],
+    meta: {
+      id,
+      name: id,
+      description: "",
+      category,
+      scope: "site",
+      severity: "error",
+      weight: 7,
+    },
+    checks: [
+      {
+        name: "c",
+        status: "fail",
+        message: "1 broken internal link(s) (4xx/5xx)",
+      },
+    ],
   };
 }
 
@@ -34,8 +52,24 @@ function report(rules: ReportRuleResult[]): AuditReport {
       overall: 80,
       categories: [],
       groups: [
-        { group: "seo", name: "SEO", score: 80, passed: 1, warnings: 0, failed: 1, total: 2 },
-        { group: "performance", name: "Performance", score: 80, passed: 1, warnings: 0, failed: 1, total: 2 },
+        {
+          group: "seo",
+          name: "SEO",
+          score: 80,
+          passed: 1,
+          warnings: 0,
+          failed: 1,
+          total: 2,
+        },
+        {
+          group: "performance",
+          name: "Performance",
+          score: 80,
+          passed: 1,
+          warnings: 0,
+          failed: 1,
+          total: 2,
+        },
       ],
       errorCount: rules.length,
       warningCount: 0,
@@ -46,16 +80,20 @@ function report(rules: ReportRuleResult[]): AuditReport {
 
 /** Every `gtag` pill as `title|text`. */
 function badges(html: string): string[] {
-  return [...html.matchAll(/class="gtag" data-g="[^"]*" title="([^"]*)"[^>]*>([^<]*)<\/span>/g)].map(
-    (m) => `${m[1]}|${m[2]}`,
-  );
+  return [
+    ...html.matchAll(
+      /class="gtag" data-g="[^"]*" title="([^"]*)"[^>]*>([^<]*)<\/span>/g
+    ),
+  ].map((m) => `${m[1]}|${m[2]}`);
 }
 
 describe("reliability badges (pub#842)", () => {
   test("a Reliability rule's badge names its category; its score still rolls into Performance", () => {
     expect(getCategoryGroup("reliability")).toBe("performance");
     expect(getBadgeName("reliability")).toBe("Reliability");
-    expect(getBadgeTitle("reliability")).toBe("Reliability, scored under Performance");
+    expect(getBadgeTitle("reliability")).toBe(
+      "Reliability, scored under Performance"
+    );
     // Every other category keeps its group's badge.
     expect(getBadgeName("perf")).toBe("Performance");
     expect(getBadgeName("links")).toBe("SEO");
@@ -68,16 +106,18 @@ describe("reliability badges (pub#842)", () => {
         rule("links/broken-links", "reliability"),
         rule("links/broken-external-links", "reliability"),
         rule("perf/lcp", "perf"),
-      ]),
+      ])
     );
     expect(badges(html).sort()).toEqual(
       [
         "Performance|Performance",
         "Reliability, scored under Performance|Reliability",
         "Reliability, scored under Performance|Reliability",
-      ].sort(),
+      ].sort()
     );
-    expect(html).not.toMatch(/>Performance<\/span>\s*<span class="rule-name">links\/broken-links/);
+    expect(html).not.toMatch(
+      />Performance<\/span>\s*<span class="rule-name">links\/broken-links/
+    );
   });
 
   test("html: a report stored before the move keeps its stored Links category and SEO badge", () => {

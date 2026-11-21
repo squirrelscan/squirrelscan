@@ -1,8 +1,9 @@
 // a11y/definition-list - Definition lists are properly structured
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const definitionListRule: Rule = {
   meta: {

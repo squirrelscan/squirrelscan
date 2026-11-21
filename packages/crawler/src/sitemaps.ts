@@ -1,8 +1,3 @@
-import { brotliDecompressSync, gunzipSync, inflateRawSync, inflateSync } from "node:zlib";
-
-import { Effect } from "effect";
-import { XMLParser, XMLValidator } from "fast-xml-parser";
-
 import type {
   SitemapReadState,
   RobotsTxtData,
@@ -10,18 +5,30 @@ import type {
   SitemapFetchFailure,
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
-import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirrelscan/utils/headers";
+
+import {
+  SITEMAP_NOT_CHECKED_ERROR,
+  SITEMAP_OFF_SITE_SKIPPED_ERROR,
+} from "@squirrelscan/core-contracts/storage";
+import {
+  createHeaderScope,
+  mergeHeaderRecords,
+  type HeaderScope,
+} from "@squirrelscan/utils/headers";
 import {
   EGRESS_OFF_SITE_REFUSAL,
   EgressRefusedError,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
 import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
-
+import { Effect } from "effect";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 import {
-  SITEMAP_NOT_CHECKED_ERROR,
-  SITEMAP_OFF_SITE_SKIPPED_ERROR,
-} from "@squirrelscan/core-contracts/storage";
+  brotliDecompressSync,
+  gunzipSync,
+  inflateRawSync,
+  inflateSync,
+} from "node:zlib";
 
 import { safeFetchWithDeadline, ungated, type ProbeGate } from "./deadline";
 import { noteRefusal, type RefusalLog } from "./refusals";
@@ -48,20 +55,30 @@ const logger = {
 export const SITEMAP_MAX_BYTES = 52_428_800;
 
 /** Recorded against a sitemap whose uncompressed body is over SITEMAP_MAX_BYTES. */
-export const SITEMAP_TOO_LARGE_ERROR = "Sitemap exceeds the 50 MB uncompressed size limit";
+export const SITEMAP_TOO_LARGE_ERROR =
+  "Sitemap exceeds the 50 MB uncompressed size limit";
 
 /** Prefix for a body that carries the gzip signature but does not decompress. */
 export const SITEMAP_CORRUPT_GZIP_ERROR = "Corrupt gzip body";
 
 /** Prefix for a response whose `Content-Encoding` the walk cannot undo. */
-export const SITEMAP_UNSUPPORTED_ENCODING_ERROR = "Unsupported Content-Encoding";
+export const SITEMAP_UNSUPPORTED_ENCODING_ERROR =
+  "Unsupported Content-Encoding";
 
 /** Recorded against a sitemap URL that answered with a web page instead (#670). */
-export const SITEMAP_HTML_PAGE_ERROR = "Not a sitemap: the URL returned an HTML page";
+export const SITEMAP_HTML_PAGE_ERROR =
+  "Not a sitemap: the URL returned an HTML page";
 
 /** The shape a sitemap takes when its body could not be read as one. */
 function unreadableSitemap(url: string, error: string): SitemapData {
-  return { url, type: "urlset", urls: [], childSitemaps: [], errors: [error], urlCount: 0 };
+  return {
+    url,
+    type: "urlset",
+    urls: [],
+    childSitemaps: [],
+    errors: [error],
+    urlCount: 0,
+  };
 }
 
 /**
@@ -98,7 +115,8 @@ function decodeXmlEscapes(value: string): string {
  */
 function fieldText(value: unknown): string | undefined {
   if (typeof value === "string") return value.trim();
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return undefined;
   let text = "";
   for (const [key, part] of Object.entries(value)) {
     if (key === "#text" && typeof part === "string") text = part;
@@ -112,7 +130,8 @@ function sitemapEntries(value: unknown): Record<string, unknown>[] {
   const entries = Array.isArray(value) ? value : [value];
   // An empty element parses as "", a bare text body as a string: neither has fields.
   return entries.filter(
-    (entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null,
+    (entry): entry is Record<string, unknown> =>
+      typeof entry === "object" && entry !== null
   );
 }
 
@@ -128,21 +147,30 @@ type SitemapField = "loc" | "lastmod" | "changefreq" | "priority";
 function createFieldReader(element: "url" | "sitemap") {
   const unreadable = new Map<SitemapField, number>();
   return {
-    read(entry: Record<string, unknown>, field: SitemapField): string | undefined {
+    read(
+      entry: Record<string, unknown>,
+      field: SitemapField
+    ): string | undefined {
       if (entry[field] === undefined) return undefined;
       const text = fieldText(entry[field]);
-      if (text === undefined) unreadable.set(field, (unreadable.get(field) ?? 0) + 1);
+      if (text === undefined)
+        unreadable.set(field, (unreadable.get(field) ?? 0) + 1);
       return text;
     },
     errors(): string[] {
       const errors: string[] = [];
-      for (const field of ["loc", "lastmod", "changefreq", "priority"] as const) {
+      for (const field of [
+        "loc",
+        "lastmod",
+        "changefreq",
+        "priority",
+      ] as const) {
         const count = unreadable.get(field);
         if (!count) continue;
         errors.push(
           field === "loc"
             ? `${count} <${element}> ${count === 1 ? "entry" : "entries"} skipped: <loc> is not a single text value`
-            : `${count} <${field}> ${count === 1 ? "value" : "values"} ignored: not a single text value`,
+            : `${count} <${field}> ${count === 1 ? "value" : "values"} ignored: not a single text value`
         );
       }
       return errors;
@@ -167,19 +195,25 @@ const SITEMAP_NAMESPACES = new Set([
  * (#759). Attributes, and elements in any other prefix, are left as they are.
  */
 function withoutElementPrefix(value: unknown, prefix: string): unknown {
-  if (Array.isArray(value)) return value.map((item) => withoutElementPrefix(item, prefix));
+  if (Array.isArray(value))
+    return value.map((item) => withoutElementPrefix(item, prefix));
   if (value === null || typeof value !== "object") return value;
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
-    const name = key.startsWith(`${prefix}:`) ? key.slice(prefix.length + 1) : key;
+    const name = key.startsWith(`${prefix}:`)
+      ? key.slice(prefix.length + 1)
+      : key;
     // The parser refuses an element named `__proto__`; `ns0:__proto__` is
     // another name to it, so the bare one would reach here and replace the
     // copy's prototype. Refused the same way.
-    if (name === "__proto__") throw new Error('[SECURITY] Invalid name: "__proto__"');
+    if (name === "__proto__")
+      throw new Error('[SECURITY] Invalid name: "__proto__"');
     const stripped = withoutElementPrefix(child, prefix);
     // `<ns0:loc>` beside `<loc>` is two of the same element, as the parser
     // reports a repeat: kept as a list, so a doubled field is still flagged.
-    out[name] = Object.hasOwn(out, name) ? [out[name], stripped].flat() : stripped;
+    out[name] = Object.hasOwn(out, name)
+      ? [out[name], stripped].flat()
+      : stripped;
   }
   return out;
 }
@@ -191,7 +225,9 @@ function withoutElementPrefix(value: unknown, prefix: string): unknown {
  * whose prefix is bound to any other namespace is left alone, so it stays an
  * unknown format.
  */
-function unprefixedRoot(parsed: Record<string, unknown>): Record<string, unknown> {
+function unprefixedRoot(
+  parsed: Record<string, unknown>
+): Record<string, unknown> {
   // An unprefixed root is read as before, whatever else the document holds.
   if ("urlset" in parsed || "sitemapindex" in parsed) return parsed;
   for (const [key, element] of Object.entries(parsed)) {
@@ -201,7 +237,11 @@ function unprefixedRoot(parsed: Record<string, unknown>): Record<string, unknown
     const name = key.slice(colon + 1);
     if (name !== "urlset" && name !== "sitemapindex") continue;
     const namespace = (element as Record<string, unknown>)[`@_xmlns:${prefix}`];
-    if (typeof namespace !== "string" || !SITEMAP_NAMESPACES.has(namespace.trim())) continue;
+    if (
+      typeof namespace !== "string" ||
+      !SITEMAP_NAMESPACES.has(namespace.trim())
+    )
+      continue;
     return { [name]: withoutElementPrefix(element, prefix) };
   }
   return parsed;
@@ -230,16 +270,21 @@ function wellFormednessError(content: string): string | null {
   const result = XMLValidator.validate(body);
   if (result === true) return null;
   // Positions in the body as served: past the whitespace taken off the front.
-  const skippedLines = content.slice(0, content.length - body.length).split("\n");
+  const skippedLines = content
+    .slice(0, content.length - body.length)
+    .split("\n");
   const lineOffset = skippedLines.length - 1;
   const lastSkipped = skippedLines[lineOffset]!.length;
   const at = (line: number, col: number) =>
     [line + lineOffset, line === 1 ? col + lastSkipped : col] as const;
   const { msg, line, col } = result.err;
-  const message = msg.replace(/opened in line (\d+), col (\d+)/g, (_match, l: string, c: string) => {
-    const [openLine, openCol] = at(Number(l), Number(c));
-    return `opened in line ${openLine}, col ${openCol}`;
-  });
+  const message = msg.replace(
+    /opened in line (\d+), col (\d+)/g,
+    (_match, l: string, c: string) => {
+      const [openLine, openCol] = at(Number(l), Number(c));
+      return `opened in line ${openLine}, col ${openCol}`;
+    }
+  );
   const [errLine, errCol] = at(line, col);
   return `${SITEMAP_NOT_WELL_FORMED_ERROR}: ${message} (line ${errLine}, column ${errCol})`;
 }
@@ -310,10 +355,14 @@ export function parseSitemap(content: string, url: string): SitemapData {
   });
 
   try {
-    const parsed = unprefixedRoot(parser.parse(content) as Record<string, unknown>);
+    const parsed = unprefixedRoot(
+      parser.parse(content) as Record<string, unknown>
+    );
     // Checked once a sitemap root is found: anything else is already an error.
     const notWellFormed =
-      parsed.sitemapindex || parsed.urlset ? wellFormednessError(content) : null;
+      parsed.sitemapindex || parsed.urlset
+        ? wellFormednessError(content)
+        : null;
     if (notWellFormed) errors.push(notWellFormed);
 
     if (parsed.sitemapindex) {
@@ -342,7 +391,10 @@ export function parseSitemap(content: string, url: string): SitemapData {
     }
 
     if (parsed.urlset) {
-      const urlset = parsed.urlset as { "@_xmlns:news"?: string; url?: unknown };
+      const urlset = parsed.urlset as {
+        "@_xmlns:news"?: string;
+        url?: unknown;
+      };
       const urls: SitemapUrl[] = [];
       const fields = createFieldReader("url");
       const locs = createLocResolver("url", url);
@@ -354,7 +406,9 @@ export function parseSitemap(content: string, url: string): SitemapData {
         if (!loc) continue;
 
         const priorityText = fields.read(entry, "priority");
-        const priority = priorityText ? Number.parseFloat(priorityText) : undefined;
+        const priority = priorityText
+          ? Number.parseFloat(priorityText)
+          : undefined;
 
         urls.push({
           loc,
@@ -486,7 +540,10 @@ function opensWithMarkup(bytes: Uint8Array): boolean {
   return bytes[i] === 0x3c;
 }
 
-type Inflate = (bytes: Uint8Array, options: { maxOutputLength: number }) => Uint8Array;
+type Inflate = (
+  bytes: Uint8Array,
+  options: { maxOutputLength: number }
+) => Uint8Array;
 
 /** HTTP's `deflate` is zlib-wrapped, but servers that send it raw are common enough to accept. */
 const inflateEither: Inflate = (bytes, options) => {
@@ -517,10 +574,16 @@ function inflateWithin(coding: string, bytes: Uint8Array): Uint8Array | string {
   try {
     return inflate(bytes, { maxOutputLength: SITEMAP_MAX_BYTES });
   } catch (error) {
-    if (error instanceof RangeError || (error as { code?: unknown }).code === "ERR_BUFFER_TOO_LARGE") {
+    if (
+      error instanceof RangeError ||
+      (error as { code?: unknown }).code === "ERR_BUFFER_TOO_LARGE"
+    ) {
       return SITEMAP_TOO_LARGE_ERROR;
     }
-    const prefix = inflate === gunzipSync ? SITEMAP_CORRUPT_GZIP_ERROR : `Corrupt ${coding} body`;
+    const prefix =
+      inflate === gunzipSync
+        ? SITEMAP_CORRUPT_GZIP_ERROR
+        : `Corrupt ${coding} body`;
     return `${prefix}: ${(error as Error).message}`;
   }
 }
@@ -547,7 +610,7 @@ export function decodeSitemapBody(
   bytes: Uint8Array,
   url: string,
   contentType: string | null,
-  contentEncoding: string | null = null,
+  contentEncoding: string | null = null
 ): DecodedSitemapBody {
   let body = bytes;
 
@@ -558,7 +621,12 @@ export function decodeSitemapBody(
   // One coding at most: each layer can inflate to the full limit, and nothing
   // a real server sends stacks them.
   if (codings.length > 1) {
-    return { data: unreadableSitemap(url, `${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: ${codings.join(", ")}`) };
+    return {
+      data: unreadableSitemap(
+        url,
+        `${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: ${codings.join(", ")}`
+      ),
+    };
   }
   const coding = codings[0];
   if (coding) {
@@ -575,25 +643,34 @@ export function decodeSitemapBody(
 
   if (hasGzipSignature(body)) {
     const inflated = inflateWithin("gzip", body);
-    if (typeof inflated === "string") return { data: unreadableSitemap(url, inflated) };
+    if (typeof inflated === "string")
+      return { data: unreadableSitemap(url, inflated) };
     body = inflated;
   }
 
   const text = new TextDecoder().decode(body);
   const opening = bodyOpening(text);
   if (opening === "html") {
-    return { data: unreadableSitemap(url, SITEMAP_HTML_PAGE_ERROR), notASitemap: true };
+    return {
+      data: unreadableSitemap(url, SITEMAP_HTML_PAGE_ERROR),
+      notASitemap: true,
+    };
   }
 
   const data = parseSitemap(text, url);
   // A well-formedness error (#760) does not make a parsed sitemap a page: its
   // URLs were read, and are kept.
-  const readable = data.errors.every((error) => error.startsWith(SITEMAP_NOT_WELL_FORMED_ERROR));
+  const readable = data.errors.every((error) =>
+    error.startsWith(SITEMAP_NOT_WELL_FORMED_ERROR)
+  );
   if (opening === "sitemap" || readable) return { data };
   // A page that opens with something other than a doctype (a fragment, a
   // script) still says what it is in its Content-Type.
   if (isHtmlContentType(contentType)) {
-    return { data: unreadableSitemap(url, SITEMAP_HTML_PAGE_ERROR), notASitemap: true };
+    return {
+      data: unreadableSitemap(url, SITEMAP_HTML_PAGE_ERROR),
+      notASitemap: true,
+    };
   }
   if (opening === "not-xml") return { data, notASitemap: true };
   return { data };
@@ -606,7 +683,10 @@ export function decodeSitemapBody(
  * body dribbled out a byte at a time costs bytes, not an object per chunk. A
  * read that fails (a stalled body aborted at the deadline) rejects.
  */
-async function readBodyWithin(response: Response, maxBytes: number): Promise<Uint8Array | null> {
+async function readBodyWithin(
+  response: Response,
+  maxBytes: number
+): Promise<Uint8Array | null> {
   // A null body is a bodyless response, never a large one.
   const reader = response.body?.getReader();
   if (!reader) return new Uint8Array(0);
@@ -623,7 +703,9 @@ async function readBodyWithin(response: Response, maxBytes: number): Promise<Uin
       return null;
     }
     if (needed > buffer.byteLength) {
-      const grown = new Uint8Array(Math.min(maxBytes, Math.max(buffer.byteLength * 2, needed)));
+      const grown = new Uint8Array(
+        Math.min(maxBytes, Math.max(buffer.byteLength * 2, needed))
+      );
       grown.set(buffer.subarray(0, total));
       buffer = grown;
     }
@@ -677,7 +759,10 @@ const WALK_WINDOW_REQUESTS = 3;
 
 /** The walk's progress window for a given per-request timeout. */
 export function sitemapWalkWindowMs(timeoutMs: number): number {
-  return Math.min(SITEMAP_WALK_WINDOW_MS, Math.max(1, timeoutMs) * WALK_WINDOW_REQUESTS);
+  return Math.min(
+    SITEMAP_WALK_WINDOW_MS,
+    Math.max(1, timeoutMs) * WALK_WINDOW_REQUESTS
+  );
 }
 
 /**
@@ -711,7 +796,7 @@ interface WalkWindow {
 
 function newWalkWindow(
   windowMs: number = SITEMAP_WALK_WINDOW_MS,
-  totalMs: number = SITEMAP_WALK_TOTAL_MS,
+  totalMs: number = SITEMAP_WALK_TOTAL_MS
 ): WalkWindow {
   const now = Date.now();
   return {
@@ -727,7 +812,9 @@ function newWalkWindow(
 
 /** ms the walk may still spend: the progress window or the hard stop, whichever is nearer. */
 function walkRemainingMs(walkWindow: WalkWindow): number {
-  return Math.min(walkWindow.deadlineAt, walkWindow.hardDeadlineAt) - Date.now();
+  return (
+    Math.min(walkWindow.deadlineAt, walkWindow.hardDeadlineAt) - Date.now()
+  );
 }
 
 export function fetchSitemap(
@@ -743,7 +830,7 @@ export function fetchSitemap(
   refusals?: RefusalLog,
   // repo#2830: every hop vetted, the first included: a `Sitemap:` line or an
   // index entry is the site's to name, and so is every redirect.
-  egress?: EgressPolicy,
+  egress?: EgressPolicy
 ): Effect.Effect<SitemapFetchResult, never, never> {
   // #1393: the caller's secret customHeaders are scoped to the audited origin. A
   // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
@@ -758,7 +845,7 @@ export function fetchSitemap(
       },
       originScopedHeaders,
       // Only codings decodeSitemapBody undoes within its cap: never the caller's.
-      { "Accept-Encoding": "gzip" },
+      { "Accept-Encoding": "gzip" }
     ),
     redirect: "follow",
     // #662: a Bun fetch option. Bun's own decoding inflates a whole response
@@ -769,7 +856,12 @@ export function fetchSitemap(
   };
   return Effect.promise(async (): Promise<SitemapFetchResult> => {
     if (timeoutMs <= 0) {
-      return { success: false, url, error: SITEMAP_NOT_REACHED_ERROR, settled: false };
+      return {
+        success: false,
+        url,
+        error: SITEMAP_NOT_REACHED_ERROR,
+        settled: false,
+      };
     }
     try {
       // #1395: manual redirects — per-hop scheme allowlist + strip secret
@@ -785,7 +877,12 @@ export function fetchSitemap(
             await response.body?.cancel().catch(() => {});
             noteRefusal(refusals, url, "sitemap", response);
             // The origin answered; the status IS the answer.
-            return { success: false, url, error: `HTTP ${response.status}`, settled: true };
+            return {
+              success: false,
+              url,
+              error: `HTTP ${response.status}`,
+              settled: true,
+            };
           }
           // A body that never arrives (including a deadline abort) classifies
           // as "Empty response", the same as one that arrives empty. This text
@@ -796,14 +893,27 @@ export function fetchSitemap(
             body = await readBodyWithin(response, SITEMAP_MAX_BYTES);
           } catch {
             // The read never finished — a stalled or aborted body.
-            return { success: false, url, error: "Empty response", settled: false };
+            return {
+              success: false,
+              url,
+              error: "Empty response",
+              settled: false,
+            };
           }
           if (body === null) {
-            return { success: true, data: unreadableSitemap(url, SITEMAP_TOO_LARGE_ERROR) };
+            return {
+              success: true,
+              data: unreadableSitemap(url, SITEMAP_TOO_LARGE_ERROR),
+            };
           }
           // Arrived, just empty.
           if (body.byteLength === 0) {
-            return { success: false, url, error: "Empty response", settled: true };
+            return {
+              success: false,
+              url,
+              error: "Empty response",
+              settled: true,
+            };
           }
           return {
             success: true,
@@ -811,18 +921,28 @@ export function fetchSitemap(
               body,
               url,
               response.headers.get("content-type"),
-              FETCH_RETURNS_RAW_BODY ? response.headers.get("content-encoding") : null,
+              FETCH_RETURNS_RAW_BODY
+                ? response.headers.get("content-encoding")
+                : null
             ),
           };
         },
-        egress,
+        egress
       );
     } catch (error) {
       // #819: a sitemap on the site that redirects to another host is not
       // followed there (an offline audit). Nothing was requested off the site,
       // so it is skipped, not a sitemap that failed to load.
-      if (error instanceof EgressRefusedError && error.message === EGRESS_OFF_SITE_REFUSAL) {
-        return { success: false, url, error: SITEMAP_OFF_SITE_SKIPPED_ERROR, settled: true };
+      if (
+        error instanceof EgressRefusedError &&
+        error.message === EGRESS_OFF_SITE_REFUSAL
+      ) {
+        return {
+          success: false,
+          url,
+          error: SITEMAP_OFF_SITE_SKIPPED_ERROR,
+          settled: true,
+        };
       }
       return {
         success: false,
@@ -875,7 +995,7 @@ export function fetchSitemapsRecursive(
   egress?: EgressPolicy,
   // #422: each request waits for its host's slot and delay, like the crawl's own
   // and the discovery probes (per_host_concurrency, per_host_delay_ms).
-  gate: ProbeGate = ungated,
+  gate: ProbeGate = ungated
 ): Effect.Effect<SitemapFetchResult[], never, never> {
   if (urls.length === 0) return Effect.succeed([]);
   // Candidates exist but the walk will not visit them: that is a gap in
@@ -904,7 +1024,7 @@ export function fetchSitemapsRecursive(
       if (urlBudget && urlBudget.remaining <= 0) {
         logger.debug(
           "sitemap URL budget exhausted, skipping remaining sitemaps",
-          `${unseenUrls.length - i} skipped at depth ${currentDepth}`,
+          `${unseenUrls.length - i} skipped at depth ${currentDepth}`
         );
         walkWindow.stoppedEarly = true;
         break;
@@ -916,7 +1036,7 @@ export function fetchSitemapsRecursive(
       if (remainingMs <= 0) {
         logger.debug(
           "sitemap walk stopped, skipping remaining sitemaps",
-          `${unseenUrls.length - i} skipped at depth ${currentDepth}`,
+          `${unseenUrls.length - i} skipped at depth ${currentDepth}`
         );
         walkWindow.stoppedEarly = true;
         break;
@@ -940,13 +1060,13 @@ export function fetchSitemapsRecursive(
                   headerScope,
                   chunkDeadlineAt - Date.now(),
                   refusals,
-                  egress,
-                ),
-              ),
-            ),
-          ),
+                  egress
+                )
+              )
+            )
+          )
         ),
-        { concurrency: SITEMAP_FETCH_CONCURRENCY },
+        { concurrency: SITEMAP_FETCH_CONCURRENCY }
       );
       fetchResults.push(...chunkResults);
       // Any chunk where the origin ANSWERED earns a fresh window — a fast 404
@@ -958,7 +1078,7 @@ export function fetchSitemapsRecursive(
       if (chunkResults.some((result) => result.success || result.settled)) {
         walkWindow.deadlineAt = Math.min(
           Date.now() + walkWindow.windowMs,
-          walkWindow.hardDeadlineAt,
+          walkWindow.hardDeadlineAt
         );
       }
 
@@ -979,7 +1099,7 @@ export function fetchSitemapsRecursive(
             if (childHost !== parentHost) {
               logger.debug(
                 "cross-domain sitemap reference skipped",
-                `${sitemap.url} -> ${childUrl}`,
+                `${sitemap.url} -> ${childUrl}`
               );
               continue;
             }
@@ -1003,7 +1123,7 @@ export function fetchSitemapsRecursive(
       walkWindow,
       refusals,
       egress,
-      gate,
+      gate
     );
 
     return [...fetchResults, ...childResults];
@@ -1049,14 +1169,20 @@ export interface SitemapDiscoveryResult {
  * state to report, and `crawl/sitemap-exists` owns that case.
  */
 export function classifySitemapReadState(
-  result: Pick<SitemapDiscoveryResult, "discovered" | "all" | "failed" | "truncated">,
+  result: Pick<
+    SitemapDiscoveryResult,
+    "discovered" | "all" | "failed" | "truncated"
+  >
 ): SitemapReadState | null {
   const declaredFailures = result.failed.filter(
     (failure) =>
-      failure.source === "robots.txt" && failure.error !== SITEMAP_OFF_SITE_SKIPPED_ERROR,
+      failure.source === "robots.txt" &&
+      failure.error !== SITEMAP_OFF_SITE_SKIPPED_ERROR
   );
   if (result.discovered.length === 0) {
-    return declaredFailures.length > 0 || result.truncated ? "unreadable" : null;
+    return declaredFailures.length > 0 || result.truncated
+      ? "unreadable"
+      : null;
   }
   if (declaredFailures.length > 0 || result.truncated) return "partial";
 
@@ -1122,7 +1248,7 @@ export function discoverSitemaps(
   baseUrl: string,
   robotsTxt: RobotsTxtData | null,
   userAgent: string,
-  options: DiscoverSitemapsOptions = {},
+  options: DiscoverSitemapsOptions = {}
 ): Effect.Effect<SitemapDiscoveryResult, never, never> {
   return Effect.gen(function* () {
     const sitemapUrls = new Set<string>();
@@ -1142,13 +1268,18 @@ export function discoverSitemaps(
       for (const sitemap of robotsTxt.sitemaps) {
         const resolvedUrl = resolveRobotsSitemapUrl(sitemap, baseUrl).url;
         if (resolvedUrl === null) {
-          logger.debug(`Unusable sitemap URL in robots.txt skipped: ${sitemap}`);
+          logger.debug(
+            `Unusable sitemap URL in robots.txt skipped: ${sitemap}`
+          );
           continue;
         }
         // #819: an own-site-only (offline) audit never requests a sitemap on
         // another host. It is recorded as skipped, so the report does not read
         // it as a sitemap that failed to load or does not exist.
-        if (options.egress?.allowHost && !options.egress.allowHost(hostOf(resolvedUrl))) {
+        if (
+          options.egress?.allowHost &&
+          !options.egress.allowHost(hostOf(resolvedUrl))
+        ) {
           offSiteSkipped.add(resolvedUrl);
           continue;
         }
@@ -1163,7 +1294,9 @@ export function discoverSitemaps(
 
     const entryPoints = Array.from(sitemapUrls);
     const urlBudget: SitemapUrlBudget | undefined =
-      options.maxUrls !== undefined ? { remaining: options.maxUrls } : undefined;
+      options.maxUrls !== undefined
+        ? { remaining: options.maxUrls }
+        : undefined;
     // Shared with the recursion so a level abandoned DEEP in the walk still
     // reports truncation. Counting only unvisited entry points would miss it:
     // every common location can be visited while an index's children are
@@ -1181,7 +1314,7 @@ export function discoverSitemaps(
       walkWindow,
       options.refusals,
       options.egress,
-      options.gate,
+      options.gate
     );
 
     // #670: a server that answers 200 with a page for every path makes each
@@ -1202,35 +1335,59 @@ export function discoverSitemaps(
               error: result.data.errors[0] ?? SITEMAP_HTML_PAGE_ERROR,
               settled: true,
             }
-          : result,
+          : result
     );
 
-    const allSitemaps = allResults.filter((result) => result.success).map((result) => result.data);
+    const allSitemaps = allResults
+      .filter((result) => result.success)
+      .map((result) => result.data);
     const entryPointSet = new Set(entryPoints);
-    const discovered = allSitemaps.filter((sitemap) => entryPointSet.has(sitemap.url));
+    const discovered = allSitemaps.filter((sitemap) =>
+      entryPointSet.has(sitemap.url)
+    );
 
     const sourceOf = (url: string) =>
       robotsSitemaps.has(url) ? ("robots.txt" as const) : ("common" as const);
 
     const failed: SitemapFetchFailure[] = allResults
       .filter(
-        (result): result is { success: false; url: string; error: string; settled: boolean } =>
-          !result.success && entryPointSet.has(result.url),
+        (
+          result
+        ): result is {
+          success: false;
+          url: string;
+          error: string;
+          settled: boolean;
+        } => !result.success && entryPointSet.has(result.url)
       )
-      .map((result) => ({ url: result.url, source: sourceOf(result.url), error: result.error }));
+      .map((result) => ({
+        url: result.url,
+        source: sourceOf(result.url),
+        error: result.error,
+      }));
 
     // An entry point with NO result at all was never visited — the walk stopped
     // first. Record each one rather than letting it vanish, so "we did not look"
     // is never silently indistinguishable from "there was nothing there".
     const attempted = new Set(
-      allResults.map((result) => (result.success ? result.data.url : result.url)),
+      allResults.map((result) =>
+        result.success ? result.data.url : result.url
+      )
     );
     const unvisited = entryPoints.filter((url) => !attempted.has(url));
     for (const url of unvisited) {
-      failed.push({ url, source: sourceOf(url), error: SITEMAP_NOT_REACHED_ERROR });
+      failed.push({
+        url,
+        source: sourceOf(url),
+        error: SITEMAP_NOT_REACHED_ERROR,
+      });
     }
     for (const url of offSiteSkipped) {
-      failed.push({ url, source: "robots.txt", error: SITEMAP_OFF_SITE_SKIPPED_ERROR });
+      failed.push({
+        url,
+        source: "robots.txt",
+        error: SITEMAP_OFF_SITE_SKIPPED_ERROR,
+      });
     }
 
     return {
@@ -1248,8 +1405,13 @@ export function discoverSitemaps(
  * sections/post types/date archives) instead of exhausting the first
  * sitemap file before the cap is hit. Deduplicates by loc.
  */
-export function selectSitemapUrls(sitemaps: SitemapData[], cap: number): SitemapUrl[] {
-  const lists = sitemaps.filter((sitemap) => sitemap.urls.length > 0).map((sitemap) => sitemap.urls);
+export function selectSitemapUrls(
+  sitemaps: SitemapData[],
+  cap: number
+): SitemapUrl[] {
+  const lists = sitemaps
+    .filter((sitemap) => sitemap.urls.length > 0)
+    .map((sitemap) => sitemap.urls);
   const selected: SitemapUrl[] = [];
   const seen = new Set<string>();
   let offset = 0;

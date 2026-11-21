@@ -1,14 +1,28 @@
 // crawl/sitemap-lastmod-drift - Sitemap lastmod vs the page's own dateModified
 
-import { z } from "zod";
-
-import type { ParsedPage, Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SitemapData } from "@squirrelscan/core-contracts";
 
 import { flattenJsonLdNodes, normalizeUrl } from "@squirrelscan/utils";
+import {
+  datePeriod,
+  periodGapMs,
+  type DatePeriod,
+} from "@squirrelscan/utils/date-period";
+import { z } from "zod";
 
-import { documentTypes, isArticleType, schemaDateString } from "../shared/schema-document";
-import { datePeriod, periodGapMs, type DatePeriod } from "@squirrelscan/utils/date-period";
+import type {
+  ParsedPage,
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+} from "../types";
+
+import {
+  documentTypes,
+  isArticleType,
+  schemaDateString,
+} from "../shared/schema-document";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -23,13 +37,17 @@ export const optionsSchema = z.object({
     .int()
     .min(0)
     .default(30)
-    .describe("Days a sitemap lastmod may run ahead of the page's own dateModified before warning"),
+    .describe(
+      "Days a sitemap lastmod may run ahead of the page's own dateModified before warning"
+    ),
   behind_days: z
     .number()
     .int()
     .min(0)
     .default(7)
-    .describe("Days a sitemap lastmod may lag the page's own dateModified before warning"),
+    .describe(
+      "Days a sitemap lastmod may lag the page's own dateModified before warning"
+    ),
 });
 
 /** Where a page's own date came from — reported so a fix targets the right markup. */
@@ -90,7 +108,10 @@ function schemaDateModified(parsed: ParsedPage): string | null {
  * every DOM has been dropped before site rules run.
  */
 function resolvePageDate(parsed: ParsedPage): PageDate | null {
-  const candidates: Array<{ value: string | null | undefined; source: DateSource }> = [
+  const candidates: Array<{
+    value: string | null | undefined;
+    source: DateSource;
+  }> = [
     { value: schemaDateModified(parsed), source: "schema" },
     { value: parsed.visibleDateModified, source: "meta" },
     { value: parsed.visibleDatePublished, source: "visible" },
@@ -99,7 +120,8 @@ function resolvePageDate(parsed: ParsedPage): PageDate | null {
   for (const candidate of candidates) {
     const value = candidate.value?.trim();
     const period = datePeriod(value);
-    if (value && period !== null) return { value, period, source: candidate.source };
+    if (value && period !== null)
+      return { value, period, source: candidate.source };
   }
   return null;
 }
@@ -157,7 +179,8 @@ export const sitemapLastmodDriftRule: Rule = {
   meta: {
     id: "crawl/sitemap-lastmod-drift",
     name: "Sitemap Lastmod Drift",
-    description: "Checks that sitemap lastmod matches the page's own dateModified",
+    description:
+      "Checks that sitemap lastmod matches the page's own dateModified",
     solution:
       "A sitemap lastmod that disagrees with the page's own dateModified points at the sitemap generator, not the content. Lastmod OLDER than the page's dateModified tells crawlers not to bother with a page that has in fact changed - usually a stale cached sitemap, or a generator resolving `publishedAt ?? updatedAt` while the page renders `updatedAt ?? publishedAt` (a precedence inversion; both fields are present, so presence checks pass). Lastmod NEWER than the page's dateModified usually means lastmod is stamped at build/deploy time. Drive both values from the same content-modification timestamp.",
     category: "crawl",
@@ -229,7 +252,9 @@ export const sitemapLastmodDriftRule: Rule = {
       // not rounded: rounding moved the real thresholds half a day past the
       // documented ones (a 7.5-day gap warned, and was quoted back to the user
       // as "8 day(s)" under a message reading "more than 7 day(s)").
-      const deltaDays = Math.floor(periodGapMs(pageDate.period, period) / MS_PER_DAY);
+      const deltaDays = Math.floor(
+        periodGapMs(pageDate.period, period) / MS_PER_DAY
+      );
       const drift: Drift = {
         url: page.url,
         lastmod,
@@ -238,8 +263,13 @@ export const sitemapLastmodDriftRule: Rule = {
         deltaDays,
       };
 
-      if (pageDate.period.start > period.end && deltaDays > opts.behind_days) behind.push(drift);
-      else if (pageDate.period.end < period.start && deltaDays > opts.ahead_days) ahead.push(drift);
+      if (pageDate.period.start > period.end && deltaDays > opts.behind_days)
+        behind.push(drift);
+      else if (
+        pageDate.period.end < period.start &&
+        deltaDays > opts.ahead_days
+      )
+        ahead.push(drift);
     }
 
     if (comparedPages === 0) {
@@ -248,7 +278,8 @@ export const sitemapLastmodDriftRule: Rule = {
           {
             name: "sitemap-lastmod-drift",
             status: "skipped",
-            message: "No sitemap URL carries both a lastmod and a page-side date signal",
+            message:
+              "No sitemap URL carries both a lastmod and a page-side date signal",
             skipReason: "No comparable dates",
           },
         ],
@@ -257,7 +288,8 @@ export const sitemapLastmodDriftRule: Rule = {
 
     // Worst drift first, URL as the tie-break — deterministic regardless of the
     // order pages were crawled in.
-    const byDelta = (a: Drift, b: Drift) => b.deltaDays - a.deltaDays || a.url.localeCompare(b.url);
+    const byDelta = (a: Drift, b: Drift) =>
+      b.deltaDays - a.deltaDays || a.url.localeCompare(b.url);
     behind.sort(byDelta);
     ahead.sort(byDelta);
 

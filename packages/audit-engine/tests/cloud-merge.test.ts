@@ -3,22 +3,24 @@
 // Promise/Worker path: carry un-crawled findings, supersede re-crawled, stale
 // 404/410, and score over the union so a partial re-audit can't inflate.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   FindingState,
   PageFindingRecord,
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
-import { normalizeUrl } from "@squirrelscan/utils/url";
 
+import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 import { foldOverflowChecks, type FoldLimits } from "@squirrelscan/rules/fold";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
+import { normalizeUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import { findingKey } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { calculateHealthScore } from "../src/scoring";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
@@ -26,11 +28,19 @@ class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
 
-  private key(f: { normalizedUrl: string; ruleId: string; checkName: string; locator: string }) {
+  private key(f: {
+    normalizedUrl: string;
+    ruleId: string;
+    checkName: string;
+    locator: string;
+  }) {
     return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
   }
 
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -47,7 +57,7 @@ class MemStore implements SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void> {
     this.pages.set(normalizedUrl, {
       siteKey,
@@ -59,17 +69,26 @@ class MemStore implements SmartAuditStore {
     });
     for (const [k, f] of this.findings) {
       if (f.normalizedUrl === normalizedUrl && f.state === "open") {
-        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+        this.findings.set(k, {
+          ...f,
+          state: "stale",
+          lastSeenCrawlId: crawlId,
+        });
       }
     }
   }
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void> {
     for (const p of pages)
-      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+      await this.markPageRemoved(
+        siteKey,
+        p.normalizedUrl,
+        crawlId,
+        p.lastStatus
+      );
   }
   async compactFindings(): Promise<number> {
     return 0;
@@ -122,7 +141,11 @@ describe("runCloudSmartAudits — cloud parity", () => {
     });
     // (#1652) `unrenderedFindings` is OMITTED, not 0 — a site with none must
     // serialize byte-identically to a pre-#1652 report.
-    expect(r.coverage).toEqual({ auditedPages: 3, knownPages: 3, carriedFindings: 0 });
+    expect(r.coverage).toEqual({
+      auditedPages: 3,
+      knownPages: 3,
+      carriedFindings: 0,
+    });
     expect((await store.getFindings("web_1", ["open"])).length).toBe(1);
   });
 
@@ -136,7 +159,9 @@ describe("runCloudSmartAudits — cloud parity", () => {
       ruleResults: ruleResultsFor([P2], [P1, P3]),
       pageStatuses: [P1, P2, P3].map((url) => ({ url, status: 200 })),
     });
-    const fullScore = calculateHealthScore({ results: full.unionRuleResults }).overall;
+    const fullScore = calculateHealthScore({
+      results: full.unionRuleResults,
+    }).overall;
 
     // Run 2: only P1 re-crawled (clean). P2/P3 not crawled → carry.
     const partial = await runCloudSmartAudits({
@@ -151,7 +176,9 @@ describe("runCloudSmartAudits — cloud parity", () => {
     expect(partial.coverage.carriedFindings).toBe(1); // P2's fail carried
 
     // The carried fail must still be in the union → score does NOT inflate.
-    const partialScore = calculateHealthScore({ results: partial.unionRuleResults }).overall;
+    const partialScore = calculateHealthScore({
+      results: partial.unionRuleResults,
+    }).overall;
     expect(partialScore).toBe(fullScore);
     expect(partialScore).toBeLessThan(100);
   });
@@ -191,7 +218,10 @@ describe("runCloudSmartAudits — cloud parity", () => {
   // tell findings from pages outside this crawl are being carried: `carriedFindings > 0` implies
   // `knownPages > auditedPages` whenever the carried pages have records.
   test("a capped run over a rotated page set counts the out-of-crawl carried pages as known (#1031)", async () => {
-    const pages = Array.from({ length: 6 }, (_, i) => `https://x.test/p${i + 1}`);
+    const pages = Array.from(
+      { length: 6 },
+      (_, i) => `https://x.test/p${i + 1}`
+    );
     const store = new MemStore();
     const run = async (crawlId: string, crawled: string[]) =>
       (
@@ -253,7 +283,9 @@ describe("runCloudSmartAudits — cloud parity", () => {
     expect(r.removedPages).toBe(1);
     // No open findings remain.
     expect((await store.getFindings("web_1", ["open"])).length).toBe(0);
-    expect(calculateHealthScore({ results: r.unionRuleResults }).overall).toBe(100);
+    expect(calculateHealthScore({ results: r.unionRuleResults }).overall).toBe(
+      100
+    );
   });
 });
 
@@ -269,7 +301,10 @@ describe("runCloudSmartAudits — folded input (#916)", () => {
     maxPagesPerCheck: 2000,
     maxSourcePagesPerItem: 5,
   };
-  const FAIL_URLS = Array.from({ length: 6 }, (_, i) => `https://x.test/p/${i}`);
+  const FAIL_URLS = Array.from(
+    { length: 6 },
+    (_, i) => `https://x.test/p/${i}`
+  );
 
   function foldedFailRule() {
     const perPage = FAIL_URLS.map((url) => ({
@@ -299,7 +334,9 @@ describe("runCloudSmartAudits — folded input (#916)", () => {
 
     const open = await store.getFindings("web_1", ["open"]);
     expect(open.length).toBe(FAIL_URLS.length); // was 0 before the unfold
-    expect(new Set(open.map((f) => f.normalizedUrl)).size).toBe(FAIL_URLS.length);
+    expect(new Set(open.map((f) => f.normalizedUrl)).size).toBe(
+      FAIL_URLS.length
+    );
     expect(r.coverage.auditedPages).toBe(FAIL_URLS.length);
   });
 
@@ -325,8 +362,12 @@ describe("runCloudSmartAudits — folded input (#916)", () => {
       pageStatuses,
     });
 
-    const rawScore = calculateHealthScore({ results: raw.unionRuleResults }).overall;
-    const foldScore = calculateHealthScore({ results: fold.unionRuleResults }).overall;
+    const rawScore = calculateHealthScore({
+      results: raw.unionRuleResults,
+    }).overall;
+    const foldScore = calculateHealthScore({
+      results: fold.unionRuleResults,
+    }).overall;
     expect(foldScore).toBe(rawScore);
     expect(foldScore).toBeLessThan(100);
   });
@@ -352,7 +393,9 @@ describe("runCloudSmartAudits — truncated-sample carry (#1167)", () => {
             details: {
               aggregated: true,
               occurrences: truncatedTo ?? sampledUrls.length,
-              ...(truncatedTo !== undefined ? { pagesTruncated: truncatedTo } : {}),
+              ...(truncatedTo !== undefined
+                ? { pagesTruncated: truncatedTo }
+                : {}),
             },
           },
         ],
@@ -397,10 +440,12 @@ describe("runCloudSmartAudits — truncated-sample carry (#1167)", () => {
     // un-crawled carriedPageUrls set or the score re-inflates (the #1167 bug).
     const rule = r.unionRuleResults.get("meta-description")!;
     const p3Fail = rule.checks.find(
-      (c) => c.pageUrl === "https://x.test/contact" && c.status === "fail",
+      (c) => c.pageUrl === "https://x.test/contact" && c.status === "fail"
     );
     expect(p3Fail).toBeDefined();
-    expect(calculateHealthScore({ results: r.unionRuleResults }).overall).toBeLessThan(100);
+    expect(
+      calculateHealthScore({ results: r.unionRuleResults }).overall
+    ).toBeLessThan(100);
   });
 
   test("an UN-truncated aggregate still resolves a genuinely fixed page", async () => {
@@ -458,7 +503,11 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
             status: "fail" as const,
             message: "Missing meta description (+more pages)",
             pages: sampledUrls,
-            details: { aggregated: true, occurrences: trueCount, pagesTruncated: trueCount },
+            details: {
+              aggregated: true,
+              occurrences: trueCount,
+              pagesTruncated: trueCount,
+            },
           },
         ],
       },
@@ -500,7 +549,7 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
     const open = await store.getFindings("web_1", ["open"]);
     expect(open.map((f) => f.normalizedUrl)).toEqual(["https://x.test/about"]); // only P2
     const p3 = (await store.getFindings("web_1", ["resolved"])).find(
-      (f) => f.normalizedUrl === "https://x.test/contact",
+      (f) => f.normalizedUrl === "https://x.test/contact"
     );
     expect(p3).toBeDefined();
     expect(p3!.lastSeenCrawlId).toBe("audit_2");
@@ -533,18 +582,24 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
     });
 
     expect(withSignal.coverage.carriedFindings).toBe(0);
-    expect((await store.getFindings("web_2", ["open"])).map((f) => f.normalizedUrl)).toEqual([
-      "https://x.test/about",
-    ]);
+    expect(
+      (await store.getFindings("web_2", ["open"])).map((f) => f.normalizedUrl)
+    ).toEqual(["https://x.test/about"]);
 
     // Density/score recovery: the carried warn is gone from the union, and P3
     // (still NOT in the scoring crawledUrls) counts as a clean carried page —
     // synthetic pass — so the union score strictly recovers.
-    const scoreWithout = calculateHealthScore({ results: noSignal.unionRuleResults }).overall;
-    const scoreWith = calculateHealthScore({ results: withSignal.unionRuleResults }).overall;
+    const scoreWithout = calculateHealthScore({
+      results: noSignal.unionRuleResults,
+    }).overall;
+    const scoreWith = calculateHealthScore({
+      results: withSignal.unionRuleResults,
+    }).overall;
     expect(scoreWith!).toBeGreaterThan(scoreWithout!);
     const union = withSignal.unionRuleResults.get(RULE)!;
-    expect(union.checks.some((c) => c.pageUrl === "https://x.test/contact")).toBe(false);
+    expect(
+      union.checks.some((c) => c.pageUrl === "https://x.test/contact")
+    ).toBe(false);
     expect(union.syntheticPassCount ?? 0).toBeGreaterThan(0); // P3 counts as clean carried
   });
 
@@ -558,13 +613,16 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
       crawlId: "audit_2",
       ruleResults: sampledFail([P2], 2),
       pageStatuses: [P1, P2, P3].map((url) => ({ url, status: 200 })),
-      resolutionSignal: { crawledUrls: [P1, P2, P3], failing: { [KEY]: [h(P2), h(P3)] } },
+      resolutionSignal: {
+        crawledUrls: [P1, P2, P3],
+        failing: { [KEY]: [h(P2), h(P3)] },
+      },
     });
 
     expect(r.coverage.carriedFindings).toBe(1); // P3 still failing → carried
     const open = await store.getFindings("web_3", ["open"]);
     expect(new Set(open.map((f) => f.normalizedUrl))).toEqual(
-      new Set(["https://x.test/about", "https://x.test/contact"]),
+      new Set(["https://x.test/about", "https://x.test/contact"])
     );
   });
 
@@ -610,7 +668,7 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
     expect(r.coverage.carriedFindings).toBe(1);
     const open = await store.getFindings("web_5", ["open"]);
     expect(new Set(open.map((f) => f.normalizedUrl))).toEqual(
-      new Set(["https://x.test/about", "https://x.test/contact"]),
+      new Set(["https://x.test/about", "https://x.test/contact"])
     );
   });
 
@@ -632,7 +690,9 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
 
     expect(r.coverage.carriedFindings).toBe(0);
     expect((await store.getFindings("web_6", ["open"])).length).toBe(0);
-    expect(calculateHealthScore({ results: r.unionRuleResults }).overall).toBe(100);
+    expect(calculateHealthScore({ results: r.unionRuleResults }).overall).toBe(
+      100
+    );
   });
 
   test("page the check SKIPPED (notEvaluated) does not resolve, even though it's absent from failing", async () => {
@@ -659,7 +719,7 @@ describe("runCloudSmartAudits — unsampled resolution signal (#1185)", () => {
     expect(r.coverage.carriedFindings).toBe(1);
     const open = await store.getFindings("web_7", ["open"]);
     expect(new Set(open.map((f) => f.normalizedUrl))).toEqual(
-      new Set(["https://x.test/about", "https://x.test/contact"]),
+      new Set(["https://x.test/about", "https://x.test/contact"])
     );
   });
   test("signal-confirmed still-failing carry REFRESHES last-seen; an unevaluated carry does not", async () => {
@@ -872,7 +932,9 @@ describe("runCloudSmartAudits — a noindex skip resolves the page's priors (pub
     message: `Skipped (${reason})`,
     skipReason: reason,
     pageUrl: url,
-    ...(reason === "noindex" || reason === "page-type" ? { details: { foldKey: reason } } : {}),
+    ...(reason === "noindex" || reason === "page-type"
+      ? { details: { foldKey: reason } }
+      : {}),
   });
 
   async function rerunWith(reason: "noindex" | "page-type" | "soft-404") {
@@ -882,7 +944,9 @@ describe("runCloudSmartAudits — a noindex skip resolves the page's priors (pub
       store,
       siteKey: "web_1",
       crawlId: "audit_1",
-      ruleResults: { "core/h1": { meta: h1Meta, checks: [pass(P1), fail(P2), fail(P3)] } },
+      ruleResults: {
+        "core/h1": { meta: h1Meta, checks: [pass(P1), fail(P2), fail(P3)] },
+      },
       pageStatuses: [P1, P2, P3].map((url) => ({ url, status: 200 })),
     });
     expect((await store.getFindings("web_1", ["open"])).length).toBe(2);
@@ -890,7 +954,10 @@ describe("runCloudSmartAudits — a noindex skip resolves the page's priors (pub
     // Run 2: P2 is skipped by a gate, P3 still fails. The signal is built the
     // way both publish producers build it.
     const ruleResults = {
-      "core/h1": { meta: h1Meta, checks: [pass(P1), skip(P2, reason), fail(P3)] },
+      "core/h1": {
+        meta: h1Meta,
+        checks: [pass(P1), skip(P2, reason), fail(P3)],
+      },
     };
     await runCloudSmartAudits({
       store,
@@ -901,8 +968,12 @@ describe("runCloudSmartAudits — a noindex skip resolves the page's priors (pub
       resolutionSignal: buildResolutionSignal(ruleResults, [P1, P2, P3]),
     });
     return {
-      open: (await store.getFindings("web_1", ["open"])).map((f) => f.normalizedUrl).sort(),
-      resolved: (await store.getFindings("web_1", ["resolved"])).map((f) => f.normalizedUrl),
+      open: (await store.getFindings("web_1", ["open"]))
+        .map((f) => f.normalizedUrl)
+        .sort(),
+      resolved: (await store.getFindings("web_1", ["resolved"])).map(
+        (f) => f.normalizedUrl
+      ),
     };
   }
 

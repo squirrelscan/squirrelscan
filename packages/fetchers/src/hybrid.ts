@@ -7,8 +7,9 @@
 // DOM. A failed render upgrade falls back to the HTTP response so a page is
 // never lost.
 
-import { looksClientRendered } from "./csr-detect";
 import type { DocumentFetcher, FetchRequest, FetchResponse } from "./index";
+
+import { looksClientRendered } from "./csr-detect";
 
 export interface HybridFetcherOptions {
   /** Plain-HTTP fetcher — tried for every page first. */
@@ -33,7 +34,9 @@ export function defaultShouldUpgrade(resp: FetchResponse): boolean {
   return resp.status < 400 && isHtml(resp) && looksClientRendered(resp.body);
 }
 
-export function createHybridDocumentFetcher(opts: HybridFetcherOptions): DocumentFetcher {
+export function createHybridDocumentFetcher(
+  opts: HybridFetcherOptions
+): DocumentFetcher {
   const shouldUpgrade = opts.shouldUpgrade ?? defaultShouldUpgrade;
 
   return {

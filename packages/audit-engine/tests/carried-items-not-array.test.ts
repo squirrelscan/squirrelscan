@@ -2,9 +2,11 @@
 // items: foldGroup iterates them and a non-iterable value throws, aborting the
 // publish merge (#504).
 
+import {
+  DEFAULT_FOLD_LIMITS,
+  foldOverflowChecks,
+} from "@squirrelscan/rules/fold";
 import { describe, expect, test } from "bun:test";
-
-import { DEFAULT_FOLD_LIMITS, foldOverflowChecks } from "@squirrelscan/rules/fold";
 
 import { carriedFindingToCheck, type CarriedFinding } from "../src/scoring";
 
@@ -25,7 +27,10 @@ describe("carriedFindingToCheck with a malformed payload items (#504)", () => {
     ["true", '{"items":true}'],
     ["an object", '{"items":{"length":3}}'],
   ])("items that is %s is not replayed", (_label, payload) => {
-    const check = carriedFindingToCheck(carried(payload), "https://example.com/a");
+    const check = carriedFindingToCheck(
+      carried(payload),
+      "https://example.com/a"
+    );
     expect(check.items).toBeUndefined();
   });
 
@@ -33,7 +38,7 @@ describe("carriedFindingToCheck with a malformed payload items (#504)", () => {
     const items = [{ id: "x", label: "x" }];
     const check = carriedFindingToCheck(
       carried(JSON.stringify({ items })),
-      "https://example.com/a",
+      "https://example.com/a"
     );
     expect(check.items).toEqual(items);
   });
@@ -42,8 +47,13 @@ describe("carriedFindingToCheck with a malformed payload items (#504)", () => {
     const checks = [
       carriedFindingToCheck(carried('{"items":3}'), "https://example.com/a"),
       carriedFindingToCheck(carried('{"items":3}'), "https://example.com/b"),
-      carriedFindingToCheck(carried('{"items":{"length":3}}'), "https://example.com/c"),
+      carriedFindingToCheck(
+        carried('{"items":{"length":3}}'),
+        "https://example.com/c"
+      ),
     ];
-    expect(() => foldOverflowChecks(checks, { ...DEFAULT_FOLD_LIMITS, maxChecks: 1 })).not.toThrow();
+    expect(() =>
+      foldOverflowChecks(checks, { ...DEFAULT_FOLD_LIMITS, maxChecks: 1 })
+    ).not.toThrow();
   });
 });

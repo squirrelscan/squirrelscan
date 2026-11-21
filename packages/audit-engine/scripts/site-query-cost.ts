@@ -45,7 +45,9 @@ function snap(): number {
 const before = snap();
 const rssBefore = process.memoryUsage.rss();
 const t0 = performance.now();
-const siteQuery = await run(createSiteQuery(storage, crawlId, { pageScanBatchSize: BATCH }));
+const siteQuery = await run(
+  createSiteQuery(storage, crawlId, { pageScanBatchSize: BATCH })
+);
 const ms = performance.now() - t0;
 const rssAfter = process.memoryUsage.rss();
 const after = snap();
@@ -61,6 +63,6 @@ console.log(
     rssDeltaMB: Math.round((rssAfter - rssBefore) / 1024 / 1024),
     // Touch the result so it cannot be collected before the sample.
     incoming: siteQuery.incomingLinkCounts().size,
-  }),
+  })
 );
 await run(storage.close());

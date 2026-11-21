@@ -3,11 +3,13 @@
 // pages it left are counted. A page already running finishes. No deadline: every
 // page runs and nothing is reported as left.
 
+import { createRunner, type SiteData } from "@squirrelscan/rules";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { Effect } from "effect";
-
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import { createRunner, type SiteData } from "@squirrelscan/rules";
 
 import { streamPageRules } from "../src/streaming";
 
@@ -19,11 +21,19 @@ const CONFIG = { rule_options: {}, rules: { enable: ["*"] } };
 const PAGES = 24;
 
 function siteData(): SiteData {
-  return { baseUrl: "http://synthetic.example.com", pages: [], robotsTxt: null, sitemaps: null };
+  return {
+    baseUrl: "http://synthetic.example.com",
+    pages: [],
+    robotsTxt: null,
+    sitemaps: null,
+  };
 }
 
 async function fixture() {
-  return writeCrawlToStorage(generateSiteModel({ seed: 7, pageCount: PAGES }), ":memory:");
+  return writeCrawlToStorage(
+    generateSiteModel({ seed: 7, pageCount: PAGES }),
+    ":memory:"
+  );
 }
 
 afterEach(() => setSystemTime());
@@ -32,7 +42,9 @@ describe("streamPageRules deadlineAt (#1271)", () => {
   test("no deadline: every page runs and none is left", async () => {
     const { storage, crawlId } = await fixture();
     const result = await run(
-      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 8 })
+      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), {
+        batchSize: 8,
+      })
     );
     expect(result.pagesNotEvaluated).toBe(0);
     expect(result.pageUrls.length).toBeGreaterThan(0);

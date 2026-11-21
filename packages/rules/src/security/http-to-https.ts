@@ -1,16 +1,18 @@
 // security/http-to-https - Detect HTTP to HTTPS redirects
 
+import type { RedirectChain } from "@squirrelscan/core-contracts";
+
+import { getHostname } from "@squirrelscan/utils";
+import { HTTP_PROBE_LIMITS } from "@squirrelscan/utils/constants";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { RedirectChain } from "@squirrelscan/core-contracts";
 
-import { HTTP_PROBE_LIMITS } from "@squirrelscan/utils/constants";
 import { followRedirects } from "../links/redirects";
 import { hasRequestTool } from "../tools";
-import { getHostname } from "@squirrelscan/utils";
 
-const ANALYZE_OFFLINE_REASON = "analyze runs offline; run `squirrel audit` to probe";
+const ANALYZE_OFFLINE_REASON =
+  "analyze runs offline; run `squirrel audit` to probe";
 
 export const optionsSchema = z.object({
   sampleLimit: z
@@ -80,7 +82,8 @@ export interface ProbeReport {
 
 function classify(chain: RedirectChain): ProbeOutcome["kind"] {
   if (chain.isLoop) return "unverified";
-  if (chain.httpToHttps || chain.finalUrl.startsWith("https://")) return "redirects";
+  if (chain.httpToHttps || chain.finalUrl.startsWith("https://"))
+    return "redirects";
   if (chain.endsInError || chain.endsRateLimited) return "unverified";
   return "insecure";
 }
@@ -114,7 +117,9 @@ export async function probeHttpCoverage(
       : HTTP_PROBE_LIMITS.PROBE_TOTAL_BUDGET_MS;
   const deadlineAt = Date.now() + budgetMs;
 
-  const results: Array<ProbeOutcome | undefined> = new Array(urls.length).fill(undefined);
+  const results: Array<ProbeOutcome | undefined> = new Array(urls.length).fill(
+    undefined
+  );
   let nextIndex = 0;
   let notProbed = 0;
 
@@ -165,7 +170,9 @@ export async function probeHttpCoverage(
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, urls.length) }, (_, i) => worker(i))
+    Array.from({ length: Math.min(concurrency, urls.length) }, (_, i) =>
+      worker(i)
+    )
   );
 
   return {
@@ -184,7 +191,12 @@ export async function probeHttpVariants(
   const report = await probeHttpCoverage(urls, baseUrl, probe, options);
   return report.outcomes
     .filter((o) => o.kind === "redirects")
-    .map((o) => ({ from: o.from, to: o.to, statusCode: o.statusCode, chain: o.chain }));
+    .map((o) => ({
+      from: o.from,
+      to: o.to,
+      statusCode: o.statusCode,
+      chain: o.chain,
+    }));
 }
 
 export const httpToHttpsRule: Rule = {
@@ -273,7 +285,9 @@ export const httpToHttpsRule: Rule = {
 
     const insecure = report.outcomes.filter((o) => o.kind === "insecure");
     const redirected = report.outcomes.filter((o) => o.kind === "redirects");
-    const unverified = report.outcomes.filter((o) => o.kind === "unverified").length;
+    const unverified = report.outcomes.filter(
+      (o) => o.kind === "unverified"
+    ).length;
     const partial = report.notProbed > 0;
     const coverage = `${report.outcomes.length} of ${sampled} URL(s) probed`;
     const partialNote = partial

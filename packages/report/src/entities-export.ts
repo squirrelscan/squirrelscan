@@ -17,6 +17,7 @@
 //            characters that break it neutralised, and a hard node cap.
 
 import type { EntityMap, EntityMapEdge, EntityMapNode } from "./types";
+
 import { entityLabel, entityPageTotal } from "./entities";
 
 /**
@@ -33,7 +34,7 @@ function compareStrings(a: string, b: string): number {
 /** Nodes by reach, so a truncated export keeps the entities that matter. */
 function byReach(nodes: EntityMapNode[]): EntityMapNode[] {
   return [...nodes].sort(
-    (a, b) => b.occurrences - a.occurrences || compareStrings(a.key, b.key),
+    (a, b) => b.occurrences - a.occurrences || compareStrings(a.key, b.key)
   );
 }
 
@@ -48,14 +49,18 @@ function byReach(nodes: EntityMapNode[]): EntityMapNode[] {
  * when someone opens the export. Prefixing with an apostrophe is the documented
  * neutralisation and survives a round trip as text.
  */
-export function csvField(value: string | number | boolean | null | undefined): string {
+export function csvField(
+  value: string | number | boolean | null | undefined
+): string {
   if (value === null || value === undefined) return "";
   const raw = String(value);
   const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-export function csvRow(fields: (string | number | boolean | null | undefined)[]): string {
+export function csvRow(
+  fields: (string | number | boolean | null | undefined)[]
+): string {
   return fields.map(csvField).join(",");
 }
 
@@ -83,7 +88,7 @@ export function renderEntitiesCsv(map: EntityMap): string {
       "url",
       "logo",
       "sameAs",
-    ]),
+    ])
   );
   for (const node of map.nodes) {
     lines.push(
@@ -100,15 +105,23 @@ export function renderEntitiesCsv(map: EntityMap): string {
         node.properties.url,
         node.properties.logo,
         node.properties.sameAs?.join(" "),
-      ]),
+      ])
     );
   }
 
   lines.push("");
-  lines.push(csvRow(["source", "predicate", "target", "dangling", "occurrences"]));
+  lines.push(
+    csvRow(["source", "predicate", "target", "dangling", "occurrences"])
+  );
   for (const edge of map.edges) {
     lines.push(
-      csvRow([edge.source, edge.predicate, edge.target, edge.dangling, edge.occurrences]),
+      csvRow([
+        edge.source,
+        edge.predicate,
+        edge.target,
+        edge.dangling,
+        edge.occurrences,
+      ])
     );
   }
 
@@ -158,19 +171,25 @@ export function renderEntitiesDot(map: EntityMap): string {
     if (!edge.dangling || danglingIds.has(edge.target)) continue;
     const id = `d${danglingIndex++}`;
     danglingIds.set(edge.target, id);
-    const label = edge.target.startsWith("id:") ? edge.target.slice(3) : edge.target;
+    const label = edge.target.startsWith("id:")
+      ? edge.target.slice(3)
+      : edge.target;
     lines.push(
-      `  ${id} [label=${dotQuote(label)}, style="dashed", fillcolor="#ffffff", color="#a32020", fontcolor="#a32020"];`,
+      `  ${id} [label=${dotQuote(label)}, style="dashed", fillcolor="#ffffff", color="#a32020", fontcolor="#a32020"];`
     );
   }
 
   lines.push("");
   for (const edge of map.edges) {
     const source = ids.get(edge.source);
-    const target = edge.dangling ? danglingIds.get(edge.target) : ids.get(edge.target);
+    const target = edge.dangling
+      ? danglingIds.get(edge.target)
+      : ids.get(edge.target);
     if (!source || !target) continue;
     const style = edge.dangling ? ', style="dashed", color="#a32020"' : "";
-    lines.push(`  ${source} -> ${target} [label=${dotQuote(edge.predicate)}${style}];`);
+    lines.push(
+      `  ${source} -> ${target} [label=${dotQuote(edge.predicate)}${style}];`
+    );
   }
 
   lines.push("}");
@@ -187,22 +206,24 @@ export function renderEntitiesDot(map: EntityMap): string {
  * Dropping is the only option that keeps the file openable.
  */
 function xmlText(value: string): string {
-  return value
-    // XML 1.0 has no representation for these at all, not even as a numeric
-    // reference, so a parser rejects the whole document. Dropping is the only
-    // option that keeps the file openable.
-    // Not just the C0 controls: U+FFFE and U+FFFF are permanently unassigned
-    // non-characters, and an unpaired surrogate is not a character at all, so a
-    // parser rejects all three the same way a control byte is rejected.
-    .replace(
-      /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
-      ""
-    )
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+  return (
+    value
+      // XML 1.0 has no representation for these at all, not even as a numeric
+      // reference, so a parser rejects the whole document. Dropping is the only
+      // option that keeps the file openable.
+      // Not just the C0 controls: U+FFFE and U+FFFF are permanently unassigned
+      // non-characters, and an unpaired surrogate is not a character at all, so a
+      // parser rejects all three the same way a control byte is rejected.
+      .replace(
+        /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+        ""
+      )
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;")
+  );
 }
 
 /** GraphML for Gephi, yEd and networkx. */
@@ -233,7 +254,9 @@ export function renderEntitiesGraphml(map: EntityMap): string {
     lines.push(`    <node id="${id}">`);
     lines.push(`      <data key="label">${xmlText(entityLabel(node))}</data>`);
     lines.push(`      <data key="entityId">${xmlText(node.id ?? "")}</data>`);
-    lines.push(`      <data key="types">${xmlText(node.types.join(", "))}</data>`);
+    lines.push(
+      `      <data key="types">${xmlText(node.types.join(", "))}</data>`
+    );
     lines.push(`      <data key="occurrences">${node.occurrences}</data>`);
     lines.push(`      <data key="pages">${entityPageTotal(node)}</data>`);
     lines.push(`      <data key="conflicts">${node.conflicts.length}</data>`);
@@ -247,7 +270,9 @@ export function renderEntitiesGraphml(map: EntityMap): string {
     if (!edge.dangling || danglingIds.has(edge.target)) continue;
     const id = `d${danglingIndex++}`;
     danglingIds.set(edge.target, id);
-    const label = edge.target.startsWith("id:") ? edge.target.slice(3) : edge.target;
+    const label = edge.target.startsWith("id:")
+      ? edge.target.slice(3)
+      : edge.target;
     lines.push(`    <node id="${id}">`);
     lines.push(`      <data key="label">${xmlText(label)}</data>`);
     lines.push(`      <data key="entityId">${xmlText(label)}</data>`);
@@ -261,9 +286,13 @@ export function renderEntitiesGraphml(map: EntityMap): string {
 
   map.edges.forEach((edge: EntityMapEdge, index: number) => {
     const source = ids.get(edge.source);
-    const target = edge.dangling ? danglingIds.get(edge.target) : ids.get(edge.target);
+    const target = edge.dangling
+      ? danglingIds.get(edge.target)
+      : ids.get(edge.target);
     if (!source || !target) return;
-    lines.push(`    <edge id="e${index}" source="${source}" target="${target}">`);
+    lines.push(
+      `    <edge id="e${index}" source="${source}" target="${target}">`
+    );
     lines.push(`      <data key="predicate">${xmlText(edge.predicate)}</data>`);
     lines.push(`      <data key="dangling">${edge.dangling}</data>`);
     lines.push("    </edge>");
@@ -307,15 +336,17 @@ export function renderEntitiesMermaid(map: EntityMap): string {
   const keptKeys = new Set(kept.map((node) => node.key));
   const ids = new Map<string, string>();
   // Document order for the ids, so the same map always yields the same source.
-  map.nodes.filter((node) => keptKeys.has(node.key)).forEach((node, index) => {
-    ids.set(node.key, `n${index}`);
-  });
+  map.nodes
+    .filter((node) => keptKeys.has(node.key))
+    .forEach((node, index) => {
+      ids.set(node.key, `n${index}`);
+    });
 
   const lines: string[] = [];
   if (map.nodes.length > MERMAID_NODE_CAP) {
     lines.push(
       `%% Showing the ${MERMAID_NODE_CAP} most-declared of ${map.nodes.length} entities.`,
-      "%% Mermaid stops rendering well beyond this; use -f dot or -f graphml for the whole graph.",
+      "%% Mermaid stops rendering well beyond this; use -f dot or -f graphml for the whole graph."
     );
   }
   lines.push("graph LR");
@@ -334,21 +365,32 @@ export function renderEntitiesMermaid(map: EntityMap): string {
   let danglingIndex = 0;
   const danglingIds = new Map<string, string>();
   for (const edge of map.edges) {
-    if (!edge.dangling || !keptKeys.has(edge.source) || danglingIds.has(edge.target)) continue;
+    if (
+      !edge.dangling ||
+      !keptKeys.has(edge.source) ||
+      danglingIds.has(edge.target)
+    )
+      continue;
     const id = `d${danglingIndex++}`;
     danglingIds.set(edge.target, id);
-    const label = edge.target.startsWith("id:") ? edge.target.slice(3) : edge.target;
+    const label = edge.target.startsWith("id:")
+      ? edge.target.slice(3)
+      : edge.target;
     lines.push(`  ${id}(["${mermaidLabel(label)}"])`);
   }
 
   for (const edge of map.edges) {
     const source = ids.get(edge.source);
-    const target = edge.dangling ? danglingIds.get(edge.target) : ids.get(edge.target);
+    const target = edge.dangling
+      ? danglingIds.get(edge.target)
+      : ids.get(edge.target);
     if (!source || !target) continue;
     const arrow = edge.dangling ? "-.->" : "-->";
     // Quoted: the edge label sits between bare pipes, so a predicate that
     // escaping emptied would leave `||` and the grammar rejects it.
-    lines.push(`  ${source} ${arrow}|"${mermaidLabel(edge.predicate)}"| ${target}`);
+    lines.push(
+      `  ${source} ${arrow}|"${mermaidLabel(edge.predicate)}"| ${target}`
+    );
   }
 
   return `${lines.join("\n")}\n`;

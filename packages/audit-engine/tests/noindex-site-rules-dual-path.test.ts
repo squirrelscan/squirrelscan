@@ -7,13 +7,17 @@
 // `isPageIndexable`. Each rule runs both ways over one seeded store and must agree,
 // with and without a site known to be indexed (`SiteData.siteIndexable`).
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type {
+  LinkData,
+  PageFeatureRow,
+  PageRecord,
+} from "@squirrelscan/core-contracts";
+import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { loadAllRules } from "@squirrelscan/rules";
-import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
-import type { LinkData, PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { createSiteQuery } from "../src/site-query";
 
@@ -193,7 +197,10 @@ function legacyPages(fixture: Spec[] = FIXTURE) {
       pageType: s.pageType ?? null,
       links: s.links.map(link),
     } as unknown as ParsedPage,
-    headers: (s.xRobotsTag ? { "x-robots-tag": s.xRobotsTag } : {}) as Record<string, string>,
+    headers: (s.xRobotsTag ? { "x-robots-tag": s.xRobotsTag } : {}) as Record<
+      string,
+      string
+    >,
   }));
 }
 
@@ -202,7 +209,7 @@ async function runBothWays(
   rule: Rule,
   siteIndexable: boolean | undefined,
   options: Record<string, unknown> = {},
-  fixture: Spec[] = FIXTURE,
+  fixture: Spec[] = FIXTURE
 ) {
   const base = {
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -225,7 +232,13 @@ async function runBothWays(
   const streamedCtx: RuleContext = {
     ...base,
     // EMPTY pages: the streaming path must not read them.
-    site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null, siteIndexable },
+    site: {
+      baseUrl: BASE,
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      siteIndexable,
+    },
     siteQuery,
   };
   const streamed = (await Promise.resolve(rule.run(streamedCtx))).checks;
@@ -273,7 +286,12 @@ describe("noindex pages are left out of the site rules, identically on both path
 
       // A staging or preview host (false) and an unknown one (undefined) count all.
       for (const siteIndexable of [false, undefined]) {
-        const counted = await runBothWays(store, rule, siteIndexable, c.options);
+        const counted = await runBothWays(
+          store,
+          rule,
+          siteIndexable,
+          c.options
+        );
         expect(counted.streamed).toEqual(counted.legacy);
         expect(counted.legacy[0]?.message).toBe(c.counted);
       }
@@ -295,7 +313,7 @@ const OUTLIER_FIXTURE: Spec[] = [
       robots: null,
       xRobotsTag: null,
       links: [],
-    }),
+    })
   ),
   {
     normalizedUrl: "https://example.com/campaign-terms.html",
@@ -325,7 +343,13 @@ describe("content/title-pattern-outlier leaves noindex pages out, identically on
     expect(skipped.legacy[0]?.status).toBe("pass");
 
     for (const siteIndexable of [false, undefined]) {
-      const counted = await runBothWays(store, rule, siteIndexable, {}, OUTLIER_FIXTURE);
+      const counted = await runBothWays(
+        store,
+        rule,
+        siteIndexable,
+        {},
+        OUTLIER_FIXTURE
+      );
       expect(counted.streamed).toEqual(counted.legacy);
       expect(counted.legacy[0]?.status).toBe("warn");
       expect(counted.legacy[0]?.items?.[0]?.id).toBe("brand-missing:");
@@ -347,7 +371,7 @@ const THIN_FIXTURE: Spec[] = [
       robots: null,
       xRobotsTag: null,
       links: [],
-    }),
+    })
   ),
   {
     normalizedUrl: "https://example.com/short-header",
@@ -377,13 +401,17 @@ describe("content/thin-vs-site-norm leaves noindex pages out, identically on bot
     const rule = rules.get("content/thin-vs-site-norm")!;
 
     const skipped = await runBothWays(store, rule, true, {}, THIN_FIXTURE);
-    expect(JSON.stringify(skipped.streamed)).toBe(JSON.stringify(skipped.legacy));
+    expect(JSON.stringify(skipped.streamed)).toBe(
+      JSON.stringify(skipped.legacy)
+    );
     expect(skipped.legacy[0]?.status).toBe("pass");
     expect(skipped.legacy[0]?.details?.judgedPages).toBe(10);
     expect(skipped.legacy[0]?.details?.skippedNoindexPages).toBe(2);
 
     const counted = await runBothWays(store, rule, false, {}, THIN_FIXTURE);
-    expect(JSON.stringify(counted.streamed)).toBe(JSON.stringify(counted.legacy));
+    expect(JSON.stringify(counted.streamed)).toBe(
+      JSON.stringify(counted.legacy)
+    );
     expect(counted.legacy[0]?.status).toBe("warn");
     expect(counted.legacy[0]?.details?.flaggedPages).toBe(2);
     expect(counted.legacy[0]?.details?.skippedNoindexPages).toBe(0);

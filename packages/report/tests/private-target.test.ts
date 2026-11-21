@@ -1,19 +1,26 @@
 // pub#629: transport and delivery rules skipped for a local or private-network
 // host are reported ONCE per report, never as issues and never per rule or page.
 
+import { PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
-import { PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
+import type { AuditReport, ReportRuleResult } from "../src/types";
 
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
-import { privateTargetLine, privateTargetSkippedRules } from "../src/private-target";
-import type { AuditReport, ReportRuleResult } from "../src/types";
+import {
+  privateTargetLine,
+  privateTargetSkippedRules,
+} from "../src/private-target";
 
-function rule(id: string, name: string, checks: ReportRuleResult["checks"]): ReportRuleResult {
+function rule(
+  id: string,
+  name: string,
+  checks: ReportRuleResult["checks"]
+): ReportRuleResult {
   return {
     meta: {
       id,
@@ -28,7 +35,10 @@ function rule(id: string, name: string, checks: ReportRuleResult["checks"]): Rep
   };
 }
 
-function privateSkip(id: string, pageUrl?: string): ReportRuleResult["checks"][number] {
+function privateSkip(
+  id: string,
+  pageUrl?: string
+): ReportRuleResult["checks"][number] {
   return {
     name: id,
     status: "skipped",
@@ -54,18 +64,25 @@ function localReport(): AuditReport {
       "security/https": rule(
         "security/https",
         "HTTPS",
-        PAGES.map((p) => privateSkip("security/https", p)),
+        PAGES.map((p) => privateSkip("security/https", p))
       ),
       "perf/compression": rule(
         "perf/compression",
         "Compression",
-        PAGES.map((p) => privateSkip("perf/compression", p)),
+        PAGES.map((p) => privateSkip("perf/compression", p))
       ),
-      "security/hsts": rule("security/hsts", "HSTS Header", [privateSkip("security/hsts")]),
+      "security/hsts": rule("security/hsts", "HSTS Header", [
+        privateSkip("security/hsts"),
+      ]),
       "core/meta-title": rule(
         "core/meta-title",
         "Meta Title",
-        PAGES.map((p) => ({ name: "meta-title", status: "pass", message: "Title OK", pageUrl: p })),
+        PAGES.map((p) => ({
+          name: "meta-title",
+          status: "pass",
+          message: "Title OK",
+          pageUrl: p,
+        }))
       ),
     },
   };
@@ -86,9 +103,11 @@ describe("privateTargetSkippedRules / privateTargetLine", () => {
 
   test("singular wording for one rule", () => {
     const report = localReport();
-    report.ruleResults = { "security/hsts": report.ruleResults["security/hsts"]! };
+    report.ruleResults = {
+      "security/hsts": report.ruleResults["security/hsts"]!,
+    };
     expect(privateTargetLine(report)).toBe(
-      "Local or private-network host: 1 transport and delivery rule does not apply here and is not scored (HSTS Header).",
+      "Local or private-network host: 1 transport and delivery rule does not apply here and is not scored (HSTS Header)."
     );
   });
 
@@ -96,7 +115,12 @@ describe("privateTargetSkippedRules / privateTargetLine", () => {
     const report = localReport();
     report.ruleResults = {
       "content/hidden-text": rule("content/hidden-text", "Hidden text", [
-        { name: "hidden-text", status: "skipped", message: "x", skipReason: "scan-truncated" },
+        {
+          name: "hidden-text",
+          status: "skipped",
+          message: "x",
+          skipReason: "scan-truncated",
+        },
       ]),
       "core/meta-title": report.ruleResults["core/meta-title"]!,
     };
@@ -110,7 +134,8 @@ describe("privateTargetSkippedRules / privateTargetLine", () => {
 });
 
 describe("every renderer says it once and never as an issue", () => {
-  const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+  const count = (haystack: string, needle: string) =>
+    haystack.split(needle).length - 1;
 
   test("text", () => {
     const out = renderText(localReport());
@@ -129,7 +154,9 @@ describe("every renderer says it once and never as an issue", () => {
 
   test("llm: one not-applicable element listing the rules, and no issues", () => {
     const out = renderLlm(localReport());
-    expect(count(out, '<not-applicable reason="private-target" count="3">')).toBe(1);
+    expect(
+      count(out, '<not-applicable reason="private-target" count="3">')
+    ).toBe(1);
     expect(count(out, LINE)).toBe(1);
     expect(count(out, '<rule id="security/https" name="HTTPS"/>')).toBe(1);
     expect(out).toContain("<issues/>");
@@ -154,7 +181,9 @@ describe("every renderer says it once and never as an issue", () => {
   test("a public report carries none of it", () => {
     const report = localReport();
     report.baseUrl = "https://example.com";
-    report.ruleResults = { "core/meta-title": report.ruleResults["core/meta-title"]! };
+    report.ruleResults = {
+      "core/meta-title": report.ruleResults["core/meta-title"]!,
+    };
     expect(renderText(report)).not.toContain("Local or private-network host");
     expect(renderLlm(report)).not.toContain("not-applicable");
     expect(JSON.parse(renderJson(report)).notApplicable).toBeUndefined();

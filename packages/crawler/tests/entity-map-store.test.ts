@@ -8,11 +8,12 @@
 
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import type { CrawlMetadata } from "../src/storage/types";
 
 import {
   MAX_STORED_EDGES_PER_SOURCE,
@@ -20,7 +21,6 @@ import {
   SCHEMA_VERSION,
   SQLiteStorage,
 } from "../src/storage/sqlite";
-import type { CrawlMetadata } from "../src/storage/types";
 
 const STATS = {
   pagesTotal: 0,
@@ -47,7 +47,10 @@ const run = <A, E>(e: Effect.Effect<A, E, never>) => Effect.runPromise(e);
 async function withStorage<T>(
   fn: (s: SQLiteStorage, crawlId: string) => Promise<T>
 ): Promise<T> {
-  const dir = join(mkdtempSync(join(tmpdir(), "squirrelscan-em-")), "store.sqlite");
+  const dir = join(
+    mkdtempSync(join(tmpdir(), "squirrelscan-em-")),
+    "store.sqlite"
+  );
   const storage = new SQLiteStorage(dir);
   try {
     await run(storage.init());
@@ -64,14 +67,26 @@ const ORG = {
   id: "http://x.test/#org",
   types: ["Organization", "Brand"],
   name: "Acme",
-  properties: { name: "Acme", logo: "http://x.test/a.png", sameAs: ["http://x.test/s"] },
+  properties: {
+    name: "Acme",
+    logo: "http://x.test/a.png",
+    sameAs: ["http://x.test/s"],
+  },
   occurrences: 3,
   conflicts: [
     {
       property: "logo",
       values: [
-        { value: "http://x.test/a.png", pages: ["http://x.test/a"], morePages: 0 },
-        { value: "http://x.test/b.png", pages: ["http://x.test/b"], morePages: 0 },
+        {
+          value: "http://x.test/a.png",
+          pages: ["http://x.test/a"],
+          morePages: 0,
+        },
+        {
+          value: "http://x.test/b.png",
+          pages: ["http://x.test/b"],
+          morePages: 0,
+        },
       ],
     },
   ],
@@ -121,7 +136,10 @@ describe("entity map storage", () => {
             { key: "id:http://x.test/#org", normalizedUrl: "http://x.test/a" },
             { key: "id:http://x.test/#org", normalizedUrl: "http://x.test/b" },
             { key: "id:http://x.test/#org", normalizedUrl: "http://x.test/c" },
-            { key: "syn:BreadcrumbList|name:home", normalizedUrl: "http://x.test/a" },
+            {
+              key: "syn:BreadcrumbList|name:home",
+              normalizedUrl: "http://x.test/a",
+            },
           ],
         })
       );
@@ -212,7 +230,13 @@ describe("entity map storage", () => {
           occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
         })
       );
-      await run(storage.saveEntityMap(crawlId, { nodes: [], edges: [], occurrences: [] }));
+      await run(
+        storage.saveEntityMap(crawlId, {
+          nodes: [],
+          edges: [],
+          occurrences: [],
+        })
+      );
 
       const rows = await run(storage.getEntityMapRows(crawlId));
       expect(rows.nodes).toHaveLength(0);
@@ -275,8 +299,13 @@ describe("entity edge pages across a schema upgrade (#492)", () => {
     morePages: 0,
   };
 
-  async function storeWithoutEdgePages(version: number): Promise<{ path: string; crawlId: string }> {
-    const path = join(mkdtempSync(join(tmpdir(), "squirrelscan-em-")), "store.sqlite");
+  async function storeWithoutEdgePages(
+    version: number
+  ): Promise<{ path: string; crawlId: string }> {
+    const path = join(
+      mkdtempSync(join(tmpdir(), "squirrelscan-em-")),
+      "store.sqlite"
+    );
     const storage = new SQLiteStorage(path);
     await run(storage.init());
     const crawlId = await run(storage.createCrawl(crawlMeta(1_000)));
@@ -331,7 +360,13 @@ describe("entity map presence and per-page figures (repo#2105)", () => {
       const before = await run(storage.getEntityMapRows(crawlId));
       expect(before.written).toBe(false);
 
-      await run(storage.saveEntityMap(crawlId, { nodes: [], edges: [], occurrences: [] }));
+      await run(
+        storage.saveEntityMap(crawlId, {
+          nodes: [],
+          edges: [],
+          occurrences: [],
+        })
+      );
       const after = await run(storage.getEntityMapRows(crawlId));
       expect(after.nodes).toHaveLength(0);
       expect(after.written).toBe(true);
@@ -353,7 +388,12 @@ describe("entity map presence and per-page figures (repo#2105)", () => {
       );
       const rows = await run(storage.getEntityMapRows(crawlId));
       expect(rows.pages).toEqual([
-        { url: "http://x.test/a", entityCount: 2, references: [CRUMB.key], referencesTotal: 1 },
+        {
+          url: "http://x.test/a",
+          entityCount: 2,
+          references: [CRUMB.key],
+          referencesTotal: 1,
+        },
       ]);
     });
   }, 30_000);
@@ -390,9 +430,19 @@ describe("entity map presence and per-page figures (repo#2105)", () => {
       const storage = new SQLiteStorage(path);
       await run(storage.init());
       try {
-        expect((await run(storage.getEntityMapRows(crawlId))).written).toBe(false);
-        await run(storage.saveEntityMap(crawlId, { nodes: [], edges: [], occurrences: [] }));
-        expect((await run(storage.getEntityMapRows(crawlId))).written).toBe(true);
+        expect((await run(storage.getEntityMapRows(crawlId))).written).toBe(
+          false
+        );
+        await run(
+          storage.saveEntityMap(crawlId, {
+            nodes: [],
+            edges: [],
+            occurrences: [],
+          })
+        );
+        expect((await run(storage.getEntityMapRows(crawlId))).written).toBe(
+          true
+        );
       } finally {
         await run(storage.close());
       }
@@ -404,7 +454,10 @@ describe("entity map presence and per-page figures (repo#2105)", () => {
 
 describe("entity map storage caps (#2135)", () => {
   const manyRefs = (n: number) =>
-    Array.from({ length: n }, (_, i) => `id:http://x.test/${"p".repeat(1800)}#n${i}`);
+    Array.from(
+      { length: n },
+      (_, i) => `id:http://x.test/${"p".repeat(1800)}#n${i}`
+    );
 
   test("a page with 20k expanded refs stores a bounded, sorted row with the total", async () => {
     await withStorage(async (storage, crawlId) => {
@@ -416,7 +469,11 @@ describe("entity map storage caps (#2135)", () => {
           occurrences: [],
           pages: [
             { url: "http://x.test/big", entityCount: 1, references: refs },
-            { url: "http://x.test/small", entityCount: 1, references: ["id:a"] },
+            {
+              url: "http://x.test/small",
+              entityCount: 1,
+              references: ["id:a"],
+            },
           ],
         })
       );
@@ -434,15 +491,18 @@ describe("entity map storage caps (#2135)", () => {
 
   test("edges are capped per source and the rest of the map still writes", async () => {
     await withStorage(async (storage, crawlId) => {
-      const edges = Array.from({ length: MAX_STORED_EDGES_PER_SOURCE + 50 }, (_, i) => ({
-        source: "id:s",
-        predicate: "mentions",
-        target: `id:t${String(i).padStart(5, "0")}`,
-        dangling: true,
-        occurrences: 1,
-        pages: ["http://x.test/a"],
-        morePages: 0,
-      }));
+      const edges = Array.from(
+        { length: MAX_STORED_EDGES_PER_SOURCE + 50 },
+        (_, i) => ({
+          source: "id:s",
+          predicate: "mentions",
+          target: `id:t${String(i).padStart(5, "0")}`,
+          dangling: true,
+          occurrences: 1,
+          pages: ["http://x.test/a"],
+          morePages: 0,
+        })
+      );
       await run(
         storage.saveEntityMap(crawlId, {
           nodes: [CRUMB],
@@ -471,7 +531,9 @@ describe("entity map storage caps (#2135)", () => {
       );
       (storage as unknown as { getDb(): Database })
         .getDb()
-        .prepare("UPDATE entity_map_pages SET refs = ? WHERE normalized_url = ?")
+        .prepare(
+          "UPDATE entity_map_pages SET refs = ? WHERE normalized_url = ?"
+        )
         .run("{not json", "http://x.test/bad");
       const rows = await run(storage.getEntityMapRows(crawlId));
       expect(rows.pages.map((p) => p.url)).toEqual(["http://x.test/ok"]);

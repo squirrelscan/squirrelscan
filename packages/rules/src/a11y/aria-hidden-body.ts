@@ -1,6 +1,7 @@
 // a11y/aria-hidden-body - Ensure body is not aria-hidden
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const ariaHiddenBodyRule: Rule = {

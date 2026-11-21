@@ -1,12 +1,16 @@
+import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
 import { describe, expect, test } from "bun:test";
 
-import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
-
 import { loadAllRules } from "../src";
-import { findUnmatchedRulePatterns, parseRuleFilters } from "../src/rule-filter";
+import {
+  findUnmatchedRulePatterns,
+  parseRuleFilters,
+} from "../src/rule-filter";
 
 const selectRuleIds = (enable: string[]): string[] =>
-  [...loadAllRules().keys()].filter((id) => enable.some((p) => matchesRulePattern(id, p)));
+  [...loadAllRules().keys()].filter((id) =>
+    enable.some((p) => matchesRulePattern(id, p))
+  );
 
 describe("rule-filter core (shared by the CLI and the cloud API, private#3785)", () => {
   test("parseRuleFilters expands bare categories and validates the category half", () => {
@@ -19,7 +23,10 @@ describe("rule-filter core (shared by the CLI and the cloud API, private#3785)",
   test("findUnmatchedRulePatterns lists exactly the dead patterns (typo'd rule id, same category)", () => {
     const ids = [...loadAllRules().keys()];
     expect(
-      findUnmatchedRulePatterns(["ax/*", "core/robots-meta", "core/robots-metaa", "ax/nope"], ids)
+      findUnmatchedRulePatterns(
+        ["ax/*", "core/robots-meta", "core/robots-metaa", "ax/nope"],
+        ids
+      )
     ).toEqual(["core/robots-metaa", "ax/nope"]);
     expect(findUnmatchedRulePatterns([], ids)).toEqual([]);
   });
@@ -28,7 +35,9 @@ describe("rule-filter core (shared by the CLI and the cloud API, private#3785)",
     const rules = loadAllRules();
     const selected = selectRuleIds(["ax/*", "core/robots-meta"]);
     const expected = [...rules.values()]
-      .filter((r) => r.meta.category === "ax" || r.meta.id === "core/robots-meta")
+      .filter(
+        (r) => r.meta.category === "ax" || r.meta.id === "core/robots-meta"
+      )
       .map((r) => r.meta.id);
     expect(selected.toSorted()).toEqual(expected.toSorted());
     // Legacy `ai/` ids filed under category ax ARE ax rules: ax/* reaches them

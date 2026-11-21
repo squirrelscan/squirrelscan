@@ -23,7 +23,11 @@
  * `render` is a request the page issued while it rendered. It reaches the surface
  * as a ref whose `discoveredVia` is `render-request` (or as `renderedRequests`).
  */
-export type EndpointSource = "static-js" | "static-html" | "convention" | "render";
+export type EndpointSource =
+  | "static-js"
+  | "static-html"
+  | "convention"
+  | "render";
 
 /** One audited-site endpoint the pass found. */
 export interface EndpointCandidate {
@@ -115,10 +119,23 @@ export const CONVENTION_PATHS: Readonly<Record<string, readonly string[]>> = {
   directus: ["/graphql", "/server/health", "/server/specs/oas"],
   wordpress: ["/wp-json/", "/graphql"],
   drupal: ["/jsonapi", "/graphql"],
-  "aspnet-kestrel": ["/health", "/swagger/v1/swagger.json", "/openapi.json", "/metrics"],
+  "aspnet-kestrel": [
+    "/health",
+    "/swagger/v1/swagger.json",
+    "/openapi.json",
+    "/metrics",
+  ],
 };
 
-const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
+const HTTP_METHODS = new Set([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+]);
 
 // ── classification ─────────────────────────────────────────────────
 
@@ -126,7 +143,8 @@ const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "
 const API_PATH_RE =
   /^\/(?:api(?:[/?]|$)|graphql(?:[/?]|$)|rest\/v1\/|_next\/data\/|trpc\/|wp-json(?:[/?]|$)|actuator(?:[/?]|$)|openapi\.json)/i;
 const API_HOST_RE = /^(?:api|graphql|gql|gateway)\./i;
-const STATIC_ASSET_RE = /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|webm|pdf)(?:[?#]|$)/i;
+const STATIC_ASSET_RE =
+  /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|webm|pdf)(?:[?#]|$)/i;
 // Characters that mean the literal is a template, a pattern or prose, not a URL.
 const NOT_A_URL_RE = /[{}<>()*^$|\\]/;
 
@@ -156,7 +174,8 @@ function looksLikeApiUrl(u: URL): boolean {
 function classifyLiteral(literal: string, base: string): string | null {
   if (literal.length < 2 || NOT_A_URL_RE.test(literal)) return null;
   const isAbsolute = /^https?:\/\//i.test(literal);
-  const isRootRelative = literal.charCodeAt(0) === 47 /* / */ && literal.charCodeAt(1) !== 47;
+  const isRootRelative =
+    literal.charCodeAt(0) === 47 /* / */ && literal.charCodeAt(1) !== 47;
   if (!isAbsolute && !isRootRelative) return null;
   const href = resolveUrl(literal, base);
   if (!href) return null;
@@ -209,7 +228,8 @@ const JQUERY_AJAX_RE = new RegExp(
 );
 const LITERAL_RE = /(["'`])([^"'`\\\s]{2,512})\1/g;
 
-const SCAN_GATE_RE = /fetch|axios|\.open|\$|jQuery|api|graphql|gql|gateway|_next\/data|trpc|wp-json|actuator|openapi/i;
+const SCAN_GATE_RE =
+  /fetch|axios|\.open|\$|jQuery|api|graphql|gql|gateway|_next\/data|trpc|wp-json|actuator|openapi/i;
 
 type Push = (url: string, via: string, method?: string) => void;
 
@@ -224,7 +244,8 @@ function normalizeMethod(m: string | undefined): string | undefined {
  * signal), then any remaining endpoint-looking string literal.
  */
 function scanScriptText(text: string, base: string, push: Push): void {
-  const src = text.length > MAX_SCAN_CHARS ? text.slice(0, MAX_SCAN_CHARS) : text;
+  const src =
+    text.length > MAX_SCAN_CHARS ? text.slice(0, MAX_SCAN_CHARS) : text;
   // Cheap gate: skip text that names no call site and no API-looking token.
   if (!SCAN_GATE_RE.test(src)) return;
 
@@ -236,7 +257,11 @@ function scanScriptText(text: string, base: string, push: Push): void {
     const url = classifyCallSiteUrl(m[2], base);
     if (!url) continue;
     const verb = m[1].toLowerCase();
-    push(url, `axios.${verb}`, verb === "request" ? undefined : normalizeMethod(verb));
+    push(
+      url,
+      `axios.${verb}`,
+      verb === "request" ? undefined : normalizeMethod(verb)
+    );
   }
   for (const m of src.matchAll(XHR_RE)) {
     const method = normalizeMethod(m[1]);
@@ -264,10 +289,14 @@ function scanScriptText(text: string, base: string, push: Push): void {
  * Endpoint refs in one served JS file. `base` is the script's own URL, so a
  * root-relative literal resolves against the origin that served it.
  */
-export function extractEndpointRefsFromScript(content: string, scriptUrl: string): PageEndpointRef[] {
+export function extractEndpointRefsFromScript(
+  content: string,
+  scriptUrl: string
+): PageEndpointRef[] {
   const refs: PageEndpointRef[] = [];
   scanScriptText(content, scriptUrl, (url, discoveredVia, method) => {
-    if (refs.length < MAX_REFS_PER_SCRIPT) refs.push({ url, method, discoveredVia });
+    if (refs.length < MAX_REFS_PER_SCRIPT)
+      refs.push({ url, method, discoveredVia });
   });
   return refs;
 }
@@ -275,7 +304,8 @@ export function extractEndpointRefsFromScript(content: string, scriptUrl: string
 // ── page DOM extraction ────────────────────────────────────────────
 
 // Script types that are code. JSON data blocks (JSON-LD, __NEXT_DATA__) are not.
-const JS_TYPE_RE = /^(?:|module|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript)$/i;
+const JS_TYPE_RE =
+  /^(?:|module|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript)$/i;
 
 /**
  * Collect endpoint refs from a live page DOM: inline scripts, form actions, and
@@ -287,7 +317,8 @@ export function extractEndpointRefsFromDocument(
 ): PageEndpointRef[] {
   const refs: PageEndpointRef[] = [];
   const push: Push = (url, discoveredVia, method) => {
-    if (refs.length < MAX_REFS_PER_PAGE) refs.push({ url, method, discoveredVia });
+    if (refs.length < MAX_REFS_PER_PAGE)
+      refs.push({ url, method, discoveredVia });
   };
 
   for (const form of doc.querySelectorAll("form[action]")) {
@@ -295,7 +326,11 @@ export function extractEndpointRefsFromDocument(
     if (!action || action.startsWith("#")) continue;
     const href = resolveUrl(action, pageUrl);
     if (!href || !looksLikeApiUrl(new URL(href))) continue;
-    push(href, "form-action", normalizeMethod(form.getAttribute("method") ?? undefined) ?? "GET");
+    push(
+      href,
+      "form-action",
+      normalizeMethod(form.getAttribute("method") ?? undefined) ?? "GET"
+    );
   }
 
   for (const [selector, attr, via] of [
@@ -337,7 +372,11 @@ export interface EndpointSurfaceInput {
   /** Per-page records, in crawl order. */
   pages: readonly PageEndpointRefs[];
   /** Served scripts (`site.scripts`). Only same-origin ones are scanned. */
-  scripts?: ReadonlyArray<{ url: string; finalUrl?: string; content: string | null }>;
+  scripts?: ReadonlyArray<{
+    url: string;
+    finalUrl?: string;
+    content: string | null;
+  }>;
   /** Technology ids detected on the website; drives the convention paths. */
   techIds?: readonly string[];
   /**
@@ -361,7 +400,9 @@ function originOf(url: string): string | null {
  * Dedup key is method plus URL. A method-less record (a string literal, a link)
  * is dropped when the same URL also has a record with a method.
  */
-export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurface {
+export function buildEndpointSurface(
+  input: EndpointSurfaceInput
+): EndpointSurface {
   const siteOrigin = originOf(input.baseUrl);
   const byKey = new Map<string, EndpointCandidate>();
 
@@ -409,7 +450,9 @@ export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurfa
     if (siteOrigin === null || originOf(url) !== siteOrigin) continue;
     sameOriginScripts.push({ url, content: script.content });
   }
-  sameOriginScripts.sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+  sameOriginScripts.sort((a, b) =>
+    a.url < b.url ? -1 : a.url > b.url ? 1 : 0
+  );
   let scanned = 0;
   let charsLeft = MAX_SCRIPT_SCAN_CHARS;
   for (const script of sameOriginScripts) {
@@ -425,7 +468,8 @@ export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurfa
 
   for (const page of input.pages) {
     for (const ref of page.refs) {
-      const source = ref.discoveredVia === RENDER_REQUEST_VIA ? "render" : "static-html";
+      const source =
+        ref.discoveredVia === RENDER_REQUEST_VIA ? "render" : "static-html";
       add(ref.url, source, ref.discoveredVia, ref.method);
     }
   }
@@ -437,7 +481,9 @@ export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurfa
   // Drop a method-less record when the same URL has a method-carrying one.
   const withMethod = new Set<string>();
   for (const c of byKey.values()) if (c.method) withMethod.add(c.url);
-  const deduped = [...byKey.values()].filter((c) => c.method || !withMethod.has(c.url));
+  const deduped = [...byKey.values()].filter(
+    (c) => c.method || !withMethod.has(c.url)
+  );
 
   // Stable order: source rank, then URL, then method. Input order must not leak
   // into the cap, or two runs over the same site could keep different endpoints.

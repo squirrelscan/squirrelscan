@@ -9,10 +9,11 @@
 // read relies on: that both `ORDER BY` clauses return their ties in `id` order,
 // and that the key order comes from SQLite rather than from a JS sort.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -70,9 +71,9 @@ describe("getRuleResultsGrouped", () => {
     const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
 
     // This is the entire point: one allocation per row, referenced twice.
-    const fromPage = grouped.byPage.get("https://e.test/a")!.find(
-      (c) => c.name === "ttfb"
-    );
+    const fromPage = grouped.byPage
+      .get("https://e.test/a")!
+      .find((c) => c.name === "ttfb");
     const fromRule = grouped.byRuleId
       .get("perf/ttfb")!
       .find((c) => c.pageUrl === "https://e.test/a");
@@ -106,11 +107,11 @@ describe("getRuleResultsGrouped", () => {
     ]);
     // Reaching into the connection deliberately: the point is a DIFFERENT query
     // plan from the one the schema gives today.
-    (
-      store as unknown as { getDb(): { exec(sql: string): void } }
-    ).getDb().exec(
-      "CREATE INDEX IF NOT EXISTS idx_rr_probe ON rule_results (crawl_id, rule_id, page_url)"
-    );
+    (store as unknown as { getDb(): { exec(sql: string): void } })
+      .getDb()
+      .exec(
+        "CREATE INDEX IF NOT EXISTS idx_rr_probe ON rule_results (crawl_id, rule_id, page_url)"
+      );
 
     const byRuleId = await run(store.getRuleResultsByRuleId("crawl-1"));
     const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
@@ -158,8 +159,20 @@ describe("getRuleResultsGrouped compact build (#1920)", () => {
     for (const page of ["https://e.test/a", "https://e.test/b"]) {
       await save(page, "seo/title", [
         { name: "t", status: "pass", message: "ok" },
-        { name: "t2", status: "warn", message: "short", value: 0, expected: "30+" },
-        { name: "t3", status: "fail", message: "empty", value: "", expected: 60 },
+        {
+          name: "t2",
+          status: "warn",
+          message: "short",
+          value: 0,
+          expected: "30+",
+        },
+        {
+          name: "t3",
+          status: "fail",
+          message: "empty",
+          value: "",
+          expected: 60,
+        },
         {
           name: "t4",
           status: "info",
@@ -168,7 +181,12 @@ describe("getRuleResultsGrouped compact build (#1920)", () => {
           details: { a: 1 },
           pages: ["https://e.test/a"],
         },
-        { name: "t5", status: "skipped", message: "n/a", skipReason: "not applicable" },
+        {
+          name: "t5",
+          status: "skipped",
+          message: "n/a",
+          skipReason: "not applicable",
+        },
       ]);
     }
     await save("", "crawl/sitemap-exists", [
@@ -187,14 +205,29 @@ describe("getRuleResultsGrouped compact build (#1920)", () => {
             provenance: { source: "page-dom", rendered: false },
             groupable: true,
             confidence: "observed",
-            region: { role: "footer", nestedIn: "none", structuralSignature: "r" },
+            region: {
+              role: "footer",
+              nestedIn: "none",
+              structuralSignature: "r",
+            },
             family: { key: "f", structuralSignature: "f" },
             variant: { key: "v", structuralSignature: "v", contentHash: "c" },
-            element: { locator: "footer:1>footer>p:1", structuralSignature: "e" },
-            defect: { kind: "stale-copyright", values: { year: 2019 }, valueHashes: { year: "h" } },
+            element: {
+              locator: "footer:1>footer>p:1",
+              structuralSignature: "e",
+            },
+            defect: {
+              kind: "stale-copyright",
+              values: { year: 2019 },
+              valueHashes: { year: "h" },
+            },
           },
         ],
-        componentEvidence: { state: "omitted", reason: "page-sample-limit", occurrenceCount: 4 },
+        componentEvidence: {
+          state: "omitted",
+          reason: "page-sample-limit",
+          occurrenceCount: 4,
+        },
       },
     ]);
     return store;
@@ -205,8 +238,12 @@ describe("getRuleResultsGrouped compact build (#1920)", () => {
     const byPage = await run(store.getRuleResultsByPage("crawl-1"));
     const byRuleId = await run(store.getRuleResultsByRuleId("crawl-1"));
     const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
-    expect(JSON.stringify([...grouped.byPage])).toBe(JSON.stringify([...byPage]));
-    expect(JSON.stringify([...grouped.byRuleId])).toBe(JSON.stringify([...byRuleId]));
+    expect(JSON.stringify([...grouped.byPage])).toBe(
+      JSON.stringify([...byPage])
+    );
+    expect(JSON.stringify([...grouped.byRuleId])).toBe(
+      JSON.stringify([...byRuleId])
+    );
   });
 
   test("checks carry no explicitly undefined keys, and keep value 0 and ''", async () => {
@@ -230,8 +267,12 @@ describe("getRuleResultsGrouped compact build (#1920)", () => {
   test("equal JSON columns on different rows are distinct objects", async () => {
     const store = await richStore();
     const grouped = await run(store.getRuleResultsGrouped("crawl-1"));
-    const a = grouped.byPage.get("https://e.test/a")!.find((c) => c.name === "t4")!;
-    const b = grouped.byPage.get("https://e.test/b")!.find((c) => c.name === "t4")!;
+    const a = grouped.byPage
+      .get("https://e.test/a")!
+      .find((c) => c.name === "t4")!;
+    const b = grouped.byPage
+      .get("https://e.test/b")!
+      .find((c) => c.name === "t4")!;
     expect(a.items).toEqual(b.items);
     expect(a.items).not.toBe(b.items);
     expect(a.details).not.toBe(b.details);

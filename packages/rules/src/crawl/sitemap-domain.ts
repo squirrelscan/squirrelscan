@@ -1,8 +1,8 @@
 // crawl/sitemap-domain - Cross-domain URL detection in sitemaps
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getHostname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { URL_ITEM_SAMPLE, sampleUrlItems } from "../shared/sample-items";
 
@@ -90,7 +90,9 @@ export const sitemapDomainRule: Rule = {
           total: crossDomainUrls.length,
           expectedHost,
           foundHosts: uniqueHosts.slice(0, URL_ITEM_SAMPLE),
-          ...(uniqueHosts.length > URL_ITEM_SAMPLE ? { hostCount: uniqueHosts.length } : {}),
+          ...(uniqueHosts.length > URL_ITEM_SAMPLE
+            ? { hostCount: uniqueHosts.length }
+            : {}),
         },
       });
     } else {

@@ -18,7 +18,10 @@ import type { CheckItem, CheckResult } from "@squirrelscan/core-contracts";
 function pathKey(url: string): string | undefined {
   try {
     const parsed = new URL(url);
-    const path = parsed.pathname.length > 1 && parsed.pathname.endsWith("/") ? parsed.pathname.slice(0, -1) : parsed.pathname;
+    const path =
+      parsed.pathname.length > 1 && parsed.pathname.endsWith("/")
+        ? parsed.pathname.slice(0, -1)
+        : parsed.pathname;
     return `${parsed.protocol}//${parsed.host.toLowerCase()}${path}`;
   } catch {
     return undefined;
@@ -30,7 +33,7 @@ function pathKey(url: string): string | undefined {
  * pages' URLs (the report's identity for a page) with their declared canonical.
  */
 export function canonicalVariantMap(
-  pages: ReadonlyArray<{ url: string; canonical?: string | null }>,
+  pages: ReadonlyArray<{ url: string; canonical?: string | null }>
 ): Map<string, string> {
   const crawled = new Set<string>();
   for (const page of pages) crawled.add(page.url);
@@ -48,7 +51,10 @@ export function canonicalVariantMap(
     // The declared canonical must itself be a crawled page of this audit (compared with and
     // without a trailing slash and fragment), and not this page.
     const withoutHash = target.split("#")[0]!;
-    const candidates = [withoutHash, withoutHash.endsWith("/") ? withoutHash.slice(0, -1) : `${withoutHash}/`];
+    const candidates = [
+      withoutHash,
+      withoutHash.endsWith("/") ? withoutHash.slice(0, -1) : `${withoutHash}/`,
+    ];
     const canonical = candidates.find((c) => crawled.has(c));
     if (canonical === undefined || canonical === page.url) continue;
     // A canonical that is itself a variant of another page folds into that page's target.
@@ -68,8 +74,10 @@ export function canonicalVariantMap(
       onPath.add(at);
       at = variants.get(at)!;
     }
-    if (done.has(at)) target = resolved.get(at) ?? (variants.has(at) ? undefined : at);
-    else if (onPath.has(at)) target = undefined; // a loop: none of it folds
+    if (done.has(at))
+      target = resolved.get(at) ?? (variants.has(at) ? undefined : at);
+    else if (onPath.has(at))
+      target = undefined; // a loop: none of it folds
     else target = at; // reached a page that is not itself a variant
     for (const url of path) {
       if (target !== undefined && target !== url) resolved.set(url, target);
@@ -79,9 +87,13 @@ export function canonicalVariantMap(
   return resolved;
 }
 
-const mapPage = (url: string, map: ReadonlyMap<string, string>): string => map.get(url) ?? url;
+const mapPage = (url: string, map: ReadonlyMap<string, string>): string =>
+  map.get(url) ?? url;
 
-const mapPages = (pages: string[], map: ReadonlyMap<string, string>): string[] => [...new Set(pages.map((p) => mapPage(p, map)))];
+const mapPages = (
+  pages: string[],
+  map: ReadonlyMap<string, string>
+): string[] => [...new Set(pages.map((p) => mapPage(p, map)))];
 
 function foldItem(item: CheckItem, map: ReadonlyMap<string, string>): void {
   if (item.sourcePages) item.sourcePages = mapPages(item.sourcePages, map);
@@ -94,7 +106,10 @@ function foldItem(item: CheckItem, map: ReadonlyMap<string, string>): void {
  * item's `sourcePages` (and an item that is itself a page). Idempotent, and safe on checks
  * shared between two lookups. Returns how many checks changed.
  */
-export function foldChecksToCanonical(checks: Iterable<CheckResult>, map: ReadonlyMap<string, string>): number {
+export function foldChecksToCanonical(
+  checks: Iterable<CheckResult>,
+  map: ReadonlyMap<string, string>
+): number {
   if (map.size === 0) return 0;
   let changed = 0;
   for (const check of checks) {
@@ -113,7 +128,9 @@ export function foldChecksToCanonical(checks: Iterable<CheckResult>, map: Readon
     // duplicates of another item. Every other item of the check is left exactly as it is.
     const rewritten = new Set<unknown>();
     for (const item of items ?? []) {
-      const before = item.sourcePages?.some((p) => map.has(p)) || (!item.sourcePages && map.has(item.id));
+      const before =
+        item.sourcePages?.some((p) => map.has(p)) ||
+        (!item.sourcePages && map.has(item.id));
       if (before) {
         if (!item.sourcePages) rewritten.add(item);
         foldItem(item, map);
@@ -124,7 +141,8 @@ export function foldChecksToCanonical(checks: Iterable<CheckResult>, map: Readon
     // renderer reads from `details` follow the list. A rewritten item is dropped only when an item with
     // the same id and the same content is already listed; distinct items sharing an id stay.
     if (items && rewritten.size > 0) {
-      const content = (item: CheckItem): string => JSON.stringify({ ...item, id: undefined });
+      const content = (item: CheckItem): string =>
+        JSON.stringify({ ...item, id: undefined });
       const seen = new Set<string>();
       const kept: CheckItem[] = [];
       for (const item of items) {

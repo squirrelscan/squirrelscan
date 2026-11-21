@@ -7,7 +7,10 @@
 // records the same four facts, and the origin is derived here rather than at
 // each call site, so no two rules can scope a resource differently.
 
-import { componentSiteOrigin, type SiteResourceOccurrence } from "@squirrelscan/core-contracts";
+import {
+  componentSiteOrigin,
+  type SiteResourceOccurrence,
+} from "@squirrelscan/core-contracts";
 
 /**
  * One observation per distinct resource key on one page.

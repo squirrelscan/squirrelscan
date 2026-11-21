@@ -6,18 +6,18 @@
 // out. A rule that slices its items without saying so would make a cut-off item
 // look fixed. Several a11y and performance rules did exactly that.
 
+import { parsePage } from "@squirrelscan/parser";
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { parsePage } from "@squirrelscan/parser";
-import { parseHTML } from "@squirrelscan/parser/dom";
+import type { CheckResult, ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { labelContentNameMismatchRule } from "../src/a11y/label-content-name-mismatch";
 import { tabindexRule } from "../src/a11y/tabindex";
 import { devLeakageRule } from "../src/content/dev-leakage";
 import { hiddenTextRule } from "../src/content/hidden-text";
-import type { CheckResult, ParsedPage, Rule, RuleContext } from "../src/types";
 
 function run(rule: Rule, body: string): CheckResult[] {
   const html = `<!doctype html><html lang="en"><head><title>t</title></head><body><h1>Repro</h1>${body}</body></html>`;
@@ -44,8 +44,11 @@ const repeat = (n: number, html: (i: number) => string): string =>
 describe("rules that cap items record the remainder", () => {
   test("a11y/tabindex: 12 positive tabindex values list 10 and record 2 more", () => {
     const c = check(
-      run(tabindexRule, repeat(12, (i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`)),
-      "tabindex-positive",
+      run(
+        tabindexRule,
+        repeat(12, (i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`)
+      ),
+      "tabindex-positive"
     );
     expect(c.status).toBe("warn");
     expect(c.items).toHaveLength(10);
@@ -54,8 +57,11 @@ describe("rules that cap items record the remainder", () => {
 
   test("a11y/tabindex: a list under the cap records no remainder", () => {
     const c = check(
-      run(tabindexRule, repeat(3, (i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`)),
-      "tabindex-positive",
+      run(
+        tabindexRule,
+        repeat(3, (i) => `<button id="b${i}" tabindex="${i + 1}">b</button>`)
+      ),
+      "tabindex-positive"
     );
     expect(c.items).toHaveLength(3);
     expect(c.details?.additional).toBeUndefined();
@@ -63,8 +69,11 @@ describe("rules that cap items record the remainder", () => {
 
   test("a11y/tabindex: the very-high check records its own remainder", () => {
     const c = check(
-      run(tabindexRule, repeat(11, (i) => `<a id="a${i}" href="/" tabindex="${200 + i}">a</a>`)),
-      "tabindex-very-high",
+      run(
+        tabindexRule,
+        repeat(11, (i) => `<a id="a${i}" href="/" tabindex="${200 + i}">a</a>`)
+      ),
+      "tabindex-very-high"
     );
     expect(c.status).toBe("fail");
     expect(c.items).toHaveLength(10);
@@ -75,9 +84,13 @@ describe("rules that cap items record the remainder", () => {
     const c = check(
       run(
         labelContentNameMismatchRule,
-        repeat(11, (i) => `<button aria-label="Close dialog ${i}">Open menu ${i}</button>`),
+        repeat(
+          11,
+          (i) =>
+            `<button aria-label="Close dialog ${i}">Open menu ${i}</button>`
+        )
       ),
-      "label-content-name-mismatch",
+      "label-content-name-mismatch"
     );
     expect(c.status).toBe("fail");
     expect(c.items).toHaveLength(10);
@@ -89,7 +102,13 @@ describe("rules that cap items record the remainder", () => {
 // marks the check `scanTruncated` instead of a remainder count.
 function runOnDom(rule: Rule, html: string): CheckResult[] {
   const ctx = {
-    page: { url: "https://example.com/about", html, statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/about",
+      html,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: { document: parseHTML(html).document } as unknown as ParsedPage,
     options: {},
   } as unknown as RuleContext;
@@ -98,7 +117,8 @@ function runOnDom(rule: Rule, html: string): CheckResult[] {
   return result.checks;
 }
 
-const HIDDEN = "cheap discount widgets wholesale supplier best prices online now";
+const HIDDEN =
+  "cheap discount widgets wholesale supplier best prices online now";
 
 describe("rules that stop at a scan budget say so", () => {
   test("content/hidden-text: findings past the 20,000-element walk are marked", () => {
@@ -137,10 +157,16 @@ describe("rules that stop at a scan budget say so", () => {
   });
 
   test("content/dev-leakage: stopping at the attribute hit cap is marked", () => {
-    const body = repeat(1_001, (i) => `<a href="http://localhost:3000/p${i}">x</a>`);
+    const body = repeat(
+      1_001,
+      (i) => `<a href="http://localhost:3000/p${i}">x</a>`
+    );
     const c = check(
-      runOnDom(devLeakageRule, `<html><head><title>t</title></head><body>${body}</body></html>`),
-      "dev-leakage",
+      runOnDom(
+        devLeakageRule,
+        `<html><head><title>t</title></head><body>${body}</body></html>`
+      ),
+      "dev-leakage"
     );
     expect(c.details?.scanTruncated).toBe(true);
   });
@@ -148,8 +174,11 @@ describe("rules that stop at a scan budget say so", () => {
   test("content/dev-leakage: a page scanned in full says so explicitly", () => {
     const body = `<a href="http://localhost:3000/p">x</a>`;
     const c = check(
-      runOnDom(devLeakageRule, `<html><head><title>t</title></head><body>${body}</body></html>`),
-      "dev-leakage",
+      runOnDom(
+        devLeakageRule,
+        `<html><head><title>t</title></head><body>${body}</body></html>`
+      ),
+      "dev-leakage"
     );
     expect(c.status).toBe("fail");
     expect(c.details?.scanTruncated).toBe(false);

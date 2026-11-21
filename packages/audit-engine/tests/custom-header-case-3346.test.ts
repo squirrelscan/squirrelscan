@@ -2,13 +2,12 @@
 // records, so a custom `user-agent` sat beside the built-in `User-Agent` and the
 // request sent both values combined. It now replaces it.
 
+import type { Config } from "@squirrelscan/config";
+
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
+import { createHeaderScope } from "@squirrelscan/utils/headers";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { Config } from "@squirrelscan/config";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-
-import { createHeaderScope } from "@squirrelscan/utils/headers";
 
 import { runCloakingProbe } from "../src/cloaking-probe";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -25,17 +24,24 @@ describe("asset checks with a custom header that differs only in case (repo#3346
       port: 0,
       fetch(req) {
         const url = new URL(req.url);
-        seen.push({ path: url.pathname, userAgent: req.headers.get("user-agent") });
+        seen.push({
+          path: url.pathname,
+          userAgent: req.headers.get("user-agent"),
+        });
         switch (url.pathname) {
           case "/":
             return new Response(
               `<!doctype html><html><head><title>Home</title><link rel="stylesheet" href="/style.css"><script src="/app.js"></script></head><body><img src="/logo.png" alt="x" width="1" height="1"></body></html>`,
-              { headers: { "content-type": "text/html" } },
+              { headers: { "content-type": "text/html" } }
             );
           case "/style.css":
-            return new Response("body{}", { headers: { "content-type": "text/css" } });
+            return new Response("body{}", {
+              headers: { "content-type": "text/css" },
+            });
           case "/app.js":
-            return new Response("void 0;", { headers: { "content-type": "text/javascript" } });
+            return new Response("void 0;", {
+              headers: { "content-type": "text/javascript" },
+            });
           case "/logo.png":
             return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
               headers: { "content-type": "image/png" },
@@ -65,9 +71,11 @@ describe("asset checks with a custom header that differs only in case (repo#3346
           disableLinkDiscovery: true,
           headers,
         },
-      }),
+      })
     );
-    const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+    const crawlId = await Effect.runPromise(
+      crawler.start(`${origin}/`, `${origin}/`)
+    );
     const config = {
       rule_options: {},
       rules: { enable: ["*"] },
@@ -75,11 +83,20 @@ describe("asset checks with a custom header that differs only in case (repo#3346
       external_links: { enabled: false },
       internal_links: { enabled: false },
     } as unknown as Config;
-    await Effect.runPromise(runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}));
+    await Effect.runPromise(
+      runStreamingPreRules(
+        crawler.storage as SQLiteStorage,
+        crawlId,
+        config,
+        {}
+      )
+    );
 
-    const assets = seen.filter((s) => ["/style.css", "/app.js", "/logo.png"].includes(s.path));
+    const assets = seen.filter((s) =>
+      ["/style.css", "/app.js", "/logo.png"].includes(s.path)
+    );
     expect(new Set(assets.map((s) => s.path))).toEqual(
-      new Set(["/style.css", "/app.js", "/logo.png"]),
+      new Set(["/style.css", "/app.js", "/logo.png"])
     );
     for (const s of assets) expect(s.userAgent).toBe("custom-agent");
   });

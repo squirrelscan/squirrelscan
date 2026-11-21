@@ -5,7 +5,15 @@
 // Every request the crawl sends now turns that decoding off, and the capped
 // readers decode the body themselves, no further than their cap.
 
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { DEFAULT_MAX_DOCUMENT_BODY_BYTES } from "@squirrelscan/utils/response-body";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { Effect } from "effect";
 import {
   brotliCompressSync,
@@ -18,25 +26,32 @@ import {
   zstdCompressSync,
 } from "node:zlib";
 
-import { DEFAULT_MAX_DOCUMENT_BODY_BYTES } from "@squirrelscan/utils/response-body";
+import type { CrawlerConfig } from "../src/core/types";
 
 import { createCrawler } from "../src/core/crawler";
-import type { CrawlerConfig } from "../src/core/types";
 import { fetchPage } from "../src/fetcher";
 import { fetchLlmsTxt } from "../src/llms";
 import { fetchRobotsEvaluator } from "../src/robots";
 
 const GIB = 1024 * 1024 * 1024;
-const FETCH_OPTIONS = { userAgent: "squirrel-test", timeoutMs: 30_000, followRedirects: true };
+const FETCH_OPTIONS = {
+  userAgent: "squirrel-test",
+  timeoutMs: 30_000,
+  followRedirects: true,
+};
 
 /** `total` bytes of spaces through a streaming compressor, never held whole. */
-async function bomb(compressor: NodeJS.ReadWriteStream, total: number): Promise<Buffer<ArrayBuffer>> {
+async function bomb(
+  compressor: NodeJS.ReadWriteStream,
+  total: number
+): Promise<Buffer<ArrayBuffer>> {
   const out: Buffer[] = [];
   compressor.on("data", (chunk: Buffer) => out.push(chunk));
   const ended = new Promise((resolve) => compressor.on("end", resolve));
   const chunk = Buffer.alloc(16 * 1024 * 1024, 0x20);
   for (let sent = 0; sent < total; sent += chunk.byteLength) {
-    if (!compressor.write(chunk)) await new Promise((resolve) => compressor.once("drain", resolve));
+    if (!compressor.write(chunk))
+      await new Promise((resolve) => compressor.once("drain", resolve));
   }
   compressor.end();
   await ended;
@@ -80,7 +95,7 @@ beforeAll(async () => {
   gzipBomb = await bomb(createGzip({ level: 6 }), GIB);
   brBomb = await bomb(
     createBrotliCompress({ params: { [constants.BROTLI_PARAM_QUALITY]: 1 } }),
-    GIB,
+    GIB
   );
   server = Bun.serve({
     port: 0,
@@ -95,7 +110,11 @@ beforeAll(async () => {
         // A redirect whose own body is the bomb: the redirect loop discards it.
         return new Response(brBomb, {
           status: 302,
-          headers: { location: "/plain", "content-type": "text/html", "content-encoding": "br" },
+          headers: {
+            location: "/plain",
+            "content-type": "text/html",
+            "content-encoding": "br",
+          },
         });
       }
       if (path === "/plain") {
@@ -123,7 +142,9 @@ describe("a compression bomb costs the cap, not its inflated size", () => {
   test("a page whose gzip body inflates to 1 GiB is recorded cut at the document cap", async () => {
     let body = "";
     const growth = await peakRssGrowth(async () => {
-      const result = await Effect.runPromise(fetchPage(`${origin}/bomb`, FETCH_OPTIONS));
+      const result = await Effect.runPromise(
+        fetchPage(`${origin}/bomb`, FETCH_OPTIONS)
+      );
       body = result.body;
     });
     expect(body.length).toBe(DEFAULT_MAX_DOCUMENT_BODY_BYTES);
@@ -135,7 +156,9 @@ describe("a compression bomb costs the cap, not its inflated size", () => {
   test("a redirect hop whose own body is a bomb is never inflated", async () => {
     let title = "";
     const growth = await peakRssGrowth(async () => {
-      const result = await Effect.runPromise(fetchPage(`${origin}/hop-bomb`, FETCH_OPTIONS));
+      const result = await Effect.runPromise(
+        fetchPage(`${origin}/hop-bomb`, FETCH_OPTIONS)
+      );
       title = result.body;
     });
     expect(title).toContain("plain");
@@ -146,9 +169,13 @@ describe("a compression bomb costs the cap, not its inflated size", () => {
     let llmsBytes = 0;
     let robotsBytes = 0;
     const growth = await peakRssGrowth(async () => {
-      const llms = await Effect.runPromise(fetchLlmsTxt(origin, "squirrel-test"));
+      const llms = await Effect.runPromise(
+        fetchLlmsTxt(origin, "squirrel-test")
+      );
       llmsBytes = llms?.llmsTxt.sizeBytes ?? -1;
-      const robots = await Effect.runPromise(fetchRobotsEvaluator(origin, "squirrel-test", true));
+      const robots = await Effect.runPromise(
+        fetchRobotsEvaluator(origin, "squirrel-test", true)
+      );
       robotsBytes = robots.data.sizeBytes;
     });
     expect(llmsBytes).toBe(1_000_000);
@@ -163,7 +190,10 @@ const HTML = (title: string, links: string[]) =>
     .join("")}</body></html>`;
 
 /** One coding per path, so the crawl meets every one Bun decodes. */
-const ENCODERS: Record<string, [string, (body: string) => Uint8Array<ArrayBuffer>]> = {
+const ENCODERS: Record<
+  string,
+  [string, (body: string) => Uint8Array<ArrayBuffer>]
+> = {
   "/home": ["gzip", (b) => gzipSync(b)],
   "/about": ["br", (b) => brotliCompressSync(b)],
   "/team": ["deflate", (b) => deflateSync(b)],
@@ -185,37 +215,59 @@ describe("every request a crawl sends", () => {
         // The seed and a page link both redirect, so seed resolution and the
         // page fetcher's own redirect loop each follow a hop.
         if (path === "/")
-          return new Response(null, { status: 301, headers: { location: "/home" } });
+          return new Response(null, {
+            status: 301,
+            headers: { location: "/home" },
+          });
         if (path === "/old-team") {
-          return new Response(null, { status: 302, headers: { location: "/team" } });
+          return new Response(null, {
+            status: 302,
+            headers: { location: "/team" },
+          });
         }
         if (path === "/robots.txt") {
           return new Response(
-            gzipSync(`User-agent: *\nAllow: /\nSitemap: ${origin2}/sitemap.xml\n`),
+            gzipSync(
+              `User-agent: *\nAllow: /\nSitemap: ${origin2}/sitemap.xml\n`
+            ),
             {
-              headers: { "content-type": "text/plain", "content-encoding": "gzip" },
-            },
+              headers: {
+                "content-type": "text/plain",
+                "content-encoding": "gzip",
+              },
+            }
           );
         }
         if (path === "/sitemap.xml") {
           const xml = `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin2}/contact</loc></url></urlset>`;
           return new Response(brotliCompressSync(xml), {
-            headers: { "content-type": "application/xml", "content-encoding": "br" },
+            headers: {
+              "content-type": "application/xml",
+              "content-encoding": "br",
+            },
           });
         }
         if (path === "/llms.txt") {
           return new Response(gzipSync("# squirrel\n\n- [home](/home)\n"), {
-            headers: { "content-type": "text/plain", "content-encoding": "gzip" },
+            headers: {
+              "content-type": "text/plain",
+              "content-encoding": "gzip",
+            },
           });
         }
         const encoder = ENCODERS[path];
         if (encoder) {
           const [coding, encode] = encoder;
           return new Response(
-            encode(HTML(`page ${path}`, ["/about", "/old-team", "/raw-deflate"])),
+            encode(
+              HTML(`page ${path}`, ["/about", "/old-team", "/raw-deflate"])
+            ),
             {
-              headers: { "content-type": "text/html", "content-encoding": coding },
-            },
+              headers: {
+                "content-type": "text/html",
+                "content-encoding": coding,
+              },
+            }
           );
         }
         return new Response("not found", { status: 404 });
@@ -232,7 +284,7 @@ describe("every request a crawl sends", () => {
         });
         return real(input, init);
       },
-      { preconnect: real.preconnect },
+      { preconnect: real.preconnect }
     );
 
     const config: Partial<CrawlerConfig> = {
@@ -251,14 +303,20 @@ describe("every request a crawl sends", () => {
     };
     try {
       const crawler = await Effect.runPromise(createCrawler({ config }));
-      const crawlId = await Effect.runPromise(crawler.start(`${origin2}/`, `${origin2}/`));
+      const crawlId = await Effect.runPromise(
+        crawler.start(`${origin2}/`, `${origin2}/`)
+      );
       const pages = await Effect.runPromise(crawler.storage.getPages(crawlId));
       globalThis.fetch = real;
 
       // Every page arrived decoded, whatever its coding.
-      const titles = new Map(pages.map((p) => [new URL(p.finalUrl).pathname, p.html ?? ""]));
+      const titles = new Map(
+        pages.map((p) => [new URL(p.finalUrl).pathname, p.html ?? ""])
+      );
       for (const path of Object.keys(ENCODERS)) {
-        expect(titles.get(path) ?? `missing ${path}`).toContain(`<title>page ${path}</title>`);
+        expect(titles.get(path) ?? `missing ${path}`).toContain(
+          `<title>page ${path}</title>`
+        );
       }
 
       // Every request, root probes, sitemaps, seed resolution and redirect

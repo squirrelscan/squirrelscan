@@ -6,7 +6,8 @@ import { describe, expect, test } from "bun:test";
 
 import { pageMarkup } from "../src/detect";
 
-const rep = (s: string, bytes: number): string => s.repeat(Math.ceil(bytes / s.length));
+const rep = (s: string, bytes: number): string =>
+  s.repeat(Math.ceil(bytes / s.length));
 const MB5 = 5_000_000;
 const LIMIT_MS = 3_000;
 
@@ -21,8 +22,14 @@ const SHAPES: Record<string, string> = {
   "type with a run of spaces before the equals sign": `<script type${" ".repeat(MB5)}>x</script>`,
   "many ` type` words in one tag": `<script ${" type".repeat(MB5 / 5)}>x</script>`,
   "many flight openers in one script": `<script>${rep("self.__next_f.push(", MB5)}</script>`,
-  "many small flight scripts": rep('<script>self.__next_f.push([1,"x"])</script>', MB5),
-  "comment prefixes before the flight start, in many scripts": rep(`<script>${"/* x */ ".repeat(70)}self.__next_f.push(1)</script>`, MB5),
+  "many small flight scripts": rep(
+    '<script>self.__next_f.push([1,"x"])</script>',
+    MB5
+  ),
+  "comment prefixes before the flight start, in many scripts": rep(
+    `<script>${"/* x */ ".repeat(70)}self.__next_f.push(1)</script>`,
+    MB5
+  ),
   "one script of comment openers": `<script>${rep("/*", MB5)}self.__next_f.push(1)</script>`,
   "many small scripts": rep("<script>a</script>", MB5),
   "a script that never closes": `<script>${"a".repeat(MB5)}`,

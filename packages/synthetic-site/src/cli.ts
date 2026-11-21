@@ -5,11 +5,10 @@
 //
 // Dev-only tool, never imported by the shipping CLI or hosted runtimes.
 
+import { Effect } from "effect";
 import { parseArgs } from "node:util";
 
 import type { GenerateSiteModelOptions, IssueMixOptions } from "./types";
-
-import { Effect } from "effect";
 
 import { generateSiteModel } from "./page-model";
 import { serveSite } from "./server";
@@ -20,7 +19,8 @@ function num(value: string | undefined): number | undefined {
   const n = Number(value);
   // Rejects NaN AND ±Infinity — an unbounded pageCount/size would otherwise
   // try to allocate an infinite-length array or loop forever downstream.
-  if (!Number.isFinite(n)) throw new Error(`Expected a finite number, got "${value}"`);
+  if (!Number.isFinite(n))
+    throw new Error(`Expected a finite number, got "${value}"`);
   return n;
 }
 
@@ -80,7 +80,7 @@ if (values.help || !values.pages) {
   --dup-title-groups / --dup-title-group-size <n>
   --dup-description-groups / --dup-description-group-size <n>
   --redirect-chains / --redirect-chain-length <n>
-`,
+`
   );
   process.exit(values.help ? 0 : 1);
 }
@@ -138,19 +138,25 @@ async function main(): Promise<void> {
   const model = generateSiteModel(options);
   const generateMs = performance.now() - start;
   console.log(
-    `Generated ${model.pages.length} pages (seed="${model.seed}") in ${generateMs.toFixed(0)}ms. Issue summary:`,
+    `Generated ${model.pages.length} pages (seed="${model.seed}") in ${generateMs.toFixed(0)}ms. Issue summary:`
   );
   console.table(model.issueSummary);
 
   if (values["write-db"]) {
     const dbStart = performance.now();
-    const result = await writeCrawlToStorage(model, values["write-db"] as string, {
-      baseUrl: values["base-url"] as string,
-    });
-    console.log(
-      `Wrote crawl ${result.crawlId} (${result.pageCount} pages, ${result.linkAppearanceCount} link appearances) to ${values["write-db"]} in ${(performance.now() - dbStart).toFixed(0)}ms`,
+    const result = await writeCrawlToStorage(
+      model,
+      values["write-db"] as string,
+      {
+        baseUrl: values["base-url"] as string,
+      }
     );
-    await Effect.runPromise(result.storage.close() as Effect.Effect<void, never, never>);
+    console.log(
+      `Wrote crawl ${result.crawlId} (${result.pageCount} pages, ${result.linkAppearanceCount} link appearances) to ${values["write-db"]} in ${(performance.now() - dbStart).toFixed(0)}ms`
+    );
+    await Effect.runPromise(
+      result.storage.close() as Effect.Effect<void, never, never>
+    );
     return;
   }
 

@@ -1,6 +1,12 @@
 // i18n/hreflang - Checks for hreflang tags
 
-import type { Rule, RuleContext, RuleResult, CheckResult, CheckItem } from "../types";
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  CheckItem,
+} from "../types";
 
 import { documentUrl } from "../shared/redirect-evidence";
 
@@ -14,7 +20,7 @@ const LANGUAGES_639_1 = new Set(
     "mn mr ms mt my na nb nd ne ng nl nn no nr nv ny oc oj om or os pa pi pl ps pt qu rm rn ro ru rw sa sc sd " +
     "se sg si sk sl sm sn so sq sr ss st su sv sw ta te tg th ti tk tl tn to tr ts tt tw ty ug uk ur uz ve vi " +
     "vo wa wo xh yi yo za zh zu iw in ji"
-  ).split(" "),
+  ).split(" ")
 );
 
 // ISO 3166-1 alpha-2 region codes, plus XK (Kosovo, user-assigned, in common use).
@@ -27,14 +33,16 @@ const REGIONS_3166_1 = new Set(
     "mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf pg ph pk pl pm pn pr ps pt pw py qa re ro rs " +
     "ru rw sa sb sc sd se sg sh si sj sk sl sm sn so sr ss st sv sx sy sz tc td tf tg th tj tk tl tm tn to tr tt tv tw " +
     "tz ua ug um us uy uz va vc ve vg vi vn vu wf ws ye yt za zm zw xk"
-  ).split(" "),
+  ).split(" ")
 );
 
 /**
  * Why an hreflang value is not `x-default` or `language[-script][-region]`, or
  * null when it is. Case-insensitive. Checks code format only.
  */
-function hreflangProblem(raw: string): { reason: string; suggestion?: string } | null {
+function hreflangProblem(
+  raw: string
+): { reason: string; suggestion?: string } | null {
   const value = raw.trim();
   const lower = value.toLowerCase();
   if (lower === "x-default") return null;
@@ -42,9 +50,18 @@ function hreflangProblem(raw: string): { reason: string; suggestion?: string } |
   if (value.includes("_")) {
     const fixed = value
       .split("_")
-      .map((part, i) => (i === 0 ? part.toLowerCase() : part.length === 2 ? part.toUpperCase() : part))
+      .map((part, i) =>
+        i === 0
+          ? part.toLowerCase()
+          : part.length === 2
+            ? part.toUpperCase()
+            : part
+      )
       .join("-");
-    return { reason: "uses an underscore instead of a hyphen", suggestion: fixed };
+    return {
+      reason: "uses an underscore instead of a hyphen",
+      suggestion: fixed,
+    };
   }
 
   const parts = lower.split("-");
@@ -64,7 +81,9 @@ function hreflangProblem(raw: string): { reason: string; suggestion?: string } |
       if (!REGIONS_3166_1.has(region)) {
         return {
           reason: `"${region.toUpperCase()}" is not an ISO 3166-1 region code`,
-          ...(region === "uk" ? { suggestion: [...parts.slice(0, i), "GB"].join("-") } : {}),
+          ...(region === "uk"
+            ? { suggestion: [...parts.slice(0, i), "GB"].join("-") }
+            : {}),
         };
       }
     } else if (!/^\d{3}$/.test(region)) {
@@ -73,7 +92,10 @@ function hreflangProblem(raw: string): { reason: string; suggestion?: string } |
     i++;
   }
   if (i < parts.length) {
-    return { reason: "has subtags after the region; hreflang takes language, script and region only" };
+    return {
+      reason:
+        "has subtags after the region; hreflang takes language, script and region only",
+    };
   }
   return null;
 }

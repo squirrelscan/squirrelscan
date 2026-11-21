@@ -6,12 +6,12 @@
 // checker, and not as a redirect hop. The same rules as the internal link
 // probe (link-target-probe.ts).
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -21,7 +21,10 @@ import {
   splitNotRequestedExternalLinks,
   type ExternalLinkOccurrences,
 } from "../src/adapter";
-import { checkExternalLinks, type ExternalCheckResult } from "../src/external-checker";
+import {
+  checkExternalLinks,
+  type ExternalCheckResult,
+} from "../src/external-checker";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -54,7 +57,7 @@ function serve(): { port: string; third: string } {
           `<!doctype html><html><head><title>Fixture</title></head><body>${body}</body></html>`,
           {
             headers: { "content-type": "text/html; charset=utf-8" },
-          },
+          }
         );
       switch (url.pathname) {
         case "/":
@@ -66,34 +69,52 @@ function serve(): { port: string; third: string } {
               `<a href="${third}/short">Short link</a>`,
               `<a href="${third}/moved">Moved</a>`,
               `<a href="${third}/account" rel="nofollow">Log out</a>`,
-            ].join(" "),
+            ].join(" ")
           );
         case "/short":
-          return new Response(null, { status: 302, headers: { location: UNSUBSCRIBE } });
+          return new Response(null, {
+            status: 302,
+            headers: { location: UNSUBSCRIBE },
+          });
         case "/moved":
-          return new Response(null, { status: 301, headers: { location: "/partner" } });
+          return new Response(null, {
+            status: 301,
+            headers: { location: "/partner" },
+          });
         case "/loop":
-          return new Response(null, { status: 302, headers: { location: "/loop" } });
+          return new Response(null, {
+            status: 302,
+            headers: { location: "/loop" },
+          });
         case "/head-404":
           // HEAD refused, so the checker falls back to GET, whose redirect
           // leads into the unsubscribe link.
           return req.method === "HEAD"
             ? new Response(null, { status: 404 })
-            : new Response(null, { status: 302, headers: { location: UNSUBSCRIBE } });
+            : new Response(null, {
+                status: 302,
+                headers: { location: UNSUBSCRIBE },
+              });
         case "/to-mailto":
           return new Response(null, {
             status: 302,
             headers: { location: "mailto:list@example.com" },
           });
         case "/choices":
-          return new Response(null, { status: 300, headers: { location: "/partner" } });
+          return new Response(null, {
+            status: 300,
+            headers: { location: "/partner" },
+          });
         default:
           return html("A page");
       }
     },
   });
   servers.push(server);
-  return { port: String(server.port), third: `http://127.0.0.1:${server.port}` };
+  return {
+    port: String(server.port),
+    third: `http://127.0.0.1:${server.port}`,
+  };
 }
 
 const occurrence = (text = "link", isNofollow = false) => ({
@@ -121,10 +142,17 @@ describe("splitNotRequestedExternalLinks", () => {
       ["https://blog.example.com/how-to-verify-your-domain", [occurrence()]],
       // rel=nofollow on an external link marks a paid or untrusted link, not
       // an action: an affiliate "Buy on Amazon" is still checked.
-      ["https://www.amazon.example.com/dp/B00EXAMPLE", [occurrence("Buy on Amazon", true)]],
-      ["https://social.example.com/squirrelscan", [occurrence("Follow us", true)]],
+      [
+        "https://www.amazon.example.com/dp/B00EXAMPLE",
+        [occurrence("Buy on Amazon", true)],
+      ],
+      [
+        "https://social.example.com/squirrelscan",
+        [occurrence("Follow us", true)],
+      ],
     ]);
-    const { requestable, notRequested } = splitNotRequestedExternalLinks(occurrences);
+    const { requestable, notRequested } =
+      splitNotRequestedExternalLinks(occurrences);
     expect([...requestable.keys()]).toEqual([
       "https://partner.example.com/pricing",
       "https://blog.example.com/how-to-verify-your-domain",
@@ -141,7 +169,7 @@ describe("splitNotRequestedExternalLinks", () => {
         "https://auth.example.com/magic-login/…",
         "https://app.example.com/account",
         "https://shop.example.com/basket",
-      ].sort(),
+      ].sort()
     );
     expect(notRequested.sample[0]).toMatchObject({
       sourcePages: ["https://example.com/"],
@@ -202,7 +230,9 @@ describe("checkExternalLinks redirects", () => {
 
   test("a redirect into an action or token link is not followed: the 3xx is the answer", async () => {
     const { third } = serve();
-    const [result] = await Effect.runPromise(checkExternalLinks([`${third}/short`], null, options));
+    const [result] = await Effect.runPromise(
+      checkExternalLinks([`${third}/short`], null, options)
+    );
     expect(result).toMatchObject({
       status: 302,
       error: null,
@@ -213,37 +243,55 @@ describe("checkExternalLinks redirects", () => {
 
   test("an ordinary redirect is still followed to its end", async () => {
     const { third } = serve();
-    const [result] = await Effect.runPromise(checkExternalLinks([`${third}/moved`], null, options));
-    expect(result).toMatchObject({ status: 200, error: null, redirectTarget: `${third}/partner` });
+    const [result] = await Effect.runPromise(
+      checkExternalLinks([`${third}/moved`], null, options)
+    );
+    expect(result).toMatchObject({
+      status: 200,
+      error: null,
+      redirectTarget: `${third}/partner`,
+    });
     expect(requested).toEqual(["/moved", "/partner"]);
   });
 
   test("the GET fallback's redirect into an action link is not followed either", async () => {
     const { third } = serve();
     const [result] = await Effect.runPromise(
-      checkExternalLinks([`${third}/head-404`], null, options),
+      checkExternalLinks([`${third}/head-404`], null, options)
     );
-    expect(result).toMatchObject({ status: 302, redirectTarget: `${third}${UNSUBSCRIBE}` });
+    expect(result).toMatchObject({
+      status: 302,
+      redirectTarget: `${third}${UNSUBSCRIBE}`,
+    });
     expect(requested).toEqual(["/head-404", "/head-404"]);
   });
 
   test("a Location that is not http(s), and a 300, are answers, not hops", async () => {
     const { third } = serve();
     const results = await Effect.runPromise(
-      checkExternalLinks([`${third}/to-mailto`, `${third}/choices`], null, options),
+      checkExternalLinks(
+        [`${third}/to-mailto`, `${third}/choices`],
+        null,
+        options
+      )
     );
     const byHref = new Map(results.map((r) => [r.href, r]));
     expect(byHref.get(`${third}/to-mailto`)).toMatchObject({
       status: 302,
       redirectTarget: "mailto:list@example.com",
     });
-    expect(byHref.get(`${third}/choices`)).toMatchObject({ status: 300, redirectTarget: null });
+    expect(byHref.get(`${third}/choices`)).toMatchObject({
+      status: 300,
+      redirectTarget: null,
+    });
     expect(requested.sort()).toEqual(["/choices", "/to-mailto"]);
   });
 
   test("a redirect loop is still an error", async () => {
     const { third } = serve();
-    const [result] = await Effect.runPromise(checkExternalLinks([`${third}/loop`], null, options));
+    const [result] = await Effect.runPromise(
+      checkExternalLinks([`${third}/loop`], null, options)
+    );
     expect(result!.status).toBeNull();
     expect(result!.error).toBe("too many redirects");
   });
@@ -257,17 +305,23 @@ describe("checkExternalLinks redirects", () => {
     const results = await Effect.runPromise(
       checkExternalLinks([`${third}${UNSUBSCRIBE}`, `${third}/partner`], null, {
         ...options,
-        egress: { allowPrivateNetwork: true, resolve: async () => ["127.0.0.1"] },
+        egress: {
+          allowPrivateNetwork: true,
+          resolve: async () => ["127.0.0.1"],
+        },
         bulkChecker: async (urls) => {
           bulkAsked.push(urls);
           return new Map<string, ExternalCheckResult>();
         },
-      }),
+      })
     );
     expect(bulkAsked).toEqual([[`${third}/partner`]]);
     expect(requested).toEqual(["/partner"]);
     const byHref = new Map(results.map((r) => [r.href, r]));
-    expect(byHref.get(`${third}${UNSUBSCRIBE}`)).toMatchObject({ status: null, error: null });
+    expect(byHref.get(`${third}${UNSUBSCRIBE}`)).toMatchObject({
+      status: null,
+      error: null,
+    });
   });
 });
 
@@ -285,8 +339,8 @@ describe("the cloud's dead-links service and not-requested links (repo#2759)", (
           status: "running",
           config: {},
           stats: {},
-        } as never),
-      ),
+        } as never)
+      )
     );
     const third = "https://third.example.com";
     const occurrences: ExternalLinkOccurrences = new Map();
@@ -297,7 +351,12 @@ describe("the cloud's dead-links service and not-requested links (repo#2759)", (
       ["/account", "Log out"],
     ] as const) {
       occurrences.set(`${third}${path}`, [
-        { pageUrl: "https://example.com/", text, position: "content" as const, isNofollow: false },
+        {
+          pageUrl: "https://example.com/",
+          text,
+          position: "content" as const,
+          isNofollow: false,
+        },
       ]);
     }
     const bulkAsked: string[] = [];
@@ -306,7 +365,12 @@ describe("the cloud's dead-links service and not-requested links (repo#2759)", (
         storage,
         crawlId,
         occurrences,
-        { enabled: true, concurrency: 1, timeout_ms: 2_000, cache_ttl_days: 1 } as never,
+        {
+          enabled: true,
+          concurrency: 1,
+          timeout_ms: 2_000,
+          cache_ttl_days: 1,
+        } as never,
         undefined,
         null,
         // Answers everything it is asked, so nothing is checked locally.
@@ -315,11 +379,17 @@ describe("the cloud's dead-links service and not-requested links (repo#2759)", (
           return new Map(
             urls.map((url) => [
               url,
-              { href: url, status: 200, error: null, redirectTarget: null, fromCache: false },
-            ]),
+              {
+                href: url,
+                status: 200,
+                error: null,
+                redirectTarget: null,
+                fromCache: false,
+              },
+            ])
           );
-        },
-      ),
+        }
+      )
     );
     expect(bulkAsked).toEqual([`${third}/partner`]);
   });
@@ -344,7 +414,7 @@ describe("an audit with external link checks on (repo#2759)", () => {
           incremental: false,
           useCacheControl: false,
         },
-      }),
+      })
     );
     const crawlId = await Effect.runPromise(crawler.start(home, home));
     const storage = crawler.storage as SQLiteStorage;
@@ -352,7 +422,12 @@ describe("an audit with external link checks on (repo#2759)", () => {
       rule_options: {},
       rules: { enable: ["links/broken-external-links"] },
       crawler: { max_pages: 1, exclude: [] },
-      external_links: { enabled: true, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
+      external_links: {
+        enabled: true,
+        concurrency: 1,
+        timeout_ms: 5_000,
+        cache_ttl_days: 1,
+      },
       internal_links: { enabled: false },
     } as unknown as Config;
     const preRules = await Effect.runPromise(
@@ -368,7 +443,7 @@ describe("an audit with external link checks on (repo#2759)", () => {
             return new Map<string, ExternalCheckResult>();
           },
         },
-      }),
+      })
     );
 
     // Not one request to the unsubscribe link, the signed URL or the
@@ -378,31 +453,40 @@ describe("an audit with external link checks on (repo#2759)", () => {
       expect(requested).not.toContain(path);
       expect(bulkAsked).not.toContain(`${third}${path}`);
     }
-    expect(requested).toEqual(expect.arrayContaining(["/partner", "/short", "/moved"]));
+    expect(requested).toEqual(
+      expect.arrayContaining(["/partner", "/short", "/moved"])
+    );
 
     const ran = await Effect.runPromise(
-      runStreamingRules(storage, crawlId, config, preRules.assets) as Effect.Effect<
+      runStreamingRules(
+        storage,
+        crawlId,
+        config,
+        preRules.assets
+      ) as Effect.Effect<
         { siteRuleResults: Map<string, CheckResult[]> },
         never,
         never
-      >,
+      >
     );
     const checks = ran.siteRuleResults.get("links/broken-external-links") ?? [];
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "broken-external-links:pass",
       "not-requested-external-links:info",
     ]);
-    expect(checks[0]!.message).toBe("3 of 6 external link(s) verified working; 3 could not be verified or were not checked");
+    expect(checks[0]!.message).toBe(
+      "3 of 6 external link(s) verified working; 3 could not be verified or were not checked"
+    );
     const info = checks[1]!;
     expect(info.message).toBe(
-      "3 external link(s) were not requested because they look like actions (log out, unsubscribe) or carry a token or signature in the URL, so their status was not checked",
+      "3 external link(s) were not requested because they look like actions (log out, unsubscribe) or carry a token or signature in the URL, so their status was not checked"
     );
     expect(info.items?.map((i) => i.id).sort()).toEqual(
       [
         `${third}/unsubscribe?token=…`,
         `${third}/files/report.pdf?sig=…`,
         `${third}/account`,
-      ].sort(),
+      ].sort()
     );
   });
 });
@@ -431,20 +515,27 @@ for (const engine of ["v1", "v2"] as const) {
         rule_options: {},
         rules: { enable: ["links/broken-external-links", "links/dead-links"] },
         crawler: { max_pages: 1, exclude: [] },
-        external_links: { enabled: true, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
+        external_links: {
+          enabled: true,
+          concurrency: 1,
+          timeout_ms: 5_000,
+          cache_ttl_days: 1,
+        },
         internal_links: { enabled: false },
       } as unknown as Config;
-      const first = await Effect.runPromise(createCrawler({ config: crawlerConfig }));
+      const first = await Effect.runPromise(
+        createCrawler({ config: crawlerConfig })
+      );
       const storage = first.storage as SQLiteStorage;
       const audit = async (
         crawler: typeof first,
-        afterPreRules?: (crawlId: string) => Promise<void>,
+        afterPreRules?: (crawlId: string) => Promise<void>
       ) => {
         const crawlId = await Effect.runPromise(crawler.start(home, home));
         const pre = await Effect.runPromise(
           runStreamingPreRules(storage, crawlId, config, {
             externalLinks: { config: config.external_links, linkCache: null },
-          }),
+          })
         );
         await afterPreRules?.(crawlId);
         const ran = await Effect.runPromise(
@@ -452,10 +543,25 @@ for (const engine of ["v1", "v2"] as const) {
             if (engine === "v1") {
               const stored = yield* storage.getPages(crawlId);
               const siteContext = yield* buildSiteContext(stored);
-              return yield* runRulesOnStorage(storage, crawlId, siteContext, config, pre.assets);
+              return yield* runRulesOnStorage(
+                storage,
+                crawlId,
+                siteContext,
+                config,
+                pre.assets
+              );
             }
-            return yield* runStreamingRules(storage, crawlId, config, pre.assets);
-          }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+            return yield* runStreamingRules(
+              storage,
+              crawlId,
+              config,
+              pre.assets
+            );
+          }) as unknown as Effect.Effect<
+            { siteRuleResults: Map<string, CheckResult[]> },
+            never,
+            never
+          >
         );
         return { crawlId, ran };
       };
@@ -466,7 +572,8 @@ for (const engine of ["v1", "v2"] as const) {
       // its link text ("Log out"). The next crawl copies the reused page's
       // link rows; it does not copy their appearances.
       const pageUrl =
-        (await Effect.runPromise(storage.getPages(firstId)))[0]?.normalizedUrl ?? home;
+        (await Effect.runPromise(storage.getPages(firstId)))[0]
+          ?.normalizedUrl ?? home;
       const stale = `${third}${UNSUBSCRIBE}`;
       const staleByText = `${third}/account`;
       // pub#770: and a link the check refuses for its address, and one this
@@ -485,17 +592,25 @@ for (const engine of ["v1", "v2"] as const) {
             isInternal: false,
             status: 404,
             checkedAt: Date.now() - 60_000,
-          }),
+          })
         );
         await Effect.runPromise(
           storage.addLinkAppearancesBatch(firstId, [
-            { href, pageUrl, anchorText, position: "content", isNofollow: false },
-          ]),
+            {
+              href,
+              pageUrl,
+              anchorText,
+              position: "content",
+              isNofollow: false,
+            },
+          ])
         );
       }
 
       requested = [];
-      const second = await Effect.runPromise(createCrawler({ config: crawlerConfig, storage }));
+      const second = await Effect.runPromise(
+        createCrawler({ config: crawlerConfig, storage })
+      );
       const { ran } = await audit(second, (crawlId) =>
         // A row older than this run beside an appearance this run wrote: what
         // a link refused after its DNS lookup leaves (the check writes its
@@ -506,21 +621,26 @@ for (const engine of ["v1", "v2"] as const) {
             isInternal: false,
             status: 404,
             checkedAt: 1,
-          }),
-        ),
+          })
+        )
       );
       expect(requested).not.toContain(UNSUBSCRIBE);
       expect(requested).not.toContain("/account");
-      const checks = ran.siteRuleResults.get("links/broken-external-links") ?? [];
+      const checks =
+        ran.siteRuleResults.get("links/broken-external-links") ?? [];
       expect(checks.find((c) => c.status === "warn")).toBeUndefined();
-      for (const c of checks.filter((c) => c.name === "broken-external-links")) {
+      for (const c of checks.filter(
+        (c) => c.name === "broken-external-links"
+      )) {
         expect(c.items?.map((i) => i.id) ?? []).not.toContain(stale);
         expect(c.items?.map((i) => i.id) ?? []).not.toContain(staleByText);
         expect(c.items?.map((i) => i.id) ?? []).not.toContain(staleRefused);
         expect(c.items?.map((i) => i.id) ?? []).not.toContain(staleUnchecked);
       }
       const dead = ran.siteRuleResults.get("links/dead-links") ?? [];
-      expect(dead.map((c) => c.message)).toEqual(["Checked 2 external link(s); none are dead"]);
+      expect(dead.map((c) => c.message)).toEqual([
+        "Checked 2 external link(s); none are dead",
+      ]);
     });
   });
 }

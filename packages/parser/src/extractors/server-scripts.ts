@@ -10,9 +10,8 @@
 // The merge is a pure function of the two documents, so the same page gives the
 // same script set for a fast and a slow render.
 
-import { createHash } from "node:crypto";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { createHash } from "node:crypto";
 
 import { parseHTML } from "../dom";
 
@@ -28,7 +27,14 @@ export const MAX_SERVER_ONLY_INLINE_BYTES = 256 * 1024;
 /** Total inline bytes added to one page. */
 export const MAX_SERVER_ONLY_INLINE_TOTAL_BYTES = 1024 * 1024;
 
-const JS_TYPES = new Set(["", "module", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript"]);
+const JS_TYPES = new Set([
+  "",
+  "module",
+  "text/javascript",
+  "application/javascript",
+  "text/ecmascript",
+  "application/ecmascript",
+]);
 
 function isExecutableScript(type: string | null): boolean {
   return JS_TYPES.has((type ?? "").trim().toLowerCase());
@@ -66,13 +72,18 @@ export function mergeServerOnlyScripts(
   serverHtml: string | undefined | null,
   baseUrl: string
 ): ServerScriptMerge {
-  const unchanged: ServerScriptMerge = { html: renderedHtml, added: 0, omitted: 0 };
+  const unchanged: ServerScriptMerge = {
+    html: renderedHtml,
+    added: 0,
+    omitted: 0,
+  };
   if (!serverHtml || !/<script/i.test(serverHtml)) return unchanged;
 
   const server = parseHTML(serverHtml).document;
-  const serverScripts = querySelectorAllOutsideNoscript(server, "script").filter((el) =>
-    isExecutableScript(el.getAttribute("type"))
-  );
+  const serverScripts = querySelectorAllOutsideNoscript(
+    server,
+    "script"
+  ).filter((el) => isExecutableScript(el.getAttribute("type")));
   if (serverScripts.length === 0) return unchanged;
 
   const rendered = parseHTML(renderedHtml).document;
@@ -115,26 +126,34 @@ export function mergeServerOnlyScripts(
     const size = Buffer.byteLength(text);
     if (
       added >= MAX_SERVER_ONLY_SCRIPTS ||
-      (isInline && (size > MAX_SERVER_ONLY_INLINE_BYTES || inlineBytes + size > MAX_SERVER_ONLY_INLINE_TOTAL_BYTES))
+      (isInline &&
+        (size > MAX_SERVER_ONLY_INLINE_BYTES ||
+          inlineBytes + size > MAX_SERVER_ONLY_INLINE_TOTAL_BYTES))
     ) {
       omitted++;
       continue;
     }
 
     const copy = rendered.createElement("script");
-    for (const attr of Array.from(el.attributes)) copy.setAttribute(attr.name, attr.value);
+    for (const attr of Array.from(el.attributes))
+      copy.setAttribute(attr.name, attr.value);
     copy.setAttribute(SERVER_ONLY_SCRIPT_ATTR, "1");
     if (isInline) {
       copy.textContent = text;
       inlineBytes += size;
     }
     const inHead = !!el.closest("head");
-    const parent = (inHead ? rendered.head : rendered.body) ?? rendered.documentElement;
+    const parent =
+      (inHead ? rendered.head : rendered.body) ?? rendered.documentElement;
     parent.appendChild(copy);
     added++;
   }
 
   if (added === 0 && omitted === 0) return unchanged;
-  if (omitted > 0) rendered.documentElement?.setAttribute(SERVER_SCRIPTS_OMITTED_ATTR, String(omitted));
+  if (omitted > 0)
+    rendered.documentElement?.setAttribute(
+      SERVER_SCRIPTS_OMITTED_ATTR,
+      String(omitted)
+    );
   return { html: rendered.toString(), added, omitted };
 }

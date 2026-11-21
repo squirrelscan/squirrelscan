@@ -5,7 +5,15 @@
 // lines for one edit.
 
 import { describe, expect, test } from "bun:test";
-import type { AuditReport, CheckResult, ComponentOccurrence, ReportRuleResult } from "../src/types";
+
+import type { ComponentFixGroup } from "../src/component-fix-groups";
+import type {
+  AuditReport,
+  CheckResult,
+  ComponentOccurrence,
+  ReportRuleResult,
+} from "../src/types";
+
 import {
   componentFamilyRollups,
   componentFixRollups,
@@ -17,7 +25,6 @@ import {
   fixRollupLine,
   fixUnits,
 } from "../src/component-presentation";
-import type { ComponentFixGroup } from "../src/component-fix-groups";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderText } from "../src/output/text";
@@ -26,7 +33,9 @@ const SITE = "https://example.test";
 const PAGES = Array.from({ length: 14 }, (_, i) => `${SITE}/releases/1.0.${i}`);
 
 /** A group as the grouping stage produces them, plus the additive root key. */
-function group(overrides: Partial<ComponentFixGroup> & { root?: string; value?: string }): ComponentFixGroup {
+function group(
+  overrides: Partial<ComponentFixGroup> & { root?: string; value?: string }
+): ComponentFixGroup {
   const { root, value, ...rest } = overrides;
   const base = {
     id: `component-fix:${(value ?? "x").padEnd(32, "0").slice(0, 32)}`,
@@ -35,8 +44,15 @@ function group(overrides: Partial<ComponentFixGroup> & { root?: string; value?: 
     attribution: "repeated-subtree" as const,
     affectedPages: PAGES,
     affectedPageCount: PAGES.length,
-    region: { role: "main" as const, nestedIn: "none" as const, structuralSignature: "s128:r" },
-    element: { locator: "main:1>main>div:1>a:1", structuralSignature: "s128:e" },
+    region: {
+      role: "main" as const,
+      nestedIn: "none" as const,
+      structuralSignature: "s128:r",
+    },
+    element: {
+      locator: "main:1>main>div:1>a:1",
+      structuralSignature: "s128:e",
+    },
     semanticSlot: "main:1>main>div:1>a:1",
     defect: {
       kind: "link-text-generic" as const,
@@ -47,13 +63,23 @@ function group(overrides: Partial<ComponentFixGroup> & { root?: string; value?: 
     ...rest,
   } as ComponentFixGroup;
   // Terra's additive key; read optionally by the rollup.
-  return root === undefined ? base : ({ ...base, componentRootKey: root } as ComponentFixGroup);
+  return root === undefined
+    ? base
+    : ({ ...base, componentRootKey: root } as ComponentFixGroup);
 }
 
 describe("rolling up one block", () => {
   test("seven per-button groups become one unit", () => {
-    const groups = ["download", "download", "download", "download", "download", "get", "get"].map(
-      (value, i) => group({ root: "install-block", value: `${value}${i}` }),
+    const groups = [
+      "download",
+      "download",
+      "download",
+      "download",
+      "download",
+      "get",
+      "get",
+    ].map((value, i) =>
+      group({ root: "install-block", value: `${value}${i}` })
     );
     const rollups = componentFixRollups(groups);
     expect(rollups).toHaveLength(1);
@@ -82,18 +108,22 @@ describe("rolling up one block", () => {
       componentFixRollups([
         group({ root: "install-block", value: "a" }),
         group({ root: "footer-block", value: "b" }),
-      ]),
+      ])
     ).toHaveLength(2);
   });
 
   test("without a root key each group stands alone", () => {
     // The key is what establishes "same component". Guessing one from the
     // locator would merge unrelated blocks that happen to sit at the same depth.
-    expect(componentFixRollups([group({ value: "a" }), group({ value: "b" })])).toHaveLength(2);
+    expect(
+      componentFixRollups([group({ value: "a" }), group({ value: "b" })])
+    ).toHaveLength(2);
   });
 
   test("a single-member rollup is worded exactly like the group", () => {
-    const one = componentFixRollups([group({ root: "install-block", value: "download" })]);
+    const one = componentFixRollups([
+      group({ root: "install-block", value: "download" }),
+    ]);
     expect(one).toHaveLength(1);
     expect(one[0]!.groups).toHaveLength(1);
   });
@@ -109,25 +139,44 @@ function report(groups: ComponentFixGroup[]): AuditReport {
   }));
   const rule: ReportRuleResult = {
     meta: {
-      id: "a11y/link-text", name: "Link text", description: "d", solution: "s",
-      category: "accessibility", scope: "page", severity: "warning", weight: 1,
+      id: "a11y/link-text",
+      name: "Link text",
+      description: "d",
+      solution: "s",
+      category: "accessibility",
+      scope: "page",
+      severity: "warning",
+      weight: 1,
     },
     checks,
   };
   const built = {
-    baseUrl: SITE, timestamp: "2026-09-19T00:00:00.000Z", totalPages: PAGES.length,
-    passed: 0, warnings: checks.length, failed: 0, ruleResults: { "a11y/link-text": rule },
-    healthScore: { overall: 80, categories: [], groups: [], errorCount: 0, warningCount: 1, passedCount: 0 },
+    baseUrl: SITE,
+    timestamp: "2026-09-19T00:00:00.000Z",
+    totalPages: PAGES.length,
+    passed: 0,
+    warnings: checks.length,
+    failed: 0,
+    ruleResults: { "a11y/link-text": rule },
+    healthScore: {
+      overall: 80,
+      categories: [],
+      groups: [],
+      errorCount: 0,
+      warningCount: 1,
+      passedCount: 0,
+    },
   } as unknown as AuditReport;
   // The grouping stage derives groups from evidence; here they are supplied
   // directly so the rollup can be exercised before that field exists upstream.
-  (built as unknown as { __fixGroups: ComponentFixGroup[] }).__fixGroups = groups;
+  (built as unknown as { __fixGroups: ComponentFixGroup[] }).__fixGroups =
+    groups;
   return built;
 }
 
 describe("rendered output", () => {
   const groups = Array.from({ length: 7 }, (_, i) =>
-    group({ root: "install-block", value: i < 5 ? "download" : `get${i}` }),
+    group({ root: "install-block", value: i < 5 ? "download" : `get${i}` })
   );
 
   test("one line stands in for seven groups", () => {
@@ -143,7 +192,9 @@ describe("rendered output", () => {
     // 98 described the evidence; the fix is seven links in one block.
     const [rollup] = componentFixRollups(groups);
     expect(rollup!.elementCount).toBe(98);
-    expect(describeRollupDefect(rollup!)).toContain("7 links with generic text");
+    expect(describeRollupDefect(rollup!)).toContain(
+      "7 links with generic text"
+    );
     // No "in one shared block" suffix: the prefix on every surface says it.
     expect(describeRollupDefect(rollup!)).not.toContain("in one shared block");
     expect(describeRollupDefect(rollup!)).not.toContain("98");
@@ -160,7 +211,10 @@ describe("rendered output", () => {
 
   test("label precedence is heading, then aria-label, then id", () => {
     const make = (hint: Record<string, string>) =>
-      describeRoot({ ...groups[0]!, rootHint: hint } as unknown as ComponentFixGroup);
+      describeRoot({
+        ...groups[0]!,
+        rootHint: hint,
+      } as unknown as ComponentFixGroup);
     expect(make({ heading: "H", ariaLabel: "A", id: "i" })).toBe('"H"');
     expect(make({ ariaLabel: "A", id: "i" })).toBe('"A"');
     expect(make({ id: "i" })).toBe("#i");
@@ -174,13 +228,17 @@ describe("rendered output", () => {
     })) as ComponentFixGroup[];
     const [rollup] = componentFixRollups(withHint);
     const line = fixRollupLine(rollup!, 3, (p) => new URL(p).pathname);
-    expect(line).toContain('Likely one shared block ("Download squirrel") in the main content:');
+    expect(line).toContain(
+      'Likely one shared block ("Download squirrel") in the main content:'
+    );
     // One element's slot describes none of the other six.
     expect(line).not.toContain("main:1>main>div:1>a:1");
   });
 
   test("a single-group rollup keeps its slot: one element, however many pages", () => {
-    const [rollup] = componentFixRollups([group({ root: "install-block", value: "download" })]);
+    const [rollup] = componentFixRollups([
+      group({ root: "install-block", value: "download" }),
+    ]);
     const line = fixRollupLine(rollup!, 3, (p) => new URL(p).pathname);
     expect(line).toContain("(div:1 > a:1)");
   });
@@ -217,12 +275,19 @@ describe("family rollup: one component in two structural variants", () => {
       },
       componentFamilyKey: "family-nav",
       attribution: "observed-component-evidence" as const,
-      region: { role: "navigation" as const, nestedIn: "none" as const, structuralSignature: "s128:n" },
+      region: {
+        role: "navigation" as const,
+        nestedIn: "none" as const,
+        structuralSignature: "s128:n",
+      },
     } as Parameters<typeof group>[0]);
   }
 
   test("equal slot counts merge into one unit over the union of pages", () => {
-    const units = fixUnits([variant(NAV_A, "nav>a:1"), variant(NAV_B, "nav>ul:1>a:1")]);
+    const units = fixUnits([
+      variant(NAV_A, "nav>a:1"),
+      variant(NAV_B, "nav>ul:1>a:1"),
+    ]);
     expect(units).toHaveLength(1);
     expect(units[0]!.level).toBe("family");
     expect(units[0]!.variantCount).toBe(2);
@@ -230,7 +295,7 @@ describe("family rollup: one component in two structural variants", () => {
     const line = fixRollupLine(units[0]!, 3, (p) => new URL(p).pathname);
     expect(line).toBe(
       'Fix once in the navigation (2 variants): 2 links with generic text "log in", ' +
-        "14 pages: /releases/1.0.0, /releases/1.0.1, /releases/1.0.10 (+11 more)",
+        "14 pages: /releases/1.0.0, /releases/1.0.1, /releases/1.0.10 (+11 more)"
     );
   });
 
@@ -239,8 +304,14 @@ describe("family rollup: one component in two structural variants", () => {
     // merging would claim a repair one variant does not have.
     // Same root key, so these two slots merge into ONE two-slot unit.
     const two = componentFixRollups([
-      { ...variant(NAV_A, "nav>a:1"), componentRootKey: "shared-root" } as ComponentFixGroup,
-      { ...variant(NAV_A, "nav>a:2"), componentRootKey: "shared-root" } as ComponentFixGroup,
+      {
+        ...variant(NAV_A, "nav>a:1"),
+        componentRootKey: "shared-root",
+      } as ComponentFixGroup,
+      {
+        ...variant(NAV_A, "nav>a:2"),
+        componentRootKey: "shared-root",
+      } as ComponentFixGroup,
     ]);
     expect(two).toHaveLength(1);
     const one = componentFixRollups([variant(NAV_B, "nav>ul:1>a:1")]);
@@ -257,11 +328,15 @@ describe("family rollup: one component in two structural variants", () => {
 
   test("a single variant is byte-identical to today", () => {
     const single = variant(NAV_A, "nav>a:1");
-    const withFamily = fixRollupLine(fixUnits([single])[0]!, 3, (p) => new URL(p).pathname);
+    const withFamily = fixRollupLine(
+      fixUnits([single])[0]!,
+      3,
+      (p) => new URL(p).pathname
+    );
     const plain = fixRollupLine(
       componentFixRollups([single])[0]!,
       3,
-      (p) => new URL(p).pathname,
+      (p) => new URL(p).pathname
     );
     expect(withFamily).toBe(plain);
     expect(withFamily).not.toContain("variants");
@@ -269,8 +344,16 @@ describe("family rollup: one component in two structural variants", () => {
 
   test("no family key keeps every unit apart", () => {
     const noKey = (pages: string[], slot: string) =>
-      group({ root: `r-${slot}`, value: "log in", affectedPages: pages, affectedPageCount: pages.length, semanticSlot: slot } as Parameters<typeof group>[0]);
-    expect(fixUnits([noKey(NAV_A, "nav>a:1"), noKey(NAV_B, "nav>ul:1>a:1")])).toHaveLength(2);
+      group({
+        root: `r-${slot}`,
+        value: "log in",
+        affectedPages: pages,
+        affectedPageCount: pages.length,
+        semanticSlot: slot,
+      } as Parameters<typeof group>[0]);
+    expect(
+      fixUnits([noKey(NAV_A, "nav>a:1"), noKey(NAV_B, "nav>ul:1>a:1")])
+    ).toHaveLength(2);
   });
 });
 
@@ -283,18 +366,43 @@ describe("packed evidence tables are complete in JSON", () => {
       provenance: { source: "page-dom" as const, rendered: true },
       groupable: true,
       confidence: "observed" as const,
-      region: { role: "footer" as const, nestedIn: "none" as const, structuralSignature: "s128:r" },
+      region: {
+        role: "footer" as const,
+        nestedIn: "none" as const,
+        structuralSignature: "s128:r",
+      },
       family: { key: "s128:f", structuralSignature: "s128:f" },
-      variant: { key: "s128:v", structuralSignature: "s128:v", contentHash: "s128:c" },
-      element: { locator: "footer:1>footer>a:1", structuralSignature: "s128:e" },
-      defect: { kind: "link-text-generic" as const, values: { normalizedText: "download" }, valueHashes: {} },
+      variant: {
+        key: "s128:v",
+        structuralSignature: "s128:v",
+        contentHash: "s128:c",
+      },
+      element: {
+        locator: "footer:1>footer>a:1",
+        structuralSignature: "s128:e",
+      },
+      defect: {
+        kind: "link-text-generic" as const,
+        values: { normalizedText: "download" },
+        valueHashes: {},
+      },
     };
     return withLadder
       ? ({
           ...base,
           subtreeCandidates: [
-            { level: 1, skeletonSignature: "s128:l1", textShareOfRegion: 0.5, locatorFromRoot: "div:1>a:1" },
-            { level: 2, skeletonSignature: "s128:l2", textShareOfRegion: 0.9, locatorFromRoot: "a:1" },
+            {
+              level: 1,
+              skeletonSignature: "s128:l1",
+              textShareOfRegion: 0.5,
+              locatorFromRoot: "div:1>a:1",
+            },
+            {
+              level: 2,
+              skeletonSignature: "s128:l2",
+              textShareOfRegion: 0.9,
+              locatorFromRoot: "a:1",
+            },
           ],
         } as unknown as ComponentOccurrence)
       : (base as ComponentOccurrence);
@@ -311,15 +419,33 @@ describe("packed evidence tables are complete in JSON", () => {
     }));
     const rule: ReportRuleResult = {
       meta: {
-        id: "a11y/link-text", name: "Link text", description: "d", solution: "s",
-        category: "accessibility", scope: "page", severity: "warning", weight: 1,
+        id: "a11y/link-text",
+        name: "Link text",
+        description: "d",
+        solution: "s",
+        category: "accessibility",
+        scope: "page",
+        severity: "warning",
+        weight: 1,
       },
       checks,
     };
     return {
-      baseUrl: SITE, timestamp: "2026-09-19T00:00:00.000Z", totalPages: 3,
-      passed: 0, warnings: 3, failed: 0, ruleResults: { "a11y/link-text": rule },
-      healthScore: { overall: 80, categories: [], groups: [], errorCount: 0, warningCount: 1, passedCount: 0 },
+      baseUrl: SITE,
+      timestamp: "2026-09-19T00:00:00.000Z",
+      totalPages: 3,
+      passed: 0,
+      warnings: 3,
+      failed: 0,
+      ruleResults: { "a11y/link-text": rule },
+      healthScore: {
+        overall: 80,
+        categories: [],
+        groups: [],
+        errorCount: 0,
+        warningCount: 1,
+        passedCount: 0,
+      },
     } as unknown as AuditReport;
   }
 

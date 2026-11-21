@@ -6,13 +6,17 @@
 // unrelated findings) and (b) degrade gracefully — never throw — on a
 // non-parseable id.
 
-import { describe, expect, test } from "bun:test";
-
 import { clampItemId } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { describe, expect, test } from "bun:test";
 
 import type { CheckResult } from "../src/types";
-import { checkAffectedPages, isPageUrl, ruleAffectedPages } from "../src/affected-pages";
+
+import {
+  checkAffectedPages,
+  isPageUrl,
+  ruleAffectedPages,
+} from "../src/affected-pages";
 import { getPathname } from "../src/url";
 import { sanitizeUrl } from "../src/utils";
 
@@ -24,7 +28,10 @@ const sharedPrefix = "https://example.com/" + "a".repeat(CAP);
 const urlA = clampItemId(sharedPrefix + "/alpha", CAP);
 const urlB = clampItemId(sharedPrefix + "/bravo", CAP);
 // A `data:` URL id (a real rule-emitted id class) — not a page URL.
-const dataId = clampItemId("data:image/png;base64," + "Q".repeat(CAP + 500), CAP);
+const dataId = clampItemId(
+  "data:image/png;base64," + "Q".repeat(CAP + 500),
+  CAP
+);
 
 describe("clamped id downstream integrity (#1228)", () => {
   test("two oversize page-URL ids sharing a >cap prefix stay distinct after clamping", () => {

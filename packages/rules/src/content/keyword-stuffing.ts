@@ -1,17 +1,32 @@
 // content/keyword-stuffing - Excessive keyword repetition detection
 
+import { getDocumentPlacer } from "@squirrelscan/parser";
 import { getDomainWithoutSuffix } from "tldts";
 import { z } from "zod";
 
-import { getDocumentPlacer } from "@squirrelscan/parser";
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  ParsedPage,
+} from "../types";
 
 import { primaryLangSubtag } from "../shared/generic-link-phrases";
-import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
-import { getRenderedProseText, getRenderedProseTextWhere } from "./text-content";
+import {
+  getRenderedProseText,
+  getRenderedProseTextWhere,
+} from "./text-content";
 
 export const optionsSchema = z.object({
-  density_threshold: z.number().default(3).describe("Keyword density percentage threshold"),
-  min_occurrences: z.number().default(5).describe("Minimum word occurrences to flag"),
+  density_threshold: z
+    .number()
+    .default(3)
+    .describe("Keyword density percentage threshold"),
+  min_occurrences: z
+    .number()
+    .default(5)
+    .describe("Minimum word occurrences to flag"),
   whitelist: z
     .array(z.string())
     .default([])
@@ -36,7 +51,7 @@ const COMMON_WORDS = wordSet(
   // ordinary pages, never as a real SEO target.
   "your our his her its who whom whose get here very such same each any all most much many even still yet",
   // `out` (#1315): "out of stock", "check out" on every product page.
-  "out",
+  "out"
 );
 
 // Price-note boilerplate repeated beside every product on English shops
@@ -53,42 +68,42 @@ const LANGUAGE_STOP_WORDS = new Map<string, ReadonlySet<string>>([
       "vom von war waren was wenn wer wie wir wird zum zur inkl mwst zzgl versandkosten",
       // Formal and informal address and common pronouns (#1315): "Sie" in every sentence of a
       // service page, "für" everywhere. Words under three characters are never tokens.
-      "sie für dich dir deinen deinem deiner deines ihn ihm ihnen ihren ihrem ihrer",
+      "sie für dich dir deinen deinem deiner deines ihn ihm ihnen ihren ihrem ihrer"
     ),
   ],
   [
     "es",
     wordSet(
       "algo algunas algunos ante antes aquel aqui bajo bien cada como con contra cual cuando del desde donde durante ella ellas ellos entre era eran esta estas este estos fue fueron",
-      "hacia hasta hay las los mas mientras muy nada nos nosotros otra otras otro otros para pero poco por porque que quien ser sin sobre son sus tanto tiene todo todos una unas uno unos",
+      "hacia hasta hay las los mas mientras muy nada nos nosotros otra otras otro otros para pero poco por porque que quien ser sin sobre son sus tanto tiene todo todos una unas uno unos"
     ),
   ],
   [
     "fr",
     wordSet(
       "alors aucun aussi autre aux avec avoir car ceci cela ces cette comme dans des donc elle elles encore entre est eux faire fois ils les leur leurs mais mes moins mon nos notre nous",
-      "par parce pas peut plus pourquoi quand que quel quelle qui sans ses son sont sous sur tous tout tres une vos votre vous",
+      "par parce pas peut plus pourquoi quand que quel quelle qui sans ses son sont sous sur tous tout tres une vos votre vous"
     ),
   ],
   [
     "pt",
     wordSet(
       "ainda algo algumas alguns assim ate bem cada como com contra das dela dele deles depois desde dos durante ela elas ele eles entre essa essas esse esses esta estas este estes foi foram",
-      "isso isto mais mas mesmo muito nao nas nos nossa nosso numa onde outra outras outro outros para pela pelas pelo pelos por porque qual quando que quem sem ser seus sua suas sobre sao tem todo todos uma umas uns voce voces",
+      "isso isto mais mas mesmo muito nao nas nos nossa nosso numa onde outra outras outro outros para pela pelas pelo pelos por porque qual quando que quem sem ser seus sua suas sobre sao tem todo todos uma umas uns voce voces"
     ),
   ],
   [
     "it",
     wordSet(
       "alcune alcuni altro anche ancora avere che chi come con contro cui dagli dai dal dalla dalle degli dei del della delle dentro deve dove due era erano essere fare fra gli hanno lei loro",
-      "mai molto nei nel nella nelle noi non ogni per pero piu quale quando questa queste questi questo sara senza sia siamo sono sua sue sul sulla tra tutti tutto una uno voi",
+      "mai molto nei nel nella nelle noi non ogni per pero piu quale quando questa queste questi questo sara senza sia siamo sono sua sue sul sulla tra tutti tutto una uno voi"
     ),
   ],
   [
     "nl",
     wordSet(
       "aan alle als bij dan dat deze die dit door een had hebben heeft hem het hier hij hoe hun kan maar meer met mij moet naar niet nog ook ons onze over tot uit van veel voor want",
-      "waren was wat wel werd worden zal zijn zonder zou",
+      "waren was wat wel werd worden zal zijn zonder zou"
     ),
   ],
 ]);
@@ -165,7 +180,12 @@ function hasUnsupportedScriptMajority(words: readonly string[]): boolean {
 }
 
 const CHROME_TAGS = new Set(["header", "nav", "footer", "aside"]);
-const CHROME_ROLES = new Set(["banner", "navigation", "contentinfo", "complementary"]);
+const CHROME_ROLES = new Set([
+  "banner",
+  "navigation",
+  "contentinfo",
+  "complementary",
+]);
 const CONTENT_REGION_TAGS = new Set(["article", "section"]);
 
 function isPageChrome(el: Element): boolean {
@@ -191,7 +211,9 @@ function isSiteChrome(el: Element, root: Element): boolean {
   return true;
 }
 
-function createSiteChromeAncestorTest(root: Element): (element: Element) => boolean {
+function createSiteChromeAncestorTest(
+  root: Element
+): (element: Element) => boolean {
   const known = new WeakMap<Element, boolean>();
   return (element) => {
     const passed: Element[] = [];
@@ -234,18 +256,29 @@ const LINK_CLOUD_SAMPLE = 60;
  * dropdown sets (`aria-haspopup`, `aria-expanded`). Class and id names (`nav`, `menu`) and a plain
  * `ul > li` are NOT signals: anyone can write them, and a keyword spammer would.
  */
-function hasMenuSignal(element: Element, body: Element, cache: WeakMap<Element, boolean>): boolean {
+function hasMenuSignal(
+  element: Element,
+  body: Element,
+  cache: WeakMap<Element, boolean>
+): boolean {
   const known = cache.get(element);
   if (known !== undefined) return known;
   let answer = false;
   let current: Element | null = element;
-  for (let depth = 0; current && current !== body && depth < 4; depth++, current = current.parentElement) {
+  for (
+    let depth = 0;
+    current && current !== body && depth < 4;
+    depth++, current = current.parentElement
+  ) {
     const role = current.getAttribute?.("role")?.toLowerCase();
     if (role === "menu" || role === "menubar" || role === "navigation") {
       answer = true;
       break;
     }
-    if (current.hasAttribute?.("aria-haspopup") || current.hasAttribute?.("aria-expanded")) {
+    if (
+      current.hasAttribute?.("aria-haspopup") ||
+      current.hasAttribute?.("aria-expanded")
+    ) {
       answer = true;
       break;
     }
@@ -259,7 +292,8 @@ function isKeywordCloud(labels: readonly string[]): boolean {
   if (labels.length === 0) return false;
   const counts = new Map<string, number>();
   for (const label of labels) {
-    for (const word of new Set(keywordTokens(label))) counts.set(word, (counts.get(word) ?? 0) + 1);
+    for (const word of new Set(keywordTokens(label)))
+      counts.set(word, (counts.get(word) ?? 0) + 1);
   }
   let top = 0;
   for (const n of counts.values()) if (n > top) top = n;
@@ -275,15 +309,27 @@ function isKeywordCloud(labels: readonly string[]): boolean {
  * repeats one anchor ("emergency plumber" x20), or a cloud of keyword links, still counts.
  */
 function createLinkListTest(body: Element): (element: Element) => boolean {
-  type Stats = { links: number; chars: number; labels: Set<string>; sample: string[] };
+  type Stats = {
+    links: number;
+    chars: number;
+    labels: Set<string>;
+    sample: string[];
+  };
   const stats = new Map<Element, Stats>();
   let seen = 0;
   for (const a of body.querySelectorAll("a")) {
     if (++seen > LINK_LIST_MAX_ANCHORS) break;
-    const label = (a.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const label = (a.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
     if (!label) continue;
     let current: Element | null = a.parentElement;
-    for (let depth = 0; current && current !== body && depth < LINK_LIST_MAX_DEPTH; depth++, current = current.parentElement) {
+    for (
+      let depth = 0;
+      current && current !== body && depth < LINK_LIST_MAX_DEPTH;
+      depth++, current = current.parentElement
+    ) {
       let entry = stats.get(current);
       if (!entry) {
         entry = { links: 0, chars: 0, labels: new Set(), sample: [] };
@@ -300,10 +346,16 @@ function createLinkListTest(body: Element): (element: Element) => boolean {
   for (const [element, entry] of stats) {
     // Cheapest tests first: counts, then the signal (attributes only, cached), then the keyword cloud, and
     // only then the text of the element (a giant ancestor's text is not read for every candidate).
-    if (entry.links < LINK_LIST_MIN_LINKS || entry.labels.size < LINK_LIST_MIN_LABELS) continue;
-    if (!hasMenuSignal(element, body, signals) || isKeywordCloud(entry.sample)) continue;
+    if (
+      entry.links < LINK_LIST_MIN_LINKS ||
+      entry.labels.size < LINK_LIST_MIN_LABELS
+    )
+      continue;
+    if (!hasMenuSignal(element, body, signals) || isKeywordCloud(entry.sample))
+      continue;
     const textChars = (element.textContent || "").replace(/\s/g, "").length;
-    if (textChars > 0 && entry.chars >= textChars * LINK_LIST_TEXT_SHARE) lists.add(element);
+    if (textChars > 0 && entry.chars >= textChars * LINK_LIST_TEXT_SHARE)
+      lists.add(element);
   }
   const known = new WeakMap<Element, boolean>();
   return (element) => {
@@ -329,7 +381,13 @@ function createLinkListTest(body: Element): (element: Element) => boolean {
 }
 
 /** Region labels the page classifier gives to site furniture (page-classifier `SITE_CHROME_CLASSES` plus its group label). */
-const MODEL_CHROME_REGIONS = new Set(["site_header", "navigation", "footer", "sidebar", "site_chrome"]);
+const MODEL_CHROME_REGIONS = new Set([
+  "site_header",
+  "navigation",
+  "footer",
+  "sidebar",
+  "site_chrome",
+]);
 
 /**
  * Which elements the page classifier placed in site chrome (repo#3544), or null when this page was
@@ -338,7 +396,7 @@ const MODEL_CHROME_REGIONS = new Set(["site_header", "navigation", "footer", "si
  */
 function createModelChromeTest(
   doc: NonNullable<ParsedPage["document"]>,
-  regions: ReadonlySet<string> = MODEL_CHROME_REGIONS,
+  regions: ReadonlySet<string> = MODEL_CHROME_REGIONS
 ): ((element: Element) => boolean) | null {
   const place = getDocumentPlacer(doc);
   if (!place) return null;
@@ -349,7 +407,10 @@ function createModelChromeTest(
     let answer = false;
     try {
       const placement = place(element);
-      answer = !!placement?.region && regions.has(placement.region.label) && !placement.truncated;
+      answer =
+        !!placement?.region &&
+        regions.has(placement.region.label) &&
+        !placement.truncated;
     } catch {
       answer = false;
     }
@@ -367,7 +428,7 @@ interface ContentSelection {
 function selectMainContent(
   doc: NonNullable<ParsedPage["document"]>,
   body: Element,
-  isModelChrome: ((element: Element) => boolean) | null,
+  isModelChrome: ((element: Element) => boolean) | null
 ): ContentSelection {
   const isInSiteChrome = createSiteChromeAncestorTest(body);
   let largest: { readonly root: Element; readonly words: string[] } | undefined;
@@ -382,9 +443,12 @@ function selectMainContent(
     if (measuredMainLandmarks >= MAX_MAIN_LANDMARK_CANDIDATES) break;
     measuredMainLandmarks += 1;
     const words = keywordTokens(
-      isModelChrome ? getRenderedProseTextWhere(root, isModelChrome) : getRenderedProseText(root),
+      isModelChrome
+        ? getRenderedProseTextWhere(root, isModelChrome)
+        : getRenderedProseText(root)
     );
-    if (!largest || words.length > largest.words.length) largest = { root, words };
+    if (!largest || words.length > largest.words.length)
+      largest = { root, words };
   }
   if (largest && largest.words.length >= 100) {
     return { ...largest, isInExcludedChrome: isModelChrome };
@@ -396,14 +460,19 @@ function selectMainContent(
   if (articles.length === 1 && !isInSiteChrome(articles[0])) {
     const root = articles[0];
     const words = keywordTokens(
-      isModelChrome ? getRenderedProseTextWhere(root, isModelChrome) : getRenderedProseText(root),
+      isModelChrome
+        ? getRenderedProseTextWhere(root, isModelChrome)
+        : getRenderedProseText(root)
     );
-    if (words.length >= 100) return { root, words, isInExcludedChrome: isModelChrome };
+    if (words.length >= 100)
+      return { root, words, isInExcludedChrome: isModelChrome };
   }
 
   const isInLinkList = createLinkListTest(body);
   const isExcluded = (element: Element): boolean =>
-    isInSiteChrome(element) || isInLinkList(element) || (isModelChrome?.(element) ?? false);
+    isInSiteChrome(element) ||
+    isInLinkList(element) ||
+    (isModelChrome?.(element) ?? false);
   const words = keywordTokens(getRenderedProseTextWhere(body, isExcluded));
   return { root: body, words, isInExcludedChrome: isExcluded };
 }
@@ -425,7 +494,9 @@ export function brandTerms(
   const terms = new Set<string>();
   let label = "";
   try {
-    label = (getDomainWithoutSuffix(new URL(pageUrl).hostname) || "").toLowerCase();
+    label = (
+      getDomainWithoutSuffix(new URL(pageUrl).hostname) || ""
+    ).toLowerCase();
   } catch {
     return terms;
   }
@@ -499,8 +570,14 @@ const CARD_RAW_DENSITY_LIMIT = 10;
  *
  * Linear in the page: each leaf is read once, with no parent text read at all.
  */
-function repeatedCardText(root: Element, excluded: ((element: Element) => boolean) | null): Map<string, number> {
-  const byText = new Map<string, { count: number; parents: Set<Element>; raws: Set<string> }>();
+function repeatedCardText(
+  root: Element,
+  excluded: ((element: Element) => boolean) | null
+): Map<string, number> {
+  const byText = new Map<
+    string,
+    { count: number; parents: Set<Element>; raws: Set<string> }
+  >();
   let scanned = 0;
   let candidates = 0;
   for (const el of root.querySelectorAll(CARD_TEXT_SELECTOR)) {
@@ -531,8 +608,10 @@ function repeatedCardText(root: Element, excluded: ((element: Element) => boolea
   }
   const out = new Map<string, number>();
   for (const [text, entry] of byText) {
-    const varies = entry.raws.size >= 2 && entry.parents.size >= CARD_MIN_PARENTS;
-    if (varies || entry.parents.size >= CARD_IDENTICAL_MIN_PARENTS) out.set(text, entry.count);
+    const varies =
+      entry.raws.size >= 2 && entry.parents.size >= CARD_MIN_PARENTS;
+    if (varies || entry.parents.size >= CARD_IDENTICAL_MIN_PARENTS)
+      out.set(text, entry.count);
   }
   return out;
 }
@@ -565,205 +644,231 @@ export const keywordStuffingRule: Rule = {
 };
 
 function runDensity(ctx: RuleContext): RuleResult {
-    const opts = optionsSchema.parse(ctx.options);
-    const checks: CheckResult[] = [];
-    const doc = ctx.parsed.document;
-    if (!doc) return { checks: [] };
+  const opts = optionsSchema.parse(ctx.options);
+  const checks: CheckResult[] = [];
+  const doc = ctx.parsed.document;
+  if (!doc) return { checks: [] };
 
-    // Get text content
-    const body = doc.querySelector("body");
-    if (!body) {
-      checks.push({
-        name: "keyword-stuffing",
-        status: "skipped",
-        message: "No body content to analyze",
-      });
-      return { checks };
-    }
-
-    const pageLanguage = primaryLangSubtag(doc.documentElement?.getAttribute("lang"));
-    const pageStopWords = LANGUAGE_STOP_WORDS.get(pageLanguage);
-    const usesEnglishPriceNotes = pageLanguage === "" || pageLanguage === "en";
-
-    // Prefer substantial main copy. Otherwise retain body copy but drop only
-    // site-wide chrome, not headers and footers inside articles or sections.
-    // Both paths are non-mutating because every rule shares this document.
-    const isModelChrome = createModelChromeTest(doc);
-    const { root: contentRoot, words, isInExcludedChrome } = selectMainContent(doc, body, isModelChrome);
-
-    // A lang attribute is page-controlled and must not turn off a scored rule.
-    // Skip only when the measured copy itself is predominantly written in a
-    // script for which the rule has no function-word list (#1232).
-    if (hasUnsupportedScriptMajority(words)) {
-      checks.push({
-        name: "keyword-stuffing",
-        status: "skipped",
-        message: "Most content uses a script without a function-word list",
-      });
-      return { checks };
-    }
-
-    if (words.length < 100) {
-      checks.push({
-        name: "keyword-stuffing",
-        status: "info",
-        message: "Content too short for keyword density analysis",
-        details: { inconclusive: true },
-      });
-      return { checks };
-    }
-
-    // Count word frequency
-    const wordCounts = new Map<string, number>();
-    for (const word of words) {
-      wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
-    }
-
-    // Find words with high density, excluding English common words and the
-    // grammatical filler for the page's declared language (#1042).
-    // Repeated generic nav/CTA labels ("Learn more" x11 cards) are a UI
-    // component, not organic content — don't count their words toward
-    // density (#695). Deliberately an ALLOWLIST of known boilerplate phrases
-    // (not "any repeated short anchor text"): a spam page repeating a real
-    // commercial keyword as anchor text ("emergency plumber" x20) must still
-    // count fully toward density, so genuine anchor-text stuffing still flags.
-    const GENERIC_CTA_LABELS = new Set([
-      "learn more",
-      "read more",
-      "see more",
-      "view more",
-      "show more",
-      "load more",
-      "find out more",
-      "get started",
-      "sign up",
-      "sign in",
-      "log in",
-      "contact us",
-      "click here",
-      "shop now",
-      "buy now",
-      "add to cart",
-      "view details",
-      "view all",
-      "see all",
-      "book now",
-      "get a quote",
-      "request a quote",
-      "subscribe",
-      "join now",
-      "try for free",
-      "try it free",
-      "get in touch",
-      "call now",
-      "download now",
-      "next page",
-      "previous page",
-      "back to top",
-    ]);
-    const ctaLabelCounts = new Map<string, number>();
-    for (const el of contentRoot.querySelectorAll("a, button")) {
-      if (isInExcludedChrome?.(el)) continue;
-      // Nested <a><button>Learn more</button></a> matches BOTH elements but
-      // renders the phrase once — count only the outermost (review, #695).
-      if (el.parentElement?.closest("a, button")) continue;
-      const label = (el.textContent || "").trim().toLowerCase().replace(/\s+/g, " ");
-      if (!GENERIC_CTA_LABELS.has(label)) continue;
-      ctaLabelCounts.set(label, (ctaLabelCounts.get(label) || 0) + 1);
-    }
-
-    const ctaWordDeductions = new Map<string, number>();
-    let ctaWordTotal = 0;
-    for (const [label, occurrences] of ctaLabelCounts) {
-      for (const word of keywordTokens(label)) {
-        ctaWordDeductions.set(word, (ctaWordDeductions.get(word) || 0) + occurrences);
-        ctaWordTotal += occurrences;
-      }
-    }
-
-    // Rating and price text repeated once per card (#1315) is a UI component, not copy aimed at a
-    // term. Bounded (see repeatedCardText): clamped to a share of the words, largest texts first.
-    const cardDeductions = new Map<string, number>();
-    {
-      let left = Math.floor(words.length * CARD_MAX_SHARE);
-      const texts = [...repeatedCardText(contentRoot, isInExcludedChrome)].sort((x, y) => y[1] - x[1]);
-      for (const [text, occurrences] of texts) {
-        const tokens = keywordTokens(text);
-        if (tokens.length === 0) continue;
-        const allowed = Math.min(occurrences, Math.floor(left / tokens.length));
-        if (allowed <= 0) continue;
-        left -= allowed * tokens.length;
-        for (const word of tokens) cardDeductions.set(word, (cardDeductions.get(word) || 0) + allowed);
-      }
-    }
-    // What of that is applied, word by word: never below the floor, never on a word that is
-    // already a big share of the page. Removed words also leave the total they are measured against.
-    const baseTotal = words.length - ctaWordTotal;
-    const floorCount = Math.ceil((baseTotal * opts.density_threshold * CARD_FLOOR_SHARE) / 100);
-    const cardApplied = new Map<string, number>();
-    let cardAppliedTotal = 0;
-    for (const [word, deduction] of cardDeductions) {
-      const raw = wordCounts.get(word) ?? 0;
-      if ((raw / words.length) * 100 >= CARD_RAW_DENSITY_LIMIT) continue;
-      const applied = Math.min(deduction, Math.max(0, raw - (ctaWordDeductions.get(word) ?? 0) - floorCount));
-      if (applied <= 0) continue;
-      cardApplied.set(word, applied);
-      cardAppliedTotal += applied;
-    }
-
-    const organicTotal = baseTotal - cardAppliedTotal;
-
-    const suspiciousWords: { word: string; count: number; density: number }[] = [];
-
-    // User-configured whitelist (lowercase for matching)
-    const whitelist = new Set(opts.whitelist.map((w) => w.normalize("NFKC").toLowerCase()));
-    // The site's own brand / product name is not a keyword it is stuffing.
-    for (const term of brandTerms(ctx.page.url, doc)) whitelist.add(term);
-
-    if (organicTotal > 0) {
-      for (const [word, rawCount] of wordCounts) {
-        if (
-          COMMON_WORDS.has(word) ||
-          pageStopWords?.has(word) ||
-          (usesEnglishPriceNotes && ENGLISH_PRICE_NOTE_WORDS.has(word))
-        ) {
-          continue;
-        }
-        if (whitelist.has(word)) continue;
-
-        const count = rawCount - (ctaWordDeductions.get(word) ?? 0) - (cardApplied.get(word) ?? 0);
-        if (count <= 0) continue;
-
-        const density = (count / organicTotal) * 100;
-        if (density > opts.density_threshold && count > opts.min_occurrences) {
-          suspiciousWords.push({ word, count, density });
-        }
-      }
-    }
-
-    // Sort by density
-    suspiciousWords.sort((a, b) => b.density - a.density);
-
-    if (suspiciousWords.length > 0) {
-      checks.push({
-        name: "keyword-stuffing",
-        status: "warn",
-        message: `${suspiciousWords.length} word(s) may be overused`,
-        items: suspiciousWords.map((w) => ({
-          id: w.word,
-          label: `"${w.word}" (${w.density.toFixed(1)}%)`,
-          meta: { count: w.count, density: w.density },
-        })),
-      });
-    } else {
-      checks.push({
-        name: "keyword-stuffing",
-        status: "pass",
-        message: "No keyword stuffing detected",
-      });
-    }
-
+  // Get text content
+  const body = doc.querySelector("body");
+  if (!body) {
+    checks.push({
+      name: "keyword-stuffing",
+      status: "skipped",
+      message: "No body content to analyze",
+    });
     return { checks };
+  }
+
+  const pageLanguage = primaryLangSubtag(
+    doc.documentElement?.getAttribute("lang")
+  );
+  const pageStopWords = LANGUAGE_STOP_WORDS.get(pageLanguage);
+  const usesEnglishPriceNotes = pageLanguage === "" || pageLanguage === "en";
+
+  // Prefer substantial main copy. Otherwise retain body copy but drop only
+  // site-wide chrome, not headers and footers inside articles or sections.
+  // Both paths are non-mutating because every rule shares this document.
+  const isModelChrome = createModelChromeTest(doc);
+  const {
+    root: contentRoot,
+    words,
+    isInExcludedChrome,
+  } = selectMainContent(doc, body, isModelChrome);
+
+  // A lang attribute is page-controlled and must not turn off a scored rule.
+  // Skip only when the measured copy itself is predominantly written in a
+  // script for which the rule has no function-word list (#1232).
+  if (hasUnsupportedScriptMajority(words)) {
+    checks.push({
+      name: "keyword-stuffing",
+      status: "skipped",
+      message: "Most content uses a script without a function-word list",
+    });
+    return { checks };
+  }
+
+  if (words.length < 100) {
+    checks.push({
+      name: "keyword-stuffing",
+      status: "info",
+      message: "Content too short for keyword density analysis",
+      details: { inconclusive: true },
+    });
+    return { checks };
+  }
+
+  // Count word frequency
+  const wordCounts = new Map<string, number>();
+  for (const word of words) {
+    wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
+  }
+
+  // Find words with high density, excluding English common words and the
+  // grammatical filler for the page's declared language (#1042).
+  // Repeated generic nav/CTA labels ("Learn more" x11 cards) are a UI
+  // component, not organic content — don't count their words toward
+  // density (#695). Deliberately an ALLOWLIST of known boilerplate phrases
+  // (not "any repeated short anchor text"): a spam page repeating a real
+  // commercial keyword as anchor text ("emergency plumber" x20) must still
+  // count fully toward density, so genuine anchor-text stuffing still flags.
+  const GENERIC_CTA_LABELS = new Set([
+    "learn more",
+    "read more",
+    "see more",
+    "view more",
+    "show more",
+    "load more",
+    "find out more",
+    "get started",
+    "sign up",
+    "sign in",
+    "log in",
+    "contact us",
+    "click here",
+    "shop now",
+    "buy now",
+    "add to cart",
+    "view details",
+    "view all",
+    "see all",
+    "book now",
+    "get a quote",
+    "request a quote",
+    "subscribe",
+    "join now",
+    "try for free",
+    "try it free",
+    "get in touch",
+    "call now",
+    "download now",
+    "next page",
+    "previous page",
+    "back to top",
+  ]);
+  const ctaLabelCounts = new Map<string, number>();
+  for (const el of contentRoot.querySelectorAll("a, button")) {
+    if (isInExcludedChrome?.(el)) continue;
+    // Nested <a><button>Learn more</button></a> matches BOTH elements but
+    // renders the phrase once — count only the outermost (review, #695).
+    if (el.parentElement?.closest("a, button")) continue;
+    const label = (el.textContent || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+    if (!GENERIC_CTA_LABELS.has(label)) continue;
+    ctaLabelCounts.set(label, (ctaLabelCounts.get(label) || 0) + 1);
+  }
+
+  const ctaWordDeductions = new Map<string, number>();
+  let ctaWordTotal = 0;
+  for (const [label, occurrences] of ctaLabelCounts) {
+    for (const word of keywordTokens(label)) {
+      ctaWordDeductions.set(
+        word,
+        (ctaWordDeductions.get(word) || 0) + occurrences
+      );
+      ctaWordTotal += occurrences;
+    }
+  }
+
+  // Rating and price text repeated once per card (#1315) is a UI component, not copy aimed at a
+  // term. Bounded (see repeatedCardText): clamped to a share of the words, largest texts first.
+  const cardDeductions = new Map<string, number>();
+  {
+    let left = Math.floor(words.length * CARD_MAX_SHARE);
+    const texts = [...repeatedCardText(contentRoot, isInExcludedChrome)].sort(
+      (x, y) => y[1] - x[1]
+    );
+    for (const [text, occurrences] of texts) {
+      const tokens = keywordTokens(text);
+      if (tokens.length === 0) continue;
+      const allowed = Math.min(occurrences, Math.floor(left / tokens.length));
+      if (allowed <= 0) continue;
+      left -= allowed * tokens.length;
+      for (const word of tokens)
+        cardDeductions.set(word, (cardDeductions.get(word) || 0) + allowed);
+    }
+  }
+  // What of that is applied, word by word: never below the floor, never on a word that is
+  // already a big share of the page. Removed words also leave the total they are measured against.
+  const baseTotal = words.length - ctaWordTotal;
+  const floorCount = Math.ceil(
+    (baseTotal * opts.density_threshold * CARD_FLOOR_SHARE) / 100
+  );
+  const cardApplied = new Map<string, number>();
+  let cardAppliedTotal = 0;
+  for (const [word, deduction] of cardDeductions) {
+    const raw = wordCounts.get(word) ?? 0;
+    if ((raw / words.length) * 100 >= CARD_RAW_DENSITY_LIMIT) continue;
+    const applied = Math.min(
+      deduction,
+      Math.max(0, raw - (ctaWordDeductions.get(word) ?? 0) - floorCount)
+    );
+    if (applied <= 0) continue;
+    cardApplied.set(word, applied);
+    cardAppliedTotal += applied;
+  }
+
+  const organicTotal = baseTotal - cardAppliedTotal;
+
+  const suspiciousWords: { word: string; count: number; density: number }[] =
+    [];
+
+  // User-configured whitelist (lowercase for matching)
+  const whitelist = new Set(
+    opts.whitelist.map((w) => w.normalize("NFKC").toLowerCase())
+  );
+  // The site's own brand / product name is not a keyword it is stuffing.
+  for (const term of brandTerms(ctx.page.url, doc)) whitelist.add(term);
+
+  if (organicTotal > 0) {
+    for (const [word, rawCount] of wordCounts) {
+      if (
+        COMMON_WORDS.has(word) ||
+        pageStopWords?.has(word) ||
+        (usesEnglishPriceNotes && ENGLISH_PRICE_NOTE_WORDS.has(word))
+      ) {
+        continue;
+      }
+      if (whitelist.has(word)) continue;
+
+      const count =
+        rawCount -
+        (ctaWordDeductions.get(word) ?? 0) -
+        (cardApplied.get(word) ?? 0);
+      if (count <= 0) continue;
+
+      const density = (count / organicTotal) * 100;
+      if (density > opts.density_threshold && count > opts.min_occurrences) {
+        suspiciousWords.push({ word, count, density });
+      }
+    }
+  }
+
+  // Sort by density
+  suspiciousWords.sort((a, b) => b.density - a.density);
+
+  if (suspiciousWords.length > 0) {
+    checks.push({
+      name: "keyword-stuffing",
+      status: "warn",
+      message: `${suspiciousWords.length} word(s) may be overused`,
+      items: suspiciousWords.map((w) => ({
+        id: w.word,
+        label: `"${w.word}" (${w.density.toFixed(1)}%)`,
+        meta: { count: w.count, density: w.density },
+      })),
+    });
+  } else {
+    checks.push({
+      name: "keyword-stuffing",
+      status: "pass",
+      message: "No keyword stuffing detected",
+    });
+  }
+
+  return { checks };
 }
 
 /** Footer anchors looked at per page (a bound), and what a footer link block must look like to be flagged. */
@@ -774,7 +879,10 @@ const FOOTER_MIN_OCCURRENCES = 8;
 
 function isFooterElement(el: Element): boolean {
   const tag = el.tagName?.toLowerCase();
-  return tag === "footer" || el.getAttribute?.("role")?.toLowerCase() === "contentinfo";
+  return (
+    tag === "footer" ||
+    el.getAttribute?.("role")?.toLowerCase() === "contentinfo"
+  );
 }
 
 /**
@@ -796,7 +904,11 @@ function footerLinkCheck(ctx: RuleContext): CheckResult | null {
   const isChromeAncestor = createSiteChromeAncestorTest(body);
   const inFooter = (el: Element): boolean => {
     if (modelFooter?.(el)) return true;
-    for (let cur: Element | null = el; cur && cur !== body; cur = cur.parentElement) {
+    for (
+      let cur: Element | null = el;
+      cur && cur !== body;
+      cur = cur.parentElement
+    ) {
       if (isFooterElement(cur) && isChromeAncestor(cur)) return true;
     }
     return false;
@@ -813,13 +925,18 @@ function footerLinkCheck(ctx: RuleContext): CheckResult | null {
   }
   if (labels.length < FOOTER_MIN_LINKS) return null;
 
-  const pageStopWords = LANGUAGE_STOP_WORDS.get(primaryLangSubtag(doc.documentElement?.getAttribute("lang")));
-  const skip = new Set(opts.whitelist.map((w) => w.normalize("NFKC").toLowerCase()));
+  const pageStopWords = LANGUAGE_STOP_WORDS.get(
+    primaryLangSubtag(doc.documentElement?.getAttribute("lang"))
+  );
+  const skip = new Set(
+    opts.whitelist.map((w) => w.normalize("NFKC").toLowerCase())
+  );
   for (const term of brandTerms(ctx.page.url, doc)) skip.add(term);
   const counts = new Map<string, { links: number; total: number }>();
   for (const tokens of labels) {
     for (const word of new Set(tokens)) {
-      if (COMMON_WORDS.has(word) || pageStopWords?.has(word) || skip.has(word)) continue;
+      if (COMMON_WORDS.has(word) || pageStopWords?.has(word) || skip.has(word))
+        continue;
       const entry = counts.get(word) ?? { links: 0, total: 0 };
       entry.links += 1;
       entry.total += tokens.filter((t) => t === word).length;
@@ -827,7 +944,11 @@ function footerLinkCheck(ctx: RuleContext): CheckResult | null {
     }
   }
   const hits = [...counts]
-    .filter(([, e]) => e.total >= FOOTER_MIN_OCCURRENCES && e.links >= labels.length * FOOTER_MIN_SHARE)
+    .filter(
+      ([, e]) =>
+        e.total >= FOOTER_MIN_OCCURRENCES &&
+        e.links >= labels.length * FOOTER_MIN_SHARE
+    )
     .sort((a, b) => b[1].links - a[1].links);
   if (hits.length === 0) return null;
   return {

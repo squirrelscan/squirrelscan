@@ -9,7 +9,7 @@ describe("stripHtmlForText", () => {
     expect(
       stripHtmlForText(html, { exclude: ["script", "style"] })
         .replace(/\s+/g, " ")
-        .trim(),
+        .trim()
     ).toBe("Hello world");
   });
 

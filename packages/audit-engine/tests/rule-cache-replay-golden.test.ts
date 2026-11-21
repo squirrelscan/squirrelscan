@@ -16,27 +16,30 @@
 // The invalidation cases then change ONE input at a time and require the affected
 // pages to run again.
 
+import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
+import type { Config } from "@squirrelscan/config";
+import type { ContentStoreAdapter } from "@squirrelscan/crawler";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import { createRunner, fingerprintPage, RuleRunner } from "@squirrelscan/rules";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect } from "effect";
+import type { RuleCacheStore } from "../src/rule-cache";
 
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import { SQLiteStorage } from "@squirrelscan/crawler";
-import { createRunner, fingerprintPage, RuleRunner } from "@squirrelscan/rules";
-import type { ContentStoreAdapter } from "@squirrelscan/crawler";
-import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
-
-import type { Config } from "@squirrelscan/config";
 import { generateReportFromStorage, runStreamingRules } from "../src/adapter";
 import { parseHtmlForRules } from "../src/adapter";
 import { bindRuleCache } from "../src/rule-cache";
+import { streamPageRules } from "../src/streaming";
 import { fanoutClusterKey, fanoutInputSignature } from "../src/template-fanout";
 import { templateFingerprintKey } from "../src/template-key";
-import { streamPageRules } from "../src/streaming";
-import type { RuleCacheStore } from "../src/rule-cache";
 import { getGoldenBaselineConfig } from "./helpers/golden-baseline";
 
 const run = <A, E>(e: Effect.Effect<A, E, never>) => Effect.runPromise(e);
@@ -46,7 +49,12 @@ afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
 const PAGE_COUNT = 60;
 
 function emptyAssets(): PreFetchedAssets {
-  return { resourceSizes: { css: [], images: [] }, scripts: [], pdfSizes: [], sitemapUrlStatuses: [] };
+  return {
+    resourceSizes: { css: [], images: [] },
+    scripts: [],
+    pdfSizes: [],
+    sitemapUrlStatuses: [],
+  };
 }
 
 /**
@@ -112,7 +120,9 @@ function memoryCacheStore() {
 }
 
 /** Build a crawl DB whose pages carry an exact HTML hash. */
-async function buildCrawl(name: string): Promise<{ dbPath: string; crawlId: string }> {
+async function buildCrawl(
+  name: string
+): Promise<{ dbPath: string; crawlId: string }> {
   const dbPath = join(tmpDir, `${name}.sqlite`);
   const model = generateSiteModel({
     seed: `rule-cache-${name}`,
@@ -141,7 +151,10 @@ async function buildCrawl(name: string): Promise<{ dbPath: string; crawlId: stri
   return { dbPath, crawlId };
 }
 
-async function withStorage<T>(dbPath: string, fn: (s: SQLiteStorage) => Promise<T>): Promise<T> {
+async function withStorage<T>(
+  dbPath: string,
+  fn: (s: SQLiteStorage) => Promise<T>
+): Promise<T> {
   const storage = new SQLiteStorage(dbPath, contentStoreFor(dbPath));
   try {
     await run(storage.init());
@@ -173,7 +186,7 @@ async function runOnce(
     engineVersion?: string;
     rulesVersion?: string;
     config?: Config;
-  } = {},
+  } = {}
 ): Promise<RunOutcome> {
   return withStorage(dbPath, async (storage) => {
     const config = opts.config ?? getGoldenBaselineConfig();
@@ -188,10 +201,15 @@ async function runOnce(
               },
             }
           : {}),
-      }),
+      })
     );
-    const report = await run(generateReportFromStorage(storage, crawlId, results));
-    const stripped = JSON.parse(JSON.stringify(report)) as Record<string, unknown>;
+    const report = await run(
+      generateReportFromStorage(storage, crawlId, results)
+    );
+    const stripped = JSON.parse(JSON.stringify(report)) as Record<
+      string,
+      unknown
+    >;
     delete stripped.timestamp;
     const meta = stripped.meta as Record<string, unknown> | undefined;
     if (meta) delete meta.timestamp;
@@ -215,7 +233,7 @@ function expectSameSerialization(actual: string, expected: string): void {
   throw new Error(
     `replayed report diverges at byte ${i} of ${expected.length} (actual length ${actual.length})\n` +
       `  expected: ...${expected.slice(Math.max(0, i - 120), i + 120)}\n` +
-      `  actual:   ...${actual.slice(Math.max(0, i - 120), i + 120)}`,
+      `  actual:   ...${actual.slice(Math.max(0, i - 120), i + 120)}`
   );
 }
 
@@ -225,7 +243,9 @@ describe("per-page rule-result cache — replay parity", () => {
     const cache = memoryCacheStore();
 
     // The reference is a cold run with the cache enabled and an empty store.
-    const cold = await runOnce(dbPath, crawlId, { store: memoryCacheStore().store });
+    const cold = await runOnce(dbPath, crawlId, {
+      store: memoryCacheStore().store,
+    });
     expect(cold.replayedPages).toBe(0);
 
     const warm1 = await runOnce(dbPath, crawlId, { store: cache.store });
@@ -260,9 +280,14 @@ describe("per-page rule-result cache — replay parity", () => {
     // designed NOT to notice — the normalized hash is identical either way — so a
     // key built on that field would replay stale verdicts here.
     const changedUrl = await withStorage(dbPath, async (storage) => {
-      const pages = await run(storage.getPages(crawlId, { limit: 1, offset: 0 }));
+      const pages = await run(
+        storage.getPages(crawlId, { limit: 1, offset: 0 })
+      );
       const page = pages[0]!;
-      const edited = { ...page, html: page.html!.replace("<body", "<body\n  ") };
+      const edited = {
+        ...page,
+        html: page.html!.replace("<body", "<body\n  "),
+      };
       await run(storage.upsertPage(crawlId, edited));
       return page.normalizedUrl;
     });
@@ -304,9 +329,9 @@ describe("per-page rule-result cache — replay parity", () => {
           ...target,
           html: target.html!.replace(
             "<head>",
-            '<head>\n<meta name="viewport" content="width=device-width, initial-scale=1">',
+            '<head>\n<meta name="viewport" content="width=device-width, initial-scale=1">'
           ),
-        }),
+        })
       );
     });
 
@@ -316,10 +341,14 @@ describe("per-page rule-result cache — replay parity", () => {
     expect(afterChange.replayedPages).toBeGreaterThan(0);
 
     // Now nothing has changed, so everything replays...
-    const fullyReplayed = await runOnce(dbPath, crawlId, { store: cache.store });
+    const fullyReplayed = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+    });
     expect(fullyReplayed.freshPages).toBe(0);
     // ...and it must say what a fresh audit of this same content says.
-    const fresh = await runOnce(dbPath, crawlId, { store: memoryCacheStore().store });
+    const fresh = await runOnce(dbPath, crawlId, {
+      store: memoryCacheStore().store,
+    });
     expect(fresh.replayedPages).toBe(0);
     expectSameSerialization(fullyReplayed.serialized, fresh.serialized);
   }, 180_000);
@@ -346,7 +375,7 @@ describe("per-page rule-result cache — replay parity", () => {
         return fanoutClusterKey(
           templateFingerprintKey(fingerprintPage(parsed, p.normalizedUrl)),
           p.normalizedUrl,
-          fanoutInputSignature(parsed.document),
+          fanoutInputSignature(parsed.document)
         );
       };
       const auditable = pages.filter((p) => p.html && p.status === 200);
@@ -354,13 +383,18 @@ describe("per-page rule-result cache — replay parity", () => {
         const key = keyOf(p);
         if (key) sizes.set(key, (sizes.get(key) ?? 0) + 1);
       }
-      const first = auditable.find((p) => (sizes.get(keyOf(p) ?? "") ?? 0) > 1)!;
+      const first = auditable.find(
+        (p) => (sizes.get(keyOf(p) ?? "") ?? 0) > 1
+      )!;
       expect(first).toBeTruthy();
       await run(
         storage.upsertPage(crawlId, {
           ...first,
-          html: first.html!.replace("</body>", "<script>/* gtm.js */</script></body>"),
-        }),
+          html: first.html!.replace(
+            "</body>",
+            "<script>/* gtm.js */</script></body>"
+          ),
+        })
       );
     });
 
@@ -370,10 +404,14 @@ describe("per-page rule-result cache — replay parity", () => {
     expect(afterChange.freshPages).toBeGreaterThan(1);
     expect(afterChange.replayedPages).toBeGreaterThan(0);
 
-    const fullyReplayed = await runOnce(dbPath, crawlId, { store: cache.store });
+    const fullyReplayed = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+    });
     expect(fullyReplayed.freshPages).toBe(0);
 
-    const fresh = await runOnce(dbPath, crawlId, { store: memoryCacheStore().store });
+    const fresh = await runOnce(dbPath, crawlId, {
+      store: memoryCacheStore().store,
+    });
     // Not vacuous: the change moved the report at all.
     expect(fresh.serialized).not.toBe(baseline.serialized);
     expectSameSerialization(afterChange.serialized, fresh.serialized);
@@ -400,7 +438,7 @@ describe("per-page rule-result cache — replay parity", () => {
             templateFanout: true,
             collectors: [],
             ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
-          }),
+          })
         );
 
       const cold = await pass();
@@ -434,7 +472,7 @@ describe("per-page rule-result cache — replay parity", () => {
             templateFanout,
             collectors: [],
             ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
-          }),
+          })
         );
       const off = await pass(false);
       expect(off.templateFanout.fannedRuleRuns).toBe(0);
@@ -475,7 +513,11 @@ describe("per-page rule-result cache — replay parity", () => {
                       // spin
                     }
                   }
-                  return { checks: [{ name: "test/slow-once", status: "pass", message: "ok" }] };
+                  return {
+                    checks: [
+                      { name: "test/slow-once", status: "pass", message: "ok" },
+                    ],
+                  };
                 },
               },
             ],
@@ -495,10 +537,10 @@ describe("per-page rule-result cache — replay parity", () => {
           collectors: [],
           retainPageResults: true,
           ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
-        }),
+        })
       );
       const timedOut = [...result.pageRuleResults.values()].filter((byRule) =>
-        byRule.get("test/slow-once")?.some((c) => c.details?.timedOut === true),
+        byRule.get("test/slow-once")?.some((c) => c.details?.timedOut === true)
       );
       expect(timedOut).toHaveLength(1);
       expect(result.ruleCache.freshPages).toBe(PAGE_COUNT);
@@ -528,7 +570,10 @@ describe("per-page rule-result cache — replay parity", () => {
         id: "timeout-probe",
         collect(page: { normalizedUrl: string }) {
           firstUrl ??= page.normalizedUrl;
-          const signal = { url: page.normalizedUrl, timedOut: page.normalizedUrl === firstUrl };
+          const signal = {
+            url: page.normalizedUrl,
+            timedOut: page.normalizedUrl === firstUrl,
+          };
           collected.push(signal);
           return signal.timedOut ? undefined : signal;
         },
@@ -542,7 +587,7 @@ describe("per-page rule-result cache — replay parity", () => {
             batchSize: 20,
             collectors: [collector],
             ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
-          }),
+          })
         );
 
       const first = await pass();
@@ -562,7 +607,10 @@ describe("per-page rule-result cache — replay parity", () => {
     const { dbPath, crawlId } = await buildCrawl("invalidate-applicability");
     const cache = memoryCacheStore();
     const base = getGoldenBaselineConfig();
-    const first = await runOnce(dbPath, crawlId, { store: cache.store, config: base });
+    const first = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      config: base,
+    });
 
     // `ignore_applicability` changes a gated rule's output from a `skipped` check
     // to its real verdict without touching the rule list or any rule's options,
@@ -571,7 +619,10 @@ describe("per-page rule-result cache — replay parity", () => {
       ...base,
       rules: { ...base.rules, ignore_applicability: true },
     } as unknown as Config;
-    const second = await runOnce(dbPath, crawlId, { store: cache.store, config: forced });
+    const second = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      config: forced,
+    });
     expect(second.replayedPages).toBe(0);
     expect(second.freshPages).toBe(first.freshPages);
   }, 120_000);
@@ -579,8 +630,14 @@ describe("per-page rule-result cache — replay parity", () => {
   test("a new engine version invalidates every entry", async () => {
     const { dbPath, crawlId } = await buildCrawl("invalidate-version");
     const cache = memoryCacheStore();
-    const first = await runOnce(dbPath, crawlId, { store: cache.store, engineVersion: "0.0.91" });
-    const upgraded = await runOnce(dbPath, crawlId, { store: cache.store, engineVersion: "0.0.92" });
+    const first = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      engineVersion: "0.0.91",
+    });
+    const upgraded = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      engineVersion: "0.0.92",
+    });
     expect(upgraded.replayedPages).toBe(0);
     expect(upgraded.freshPages).toBe(first.freshPages);
   }, 120_000);
@@ -591,12 +648,21 @@ describe("per-page rule-result cache — replay parity", () => {
   test("a changed rules version invalidates every entry", async () => {
     const { dbPath, crawlId } = await buildCrawl("invalidate-rules-version");
     const cache = memoryCacheStore();
-    const first = await runOnce(dbPath, crawlId, { store: cache.store, rulesVersion: "a" });
-    const changed = await runOnce(dbPath, crawlId, { store: cache.store, rulesVersion: "b" });
+    const first = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      rulesVersion: "a",
+    });
+    const changed = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      rulesVersion: "b",
+    });
     expect(changed.replayedPages).toBe(0);
     expect(changed.freshPages).toBe(first.freshPages);
     // And an unchanged rules version still replays, so the fast path is kept.
-    const again = await runOnce(dbPath, crawlId, { store: cache.store, rulesVersion: "b" });
+    const again = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      rulesVersion: "b",
+    });
     expect(again.replayedPages).toBe(first.freshPages);
     expect(again.freshPages).toBe(0);
   }, 120_000);
@@ -605,16 +671,25 @@ describe("per-page rule-result cache — replay parity", () => {
     const { dbPath, crawlId } = await buildCrawl("invalidate-rules");
     const cache = memoryCacheStore();
     const base = getGoldenBaselineConfig();
-    const first = await runOnce(dbPath, crawlId, { store: cache.store, config: base });
+    const first = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      config: base,
+    });
 
     // Turn one page rule off. Every page's key moves, because the rule id list is
     // part of the run context — a rule that stops running changes the flat check
     // list of every page, not just the ones it failed on.
     const fewer = {
       ...base,
-      rules: { ...base.rules, disable: [...base.rules.disable, "core/meta-title"] },
+      rules: {
+        ...base.rules,
+        disable: [...base.rules.disable, "core/meta-title"],
+      },
     } as Config;
-    const second = await runOnce(dbPath, crawlId, { store: cache.store, config: fewer });
+    const second = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      config: fewer,
+    });
     expect(second.replayedPages).toBe(0);
     expect(second.freshPages).toBe(first.freshPages);
   }, 120_000);
@@ -623,13 +698,22 @@ describe("per-page rule-result cache — replay parity", () => {
     const { dbPath, crawlId } = await buildCrawl("invalidate-options");
     const cache = memoryCacheStore();
     const base = getGoldenBaselineConfig();
-    const first = await runOnce(dbPath, crawlId, { store: cache.store, config: base });
+    const first = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      config: base,
+    });
 
     const retuned = {
       ...base,
-      rule_options: { ...(base.rule_options ?? {}), "core/meta-title": { max_length: 12 } },
+      rule_options: {
+        ...(base.rule_options ?? {}),
+        "core/meta-title": { max_length: 12 },
+      },
     } as Config;
-    const second = await runOnce(dbPath, crawlId, { store: cache.store, config: retuned });
+    const second = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      config: retuned,
+    });
     expect(second.replayedPages).toBe(0);
     expect(second.freshPages).toBe(first.freshPages);
   }, 120_000);

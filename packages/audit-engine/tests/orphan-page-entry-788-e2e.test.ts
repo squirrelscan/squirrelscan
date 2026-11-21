@@ -6,12 +6,12 @@
 // crawl's `seedUrl` / `originalUrl`, so only a run through `runRulesOnStorage`
 // and `runStreamingRules` proves both builders hand it to the rule.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -83,7 +83,7 @@ const PAGES = [
 async function orphanChecks(
   seedUrl: string,
   engine: "v1" | "streaming",
-  ruleId = "integrity/orphan-page",
+  ruleId = "integrity/orphan-page"
 ): Promise<CheckResult[]> {
   const storage = new SQLiteStorage(":memory:");
   return run(
@@ -121,16 +121,29 @@ async function orphanChecks(
 
       let result;
       if (engine === "streaming") {
-        result = yield* runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, {
-          batchSize: 1,
-        });
+        result = yield* runStreamingRules(
+          storage,
+          crawlId,
+          CONFIG,
+          EMPTY_ASSETS,
+          undefined,
+          {
+            batchSize: 1,
+          }
+        );
       } else {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+        result = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          EMPTY_ASSETS
+        );
       }
       return (result.ruleResultsMap.get(ruleId)?.checks ?? []) as CheckResult[];
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
@@ -144,7 +157,9 @@ for (const engine of ["v1", "streaming"] as const) {
 
     test("the page the root redirected to is the front door, not a hidden page", async () => {
       const checks = await orphanChecks(LANDING, engine);
-      expect(checks.map((c) => [c.name, c.status])).toEqual([["orphan-page", "pass"]]);
+      expect(checks.map((c) => [c.name, c.status])).toEqual([
+        ["orphan-page", "pass"],
+      ]);
     });
   });
 
@@ -152,9 +167,13 @@ for (const engine of ["v1", "streaming"] as const) {
   // /privacy link each other once, under the default two inbound links.
   describe(`pub#796 links/orphan-pages entry page through the real adapter (${engine})`, () => {
     test("control: a landing page the crawl did not start on is an orphan", async () => {
-      const checks = await orphanChecks(`${BASE}/`, engine, "links/orphan-pages");
+      const checks = await orphanChecks(
+        `${BASE}/`,
+        engine,
+        "links/orphan-pages"
+      );
       expect(checks[0]?.items?.map((i) => i.id).sort()).toEqual(
-        [LANDING, `${BASE}/help`, `${BASE}/privacy`].sort(),
+        [LANDING, `${BASE}/help`, `${BASE}/privacy`].sort()
       );
     });
 

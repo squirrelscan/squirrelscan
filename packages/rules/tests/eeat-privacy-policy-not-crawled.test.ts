@@ -5,14 +5,17 @@
 // crawl (`[crawler] exclude = ["/policies/**"]`). The excluded case used to get
 // "No Privacy Policy page found" and advice to create one.
 
-import { describe, expect, test } from "bun:test";
-
-import type { CheckResult, SitemapUrlStatusData } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  SitemapUrlStatusData,
+} from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 import { privacyPolicyRule } from "../src/eeat/privacy-policy";
-import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const ORIGIN = "http://127.0.0.1:8792";
 const POLICY = `${ORIGIN}/policies/privacy-policy`;
@@ -25,7 +28,7 @@ function fixturePage(title: string, footer: string): string {
 
 function siteCtx(
   pagesHtml: { url: string; html: string; finalUrl?: string }[],
-  linkTargetStatuses?: SitemapUrlStatusData[],
+  linkTargetStatuses?: SitemapUrlStatusData[]
 ): RuleContext {
   const pages: SiteData["pages"] = pagesHtml.map((p) => ({
     url: p.url,
@@ -34,7 +37,13 @@ function siteCtx(
     parsed: parsePage(p.html, p.url),
   }));
   return {
-    page: { url: pages[0]?.url ?? ORIGIN, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: pages[0]?.url ?? ORIGIN,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: pages[0]?.parsed ?? ({} as ParsedPage),
     site: {
       baseUrl: ORIGIN,
@@ -62,7 +71,7 @@ const home = (footer: string) => ({
 
 describe("eeat/privacy-policy: the reporter's three origins (pub#672)", () => {
   test("missing: no policy and no link still warns with the create advice", async () => {
-    const checks = (await run(siteCtx([home("")])));
+    const checks = await run(siteCtx([home("")]));
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
       name: "privacy-policy",
@@ -73,9 +82,12 @@ describe("eeat/privacy-policy: the reporter's three origins (pub#672)", () => {
   });
 
   test("allowed: the crawled, linked policy passes", async () => {
-    const checks = (await run(
-      siteCtx([home(LINK), { url: POLICY, html: fixturePage("Privacy Policy", "") }]),
-    ));
+    const checks = await run(
+      siteCtx([
+        home(LINK),
+        { url: POLICY, html: fixturePage("Privacy Policy", "") },
+      ])
+    );
     expect(check(checks, "privacy-policy")).toMatchObject({
       status: "pass",
       message: "Privacy Policy page exists",
@@ -89,14 +101,16 @@ describe("eeat/privacy-policy: the reporter's three origins (pub#672)", () => {
   });
 
   test("excluded: a linked policy the crawl did not fetch is info, not create advice", async () => {
-    const checks = (await run(siteCtx([home(LINK)])));
+    const checks = await run(siteCtx([home(LINK)]));
     expect(check(checks, "privacy-policy")).toMatchObject({
       status: "info",
       message: "Privacy Policy linked but not crawled",
       value: POLICY,
       details: { linkedFrom: `${ORIGIN}/` },
     });
-    expect(checks.some((c) => c.value === "Create /privacy-policy page")).toBe(false);
+    expect(checks.some((c) => c.value === "Create /privacy-policy page")).toBe(
+      false
+    );
     // The footer link is on every crawled page, so coverage still reads 100%.
     expect(check(checks, "privacy-linked")).toMatchObject({
       status: "pass",
@@ -107,7 +121,9 @@ describe("eeat/privacy-policy: the reporter's three origins (pub#672)", () => {
 
 describe("eeat/privacy-policy: what the link probe recorded", () => {
   test("a probed 404 warns that the link is broken", async () => {
-    const checks = (await run(siteCtx([home(LINK)], [{ url: POLICY, status: 404, error: null }])));
+    const checks = await run(
+      siteCtx([home(LINK)], [{ url: POLICY, status: 404, error: null }])
+    );
     expect(check(checks, "privacy-policy")).toMatchObject({
       status: "warn",
       message: "Privacy Policy link returns 404",
@@ -117,7 +133,9 @@ describe("eeat/privacy-policy: what the link probe recorded", () => {
   });
 
   test("a probed 200 is still only info: a status is not proof of a policy", async () => {
-    const checks = (await run(siteCtx([home(LINK)], [{ url: POLICY, status: 200, error: null }])));
+    const checks = await run(
+      siteCtx([home(LINK)], [{ url: POLICY, status: 200, error: null }])
+    );
     expect(check(checks, "privacy-policy")).toMatchObject({
       status: "info",
       message: "Privacy Policy linked but not crawled",
@@ -130,20 +148,26 @@ describe("eeat/privacy-policy: what the link probe recorded", () => {
       { url: POLICY, status: 403, error: null },
       { url: POLICY, status: 429, error: null, rateLimited: true },
     ]) {
-      const checks = (await run(siteCtx([home(LINK)], [probe])));
+      const checks = await run(siteCtx([home(LINK)], [probe]));
       expect(check(checks, "privacy-policy")?.status).toBe("info");
     }
   });
 
   test("the probe's URL matches the link with a trailing slash", async () => {
-    const checks = (await run(siteCtx([home(LINK)], [{ url: `${POLICY}/`, status: 410, error: null }])));
-    expect(check(checks, "privacy-policy")?.message).toBe("Privacy Policy link returns 410");
+    const checks = await run(
+      siteCtx([home(LINK)], [{ url: `${POLICY}/`, status: 410, error: null }])
+    );
+    expect(check(checks, "privacy-policy")?.message).toBe(
+      "Privacy Policy link returns 410"
+    );
   });
 });
 
 describe("eeat/privacy-policy: which links count", () => {
   test("a link recognised only by its anchor text is info, with no slug coverage check", async () => {
-    const checks = (await run(siteCtx([home('<a href="/rechtliches/dsgvo">Datenschutz</a>')])));
+    const checks = await run(
+      siteCtx([home('<a href="/rechtliches/dsgvo">Datenschutz</a>')])
+    );
     expect(check(checks, "privacy-policy")).toMatchObject({
       status: "info",
       message: "Privacy Policy linked but not crawled",
@@ -153,29 +177,31 @@ describe("eeat/privacy-policy: which links count", () => {
   });
 
   test("a slug link anywhere wins over an earlier text-only link", async () => {
-    const checks = (await run(
+    const checks = await run(
       siteCtx([
         home('<a href="/cookies">Privacy settings</a>'),
         { url: `${ORIGIN}/shop`, html: fixturePage("Shop", LINK) },
-      ]),
-    ));
+      ])
+    );
     expect(check(checks, "privacy-policy")?.value).toBe(POLICY);
   });
 
   test("a linked page the crawl DID fetch is not reported as uncrawled", async () => {
     // Crawled, but neither its slug nor its title reads as a privacy policy:
     // the page was checked, so the missing-policy advice stands as before.
-    const checks = (await run(
+    const checks = await run(
       siteCtx([
         home('<a href="/rechtliches">Datenschutz</a>'),
         { url: `${ORIGIN}/rechtliches`, html: fixturePage("Rechtliches", "") },
-      ]),
-    ));
-    expect(check(checks, "privacy-policy")?.message).toBe("No Privacy Policy page found");
+      ])
+    );
+    expect(check(checks, "privacy-policy")?.message).toBe(
+      "No Privacy Policy page found"
+    );
   });
 
   test("a target reached through a crawled redirect counts as crawled", async () => {
-    const checks = (await run(
+    const checks = await run(
       siteCtx([
         home('<a href="/old-privacy">Privacy</a>'),
         {
@@ -183,20 +209,22 @@ describe("eeat/privacy-policy: which links count", () => {
           finalUrl: `${ORIGIN}/old-privacy`,
           html: fixturePage("Legal", ""),
         },
-      ]),
-    ));
-    expect(check(checks, "privacy-policy")?.message).toBe("No Privacy Policy page found");
+      ])
+    );
+    expect(check(checks, "privacy-policy")?.message).toBe(
+      "No Privacy Policy page found"
+    );
   });
 
   test("another site's privacy page is not this site's policy", async () => {
     // reCAPTCHA's notice links Google's policy; a social footer links its own.
-    const checks = (await run(
+    const checks = await run(
       siteCtx([
         home(
-          '<a href="https://policies.google.com/privacy">Privacy Policy</a><a href="https://social.example/privacy">Privacy</a>',
+          '<a href="https://policies.google.com/privacy">Privacy Policy</a><a href="https://social.example/privacy">Privacy</a>'
         ),
-      ]),
-    ));
+      ])
+    );
     expect(check(checks, "privacy-policy")).toMatchObject({
       status: "warn",
       message: "No Privacy Policy page found",
@@ -205,13 +233,15 @@ describe("eeat/privacy-policy: which links count", () => {
   });
 
   test("mailto: and javascript: links are never a policy page", async () => {
-    const checks = (await run(
+    const checks = await run(
       siteCtx([
         home(
-          '<a href="mailto:privacy@example.com">Privacy</a><a href="javascript:void(0)">Privacy</a>',
+          '<a href="mailto:privacy@example.com">Privacy</a><a href="javascript:void(0)">Privacy</a>'
         ),
-      ]),
-    ));
-    expect(check(checks, "privacy-policy")?.message).toBe("No Privacy Policy page found");
+      ])
+    );
+    expect(check(checks, "privacy-policy")?.message).toBe(
+      "No Privacy Policy page found"
+    );
   });
 });

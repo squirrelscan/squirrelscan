@@ -3,10 +3,13 @@
 
 import type { ScriptContentData } from "@squirrelscan/core-contracts";
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { querySelectorAllOutsideNoscript, resolveUrl } from "@squirrelscan/utils";
+import {
+  querySelectorAllOutsideNoscript,
+  resolveUrl,
+} from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { sharedRegex } from "../shared-regex";
 import { siteResourceOccurrences } from "../shared/site-resource-occurrence";
@@ -68,16 +71,22 @@ interface MapConsumers {
  * differ from page to page, and the pages of one group would stop emitting
  * one identical check.
  */
-const mapConsumersCache = new WeakMap<readonly ScriptContentData[], Map<string, MapConsumers>>();
+const mapConsumersCache = new WeakMap<
+  readonly ScriptContentData[],
+  Map<string, MapConsumers>
+>();
 
-function mapConsumers(scripts: readonly ScriptContentData[]): Map<string, MapConsumers> {
+function mapConsumers(
+  scripts: readonly ScriptContentData[]
+): Map<string, MapConsumers> {
   const cached = mapConsumersCache.get(scripts);
   if (cached) return cached;
 
   const consumers = new Map<string, MapConsumers>();
   const add = (mapUrl: string, pages: readonly string[], source: string) => {
     let entry = consumers.get(mapUrl);
-    if (!entry) consumers.set(mapUrl, (entry = { pages: new Set(), sources: new Set() }));
+    if (!entry)
+      consumers.set(mapUrl, (entry = { pages: new Set(), sources: new Set() }));
     for (const page of pages) entry.pages.add(page);
     entry.sources.add(source);
   };
@@ -86,7 +95,8 @@ function mapConsumers(scripts: readonly ScriptContentData[]): Map<string, MapCon
     const pages = script.sourcePages ?? [];
     if (script.sourceMapHeader) {
       const base = script.finalUrl || script.url;
-      const mapUrl = resolveUrl(script.sourceMapHeader, base) || script.sourceMapHeader;
+      const mapUrl =
+        resolveUrl(script.sourceMapHeader, base) || script.sourceMapHeader;
       add(mapUrl, pages, `${script.url}${HEADER_SOURCE}`);
     }
     if (script.content) {
@@ -132,7 +142,8 @@ function displayMapUrl(mapUrl: string, siteUrl: string): string {
   let shown = mapUrl;
   try {
     const map = new URL(mapUrl);
-    if (map.origin === new URL(siteUrl).origin) shown = map.href.slice(map.origin.length);
+    if (map.origin === new URL(siteUrl).origin)
+      shown = map.href.slice(map.origin.length);
   } catch {
     // Unparseable: show it as found.
   }
@@ -164,7 +175,9 @@ function sharedBundleChecks(found: FoundMap[], siteUrl: string): CheckResult[] {
     // Sorted, so pages that list the bundles in a different order still emit
     // the same message and land in the same finding.
     maps.sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
-    const named = maps.slice(0, MAX_MESSAGE_MAPS).map((m) => displayMapUrl(m.url, siteUrl));
+    const named = maps
+      .slice(0, MAX_MESSAGE_MAPS)
+      .map((m) => displayMapUrl(m.url, siteUrl));
     const more = maps.length - named.length;
     checks.push({
       name: "source-maps-exposed",
@@ -178,7 +191,9 @@ function sharedBundleChecks(found: FoundMap[], siteUrl: string): CheckResult[] {
         note: NOTE,
         sharedPages: pages.size,
         foldKey: `perf/source-maps:${shortHash(maps.map((m) => m.url).join("\n"))}`,
-        ...(maps.length > MAX_SHARED_ITEMS ? { additional: maps.length - MAX_SHARED_ITEMS } : {}),
+        ...(maps.length > MAX_SHARED_ITEMS
+          ? { additional: maps.length - MAX_SHARED_ITEMS }
+          : {}),
       },
     });
   }
@@ -350,7 +365,11 @@ export const sourceMapsRule: Rule = {
         found.url,
         found.sharedPages || !prior?.sharedPages
           ? found
-          : { ...found, sharedPages: prior.sharedPages, sharedSources: prior.sharedSources }
+          : {
+              ...found,
+              sharedPages: prior.sharedPages,
+              sharedSources: prior.sharedSources,
+            }
       );
     }
     const uniqueSourceMaps = [...byUrl.values()];
@@ -390,7 +409,9 @@ export const sourceMapsRule: Rule = {
     // Named against the site's base URL, not this page's: pages of one group
     // can sit on different origins (http and https) and must still emit one
     // identical message.
-    checks.push(...sharedBundleChecks(uniqueSourceMaps, ctx.site?.baseUrl || baseUrl));
+    checks.push(
+      ...sharedBundleChecks(uniqueSourceMaps, ctx.site?.baseUrl || baseUrl)
+    );
 
     if (inlineSourceMaps.length > 0) {
       checks.push({
@@ -400,7 +421,9 @@ export const sourceMapsRule: Rule = {
         items: inlineSourceMaps.slice(0, 3).map((id) => ({ id })),
         details: {
           note: "Inline source maps increase bundle size and expose code",
-          ...(inlineSourceMaps.length > 3 ? { additional: inlineSourceMaps.length - 3 } : {}),
+          ...(inlineSourceMaps.length > 3
+            ? { additional: inlineSourceMaps.length - 3 }
+            : {}),
         },
       });
     }

@@ -1,5 +1,6 @@
-import { EMPTY_SCHEMA_COLLECTION } from "@squirrelscan/parser";
 import type { ParsedPage } from "@squirrelscan/rules";
+
+import { EMPTY_SCHEMA_COLLECTION } from "@squirrelscan/parser";
 
 /**
  * Empty ParsedPage for error pages (4xx/5xx) that have no HTML content.

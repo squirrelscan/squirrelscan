@@ -9,18 +9,18 @@
 // counts as a failure, instead of the "not found" it reports for a request that
 // did get an answer.
 
-import {
-  PROBE_NOT_SENT_ERRORS,
-  PROBE_PATH_NOT_APPROVED_ERROR,
-  PROBE_REDIRECT_NOT_FOLLOWED_ERROR,
-} from "@squirrelscan/core-contracts/storage";
-
 import type {
   DiscoveryProbeSkipReason,
   WellKnownPath,
   WellKnownProbe,
   WellKnownProbeData,
 } from "@squirrelscan/core-contracts";
+
+import {
+  PROBE_NOT_SENT_ERRORS,
+  PROBE_PATH_NOT_APPROVED_ERROR,
+  PROBE_REDIRECT_NOT_FOLLOWED_ERROR,
+} from "@squirrelscan/core-contracts/storage";
 
 import type { CheckResult } from "../types";
 
@@ -64,7 +64,9 @@ const SKIP_REASON: Record<NotCheckedReason, DiscoveryProbeSkipReason> = {
 };
 
 /** The `skipReason` for a not-checked cause. */
-export function probeSkipReason(reason: NotCheckedReason): DiscoveryProbeSkipReason {
+export function probeSkipReason(
+  reason: NotCheckedReason
+): DiscoveryProbeSkipReason {
   return SKIP_REASON[reason];
 }
 
@@ -77,7 +79,7 @@ export function notCheckedCheck(
   name: string,
   subject: string,
   details?: Record<string, unknown>,
-  reason: NotCheckedReason = "not-sent",
+  reason: NotCheckedReason = "not-sent"
 ): CheckResult {
   return {
     name,
@@ -90,12 +92,20 @@ export function notCheckedCheck(
 }
 
 /** Whether `path` is recorded as left out by `[crawler] discovery_probe_paths` (never requested, on purpose). */
-export function notApprovedPath(wellKnown: WellKnownProbeData, path: string): boolean {
-  return wellKnown.probes.some((p) => p.path === path && p.error === PROBE_PATH_NOT_APPROVED_ERROR);
+export function notApprovedPath(
+  wellKnown: WellKnownProbeData,
+  path: string
+): boolean {
+  return wellKnown.probes.some(
+    (p) => p.path === path && p.error === PROBE_PATH_NOT_APPROVED_ERROR
+  );
 }
 
 /** `paths.includes(path)` for a path read back from storage, a plain string. */
-export function includesPath(paths: readonly WellKnownPath[], path: string): boolean {
+export function includesPath(
+  paths: readonly WellKnownPath[],
+  path: string
+): boolean {
   return (paths as readonly string[]).includes(path);
 }
 
@@ -104,8 +114,15 @@ export function includesPath(paths: readonly WellKnownPath[], path: string): boo
  * recorded as `status: 0` with the not-attempted marker, the same status a
  * network failure gets, so the marker is the only discriminator.
  */
-export function wasSent(probe: { status: number; error: string | null }): boolean {
-  return !(probe.status === 0 && probe.error !== null && PROBE_NOT_SENT_ERRORS.includes(probe.error));
+export function wasSent(probe: {
+  status: number;
+  error: string | null;
+}): boolean {
+  return !(
+    probe.status === 0 &&
+    probe.error !== null &&
+    PROBE_NOT_SENT_ERRORS.includes(probe.error)
+  );
 }
 
 /** Whether a stored probe got an HTTP answer. `status: 0` is no answer at all. */
@@ -115,17 +132,23 @@ export function answered(probe: { status: number }): boolean {
 
 /** "not-sent" when none of `probes` went out, else "no-answer". */
 export function notCheckedReason(
-  probes: ReadonlyArray<{ status: number; error: string | null } | undefined>,
+  probes: ReadonlyArray<{ status: number; error: string | null } | undefined>
 ): NotCheckedReason {
   if (probes.some((p) => p !== undefined && wasSent(p))) return "no-answer";
   // The request went out and was redirected off its approved path: it was sent, so never say "not sent".
   const present0 = probes.filter((p) => p !== undefined);
-  if (present0.length > 0 && present0.every((p) => p.error === PROBE_REDIRECT_NOT_FOLLOWED_ERROR)) {
+  if (
+    present0.length > 0 &&
+    present0.every((p) => p.error === PROBE_REDIRECT_NOT_FOLLOWED_ERROR)
+  ) {
     return "redirect-not-followed";
   }
   // Every silent path was left out by the allowlist: say so, rather than blaming a block or a budget.
   const present = probes.filter((p) => p !== undefined);
-  if (present.length > 0 && present.every((p) => p.error === PROBE_PATH_NOT_APPROVED_ERROR)) {
+  if (
+    present.length > 0 &&
+    present.every((p) => p.error === PROBE_PATH_NOT_APPROVED_ERROR)
+  ) {
     return "not-approved";
   }
   return "not-sent";
@@ -138,8 +161,12 @@ export function notCheckedReason(
  */
 export function answeredWellKnown(
   wellKnown: WellKnownProbeData,
-  paths: readonly WellKnownPath[],
-): { answered: WellKnownProbe[]; unchecked: WellKnownPath[]; reason: NotCheckedReason } {
+  paths: readonly WellKnownPath[]
+): {
+  answered: WellKnownProbe[];
+  unchecked: WellKnownPath[];
+  reason: NotCheckedReason;
+} {
   const done: WellKnownProbe[] = [];
   const unchecked: WellKnownPath[] = [];
   const silent: Array<WellKnownProbe | undefined> = [];

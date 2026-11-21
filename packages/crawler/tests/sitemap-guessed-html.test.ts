@@ -7,13 +7,17 @@
 // index entry), an HTML answer is still a defect, with a message saying what
 // came back.
 
+import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { gzipSync } from "node:zlib";
 
-import type { RobotsTxtData } from "@squirrelscan/core-contracts";
-
-import { SITEMAP_HTML_PAGE_ERROR, decodeSitemapBody, discoverSitemaps } from "../src/sitemaps";
+import {
+  SITEMAP_HTML_PAGE_ERROR,
+  decodeSitemapBody,
+  discoverSitemaps,
+} from "../src/sitemaps";
 
 const NS = "http://www.sitemaps.org/schemas/sitemap/0.9";
 const HTML_TYPE = { "Content-Type": "text/html; charset=utf-8" };
@@ -40,13 +44,21 @@ afterEach(() => {
 type Route = { body: string; headers: Record<string, string>; status?: number };
 
 /** A catch-all origin: `routes` where given, the same 200 web page everywhere else. */
-function catchAll(routes: (base: string) => Record<string, Route> = () => ({})): string {
+function catchAll(
+  routes: (base: string) => Record<string, Route> = () => ({})
+): string {
   let table: Record<string, Route> = {};
   const server = Bun.serve({
     port: 0,
     fetch(req) {
-      const route = table[new URL(req.url).pathname] ?? { body: PAGE, headers: HTML_TYPE };
-      return new Response(route.body, { headers: route.headers, status: route.status });
+      const route = table[new URL(req.url).pathname] ?? {
+        body: PAGE,
+        headers: HTML_TYPE,
+      };
+      return new Response(route.body, {
+        headers: route.headers,
+        status: route.status,
+      });
     },
   });
   servers.push(server);
@@ -73,8 +85,13 @@ function robots(origin: string, ...sitemaps: string[]): RobotsTxtData {
   };
 }
 
-async function discover(origin: string, robotsTxt: RobotsTxtData | null = null) {
-  return Effect.runPromise(discoverSitemaps(origin, robotsTxt, "squirrel-test"));
+async function discover(
+  origin: string,
+  robotsTxt: RobotsTxtData | null = null
+) {
+  return Effect.runPromise(
+    discoverSitemaps(origin, robotsTxt, "squirrel-test")
+  );
 }
 
 describe("guessed sitemap locations on a catch-all server (#670)", () => {
@@ -88,20 +105,27 @@ describe("guessed sitemap locations on a catch-all server (#670)", () => {
     expect(result.truncated).toBe(false);
     // Recorded as guesses that found nothing, which no rule reports.
     expect(result.failed).toHaveLength(COMMON_LOCATIONS.length);
-    expect(result.failed.every((f) => f.source === "common" && f.error === SITEMAP_HTML_PAGE_ERROR)).toBe(
-      true,
-    );
+    expect(
+      result.failed.every(
+        (f) => f.source === "common" && f.error === SITEMAP_HTML_PAGE_ERROR
+      )
+    ).toBe(true);
   });
 
   test("a sitemap DECLARED in robots.txt that returns a web page still fails, saying what came back", async () => {
     const origin = catchAll();
 
-    const result = await discover(origin, robots(origin, `${origin}/site-map.xml`));
+    const result = await discover(
+      origin,
+      robots(origin, `${origin}/site-map.xml`)
+    );
 
     expect(result.all.map((sitemap) => [sitemap.url, sitemap.errors])).toEqual([
       [`${origin}/site-map.xml`, [SITEMAP_HTML_PAGE_ERROR]],
     ]);
-    expect(result.discovered.map((sitemap) => sitemap.url)).toEqual([`${origin}/site-map.xml`]);
+    expect(result.discovered.map((sitemap) => sitemap.url)).toEqual([
+      `${origin}/site-map.xml`,
+    ]);
   });
 
   test("a declared sitemap that redirects to a web page is still the declared one", async () => {
@@ -111,7 +135,10 @@ describe("guessed sitemap locations on a catch-all server (#670)", () => {
       "/old-sitemap.xml": { body: "", headers: { location: "/" }, status: 301 },
     }));
 
-    const result = await discover(origin, robots(origin, `${origin}/old-sitemap.xml`));
+    const result = await discover(
+      origin,
+      robots(origin, `${origin}/old-sitemap.xml`)
+    );
 
     expect(result.all.map((sitemap) => [sitemap.url, sitemap.errors])).toEqual([
       [`${origin}/old-sitemap.xml`, [SITEMAP_HTML_PAGE_ERROR]],
@@ -121,7 +148,10 @@ describe("guessed sitemap locations on a catch-all server (#670)", () => {
   test("a declared sitemap at a common location keeps its error too", async () => {
     const origin = catchAll();
 
-    const result = await discover(origin, robots(origin, `${origin}/sitemap.xml`));
+    const result = await discover(
+      origin,
+      robots(origin, `${origin}/sitemap.xml`)
+    );
 
     expect(result.all.map((sitemap) => [sitemap.url, sitemap.errors])).toEqual([
       [`${origin}/sitemap.xml`, [SITEMAP_HTML_PAGE_ERROR]],
@@ -130,14 +160,21 @@ describe("guessed sitemap locations on a catch-all server (#670)", () => {
 
   test("a real sitemap at a guessed location is still parsed and validated", async () => {
     const origin = catchAll((base) => ({
-      "/sitemap_index.xml": { body: urlset(`${base}/`, `${base}/about`), headers: XML_TYPE },
+      "/sitemap_index.xml": {
+        body: urlset(`${base}/`, `${base}/about`),
+        headers: XML_TYPE,
+      },
     }));
 
     const result = await discover(origin);
 
-    expect(result.discovered.map((sitemap) => [sitemap.url, sitemap.errors, sitemap.urlCount])).toEqual([
-      [`${origin}/sitemap_index.xml`, [], 2],
-    ]);
+    expect(
+      result.discovered.map((sitemap) => [
+        sitemap.url,
+        sitemap.errors,
+        sitemap.urlCount,
+      ])
+    ).toEqual([[`${origin}/sitemap_index.xml`, [], 2]]);
     expect(result.all).toHaveLength(1);
   });
 
@@ -163,7 +200,10 @@ describe("guessed sitemap locations on a catch-all server (#670)", () => {
     // XML that is not a sitemap is something the site put there; only a web
     // page or a body that is not XML at all is ruled out.
     const origin = catchAll(() => ({
-      "/sitemap.xml": { body: '<?xml version="1.0"?><rss><channel/></rss>', headers: XML_TYPE },
+      "/sitemap.xml": {
+        body: '<?xml version="1.0"?><rss><channel/></rss>',
+        headers: XML_TYPE,
+      },
     }));
 
     const result = await discover(origin);
@@ -191,18 +231,30 @@ describe("what counts as a web page rather than a sitemap", () => {
   });
 
   test("a fragment served as text/html is a page", () => {
-    const decoded = decodeSitemapBody(bytes("<div>Not found</div>"), url, "text/html; charset=utf-8");
+    const decoded = decodeSitemapBody(
+      bytes("<div>Not found</div>"),
+      url,
+      "text/html; charset=utf-8"
+    );
     expect(decoded.notASitemap).toBe(true);
     expect(decoded.data.errors).toEqual([SITEMAP_HTML_PAGE_ERROR]);
   });
 
   test("a body that is not XML at all is not a sitemap", () => {
-    const decoded = decodeSitemapBody(bytes('{"error":"not found"}'), url, "application/json");
+    const decoded = decodeSitemapBody(
+      bytes('{"error":"not found"}'),
+      url,
+      "application/json"
+    );
     expect(decoded.notASitemap).toBe(true);
   });
 
   test("a valid sitemap served as text/html is still a sitemap", () => {
-    const decoded = decodeSitemapBody(bytes(urlset("https://example.com/")), url, "text/html");
+    const decoded = decodeSitemapBody(
+      bytes(urlset("https://example.com/")),
+      url,
+      "text/html"
+    );
     expect(decoded.notASitemap).toBeUndefined();
     expect(decoded.data.errors).toEqual([]);
     expect(decoded.data.urlCount).toBe(1);
@@ -230,14 +282,22 @@ describe("what counts as a web page rather than a sitemap", () => {
   });
 
   test("an opening comment of any length is skipped", () => {
-    const decoded = decodeSitemapBody(bytes(`<!--${"x".repeat(10_000)}--><html><body>x</body></html>`), url, "application/xml");
+    const decoded = decodeSitemapBody(
+      bytes(`<!--${"x".repeat(10_000)}--><html><body>x</body></html>`),
+      url,
+      "application/xml"
+    );
     expect(decoded.notASitemap).toBe(true);
   });
 
   test("many opening comments are read in linear time", () => {
     // A backtracking pattern over repeated comments took seconds here.
     const started = performance.now();
-    const decoded = decodeSitemapBody(bytes(`${"<!--x-->".repeat(5_000)}${urlset("https://example.com/")}`), url, "application/xml");
+    const decoded = decodeSitemapBody(
+      bytes(`${"<!--x-->".repeat(5_000)}${urlset("https://example.com/")}`),
+      url,
+      "application/xml"
+    );
     expect(decoded.data.urlCount).toBe(1);
     expect(performance.now() - started).toBeLessThan(1_000);
   });

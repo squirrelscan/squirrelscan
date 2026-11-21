@@ -1,13 +1,19 @@
-import { Effect } from "effect";
-import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
-import { readBodyCapped } from "@squirrelscan/utils/response-body";
+import type { LlmsTxtData, LlmsTxtFile } from "@squirrelscan/core-contracts";
 
-import { optionalProbeTimeoutMs, safeFetchWithDeadline, samePathRedirect, ungated } from "./deadline";
-import { noteRefusal } from "./refusals";
+import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+import { readBodyCapped } from "@squirrelscan/utils/response-body";
+import { Effect } from "effect";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
-import type { LlmsTxtData, LlmsTxtFile } from "@squirrelscan/core-contracts";
-import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+
+import {
+  optionalProbeTimeoutMs,
+  safeFetchWithDeadline,
+  samePathRedirect,
+  ungated,
+} from "./deadline";
+import { noteRefusal } from "./refusals";
 
 const LLMS_FETCH_TIMEOUT_MS = 30_000;
 // Cap stored content so a pathological/huge file can't bloat memory or SQLite.
@@ -26,7 +32,7 @@ async function fetchOne(
   userAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
-  pathLocked = false,
+  pathLocked = false
 ): Promise<LlmsTxtFile | null> {
   const timeoutMs = optionalProbeTimeoutMs(budget, LLMS_FETCH_TIMEOUT_MS);
   if (timeoutMs === null) return null;
@@ -36,7 +42,7 @@ async function fetchOne(
       {
         headers: mergeHeaderRecords(
           { "User-Agent": userAgent, Accept: "text/plain, text/markdown, */*" },
-          customHeaders,
+          customHeaders
         ),
       },
       timeoutMs,
@@ -74,7 +80,7 @@ async function fetchOne(
       },
       budget?.egress,
       // Approved path by path (#1655): a redirect to another path is no answer, so no file is recorded.
-      pathLocked ? samePathRedirect : undefined,
+      pathLocked ? samePathRedirect : undefined
     );
   } catch {
     return null;
@@ -96,16 +102,20 @@ export function fetchLlmsTxt(
     fetchFull?: boolean;
     /** The paths are approved one by one: a redirect may not leave its path. */
     pathLocked?: boolean;
-  } = {},
+  } = {}
 ): Effect.Effect<LlmsTxtData | null, never, never> {
   const { fetchFull = true, pathLocked = false } = options;
   const llmsUrl = new URL("/llms.txt", baseUrl).toString();
   const fullUrl = new URL("/llms-full.txt", baseUrl).toString();
   return Effect.promise(async () => {
     const [llmsTxt, llmsFullTxt] = await Promise.all([
-      gate(llmsUrl, () => fetchOne(llmsUrl, userAgent, customHeaders, budget, pathLocked)),
+      gate(llmsUrl, () =>
+        fetchOne(llmsUrl, userAgent, customHeaders, budget, pathLocked)
+      ),
       fetchFull
-        ? gate(fullUrl, () => fetchOne(fullUrl, userAgent, customHeaders, budget, pathLocked))
+        ? gate(fullUrl, () =>
+            fetchOne(fullUrl, userAgent, customHeaders, budget, pathLocked)
+          )
         : Promise.resolve(null),
     ]);
     if (!llmsTxt) return null;

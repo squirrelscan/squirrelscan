@@ -7,7 +7,10 @@
 // address); with none, or when the handshake finds no problem, the fetch's own
 // detail stands.
 
-import { auditFailureDetail, type AuditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
+import {
+  auditFailureDetail,
+  type AuditFailureDetail,
+} from "@squirrelscan/core-contracts/failure-reason";
 import {
   tlsFailureCause,
   type TlsProbe,
@@ -29,7 +32,7 @@ export async function withTlsCause(
   detail: AuditFailureDetail,
   url: string,
   probe: TlsProbeFn | undefined,
-  timeoutMs: number = TLS_CAUSE_TIMEOUT_MS,
+  timeoutMs: number = TLS_CAUSE_TIMEOUT_MS
 ): Promise<AuditFailureDetail> {
   if (detail.code !== "tls" || !probe) return detail;
   const waitMs = Math.min(TLS_CAUSE_TIMEOUT_MS, Math.floor(timeoutMs));
@@ -65,7 +68,7 @@ export function memoizeTlsProbe(probe: TlsProbeFn): TlsProbeFn {
           kind: "unreachable",
           code: "error",
           message: error instanceof Error ? error.message : String(error),
-        }),
+        })
       );
       seen.set(key, answer);
     }

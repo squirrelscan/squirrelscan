@@ -28,7 +28,10 @@ function mockResponse(url: string, body: string): FetchResponse {
     finalUrl: url,
     status: 200,
     // max-age keeps every stored page "fresh" on the re-run (skip request).
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "max-age=3600" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "max-age=3600",
+    },
     body,
     timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
     redirectChain: {
@@ -91,13 +94,13 @@ async function seedRoot(storage: CrawlStorage, crawlId: string) {
       source: "seed" as const,
       enqueuedAt: Date.now(),
       retryCount: 0,
-    }),
+    })
   );
 }
 
 async function createCrawlRecord(
   storage: CrawlStorage,
-  config: Record<string, unknown>,
+  config: Record<string, unknown>
 ): Promise<string> {
   return Effect.runPromise(
     storage.createCrawl({
@@ -108,7 +111,7 @@ async function createCrawlRecord(
       status: "paused",
       config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
-    }),
+    })
   );
 }
 
@@ -133,7 +136,10 @@ describe("cache-fresh pages skip the per-host delay (#824)", () => {
     const crawlId1 = await createCrawlRecord(storage, cfg1);
     await seedRoot(storage, crawlId1);
     const crawler1 = await Effect.runPromise(
-      createCrawler({ config: { ...cfg1, documentFetcher: pass1Fetcher }, storage }),
+      createCrawler({
+        config: { ...cfg1, documentFetcher: pass1Fetcher },
+        storage,
+      })
     );
     await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
     // Sanity: the cold crawl really fetched the whole hub.
@@ -161,7 +167,10 @@ describe("cache-fresh pages skip the per-host delay (#824)", () => {
     const crawlId2 = await createCrawlRecord(storage, cfg2);
     await seedRoot(storage, crawlId2);
     const crawler2 = await Effect.runPromise(
-      createCrawler({ config: { ...cfg2, documentFetcher: pass2Fetcher }, storage }),
+      createCrawler({
+        config: { ...cfg2, documentFetcher: pass2Fetcher },
+        storage,
+      })
     );
 
     const started = Date.now();

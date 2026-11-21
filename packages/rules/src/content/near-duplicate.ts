@@ -13,7 +13,6 @@
 // The pair loop and the legacy hashing loop yield to the event loop on a time budget, so a large
 // crawl cannot starve the timer-based rule deadline.
 
-import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import type {
   CheckItem,
   CheckResult,
@@ -22,7 +21,10 @@ import type {
   SiteQuery,
 } from "@squirrelscan/core-contracts";
 
+import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
 import type { Rule, RuleContext, RuleResult } from "../types";
+
 import { noindexSource } from "../shared/noindex";
 import { identity } from "../shared/region-variants";
 import {
@@ -86,7 +88,10 @@ function isChrome(el: Element): boolean {
 }
 
 function isLetterCode(c: number): boolean {
-  if (c < 0x80) return (c >= 48 && c <= 57) || (c >= 97 && c <= 122) || (c >= 65 && c <= 90);
+  if (c < 0x80)
+    return (
+      (c >= 48 && c <= 57) || (c >= 97 && c <= 122) || (c >= 65 && c <= 90)
+    );
   // Non-ASCII: a letter unless it is whitespace or general punctuation.
   return !isSpaceCode(c) && !(c >= 0x2000 && c <= 0x206f);
 }
@@ -119,7 +124,7 @@ function mainRoot(doc: Document): Element | null {
 export function pageContentSimhash(
   doc: Document | null | undefined,
   url: string,
-  finalUrl: string | null | undefined,
+  finalUrl: string | null | undefined
 ): string | null {
   if (!doc || isRedirectedPage(url, finalUrl)) return null;
   const root = mainRoot(doc);
@@ -163,8 +168,12 @@ export function pageContentSimhash(
         h2 = Math.imul(h2 ^ c, 1597334677);
       }
     }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    h1 =
+      Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+      Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 =
+      Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+      Math.imul(h1 ^ (h1 >>> 13), 3266489909);
     const key = (h1 >>> 0) * 2097152 + (h2 >>> 11);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -238,15 +247,21 @@ interface Node {
 /** The one builder both paths feed. */
 export async function buildNearDuplicate(
   pages: readonly NearDupPage[],
-  pageCount: number,
+  pageCount: number
 ): Promise<CheckResult> {
   if (pageCount < NEAR_DUP_MIN_PAGES) {
     return skip(
-      `Only ${pageCount} page(s) crawled; ${NEAR_DUP_MIN_PAGES} needed to compare pages for near-duplicate content`,
+      `Only ${pageCount} page(s) crawled; ${NEAR_DUP_MIN_PAGES} needed to compare pages for near-duplicate content`
     );
   }
 
-  const excluded = { noindex: 0, notOk: 0, pagination: 0, unhashed: 0, hreflang: 0 };
+  const excluded = {
+    noindex: 0,
+    notOk: 0,
+    pagination: 0,
+    unhashed: 0,
+    hreflang: 0,
+  };
   const candidates: NearDupPage[] = [];
   for (const p of pages) {
     if (p.status < 200 || p.status > 299) excluded.notOk++;
@@ -255,7 +270,8 @@ export async function buildNearDuplicate(
     else if (p.simhash === null) excluded.unhashed++;
     else candidates.push(p);
   }
-  if (candidates.length < 2) return skip("Fewer than 2 pages have enough main text to compare");
+  if (candidates.length < 2)
+    return skip("Fewer than 2 pages have enough main text to compare");
 
   candidates.sort((a, b) => cmp(a.url, b.url));
   const metas = new Map<string, PageMeta>();
@@ -279,7 +295,8 @@ export async function buildNearDuplicate(
   }
   const judged = Math.min(nodes.length, NEAR_DUP_MAX_NODES);
   let unjudgedPages = 0;
-  for (let i = judged; i < nodes.length; i++) unjudgedPages += nodes[i]!.urls.length;
+  for (let i = judged; i < nodes.length; i++)
+    unjudgedPages += nodes[i]!.urls.length;
 
   // Pairwise Hamming over the judged nodes, union-find on pairs within the threshold.
   const lo = new Uint32Array(judged);
@@ -357,7 +374,8 @@ export async function buildNearDuplicate(
       continue;
     }
     let exact = 0;
-    for (const i of idxs) if (nodes[i]!.urls.length > 1) exact += nodes[i]!.urls.length;
+    for (const i of idxs)
+      if (nodes[i]!.urls.length > 1) exact += nodes[i]!.urls.length;
     found.push({ urls, nodes: idxs.length, exact, widest: widest[root]! });
   }
 
@@ -374,7 +392,7 @@ export async function buildNearDuplicate(
     // Pages past the compare cap were never compared, so "no clusters" is not a verdict on them.
     return skip(
       `${unjudgedPages} page(s) past the ${NEAR_DUP_MAX_NODES} distinct texts compared were not checked for near-duplicates`,
-      common,
+      common
     );
   }
 
@@ -387,7 +405,9 @@ export async function buildNearDuplicate(
     };
   }
 
-  found.sort((a, b) => b.urls.length - a.urls.length || cmp(a.urls[0]!, b.urls[0]!));
+  found.sort(
+    (a, b) => b.urls.length - a.urls.length || cmp(a.urls[0]!, b.urls[0]!)
+  );
   const totalPages = found.reduce((sum, c) => sum + c.urls.length, 0);
   const shown = found.slice(0, MAX_CLUSTERS);
   const items: CheckItem[] = shown.map((c) => {
@@ -426,13 +446,19 @@ export async function buildNearDuplicate(
   };
 }
 
-async function runStreaming(ctx: RuleContext, siteQuery: SiteQuery): Promise<RuleResult> {
+async function runStreaming(
+  ctx: RuleContext,
+  siteQuery: SiteQuery
+): Promise<RuleResult> {
   const exact = new Map<string, string>();
   for (const page of ctx.collectedSignals?.pages ?? []) {
-    if (page.contentFingerprint) exact.set(page.url, page.contentFingerprint.hash);
+    if (page.contentFingerprint)
+      exact.set(page.url, page.contentFingerprint.hash);
   }
   const pages: NearDupPage[] = [];
-  for await (const row of siteQuery.pagesMatching(() => true) as AsyncIterable<PageFeatureRow>) {
+  for await (const row of siteQuery.pagesMatching(
+    () => true
+  ) as AsyncIterable<PageFeatureRow>) {
     pages.push({
       url: row.normalizedUrl,
       status: row.status,
@@ -476,7 +502,11 @@ async function runLegacy(ctx: RuleContext): Promise<RuleResult> {
         exactKey:
           simhash === null
             ? null
-            : (fingerprintForPage(page.parsed?.document, page.url, page.finalUrl)?.hash ?? null),
+            : (fingerprintForPage(
+                page.parsed?.document,
+                page.url,
+                page.finalUrl
+              )?.hash ?? null),
       });
     }
   }

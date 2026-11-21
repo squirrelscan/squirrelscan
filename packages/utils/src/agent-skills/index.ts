@@ -13,7 +13,12 @@
  * Runtime-neutral (Bun and Workers): no YAML parser (frontmatter is parsed at
  * bundle time) and WebCrypto for the digests.
  */
-import type { BundledSkill, SkillEntry, SkillFileContents, SkillResource } from "./types";
+import type {
+  BundledSkill,
+  SkillEntry,
+  SkillFileContents,
+  SkillResource,
+} from "./types";
 
 import { AGENT_SKILLS_BUNDLE, AGENT_SKILLS_SOURCE } from "./bundle.generated";
 
@@ -30,14 +35,20 @@ export { AGENT_SKILLS_BUNDLE, AGENT_SKILLS_SOURCE };
 export const SKILLS_EXTENSION = "io.modelcontextprotocol/skills";
 
 /** The extension's per-skill limits: what every conforming host accepts. */
-export const SKILL_LIMITS = { maxResources: 512, maxBytes: 16 * 1024 * 1024 } as const;
+export const SKILL_LIMITS = {
+  maxResources: 512,
+  maxBytes: 16 * 1024 * 1024,
+} as const;
 
 /**
  * `ttlMs` / `cacheScope` for `skills/list`, `skills/get` and the skill files.
  * The bundle only changes with a deploy or a CLI release, and nothing in it
  * depends on who is asking.
  */
-export const SKILLS_CACHE = { ttlMs: 60 * 60 * 1000, cacheScope: "public" } as const;
+export const SKILLS_CACHE = {
+  ttlMs: 60 * 60 * 1000,
+  cacheScope: "public",
+} as const;
 
 /** `skill://<name>/<path>`, the extension's resource URI for a skill file. */
 export function skillUri(skill: string, path: string): string {
@@ -65,7 +76,7 @@ let files: Map<string, SkillFile> | undefined;
 
 /** Every file of every bundled skill, keyed by URI. */
 export function agentSkillFiles(
-  bundle: readonly BundledSkill[] = AGENT_SKILLS_BUNDLE,
+  bundle: readonly BundledSkill[] = AGENT_SKILLS_BUNDLE
 ): ReadonlyMap<string, SkillFile> {
   if (bundle === AGENT_SKILLS_BUNDLE && files) return files;
   const out = new Map<string, SkillFile>();
@@ -80,7 +91,14 @@ export function agentSkillFiles(
         file.encoding === "base64"
           ? decodeBase64(file.content)
           : new TextEncoder().encode(file.content);
-      out.set(uri, { uri, skill: skill.name, path: file.path, mimeType: file.mimeType, bytes, contents });
+      out.set(uri, {
+        uri,
+        skill: skill.name,
+        path: file.path,
+        mimeType: file.mimeType,
+        bytes,
+        contents,
+      });
     }
   }
   if (bundle === AGENT_SKILLS_BUNDLE) files = out;
@@ -95,7 +113,9 @@ export function readAgentSkillFile(uri: string): SkillFileContents | undefined {
 async function sha256(bytes: Uint8Array): Promise<string> {
   // The cast only satisfies TS's lib typing of `Uint8Array<ArrayBufferLike>`.
   const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
 }
 
 /**
@@ -104,7 +124,7 @@ async function sha256(bytes: Uint8Array): Promise<string> {
  * the digest and size of the bytes this module serves for it.
  */
 export async function buildSkillEntries(
-  bundle: readonly BundledSkill[] = AGENT_SKILLS_BUNDLE,
+  bundle: readonly BundledSkill[] = AGENT_SKILLS_BUNDLE
 ): Promise<SkillEntry[]> {
   const served = agentSkillFiles(bundle);
   const sorted = [...bundle].sort((a, b) => a.name.localeCompare(b.name));
@@ -114,17 +134,22 @@ export async function buildSkillEntries(
         skill.files.map(async (file) => {
           // Built from the same bundle just above, so every file is present.
           const servedFile = served.get(skillUri(skill.name, file.path));
-          if (!servedFile) throw new Error(`agent skills: ${skill.name}/${file.path} missing`);
+          if (!servedFile)
+            throw new Error(`agent skills: ${skill.name}/${file.path} missing`);
           const { uri, bytes } = servedFile;
-          return { uri, digest: `sha256:${await sha256(bytes)}`, size: bytes.byteLength };
-        }),
+          return {
+            uri,
+            digest: `sha256:${await sha256(bytes)}`,
+            size: bytes.byteLength,
+          };
+        })
       );
       return {
         uri: skillUri(skill.name, "SKILL.md"),
         frontmatter: skill.frontmatter as SkillEntry["frontmatter"],
         resources,
       };
-    }),
+    })
   );
 }
 
@@ -137,6 +162,8 @@ export function agentSkillEntries(): Promise<SkillEntry[]> {
 }
 
 /** The entry for the skill whose SKILL.md is at `uri`, or undefined. */
-export async function agentSkillEntry(uri: string): Promise<SkillEntry | undefined> {
+export async function agentSkillEntry(
+  uri: string
+): Promise<SkillEntry | undefined> {
   return (await agentSkillEntries()).find((entry) => entry.uri === uri);
 }

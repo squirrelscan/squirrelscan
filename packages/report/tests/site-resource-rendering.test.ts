@@ -7,30 +7,46 @@
 // resource evidence at all, which must render exactly as it did before.
 
 import { describe, expect, test } from "bun:test";
+
 import type {
   AuditReport,
   CheckResult,
   ReportRuleResult,
   SiteResourceOccurrence,
 } from "../src/types";
+
+import { renderHtml } from "../src/output/html";
+import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
-import { renderHtml } from "../src/output/html";
-import { renderJson } from "../src/output/json";
 
 /** Markdown output with its backslash escapes undone, to compare wording with the other formats (3522). */
-const plain = (markdown: string): string => markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
+const plain = (markdown: string): string =>
+  markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
 
 const ORIGIN = "https://example.test";
-const SHARED = [`${ORIGIN}/assets/app.js.map`, `${ORIGIN}/assets/vendor.js.map`];
+const SHARED = [
+  `${ORIGIN}/assets/app.js.map`,
+  `${ORIGIN}/assets/vendor.js.map`,
+];
 const PAGES = [`${ORIGIN}/`, `${ORIGIN}/about`, `${ORIGIN}/pricing`];
 
 function occurrence(pageUrl: string, key: string): SiteResourceOccurrence {
-  return { kind: "source-map", key, pageUrl, source: "/assets/app.js", siteOrigin: ORIGIN };
+  return {
+    kind: "source-map",
+    key,
+    pageUrl,
+    source: "/assets/app.js",
+    siteOrigin: ORIGIN,
+  };
 }
 
-function check(pageUrl: string, keys: string[], withEvidence = true): CheckResult {
+function check(
+  pageUrl: string,
+  keys: string[],
+  withEvidence = true
+): CheckResult {
   return {
     name: "source-maps-exposed",
     status: "warn",
@@ -86,7 +102,7 @@ describe("a shared bundle on every page", () => {
   test("llm emits one unit and drops the per-page Pages and Items lines", () => {
     const out = renderLlm(full);
     expect(out).toContain(
-      `<fix-once scope="site-resource" pages="3" resources="2">${SENTENCE}</fix-once>`,
+      `<fix-once scope="site-resource" pages="3" resources="2">${SENTENCE}</fix-once>`
     );
     expect(out).not.toContain("Pages (");
     expect(out).not.toContain("Items (");
@@ -132,20 +148,22 @@ describe("a section bundle alongside the shared one", () => {
   test("two units, each with its own exact page count", () => {
     const out = renderLlm(sectioned);
     expect(out).toContain(
-      `<fix-once scope="site-resource" pages="3" resources="2">${SENTENCE}</fix-once>`,
+      `<fix-once scope="site-resource" pages="3" resources="2">${SENTENCE}</fix-once>`
     );
     expect(out).toContain(
-      '<fix-once scope="site-resource" pages="2" resources="1">Fix once in the build: 1 source map exposed by shared bundles (blog.js.map), 2 pages: /about, /pricing</fix-once>',
+      '<fix-once scope="site-resource" pages="2" resources="1">Fix once in the build: 1 source map exposed by shared bundles (blog.js.map), 2 pages: /about, /pricing</fix-once>'
     );
   });
 });
 
 describe("more distinct maps than the unit names", () => {
   test("the count is the true total and the remainder is stated", () => {
-    const many = ["a", "b", "c", "d", "e"].map((n) => `${ORIGIN}/assets/${n}.js.map`);
+    const many = ["a", "b", "c", "d", "e"].map(
+      (n) => `${ORIGIN}/assets/${n}.js.map`
+    );
     const out = renderLlm(report(PAGES.map((page) => check(page, many))));
     expect(out).toContain(
-      "Fix once in the build: 5 source maps exposed by shared bundles (a.js.map, b.js.map, c.js.map, +2 more), 3 pages: /, /about, /pricing",
+      "Fix once in the build: 5 source maps exposed by shared bundles (a.js.map, b.js.map, c.js.map, +2 more), 3 pages: /, /about, /pricing"
     );
   });
 });

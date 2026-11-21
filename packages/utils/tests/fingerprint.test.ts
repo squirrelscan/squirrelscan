@@ -84,7 +84,9 @@ describe("normalizeHtmlForFingerprint", () => {
 
   test("empty string and injection-free string are returned as-is", () => {
     expect(normalizeHtmlForFingerprint("")).toBe("");
-    expect(normalizeHtmlForFingerprint("<p>no scripts here</p>")).toBe("<p>no scripts here</p>");
+    expect(normalizeHtmlForFingerprint("<p>no scripts here</p>")).toBe(
+      "<p>no scripts here</p>"
+    );
   });
 
   test("TanStack Start pages differing only in the inline u:<epoch-ms> normalize identically", () => {
@@ -105,7 +107,9 @@ describe("normalizeHtmlForFingerprint", () => {
     const b = `<body><script>boot();</script><p>order 1783993374448 shipped</p></body>`;
 
     expect(normalizeHtmlForFingerprint(a)).toContain("1783993372389");
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 
   test("a 14-digit integer inside a script is preserved (not treated as epoch-ms)", () => {
@@ -134,6 +138,8 @@ describe("normalizeHtmlForFingerprint", () => {
     const b = `<html><body><script src="/app.js?v=9876543210987"></script></body></html>`;
 
     expect(normalizeHtmlForFingerprint(a)).toContain("1783993372389");
-    expect(normalizeHtmlForFingerprint(a)).not.toBe(normalizeHtmlForFingerprint(b));
+    expect(normalizeHtmlForFingerprint(a)).not.toBe(
+      normalizeHtmlForFingerprint(b)
+    );
   });
 });

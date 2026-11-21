@@ -7,8 +7,9 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { isOffSiteFinalUrl, resolveSeedRedirect } from "../src/frontier";
 import { SQLiteStorage } from "../src/storage/sqlite";
 import { WELL_KNOWN_PATHS } from "../src/well-known";
@@ -65,7 +66,7 @@ function serveTarget(): RecordingServer {
       paths.push(new URL(req.url).pathname);
       return new Response(
         `<!doctype html><html><head><title>${TARGET_TITLE}</title></head><body><p>${TARGET_BODY}</p></body></html>`,
-        { headers: { "content-type": "text/html" } },
+        { headers: { "content-type": "text/html" } }
       );
     },
   });
@@ -112,12 +113,19 @@ afterEach(() => {
   while (servers.length > 0) servers.pop()?.stop();
 });
 
-async function crawl(targetUrl: string, originalUrl: string, config: Partial<CrawlerConfig> = {}) {
+async function crawl(
+  targetUrl: string,
+  originalUrl: string,
+  config: Partial<CrawlerConfig> = {}
+) {
   const storage = new SQLiteStorage(":memory:");
   return Effect.runPromise(
     Effect.gen(function* () {
       yield* storage.init();
-      const crawler = yield* createCrawler({ config: { ...CONFIG, ...config }, storage });
+      const crawler = yield* createCrawler({
+        config: { ...CONFIG, ...config },
+        storage,
+      });
       const crawlId = yield* crawler.start(targetUrl, originalUrl);
       const meta = yield* storage.getCrawl(crawlId);
       const pages = yield* storage.getPages(crawlId);
@@ -126,7 +134,7 @@ async function crawl(targetUrl: string, originalUrl: string, config: Partial<Cra
       const wellKnown = yield* storage.getWellKnownProbe(crawlId);
       const markdown = yield* storage.getMarkdownProbe(crawlId);
       return { meta, pages, robots, llms, wellKnown, markdown };
-    }),
+    })
   );
 }
 
@@ -137,7 +145,7 @@ describe("seed redirect that leaves the seed's site", () => {
 
     const { meta, pages, robots, llms, wellKnown, markdown } = await crawl(
       `${seed.origin}/`,
-      `${seed.origin}/`,
+      `${seed.origin}/`
     );
 
     // The audit is about the seed, not whatever it bounced to.
@@ -168,7 +176,10 @@ describe("seed redirect that leaves the seed's site", () => {
     const target = track(serveTarget());
     const seed = track(serveSingleRedirect(`${target.origin}${TARGET_PATH}`));
 
-    const { meta, pages } = await crawl(`${target.origin}${TARGET_PATH}`, `${seed.origin}/`);
+    const { meta, pages } = await crawl(
+      `${target.origin}${TARGET_PATH}`,
+      `${seed.origin}/`
+    );
 
     expect(meta?.baseUrl).toBe(seed.origin);
     // The refused target is still recorded, just not adopted — that divergence
@@ -207,9 +218,12 @@ describe("scope config the user asked for", () => {
           });
         }
         if (url.hostname === "localhost") {
-          return new Response(`<!doctype html><html><head><title>${TARGET_TITLE}</title></head></html>`, {
-            headers: { "content-type": "text/html" },
-          });
+          return new Response(
+            `<!doctype html><html><head><title>${TARGET_TITLE}</title></head></html>`,
+            {
+              headers: { "content-type": "text/html" },
+            }
+          );
         }
         return new Response("not found", { status: 404 });
       },
@@ -235,7 +249,9 @@ describe("scope config the user asked for", () => {
     });
 
     expect(meta?.baseUrl).toBe(seed.origin);
-    expect(pages.some((p) => p.finalUrl === `${target.origin}${TARGET_PATH}`)).toBe(false);
+    expect(
+      pages.some((p) => p.finalUrl === `${target.origin}${TARGET_PATH}`)
+    ).toBe(false);
     expect(JSON.stringify(pages)).not.toContain(TARGET_TITLE);
   });
 });
@@ -249,12 +265,18 @@ describe("seed redirect that stays on the seed's site", () => {
         const path = new URL(req.url).pathname;
         paths.push(path);
         if (path === "/") {
-          return new Response(null, { status: 302, headers: { location: "/en" } });
+          return new Response(null, {
+            status: 302,
+            headers: { location: "/en" },
+          });
         }
         if (path === "/en") {
-          return new Response("<!doctype html><html><head><title>Home</title></head></html>", {
-            headers: { "content-type": "text/html" },
-          });
+          return new Response(
+            "<!doctype html><html><head><title>Home</title></head></html>",
+            {
+              headers: { "content-type": "text/html" },
+            }
+          );
         }
         return new Response("not found", { status: 404 });
       },
@@ -270,19 +292,24 @@ describe("seed redirect that stays on the seed's site", () => {
 });
 
 describe("resolveSeedRedirect", () => {
-  const adopted = (seed: string, final: string) => resolveSeedRedirect(seed, final);
+  const adopted = (seed: string, final: string) =>
+    resolveSeedRedirect(seed, final);
 
   test("adopts a redirect within the seed's registrable domain", () => {
-    expect(adopted("https://example.com/", "https://www.example.com/")).toEqual({
-      baseUrl: "https://www.example.com",
-      seedUrl: "https://www.example.com/",
-      offSite: false,
-    });
-    expect(adopted("https://example.com/", "https://app.example.com/home").baseUrl).toBe(
-      "https://app.example.com",
+    expect(adopted("https://example.com/", "https://www.example.com/")).toEqual(
+      {
+        baseUrl: "https://www.example.com",
+        seedUrl: "https://www.example.com/",
+        offSite: false,
+      }
     );
+    expect(
+      adopted("https://example.com/", "https://app.example.com/home").baseUrl
+    ).toBe("https://app.example.com");
     // Multi-label public suffixes come from the real PSL, not a curated table.
-    expect(adopted("https://example.co.uk/", "https://www.example.co.uk/").offSite).toBe(false);
+    expect(
+      adopted("https://example.co.uk/", "https://www.example.co.uk/").offSite
+    ).toBe(false);
   });
 
   test("adopts an http→https upgrade", () => {
@@ -294,31 +321,43 @@ describe("resolveSeedRedirect", () => {
   });
 
   test("refuses a redirect to another registrable domain", () => {
-    expect(adopted("https://example.com/", "https://cdn.example.net/x")).toEqual({
+    expect(
+      adopted("https://example.com/", "https://cdn.example.net/x")
+    ).toEqual({
       baseUrl: "https://example.com",
       seedUrl: "https://example.com/",
       offSite: true,
     });
-    expect(adopted("https://example.co.uk/", "https://evil.co.uk/").offSite).toBe(true);
+    expect(
+      adopted("https://example.co.uk/", "https://evil.co.uk/").offSite
+    ).toBe(true);
   });
 
   test("refuses a port hop on the same host", () => {
     // The loopback pivot: same hostname, different service.
-    expect(adopted("http://127.0.0.1:8750/", "http://127.0.0.1:8751/internal")).toEqual({
+    expect(
+      adopted("http://127.0.0.1:8750/", "http://127.0.0.1:8751/internal")
+    ).toEqual({
       baseUrl: "http://127.0.0.1:8750",
       seedUrl: "http://127.0.0.1:8750/",
       offSite: true,
     });
-    expect(adopted("http://localhost:3000/", "http://localhost:9229/json").offSite).toBe(true);
+    expect(
+      adopted("http://localhost:3000/", "http://localhost:9229/json").offSite
+    ).toBe(true);
   });
 
   test("refuses a hop between tenants of a shared hosting platform", () => {
     // allowPrivateDomains keeps `*.pages.dev` per-tenant rather than one site.
-    expect(adopted("https://mine.pages.dev/", "https://theirs.pages.dev/").offSite).toBe(true);
+    expect(
+      adopted("https://mine.pages.dev/", "https://theirs.pages.dev/").offSite
+    ).toBe(true);
   });
 
   test("refuses a hop between different loopback hosts", () => {
-    expect(adopted("http://localhost:8080/", "http://127.0.0.1:8080/").offSite).toBe(true);
+    expect(
+      adopted("http://localhost:8080/", "http://127.0.0.1:8080/").offSite
+    ).toBe(true);
   });
 
   test("keeps the resolved URL as the seed when nothing moved", () => {
@@ -330,7 +369,9 @@ describe("resolveSeedRedirect", () => {
   });
 
   test("unparseable input falls back instead of throwing", () => {
-    expect(adopted("not a url", "https://example.com/").baseUrl).toBe("https://example.com");
+    expect(adopted("not a url", "https://example.com/").baseUrl).toBe(
+      "https://example.com"
+    );
     expect(adopted("https://example.com/", "not a url")).toEqual({
       baseUrl: "https://example.com",
       seedUrl: "https://example.com/",
@@ -342,53 +383,81 @@ describe("resolveSeedRedirect", () => {
     // `new URL("blob:https://evil.test/x").origin` is "https://evil.test" — a
     // host nothing ever fetched. Basing the crawl on it would sweep every root
     // probe against it, so an unusable seed pins to what WAS fetched instead.
-    expect(adopted("blob:https://evil.test/x", "https://example.com/")).toEqual({
-      baseUrl: "https://example.com",
-      seedUrl: "https://example.com/",
-      offSite: false,
-    });
-    expect(adopted("about:blank", "https://example.com/").baseUrl).toBe("https://example.com");
-  });
-
-  test("a non-http landing is not adopted", () => {
-    expect(adopted("https://example.com/", "blob:https://evil.test/x")).toEqual({
-      baseUrl: "https://example.com",
-      seedUrl: "https://example.com/",
-      offSite: false,
-    });
-  });
-
-  test("host spellings that normalize to the same site are not off-site", () => {
-    expect(adopted("https://example.com/", "https://WWW.EXAMPLE.COM/").offSite).toBe(false);
-    // Trailing-dot (fully qualified) form of the same host.
-    expect(adopted("https://example.com/", "https://www.example.com./").offSite).toBe(false);
-    // Explicit default port is normalized away by WHATWG URL, so it is same-origin.
-    expect(adopted("https://example.com/", "https://example.com:443/en").baseUrl).toBe(
-      "https://example.com",
+    expect(adopted("blob:https://evil.test/x", "https://example.com/")).toEqual(
+      {
+        baseUrl: "https://example.com",
+        seedUrl: "https://example.com/",
+        offSite: false,
+      }
+    );
+    expect(adopted("about:blank", "https://example.com/").baseUrl).toBe(
+      "https://example.com"
     );
   });
 
+  test("a non-http landing is not adopted", () => {
+    expect(adopted("https://example.com/", "blob:https://evil.test/x")).toEqual(
+      {
+        baseUrl: "https://example.com",
+        seedUrl: "https://example.com/",
+        offSite: false,
+      }
+    );
+  });
+
+  test("host spellings that normalize to the same site are not off-site", () => {
+    expect(
+      adopted("https://example.com/", "https://WWW.EXAMPLE.COM/").offSite
+    ).toBe(false);
+    // Trailing-dot (fully qualified) form of the same host.
+    expect(
+      adopted("https://example.com/", "https://www.example.com./").offSite
+    ).toBe(false);
+    // Explicit default port is normalized away by WHATWG URL, so it is same-origin.
+    expect(
+      adopted("https://example.com/", "https://example.com:443/en").baseUrl
+    ).toBe("https://example.com");
+  });
+
   test("userinfo does not smuggle a different host past the check", () => {
-    expect(adopted("https://example.com/", "https://example.com@evil.test/").offSite).toBe(true);
+    expect(
+      adopted("https://example.com/", "https://example.com@evil.test/").offSite
+    ).toBe(true);
   });
 
   test("distinct IPv6 literals are different sites", () => {
-    expect(adopted("http://[::1]:8750/", "http://[::1]:8751/").offSite).toBe(true);
-    expect(adopted("http://[::1]:8750/", "http://[::2]:8750/").offSite).toBe(true);
-    expect(adopted("http://[::1]:8750/", "http://[0:0:0:0:0:0:0:1]:8750/x").offSite).toBe(false);
+    expect(adopted("http://[::1]:8750/", "http://[::1]:8751/").offSite).toBe(
+      true
+    );
+    expect(adopted("http://[::1]:8750/", "http://[::2]:8750/").offSite).toBe(
+      true
+    );
+    expect(
+      adopted("http://[::1]:8750/", "http://[0:0:0:0:0:0:0:1]:8750/x").offSite
+    ).toBe(false);
   });
 });
 
 describe("isOffSiteFinalUrl", () => {
   test("same-site hops are storable", () => {
-    expect(isOffSiteFinalUrl("https://example.com", "https://example.com/a")).toBe(false);
-    expect(isOffSiteFinalUrl("https://example.com", "https://www.example.com/a")).toBe(false);
-    expect(isOffSiteFinalUrl("http://example.com", "https://example.com/a")).toBe(false);
+    expect(
+      isOffSiteFinalUrl("https://example.com", "https://example.com/a")
+    ).toBe(false);
+    expect(
+      isOffSiteFinalUrl("https://example.com", "https://www.example.com/a")
+    ).toBe(false);
+    expect(
+      isOffSiteFinalUrl("http://example.com", "https://example.com/a")
+    ).toBe(false);
   });
 
   test("cross-site hops are not", () => {
-    expect(isOffSiteFinalUrl("https://example.com", "https://evil.test/a")).toBe(true);
-    expect(isOffSiteFinalUrl("http://127.0.0.1:8750", "http://127.0.0.1:8751/a")).toBe(true);
+    expect(
+      isOffSiteFinalUrl("https://example.com", "https://evil.test/a")
+    ).toBe(true);
+    expect(
+      isOffSiteFinalUrl("http://127.0.0.1:8750", "http://127.0.0.1:8751/a")
+    ).toBe(true);
   });
 
   test("an absent final URL is no evidence of a redirect", () => {
@@ -397,6 +466,8 @@ describe("isOffSiteFinalUrl", () => {
 
   test("a landing we cannot attribute fails closed", () => {
     expect(isOffSiteFinalUrl("https://example.com", "not a url")).toBe(true);
-    expect(isOffSiteFinalUrl("https://example.com", "blob:https://example.com/x")).toBe(true);
+    expect(
+      isOffSiteFinalUrl("https://example.com", "blob:https://example.com/x")
+    ).toBe(true);
   });
 });

@@ -1,12 +1,22 @@
 import { describe, expect, test } from "bun:test";
-import type { AuditReport, CheckResult, ComponentOccurrence, ReportRuleResult } from "../src/types";
+
+import type {
+  AuditReport,
+  CheckResult,
+  ComponentOccurrence,
+  ReportRuleResult,
+} from "../src/types";
+
 import { componentFixGroupDigest } from "../src/component-fix-groups";
 import { groupIssuesByCategory } from "../src/grouping";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderText } from "../src/output/text";
 
-function occurrence(pageUrl: string, overrides: Partial<ComponentOccurrence> = {}): ComponentOccurrence {
+function occurrence(
+  pageUrl: string,
+  overrides: Partial<ComponentOccurrence> = {}
+): ComponentOccurrence {
   return {
     version: 1,
     pageUrl,
@@ -16,9 +26,17 @@ function occurrence(pageUrl: string, overrides: Partial<ComponentOccurrence> = {
     confidence: "observed",
     region: { role: "footer", nestedIn: "none", structuralSignature: "region" },
     family: { key: "family", structuralSignature: "family" },
-    variant: { key: "variant", structuralSignature: "variant", contentHash: "content" },
+    variant: {
+      key: "variant",
+      structuralSignature: "variant",
+      contentHash: "content",
+    },
     element: { locator: "footer>a:1", structuralSignature: "element" },
-    defect: { kind: "link-text-generic", values: { text: "Read more" }, valueHashes: { text: "h" } },
+    defect: {
+      kind: "link-text-generic",
+      values: { text: "Read more" },
+      valueHashes: { text: "h" },
+    },
     ...overrides,
   };
 }
@@ -26,20 +44,44 @@ function occurrence(pageUrl: string, overrides: Partial<ComponentOccurrence> = {
 function report(checks: CheckResult[]): AuditReport {
   const rule: ReportRuleResult = {
     meta: {
-      id: "a11y/link-text", name: "Link text", description: "desc", solution: "sol",
-      category: "accessibility", scope: "page", severity: "warning", weight: 1,
+      id: "a11y/link-text",
+      name: "Link text",
+      description: "desc",
+      solution: "sol",
+      category: "accessibility",
+      scope: "page",
+      severity: "warning",
+      weight: 1,
     },
     checks,
   };
   return {
-    baseUrl: "https://example.test", timestamp: "2026-09-18T00:00:00.000Z", totalPages: 3,
-    passed: 0, warnings: checks.length, failed: 0, ruleResults: { "a11y/link-text": rule },
-    healthScore: { overall: 80, categories: [], groups: [], errorCount: 0, warningCount: 1, passedCount: 0 },
+    baseUrl: "https://example.test",
+    timestamp: "2026-09-18T00:00:00.000Z",
+    totalPages: 3,
+    passed: 0,
+    warnings: checks.length,
+    failed: 0,
+    ruleResults: { "a11y/link-text": rule },
+    healthScore: {
+      overall: 80,
+      categories: [],
+      groups: [],
+      errorCount: 0,
+      warningCount: 1,
+      passedCount: 0,
+    },
   } as unknown as AuditReport;
 }
 
 function check(pageUrl: string, evidence: ComponentOccurrence[]): CheckResult {
-  return { name: "generic-link-text", status: "warn", message: "Generic link text found", pageUrl, componentOccurrences: evidence };
+  return {
+    name: "generic-link-text",
+    status: "warn",
+    message: "Generic link text found",
+    pageUrl,
+    componentOccurrences: evidence,
+  };
 }
 
 describe("component-aware actionable groups (#2307)", () => {
@@ -48,8 +90,12 @@ describe("component-aware actionable groups (#2307)", () => {
       check("https://example.test/a", [occurrence("https://example.test/a")]),
       check("https://example.test/b", [occurrence("https://example.test/b")]),
     ]);
-    const group = groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!.componentFixGroups![0]!;
-    expect(group.affectedPages).toEqual(["https://example.test/a", "https://example.test/b"]);
+    const group = groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!
+      .componentFixGroups![0]!;
+    expect(group.affectedPages).toEqual([
+      "https://example.test/a",
+      "https://example.test/b",
+    ]);
     expect(group.affectedPageCount).toBe(2);
     expect(group.occurrences).toHaveLength(2);
 
@@ -62,7 +108,9 @@ describe("component-aware actionable groups (#2307)", () => {
     expect(json.occurrenceCount).toBe(2);
     expect(json.occurrenceRefs).toHaveLength(2);
     for (const ref of json.occurrenceRefs) {
-      expect(issue.checks[ref.checkIndex].componentOccurrences[ref.occurrenceIndex]).toBeDefined();
+      expect(
+        issue.checks[ref.checkIndex].componentOccurrences[ref.occurrenceIndex]
+      ).toBeDefined();
     }
     // Signatures are HOISTED: the shared region/family/variant triple is stored
     // once in `componentShapes`, not once per occurrence. So the signature count
@@ -70,26 +118,33 @@ describe("component-aware actionable groups (#2307)", () => {
     expect(issue.checks[0].componentShapes.shapes).toHaveLength(1);
     expect(issue.checks[0].componentOccurrences).toHaveLength(2);
     expect(issue.checks[0].componentOccurrences[0].shape).toBe(0);
-    const signatures = JSON.stringify(issue).split('"structuralSignature"').length - 1;
+    const signatures =
+      JSON.stringify(issue).split('"structuralSignature"').length - 1;
     // 3 in the one shape + 1 element signature per occurrence + 2 on the group's
     // representative region/element. Repeating the triple per occurrence would
     // add 3 more for the second occurrence.
-    expect(signatures).toBe(3 + issue.checks[0].componentOccurrences.length + 2);
+    expect(signatures).toBe(
+      3 + issue.checks[0].componentOccurrences.length + 2
+    );
     expect(json.id).toMatch(/^component-fix:[0-9a-f]{32}$/);
-    expect(json.defect).toEqual({ kind: "link-text-generic", values: { text: "Read more" }, valueHashes: { text: "h" } });
+    expect(json.defect).toEqual({
+      kind: "link-text-generic",
+      values: { text: "Read more" },
+      valueHashes: { text: "h" },
+    });
     expect(json.region).toMatchObject({ role: "footer", nestedIn: "none" });
     expect(json.semanticSlot).toBe("footer>a:1");
     // The group REPLACES the legacy lines rather than adding to them, and
     // carries no hashes, signatures or internal keys.
     const llm = renderLlm(r);
     expect(llm).toContain(
-      '<fix-once pages="2">Fix once in the site footer: link text &quot;Read more&quot; is generic, 2 pages: /a, /b [a:1]</fix-once>',
+      '<fix-once pages="2">Fix once in the site footer: link text &quot;Read more&quot; is generic, 2 pages: /a, /b [a:1]</fix-once>'
     );
     expect(llm).not.toContain("Pages (2)");
     expect(llm).not.toContain("s128:");
     expect(llm).not.toContain("structuralSignature");
     expect(renderText(r)).toContain(
-      'Fix once in the site footer (a:1): link text "Read more" is generic, 2 pages: /a, /b',
+      'Fix once in the site footer (a:1): link text "Read more" is generic, 2 pages: /a, /b'
     );
     expect(renderText(r)).not.toContain("s128:");
   });
@@ -97,31 +152,71 @@ describe("component-aware actionable groups (#2307)", () => {
   test("keeps variant, element, check status, and site boundaries separate", () => {
     const r = report([
       check("https://example.test/a", [occurrence("https://example.test/a")]),
-      check("https://example.test/b", [occurrence("https://example.test/b", { element: { locator: "footer>a:2", structuralSignature: "other" } })]),
+      check("https://example.test/b", [
+        occurrence("https://example.test/b", {
+          element: { locator: "footer>a:2", structuralSignature: "other" },
+        }),
+      ]),
       check("https://other.test/c", [occurrence("https://other.test/c")]),
-      { ...check("https://example.test/d", [occurrence("https://example.test/d")]), status: "fail" },
+      {
+        ...check("https://example.test/d", [
+          occurrence("https://example.test/d"),
+        ]),
+        status: "fail",
+      },
     ]);
-    expect(groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!.componentFixGroups).toHaveLength(4);
+    expect(
+      groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!.componentFixGroups
+    ).toHaveLength(4);
   });
 
   test("does not promote uncertain evidence or legacy checks into a fix group", () => {
     const r = report([
-      check("https://example.test/a", [occurrence("https://example.test/a", { groupable: false, confidence: "uncertain", family: { key: "page:a", structuralSignature: "x" } })]),
-      { name: "generic-link-text", status: "warn", message: "Generic link text found", pageUrl: "https://example.test/b" },
+      check("https://example.test/a", [
+        occurrence("https://example.test/a", {
+          groupable: false,
+          confidence: "uncertain",
+          family: { key: "page:a", structuralSignature: "x" },
+        }),
+      ]),
+      {
+        name: "generic-link-text",
+        status: "warn",
+        message: "Generic link text found",
+        pageUrl: "https://example.test/b",
+      },
     ]);
-    expect(groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!.componentFixGroups).toBeUndefined();
+    expect(
+      groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!.componentFixGroups
+    ).toBeUndefined();
     const issue = JSON.parse(renderJson(r)).issues[0];
     expect(issue.componentFixGroups).toBeUndefined();
     expect(issue.checks[0].componentOccurrences).toHaveLength(1);
   });
 
   test("retains an explicit bounded-storage evidence omission in JSON", () => {
-    const r = report([{ name: "generic-link-text", status: "warn", message: "Generic link text found", pageUrl: "https://example.test/a", componentEvidence: { state: "omitted", reason: "payload-limit", occurrenceCount: 1001 } }]);
+    const r = report([
+      {
+        name: "generic-link-text",
+        status: "warn",
+        message: "Generic link text found",
+        pageUrl: "https://example.test/a",
+        componentEvidence: {
+          state: "omitted",
+          reason: "payload-limit",
+          occurrenceCount: 1001,
+        },
+      },
+    ]);
     const issue = JSON.parse(renderJson(r)).issues[0];
-    expect(issue.checks[0].componentEvidence).toEqual({ state: "omitted", reason: "payload-limit", occurrenceCount: 1001 });
+    expect(issue.checks[0].componentEvidence).toEqual({
+      state: "omitted",
+      reason: "payload-limit",
+      occurrenceCount: 1001,
+    });
     expect(issue.componentFixGroups).toBeUndefined();
     expect(renderText(r)).toContain(
-      "Component fix evidence unavailable for 1001 occurrence(s): they exceeded the stored finding payload limit.",
+      "Component fix evidence unavailable for 1001 occurrence(s): they exceeded the stored finding payload limit."
     );
   });
 
@@ -134,9 +229,11 @@ describe("component-aware actionable groups (#2307)", () => {
         }),
       ]),
     ]);
-    const groups = groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!.componentFixGroups!;
+    const groups = groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!
+      .componentFixGroups!;
     expect(groups).toHaveLength(2);
-    for (const group of groups) expect(group.id).toMatch(/^component-fix:[0-9a-f]{32}$/);
+    for (const group of groups)
+      expect(group.id).toMatch(/^component-fix:[0-9a-f]{32}$/);
     expect(new Set(groups.map((g) => g.id)).size).toBe(2);
     // The id must not carry the whole canonical identity: that ran to ~800 bytes
     // per group and rode on every serialized report.
@@ -150,7 +247,9 @@ describe("component-aware actionable groups (#2307)", () => {
     // Non-ASCII must hash by its UTF-8 bytes, not by UTF-16 code units.
     expect(componentFixGroupDigest("é")).not.toBe(componentFixGroupDigest("e"));
     const digests = new Set(
-      Array.from({ length: 2000 }, (_, i) => componentFixGroupDigest(`identity-${i}`)),
+      Array.from({ length: 2000 }, (_, i) =>
+        componentFixGroupDigest(`identity-${i}`)
+      )
     );
     expect(digests.size).toBe(2000);
   });
@@ -171,7 +270,11 @@ describe("component-aware actionable groups (#2307)", () => {
     for (const group of issue.componentFixGroups) {
       expect(group.occurrenceRefs).toHaveLength(group.occurrenceCount);
       for (const ref of group.occurrenceRefs) {
-        expect(issue.checks[ref.checkIndex]?.componentOccurrences?.[ref.occurrenceIndex]).toBeDefined();
+        expect(
+          issue.checks[ref.checkIndex]?.componentOccurrences?.[
+            ref.occurrenceIndex
+          ]
+        ).toBeDefined();
       }
     }
   });
@@ -179,7 +282,10 @@ describe("component-aware actionable groups (#2307)", () => {
   test("evidence for the same observation seen twice is not double counted", () => {
     const shared = occurrence("https://example.test/a");
     // The same page's check merged twice: a carried finding re-observed fresh.
-    const r = report([check("https://example.test/a", [shared]), check("https://example.test/a", [shared])]);
+    const r = report([
+      check("https://example.test/a", [shared]),
+      check("https://example.test/a", [shared]),
+    ]);
     const rule = groupIssuesByCategory(r.ruleResults)[0]!.rules[0]!;
     expect(rule.checks[0]!.componentOccurrences).toHaveLength(1);
   });

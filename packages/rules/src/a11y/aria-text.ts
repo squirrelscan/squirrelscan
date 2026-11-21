@@ -1,8 +1,8 @@
 // a11y/aria-text - Elements with role="text" have no focusable descendants
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { getAttrCI } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const NATIVE_FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -28,7 +28,9 @@ function isFocusable(el: Element): boolean {
  * An element's own focusability counts for its ancestors only, as
  * `querySelectorAll("*")` (descendants only) did.
  */
-function focusableDescendantCounts(textElements: Iterable<Element>): Map<Element, number> {
+function focusableDescendantCounts(
+  textElements: Iterable<Element>
+): Map<Element, number> {
   const isText = new Set(textElements);
   const counts = new Map<Element, number>();
   let focusables = 0;
@@ -36,7 +38,9 @@ function focusableDescendantCounts(textElements: Iterable<Element>): Map<Element
     // Already counted inside an outer role="text" element.
     if (counts.has(root)) continue;
     const entered = new Map<Element, number>();
-    const stack: Array<{ el: Element; leaving: boolean }> = [{ el: root, leaving: false }];
+    const stack: Array<{ el: Element; leaving: boolean }> = [
+      { el: root, leaving: false },
+    ];
     while (stack.length > 0) {
       const { el, leaving } = stack.pop()!;
       if (leaving) {
@@ -48,7 +52,10 @@ function focusableDescendantCounts(textElements: Iterable<Element>): Map<Element
       // not count its content; a role="text" template counts its own.
       if (el.localName === "template") {
         if (isText.has(el)) {
-          counts.set(el, Array.from(el.querySelectorAll("*")).filter(isFocusable).length);
+          counts.set(
+            el,
+            Array.from(el.querySelectorAll("*")).filter(isFocusable).length
+          );
         }
         continue;
       }
@@ -75,7 +82,7 @@ export const ariaTextRule: Rule = {
       "Elements with role='text' tell screen readers to treat the content as a single text string. If focusable elements (links, buttons, inputs) are nested inside, screen reader users cannot interact with them properly. Remove role='text' from the parent, or restructure so focusable elements are outside the role='text' container.",
     category: "a11y",
     wcagNone:
-      "It flags focusable elements inside role=\"text\", a role that is not part of WAI-ARIA, so no WCAG success criterion covers it.",
+      'It flags focusable elements inside role="text", a role that is not part of WAI-ARIA, so no WCAG success criterion covers it.',
     scope: "page",
     findingScope: "page",
     verdictScope: "page",

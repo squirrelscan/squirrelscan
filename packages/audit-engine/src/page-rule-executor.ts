@@ -13,7 +13,13 @@
 // thread (`rel`/`isNofollow` for weak-internal-links and orphan-pages, `textGlued`
 // and `textParts` for links/anchor-mismatch).
 
-import type { CheckResult, PageData, RuleRunResult, RuleRunner, SiteData } from "@squirrelscan/rules";
+import type {
+  CheckResult,
+  PageData,
+  RuleRunResult,
+  RuleRunner,
+  SiteData,
+} from "@squirrelscan/rules";
 
 /** One page to run page-scope rules on. `key` is the adapter's bucket key
  * (normalizedUrl); `page` carries the raw html + metadata + pre-parsed DOM. */
@@ -62,7 +68,11 @@ function yieldToEventLoop(): Promise<void> {
  * firing — and a backend must honor it so a timed-out audit stops promptly
  * instead of running the whole remaining batch to completion. */
 export interface PageRuleExecutor {
-  run(tasks: PageRuleTask[], siteData: SiteData, signal?: AbortSignal): Promise<PageRuleTaskResult[]>;
+  run(
+    tasks: PageRuleTask[],
+    siteData: SiteData,
+    signal?: AbortSignal
+  ): Promise<PageRuleTaskResult[]>;
   /** Release any held resources. No-op for serial. */
   dispose(): Promise<void>;
 }
@@ -74,10 +84,14 @@ export interface PageRuleExecutor {
 export class SerialPageRuleExecutor implements PageRuleExecutor {
   constructor(
     private readonly runner: RuleRunner,
-    private readonly hooks?: PageRuleLoopHooks,
+    private readonly hooks?: PageRuleLoopHooks
   ) {}
 
-  async run(tasks: PageRuleTask[], siteData: SiteData, signal?: AbortSignal): Promise<PageRuleTaskResult[]> {
+  async run(
+    tasks: PageRuleTask[],
+    siteData: SiteData,
+    signal?: AbortSignal
+  ): Promise<PageRuleTaskResult[]> {
     const results: PageRuleTaskResult[] = [];
     const total = tasks.length;
     const yieldEveryMs = this.hooks?.yieldEveryMs;
@@ -100,14 +114,19 @@ export class SerialPageRuleExecutor implements PageRuleExecutor {
       // and enough sync time has elapsed, so fast pages don't each pay a
       // setTimeout hop. After yielding, the deadline may have interrupted us —
       // re-check before the next page.
-      if (yieldEveryMs != null && yieldEveryMs > 0 && Date.now() - lastYieldAt >= yieldEveryMs) {
+      if (
+        yieldEveryMs != null &&
+        yieldEveryMs > 0 &&
+        Date.now() - lastYieldAt >= yieldEveryMs
+      ) {
         await yieldToEventLoop();
         lastYieldAt = Date.now();
         signal?.throwIfAborted();
       }
     }
     // Final progress marker when the last page didn't land on a heartbeat boundary.
-    if (onProgress && (done === 0 || done % heartbeatEvery !== 0)) onProgress(done, total);
+    if (onProgress && (done === 0 || done % heartbeatEvery !== 0))
+      onProgress(done, total);
     return results;
   }
 
@@ -119,7 +138,7 @@ export async function runAndDispose(
   executor: PageRuleExecutor,
   tasks: PageRuleTask[],
   siteData: SiteData,
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ): Promise<PageRuleTaskResult[]> {
   try {
     return await executor.run(tasks, siteData, signal);

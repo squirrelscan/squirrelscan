@@ -4,7 +4,11 @@
 // pages because product, collection and blog pages use different templates. The share is a
 // LABEL only, so it can never change which findings exist or the health score.
 
-export type PageShareLabel = "site-wide" | "template" | "some pages" | "single page";
+export type PageShareLabel =
+  | "site-wide"
+  | "template"
+  | "some pages"
+  | "single page";
 
 /** Share at or above which a finding reads as site-wide. */
 export const PAGE_SHARE_SITE_WIDE = 0.9;
@@ -20,7 +24,10 @@ export interface PageShare {
 }
 
 /** `pageShare = affectedPageCount / crawledPages`, with its label. One page is always "single page". */
-export function pageShare(affectedPageCount: number, crawledPages: number): PageShare {
+export function pageShare(
+  affectedPageCount: number,
+  crawledPages: number
+): PageShare {
   const affected = Math.max(0, Math.floor(affectedPageCount));
   const crawled = Math.max(0, Math.floor(crawledPages));
   const share = crawled > 0 ? Math.min(1, affected / crawled) : 0;
@@ -29,5 +36,10 @@ export function pageShare(affectedPageCount: number, crawledPages: number): Page
   else if (share >= PAGE_SHARE_SITE_WIDE) label = "site-wide";
   else if (share >= PAGE_SHARE_TEMPLATE) label = "template";
   else label = "some pages";
-  return { affectedPageCount: affected, crawledPages: crawled, pageShare: share, label };
+  return {
+    affectedPageCount: affected,
+    crawledPages: crawled,
+    pageShare: share,
+    label,
+  };
 }

@@ -3,14 +3,15 @@
 // follows the rule's breakdown (`details.notFetched`): turn the checks back on
 // only when they were off, raise the limit only when it left targets out.
 
+import { LINK_TARGETS_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
-import { LINK_TARGETS_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts";
-
-import { notCheckedLines } from "../src/not-checked";
 import type { ReportRuleResult } from "../src/types";
 
-const MESSAGE = "2 of 7 internal link target(s) were not fetched because of a reason";
+import { notCheckedLines } from "../src/not-checked";
+
+const MESSAGE =
+  "2 of 7 internal link target(s) were not fetched because of a reason";
 
 function lineFor(details?: Record<string, unknown>): string {
   const brokenLinks: ReportRuleResult = {
@@ -33,7 +34,9 @@ function lineFor(details?: Record<string, unknown>): string {
       },
     ],
   };
-  const lines = notCheckedLines({ ruleResults: { "links/broken-links": brokenLinks } });
+  const lines = notCheckedLines({
+    ruleResults: { "links/broken-links": brokenLinks },
+  });
   expect(lines).toHaveLength(1);
   return lines[0]!;
 }
@@ -42,33 +45,37 @@ describe("the internal link Not checked hint follows the causes (pub#726)", () =
   test("targets skipped, none over the limit: no max_targets, no 'turn back on'", () => {
     // A crawl keeps to the same scope and robots.txt, so it says which it can reach.
     expect(lineFor({ notFetched: { skipped: 2 } })).toBe(
-      `Not checked: Broken Links. ${MESSAGE}. A Surface or Full audit, which follows links, can reach the ones inside the crawl scope and allowed by robots.txt.`,
+      `Not checked: Broken Links. ${MESSAGE}. A Surface or Full audit, which follows links, can reach the ones inside the crawl scope and allowed by robots.txt.`
     );
   });
 
   test("no answer, not trusted, or those with skipped targets: run an audit that follows links", () => {
-    for (const notFetched of [{ noAnswer: 2 }, { untrusted: 2 }, { skipped: 1, noAnswer: 1 }]) {
+    for (const notFetched of [
+      { noAnswer: 2 },
+      { untrusted: 2 },
+      { skipped: 1, noAnswer: 1 },
+    ]) {
       expect(lineFor({ notFetched })).toBe(
-        `Not checked: Broken Links. ${MESSAGE}. Run a Surface or Full audit, which follows links, to check them.`,
+        `Not checked: Broken Links. ${MESSAGE}. Run a Surface or Full audit, which follows links, to check them.`
       );
     }
   });
 
   test("targets over the limit: raise internal_links.max_targets", () => {
     expect(lineFor({ notFetched: { overLimit: 1, skipped: 1 } })).toBe(
-      `Not checked: Broken Links. ${MESSAGE}. Raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.`,
+      `Not checked: Broken Links. ${MESSAGE}. Raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.`
     );
   });
 
   test("internal link checks off: turn them back on, and nothing about the limit", () => {
     expect(lineFor({ notFetched: { off: 2 } })).toBe(
-      `Not checked: Broken Links. ${MESSAGE}. Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), or run a Surface or Full audit, which follows links, to check them.`,
+      `Not checked: Broken Links. ${MESSAGE}. Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), or run a Surface or Full audit, which follows links, to check them.`
     );
   });
 
   test("a check from an engine before the breakdown keeps the full hint", () => {
     expect(lineFor({ linkTargets: 7, unfetchedTargets: 2 })).toContain(
-      "Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit",
+      "Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit"
     );
     expect(lineFor()).toContain("raise internal_links.max_targets");
   });

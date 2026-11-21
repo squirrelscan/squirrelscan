@@ -65,7 +65,10 @@
 // one user can read another's data: it shows what the endpoint hands to anyone
 // who asks without logging in. The rule's copy says so.
 
-import { type CheckItem, PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
+import {
+  type CheckItem,
+  PROBE_INCOMPLETE_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
@@ -74,9 +77,17 @@ import type { EndpointCandidate } from "../endpoint-surface";
 import type { ProbeBudget } from "../probe-budget";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { AUTH_ENDPOINT_DISCLOSURE_RULE_ID, selectAuthCandidates } from "./auth-endpoint-disclosure";
+import {
+  AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+  selectAuthCandidates,
+} from "./auth-endpoint-disclosure";
 import { fieldIsCovered, jsonFieldKey } from "./field-key";
-import { isGraphqlPath, isStateChangingPath, isSuccessStatus } from "./graphql-probe";
+import {
+  isGraphqlPath,
+  isStateChangingPath,
+  isSuccessStatus,
+} from "./graphql-probe";
+import { isShippedServerSecret, scanContentBounded } from "./leaked-secrets";
 import {
   ANONYMOUS_GET_CAP,
   anonymousGetUrl,
@@ -85,7 +96,6 @@ import {
   readCapped,
   sendAnonymousGet,
 } from "./probe-http";
-import { isShippedServerSecret, scanContentBounded } from "./leaked-secrets";
 
 export const JSON_SENSITIVE_FIELDS_RULE_ID = "security/json-sensitive-fields";
 
@@ -221,7 +231,10 @@ export type JsonProbeOutcome =
   | { sent: true; error: string };
 
 /** The exact request for one endpoint. Exported so tests can pin what is sent. */
-export function buildJsonProbe(url: string): { url: string; init: RequestInit } {
+export function buildJsonProbe(url: string): {
+  url: string;
+  init: RequestInit;
+} {
   return {
     url,
     init: {
@@ -266,7 +279,10 @@ export async function sendJsonProbe(
       },
     };
   } catch (err) {
-    return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
+    return {
+      sent: true,
+      error: err instanceof Error ? err.name || err.message : String(err),
+    };
   } finally {
     done.abort();
   }
@@ -292,7 +308,11 @@ async function probeCandidate(
   url: string,
   shareable: boolean
 ): Promise<CandidateAnswer> {
-  if (!shareable) return { outcome: await sendJsonProbe(probe, url), capBytes: JSON_RESPONSE_CAP };
+  if (!shareable)
+    return {
+      outcome: await sendJsonProbe(probe, url),
+      capBytes: JSON_RESPONSE_CAP,
+    };
   const outcome = await sendAnonymousGet(probe, url);
   if (outcome.sent && "response" in outcome && outcome.response.truncated) {
     const own = await sendJsonProbe(probe, url);
@@ -302,11 +322,16 @@ async function probeCandidate(
 }
 
 function formatBytes(bytes: number): string {
-  return bytes >= 1024 * 1024 ? `${bytes / (1024 * 1024)} MB` : `${bytes / 1024} KB`;
+  return bytes >= 1024 * 1024
+    ? `${bytes / (1024 * 1024)} MB`
+    : `${bytes / 1024} KB`;
 }
 
 /** True when the auth rule sends the same anonymous GET for this endpoint: same URL, no query string. */
-function sharesAuthRequest(url: string, authUrls: ReadonlySet<string>): boolean {
+function sharesAuthRequest(
+  url: string,
+  authUrls: ReadonlySet<string>
+): boolean {
   try {
     return anonymousGetUrl(url) === url && authUrls.has(url);
   } catch {
@@ -412,8 +437,19 @@ export function credentialClass(key: string): CredentialClass | null {
   return null;
 }
 
-const PII_EMAIL_RE = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$/;
-const PHONE_KEYS = new Set(["phone", "phonenumber", "mobile", "mobilephone", "mobilenumber", "cell", "cellphone", "tel", "telephone"]);
+const PII_EMAIL_RE =
+  /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$/;
+const PHONE_KEYS = new Set([
+  "phone",
+  "phonenumber",
+  "mobile",
+  "mobilephone",
+  "mobilenumber",
+  "cell",
+  "cellphone",
+  "tel",
+  "telephone",
+]);
 const PERSONAL_RECORD_KEYS = new Set([
   "address",
   "streetaddress",
@@ -428,10 +464,27 @@ const PERSONAL_RECORD_KEYS = new Set([
   "birthdate",
   "birthday",
 ]);
-const PRIVILEGE_KEYS = new Set(["role", "roles", "isadmin", "admin", "issuperuser", "superuser", "isstaff", "permissions"]);
+const PRIVILEGE_KEYS = new Set([
+  "role",
+  "roles",
+  "isadmin",
+  "admin",
+  "issuperuser",
+  "superuser",
+  "isstaff",
+  "permissions",
+]);
 // Keys that make an object a record about someone. `name` and `email` are not
 // enough as keys alone: a form's label dictionary has both (`"email": "E-Mail"`).
-const RECORD_ID_KEYS = new Set(["id", "uuid", "userid", "uid", "accountid", "customerid", "memberid"]);
+const RECORD_ID_KEYS = new Set([
+  "id",
+  "uuid",
+  "userid",
+  "uid",
+  "accountid",
+  "customerid",
+  "memberid",
+]);
 const EMAIL_KEYS = new Set(["email", "emailaddress", "mail"]);
 
 function isPhoneKey(k: string): boolean {
@@ -441,12 +494,22 @@ function isPhoneKey(k: string): boolean {
 // Password hashes recognised by their own format, whatever the key.
 const HASH_SHAPES: ReadonlyArray<[string, RegExp]> = [
   ["bcrypt hash", /^\$2[abxy]?\$\d{2}\$[./A-Za-z0-9]{53}$/],
-  ["argon2 hash", /^\$argon2(?:id|i|d)\$v=\d+\$m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]{8,}\$[A-Za-z0-9+/]{16,}$/],
+  [
+    "argon2 hash",
+    /^\$argon2(?:id|i|d)\$v=\d+\$m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]{8,}\$[A-Za-z0-9+/]{16,}$/,
+  ],
   ["scrypt hash", /^\$(?:scrypt|7)\$[./A-Za-z0-9$=,+-]{20,}$/],
-  ["PBKDF2 hash", /^(?:pbkdf2_sha(?:1|256|512)\$\d{3,7}\$[A-Za-z0-9./+]{4,}\$[A-Za-z0-9./+=]{16,}|\$pbkdf2(?:-sha(?:1|256|512))?\$\d{3,7}\$[A-Za-z0-9./+]{4,}\$[A-Za-z0-9./+=]{16,})$/],
-  ["crypt hash", /^\$[156]\$(?:rounds=\d+\$)?[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{22,86}$/],
+  [
+    "PBKDF2 hash",
+    /^(?:pbkdf2_sha(?:1|256|512)\$\d{3,7}\$[A-Za-z0-9./+]{4,}\$[A-Za-z0-9./+=]{16,}|\$pbkdf2(?:-sha(?:1|256|512))?\$\d{3,7}\$[A-Za-z0-9./+]{4,}\$[A-Za-z0-9./+=]{16,})$/,
+  ],
+  [
+    "crypt hash",
+    /^\$[156]\$(?:rounds=\d+\$)?[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{22,86}$/,
+  ],
 ];
-const HEX_DIGEST_RE = /^(?:[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64}|[a-f0-9]{128})$/i;
+const HEX_DIGEST_RE =
+  /^(?:[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64}|[a-f0-9]{128})$/i;
 
 /** The password-hash format a value is in, or null. */
 export function passwordHashShape(value: string): string | null {
@@ -457,7 +520,8 @@ export function passwordHashShape(value: string): string | null {
 }
 
 // A value written over a credential (`********`, `[REDACTED]`, `<hidden>`), or a label.
-const PLACEHOLDER_RE = /^(?:\*+|x+|•+|\.+|-+|null|none|undefined|n\/a|true|false)$|redacted|filtered|hidden|masked|removed|placeholder|example|changeme|your[_-]?/i;
+const PLACEHOLDER_RE =
+  /^(?:\*+|x+|•+|\.+|-+|null|none|undefined|n\/a|true|false)$|redacted|filtered|hidden|masked|removed|placeholder|example|changeme|your[_-]?/i;
 
 export function luhnValid(digits: string): boolean {
   let sum = 0;
@@ -481,7 +545,10 @@ export function luhnValid(digits: string): boolean {
  * `pk.` token), which is not a leak wherever it is served.
  */
 function isPublicByDesign(key: string, value: string): boolean {
-  const { secrets } = scanContentBounded(`${JSON.stringify(key)}:${JSON.stringify(value)}`, "external-script");
+  const { secrets } = scanContentBounded(
+    `${JSON.stringify(key)}:${JSON.stringify(value)}`,
+    "external-script"
+  );
   return secrets.some((s) => s.publicByDesign);
 }
 
@@ -501,7 +568,8 @@ function credentialKind(
   if (v.length === 0 || PLACEHOLDER_RE.test(v)) return null;
   switch (cls) {
     case "password": {
-      if (/\s/.test(v) || /^(?:https?:)?\/\//i.test(v) || v.startsWith("/")) return null;
+      if (/\s/.test(v) || /^(?:https?:)?\/\//i.test(v) || v.startsWith("/"))
+        return null;
       if (HEX_DIGEST_RE.test(v)) return "password hash or salt (hex digest)";
       // A bare word under `password` is as likely a label (`"Passwort"`) as a
       // password. Only a value inside a user-shaped record counts.
@@ -531,10 +599,14 @@ function credentialKind(
       return /^\d{3}-?\d{2}-?\d{4}$/.test(v) ? "social security number" : null;
     case "card": {
       const digits = v.replace(/[ -]/g, "");
-      return /^\d{13,19}$/.test(digits) && luhnValid(digits) ? "card number" : null;
+      return /^\d{13,19}$/.test(digits) && luhnValid(digits)
+        ? "card number"
+        : null;
     }
     case "cvv":
-      return /^\d{3,4}$/.test(v) && recordHasIdentity ? "card security code" : null;
+      return /^\d{3,4}$/.test(v) && recordHasIdentity
+        ? "card security code"
+        : null;
   }
 }
 
@@ -573,12 +645,18 @@ export interface JsonScanResult {
 /** A path segment the report can show: printable, clamped, quoted when it is not an identifier. */
 function pathSegment(key: string): string {
   // eslint-disable-next-line no-control-regex
-  const clean = key.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, MAX_KEY_CHARS);
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(clean) ? `.${clean}` : `[${JSON.stringify(clean)}]`;
+  const clean = key
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+    .slice(0, MAX_KEY_CHARS);
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(clean)
+    ? `.${clean}`
+    : `[${JSON.stringify(clean)}]`;
 }
 
 function clampPath(path: string): string {
-  return path.length > MAX_PATH_CHARS ? `${path.slice(0, MAX_PATH_CHARS - 1)}…` : path;
+  return path.length > MAX_PATH_CHARS
+    ? `${path.slice(0, MAX_PATH_CHARS - 1)}…`
+    : path;
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -613,11 +691,18 @@ export function scanJsonValue(root: unknown): JsonScanResult {
       prior.count++;
       prior.maxLength = Math.max(prior.maxLength, length);
     } else {
-      sensitive.set(key, { path: clampPath(path), kind, count: 1, maxLength: length });
+      sensitive.set(key, {
+        path: clampPath(path),
+        kind,
+        count: 1,
+        maxLength: length,
+      });
     }
   };
 
-  const stack: Array<{ value: unknown; path: string; depth: number }> = [{ value: root, path: "$", depth: 0 }];
+  const stack: Array<{ value: unknown; path: string; depth: number }> = [
+    { value: root, path: "$", depth: 0 },
+  ];
   while (stack.length > 0) {
     const { value, path, depth } = stack.pop()!;
     if (++nodes > MAX_NODES) {
@@ -629,7 +714,8 @@ export function scanJsonValue(root: unknown): JsonScanResult {
       continue;
     }
     if (Array.isArray(value)) {
-      for (let i = value.length - 1; i >= 0; i--) stack.push({ value: value[i], path: `${path}[]`, depth: depth + 1 });
+      for (let i = value.length - 1; i >= 0; i--)
+        stack.push({ value: value[i], path: `${path}[]`, depth: depth + 1 });
       continue;
     }
     if (!isPlainObject(value)) {
@@ -651,7 +737,9 @@ export function scanJsonValue(root: unknown): JsonScanResult {
     const hasIdentity = normalized.some(
       (k, i) =>
         RECORD_ID_KEYS.has(k) ||
-        (EMAIL_KEYS.has(k) && typeof value[keys[i]!] === "string" && PII_EMAIL_RE.test(value[keys[i]!] as string))
+        (EMAIL_KEYS.has(k) &&
+          typeof value[keys[i]!] === "string" &&
+          PII_EMAIL_RE.test(value[keys[i]!] as string))
     );
     let personal = false;
     for (let i = 0; i < keys.length; i++) {
@@ -660,7 +748,13 @@ export function scanJsonValue(root: unknown): JsonScanResult {
       const child = value[key];
       const childPath = `${path}${pathSegment(key)}`;
 
-      if (PRIVILEGE_KEYS.has(k) && child !== null && child !== undefined && child !== "") privilegeFields++;
+      if (
+        PRIVILEGE_KEYS.has(k) &&
+        child !== null &&
+        child !== undefined &&
+        child !== ""
+      )
+        privilegeFields++;
 
       if (typeof child === "string" || typeof child === "number") {
         const str = String(child);
@@ -668,7 +762,9 @@ export function scanJsonValue(root: unknown): JsonScanResult {
           // Recorded when the string node itself is walked.
         } else {
           const cls = credentialClass(key);
-          const kind = cls ? credentialKind(cls, key, str, hasIdentity, publicMemo) : null;
+          const kind = cls
+            ? credentialKind(cls, key, str, hasIdentity, publicMemo)
+            : null;
           if (kind) {
             record(childPath, kind, str.length);
             flaggedValues.add(str.trim());
@@ -687,12 +783,19 @@ export function scanJsonValue(root: unknown): JsonScanResult {
           personal = true;
           piiPaths.add(clampPath(childPath));
         }
-      } else if (PERSONAL_RECORD_KEYS.has(k) && isPlainObject(child) && Object.keys(child).length > 0) {
+      } else if (
+        PERSONAL_RECORD_KEYS.has(k) &&
+        isPlainObject(child) &&
+        Object.keys(child).length > 0
+      ) {
         personal = true;
         piiPaths.add(clampPath(childPath));
       }
       // Objects and arrays are walked; a string is walked for its own shape (a hash, an email).
-      if ((child !== null && typeof child === "object") || typeof child === "string") {
+      if (
+        (child !== null && typeof child === "object") ||
+        typeof child === "string"
+      ) {
         stack.push({ value: child, path: childPath, depth: depth + 1 });
       }
     }
@@ -726,7 +829,11 @@ export function isBulkPii(pii: JsonScanResult["pii"]): boolean {
  * Server-side keys the leaked-secrets matchers recognise in the response text.
  * Publishable keys and session values the crawl itself was issued are left out.
  */
-function leakedSecretKinds(body: string, url: string, alreadyFlagged?: Set<string>): SensitiveFinding[] {
+function leakedSecretKinds(
+  body: string,
+  url: string,
+  alreadyFlagged?: Set<string>
+): SensitiveFinding[] {
   const { secrets } = scanContentBounded(body, "external-script", url);
   const byType = new Map<string, SensitiveFinding>();
   for (const s of secrets) {
@@ -740,14 +847,20 @@ function leakedSecretKinds(body: string, url: string, alreadyFlagged?: Set<strin
       prior.count++;
       prior.maxLength = Math.max(prior.maxLength, s.length);
     } else {
-      byType.set(s.type, { path: "(response text)", kind: s.type, count: 1, maxLength: s.length });
+      byType.set(s.type, {
+        path: "(response text)",
+        kind: s.type,
+        count: 1,
+        maxLength: s.length,
+      });
     }
   }
   return [...byType.values()];
 }
 
 // Quoted emails in text that could not be parsed (a body over the read cap).
-const QUOTED_EMAIL_RE = /"([A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){0,8}\.[A-Za-z]{2,24})"/g;
+const QUOTED_EMAIL_RE =
+  /"([A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){0,8}\.[A-Za-z]{2,24})"/g;
 
 export interface EndpointScan {
   sensitive: SensitiveFinding[];
@@ -766,8 +879,12 @@ export function looksLikeJson(response: JsonProbeResponse): boolean {
 }
 
 /** Scan one 2xx JSON response, or null when it is not one. */
-export function scanJsonResponse(response: JsonProbeResponse, url: string): EndpointScan | null {
-  if (!isSuccessStatus(response.status) || !looksLikeJson(response)) return null;
+export function scanJsonResponse(
+  response: JsonProbeResponse,
+  url: string
+): EndpointScan | null {
+  if (!isSuccessStatus(response.status) || !looksLikeJson(response))
+    return null;
   const text = response.body;
 
   if (response.truncated) {
@@ -780,7 +897,13 @@ export function scanJsonResponse(response: JsonProbeResponse, url: string): Endp
     }
     return {
       sensitive: leakedSecretKinds(text, url),
-      pii: { distinctEmails: emails.size, distinctPhones: 0, personalRecords: 0, privilegeFields: 0, paths: [] },
+      pii: {
+        distinctEmails: emails.size,
+        distinctPhones: 0,
+        personalRecords: 0,
+        privilegeFields: 0,
+        paths: [],
+      },
       truncated: true,
       walkTruncated: false,
     };
@@ -794,34 +917,60 @@ export function scanJsonResponse(response: JsonProbeResponse, url: string): Endp
   }
   if (typeof json !== "object" || json === null) return null;
   const walked = scanJsonValue(json);
-  const sensitive = [...walked.sensitive, ...leakedSecretKinds(text, url, walked.flaggedValues)];
-  return { sensitive, pii: walked.pii, truncated: false, walkTruncated: walked.walkTruncated };
+  const sensitive = [
+    ...walked.sensitive,
+    ...leakedSecretKinds(text, url, walked.flaggedValues),
+  ];
+  return {
+    sensitive,
+    pii: walked.pii,
+    truncated: false,
+    walkTruncated: walked.walkTruncated,
+  };
 }
 
 // ── reporting ──────────────────────────────────────────────────────
 
-function sensitiveItems(url: string, findings: SensitiveFinding[]): CheckItem[] {
+function sensitiveItems(
+  url: string,
+  findings: SensitiveFinding[]
+): CheckItem[] {
   return findings.slice(0, MAX_ITEMS_PER_ENDPOINT).map((f) => ({
     id: `${url} ${f.path} ${f.kind}`,
     label: `${f.path}: ${f.kind}${f.count > 1 ? ` (${f.count} records)` : ""}`,
     snippet: `${f.path} = <redacted, ${f.maxLength} chars>`,
-    meta: { endpoint: url, path: f.path, kind: f.kind, records: f.count, valueLength: f.maxLength },
+    meta: {
+      endpoint: url,
+      path: f.path,
+      kind: f.kind,
+      records: f.count,
+      valueLength: f.maxLength,
+    },
   }));
 }
 
 /** The words after the kinds in a sensitive-fields message, before any partial-read note. */
 const SENSITIVE_MESSAGE_TAIL = " to a request without credentials";
 
-function sensitiveMessage(url: string, kinds: readonly string[], partial: string): string {
+function sensitiveMessage(
+  url: string,
+  kinds: readonly string[],
+  partial: string
+): string {
   const more = kinds.length > 4 ? ` and ${kinds.length - 4} more kind(s)` : "";
   return `${url} returns ${kinds.slice(0, 4).join(", ")}${more}${SENSITIVE_MESSAGE_TAIL}${partial}`;
 }
 
 function piiSummary(pii: JsonScanResult["pii"]): string {
   const parts: string[] = [];
-  if (pii.distinctEmails > 0) parts.push(`${pii.distinctEmails} distinct email address(es)`);
-  if (pii.distinctPhones > 0) parts.push(`${pii.distinctPhones} distinct phone number(s)`);
-  if (pii.personalRecords > 0) parts.push(`${pii.personalRecords} record(s) with an address or date of birth`);
+  if (pii.distinctEmails > 0)
+    parts.push(`${pii.distinctEmails} distinct email address(es)`);
+  if (pii.distinctPhones > 0)
+    parts.push(`${pii.distinctPhones} distinct phone number(s)`);
+  if (pii.personalRecords > 0)
+    parts.push(
+      `${pii.personalRecords} record(s) with an address or date of birth`
+    );
   return parts.join(", ");
 }
 
@@ -841,7 +990,11 @@ export const jsonSensitiveFieldsRule: Rule = {
     checks: [
       { name: CHECK_SENSITIVE, outcome: "problem" },
       { name: CHECK_BULK_PII, outcome: "problem" },
-      { name: CHECK_CLEAN, outcome: "clean", clears: [CHECK_SENSITIVE, CHECK_BULK_PII] },
+      {
+        name: CHECK_CLEAN,
+        outcome: "clean",
+        clears: [CHECK_SENSITIVE, CHECK_BULK_PII],
+      },
       { name: CHECK_CLEAN, outcome: "skipped" },
     ],
   },
@@ -884,8 +1037,11 @@ export const jsonSensitiveFieldsRule: Rule = {
     // An endpoint the auth rule also probes is read from the one anonymous GET
     // both rules share (squirrelscan#2083). Undefined `ruleEnabled` means the
     // default rule set.
-    const authRuleOn = ctx.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
-    const authUrls = new Set(authRuleOn ? selectAuthCandidates(ctx).candidates.map((c) => c.url) : []);
+    const authRuleOn =
+      ctx.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
+    const authUrls = new Set(
+      authRuleOn ? selectAuthCandidates(ctx).candidates.map((c) => c.url) : []
+    );
 
     let probed = 0;
     let errored = 0;
@@ -910,7 +1066,11 @@ export const jsonSensitiveFieldsRule: Rule = {
         continue;
       }
       const { response } = outcome;
-      const reply = { status: response.status, headers: response.headers, text: response.body };
+      const reply = {
+        status: response.status,
+        headers: response.headers,
+        text: response.body,
+      };
       // Throttled or challenged: the answer says nothing about the endpoint,
       // and the site is pushing back, so no further request is sent (#1920).
       if (isThrottledOrChallenged(reply)) {
@@ -925,7 +1085,9 @@ export const jsonSensitiveFieldsRule: Rule = {
       if (!scan) continue;
       jsonAnswers++;
       const cap = formatBytes(capBytes);
-      const partial = scan.truncated ? ` (the response is over ${cap}, so only its first ${cap} was read)` : "";
+      const partial = scan.truncated
+        ? ` (the response is over ${cap}, so only its first ${cap} was read)`
+        : "";
       const endpointMeta = {
         endpoint: candidate.url,
         discoveredVia: candidate.discoveredVia,
@@ -950,17 +1112,22 @@ export const jsonSensitiveFieldsRule: Rule = {
       if (isBulkPii(pii)) {
         flagged++;
         const { privilegeFields } = pii;
-        const privilege = privilegeFields > 0 ? `, and ${privilegeFields} role or admin field(s)` : "";
+        const privilege =
+          privilegeFields > 0
+            ? `, and ${privilegeFields} role or admin field(s)`
+            : "";
         checks.push({
           name: CHECK_BULK_PII,
           status: "warn",
           message: `${candidate.url} returns personal data for many records to a request without credentials: ${piiSummary(pii)}${privilege}${partial}`,
-          items: (pii.paths.length > 0 ? pii.paths : ["(response text)"]).map((path) => ({
-            id: `${candidate.url} ${path}`,
-            label: path,
-            snippet: `${path} = <redacted>`,
-            meta: { endpoint: candidate.url, path },
-          })),
+          items: (pii.paths.length > 0 ? pii.paths : ["(response text)"]).map(
+            (path) => ({
+              id: `${candidate.url} ${path}`,
+              label: path,
+              snippet: `${path} = <redacted>`,
+              meta: { endpoint: candidate.url, path },
+            })
+          ),
           details: {
             ...endpointMeta,
             distinctEmails: pii.distinctEmails,
@@ -977,7 +1144,8 @@ export const jsonSensitiveFieldsRule: Rule = {
         name: CHECK_CLEAN,
         status: "skipped",
         skipReason: "probe-budget",
-        message: "The probe budget ran out before any API endpoint was requested",
+        message:
+          "The probe budget ran out before any API endpoint was requested",
         details,
       });
       return { checks };
@@ -1007,15 +1175,30 @@ export const jsonSensitiveFieldsRule: Rule = {
           `the site throttled the requests (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`
         );
       }
-      if (budgetStopped) why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
-      if (errored > 0) why.push(`${errored} request(s) failed with a network error or timeout`);
-      if (serverErrors > 0) why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
-      const onlyBudget = budgetStopped && !pushback && errored === 0 && serverErrors === 0;
-      const onlyErrors = !pushback && !budgetStopped && serverErrors === 0 && errored === probed;
+      if (budgetStopped)
+        why.push(
+          `the probe budget ran out after ${probed} of ${total} endpoint(s)`
+        );
+      if (errored > 0)
+        why.push(
+          `${errored} request(s) failed with a network error or timeout`
+        );
+      if (serverErrors > 0)
+        why.push(
+          `${serverErrors} endpoint(s) answered with a server error (5xx)`
+        );
+      const onlyBudget =
+        budgetStopped && !pushback && errored === 0 && serverErrors === 0;
+      const onlyErrors =
+        !pushback && !budgetStopped && serverErrors === 0 && errored === probed;
       checks.push({
         name: CHECK_CLEAN,
         status: "skipped",
-        skipReason: onlyBudget ? "probe-budget" : onlyErrors ? "probe-errors" : PROBE_INCOMPLETE_SKIP_REASON,
+        skipReason: onlyBudget
+          ? "probe-budget"
+          : onlyErrors
+            ? "probe-errors"
+            : PROBE_INCOMPLETE_SKIP_REASON,
         message: `JSON API responses check incomplete: ${why.join("; ")}. ${
           flagged === 0
             ? `None of the ${verified} endpoint(s) answered returned sensitive fields, but ${unverified}`
@@ -1066,12 +1249,17 @@ export function dropFieldsReportedElsewhere(
   let dropped = 0;
   const out: CheckResult[] = [];
   for (const check of checks) {
-    const fields = check.name === CHECK_SENSITIVE ? reported.get(endpointKey(check.details?.endpoint) ?? "") : undefined;
+    const fields =
+      check.name === CHECK_SENSITIVE
+        ? reported.get(endpointKey(check.details?.endpoint) ?? "")
+        : undefined;
     const items = check.items ?? [];
     const covered = (item: CheckItem): boolean => {
       const path = item.meta?.path;
       const key = typeof path === "string" ? jsonFieldKey(path) : undefined;
-      return key !== undefined && fields !== undefined && fieldIsCovered(key, fields);
+      return (
+        key !== undefined && fields !== undefined && fieldIsCovered(key, fields)
+      );
     };
     if (fields === undefined || !items.some(covered)) {
       out.push(check);
@@ -1083,24 +1271,40 @@ export function dropFieldsReportedElsewhere(
     const url = String(check.details?.endpoint);
     const kinds = [...new Set(kept.map((item) => String(item.meta?.kind)))];
     const tail = check.message.indexOf(SENSITIVE_MESSAGE_TAIL);
-    const partial = tail >= 0 ? check.message.slice(tail + SENSITIVE_MESSAGE_TAIL.length) : "";
-    const total = typeof check.details?.fields === "number" ? check.details.fields : items.length;
+    const partial =
+      tail >= 0
+        ? check.message.slice(tail + SENSITIVE_MESSAGE_TAIL.length)
+        : "";
+    const total =
+      typeof check.details?.fields === "number"
+        ? check.details.fields
+        : items.length;
     out.push({
       ...check,
       message: sensitiveMessage(url, kinds, partial),
       items: kept,
-      details: { ...check.details, fields: total - (items.length - kept.length) },
+      details: {
+        ...check.details,
+        fields: total - (items.length - kept.length),
+      },
     });
   }
   if (dropped === 0) return checks;
-  const findingsLeft = out.some((c) => c.name === CHECK_SENSITIVE || c.name === CHECK_BULK_PII);
-  const incomplete = out.some((c) => c.name === CHECK_CLEAN && c.status === "skipped");
+  const findingsLeft = out.some(
+    (c) => c.name === CHECK_SENSITIVE || c.name === CHECK_BULK_PII
+  );
+  const incomplete = out.some(
+    (c) => c.name === CHECK_CLEAN && c.status === "skipped"
+  );
   if (!findingsLeft && !incomplete) {
     out.push({
       name: CHECK_CLEAN,
       status: "pass",
       message: `No JSON response carried other sensitive fields or bulk personal data (${dropped} field(s) reported by ${AUTH_ENDPOINT_DISCLOSURE_RULE_ID})`,
-      details: { reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID, reportedElsewhere: dropped },
+      details: {
+        reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+        reportedElsewhere: dropped,
+      },
     });
   }
   return out;

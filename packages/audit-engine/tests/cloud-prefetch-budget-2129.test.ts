@@ -5,10 +5,12 @@
 //  - page batches overlap up to the plan's renderConcurrency, never wider, with the same calls;
 //  - a prefetch that finishes inside its budget returns exactly what it did before.
 
-import { describe, expect, test } from "bun:test";
-
-import { CloudClientError, type CloudServicesClient } from "@squirrelscan/cloud-client";
 import type { CloudConfig } from "@squirrelscan/config";
+
+import {
+  CloudClientError,
+  type CloudServicesClient,
+} from "@squirrelscan/cloud-client";
 import {
   CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
   type CloudPagePayload,
@@ -24,6 +26,7 @@ import {
   type CheckResult,
   type RuleContext,
 } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import {
   BATCH_CONCURRENCY,
@@ -74,10 +77,13 @@ describe("rules behind a prefetch cut off by its budget (repo#2129)", () => {
     const all = loadAllRules({ includeOptIn: true });
     // Every rule, opt-in included, that reads a service the prefetch calls.
     const cloudRules = [...all]
-      .filter(([, rule]) => rule.meta.cloud && SUPPORTED_SERVICES.has(rule.meta.cloud.service))
+      .filter(
+        ([, rule]) =>
+          rule.meta.cloud && SUPPORTED_SERVICES.has(rule.meta.cloud.service)
+      )
       .map(([id, rule]) => ({ id, cloud: rule.meta.cloud! }));
     expect(new Set(cloudRules.map((r) => r.cloud.service))).toEqual(
-      new Set<CloudServiceId>(SUPPORTED_SERVICES),
+      new Set<CloudServiceId>(SUPPORTED_SERVICES)
     );
 
     // Preflight answers, then Stage 0 hangs: the budget cuts off every service.
@@ -95,7 +101,7 @@ describe("rules behind a prefetch cut off by its budget (repo#2129)", () => {
         metadataPages: [{ url: "https://example.com/", title: "Home" }],
         auditId: "audit-2129",
       },
-      30,
+      30
     );
     expect(res.abandoned).toBe(true);
     expect(res.spend).toEqual([]);
@@ -118,7 +124,9 @@ describe("rules behind a prefetch cut off by its budget (repo#2129)", () => {
       for (const check of out.checks) {
         // Never passed, never silently missing: skipped, with the coded not-checked reason.
         expect(check.status, id).toBe("skipped");
-        expect(check.skipReason, id).toBe(CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON);
+        expect(check.skipReason, id).toBe(
+          CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON
+        );
         expect(classifyRuleOutcome(check), id).toBe("coverage_gap");
         expect(skipReasonClass(check.skipReason)?.notChecked, id).toBe(true);
       }
@@ -126,7 +134,9 @@ describe("rules behind a prefetch cut off by its budget (repo#2129)", () => {
   });
 
   test("the rules' sentence is the coded not-checked reason", () => {
-    expect(humanizeCloudSkip("prefetch-out-of-time")).toBe(CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON);
+    expect(humanizeCloudSkip("prefetch-out-of-time")).toBe(
+      CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON
+    );
     expect(skipReasonClass(CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON)).toEqual({
       outcome: "coverage_gap",
       scope: "check",
@@ -139,11 +149,19 @@ describe("one call event per prefetch call (repo#2129)", () => {
   const RULES: CloudPrefetchInput["rules"] = [
     {
       id: "ai/site-metadata",
-      cloud: { service: "site-metadata", unit: "site", creditFeature: "site_metadata" },
+      cloud: {
+        service: "site-metadata",
+        unit: "site",
+        creditFeature: "site_metadata",
+      },
     },
     {
       id: "gaps/keywords",
-      cloud: { service: "keyword-gaps", unit: "site", creditFeature: "keyword_gaps" },
+      cloud: {
+        service: "keyword-gaps",
+        unit: "site",
+        creditFeature: "keyword_gaps",
+      },
     },
     {
       id: "ai/llm-parsability",
@@ -154,7 +172,7 @@ describe("one call event per prefetch call (repo#2129)", () => {
   function input(
     client: CloudServicesClient,
     events: CloudPrefetchCallEvent[],
-    pages = pagesOf(4),
+    pages = pagesOf(4)
   ): CloudPrefetchInput {
     return {
       client,
@@ -184,7 +202,9 @@ describe("one call event per prefetch call (repo#2129)", () => {
 
     await prefetchCloudData(input(client, events));
 
-    expect(events.map((e) => [e.service, e.status, e.batch ?? null, e.units])).toEqual([
+    expect(
+      events.map((e) => [e.service, e.status, e.batch ?? null, e.units])
+    ).toEqual([
       ["site-metadata", "completed", null, 1],
       ["ai-parse", "completed", { index: 1, of: 4 }, 1],
       ["ai-parse", "completed", { index: 2, of: 4 }, 1],
@@ -211,18 +231,25 @@ describe("one call event per prefetch call (repo#2129)", () => {
         req.pages[0].url.endsWith("/p0")
           ? Promise.resolve({ results: req.pages.map((p) => ({ url: p.url })) })
           : new Promise((resolve) => {
-              release.push(() => resolve({ results: req.pages.map((p) => ({ url: p.url })) }));
+              release.push(() =>
+                resolve({ results: req.pages.map((p) => ({ url: p.url })) })
+              );
             }),
     } as unknown as CloudServicesClient;
 
     const started = Date.now();
-    const res = await prefetchCloudDataWithDeadline(input(client, events, pagesOf(4)), 40);
+    const res = await prefetchCloudDataWithDeadline(
+      input(client, events, pagesOf(4)),
+      40
+    );
     const elapsed = Date.now() - started;
     expect(res.abandoned).toBe(true);
 
     // Four in flight at once: p0 returned, so p1, p2, p3 were in flight at the cut-off,
     // and keyword-gaps (after ai-parse in run order) was never called, so it has no event.
-    expect(events.map((e) => [e.service, e.status, e.batch?.index ?? null])).toEqual([
+    expect(
+      events.map((e) => [e.service, e.status, e.batch?.index ?? null])
+    ).toEqual([
       ["site-metadata", "completed", null],
       ["ai-parse", "completed", 1],
       ["ai-parse", "timeout", 2],
@@ -237,7 +264,9 @@ describe("one call event per prefetch call (repo#2129)", () => {
     }
     // Every key the cut-off reached reads out of time.
     for (const p of pagesOf(4).slice(1)) {
-      expect(res.store.get("ai-parse")?.get(p.url)?.skipReason).toBe("prefetch-out-of-time");
+      expect(res.store.get("ai-parse")?.get(p.url)?.skipReason).toBe(
+        "prefetch-out-of-time"
+      );
     }
 
     // Calls that return after the cut-off add no second event.
@@ -246,7 +275,7 @@ describe("one call event per prefetch call (repo#2129)", () => {
     await flush();
     expect(events).toHaveLength(5);
     expect(res.store.get("keyword-gaps")?.get(CLOUD_SITE_KEY)?.skipReason).toBe(
-      "prefetch-out-of-time",
+      "prefetch-out-of-time"
     );
   });
 
@@ -265,7 +294,9 @@ describe("one call event per prefetch call (repo#2129)", () => {
         throw new Error("listener");
       },
     });
-    expect(res.store.get("ai-parse")?.get("https://example.com/p0")?.status).toBe("ok");
+    expect(
+      res.store.get("ai-parse")?.get("https://example.com/p0")?.status
+    ).toBe("ok");
   });
 });
 
@@ -310,16 +341,21 @@ describe("page batches overlap within the plan's renderConcurrency (repo#2129)",
     ["starter", PLANS.starter.renderConcurrency],
     ["team", PLANS.team.renderConcurrency],
     ["enterprise", PLANS.enterprise.renderConcurrency],
-  ] as const)("%s runs exactly its renderConcurrency (%d) wide", async (_plan, width) => {
-    const { widest, calls } = await measure(24, width);
-    expect(widest).toBe(width);
-    // The same calls as the default width: overlap changes, spend does not.
-    expect(calls).toBe(24);
-  });
+  ] as const)(
+    "%s runs exactly its renderConcurrency (%d) wide",
+    async (_plan, width) => {
+      const { widest, calls } = await measure(24, width);
+      expect(widest).toBe(width);
+      // The same calls as the default width: overlap changes, spend does not.
+      expect(calls).toBe(24);
+    }
+  );
 
   test("the plan values are the ones planning approved, unchanged", () => {
     expect(
-      [PLANS.free, PLANS.starter, PLANS.team, PLANS.enterprise].map((p) => p.renderConcurrency),
+      [PLANS.free, PLANS.starter, PLANS.team, PLANS.enterprise].map(
+        (p) => p.renderConcurrency
+      )
     ).toEqual([2, 5, 10, 10]);
   });
 
@@ -335,7 +371,10 @@ describe("page batches overlap within the plan's renderConcurrency (repo#2129)",
 
   test("width and call events never change the result of a prefetch that finishes in time", async () => {
     const serialize = (r: Awaited<ReturnType<typeof measure>>["res"]) =>
-      JSON.stringify({ ...r, store: [...r.store].map(([s, m]) => [s, [...m]]) });
+      JSON.stringify({
+        ...r,
+        store: [...r.store].map(([s, m]) => [s, [...m]]),
+      });
     const plain = (await measure(24)).res;
     const wide = (await measure(24, PLANS.team.renderConcurrency)).res;
     expect(serialize(wide)).toBe(serialize(plain));

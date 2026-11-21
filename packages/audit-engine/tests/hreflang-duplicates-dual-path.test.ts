@@ -9,14 +9,14 @@
 // goes through the real `parsePage` and `extractPageFeatures`, so the stored row
 // is exactly what an audit writes, and each rule must give one answer both ways.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type { PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
+import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { parsePage } from "@squirrelscan/parser";
 import { loadAllRules } from "@squirrelscan/rules";
-import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
-import type { PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { extractPageFeatures } from "../src/page-features";
 import { createSiteQuery } from "../src/site-query";
@@ -51,7 +51,10 @@ function html(s: Spec): string {
       ? ""
       : `<link rel="canonical" href="${ORIGIN}${s.canonical === "self" ? s.path : s.canonical}"> <!-- self, per page -->\n`;
   const alternates = s.alternates
-    .map(([lang, path]) => `<link rel="alternate" hreflang="${lang}" href="${ORIGIN}${path}">`)
+    .map(
+      ([lang, path]) =>
+        `<link rel="alternate" hreflang="${lang}" href="${ORIGIN}${path}">`
+    )
     .join("\n");
   return `<!doctype html><html lang="${s.lang ?? "en"}"><head><meta charset="utf-8">
 <title>${TITLE}</title>
@@ -120,7 +123,10 @@ interface Fixture {
  * One store and one legacy page list from the same parse. `stale` drops the
  * alternates from both, the shape of a page parsed or cached before #489.
  */
-async function fixture(specs: Spec[], opts: { stale?: boolean } = {}): Promise<Fixture> {
+async function fixture(
+  specs: Spec[],
+  opts: { stale?: boolean } = {}
+): Promise<Fixture> {
   const store = new SQLiteStorage(":memory:");
   await run(store.init());
   const legacyPages: Fixture["legacyPages"] = [];
@@ -133,7 +139,12 @@ async function fixture(specs: Spec[], opts: { stale?: boolean } = {}): Promise<F
     const row = extractPageFeatures(record, parsed);
     if (opts.stale) delete (row as Partial<PageFeatureRow>).hreflangAlternates;
     features.push(row);
-    legacyPages.push({ url: record.normalizedUrl, statusCode: 200, parsed, headers: {} });
+    legacyPages.push({
+      url: record.normalizedUrl,
+      statusCode: 200,
+      parsed,
+      headers: {},
+    });
   }
   await run(store.upsertPageFeaturesBatch(CRAWL, features));
   return { store, legacyPages };
@@ -147,7 +158,12 @@ async function runBothWays(f: Fixture, rule: Rule) {
   };
   const legacyCtx: RuleContext = {
     ...base,
-    site: { baseUrl: BASE, pages: f.legacyPages, robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: BASE,
+      pages: f.legacyPages,
+      robotsTxt: null,
+      sitemaps: null,
+    },
   };
   const legacy = (await Promise.resolve(rule.run(legacyCtx))).checks;
 
@@ -162,7 +178,11 @@ async function runBothWays(f: Fixture, rule: Rule) {
   return { legacy, streamed };
 }
 
-const RULE_IDS = ["core/title-unique", "content/duplicate-title", "content/duplicate-description"];
+const RULE_IDS = [
+  "core/title-unique",
+  "content/duplicate-title",
+  "content/duplicate-description",
+];
 
 /** Run all three rules both ways; assert the paths agree and return each status. */
 async function statuses(specs: Spec[], opts: { stale?: boolean } = {}) {
@@ -191,7 +211,10 @@ const REPRO_ALTERNATES: Array<[string, string]> = [
   ["x-default", GB],
 ];
 
-function expectAll(result: Awaited<ReturnType<typeof statuses>>, status: "pass" | "warn") {
+function expectAll(
+  result: Awaited<ReturnType<typeof statuses>>,
+  status: "pass" | "warn"
+) {
   for (const id of RULE_IDS) expect(result[id]!.status, id).toBe(status);
 }
 
@@ -219,7 +242,12 @@ describe("reciprocal hreflang region variants, identically on both paths", () =>
       ["de-ch", "/de-ch/hemd.html"],
     ];
     const result = await statuses(
-      alternates.map(([, path]) => ({ path, canonical: "self", alternates, lang: "de" })),
+      alternates.map(([, path]) => ({
+        path,
+        canonical: "self",
+        alternates,
+        lang: "de",
+      }))
     );
     expectAll(result, "pass");
   });
@@ -282,7 +310,7 @@ describe("reciprocal hreflang region variants, identically on both paths", () =>
         { path: GB, canonical: "self", alternates: REPRO_ALTERNATES },
         { path: US, canonical: "self", alternates: REPRO_ALTERNATES },
       ],
-      { stale: true },
+      { stale: true }
     );
     expectAll(result, "warn");
   });

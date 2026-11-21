@@ -14,7 +14,9 @@ export interface AuditRuntimeComposition {
   capabilities: RuntimeCapabilities;
 }
 
-export function createCliAuditRuntime(fetcher: DocumentFetcher): AuditRuntimeComposition {
+export function createCliAuditRuntime(
+  fetcher: DocumentFetcher
+): AuditRuntimeComposition {
   return {
     kind: "cli",
     fetcher,
@@ -26,7 +28,9 @@ export function createCliAuditRuntime(fetcher: DocumentFetcher): AuditRuntimeCom
   };
 }
 
-export function createCloudAuditRuntime(fetcher: DocumentFetcher): AuditRuntimeComposition {
+export function createCloudAuditRuntime(
+  fetcher: DocumentFetcher
+): AuditRuntimeComposition {
   return {
     kind: "cloud",
     fetcher,
@@ -38,7 +42,9 @@ export function createCloudAuditRuntime(fetcher: DocumentFetcher): AuditRuntimeC
   };
 }
 
-export function createGithubAppAuditRuntime(fetcher: DocumentFetcher): AuditRuntimeComposition {
+export function createGithubAppAuditRuntime(
+  fetcher: DocumentFetcher
+): AuditRuntimeComposition {
   return {
     kind: "github-app",
     fetcher,

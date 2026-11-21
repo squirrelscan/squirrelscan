@@ -6,17 +6,24 @@
 // rule now reads both and names the source (and the crawler, for a scoped header
 // such as `X-Robots-Tag: googlebot: noindex`) in its message.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
-
-import { parseXRobotsTag, robotsMetaRule } from "../src/core/robots-meta";
 import type { ParsedPage, RuleContext } from "../src/types";
 
-async function run(opts: { meta?: string; header?: string }): Promise<CheckResult> {
+import { parseXRobotsTag, robotsMetaRule } from "../src/core/robots-meta";
+
+async function run(opts: {
+  meta?: string;
+  header?: string;
+}): Promise<CheckResult> {
   const url = "https://example.com/";
-  const metaTag = opts.meta === undefined ? "" : `<meta name="robots" content="${opts.meta}">`;
+  const metaTag =
+    opts.meta === undefined
+      ? ""
+      : `<meta name="robots" content="${opts.meta}">`;
   const html = `<!doctype html><html lang="en"><head><title>t</title>${metaTag}</head><body><p>x</p></body></html>`;
   const headers: Record<string, string> = {};
   if (opts.header !== undefined) headers["x-robots-tag"] = opts.header;
@@ -38,7 +45,9 @@ describe("parseXRobotsTag", () => {
   });
 
   test("a user-agent prefix scopes the entries after it until the next prefix", () => {
-    expect(parseXRobotsTag("googlebot: nofollow, otherbot: noindex, nofollow")).toEqual([
+    expect(
+      parseXRobotsTag("googlebot: nofollow, otherbot: noindex, nofollow")
+    ).toEqual([
       { agent: "googlebot", directives: "nofollow" },
       { agent: "otherbot", directives: "noindex, nofollow" },
     ]);
@@ -53,11 +62,14 @@ describe("parseXRobotsTag", () => {
 
   test("name: value directives are not user-agent prefixes", () => {
     expect(
-      parseXRobotsTag("max-snippet: 20, max-image-preview: large, unavailable_after: 2026-01-01"),
+      parseXRobotsTag(
+        "max-snippet: 20, max-image-preview: large, unavailable_after: 2026-01-01"
+      )
     ).toEqual([
       {
         agent: null,
-        directives: "max-snippet: 20, max-image-preview: large, unavailable_after: 2026-01-01",
+        directives:
+          "max-snippet: 20, max-image-preview: large, unavailable_after: 2026-01-01",
       },
     ]);
   });
@@ -65,7 +77,9 @@ describe("parseXRobotsTag", () => {
   test("comma-split unavailable_after dates stay in their group", () => {
     // ISO 8601 with a decimal comma and a negative offset, then RFC 850.
     expect(
-      parseXRobotsTag("googlebot: unavailable_after: 2026-06-25T15:00:00,5-08:00, noindex"),
+      parseXRobotsTag(
+        "googlebot: unavailable_after: 2026-06-25T15:00:00,5-08:00, noindex"
+      )
     ).toEqual([
       {
         agent: "googlebot",
@@ -73,9 +87,14 @@ describe("parseXRobotsTag", () => {
       },
     ]);
     expect(
-      parseXRobotsTag("unavailable_after: Friday, 25-Jun-10 15:00:00 PST, bingbot: noindex"),
+      parseXRobotsTag(
+        "unavailable_after: Friday, 25-Jun-10 15:00:00 PST, bingbot: noindex"
+      )
     ).toEqual([
-      { agent: null, directives: "unavailable_after: Friday, 25-Jun-10 15:00:00 PST" },
+      {
+        agent: null,
+        directives: "unavailable_after: Friday, 25-Jun-10 15:00:00 PST",
+      },
       { agent: "bingbot", directives: "noindex" },
     ]);
   });
@@ -96,99 +115,118 @@ describe("parseXRobotsTag", () => {
 
 describe("core/robots-meta — sources (pub#457)", () => {
   test("no meta tag and no header passes as before", async () => {
-    const c = (await run({}));
+    const c = await run({});
     expect(c.status).toBe("pass");
     expect(c.message).toBe("No robots meta tag (defaults to index, follow)");
     expect(c.value).toBeNull();
   });
 
   test("meta noindex,nofollow names the meta tag and keeps the raw value", async () => {
-    const c = (await run({ meta: "noindex,nofollow" }));
+    const c = await run({ meta: "noindex,nofollow" });
     expect(c.status).toBe("warn");
-    expect(c.message).toBe("Page is set to noindex and nofollow via robots meta tag");
+    expect(c.message).toBe(
+      "Page is set to noindex and nofollow via robots meta tag"
+    );
     expect(c.value).toBe("noindex,nofollow");
   });
 
   test("X-Robots-Tag: noindex alone is reported, naming the header", async () => {
-    const c = (await run({ header: "noindex" }));
+    const c = await run({ header: "noindex" });
     expect(c.status).toBe("warn");
     expect(c.message).toBe("Page is set to noindex via X-Robots-Tag header");
     expect(c.value).toBe("X-Robots-Tag: noindex");
   });
 
   test("a googlebot-scoped header names the crawler", async () => {
-    const c = (await run({ header: "googlebot: noindex" }));
+    const c = await run({ header: "googlebot: noindex" });
     expect(c.status).toBe("warn");
-    expect(c.message).toBe("Page is set to noindex via X-Robots-Tag header for googlebot");
+    expect(c.message).toBe(
+      "Page is set to noindex via X-Robots-Tag header for googlebot"
+    );
     expect(c.value).toBe("X-Robots-Tag: googlebot: noindex");
   });
 
   test("several scoped crawlers are listed, past five they are counted", async () => {
-    expect((await run({ header: "googlebot: noindex, bingbot: noindex" })).message).toBe(
-      "Page is set to noindex via X-Robots-Tag header for googlebot, bingbot",
+    expect(
+      (await run({ header: "googlebot: noindex, bingbot: noindex" })).message
+    ).toBe(
+      "Page is set to noindex via X-Robots-Tag header for googlebot, bingbot"
     );
-    const many = ["a", "b", "c", "d", "e", "f", "g"].map((bot) => `${bot}bot: noindex`).join(", ");
+    const many = ["a", "b", "c", "d", "e", "f", "g"]
+      .map((bot) => `${bot}bot: noindex`)
+      .join(", ");
     expect((await run({ header: many })).message).toBe(
-      "Page is set to noindex via X-Robots-Tag header for abot, bbot, cbot, dbot, ebot and 2 more",
+      "Page is set to noindex via X-Robots-Tag header for abot, bbot, cbot, dbot, ebot and 2 more"
     );
   });
 
   test("an unscoped header directive folds away the scoped ones", async () => {
     expect((await run({ header: "noindex, googlebot: noindex" })).message).toBe(
-      "Page is set to noindex via X-Robots-Tag header",
+      "Page is set to noindex via X-Robots-Tag header"
     );
   });
 
   test("meta and header both declaring noindex name both", async () => {
-    const c = (await run({ meta: "noindex", header: "noindex" }));
-    expect(c.message).toBe("Page is set to noindex via robots meta tag and X-Robots-Tag header");
+    const c = await run({ meta: "noindex", header: "noindex" });
+    expect(c.message).toBe(
+      "Page is set to noindex via robots meta tag and X-Robots-Tag header"
+    );
     expect(c.value).toBe("robots meta: noindex; X-Robots-Tag: noindex");
   });
 
   test("different sources for noindex and nofollow get one clause each", async () => {
-    const c = (await run({ meta: "nofollow", header: "googlebot: noindex" }));
+    const c = await run({ meta: "nofollow", header: "googlebot: noindex" });
     expect(c.status).toBe("warn");
     expect(c.message).toBe(
-      "Page is set to noindex via X-Robots-Tag header for googlebot, nofollow via robots meta tag",
+      "Page is set to noindex via X-Robots-Tag header for googlebot, nofollow via robots meta tag"
     );
   });
 
   test("header nofollow alone is info, naming the header", async () => {
-    const c = (await run({ header: "nofollow" }));
+    const c = await run({ header: "nofollow" });
     expect(c.status).toBe("info");
     expect(c.message).toBe(
-      "Page is set to nofollow via X-Robots-Tag header (links won't pass equity)",
+      "Page is set to nofollow via X-Robots-Tag header (links won't pass equity)"
     );
   });
 
   test("crawler names are not searched for directives", async () => {
-    const c = (await run({ header: "noindexbot: index" }));
+    const c = await run({ header: "noindexbot: index" });
     expect(c.status).toBe("pass");
     expect(c.message).toBe("X-Robots-Tag header allows indexing");
   });
 
   test("a date fragment never becomes a crawler name in the message", async () => {
     expect(
-      (await run({ header: "googlebot: unavailable_after: 2026-06-25T15:00:00,5-08:00, noindex" })).message,
+      (
+        await run({
+          header:
+            "googlebot: unavailable_after: 2026-06-25T15:00:00,5-08:00, noindex",
+        })
+      ).message
     ).toBe("Page is set to noindex via X-Robots-Tag header for googlebot");
   });
 
   test("header case is ignored", async () => {
     expect((await run({ header: "GoogleBot: NOINDEX" })).message).toBe(
-      "Page is set to noindex via X-Robots-Tag header for googlebot",
+      "Page is set to noindex via X-Robots-Tag header for googlebot"
     );
   });
 
   test("a header without noindex or nofollow passes and says so", async () => {
-    expect((await run({ header: "noarchive" })).message).toBe("X-Robots-Tag header allows indexing");
-    expect((await run({ meta: "index, follow", header: "max-snippet: 50" })).message).toBe(
-      "Robots meta tag and X-Robots-Tag header allow indexing",
+    expect((await run({ header: "noarchive" })).message).toBe(
+      "X-Robots-Tag header allows indexing"
     );
-    expect((await run({ meta: "index, follow" })).message).toBe("Robots meta tag allows indexing");
+    expect(
+      (await run({ meta: "index, follow", header: "max-snippet: 50" })).message
+    ).toBe("Robots meta tag and X-Robots-Tag header allow indexing");
+    expect((await run({ meta: "index, follow" })).message).toBe(
+      "Robots meta tag allows indexing"
+    );
   });
 
   test("a blank header counts as no header", async () => {
-    const c = (await run({ header: "  " }));
+    const c = await run({ header: "  " });
     expect(c.status).toBe("pass");
     expect(c.message).toBe("No robots meta tag (defaults to index, follow)");
   });

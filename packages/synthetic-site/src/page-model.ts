@@ -87,18 +87,24 @@ function capitalize(word: string): string {
 function resolveIssueSpec(
   spec: IssueSpec | undefined | false,
   pageCount: number,
-  defaultRatio: number,
+  defaultRatio: number
 ): { count: number } {
   if (spec === false) return { count: 0 };
-  if (spec?.count !== undefined) return { count: Math.max(0, Math.floor(spec.count)) };
-  if (spec?.ratio !== undefined) return { count: Math.max(0, Math.round(pageCount * spec.ratio)) };
+  if (spec?.count !== undefined)
+    return { count: Math.max(0, Math.floor(spec.count)) };
+  if (spec?.ratio !== undefined)
+    return { count: Math.max(0, Math.round(pageCount * spec.ratio)) };
   return { count: Math.max(0, Math.round(pageCount * defaultRatio)) };
 }
 
 // "at least 1" only applies while the ratio scale is actually nonzero —
 // cleanRatio:1 (ratioScale 0) must be able to reach truly zero defaults, not
 // get floored back up to a single group/chain.
-function defaultCountFromRatio(pageCount: number, ratio: number, ratioScale: number): number {
+function defaultCountFromRatio(
+  pageCount: number,
+  ratio: number,
+  ratioScale: number
+): number {
   if (ratioScale <= 0) return 0;
   return Math.max(1, Math.round(pageCount * ratio * ratioScale));
 }
@@ -106,21 +112,26 @@ function defaultCountFromRatio(pageCount: number, ratio: number, ratioScale: num
 function resolveDuplicateSpec(
   spec: DuplicateGroupSpec | undefined | false,
   pageCount: number,
-  ratioScale: number,
+  ratioScale: number
 ): { groupCount: number; groupSize: number } {
   if (spec === false) return { groupCount: 0, groupSize: 0 };
-  const groupCount = spec?.groupCount ?? defaultCountFromRatio(pageCount, 0.01, ratioScale);
+  const groupCount =
+    spec?.groupCount ?? defaultCountFromRatio(pageCount, 0.01, ratioScale);
   const groupSize = spec?.groupSize ?? 3;
-  return { groupCount: Math.max(0, groupCount), groupSize: Math.max(2, groupSize) };
+  return {
+    groupCount: Math.max(0, groupCount),
+    groupSize: Math.max(2, groupSize),
+  };
 }
 
 function resolveRedirectChainSpec(
   spec: RedirectChainSpec | undefined | false,
   pageCount: number,
-  ratioScale: number,
+  ratioScale: number
 ): { count: number; chainLength: number } {
   if (spec === false) return { count: 0, chainLength: 0 };
-  const count = spec?.count ?? defaultCountFromRatio(pageCount, 0.005, ratioScale);
+  const count =
+    spec?.count ?? defaultCountFromRatio(pageCount, 0.005, ratioScale);
   const chainLength = Math.max(1, spec?.chainLength ?? 3);
   return { count: Math.max(0, count), chainLength };
 }
@@ -134,34 +145,61 @@ const REFERENCE_CLEAN_RATIO = 0.5;
 function resolveIssueMixOptions(
   issues: IssueMixOptions | undefined,
   pageCount: number,
-  cleanRatio: number,
+  cleanRatio: number
 ): ResolvedIssueMixOptions {
   const ratioScale = (1 - cleanRatio) / (1 - REFERENCE_CLEAN_RATIO);
   return {
     longH1: resolveIssueSpec(issues?.longH1, pageCount, 0.05 * ratioScale),
-    oversizeTitle: resolveIssueSpec(issues?.oversizeTitle, pageCount, 0.05 * ratioScale),
+    oversizeTitle: resolveIssueSpec(
+      issues?.oversizeTitle,
+      pageCount,
+      0.05 * ratioScale
+    ),
     oversizeDescription: resolveIssueSpec(
       issues?.oversizeDescription,
       pageCount,
-      0.05 * ratioScale,
+      0.05 * ratioScale
     ),
     longUrls: resolveIssueSpec(issues?.longUrls, pageCount, 0.05 * ratioScale),
-    duplicateTitles: resolveDuplicateSpec(issues?.duplicateTitles, pageCount, ratioScale),
+    duplicateTitles: resolveDuplicateSpec(
+      issues?.duplicateTitles,
+      pageCount,
+      ratioScale
+    ),
     duplicateDescriptions: resolveDuplicateSpec(
       issues?.duplicateDescriptions,
       pageCount,
-      ratioScale,
+      ratioScale
     ),
-    orphanPages: resolveIssueSpec(issues?.orphanPages, pageCount, 0.03 * ratioScale),
-    redirectChains: resolveRedirectChainSpec(issues?.redirectChains, pageCount, ratioScale),
-    brokenLinks: resolveIssueSpec(issues?.brokenLinks, pageCount, 0.05 * ratioScale),
-    noindexInSitemap: resolveIssueSpec(issues?.noindexInSitemap, pageCount, 0.03 * ratioScale),
+    orphanPages: resolveIssueSpec(
+      issues?.orphanPages,
+      pageCount,
+      0.03 * ratioScale
+    ),
+    redirectChains: resolveRedirectChainSpec(
+      issues?.redirectChains,
+      pageCount,
+      ratioScale
+    ),
+    brokenLinks: resolveIssueSpec(
+      issues?.brokenLinks,
+      pageCount,
+      0.05 * ratioScale
+    ),
+    noindexInSitemap: resolveIssueSpec(
+      issues?.noindexInSitemap,
+      pageCount,
+      0.03 * ratioScale
+    ),
   };
 }
 
 function resolveOptions(opts: GenerateSiteModelOptions): ResolvedSiteOptions {
   const pageCount = Math.max(1, Math.floor(opts.pageCount));
-  const cleanRatio = Math.min(1, Math.max(0, opts.cleanRatio ?? DEFAULT_CLEAN_RATIO));
+  const cleanRatio = Math.min(
+    1,
+    Math.max(0, opts.cleanRatio ?? DEFAULT_CLEAN_RATIO)
+  );
   return {
     seed: String(opts.seed),
     pageCount,
@@ -169,7 +207,7 @@ function resolveOptions(opts: GenerateSiteModelOptions): ResolvedSiteOptions {
     minPageSizeBytes: opts.minPageSizeBytes ?? DEFAULT_MIN_PAGE_SIZE_BYTES,
     maxPageSizeBytes: Math.max(
       opts.minPageSizeBytes ?? DEFAULT_MIN_PAGE_SIZE_BYTES,
-      opts.maxPageSizeBytes ?? DEFAULT_MAX_PAGE_SIZE_BYTES,
+      opts.maxPageSizeBytes ?? DEFAULT_MAX_PAGE_SIZE_BYTES
     ),
     cleanRatio,
     issues: resolveIssueMixOptions(opts.issues, pageCount, cleanRatio),
@@ -183,7 +221,11 @@ function buildTemplates(templateCount: number): PageTemplate[] {
   for (let i = 1; i < templateCount; i++) {
     const kind = TEMPLATE_KINDS[(i - 1) % TEMPLATE_KINDS.length]!;
     const id = i - 1 < TEMPLATE_KINDS.length ? kind : `${kind}-${i}`;
-    templates.push({ id, label: capitalize(kind), fingerprint: hashStringHex(`tpl:${id}`) });
+    templates.push({
+      id,
+      label: capitalize(kind),
+      fingerprint: hashStringHex(`tpl:${id}`),
+    });
   }
   return templates;
 }
@@ -202,7 +244,7 @@ function basePage(
   seed: string,
   index: number,
   template: PageTemplate,
-  resolved: ResolvedSiteOptions,
+  resolved: ResolvedSiteOptions
 ): PageModel {
   // Keyed on `index`, not `template.id === "home"` — templateCount:1 reuses the
   // "home" template for every content page too, and path uniqueness must not
@@ -217,7 +259,11 @@ function basePage(
   const description = `This ${noun} ${verb} ${topic} for teams that need ${adjective.toLowerCase()} results, page ${index}.`;
   const h1 = `${adjective} ${noun} #${index}`;
   const wordCount = rngInt(rng, 150, 900);
-  const targetSizeBytes = rngInt(rng, resolved.minPageSizeBytes, resolved.maxPageSizeBytes);
+  const targetSizeBytes = rngInt(
+    rng,
+    resolved.minPageSizeBytes,
+    resolved.maxPageSizeBytes
+  );
 
   return {
     path,
@@ -236,8 +282,14 @@ function basePage(
   };
 }
 
-function wireDefaultLinks(rng: Rng, pages: PageModel[], orphanIndices: Set<number>): void {
-  const linkableIndices = pages.map((_, i) => i).filter((i) => !orphanIndices.has(i));
+function wireDefaultLinks(
+  rng: Rng,
+  pages: PageModel[],
+  orphanIndices: Set<number>
+): void {
+  const linkableIndices = pages
+    .map((_, i) => i)
+    .filter((i) => !orphanIndices.has(i));
 
   // Home links to a curated nav sample of linkable pages.
   const navSampleSize = Math.min(20, Math.max(0, linkableIndices.length - 1));
@@ -284,7 +336,10 @@ function wireDefaultLinks(rng: Rng, pages: PageModel[], orphanIndices: Set<numbe
 }
 
 /** Non-home page indices, minus any already claimed by a conflicting field mutator. */
-function eligibleNonHomeIndices(pages: PageModel[], exclude: ReadonlySet<number>): number[] {
+function eligibleNonHomeIndices(
+  pages: PageModel[],
+  exclude: ReadonlySet<number>
+): number[] {
   const indices: number[] = [];
   for (let i = 1; i < pages.length; i++) {
     if (!exclude.has(i)) indices.push(i);
@@ -307,7 +362,7 @@ function applySingleTagIssue(
   tag: IssueTag,
   issueSummary: Record<IssueTag, number>,
   apply: (page: PageModel, rng: Rng) => void,
-  exclude: ReadonlySet<number> = new Set(),
+  exclude: ReadonlySet<number> = new Set()
 ): Set<number> {
   const touched = new Set<number>();
   if (count <= 0 || pages.length <= 1) return touched;
@@ -331,7 +386,7 @@ function applyDuplicateGroup(
   issueSummary: Record<IssueTag, number>,
   setValue: (page: PageModel, value: string) => void,
   makeValue: (rng: Rng, groupIndex: number) => string,
-  exclude: ReadonlySet<number> = new Set(),
+  exclude: ReadonlySet<number> = new Set()
 ): void {
   if (spec.groupCount <= 0 || spec.groupSize < 2 || pages.length <= 1) return;
   const candidates = eligibleNonHomeIndices(pages, exclude);
@@ -349,7 +404,10 @@ function applyDuplicateGroup(
 
   const picks = pickSubset(rng, candidates, actualGroupCount * spec.groupSize);
   for (let g = 0; g < actualGroupCount; g++) {
-    const groupIndices = picks.slice(g * spec.groupSize, (g + 1) * spec.groupSize);
+    const groupIndices = picks.slice(
+      g * spec.groupSize,
+      (g + 1) * spec.groupSize
+    );
     const value = makeValue(rng, g);
     for (const idx of groupIndices) {
       const page = pages[idx]!;
@@ -365,14 +423,16 @@ function applyLongUrls(
   pages: PageModel[],
   orphanIndices: ReadonlySet<number>,
   count: number,
-  issueSummary: Record<IssueTag, number>,
+  issueSummary: Record<IssueTag, number>
 ): void {
   if (count <= 0 || pages.length <= 1) return;
   const nonHomePool = pages.length - 1;
   const picks = pickIndices(rng, nonHomePool, count).map((i) => i + 1);
   // Target pool must exclude orphans — linking to one would give it an
   // incoming link, breaking the "orphan = zero inbound links" invariant.
-  const linkableIndices = pages.map((_, i) => i).filter((i) => !orphanIndices.has(i));
+  const linkableIndices = pages
+    .map((_, i) => i)
+    .filter((i) => !orphanIndices.has(i));
   for (const idx of picks) {
     const source = pages[idx]!;
     const targetIdx = pickExcluding(rng, linkableIndices, idx);
@@ -381,9 +441,12 @@ function applyLongUrls(
     // length. Not reachable with today's `/${templateId}/${index}` paths, but
     // guard the negative case anyway (repeat() throws RangeError on a
     // negative count) since target.path length isn't bounded by this function.
-    const junkLength = Math.max(0, LONG_URL_MIN_LENGTH - target.path.length + 200);
+    const junkLength = Math.max(
+      0,
+      LONG_URL_MIN_LENGTH - target.path.length + 200
+    );
     const junk = hashStringHex(`${source.path}:${idx}`).repeat(
-      Math.max(1, Math.ceil(junkLength / 8)),
+      Math.max(1, Math.ceil(junkLength / 8))
     );
     const href = `${target.path}?session=${junk.slice(0, junkLength)}`;
     source.outgoingLinks.push(href);
@@ -396,7 +459,7 @@ function applyBrokenLinks(
   rng: Rng,
   pages: PageModel[],
   count: number,
-  issueSummary: Record<IssueTag, number>,
+  issueSummary: Record<IssueTag, number>
 ): void {
   if (count <= 0 || pages.length <= 1) return;
   const nonHomePool = pages.length - 1;
@@ -417,13 +480,17 @@ function applyRedirectChains(
   orphanIndices: Set<number>,
   spec: { count: number; chainLength: number },
   seed: string,
-  issueSummary: Record<IssueTag, number>,
+  issueSummary: Record<IssueTag, number>
 ): PageModel[] {
   if (spec.count <= 0 || spec.chainLength <= 0 || pages.length <= 1) return [];
-  const linkableIndices = pages.map((_, i) => i).filter((i) => i !== 0 && !orphanIndices.has(i));
+  const linkableIndices = pages
+    .map((_, i) => i)
+    .filter((i) => i !== 0 && !orphanIndices.has(i));
   if (linkableIndices.length === 0) return [];
 
-  const sourcePicks = pickIndices(rng, pages.length - 1, spec.count).map((i) => i + 1);
+  const sourcePicks = pickIndices(rng, pages.length - 1, spec.count).map(
+    (i) => i + 1
+  );
   const hops: PageModel[] = [];
 
   for (let c = 0; c < spec.count; c++) {
@@ -463,7 +530,9 @@ function applyRedirectChains(
       });
       issueSummary["redirect-chain"] += 1;
     }
-    pages[sourceIdx]!.outgoingLinks.push(`${RESERVED_REDIRECT_CHAIN_PREFIX}/${c}/hop-0`);
+    pages[sourceIdx]!.outgoingLinks.push(
+      `${RESERVED_REDIRECT_CHAIN_PREFIX}/${c}/hop-0`
+    );
   }
   return hops;
 }
@@ -485,14 +554,21 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
   const contentTemplateCount = templates.length - 1;
   for (let i = 1; i < resolved.pageCount; i++) {
     const template =
-      contentTemplateCount > 0 ? templates[1 + ((i - 1) % contentTemplateCount)]! : templates[0]!;
+      contentTemplateCount > 0
+        ? templates[1 + ((i - 1) % contentTemplateCount)]!
+        : templates[0]!;
     pages.push(basePage(rng, resolved.seed, i, template, resolved));
   }
 
   // Orphan reservation happens BEFORE link wiring so orphans genuinely end up
   // with zero incoming links (never chosen as a link target anywhere below).
-  const orphanCount = Math.min(resolved.issues.orphanPages.count, Math.max(0, pages.length - 1));
-  const orphanIndices = new Set(pickIndices(rng, pages.length - 1, orphanCount).map((i) => i + 1));
+  const orphanCount = Math.min(
+    resolved.issues.orphanPages.count,
+    Math.max(0, pages.length - 1)
+  );
+  const orphanIndices = new Set(
+    pickIndices(rng, pages.length - 1, orphanCount).map((i) => i + 1)
+  );
   for (const idx of orphanIndices) {
     pages[idx]!.issues.push("orphan");
     issueSummary.orphan += 1;
@@ -509,7 +585,7 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
     issueSummary,
     (page, r) => {
       page.h1 = buildLongText(r, LONG_H1_MIN_LENGTH + 50);
-    },
+    }
   );
   // oversize-title and duplicate-title both rewrite `.title` — the duplicate-
   // group pass below excludes whatever this claims, so neither can silently
@@ -522,7 +598,7 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
     issueSummary,
     (page, r) => {
       page.title = buildLongText(r, OVERSIZE_TITLE_MIN_LENGTH + 20);
-    },
+    }
   );
   const descriptionClaimed = applySingleTagIssue(
     rng,
@@ -532,7 +608,7 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
     issueSummary,
     (page, r) => {
       page.description = buildLongText(r, OVERSIZE_DESCRIPTION_MIN_LENGTH + 20);
-    },
+    }
   );
   applySingleTagIssue(
     rng,
@@ -543,7 +619,7 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
     (page) => {
       page.noindex = true;
       page.inSitemap = true;
-    },
+    }
   );
 
   applyDuplicateGroup(
@@ -557,7 +633,7 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
     },
     (r, groupIndex) =>
       `${capitalize(rngPick(r, ADJECTIVES))} ${rngPick(r, NOUNS)} \u2014 Group ${groupIndex}`,
-    titleClaimed,
+    titleClaimed
   );
   applyDuplicateGroup(
     rng,
@@ -570,10 +646,16 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
     },
     (r, groupIndex) =>
       `The same description text appears on every page in duplicate group ${groupIndex}, describing ${rngPick(r, NOUNS)}.`,
-    descriptionClaimed,
+    descriptionClaimed
   );
 
-  applyLongUrls(rng, pages, orphanIndices, resolved.issues.longUrls.count, issueSummary);
+  applyLongUrls(
+    rng,
+    pages,
+    orphanIndices,
+    resolved.issues.longUrls.count,
+    issueSummary
+  );
   applyBrokenLinks(rng, pages, resolved.issues.brokenLinks.count, issueSummary);
   const redirectHops = applyRedirectChains(
     rng,
@@ -581,7 +663,7 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
     orphanIndices,
     resolved.issues.redirectChains,
     resolved.seed,
-    issueSummary,
+    issueSummary
   );
 
   const allPages = [...pages, ...redirectHops];

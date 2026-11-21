@@ -52,7 +52,10 @@ const GDPR_COUNTRIES = new Set<string>([
  */
 export function isGdprJurisdiction(meta: SiteMetadata | undefined): boolean {
   if (!meta) return false;
-  if (meta.primaryCountry && GDPR_COUNTRIES.has(meta.primaryCountry.toUpperCase())) {
+  if (
+    meta.primaryCountry &&
+    GDPR_COUNTRIES.has(meta.primaryCountry.toUpperCase())
+  ) {
     return true;
   }
   // A globally-scoped audience reaches EU users; require GDPR-grade handling.
@@ -74,7 +77,9 @@ export function isCcpaJurisdiction(meta: SiteMetadata | undefined): boolean {
  * A short human label for the strictest privacy regime that applies, or null.
  * Used to enrich rule messages when escalating.
  */
-export function privacyRegimeLabel(meta: SiteMetadata | undefined): string | null {
+export function privacyRegimeLabel(
+  meta: SiteMetadata | undefined
+): string | null {
   if (isGdprJurisdiction(meta)) return "GDPR";
   if (isCcpaJurisdiction(meta)) return "CCPA";
   return null;

@@ -3,9 +3,11 @@
 
 import type { Document, Element } from "linkedom";
 
+import {
+  getAttrCI,
+  querySelectorAllOutsideNoscript,
+} from "@squirrelscan/utils";
 import { Effect } from "effect";
-
-import { getAttrCI, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 import type { ExtractedImage } from "./types";
 
@@ -114,7 +116,10 @@ export function extractImages(
   }
 
   // Also check for picture > source elements
-  const pictures = querySelectorAllOutsideNoscript(doc, "picture source[srcset]");
+  const pictures = querySelectorAllOutsideNoscript(
+    doc,
+    "picture source[srcset]"
+  );
   for (const source of pictures) {
     const element = source as Element;
     const srcset = element.getAttribute("srcset");

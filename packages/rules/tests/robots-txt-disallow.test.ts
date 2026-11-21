@@ -1,10 +1,11 @@
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { robotsTxtRule } from "../src/crawl/robots-txt";
-import type { ParsedPage, RuleContext } from "../src/types";
 import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 const ROBOTS_URL = "https://example.com/robots.txt";
@@ -12,7 +13,13 @@ const ROBOTS_URL = "https://example.com/robots.txt";
 async function run(content: string): Promise<CheckResult[]> {
   const robotsTxt = parseRobotsTxt(content, ROBOTS_URL);
   const ctx = {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: {
       baseUrl: "https://example.com",
@@ -29,10 +36,10 @@ async function run(content: string): Promise<CheckResult[]> {
 
 describe("crawl/robots-txt Disallow: /", () => {
   test("a wildcard-only block fails robots-txt-disallow", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Disallow: /
-`));
+`);
 
     expect(checks).toEqual([
       {
@@ -45,13 +52,13 @@ Disallow: /
   });
 
   test("a wildcard block with a Googlebot group that allows / warns and names Googlebot", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Disallow: /
 
 User-agent: Googlebot
 Allow: /
-`));
+`);
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
@@ -64,7 +71,7 @@ Allow: /
   });
 
   test("a named group that does not disallow / re-allows the site, matched without case", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Disallow: /
 
@@ -73,7 +80,7 @@ Disallow: /private/
 
 User-agent: GOOGLEBOT
 Disallow:
-`));
+`);
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
@@ -83,11 +90,11 @@ Disallow:
   });
 
   test("a wildcard block with Allow exceptions reports info when no named group re-allows the site", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Disallow: /
 Allow: /public/
-`));
+`);
 
     expect(checks).toEqual([
       {
@@ -99,14 +106,14 @@ Allow: /public/
   });
 
   test("a wildcard block with Allow exceptions and a Googlebot group that allows / warns instead of info", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Disallow: /
 Allow: /public/
 
 User-agent: Googlebot
 Allow: /
-`));
+`);
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
@@ -117,7 +124,7 @@ Allow: /
   });
 
   test("a wildcard block with a named Disallow for another bot still blocks all crawling", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Disallow: /
 
@@ -126,20 +133,27 @@ Disallow: /
 
 User-agent: SomeOtherBot
 Allow: /
-`));
+`);
 
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ name: "robots-txt-disallow", status: "fail" });
+    expect(checks[0]).toMatchObject({
+      name: "robots-txt-disallow",
+      status: "fail",
+    });
   });
 
   test("a site that is not blocked passes robots-txt-disallow", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Disallow: /admin/
-`));
+`);
 
     expect(checks).toEqual([
-      { name: "robots-txt-disallow", status: "pass", message: "robots.txt does not block all crawling" },
+      {
+        name: "robots-txt-disallow",
+        status: "pass",
+        message: "robots.txt does not block all crawling",
+      },
     ]);
   });
 });

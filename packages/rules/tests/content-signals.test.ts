@@ -1,8 +1,10 @@
 // ax/content-signals — Content-Signal parsing + contradiction detection.
 
+import type { CheckResult, RobotsTxtData } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, RobotsTxtData } from "@squirrelscan/core-contracts";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import {
   contentSignalsRule,
@@ -10,7 +12,6 @@ import {
   findContradictions,
   robotsNotReadReason,
 } from "../src/ax/content-signals";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 type Group = RobotsTxtData["rules"][number];
 
@@ -28,9 +29,20 @@ function robots(content: string, rules: Group[] = []): RobotsTxtData {
 
 function ctx(robotsTxt: RobotsTxtData | null): RuleContext {
   return {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
-    site: { baseUrl: "https://example.com", pages: [], robotsTxt, sitemaps: null },
+    site: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt,
+      sitemaps: null,
+    },
     options: {},
   };
 }
@@ -42,7 +54,7 @@ async function run(robotsTxt: RobotsTxtData | null): Promise<CheckResult[]> {
 describe("parseContentSignals", () => {
   test("parses a wildcard-group signal into known key/value pairs", () => {
     const parsed = parseContentSignals(
-      "User-agent: *\nContent-Signal: search=yes, ai-input=yes, ai-train=no\nAllow: /",
+      "User-agent: *\nContent-Signal: search=yes, ai-input=yes, ai-train=no\nAllow: /"
     );
     expect(parsed).toHaveLength(1);
     expect(parsed[0]?.userAgents).toEqual(["*"]);
@@ -57,14 +69,16 @@ describe("parseContentSignals", () => {
 
   test("associates a signal with the group's user-agent and strips comments", () => {
     const parsed = parseContentSignals(
-      "User-agent: GPTBot\nContent-Signal: ai-train=no  # opt out\nDisallow: /",
+      "User-agent: GPTBot\nContent-Signal: ai-train=no  # opt out\nDisallow: /"
     );
     expect(parsed[0]?.userAgents).toEqual(["gptbot"]);
     expect(parsed[0]?.signals).toEqual([{ key: "ai-train", value: "no" }]);
   });
 
   test("flags unknown keys and malformed tokens", () => {
-    const parsed = parseContentSignals("User-agent: *\nContent-Signal: search=maybe, foo=yes, bare");
+    const parsed = parseContentSignals(
+      "User-agent: *\nContent-Signal: search=maybe, foo=yes, bare"
+    );
     expect(parsed[0]?.unknownKeys).toEqual(["foo"]);
     // search=maybe (bad value) and `bare` (no =) are both malformed.
     expect(parsed[0]?.malformed).toEqual(["search=maybe", "bare"]);
@@ -73,7 +87,9 @@ describe("parseContentSignals", () => {
 
   test("Cloudflare managed line with use= aux key parses clean (no unknown/malformed)", () => {
     // Verbatim shape of Cloudflare's managed robots.txt rollout.
-    const parsed = parseContentSignals("User-agent: *\nContent-Signal: search=yes,ai-train=no,use=reference\nAllow: /");
+    const parsed = parseContentSignals(
+      "User-agent: *\nContent-Signal: search=yes,ai-train=no,use=reference\nAllow: /"
+    );
     expect(parsed[0]?.unknownKeys).toEqual([]);
     expect(parsed[0]?.malformed).toEqual([]);
     expect(parsed[0]?.aux).toEqual([{ key: "use", value: "reference" }]);
@@ -90,7 +106,9 @@ describe("parseContentSignals", () => {
   });
 
   test("returns nothing when robots.txt has no Content-Signal line", () => {
-    expect(parseContentSignals("User-agent: *\nDisallow: /private")).toEqual([]);
+    expect(parseContentSignals("User-agent: *\nDisallow: /private")).toEqual(
+      []
+    );
   });
 });
 
@@ -99,7 +117,10 @@ describe("findContradictions", () => {
     const r = robots("User-agent: *\nContent-Signal: ai-train=yes", [
       { userAgent: "GPTBot", rules: [{ type: "disallow", path: "/" }] },
     ]);
-    const contradictions = findContradictions(parseContentSignals(r.content ?? ""), r);
+    const contradictions = findContradictions(
+      parseContentSignals(r.content ?? ""),
+      r
+    );
     expect(contradictions).toHaveLength(1);
     expect(contradictions[0]?.signal).toBe("ai-train");
     expect(contradictions[0]?.blockedTokens).toContain("GPTBot");
@@ -109,7 +130,10 @@ describe("findContradictions", () => {
     const r = robots("Content-Signal: search=yes", [
       { userAgent: "PerplexityBot", rules: [{ type: "disallow", path: "/" }] },
     ]);
-    const contradictions = findContradictions(parseContentSignals(r.content ?? ""), r);
+    const contradictions = findContradictions(
+      parseContentSignals(r.content ?? ""),
+      r
+    );
     expect(contradictions[0]?.signal).toBe("search");
     expect(contradictions[0]?.crawlerClass).toBe("ai-search");
   });
@@ -118,23 +142,32 @@ describe("findContradictions", () => {
     const r = robots("User-agent: *\nContent-Signal: ai-train=no, search=yes", [
       { userAgent: "GPTBot", rules: [{ type: "disallow", path: "/" }] },
     ]);
-    expect(findContradictions(parseContentSignals(r.content ?? ""), r)).toEqual([]);
+    expect(findContradictions(parseContentSignals(r.content ?? ""), r)).toEqual(
+      []
+    );
   });
 
   test("signal scoped to another UA group does not contradict a different bot's block", () => {
     // ai-train=yes is declared only for Googlebot's group; GPTBot's Disallow
     // lives in a separate group the signal never spoke for.
-    const r = robots("User-agent: GPTBot\nDisallow: /\n\nUser-agent: Googlebot\nContent-Signal: ai-train=yes", [
-      { userAgent: "GPTBot", rules: [{ type: "disallow", path: "/" }] },
-    ]);
-    expect(findContradictions(parseContentSignals(r.content ?? ""), r)).toEqual([]);
+    const r = robots(
+      "User-agent: GPTBot\nDisallow: /\n\nUser-agent: Googlebot\nContent-Signal: ai-train=yes",
+      [{ userAgent: "GPTBot", rules: [{ type: "disallow", path: "/" }] }]
+    );
+    expect(findContradictions(parseContentSignals(r.content ?? ""), r)).toEqual(
+      []
+    );
   });
 
   test("signal scoped to the blocked bot's own group still contradicts", () => {
-    const r = robots("User-agent: GPTBot\nContent-Signal: ai-train=yes\nDisallow: /", [
-      { userAgent: "GPTBot", rules: [{ type: "disallow", path: "/" }] },
-    ]);
-    const contradictions = findContradictions(parseContentSignals(r.content ?? ""), r);
+    const r = robots(
+      "User-agent: GPTBot\nContent-Signal: ai-train=yes\nDisallow: /",
+      [{ userAgent: "GPTBot", rules: [{ type: "disallow", path: "/" }] }]
+    );
+    const contradictions = findContradictions(
+      parseContentSignals(r.content ?? ""),
+      r
+    );
     expect(contradictions).toHaveLength(1);
     expect(contradictions[0]?.blockedTokens).toContain("GPTBot");
   });
@@ -142,21 +175,27 @@ describe("findContradictions", () => {
 
 describe("ax/content-signals rule", () => {
   test("absent Content-Signal reports info, not a failure", async () => {
-    const checks = (await run(robots("User-agent: *\nDisallow: /admin")));
+    const checks = await run(robots("User-agent: *\nDisallow: /admin"));
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("info");
     expect(checks[0]?.message).toContain("No Content-Signal");
   });
 
   test("no robots.txt read is not checked, never absent (#1649)", async () => {
-    const checks = (await run(null));
+    const checks = await run(null);
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ name: "content-signals", status: "skipped", value: "not-checked" });
+    expect(checks[0]).toMatchObject({
+      name: "content-signals",
+      status: "skipped",
+      value: "not-checked",
+    });
     expect(checks[0]?.details).toMatchObject({ state: "not-checked" });
   });
 
   test("a clean policy reports the declared signals as info", async () => {
-    const checks = (await run(robots("User-agent: *\nContent-Signal: search=yes, ai-train=no\nAllow: /")));
+    const checks = await run(
+      robots("User-agent: *\nContent-Signal: search=yes, ai-train=no\nAllow: /")
+    );
     const policy = checks.find((c) => c.name === "content-signals-policy");
     expect(policy?.status).toBe("info");
     expect(policy?.message).toContain("search=yes");
@@ -165,127 +204,232 @@ describe("ax/content-signals rule", () => {
   });
 
   test("Cloudflare managed policy with use= reports clean info incl. the aux key", async () => {
-    const checks = (await run(robots("User-agent: *\nContent-Signal: search=yes,ai-train=no,use=reference\nAllow: /")));
-    expect(checks.find((c) => c.name === "content-signals-syntax")).toBeUndefined();
+    const checks = await run(
+      robots(
+        "User-agent: *\nContent-Signal: search=yes,ai-train=no,use=reference\nAllow: /"
+      )
+    );
+    expect(
+      checks.find((c) => c.name === "content-signals-syntax")
+    ).toBeUndefined();
     const policy = checks.find((c) => c.name === "content-signals-policy");
     expect(policy?.message).toContain("use=reference");
   });
 
   test("invalid syntax warns", async () => {
-    const checks = (await run(robots("Content-Signal: foo=bar, search=maybe")));
+    const checks = await run(robots("Content-Signal: foo=bar, search=maybe"));
     const syntax = checks.find((c) => c.name === "content-signals-syntax");
     expect(syntax?.status).toBe("warn");
     expect(syntax?.message).toContain("foo");
   });
 
   test("a contradiction warns", async () => {
-    const checks = (await run(
+    const checks = await run(
       robots("User-agent: *\nContent-Signal: ai-train=yes", [
         { userAgent: "ClaudeBot", rules: [{ type: "disallow", path: "/" }] },
-      ]),
-    ));
-    const contradiction = checks.find((c) => c.name === "content-signals-contradiction");
+      ])
+    );
+    const contradiction = checks.find(
+      (c) => c.name === "content-signals-contradiction"
+    );
     expect(contradiction?.status).toBe("warn");
     expect(contradiction?.message).toContain("ClaudeBot");
   });
 });
 
 describe("absent, declared, invalid and not checked are four states (#1649)", () => {
-  const stateOf = (checks: CheckResult[]) => checks.map((c) => (c.details as { state?: string } | undefined)?.state);
+  const stateOf = (checks: CheckResult[]) =>
+    checks.map((c) => (c.details as { state?: string } | undefined)?.state);
 
   test("a complete robots.txt with no Content-Signal is absent, as information", async () => {
-    const checks = (await run(robots("User-agent: *\nDisallow: /admin\nSitemap: https://example.com/s.xml")));
+    const checks = await run(
+      robots(
+        "User-agent: *\nDisallow: /admin\nSitemap: https://example.com/s.xml"
+      )
+    );
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({ status: "info", value: "absent" });
     expect(stateOf(checks)).toEqual(["absent"]);
   });
 
   test("a valid directive is declared", async () => {
-    const checks = (await run(robots("User-agent: *\nContent-Signal: search=yes, ai-train=no")));
+    const checks = await run(
+      robots("User-agent: *\nContent-Signal: search=yes, ai-train=no")
+    );
     expect(stateOf(checks)).toEqual(["declared"]);
   });
 
   test("a malformed directive is invalid, separately from absent", async () => {
-    const checks = (await run(robots("User-agent: *\nContent-Signal: search=maybe")));
+    const checks = await run(
+      robots("User-agent: *\nContent-Signal: search=maybe")
+    );
     expect(checks.find((c) => c.value === "absent")).toBeUndefined();
     expect(stateOf(checks)).toEqual(["invalid", "invalid"]);
-    expect(checks.map((c) => c.name)).toEqual(["content-signals-policy", "content-signals-syntax"]);
+    expect(checks.map((c) => c.name)).toEqual([
+      "content-signals-policy",
+      "content-signals-syntax",
+    ]);
   });
 
   test("a valid directive next to a malformed one is declared and invalid syntax is reported", async () => {
-    const checks = (await run(robots("User-agent: *\nContent-Signal: search=yes, ai-train=maybe")));
+    const checks = await run(
+      robots("User-agent: *\nContent-Signal: search=yes, ai-train=maybe")
+    );
     expect(stateOf(checks)).toEqual(["declared", "invalid"]);
   });
 
   test("a failed read is not checked, never absent", async () => {
-    const failed: RobotsTxtData = { exists: false, url: "https://example.com/robots.txt", content: null, sizeBytes: 0, sitemaps: [], rules: [], errors: ["HTTP 403"] };
-    const checks = (await run(failed));
+    const failed: RobotsTxtData = {
+      exists: false,
+      url: "https://example.com/robots.txt",
+      content: null,
+      sizeBytes: 0,
+      sitemaps: [],
+      rules: [],
+      errors: ["HTTP 403"],
+    };
+    const checks = await run(failed);
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+    });
     expect(checks[0]?.message).toContain("HTTP 403");
   });
 
   test("a definite 404 (exists false, no error) is absent: no policy declared", async () => {
-    const missing: RobotsTxtData = { exists: false, url: "https://example.com/robots.txt", content: null, sizeBytes: 0, sitemaps: [], rules: [], errors: [] };
-    expect((await run(missing))[0]).toMatchObject({ status: "info", value: "absent" });
+    const missing: RobotsTxtData = {
+      exists: false,
+      url: "https://example.com/robots.txt",
+      content: null,
+      sizeBytes: 0,
+      sitemaps: [],
+      rules: [],
+      errors: [],
+    };
+    expect((await run(missing))[0]).toMatchObject({
+      status: "info",
+      value: "absent",
+    });
   });
 
   test("robots.txt never read in this audit is not checked", async () => {
-    expect((await run(null))[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    expect((await run(null))[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+    });
   });
 
   test("a robots.txt reported present without content is not checked", async () => {
-    const odd: RobotsTxtData = { exists: true, url: "https://example.com/robots.txt", content: null, sizeBytes: 0, sitemaps: [], rules: [], errors: [] };
-    expect((await run(odd))[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    const odd: RobotsTxtData = {
+      exists: true,
+      url: "https://example.com/robots.txt",
+      content: null,
+      sizeBytes: 0,
+      sitemaps: [],
+      rules: [],
+      errors: [],
+    };
+    expect((await run(odd))[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+    });
   });
 
   test("a read that reached the 512 KiB cap is not checked: the policy may sit past it", async () => {
-    const big = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 };
-    expect((await run(big))[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    const big = {
+      ...robots("User-agent: *\nDisallow: /a"),
+      sizeBytes: 512 * 1024,
+    };
+    expect((await run(big))[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+    });
     expect(robotsNotReadReason(big)).toContain("512 KiB");
-    const justUnder = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 5 };
-    expect((await run(justUnder))[0]).toMatchObject({ status: "info", value: "absent" });
+    const justUnder = {
+      ...robots("User-agent: *\nDisallow: /a"),
+      sizeBytes: 512 * 1024 - 5,
+    };
+    expect((await run(justUnder))[0]).toMatchObject({
+      status: "info",
+      value: "absent",
+    });
   });
 
   test("a BOM-prefixed file cut at the cap (decoded size cap minus 3) is not checked, not absent", async () => {
-    const bomCut = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 3 };
-    expect((await run(bomCut))[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    const bomCut = {
+      ...robots("User-agent: *\nDisallow: /a"),
+      sizeBytes: 512 * 1024 - 3,
+    };
+    expect((await run(bomCut))[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+    });
   });
 
   // The margin's own boundary (ROBOTS_CAP_MARGIN_BYTES = 4): cap - 4 is the first size that counts as possibly cut short, cap - 5 the last
   // that reads as complete. Pinned so the margin cannot drift by one in either direction without a test saying so.
   test("the margin boundary: cap minus 4 is not checked, cap minus 5 is absent", async () => {
-    const at = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 4 };
-    expect((await run(at))[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+    const at = {
+      ...robots("User-agent: *\nDisallow: /a"),
+      sizeBytes: 512 * 1024 - 4,
+    };
+    expect((await run(at))[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+    });
     expect(robotsNotReadReason(at)).toContain("512 KiB");
-    const below = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes: 512 * 1024 - 5 };
-    expect((await run(below))[0]).toMatchObject({ status: "info", value: "absent" });
+    const below = {
+      ...robots("User-agent: *\nDisallow: /a"),
+      sizeBytes: 512 * 1024 - 5,
+    };
+    expect((await run(below))[0]).toMatchObject({
+      status: "info",
+      value: "absent",
+    });
     expect(robotsNotReadReason(below)).toBeNull();
   });
 
   test("exactly the cap and one byte over are not checked", async () => {
     for (const sizeBytes of [512 * 1024, 512 * 1024 + 1]) {
       const r = { ...robots("User-agent: *\nDisallow: /a"), sizeBytes };
-      expect((await run(r))[0]).toMatchObject({ status: "skipped", value: "not-checked" });
+      expect((await run(r))[0]).toMatchObject({
+        status: "skipped",
+        value: "not-checked",
+      });
     }
   });
 
   test("a directive found in a capped read is still reported as declared", async () => {
-    const big = { ...robots("User-agent: *\nContent-Signal: search=yes"), sizeBytes: 512 * 1024 };
+    const big = {
+      ...robots("User-agent: *\nContent-Signal: search=yes"),
+      sizeBytes: 512 * 1024,
+    };
     expect(stateOf(await run(big))).toEqual(["declared"]);
   });
 
   test("an empty but readable robots.txt is absent", async () => {
-    expect((await run(robots("")))[0]).toMatchObject({ status: "info", value: "absent" });
+    expect((await run(robots("")))[0]).toMatchObject({
+      status: "info",
+      value: "absent",
+    });
   });
 
   test("the rule only reads data already fetched: no probe, no extra request", () => {
-    const source = Bun.file(new URL("../src/ax/content-signals.ts", import.meta.url));
-    return source.text().then((text) => expect(text).not.toMatch(/fetch\(|safeFetch|ctx\.probe/));
+    const source = Bun.file(
+      new URL("../src/ax/content-signals.ts", import.meta.url)
+    );
+    return source
+      .text()
+      .then((text) => expect(text).not.toMatch(/fetch\(|safeFetch|ctx\.probe/));
   });
 
   test("absent is info and not-checked is skipped: neither is a finding", async () => {
-    expect((await run(robots("User-agent: *\nDisallow: /a"))).every((c) => c.status === "info")).toBe(true);
+    expect(
+      (await run(robots("User-agent: *\nDisallow: /a"))).every(
+        (c) => c.status === "info"
+      )
+    ).toBe(true);
     expect((await run(null)).every((c) => c.status === "skipped")).toBe(true);
   });
 });

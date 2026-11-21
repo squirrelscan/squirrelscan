@@ -37,7 +37,12 @@ const unknown = indexOf("ZZ");
 
 function v4ToInt(ip: string): bigint {
   const p = ip.split(".").map(Number);
-  return (BigInt(p[0]!) << 24n) | (BigInt(p[1]!) << 16n) | (BigInt(p[2]!) << 8n) | BigInt(p[3]!);
+  return (
+    (BigInt(p[0]!) << 24n) |
+    (BigInt(p[1]!) << 16n) |
+    (BigInt(p[2]!) << 8n) |
+    BigInt(p[3]!)
+  );
 }
 function v6ToInt(ip: string): bigint {
   const [head, tail] = ip.split("::");
@@ -46,7 +51,10 @@ function v6ToInt(ip: string): bigint {
   const fill = ip.includes("::") ? 8 - h.length - t.length : 0;
   const groups = [...h, ...Array<string>(fill).fill("0"), ...t];
   if (groups.length !== 8) throw new Error(`bad IPv6 ${ip}`);
-  return groups.reduce((acc, g) => (acc << 16n) | BigInt(Number.parseInt(g, 16)), 0n);
+  return groups.reduce(
+    (acc, g) => (acc << 16n) | BigInt(Number.parseInt(g, 16)),
+    0n
+  );
 }
 
 type Range = { start: bigint; end: bigint; cc: number };
@@ -55,8 +63,10 @@ const v6: Range[] = [];
 for (const line of lines) {
   if (!line.trim()) continue;
   const [a, b, cc] = line.split(",");
-  if (!a || !b || !cc || !/^[A-Z]{2}$/.test(cc)) throw new Error(`bad row: ${line}`);
-  if (a.includes(":")) v6.push({ start: v6ToInt(a), end: v6ToInt(b), cc: indexOf(cc) });
+  if (!a || !b || !cc || !/^[A-Z]{2}$/.test(cc))
+    throw new Error(`bad row: ${line}`);
+  if (a.includes(":"))
+    v6.push({ start: v6ToInt(a), end: v6ToInt(b), cc: indexOf(cc) });
   else v4.push({ start: v4ToInt(a), end: v4ToInt(b), cc: indexOf(cc) });
 }
 
@@ -82,7 +92,8 @@ function normalise(ranges: Range[], max: bigint): Range[] {
 const v4n = normalise(v4, 0xffffffffn);
 const v6n = normalise(v6, (1n << 128n) - 1n);
 
-const size = 6 + 2 + codes.length * 2 + 4 + v4n.length * 6 + 4 + v6n.length * 18;
+const size =
+  6 + 2 + codes.length * 2 + 4 + v4n.length * 6 + 4 + v6n.length * 18;
 const buf = new Uint8Array(size);
 const view = new DataView(buf.buffer);
 let o = 0;
@@ -107,7 +118,8 @@ for (const r of v4n) {
 view.setUint32(o, v6n.length);
 o += 4;
 for (const r of v6n) {
-  for (let i = 0; i < 16; i++) buf[o + i] = Number((r.start >> BigInt(120 - 8 * i)) & 0xffn);
+  for (let i = 0; i < 16; i++)
+    buf[o + i] = Number((r.start >> BigInt(120 - 8 * i)) & 0xffn);
   o += 16;
 }
 for (const r of v6n) {
@@ -119,7 +131,9 @@ const dir = new URL("../geoip-db/", import.meta.url);
 const gz = gzipSync(buf, { level: 9 });
 await Bun.write(new URL("country.bin.gz", dir), gz);
 // keep the `edge` block that scripts/refresh-edge-data.ts owns
-const previous = await Bun.file(new URL("SNAPSHOT.json", dir)).json().catch(() => ({}));
+const previous = await Bun.file(new URL("SNAPSHOT.json", dir))
+  .json()
+  .catch(() => ({}));
 await Bun.write(
   new URL("SNAPSHOT.json", dir),
   `${JSON.stringify(
@@ -138,7 +152,7 @@ await Bun.write(
       ...(previous.edge ? { edge: previous.edge } : {}),
     },
     null,
-    2,
-  )}\n`,
+    2
+  )}\n`
 );
 console.log({ sha256, v4: v4n.length, v6: v6n.length, bytes: gz.length });

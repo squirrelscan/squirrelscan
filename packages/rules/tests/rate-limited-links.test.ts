@@ -6,28 +6,48 @@
 // bucket that says the status is unverifiable, the way `broken-external-links`
 // already did for WAF-blocked 403s.
 
+import type { SitemapUrlStatusData } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
+import type {
+  ExternalLinkCheckData,
+  ParsedPage,
+  RuleContext,
+} from "../src/types";
+
+import { sitemap4xxRule } from "../src/crawl/sitemap-4xx";
 import { brokenExternalLinksRule } from "../src/links/broken-external-links";
 import { brokenLinksRule } from "../src/links/broken-links";
 import { deadLinksRule } from "../src/links/dead-links";
 import { validateRedirectChain } from "../src/links/redirects";
-import { sitemap4xxRule } from "../src/crawl/sitemap-4xx";
-import type { SitemapUrlStatusData } from "@squirrelscan/core-contracts";
-import type { ExternalLinkCheckData, ParsedPage, RuleContext } from "../src/types";
 
 const BASE = "https://example.com";
 
 function externalCtx(externalLinks: ExternalLinkCheckData[]): RuleContext {
   return {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
-    site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null, externalLinks },
+    site: {
+      baseUrl: BASE,
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      externalLinks,
+    },
     options: {},
   } as unknown as RuleContext;
 }
 
-const link = (over: Partial<ExternalLinkCheckData> = {}): ExternalLinkCheckData => ({
+const link = (
+  over: Partial<ExternalLinkCheckData> = {}
+): ExternalLinkCheckData => ({
   href: "https://other.example/",
   status: 200,
   error: null,
@@ -45,7 +65,7 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
       externalCtx([
         link({ href: "https://a.example/", status: 429 }),
         link({ href: "https://b.example/", status: 430 }),
-      ]),
+      ])
     );
     const broken = check(checks, "broken-external-links")!;
     expect(broken.status).toBe("pass");
@@ -55,14 +75,16 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
     // 503 is not recoverable from the status alone, so the checker persists the
     // verdict; the rule must honour the flag rather than re-deriving it.
     const { checks } = await brokenExternalLinksRule.run(
-      externalCtx([link({ href: "https://c.example/", status: 503, rateLimited: true })]),
+      externalCtx([
+        link({ href: "https://c.example/", status: 503, rateLimited: true }),
+      ])
     );
     expect(check(checks, "broken-external-links")!.status).toBe("pass");
   });
 
   test("they are reported as info with the status called unverifiable", async () => {
     const { checks } = await brokenExternalLinksRule.run(
-      externalCtx([link({ href: "https://a.example/", status: 429 })]),
+      externalCtx([link({ href: "https://a.example/", status: 429 })])
     );
     const info = check(checks, "rate-limited-external-links")!;
     expect(info.status).toBe("info");
@@ -75,7 +97,7 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
       externalCtx([
         link({ href: "https://dead.example/", status: 404 }),
         link({ href: "https://slow.example/", status: 429 }),
-      ]),
+      ])
     );
     const broken = check(checks, "broken-external-links")!;
     // #1739: a 404 is confirmed broken, so it fails.
@@ -86,9 +108,11 @@ describe("links/broken-external-links — rate-limited targets (#1829)", () => {
 
   test("a bare 503 with no Retry-After stays broken: possibly broken, a warning (#1739)", async () => {
     const { checks } = await brokenExternalLinksRule.run(
-      externalCtx([link({ href: "https://down.example/", status: 503 })]),
+      externalCtx([link({ href: "https://down.example/", status: 503 })])
     );
-    expect(check(checks, "possibly-broken-external-links")!.status).toBe("warn");
+    expect(check(checks, "possibly-broken-external-links")!.status).toBe(
+      "warn"
+    );
     expect(check(checks, "broken-external-links")).toBeUndefined();
   });
 });
@@ -99,7 +123,7 @@ describe("links/dead-links — rate-limited targets (#1829)", () => {
       externalCtx([
         link({ href: "https://ok.example/", status: 200 }),
         link({ href: "https://throttled.example/", status: 429 }),
-      ]),
+      ])
     );
     expect(checks[0]!.value).toBe(0);
     expect(checks[0]!.message).toContain("rate-limited");
@@ -110,16 +134,24 @@ describe("links/dead-links — rate-limited targets (#1829)", () => {
       externalCtx([
         link({ href: "https://dead.example/", status: 404 }),
         link({ href: "https://throttled.example/", status: 430 }),
-      ]),
+      ])
     );
     expect(checks[0]!.value).toBe(1);
   });
 });
 
 describe("links/broken-links — rate-limited internal pages (#1829)", () => {
-  function pageCtx(pages: { url: string; statusCode: number; links: string[] }[]): RuleContext {
+  function pageCtx(
+    pages: { url: string; statusCode: number; links: string[] }[]
+  ): RuleContext {
     return {
-      page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: `${BASE}/`,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: {} as ParsedPage,
       site: {
         baseUrl: BASE,
@@ -129,7 +161,12 @@ describe("links/broken-links — rate-limited internal pages (#1829)", () => {
           url: p.url,
           statusCode: p.statusCode,
           parsed: {
-            links: p.links.map((url) => ({ url, isInternal: true, text: "", rel: null })),
+            links: p.links.map((url) => ({
+              url,
+              isInternal: true,
+              text: "",
+              rel: null,
+            })),
           } as unknown as ParsedPage,
         })),
       },
@@ -142,7 +179,7 @@ describe("links/broken-links — rate-limited internal pages (#1829)", () => {
       pageCtx([
         { url: `${BASE}/`, statusCode: 200, links: [`${BASE}/throttled`] },
         { url: `${BASE}/throttled`, statusCode: 429, links: [] },
-      ]),
+      ])
     );
     const broken = check(checks, "broken-links")!;
     expect(broken.status).toBe("pass");
@@ -154,7 +191,7 @@ describe("links/broken-links — rate-limited internal pages (#1829)", () => {
       pageCtx([
         { url: `${BASE}/`, statusCode: 200, links: [`${BASE}/gone`] },
         { url: `${BASE}/gone`, statusCode: 404, links: [] },
-      ]),
+      ])
     );
     expect(check(checks, "broken-links")!.status).toBe("fail");
   });
@@ -163,7 +200,13 @@ describe("links/broken-links — rate-limited internal pages (#1829)", () => {
 describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
   function sitemapCtx(statuses: SitemapUrlStatusData[]): RuleContext {
     return {
-      page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: `${BASE}/`,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: {} as ParsedPage,
       site: {
         baseUrl: BASE,
@@ -183,7 +226,9 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
     } as unknown as RuleContext;
   }
 
-  const entry = (over: Partial<SitemapUrlStatusData>): SitemapUrlStatusData => ({
+  const entry = (
+    over: Partial<SitemapUrlStatusData>
+  ): SitemapUrlStatusData => ({
     url: `${BASE}/p`,
     status: 200,
     error: null,
@@ -191,12 +236,12 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
   });
 
   test("429 and 430 are inside the 4xx band but are not sitemap rot", async () => {
-    const { checks } = (await sitemap4xxRule.run(
+    const { checks } = await sitemap4xxRule.run(
       sitemapCtx([
         entry({ url: `${BASE}/a`, status: 429 }),
         entry({ url: `${BASE}/b`, status: 430 }),
-      ]),
-    ));
+      ])
+    );
     expect(check(checks, "sitemap-4xx")!.status).toBe("pass");
     const info = check(checks, "sitemap-rate-limited")!;
     expect(info.status).toBe("info");
@@ -204,20 +249,20 @@ describe("crawl/sitemap-4xx — rate-limited sitemap URLs (#1829)", () => {
   });
 
   test("a Retry-After 503 flagged by the checker is excluded too", async () => {
-    const { checks } = (await sitemap4xxRule.run(
-      sitemapCtx([entry({ url: `${BASE}/a`, status: 503, rateLimited: true })]),
-    ));
+    const { checks } = await sitemap4xxRule.run(
+      sitemapCtx([entry({ url: `${BASE}/a`, status: 503, rateLimited: true })])
+    );
     expect(check(checks, "sitemap-4xx")!.status).toBe("pass");
     expect(check(checks, "sitemap-rate-limited")!.status).toBe("info");
   });
 
   test("a genuine 404 in the sitemap is still reported", async () => {
-    const { checks } = (await sitemap4xxRule.run(
+    const { checks } = await sitemap4xxRule.run(
       sitemapCtx([
         entry({ url: `${BASE}/gone`, status: 404 }),
         entry({ url: `${BASE}/slow`, status: 429 }),
-      ]),
-    ));
+      ])
+    );
     const bad = check(checks, "sitemap-4xx")!;
     expect(bad.status).toBe("warn");
     expect(bad.items?.length).toBe(1);
@@ -257,7 +302,7 @@ describe("links/redirects — a chain ending in a rate limit (#1829)", () => {
           { url: `${BASE}/a`, statusCode: 301, type: "http" as const },
           { url: `${BASE}/b`, statusCode: 404, type: "http" as const },
         ],
-      }),
+      })
     );
     expect(check(checks, "redirect-to-error")!.status).toBe("fail");
     expect(check(checks, "redirect-rate-limited")).toBeUndefined();
@@ -275,14 +320,17 @@ describe("links/redirects — a chain ending in a rate limit (#1829)", () => {
               { url: `${BASE}/a`, statusCode: 301, type: "http" as const },
               { url: `${BASE}/b`, statusCode, type: "http" as const },
             ],
-          }),
+          })
         ),
-        "redirect-to-error",
+        "redirect-to-error"
       )!.message;
     expect(message(404)).toBe("Redirect chain ends in error (HTTP 404)");
     expect(message(500)).toBe("Redirect chain ends in error (HTTP 500)");
     expect(
-      check(validateRedirectChain(chain({ endsRateLimited: true })), "redirect-rate-limited")!.message,
+      check(
+        validateRedirectChain(chain({ endsRateLimited: true })),
+        "redirect-rate-limited"
+      )!.message
     ).toContain("(HTTP 429)");
   });
 });
@@ -292,7 +340,7 @@ describe("links/broken-external-links — link sections (#2307)", () => {
   /** Pages whose parsed links carry the given sections, so the rule can say where each link sits. */
   function sectionedCtx(
     externalLinks: ExternalLinkCheckData[],
-    sections: Record<string, Array<string | undefined>>,
+    sections: Record<string, Array<string | undefined>>
   ): RuleContext {
     const ctx = externalCtx(externalLinks);
     const pages = [
@@ -305,7 +353,7 @@ describe("links/broken-external-links — link sections (#2307)", () => {
               text: "t",
               isInternal: false,
               ...(section ? { section } : {}),
-            })),
+            }))
           ),
         },
       },
@@ -318,30 +366,44 @@ describe("links/broken-external-links — link sections (#2307)", () => {
     const { checks } = await brokenExternalLinksRule.run(
       sectionedCtx([link({ href: "https://gone.example/", status: 404 })], {
         "https://gone.example/": ["footer", "footer", "content"],
-      }),
+      })
     );
     const item = check(checks, "broken-external-links")!.items![0]!;
 
-    expect(item.label).toBe("https://gone.example/ (404), linked in the footer and the page content");
-    expect(item.meta).toEqual({ status: 404, error: null, sections: { footer: 2, content: 1 } });
+    expect(item.label).toBe(
+      "https://gone.example/ (404), linked in the footer and the page content"
+    );
+    expect(item.meta).toEqual({
+      status: 404,
+      error: null,
+      sections: { footer: 2, content: 1 },
+    });
   });
 
   test("WAF-blocked and rate-limited links say it too", async () => {
     const { checks } = await brokenExternalLinksRule.run(
       sectionedCtx(
         [
-          link({ href: "https://wall.example/", status: 403, wafBlocked: true, wafProvider: "Cloudflare" }),
+          link({
+            href: "https://wall.example/",
+            status: 403,
+            wafBlocked: true,
+            wafProvider: "Cloudflare",
+          }),
           link({ href: "https://slow.example/", status: 429 }),
         ],
-        { "https://wall.example/": ["navigation"], "https://slow.example/": ["sidebar"] },
-      ),
+        {
+          "https://wall.example/": ["navigation"],
+          "https://slow.example/": ["sidebar"],
+        }
+      )
     );
 
     expect(check(checks, "waf-blocked-external-links")!.items![0]!.label).toBe(
-      "https://wall.example/ (unverified: Cloudflare), linked in the navigation",
+      "https://wall.example/ (unverified: Cloudflare), linked in the navigation"
     );
     expect(check(checks, "rate-limited-external-links")!.items![0]!.label).toBe(
-      "https://slow.example/ (429), linked in the sidebar",
+      "https://slow.example/ (429), linked in the sidebar"
     );
   });
 
@@ -349,7 +411,7 @@ describe("links/broken-external-links — link sections (#2307)", () => {
     const { checks } = await brokenExternalLinksRule.run(
       sectionedCtx([link({ href: "https://gone.example/", status: 404 })], {
         "https://gone.example/": [undefined],
-      }),
+      })
     );
     const item = check(checks, "broken-external-links")!.items![0]!;
 

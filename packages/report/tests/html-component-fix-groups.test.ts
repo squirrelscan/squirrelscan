@@ -5,18 +5,24 @@
 // renders as it did before the feature existed, and — the one HTML nearly got
 // wrong — the sentence is the SHARED sentence, not one this renderer assembled.
 
+import { describe, expect, test } from "bun:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "bun:test";
 
-import type { AuditReport, CheckResult, ComponentOccurrence, ReportRuleResult } from "../src/types";
 import type { ComponentFixGroup } from "../src/component-fix-groups";
+import type {
+  AuditReport,
+  CheckResult,
+  ComponentOccurrence,
+  ReportRuleResult,
+} from "../src/types";
+
 import { FixGroupCards, renderHtml } from "../src/output/html";
 import { renderMarkdown } from "../src/output/markdown";
 
 function occurrence(
   pageUrl: string,
-  overrides: Partial<ComponentOccurrence> = {},
+  overrides: Partial<ComponentOccurrence> = {}
 ): ComponentOccurrence {
   return {
     version: 1,
@@ -25,10 +31,21 @@ function occurrence(
     provenance: { source: "page-dom", rendered: true },
     groupable: true,
     confidence: "observed",
-    region: { role: "footer", nestedIn: "none", structuralSignature: "s128:aaaa" },
+    region: {
+      role: "footer",
+      nestedIn: "none",
+      structuralSignature: "s128:aaaa",
+    },
     family: { key: "s128:bbbb", structuralSignature: "s128:bbbb" },
-    variant: { key: "s128:cccc", structuralSignature: "s128:cccc", contentHash: "s128:dddd" },
-    element: { locator: "footer:1>footer>ul:1>a:2", structuralSignature: "s128:eeee" },
+    variant: {
+      key: "s128:cccc",
+      structuralSignature: "s128:cccc",
+      contentHash: "s128:dddd",
+    },
+    element: {
+      locator: "footer:1>footer>ul:1>a:2",
+      structuralSignature: "s128:eeee",
+    },
     defect: {
       kind: "link-text-generic",
       values: { nameSource: "text", normalizedText: "click here" },
@@ -43,13 +60,17 @@ function promotable(
   pageUrl: string,
   slot: string,
   text: string,
-  heading?: string,
+  heading?: string
 ): ComponentOccurrence {
   return occurrence(pageUrl, {
     groupable: false,
     confidence: "uncertain",
     uncertainReason: "region-main",
-    region: { role: "main", nestedIn: "none", structuralSignature: "s128:main" },
+    region: {
+      role: "main",
+      nestedIn: "none",
+      structuralSignature: "s128:main",
+    },
     defect: {
       kind: "link-text-generic",
       values: { normalizedText: text },
@@ -112,7 +133,11 @@ function report(checks: CheckResult[]): AuditReport {
   } as unknown as AuditReport;
 }
 
-const PAGES = ["https://example.test/", "https://example.test/api", "https://example.test/guides"];
+const PAGES = [
+  "https://example.test/",
+  "https://example.test/api",
+  "https://example.test/guides",
+];
 
 function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
@@ -146,16 +171,18 @@ function stripTags(html: string): string {
 
 /** What each card's sentence says, as text: markup stripped, entities decoded. */
 function cardSentences(html: string): string[] {
-  return [...html.matchAll(/<p class="fix-group-line">(.*?)<\/p>/g)].map((match) =>
-    decodeEntities(stripTags(match[1]!)),
+  return [...html.matchAll(/<p class="fix-group-line">(.*?)<\/p>/g)].map(
+    (match) => decodeEntities(stripTags(match[1]!))
   );
 }
 
 /** The same sentences as markdown prints them, bold markers removed and its escapes undone (3522). */
 function markdownSentences(markdown: string): string[] {
-  return [...markdown.matchAll(/^\*\*((?:Fix once|Likely one shared block).*?)\*\*$/gm)].map(
-    (match) => match[1]!.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1"),
-  );
+  return [
+    ...markdown.matchAll(
+      /^\*\*((?:Fix once|Likely one shared block).*?)\*\*$/gm
+    ),
+  ].map((match) => match[1]!.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1"));
 }
 
 describe("the sentence is the shared sentence, not one HTML assembled", () => {
@@ -164,14 +191,25 @@ describe("the sentence is the shared sentence, not one HTML assembled", () => {
   // the grouping stage had worked out. Comparing TEXT (not markup) against the
   // markdown surface is what makes a private sentence builder impossible.
   const cases: Array<[string, AuditReport]> = [
-    ["observed, no block name", report(PAGES.map((page) => check(page, [occurrence(page)])))],
+    [
+      "observed, no block name",
+      report(PAGES.map((page) => check(page, [occurrence(page)]))),
+    ],
     [
       "repeated subtree with a block name",
-      report(PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", "Downloads")]))),
+      report(
+        PAGES.map((page) =>
+          check(page, [promotable(page, "div:1>a:1", "download", "Downloads")])
+        )
+      ),
     ],
     [
       "repeated subtree with no legible name",
-      report(PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download")]))),
+      report(
+        PAGES.map((page) =>
+          check(page, [promotable(page, "div:1>a:1", "download")])
+        )
+      ),
     ],
     [
       "a rollup: two slots in one block",
@@ -180,8 +218,8 @@ describe("the sentence is the shared sentence, not one HTML assembled", () => {
           check(page, [
             promotable(page, "div:1>a:1", "download", "Downloads"),
             promotable(page, "div:1>a:2", "get it", "Downloads"),
-          ]),
-        ),
+          ])
+        )
       ),
     ],
     [
@@ -191,15 +229,18 @@ describe("the sentence is the shared sentence, not one HTML assembled", () => {
           check(page, [
             occurrence(page),
             occurrence(page, {
-              element: { locator: "footer:1>footer>ul:1>a:3", structuralSignature: "s128:e3" },
+              element: {
+                locator: "footer:1>footer>ul:1>a:3",
+                structuralSignature: "s128:e3",
+              },
               defect: {
                 kind: "link-text-generic",
                 values: { normalizedText: "more" },
                 valueHashes: {},
               },
             }),
-          ]),
-        ),
+          ])
+        )
       ),
     ],
   ];
@@ -214,14 +255,24 @@ describe("the sentence is the shared sentence, not one HTML assembled", () => {
 
   test("the block name is rendered as a name, and only inside the sentence", () => {
     const html = renderHtml(
-      report(PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", "Downloads")]))),
+      report(
+        PAGES.map((page) =>
+          check(page, [promotable(page, "div:1>a:1", "download", "Downloads")])
+        )
+      )
     );
-    expect(html).toContain('<span class="fix-group-name">&quot;Downloads&quot;</span>');
-    expect(cardSentences(html)[0]).toContain('Likely one shared block ("Downloads") in the main content');
+    expect(html).toContain(
+      '<span class="fix-group-name">&quot;Downloads&quot;</span>'
+    );
+    expect(cardSentences(html)[0]).toContain(
+      'Likely one shared block ("Downloads") in the main content'
+    );
   });
 
   test("a group with no name renders the sentence with no name markup", () => {
-    const html = renderHtml(report(PAGES.map((page) => check(page, [occurrence(page)]))));
+    const html = renderHtml(
+      report(PAGES.map((page) => check(page, [occurrence(page)])))
+    );
     expect(bodyOf(html)).not.toContain("fix-group-name");
     expect(cardSentences(html)[0]).toStartWith("Fix once in the site footer");
   });
@@ -239,9 +290,13 @@ describe("full coverage: the card replaces the legacy page list", () => {
   test("the legacy per-check page list is gone, the card's own list is not", () => {
     // The rule header keeps its own "3 pages" reach; what goes is the per-check list that
     // repeated those same pages under the card.
-    expect(html).not.toContain('<summary class="more">3 pages affected</summary>');
+    expect(html).not.toContain(
+      '<summary class="more">3 pages affected</summary>'
+    );
     expect(countOccurrences(html, "pages affected")).toBe(0);
-    expect(html).toContain('<summary class="more">Affected pages (3)</summary>');
+    expect(html).toContain(
+      '<summary class="more">Affected pages (3)</summary>'
+    );
     // Every affected page is still reachable, as a real link.
     for (const page of PAGES) expect(html).toContain(`href="${page}"`);
   });
@@ -264,16 +319,20 @@ describe("partial coverage: the remainder is labelled, never hidden", () => {
     report([
       ...PAGES.map((page) => check(page, [occurrence(page)])),
       check("https://example.test/legal"),
-    ]),
+    ])
   );
 
   test("the uncovered page keeps a list of its own, explicitly named", () => {
-    expect(html).toContain('<summary class="more">Pages not attributed to a shared component (1)</summary>');
+    expect(html).toContain(
+      '<summary class="more">Pages not attributed to a shared component (1)</summary>'
+    );
     expect(html).toContain('href="https://example.test/legal"');
   });
 
   test("the covered pages are not repeated in that remainder", () => {
-    const start = html.indexOf("Pages not attributed to a shared component (1)");
+    const start = html.indexOf(
+      "Pages not attributed to a shared component (1)"
+    );
     const remainder = html.slice(start, html.indexOf("</details>", start));
     expect(remainder).toContain('href="https://example.test/legal"');
     expect(remainder).not.toContain('href="https://example.test/api"');
@@ -292,22 +351,32 @@ describe("a one-page group is not a group", () => {
     expect(renderHtml(singlePage)).toBe(renderHtml(legacy));
     expect(bodyOf(renderHtml(singlePage))).not.toContain("fix-group");
     // The defect is still reported the legacy way, not swallowed.
-    expect(renderHtml(singlePage)).toContain('<summary class="more">1 page affected</summary>');
+    expect(renderHtml(singlePage)).toContain(
+      '<summary class="more">1 page affected</summary>'
+    );
   });
 });
 
 describe("attribution changes what the card claims", () => {
   const html = renderHtml(
-    report(PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download")]))),
+    report(
+      PAGES.map((page) =>
+        check(page, [promotable(page, "div:1>a:1", "download")])
+      )
+    )
   );
 
   test("it reads as an observation, not an instruction", () => {
-    expect(cardSentences(html)[0]).toStartWith("Likely one shared block in the main content");
+    expect(cardSentences(html)[0]).toStartWith(
+      "Likely one shared block in the main content"
+    );
     expect(html).not.toContain("Fix once");
   });
 
   test("the badge is the weaker one, and says so in words", () => {
-    expect(html).toContain('<span class="fix-badge fix-badge-weak">Likely shared block</span>');
+    expect(html).toContain(
+      '<span class="fix-badge fix-badge-weak">Likely shared block</span>'
+    );
     expect(html).toContain('class="fix-group fix-group-weak"');
   });
 
@@ -327,7 +396,11 @@ describe("attribution changes what the card claims", () => {
               attribution: "some-future-signal",
               affectedPages: PAGES,
               affectedPageCount: 3,
-              region: { role: "footer", nestedIn: "none", structuralSignature: "s128:aaaa" },
+              region: {
+                role: "footer",
+                nestedIn: "none",
+                structuralSignature: "s128:aaaa",
+              },
               semanticSlot: "footer:1>footer>ul:1>a:2",
               defect: {
                 kind: "link-text-generic",
@@ -339,7 +412,7 @@ describe("attribution changes what the card claims", () => {
           ],
           uncoveredPages: [],
         },
-      }),
+      })
     );
     expect(markup).toBe("");
   });
@@ -348,15 +421,28 @@ describe("attribution changes what the card claims", () => {
 describe("a rollup is one card, however many slots the block holds", () => {
   // squirrelscan.com's install block: seven platform links, one component, 14
   // pages, which read as seven findings before the rollup existed.
-  const ROLLUP_PAGES = Array.from({ length: 14 }, (_, i) => `https://example.test/r/${i}`);
-  const SLOTS = ["download", "get it", "install", "grab", "fetch", "copy", "run"];
+  const ROLLUP_PAGES = Array.from(
+    { length: 14 },
+    (_, i) => `https://example.test/r/${i}`
+  );
+  const SLOTS = [
+    "download",
+    "get it",
+    "install",
+    "grab",
+    "fetch",
+    "copy",
+    "run",
+  ];
   const rolled = report(
     ROLLUP_PAGES.map((page) =>
       check(
         page,
-        SLOTS.map((text, index) => promotable(page, `div:1>a:${index + 1}`, text, "Install squirrel")),
-      ),
-    ),
+        SLOTS.map((text, index) =>
+          promotable(page, `div:1>a:${index + 1}`, text, "Install squirrel")
+        )
+      )
+    )
   );
   const html = renderHtml(rolled);
 
@@ -365,14 +451,18 @@ describe("a rollup is one card, however many slots the block holds", () => {
     expect(cardSentences(html)[0]).toBe(
       'Likely one shared block ("Install squirrel") in the main content: ' +
         '7 links with generic text "run", "grab", "copy" (+4 more), ' +
-        "seen on 14 pages: /r/0, /r/1, /r/10 (+11 more)",
+        "seen on 14 pages: /r/0, /r/1, /r/10 (+11 more)"
     );
     // Word for word what markdown prints for the same audit.
-    expect(cardSentences(html)).toEqual(markdownSentences(renderMarkdown(rolled)));
+    expect(cardSentences(html)).toEqual(
+      markdownSentences(renderMarkdown(rolled))
+    );
   });
 
   test("the card lists all 14 pages, collapsed, and the legacy list is gone", () => {
-    expect(html).toContain('<summary class="more">Affected pages (14)</summary>');
+    expect(html).toContain(
+      '<summary class="more">Affected pages (14)</summary>'
+    );
     const start = html.indexOf('<li class="fix-group');
     const card = html.slice(start, html.indexOf("</li>", start));
     expect(countOccurrences(card, 'href="https://example.test/r/')).toBe(14);
@@ -392,8 +482,15 @@ describe("a rollup is one card, however many slots the block holds", () => {
           attribution: "repeated-subtree",
           affectedPages: ROLLUP_PAGES,
           affectedPageCount: ROLLUP_PAGES.length,
-          region: { role: "main", nestedIn: "none", structuralSignature: "s128:main" },
-          element: { locator: "main:1>div:1>a:1", structuralSignature: "s128:eeee" },
+          region: {
+            role: "main",
+            nestedIn: "none",
+            structuralSignature: "s128:main",
+          },
+          element: {
+            locator: "main:1>div:1>a:1",
+            structuralSignature: "s128:eeee",
+          },
           semanticSlot: `div:1>a:${index + 1}`,
           defect: {
             kind: "link-text-generic",
@@ -401,19 +498,19 @@ describe("a rollup is one card, however many slots the block holds", () => {
             valueHashes: {},
           },
           occurrences: ROLLUP_PAGES.map(() => ({}) as ComponentOccurrence),
-        }) as unknown as ComponentFixGroup,
+        }) as unknown as ComponentFixGroup
     );
     const markup = renderToStaticMarkup(
       React.createElement(FixGroupCards, {
         coverage: { mode: "full" as const, groups, uncoveredPages: [] },
-      }),
+      })
     );
     expect(countOccurrences(markup, "<li class=")).toBe(7);
   });
 });
 
 describe("site-controlled strings are neutralised", () => {
-  const hostile = "\"><script>alert(1)</script>";
+  const hostile = '"><script>alert(1)</script>';
 
   test("a defect value cannot open a tag or break out of an attribute", () => {
     const html = renderHtml(
@@ -427,9 +524,9 @@ describe("site-controlled strings are neutralised", () => {
                 valueHashes: { normalizedText: "s128:ffff" },
               },
             }),
-          ]),
-        ),
-      ),
+          ])
+        )
+      )
     );
     expect(html).toContain("&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("<script>alert(1)</script>");
@@ -437,7 +534,11 @@ describe("site-controlled strings are neutralised", () => {
 
   test("a block name from the page cannot inject markup either", () => {
     const html = renderHtml(
-      report(PAGES.map((page) => check(page, [promotable(page, "div:1>a:1", "download", hostile)]))),
+      report(
+        PAGES.map((page) =>
+          check(page, [promotable(page, "div:1>a:1", "download", hostile)])
+        )
+      )
     );
     expect(html).toContain('<span class="fix-group-name">');
     expect(html).not.toContain("<script>alert(1)</script>");
@@ -450,7 +551,7 @@ describe("site-controlled strings are neutralised", () => {
       report([
         ...PAGES.map((page) => check(page, [occurrence(page)])),
         { ...check(evil), pages: [evil], pageUrl: evil },
-      ]),
+      ])
     );
     expect(html).not.toContain('href="javascript:');
     expect(html).toContain('href="#"');
@@ -469,12 +570,14 @@ describe("no component evidence: nothing changes", () => {
             confidence: "uncertain",
             uncertainReason: "no-region",
           }),
-        ]),
-      ),
+        ])
+      )
     );
     const withoutEvidence = report(PAGES.map((page) => check(page)));
     expect(renderHtml(withEvidence)).toBe(renderHtml(withoutEvidence));
-    expect(renderHtml(withoutEvidence)).toContain('<summary class="more">3 pages affected</summary>');
+    expect(renderHtml(withoutEvidence)).toContain(
+      '<summary class="more">3 pages affected</summary>'
+    );
     expect(bodyOf(renderHtml(withoutEvidence))).not.toContain("fix-group");
   });
 });

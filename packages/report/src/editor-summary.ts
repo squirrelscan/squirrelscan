@@ -20,16 +20,22 @@ import type {
   EditorSummaryTechnologyInput,
   SiteMetadata,
 } from "@squirrelscan/core-contracts";
+
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
-import { REPORT_LIMITS, SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
+import {
+  REPORT_LIMITS,
+  SERVICE_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
+
 import { normalizeCategoryCode } from "./categories";
+import { scanScopeUnfetched } from "./coverage";
 import { notCheckedRules } from "./not-checked";
 import { checkOccurrences } from "./occurrences";
-import { scanScopeUnfetched } from "./coverage";
 import { guardSummaryText, stripOutOf100 } from "./summary-text";
 
 /** Note rendered above the summary so it reads as informational, not scored. */
-export const EDITOR_SUMMARY_NOTE = "Auto-generated editor's summary: informational, not scored.";
+export const EDITOR_SUMMARY_NOTE =
+  "Auto-generated editor's summary: informational, not scored.";
 
 /** Map the resolved site-metadata profile to the slim summary-framing slice. */
 function toSiteProfile(meta: SiteMetadata): EditorSummarySiteProfile {
@@ -57,7 +63,10 @@ const SEVERITY_RANK = { error: 0, info: 1, warning: 2 } as const;
  * failing/warning check becomes one entry; entries are ranked by severity, then
  * rule weight (score impact), then occurrence count, and capped.
  */
-function buildTopIssues(report: AuditReport, max: number): EditorSummaryIssueInput[] {
+function buildTopIssues(
+  report: AuditReport,
+  max: number
+): EditorSummaryIssueInput[] {
   const issues: EditorSummaryIssueInput[] = [];
   for (const [ruleId, rr] of Object.entries(report.ruleResults)) {
     let occurrences = 0;
@@ -79,7 +88,10 @@ function buildTopIssues(report: AuditReport, max: number): EditorSummaryIssueInp
     // counts from them too, so it matches the one built from the full report. A
     // tally leaves out the warnings of an info-severity rule, so it can only raise
     // the count the kept classes give, never lower it.
-    const tally = report.detail?.capped === true ? report.checkTallies?.[ruleId] : undefined;
+    const tally =
+      report.detail?.capped === true
+        ? report.checkTallies?.[ruleId]
+        : undefined;
     if (tally) {
       let tallied = 0;
       for (const t of Object.values(tally)) {
@@ -125,7 +137,10 @@ function buildNotChecked(report: AuditReport): EditorSummaryNotCheckedInput[] {
 }
 
 /** Build the per-category score lines (worst first), capped. */
-function buildCategories(report: AuditReport, max: number): EditorSummaryCategoryInput[] {
+function buildCategories(
+  report: AuditReport,
+  max: number
+): EditorSummaryCategoryInput[] {
   const cats = report.healthScore?.categories ?? [];
   return cats
     .map((c) => ({
@@ -146,10 +161,14 @@ const EDITOR_SUMMARY_FIELD_MAX = 128;
  * The detected stack, so action points can name the platform, plugin or setting.
  * Only the fields the summary needs; capped.
  */
-function buildTechnologies(report: AuditReport, max: number): EditorSummaryTechnologyInput[] {
+function buildTechnologies(
+  report: AuditReport,
+  max: number
+): EditorSummaryTechnologyInput[] {
   // Site-derived values (a version string, a detector label): clamped so one
   // long value cannot push the request past the server's field bounds.
-  const short = (value: string) => clampItemString(value, EDITOR_SUMMARY_FIELD_MAX);
+  const short = (value: string) =>
+    clampItemString(value, EDITOR_SUMMARY_FIELD_MAX);
   return (report.technologies?.items ?? []).slice(0, max).map((t) => ({
     id: short(t.id),
     name: short(t.name),
@@ -200,7 +219,7 @@ const priorityOf = (ruleId: string): number => {
  */
 function buildChecks(
   report: AuditReport,
-  max: number,
+  max: number
 ): { failing: string[]; confirmed: string[] } | undefined {
   const failing = new Set<string>();
   const confirmed = new Set<string>();
@@ -208,7 +227,10 @@ function buildChecks(
     clampItemString(`${ruleId}|${name}`, EDITOR_SUMMARY_FIELD_MAX);
   const entries = Object.entries(report.ruleResults)
     .map((entry, order) => ({ entry, order }))
-    .sort((a, b) => priorityOf(a.entry[0]) - priorityOf(b.entry[0]) || a.order - b.order);
+    .sort(
+      (a, b) =>
+        priorityOf(a.entry[0]) - priorityOf(b.entry[0]) || a.order - b.order
+    );
   for (const {
     entry: [ruleId, rr],
   } of entries) {
@@ -241,7 +263,9 @@ const count = (v: unknown): number | undefined =>
  * The audit's coverage facts, copied from the report (never estimated), or
  * undefined when the report has no scan scope to read them from.
  */
-function buildCoverage(report: AuditReport): EditorSummaryCoverageInput | undefined {
+function buildCoverage(
+  report: AuditReport
+): EditorSummaryCoverageInput | undefined {
   const scope = report.scanScope;
   const scannedPages = count(scope?.pagesCrawled);
   if (!scope || scannedPages === undefined) return undefined;
@@ -249,7 +273,8 @@ function buildCoverage(report: AuditReport): EditorSummaryCoverageInput | undefi
   const knownPages = count(report.coverage?.knownPages);
   // A rate-limited run's count already includes the URLs still queued; any
   // other run that stopped short has only those (`scanScope.unfetched`).
-  const unfetchedPages = count(report.rateLimited?.unfetched) ?? count(scope.unfetched);
+  const unfetchedPages =
+    count(report.rateLimited?.unfetched) ?? count(scope.unfetched);
   const capped = scope.capped === true;
   const timeStopped = scope.stopReason === "time";
   const creditsStopped = scope.stopReason === "credits";
@@ -264,7 +289,11 @@ function buildCoverage(report: AuditReport): EditorSummaryCoverageInput | undefi
     ...(unfetchedPages !== undefined ? { unfetchedPages } : {}),
     // Only when crawl/single-page-site fired AND the crawl stopped for no other
     // reason: a capped, time-stopped or unfetched crawl may just be short.
-    ...(sections !== undefined && !capped && !timeStopped && !creditsStopped && !unfetchedPages
+    ...(sections !== undefined &&
+    !capped &&
+    !timeStopped &&
+    !creditsStopped &&
+    !unfetchedPages
       ? { singlePageSite: true, sectionCount: sections }
       : {}),
   };
@@ -273,7 +302,7 @@ function buildCoverage(report: AuditReport): EditorSummaryCoverageInput | undefi
 /** The section count crawl/single-page-site found, or undefined when it did not fire. */
 function singlePageSiteSections(report: AuditReport): number | undefined {
   const check = report.ruleResults["crawl/single-page-site"]?.checks.find(
-    (c) => c.name === "single-page-site" && c.status === "info",
+    (c) => c.name === "single-page-site" && c.status === "info"
   );
   return count(check?.details?.sections);
 }
@@ -292,11 +321,17 @@ export interface BuildEditorSummaryRequestOptions {
  */
 export function buildEditorSummaryRequest(
   report: AuditReport,
-  opts: BuildEditorSummaryRequestOptions = {},
+  opts: BuildEditorSummaryRequestOptions = {}
 ): EditorSummaryRequest {
   const notChecked = buildNotChecked(report);
-  const technologies = buildTechnologies(report, SERVICE_LIMITS.editorSummaryMaxTechnologies);
-  const failingRuleIds = buildFailingRuleIds(report, SERVICE_LIMITS.editorSummaryMaxFailingRuleIds);
+  const technologies = buildTechnologies(
+    report,
+    SERVICE_LIMITS.editorSummaryMaxTechnologies
+  );
+  const failingRuleIds = buildFailingRuleIds(
+    report,
+    SERVICE_LIMITS.editorSummaryMaxFailingRuleIds
+  );
   const coverage = buildCoverage(report);
   const checks = buildChecks(report, SERVICE_LIMITS.editorSummaryMaxCheckKeys);
   return {
@@ -308,10 +343,15 @@ export function buildEditorSummaryRequest(
     passed: report.passed,
     warnings: report.warnings,
     failed: report.failed,
-    categories: buildCategories(report, SERVICE_LIMITS.editorSummaryMaxCategories),
+    categories: buildCategories(
+      report,
+      SERVICE_LIMITS.editorSummaryMaxCategories
+    ),
     topIssues: buildTopIssues(report, SERVICE_LIMITS.editorSummaryMaxIssues),
     ...(opts.delta ? { delta: opts.delta } : {}),
-    ...(report.siteMetadata ? { siteProfile: toSiteProfile(report.siteMetadata) } : {}),
+    ...(report.siteMetadata
+      ? { siteProfile: toSiteProfile(report.siteMetadata) }
+      : {}),
     ...(notChecked.length > 0 ? { notChecked } : {}),
     ...(technologies.length > 0 ? { technologies } : {}),
     ...(failingRuleIds.length > 0 ? { failingRuleIds } : {}),
@@ -351,7 +391,11 @@ export function toEditorSummary(res: unknown): EditorSummary | null {
   };
 }
 
-const EFFORTS = new Set<EditorSummaryPriority["effort"]>(["quick-win", "moderate", "significant"]);
+const EFFORTS = new Set<EditorSummaryPriority["effort"]>([
+  "quick-win",
+  "moderate",
+  "significant",
+]);
 /** Most ids kept per priority list (rule ids, technology ids). */
 const MAX_PRIORITY_IDS = 20;
 
@@ -378,8 +422,14 @@ function toPriorities(value: unknown): EditorSummaryPriority[] {
     if (typeof p.title !== "string" || p.title.trim() === "") continue;
     if (typeof p.action !== "string" || p.action.trim() === "") continue;
     out.push({
-      title: clampItemString(p.title.replace(/\s+/g, " ").trim(), REPORT_LIMITS.maxShortString),
-      why: typeof p.why === "string" ? clampItemString(p.why, REPORT_LIMITS.maxMediumString) : "",
+      title: clampItemString(
+        p.title.replace(/\s+/g, " ").trim(),
+        REPORT_LIMITS.maxShortString
+      ),
+      why:
+        typeof p.why === "string"
+          ? clampItemString(p.why, REPORT_LIMITS.maxMediumString)
+          : "",
       action: clampItemString(p.action, REPORT_LIMITS.maxMediumString),
       effort: EFFORTS.has(p.effort as EditorSummaryPriority["effort"])
         ? (p.effort as EditorSummaryPriority["effort"])
@@ -392,10 +442,16 @@ function toPriorities(value: unknown): EditorSummaryPriority[] {
   return out;
 }
 
-function guardedSummary(summary: EditorSummary, report: AuditReport): EditorSummary {
+function guardedSummary(
+  summary: EditorSummary,
+  report: AuditReport
+): EditorSummary {
   const text = guardSummaryText(
     { prose: summary.prose, verdict: summary.verdict },
-    { allowedPageCounts: summaryPageCounts(report), fallbackProse: fallbackProse(report) },
+    {
+      allowedPageCounts: summaryPageCounts(report),
+      fallbackProse: fallbackProse(report),
+    }
   );
   return {
     ...summary,
@@ -415,7 +471,9 @@ function guardedSummary(summary: EditorSummary, report: AuditReport): EditorSumm
 }
 
 /** Display label for a priority's effort. */
-export function priorityEffortLabel(effort: EditorSummaryPriority["effort"]): string {
+export function priorityEffortLabel(
+  effort: EditorSummaryPriority["effort"]
+): string {
   return effort === "quick-win"
     ? "Quick win"
     : effort === "significant"
@@ -467,17 +525,23 @@ export function summaryPageCounts(report: AuditReport): number[] {
     report.rateLimited?.unfetched,
     // The URLs a capped crawl left queued (the digest's "found but not
     // fetched"), and the discovered total the report shows beside them.
-    ...(unfetched > 0 ? [unfetched, (report.scanScope?.pagesCrawled ?? 0) + unfetched] : []),
-    ...buildTopIssues(report, Number.POSITIVE_INFINITY).map((i) => i.occurrences),
+    ...(unfetched > 0
+      ? [unfetched, (report.scanScope?.pagesCrawled ?? 0) + unfetched]
+      : []),
+    ...buildTopIssues(report, Number.POSITIVE_INFINITY).map(
+      (i) => i.occurrences
+    ),
   ];
   return counts.filter(
-    (n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0,
+    (n): n is number =>
+      typeof n === "number" && Number.isSafeInteger(n) && n > 0
   );
 }
 
 /** The summary prose when no model sentence survives the text rules. */
 function fallbackProse(report: AuditReport): string {
-  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  const n = (count: number, one: string, many: string) =>
+    `${count} ${count === 1 ? one : many}`;
   return `This audit found ${n(report.failed, "failing check", "failing checks")} and ${n(report.warnings, "warning", "warnings")} across ${n(report.totalPages, "page", "pages")}.`;
 }
 
@@ -489,7 +553,7 @@ function fallbackProse(report: AuditReport): string {
  */
 export function editorSummaryView(
   es: EditorSummary | undefined | null,
-  report?: AuditReport,
+  report?: AuditReport
 ): EditorSummaryView | null {
   const stored = toEditorSummary(es);
   if (!stored) return null;

@@ -1,6 +1,7 @@
 // a11y/valid-lang - All lang attributes have valid values
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Common valid language codes (ISO 639-1)

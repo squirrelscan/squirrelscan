@@ -28,7 +28,11 @@ const FILES = new Set(sourceFiles(SRC));
 function resolveSpecifier(from: string, specifier: string): string | null {
   if (!specifier.startsWith(".")) return null;
   const base = resolve(dirname(from), specifier);
-  for (const candidate of [`${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
+  for (const candidate of [
+    `${base}.ts`,
+    `${base}.tsx`,
+    join(base, "index.ts"),
+  ]) {
     if (FILES.has(candidate)) return candidate;
   }
   return null;
@@ -40,7 +44,8 @@ function resolveSpecifier(from: string, specifier: string): string | null {
  */
 export function runtimeImports(source: string, file: string): string[] {
   const edges: string[] = [];
-  const pattern = /^(import|export)\s+(type\s+)?([^;]*?)\s*from\s*["']([^"']+)["']/gms;
+  const pattern =
+    /^(import|export)\s+(type\s+)?([^;]*?)\s*from\s*["']([^"']+)["']/gms;
   for (const match of source.matchAll(pattern)) {
     const [, , typeOnly, clause, specifier] = match;
     if (typeOnly) continue;
@@ -50,7 +55,11 @@ export function runtimeImports(source: string, file: string): string[] {
         .split(",")
         .map((name) => name.trim())
         .filter(Boolean);
-      if (members.length > 0 && members.every((name) => name.startsWith("type "))) continue;
+      if (
+        members.length > 0 &&
+        members.every((name) => name.startsWith("type "))
+      )
+        continue;
     }
     const target = resolveSpecifier(file, specifier!);
     if (target) edges.push(target);
@@ -89,7 +98,8 @@ function findCycles(graph: Map<string, string[]>): string[][] {
         onStack.delete(member);
         component.push(member);
       } while (member !== node);
-      const selfImport = component.length === 1 && (graph.get(node) ?? []).includes(node);
+      const selfImport =
+        component.length === 1 && (graph.get(node) ?? []).includes(node);
       if (component.length > 1 || selfImport) cycles.push(component);
     }
   };
@@ -101,10 +111,11 @@ function findCycles(graph: Map<string, string[]>): string[][] {
 describe("audit-engine has no runtime import cycles (#1409)", () => {
   test("src/ value imports form no cycle", () => {
     const graph = new Map<string, string[]>();
-    for (const file of FILES) graph.set(file, runtimeImports(readFileSync(file, "utf8"), file));
+    for (const file of FILES)
+      graph.set(file, runtimeImports(readFileSync(file, "utf8"), file));
 
     const cycles = findCycles(graph).map((component) =>
-      component.map((file) => relative(SRC, file)).sort(),
+      component.map((file) => relative(SRC, file)).sort()
     );
     expect(cycles).toEqual([]);
   });
@@ -132,6 +143,8 @@ describe("audit-engine has no runtime import cycles (#1409)", () => {
       'export type { D } from "./streaming";',
       'import { buildSiteContext } from "./site-fetch";',
     ].join("\n");
-    expect(runtimeImports(source, file).map((f) => relative(SRC, f))).toEqual(["site-fetch.ts"]);
+    expect(runtimeImports(source, file).map((f) => relative(SRC, f))).toEqual([
+      "site-fetch.ts",
+    ]);
   });
 });

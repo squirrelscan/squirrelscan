@@ -3,7 +3,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { isValidHeaderName, isValidHeaderValue, recordToHeaders } from "../src/headers";
+import {
+  isValidHeaderName,
+  isValidHeaderValue,
+  recordToHeaders,
+} from "../src/headers";
 
 describe("isValidHeaderName", () => {
   test("accepts RFC 7230 token names", () => {
@@ -67,12 +71,16 @@ describe("recordToHeaders", () => {
   test("does not throw where the naive new Headers(record)/headers.set() would", () => {
     const record = { "set-cookie": "a=1\nb=2" };
     expect(() => new Headers(record as Record<string, string>)).toThrow();
-    expect(() => new Headers().set("set-cookie", record["set-cookie"])).toThrow();
+    expect(() =>
+      new Headers().set("set-cookie", record["set-cookie"])
+    ).toThrow();
     expect(() => recordToHeaders(record)).not.toThrow();
   });
 
   test("single cookie, no other headers", () => {
-    const headers = recordToHeaders({ "set-cookie": "session=abc123; HttpOnly" });
+    const headers = recordToHeaders({
+      "set-cookie": "session=abc123; HttpOnly",
+    });
     expect(headers.getSetCookie()).toEqual(["session=abc123; HttpOnly"]);
   });
 

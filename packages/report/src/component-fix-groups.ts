@@ -2,10 +2,16 @@
 // These are additive report views: `occurrences` stays the immutable observed
 // evidence; a group only says the supplied component and defect identities agree.
 
-import type { ComponentOccurrence, RootHint } from "@squirrelscan/core-contracts";
+import type {
+  ComponentOccurrence,
+  RootHint,
+} from "@squirrelscan/core-contracts";
+
 import type { CheckResult } from "./types";
 
-export type ComponentFixAttribution = "observed-component-evidence" | "repeated-subtree";
+export type ComponentFixAttribution =
+  | "observed-component-evidence"
+  | "repeated-subtree";
 
 export interface ComponentFixGroup {
   /**
@@ -120,7 +126,9 @@ export function componentFixGroupDigest(value: string): string {
  * A message is deliberately absent: matching prose is not component evidence.
  * Rules make uncertain evidence page-specific before it arrives here.
  */
-export function componentOccurrenceIdentity(occurrence: ComponentOccurrence): string {
+export function componentOccurrenceIdentity(
+  occurrence: ComponentOccurrence
+): string {
   return stable({
     version: occurrence.version,
     region: occurrence.region,
@@ -129,7 +137,10 @@ export function componentOccurrenceIdentity(occurrence: ComponentOccurrence): st
     // is reported as evidence, but including it here would split one component
     // on any per-page string in the region (a date, a counter, a breadcrumb),
     // which is exactly the merge this feature exists to make.
-    variant: { key: occurrence.variant.key, structuralSignature: occurrence.variant.structuralSignature },
+    variant: {
+      key: occurrence.variant.key,
+      structuralSignature: occurrence.variant.structuralSignature,
+    },
     element: occurrence.element,
     defect: occurrence.defect,
   });
@@ -141,7 +152,9 @@ export function componentOccurrenceIdentity(occurrence: ComponentOccurrence): st
  * locator or structural signature and so keep distinct keys; only a re-merge of
  * the very same observation collapses.
  */
-export function componentOccurrenceKey(occurrence: ComponentOccurrence): string {
+export function componentOccurrenceKey(
+  occurrence: ComponentOccurrence
+): string {
   return stable({
     component: componentOccurrenceIdentity(occurrence),
     pageUrl: occurrence.pageUrl,
@@ -168,7 +181,10 @@ export const REPEATED_SUBTREE_MAX_TEXT_SHARE = 0.5;
  * what must match is the slot (`locatorFromRoot`) and the defect itself.
  */
 function promotionDefectIdentity(occurrence: ComponentOccurrence): string {
-  return stable({ kind: occurrence.defect.kind, values: occurrence.defect.values });
+  return stable({
+    kind: occurrence.defect.kind,
+    values: occurrence.defect.values,
+  });
 }
 
 type Promotable = {
@@ -197,10 +213,16 @@ type GroupEntry = {
 function modalHint(hints: GroupEntry["hints"]): RootHint | undefined {
   if (!hints?.length) return undefined;
   const perPage = new Map<string, string>();
-  for (const entry of hints) if (!perPage.has(entry.pageUrl)) perPage.set(entry.pageUrl, stable(entry.hint));
+  for (const entry of hints)
+    if (!perPage.has(entry.pageUrl))
+      perPage.set(entry.pageUrl, stable(entry.hint));
   const counts = new Map<string, number>();
-  for (const value of perPage.values()) counts.set(value, (counts.get(value) ?? 0) + 1);
-  const ranked = [...counts.entries()].sort(([leftKey, left], [rightKey, right]) => right - left || compare(leftKey, rightKey));
+  for (const value of perPage.values())
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  const ranked = [...counts.entries()].sort(
+    ([leftKey, left], [rightKey, right]) =>
+      right - left || compare(leftKey, rightKey)
+  );
   const [best, bestCount] = ranked[0]!;
   if (ranked.length > 1 && ranked[1]![1] === bestCount) return undefined;
   return hints.find((entry) => stable(entry.hint) === best)?.hint;
@@ -217,7 +239,7 @@ function modalHint(hints: GroupEntry["hints"]): RootHint | undefined {
 function componentRootKey(
   attribution: ComponentFixAttribution,
   representative: ComponentOccurrence,
-  promotedRoot: GroupEntry["promotedRoot"],
+  promotedRoot: GroupEntry["promotedRoot"]
 ): string {
   const identity =
     attribution === "repeated-subtree" && promotedRoot
@@ -227,7 +249,9 @@ function componentRootKey(
         // same structure at two depths is the same component either way.
         stable({
           origin: representative.siteOrigin,
-          repeatedSubtree: { skeletonSignature: promotedRoot.skeletonSignature },
+          repeatedSubtree: {
+            skeletonSignature: promotedRoot.skeletonSignature,
+          },
         })
       : stable({
           origin: representative.siteOrigin,
@@ -241,7 +265,7 @@ function componentRootKey(
 function componentFamilyKey(
   attribution: ComponentFixAttribution,
   representative: ComponentOccurrence,
-  rootKey: string,
+  rootKey: string
 ): string {
   // A promoted group's family.key is page-scoped by construction, so it would
   // make every page its own family. Its repeated subtree is the family.
@@ -251,7 +275,7 @@ function componentFamilyKey(
       origin: representative.siteOrigin,
       region: representative.region.role,
       family: representative.family.key,
-    }),
+    })
   )}`;
 }
 
@@ -267,7 +291,7 @@ function componentFamilyKey(
  */
 function promoteRepeatedSubtrees(
   ruleId: string,
-  promotable: Promotable[],
+  promotable: Promotable[]
 ): Map<string, GroupEntry> {
   const byScope = new Map<string, Promotable[]>();
   for (const entry of promotable) {
@@ -284,7 +308,8 @@ function promoteRepeatedSubtrees(
     const pagesByRung = new Map<string, Set<string>>();
     for (const { occurrence } of entries) {
       for (const candidate of occurrence.subtreeCandidates ?? []) {
-        if (candidate.textShareOfRegion > REPEATED_SUBTREE_MAX_TEXT_SHARE) continue;
+        if (candidate.textShareOfRegion > REPEATED_SUBTREE_MAX_TEXT_SHARE)
+          continue;
         // Keyed on the SKELETON alone, not on the level: the same block sits at
         // different depths for elements nested differently inside it, and
         // counting those separately splits one component's page evidence.
@@ -300,7 +325,7 @@ function promoteRepeatedSubtrees(
     const eligible = new Set(
       [...pagesByRung.entries()]
         .filter(([, pages]) => pages.size >= REPEATED_SUBTREE_MIN_PAGES)
-        .map(([rung]) => rung),
+        .map(([rung]) => rung)
     );
     if (eligible.size === 0) continue;
 
@@ -312,9 +337,13 @@ function promoteRepeatedSubtrees(
         .filter(
           (item) =>
             item.textShareOfRegion <= REPEATED_SUBTREE_MAX_TEXT_SHARE &&
-            eligible.has(item.skeletonSignature),
+            eligible.has(item.skeletonSignature)
         )
-        .sort((a, b) => b.level - a.level || compare(a.skeletonSignature, b.skeletonSignature))[0];
+        .sort(
+          (a, b) =>
+            b.level - a.level ||
+            compare(a.skeletonSignature, b.skeletonSignature)
+        )[0];
       if (!candidate) continue;
       // The slot inside the block is part of the identity, so seven different
       // buttons in one block stay seven repair targets rather than one.
@@ -339,7 +368,10 @@ function promoteRepeatedSubtrees(
         hints: [],
       };
       if (candidate.rootHint)
-        entry.hints?.push({ pageUrl: occurrence.pageUrl, hint: candidate.rootHint });
+        entry.hints?.push({
+          pageUrl: occurrence.pageUrl,
+          hint: candidate.rootHint,
+        });
       entry.occurrences.push(occurrence);
       promoted.set(identity, entry);
     }
@@ -347,7 +379,9 @@ function promoteRepeatedSubtrees(
   // A promoted group that ended up on fewer pages than the floor (because the
   // guard removed occurrences after the level was chosen) is not a component.
   for (const [identity, entry] of [...promoted]) {
-    const pages = new Set(entry.occurrences.map((occurrence) => occurrence.pageUrl));
+    const pages = new Set(
+      entry.occurrences.map((occurrence) => occurrence.pageUrl)
+    );
     if (pages.size < REPEATED_SUBTREE_MIN_PAGES) promoted.delete(identity);
   }
   void ruleId;
@@ -358,7 +392,10 @@ function promoteRepeatedSubtrees(
  * Derive deterministic, evidence-backed fix groups from the complete selected
  * check evidence. Checks without this additive field retain legacy rendering.
  */
-export function componentFixGroups(ruleId: string, checks: CheckResult[]): ComponentFixGroup[] {
+export function componentFixGroups(
+  ruleId: string,
+  checks: CheckResult[]
+): ComponentFixGroup[] {
   const groups = new Map<string, GroupEntry>();
   const promotable: Promotable[] = [];
   for (const check of checks) {
@@ -428,7 +465,9 @@ export function componentFixGroups(ruleId: string, checks: CheckResult[]): Compo
     seenDigests.set(digest, collisions + 1);
     idByIdentity.set(
       identity,
-      collisions === 0 ? `component-fix:${digest}` : `component-fix:${digest}-${collisions}`,
+      collisions === 0
+        ? `component-fix:${digest}`
+        : `component-fix:${digest}-${collisions}`
     );
   }
 
@@ -440,24 +479,37 @@ export function componentFixGroups(ruleId: string, checks: CheckResult[]): Compo
       // it O(n log n) times. A 1000-occurrence check made that the single
       // hottest path in the rule run.
       const occurrences = entry.occurrences
-        .map((occurrence) => ({ occurrence, key: componentOccurrenceKey(occurrence) }))
+        .map((occurrence) => ({
+          occurrence,
+          key: componentOccurrenceKey(occurrence),
+        }))
         .sort((a, b) => compare(a.key, b.key))
         .map((entry) => entry.occurrence);
       const affectedPages = [
         ...new Set(occurrences.map((occurrence) => occurrence.pageUrl)),
       ].sort(compare);
       const representative = occurrences[0]!;
-      const attribution: ComponentFixAttribution = promotedIdentities.has(identity)
+      const attribution: ComponentFixAttribution = promotedIdentities.has(
+        identity
+      )
         ? "repeated-subtree"
         : "observed-component-evidence";
-      const rootKey = componentRootKey(attribution, representative, entry.promotedRoot);
+      const rootKey = componentRootKey(
+        attribution,
+        representative,
+        entry.promotedRoot
+      );
       return {
         id: idByIdentity.get(identity)!,
         ruleId,
         check: entry.check,
         attribution,
         componentRootKey: rootKey,
-        componentFamilyKey: componentFamilyKey(attribution, representative, rootKey),
+        componentFamilyKey: componentFamilyKey(
+          attribution,
+          representative,
+          rootKey
+        ),
         ...(modalHint(entry.hints) ? { rootHint: modalHint(entry.hints) } : {}),
         affectedPages,
         affectedPageCount: affectedPages.length,

@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { captureBlockSample, writeSample, type FetchImpl } from "../scripts/capture-block-sample";
+
+import {
+  captureBlockSample,
+  writeSample,
+  type FetchImpl,
+} from "../scripts/capture-block-sample";
 
 const HOST = "shop.example.com";
 const NETLIFY = "fixture-shop.netlify.app";
@@ -85,9 +90,13 @@ describe("captureBlockSample", () => {
         new Response(body, {
           status: 403,
           headers: { location: `https://${NETLIFY}/blocked?ref=1` },
-        }),
+        })
     );
-    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    const s = await captureBlockSample({
+      url: `https://${HOST}/`,
+      fetchImpl,
+      now: fixedNow,
+    });
     expect(s.headers["location"]).toBe("https://example.com/blocked?ref=1");
     expect(s.html).toContain('href="https://example.com/"');
     expect(s.html).toContain('href="https://example.com/x">api');
@@ -108,9 +117,13 @@ describe("captureBlockSample", () => {
     ];
     for (const [location, expected] of cases) {
       const { fetchImpl } = spyFetch(
-        () => new Response("", { status: 302, headers: { location } }),
+        () => new Response("", { status: 302, headers: { location } })
       );
-      const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+      const s = await captureBlockSample({
+        url: `https://${HOST}/`,
+        fetchImpl,
+        now: fixedNow,
+      });
       expect(s.headers["location"]).toBe(expected);
       const json = JSON.stringify(s);
       expect(json).not.toContain("checkout");
@@ -127,10 +140,17 @@ describe("captureBlockSample", () => {
       () =>
         new Response(body, {
           status: 403,
-          headers: { "x-sigsci-tags": "from 2001:db8::3 SQLI", "x-forwarded-for": "2001:db8::2" },
-        }),
+          headers: {
+            "x-sigsci-tags": "from 2001:db8::3 SQLI",
+            "x-forwarded-for": "2001:db8::2",
+          },
+        })
     );
-    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    const s = await captureBlockSample({
+      url: `https://${HOST}/`,
+      fetchImpl,
+      now: fixedNow,
+    });
     expect(s.html).toContain("from REDACTED-IP and REDACTED-IP");
     expect(s.html).toContain("at 12:30:45");
     expect(s.html).toContain("a::before{content:''}");
@@ -149,9 +169,13 @@ describe("captureBlockSample", () => {
         new Response("", {
           status: 403,
           headers: { "cf-ray": CF_RAY, "x-amz-cf-id": AMZ_CF_ID },
-        }),
+        })
     );
-    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    const s = await captureBlockSample({
+      url: `https://${HOST}/`,
+      fetchImpl,
+      now: fixedNow,
+    });
     expect(s.headers["cf-ray"]).toBe("REDACTED-REQUEST-ID");
     expect(s.headers["x-amz-cf-id"]).toBe("REDACTED-REQUEST-ID");
     expect(s.redactions.requestIds).toBe(2);
@@ -170,9 +194,13 @@ describe("captureBlockSample", () => {
             "x-nf-client-connection-ip": "opaque-client-7f3a",
             "fastly-client-ip": "2001:db8::9",
           },
-        }),
+        })
     );
-    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    const s = await captureBlockSample({
+      url: `https://${HOST}/`,
+      fetchImpl,
+      now: fixedNow,
+    });
     expect(s.headers["x-nf-client-connection-ip"]).toBe("REDACTED-IP");
     expect(s.headers["fastly-client-ip"]).toBe("REDACTED-IP");
     expect(s.redactions.ips).toBe(2);
@@ -183,9 +211,17 @@ describe("captureBlockSample", () => {
 
   test("redacts only the id part of x-sigsci headers", async () => {
     const { fetchImpl } = spyFetch(
-      () => new Response("", { status: 406, headers: { "x-sigsci-tags": `SQLI ${UUID_VALUE}` } }),
+      () =>
+        new Response("", {
+          status: 406,
+          headers: { "x-sigsci-tags": `SQLI ${UUID_VALUE}` },
+        })
     );
-    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    const s = await captureBlockSample({
+      url: `https://${HOST}/`,
+      fetchImpl,
+      now: fixedNow,
+    });
     expect(s.headers["x-sigsci-tags"]).toBe("SQLI REDACTED-ID");
     expect(s.html).toBeNull();
     expect(s.name).toBe("live-406-2026-11-01");
@@ -193,7 +229,11 @@ describe("captureBlockSample", () => {
 
   test("asks for manual redirects, no credentials, plain user agent", async () => {
     const { fetchImpl, calls } = spyFetch(() => blockResponse(BODY));
-    await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+    await captureBlockSample({
+      url: `https://${HOST}/`,
+      fetchImpl,
+      now: fixedNow,
+    });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.init?.redirect).toBe("manual");
     expect(calls[0]?.init?.credentials).toBe("omit");
@@ -218,7 +258,9 @@ describe("captureBlockSample", () => {
   });
 
   test("truncates a body over the cap", async () => {
-    const { fetchImpl } = spyFetch(() => new Response("a".repeat(100), { status: 403 }));
+    const { fetchImpl } = spyFetch(
+      () => new Response("a".repeat(100), { status: 403 })
+    );
     const s = await captureBlockSample({
       url: `https://${HOST}/`,
       fetchImpl,
@@ -230,8 +272,14 @@ describe("captureBlockSample", () => {
   });
 
   test("does not flag a body at exactly the cap", async () => {
-    const { fetchImpl } = spyFetch(() => new Response("a".repeat(10), { status: 403 }));
-    const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, maxBytes: 10 });
+    const { fetchImpl } = spyFetch(
+      () => new Response("a".repeat(10), { status: 403 })
+    );
+    const s = await captureBlockSample({
+      url: `https://${HOST}/`,
+      fetchImpl,
+      maxBytes: 10,
+    });
     expect(s.truncated).toBe(false);
   });
 });
@@ -241,7 +289,11 @@ describe("writeSample", () => {
     const dir = mkdtempSync(join(tmpdir(), "capture-block-"));
     try {
       const { fetchImpl } = spyFetch(() => blockResponse(BODY));
-      const s = await captureBlockSample({ url: `https://${HOST}/`, fetchImpl, now: fixedNow });
+      const s = await captureBlockSample({
+        url: `https://${HOST}/`,
+        fetchImpl,
+        now: fixedNow,
+      });
       const file = join(dir, "nested", "sample.json");
       await writeSample(file, s, false);
       expect(existsSync(file)).toBe(true);
@@ -249,7 +301,9 @@ describe("writeSample", () => {
       expect(text.endsWith("}\n")).toBe(true);
       expect(JSON.parse(text).how).toBe("live");
 
-      await expect(writeSample(file, { ...s, name: "other" }, false)).rejects.toThrow(/--force/);
+      await expect(
+        writeSample(file, { ...s, name: "other" }, false)
+      ).rejects.toThrow(/--force/);
       expect(JSON.parse(readFileSync(file, "utf8")).name).toBe(s.name);
 
       await writeSample(file, { ...s, name: "other" }, true);

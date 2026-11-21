@@ -5,15 +5,23 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { AuditReport, CheckResult, ComponentOccurrence, ReportRuleResult } from "../src/types";
+import type {
+  AuditReport,
+  CheckResult,
+  ComponentOccurrence,
+  ReportRuleResult,
+} from "../src/types";
+
 import { renderMarkdown } from "../src/output/markdown";
 
 const EVIL_PATH = "/a](https://evil.example/x)![i](https://evil.example/p.png)";
 const PAYLOAD =
   "x](https://evil.example/y) [t](https://evil.example/z) ![i](https://evil.example/p.png) <img src=https://evil.example/q>";
-const PAGES = ["https://example.test/one", "https://example.test/two", "https://example.test/three"].map(
-  (page, i) => `${page}${EVIL_PATH}${i}`,
-);
+const PAGES = [
+  "https://example.test/one",
+  "https://example.test/two",
+  "https://example.test/three",
+].map((page, i) => `${page}${EVIL_PATH}${i}`);
 
 function occurrence(pageUrl: string): ComponentOccurrence {
   return {
@@ -23,10 +31,21 @@ function occurrence(pageUrl: string): ComponentOccurrence {
     provenance: { source: "page-dom", rendered: true },
     groupable: true,
     confidence: "observed",
-    region: { role: "footer", nestedIn: "none", structuralSignature: "s128:aaaa" },
+    region: {
+      role: "footer",
+      nestedIn: "none",
+      structuralSignature: "s128:aaaa",
+    },
     family: { key: "s128:bbbb", structuralSignature: "s128:bbbb" },
-    variant: { key: "s128:cccc", structuralSignature: "s128:cccc", contentHash: "s128:dddd" },
-    element: { locator: "footer:1>footer>ul:1>a:2", structuralSignature: "s128:eeee" },
+    variant: {
+      key: "s128:cccc",
+      structuralSignature: "s128:cccc",
+      contentHash: "s128:dddd",
+    },
+    element: {
+      locator: "footer:1>footer>ul:1>a:2",
+      structuralSignature: "s128:eeee",
+    },
     defect: {
       kind: "link-text-generic",
       values: { nameSource: "text", normalizedText: PAYLOAD },
@@ -62,7 +81,10 @@ function reportOf(check: CheckResult): AuditReport {
 
 function hostileTargets(markdown: string): string[] {
   const html = Bun.markdown.html(markdown);
-  return Array.from(html.matchAll(/(?:href|src)="(https?:\/\/evil\.example[^"]*)"/g), (m) => m[1]!);
+  return Array.from(
+    html.matchAll(/(?:href|src)="(https?:\/\/evil\.example[^"]*)"/g),
+    (m) => m[1]!
+  );
 }
 
 describe("component-aware markdown lines escape what the site chose", () => {
@@ -75,7 +97,7 @@ describe("component-aware markdown lines escape what the site chose", () => {
         pages: PAGES,
         items: [{ id: "click here" }],
         componentOccurrences: PAGES.map(occurrence),
-      }),
+      })
     );
     expect(markdown).toContain("Fix once");
     expect(hostileTargets(markdown)).toEqual([]);
@@ -93,10 +115,14 @@ describe("component-aware markdown lines escape what the site chose", () => {
             id: `https://example.test${EVIL_PATH}`,
             label: `https://example.test${EVIL_PATH} (404), linked in the footer`,
             sourcePages: PAGES,
-            sources: PAGES.map((page) => ({ page, links: 2, sections: { footer: 2 } })),
+            sources: PAGES.map((page) => ({
+              page,
+              links: 2,
+              sections: { footer: 2 },
+            })),
           },
         ],
-      }),
+      })
     );
     expect(markdown).toContain("from:");
     expect(hostileTargets(markdown)).toEqual([]);

@@ -24,7 +24,12 @@ describe("createRobotsEvaluator().isAllowed", () => {
   });
 
   test("an allow rule allows its path", () => {
-    expect(allowed("User-agent: *\nAllow: /allowed", "https://example.com/allowed/page")).toBe(true);
+    expect(
+      allowed(
+        "User-agent: *\nAllow: /allowed",
+        "https://example.com/allowed/page"
+      )
+    ).toBe(true);
   });
 
   test("a group for a named agent applies to it, the wildcard group to the others", () => {
@@ -35,9 +40,15 @@ describe("createRobotsEvaluator().isAllowed", () => {
       "User-agent: *",
       "Disallow: /all-blocked",
     ].join("\n");
-    expect(allowed(robots, "https://example.com/google-blocked", "Googlebot/2.1")).toBe(false);
-    expect(allowed(robots, "https://example.com/google-blocked", "Bingbot")).toBe(true);
-    expect(allowed(robots, "https://example.com/all-blocked", "Bingbot")).toBe(false);
+    expect(
+      allowed(robots, "https://example.com/google-blocked", "Googlebot/2.1")
+    ).toBe(false);
+    expect(
+      allowed(robots, "https://example.com/google-blocked", "Bingbot")
+    ).toBe(true);
+    expect(allowed(robots, "https://example.com/all-blocked", "Bingbot")).toBe(
+      false
+    );
   });
 
   test("a root disallow blocks every path", () => {

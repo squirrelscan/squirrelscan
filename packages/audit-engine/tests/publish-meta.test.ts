@@ -8,19 +8,28 @@ import {
   UNWIRED_CLOUD_SERVICES,
   type Rule,
 } from "@squirrelscan/rules";
-
 import { describe, expect, test } from "bun:test";
 
 import { SUPPORTED_SERVICES } from "../src/cloud-prefetch";
 import { computeLockedRules, deriveHomepageSummary } from "../src/publish-meta";
 
 // Minimal stub — computeLockedRules only reads meta.{id,name,cloud}.
-function rule(id: string, name: string, cloud: boolean, service?: string): Rule {
-  return { meta: { id, name, cloud: cloud ? { service } : undefined } } as unknown as Rule;
+function rule(
+  id: string,
+  name: string,
+  cloud: boolean,
+  service?: string
+): Rule {
+  return {
+    meta: { id, name, cloud: cloud ? { service } : undefined },
+  } as unknown as Rule;
 }
 
 describe("deriveHomepageSummary", () => {
-  const meta = (title: string | null, description: string | null) => ({ title, description });
+  const meta = (title: string | null, description: string | null) => ({
+    title,
+    description,
+  });
 
   test("picks the root page's meta title/description", () => {
     const report = {
@@ -30,17 +39,27 @@ describe("deriveHomepageSummary", () => {
         { url: "https://example.com/", meta: meta("Home", "Welcome home") },
       ],
     };
-    expect(deriveHomepageSummary(report)).toEqual({ title: "Home", description: "Welcome home" });
+    expect(deriveHomepageSummary(report)).toEqual({
+      title: "Home",
+      description: "Welcome home",
+    });
   });
 
   test("falls back to og when meta is empty", () => {
     const report = {
       baseUrl: "https://example.com",
       pages: [
-        { url: "https://example.com/", meta: meta(null, null), og: meta("OG Title", "OG Desc") },
+        {
+          url: "https://example.com/",
+          meta: meta(null, null),
+          og: meta("OG Title", "OG Desc"),
+        },
       ],
     };
-    expect(deriveHomepageSummary(report)).toEqual({ title: "OG Title", description: "OG Desc" });
+    expect(deriveHomepageSummary(report)).toEqual({
+      title: "OG Title",
+      description: "OG Desc",
+    });
   });
 
   test("prefers the same-origin root over a sibling-domain root (origin guard)", () => {
@@ -51,11 +70,16 @@ describe("deriveHomepageSummary", () => {
         { url: "https://example.com/", meta: meta("Home", "Welcome") },
       ],
     };
-    expect(deriveHomepageSummary(report)).toEqual({ title: "Home", description: "Welcome" });
+    expect(deriveHomepageSummary(report)).toEqual({
+      title: "Home",
+      description: "Welcome",
+    });
   });
 
   test("returns undefined when no pages", () => {
-    expect(deriveHomepageSummary({ baseUrl: "https://example.com", pages: [] })).toBeUndefined();
+    expect(
+      deriveHomepageSummary({ baseUrl: "https://example.com", pages: [] })
+    ).toBeUndefined();
   });
 
   test("returns undefined when the home page has no title or description", () => {
@@ -71,28 +95,44 @@ describe("deriveHomepageSummary", () => {
       baseUrl: "not-a-url",
       pages: [{ url: "https://example.com/", meta: meta("Home", "desc") }],
     };
-    expect(deriveHomepageSummary(report)).toEqual({ title: "Home", description: "desc" });
+    expect(deriveHomepageSummary(report)).toEqual({
+      title: "Home",
+      description: "desc",
+    });
   });
 });
 
 describe("computeLockedRules", () => {
   const reportWith = (
-    ruleResults: Record<string, { checks: Array<{ status: string; skipReason?: string }> }>,
+    ruleResults: Record<
+      string,
+      { checks: Array<{ status: string; skipReason?: string }> }
+    >
   ) => ({
     ruleResults,
   });
 
   test("locks a cloud rule that produced no non-skipped check", () => {
     const rules = [rule("ai/a", "Cloud A", true)];
-    expect(computeLockedRules(reportWith({}), rules)).toEqual([{ id: "ai/a", name: "Cloud A" }]);
+    expect(computeLockedRules(reportWith({}), rules)).toEqual([
+      { id: "ai/a", name: "Cloud A" },
+    ]);
     expect(
-      computeLockedRules(reportWith({ "ai/a": { checks: [{ status: "skipped" }] } }), rules),
+      computeLockedRules(
+        reportWith({ "ai/a": { checks: [{ status: "skipped" }] } }),
+        rules
+      )
     ).toEqual([{ id: "ai/a", name: "Cloud A" }]);
   });
 
   test("does not lock a cloud rule that ran, nor any non-cloud rule", () => {
-    const rules = [rule("ai/ran", "Ran", true), rule("core/title", "Title", false)];
-    const ran = reportWith({ "ai/ran": { checks: [{ status: "skipped" }, { status: "fail" }] } });
+    const rules = [
+      rule("ai/ran", "Ran", true),
+      rule("core/title", "Title", false),
+    ];
+    const ran = reportWith({
+      "ai/ran": { checks: [{ status: "skipped" }, { status: "fail" }] },
+    });
     expect(computeLockedRules(ran, rules)).toEqual([]);
   });
 
@@ -101,17 +141,36 @@ describe("computeLockedRules", () => {
   test("locks the render rule now that render is wired (#673 — reappears in the upsell)", () => {
     // render left UNWIRED_CLOUD_SERVICES when it was wired into cloud-prefetch (#673), so ax/content-without-js
     // is again a real paid-run capability and belongs in the locked-rules upsell for a free run.
-    const rules = [rule("ax/content-without-js", "Content Without JavaScript", true, "render")];
+    const rules = [
+      rule(
+        "ax/content-without-js",
+        "Content Without JavaScript",
+        true,
+        "render"
+      ),
+    ];
     expect(computeLockedRules(reportWith({}), rules)).toEqual([
       { id: "ax/content-without-js", name: "Content Without JavaScript" },
     ]);
   });
 
   test("does not lock a rule whose every check skipped as not-applicable", () => {
-    const rules = [rule("eeat/authority-signals", "Authority Signals", true, "authority-signals")];
+    const rules = [
+      rule(
+        "eeat/authority-signals",
+        "Authority Signals",
+        true,
+        "authority-signals"
+      ),
+    ];
     const gatedOut = reportWith({
       "eeat/authority-signals": {
-        checks: [{ status: "skipped", skipReason: humanizeCloudSkip("not-applicable") }],
+        checks: [
+          {
+            status: "skipped",
+            skipReason: humanizeCloudSkip("not-applicable"),
+          },
+        ],
       },
     });
     expect(computeLockedRules(gatedOut, rules)).toEqual([]);
@@ -119,12 +178,25 @@ describe("computeLockedRules", () => {
 
   // private#3792: `render: false` skips the render rule on purpose, on a paid run too.
   test("does not lock a rule whose every check skipped as render-disabled; a mixed or real lock still locks", () => {
-    const rules = [rule("ax/content-without-js", "Content Without JavaScript", true, "render")];
+    const rules = [
+      rule(
+        "ax/content-without-js",
+        "Content Without JavaScript",
+        true,
+        "render"
+      ),
+    ];
     const disabled = reportWith({
       "ax/content-without-js": {
         checks: [
-          { status: "skipped", skipReason: humanizeCloudSkip("render-disabled") },
-          { status: "skipped", skipReason: humanizeCloudSkip("render-disabled") },
+          {
+            status: "skipped",
+            skipReason: humanizeCloudSkip("render-disabled"),
+          },
+          {
+            status: "skipped",
+            skipReason: humanizeCloudSkip("render-disabled"),
+          },
         ],
       },
     });
@@ -133,32 +205,63 @@ describe("computeLockedRules", () => {
     // not-applicable is unchanged: still exempt.
     const gatedOut = reportWith({
       "ax/content-without-js": {
-        checks: [{ status: "skipped", skipReason: humanizeCloudSkip("not-applicable") }],
+        checks: [
+          {
+            status: "skipped",
+            skipReason: humanizeCloudSkip("not-applicable"),
+          },
+        ],
       },
     });
     expect(computeLockedRules(gatedOut, rules)).toEqual([]);
 
     // A real locked reason is still locked, alone or beside a render-disabled skip.
     for (const checks of [
-      [{ status: "skipped", skipReason: humanizeCloudSkip("not-authenticated") }],
+      [
+        {
+          status: "skipped",
+          skipReason: humanizeCloudSkip("not-authenticated"),
+        },
+      ],
       [
         { status: "skipped", skipReason: humanizeCloudSkip("render-disabled") },
-        { status: "skipped", skipReason: humanizeCloudSkip("not-authenticated") },
+        {
+          status: "skipped",
+          skipReason: humanizeCloudSkip("not-authenticated"),
+        },
       ],
     ]) {
-      expect(computeLockedRules(reportWith({ "ax/content-without-js": { checks } }), rules)).toEqual(
-        [{ id: "ax/content-without-js", name: "Content Without JavaScript" }],
-      );
+      expect(
+        computeLockedRules(
+          reportWith({ "ax/content-without-js": { checks } }),
+          rules
+        )
+      ).toEqual([
+        { id: "ax/content-without-js", name: "Content Without JavaScript" },
+      ]);
     }
   });
 
   test("still locks when skips are lockable (logged out) or mixed", () => {
-    const rules = [rule("eeat/authority-signals", "Authority Signals", true, "authority-signals")];
+    const rules = [
+      rule(
+        "eeat/authority-signals",
+        "Authority Signals",
+        true,
+        "authority-signals"
+      ),
+    ];
     const mixed = reportWith({
       "eeat/authority-signals": {
         checks: [
-          { status: "skipped", skipReason: humanizeCloudSkip("not-applicable") },
-          { status: "skipped", skipReason: humanizeCloudSkip("not-authenticated") },
+          {
+            status: "skipped",
+            skipReason: humanizeCloudSkip("not-applicable"),
+          },
+          {
+            status: "skipped",
+            skipReason: humanizeCloudSkip("not-authenticated"),
+          },
         ],
       },
     });
@@ -170,10 +273,14 @@ describe("computeLockedRules", () => {
   test("does not lock a rule skipped because external link checking was off (repo#2729)", () => {
     // A paid run with the setting off skips it the same way: the "Not checked"
     // note says how to turn it on, the upsell must not say "temporarily unavailable".
-    const rules = [rule("links/dead-links", "Dead Links (Cloud)", true, "dead-links")];
+    const rules = [
+      rule("links/dead-links", "Dead Links (Cloud)", true, "dead-links"),
+    ];
     const off = reportWith({
       "links/dead-links": {
-        checks: [{ status: "skipped", skipReason: "external-links-not-checked" }],
+        checks: [
+          { status: "skipped", skipReason: "external-links-not-checked" },
+        ],
       },
     });
     expect(computeLockedRules(off, rules)).toEqual([]);
@@ -204,9 +311,10 @@ describe("cloud service execution-path coverage", () => {
         SUPPORTED_SERVICES.has(service) ||
         UNWIRED_CLOUD_SERVICES.has(service) ||
         EXTERNALLY_WIRED.has(service);
-      expect(covered, `${rule.meta.id} uses service "${service}" with no execution path`).toBe(
-        true,
-      );
+      expect(
+        covered,
+        `${rule.meta.id} uses service "${service}" with no execution path`
+      ).toBe(true);
     }
   });
 });

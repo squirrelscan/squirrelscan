@@ -4,16 +4,23 @@
 // footer bands as above-the-fold candidates. Real eager-vs-lazy problems on
 // genuinely visible images must still flag.
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { lazyAboveFoldRule } from "../src/performance/lazy-above-fold";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
   const doc = parseHTML(html).document;
   return {
-    page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: { document: doc } as unknown as ParsedPage,
     options: {},
   } as unknown as RuleContext;
@@ -25,7 +32,7 @@ describe("perf/lazy-above-fold false-positive fixes (#699)", () => {
       <div aria-hidden="true"><img src="/hidden.jpg" loading="lazy"></div>
       <p>content</p>
     </body></html>`;
-    const { checks } = (await lazyAboveFoldRule.run(ctx(html)));
+    const { checks } = await lazyAboveFoldRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
@@ -34,7 +41,7 @@ describe("perf/lazy-above-fold false-positive fixes (#699)", () => {
       <div hidden><img src="/hidden.jpg" loading="lazy"></div>
       <p>content</p>
     </body></html>`;
-    const { checks } = (await lazyAboveFoldRule.run(ctx(html)));
+    const { checks } = await lazyAboveFoldRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
@@ -43,7 +50,7 @@ describe("perf/lazy-above-fold false-positive fixes (#699)", () => {
       <div style="display: none;"><img src="/hidden.jpg" loading="lazy"></div>
       <p>content</p>
     </body></html>`;
-    const { checks } = (await lazyAboveFoldRule.run(ctx(html)));
+    const { checks } = await lazyAboveFoldRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
@@ -55,7 +62,7 @@ describe("perf/lazy-above-fold false-positive fixes (#699)", () => {
         <div class="swiper-slide"><img src="/slide2.jpg" loading="lazy"></div>
       </div>
     </body></html>`;
-    const { checks } = (await lazyAboveFoldRule.run(ctx(html)));
+    const { checks } = await lazyAboveFoldRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
@@ -64,7 +71,7 @@ describe("perf/lazy-above-fold false-positive fixes (#699)", () => {
       <img src="/logo.jpg" loading="eager">
       <footer><img src="/footer-logo.jpg" loading="lazy"></footer>
     </body></html>`;
-    const { checks } = (await lazyAboveFoldRule.run(ctx(html)));
+    const { checks } = await lazyAboveFoldRule.run(ctx(html));
     expect(checks[0].status).toBe("pass");
   });
 
@@ -79,7 +86,7 @@ describe("perf/lazy-above-fold false-positive fixes (#699)", () => {
         <div class="swiper-slide"><img src="/slide2.jpg" loading="lazy"></div>
       </div>
     </body></html>`;
-    const { checks } = (await lazyAboveFoldRule.run(ctx(html)));
+    const { checks } = await lazyAboveFoldRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((i) => i.id === "/slide1.jpg")).toBe(true);
     expect(checks[0].items?.some((i) => i.id === "/slide0.jpg")).toBe(false);
@@ -90,7 +97,7 @@ describe("perf/lazy-above-fold false-positive fixes (#699)", () => {
       <div aria-hidden="true"><img src="/hidden.jpg" loading="lazy"></div>
       <img src="/hero.jpg" loading="lazy">
     </body></html>`;
-    const { checks } = (await lazyAboveFoldRule.run(ctx(html)));
+    const { checks } = await lazyAboveFoldRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((i) => i.id === "/hero.jpg")).toBe(true);
   });
@@ -100,7 +107,7 @@ describe("perf/lazy-above-fold false-positive fixes (#699)", () => {
       <img src="/hero.jpg" loading="lazy">
       <p>content</p>
     </body></html>`;
-    const { checks } = (await lazyAboveFoldRule.run(ctx(html)));
+    const { checks } = await lazyAboveFoldRule.run(ctx(html));
     expect(checks[0].status).toBe("warn");
     expect(checks[0].items?.some((i) => i.id === "/hero.jpg")).toBe(true);
   });

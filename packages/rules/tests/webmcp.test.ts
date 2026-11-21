@@ -1,11 +1,15 @@
 // ax/webmcp reports declarative WebMCP tools, flags invalid declarations, and never fails or costs score (#396).
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
-
-import { redactFormAction, scanWebMcpDeclarations, webmcpRule } from "../src/ax/webmcp";
 import type { CheckResult, RuleContext } from "../src/types";
+
+import {
+  redactFormAction,
+  scanWebMcpDeclarations,
+  webmcpRule,
+} from "../src/ax/webmcp";
 
 async function runAll(body: string, head = ""): Promise<CheckResult[]> {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Tools</title>${head}</head><body>${body}</body></html>`;
@@ -20,7 +24,8 @@ async function runAll(body: string, head = ""): Promise<CheckResult[]> {
   return result.checks;
 }
 
-const byName = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
+const byName = (checks: CheckResult[], name: string) =>
+  checks.find((c) => c.name === name);
 
 const VALID = `
 <form toolname="search_flights" tooldescription="Search flights between two airports" toolautosubmit>
@@ -38,10 +43,18 @@ describe("ax/webmcp declarative tools", () => {
     const tools = byName(checks, "webmcp-declarative-tools");
     expect(tools?.status).toBe("info");
     expect(tools?.message).toContain("2 declarative WebMCP tools");
-    expect(tools?.items?.map((i) => i.id)).toEqual(["search_flights", "subscribe"]);
+    expect(tools?.items?.map((i) => i.id)).toEqual([
+      "search_flights",
+      "subscribe",
+    ]);
     expect(tools?.items?.[0]?.selector).toContain("form");
     const details = tools?.details as {
-      tools: { name: string; description: string; params: string[]; autosubmit: boolean }[];
+      tools: {
+        name: string;
+        description: string;
+        params: string[];
+        autosubmit: boolean;
+      }[];
       relatedRules: string[];
     };
     expect(details.tools[0]).toEqual({
@@ -55,14 +68,17 @@ describe("ax/webmcp declarative tools", () => {
     expect(details.relatedRules).toContain("perf/cls-hints");
     expect(byName(checks, "webmcp-tool-schema")?.status).toBe("pass");
     expect(byName(checks, "webmcp-forms-without-tools")).toBeUndefined();
-    expect(checks.some((c) => c.status === "fail" || c.status === "warn")).toBe(false);
+    expect(checks.some((c) => c.status === "fail" || c.status === "warn")).toBe(
+      false
+    );
   });
 });
 
 describe("ax/webmcp schema validation", () => {
   const kinds = (body: string) =>
     scanWebMcpDeclarations(
-      parsePage(`<html><body>${body}</body></html>`, "https://example.com/").document!,
+      parsePage(`<html><body>${body}</body></html>`, "https://example.com/")
+        .document!
     ).problems.map((p) => p.kind);
 
   test.each([
@@ -96,7 +112,11 @@ describe("ax/webmcp schema validation", () => {
       `<form toolname="t" tooldescription="d"><input name="a"></form><form toolname="t" tooldescription="d"><input name="b"></form>`,
       "duplicate-name",
     ],
-    ["toolname on a div", `<div toolname="t" tooldescription="d"></div>`, "toolname-on-non-form"],
+    [
+      "toolname on a div",
+      `<div toolname="t" tooldescription="d"></div>`,
+      "toolname-on-non-form",
+    ],
     [
       "required control without a name",
       `<form toolname="t" tooldescription="d"><input required></form>`,
@@ -158,13 +178,15 @@ describe("ax/webmcp schema validation", () => {
 
   test("a toolname on a non-form with no tool forms still warns", async () => {
     const checks = await runAll(`<div toolname="t"></div>`);
-    expect(byName(checks, "webmcp-declarative-tools")?.message).toBe("No declarative WebMCP tools");
+    expect(byName(checks, "webmcp-declarative-tools")?.message).toBe(
+      "No declarative WebMCP tools"
+    );
     expect(byName(checks, "webmcp-tool-schema")?.status).toBe("warn");
   });
 
   test("an invalid page names the offending forms with selectors", async () => {
     const checks = await runAll(
-      `<form id="bad" toolname="no good" tooldescription="d"><input name="a"></form>`,
+      `<form id="bad" toolname="no good" tooldescription="d"><input name="a"></form>`
     );
     const schema = byName(checks, "webmcp-tool-schema");
     expect(schema?.items).toHaveLength(1);
@@ -175,7 +197,8 @@ describe("ax/webmcp schema validation", () => {
   test("a capped problem list records how many problems were left out", async () => {
     const forms = Array.from(
       { length: 55 },
-      (_, i) => `<form toolname="bad ${i}" tooldescription="d"><input name="a"></form>`,
+      (_, i) =>
+        `<form toolname="bad ${i}" tooldescription="d"><input name="a"></form>`
     ).join("");
     const schema = byName(await runAll(forms), "webmcp-tool-schema");
     expect(schema?.status).toBe("warn");
@@ -186,9 +209,13 @@ describe("ax/webmcp schema validation", () => {
 
 describe("ax/webmcp pages without WebMCP", () => {
   test("a plain form is informational only", async () => {
-    const checks = await runAll(`<form action="/search"><input name="q"></form>`);
+    const checks = await runAll(
+      `<form action="/search"><input name="q"></form>`
+    );
     expect(byName(checks, "webmcp-declarative-tools")?.status).toBe("info");
-    expect(byName(checks, "webmcp-declarative-tools")?.message).toBe("No declarative WebMCP tools");
+    expect(byName(checks, "webmcp-declarative-tools")?.message).toBe(
+      "No declarative WebMCP tools"
+    );
     const forms = byName(checks, "webmcp-forms-without-tools");
     expect(forms?.status).toBe("info");
     expect(forms?.items).toHaveLength(1);
@@ -199,7 +226,7 @@ describe("ax/webmcp pages without WebMCP", () => {
   test("a form action label drops the query string and fragment", async () => {
     const checks = await runAll(
       `<form action="/reset?token=abc123&email=a%40b.com#step2"><input name="q"></form>` +
-        `<form action="?session=xyz"><input name="q"></form>`,
+        `<form action="?session=xyz"><input name="q"></form>`
     );
     const items = byName(checks, "webmcp-forms-without-tools")?.items;
     expect(items?.[0]?.label).toBe("form posting to /reset");
@@ -212,13 +239,23 @@ describe("ax/webmcp pages without WebMCP", () => {
     const checks = await runAll(
       `<form action="https://svc_admin:Xk9pL2mQ7vR4tY8w@api.example.com/submit"><input name="q"></form>` +
         `<form action="//deploy:ghp_secret123@hooks.example.com/in"><input name="q"></form>` +
-        `<form action="https://user:pa/ss@host.example.com/x"><input name="q"></form>`,
+        `<form action="https://user:pa/ss@host.example.com/x"><input name="q"></form>`
     );
     const items = byName(checks, "webmcp-forms-without-tools")?.items;
-    expect(items?.[0]?.label).toBe("form posting to https://api.example.com/submit");
+    expect(items?.[0]?.label).toBe(
+      "form posting to https://api.example.com/submit"
+    );
     expect(items?.[1]?.label).toBe("form posting to //hooks.example.com/in");
-    expect(items?.[2]?.label).toBe("form posting to https://host.example.com/x");
-    for (const secret of ["svc_admin", "Xk9pL2mQ7vR4tY8w", "ghp_secret123", "deploy", "pa/ss"]) {
+    expect(items?.[2]?.label).toBe(
+      "form posting to https://host.example.com/x"
+    );
+    for (const secret of [
+      "svc_admin",
+      "Xk9pL2mQ7vR4tY8w",
+      "ghp_secret123",
+      "deploy",
+      "pa/ss",
+    ]) {
       expect(JSON.stringify(items)).not.toContain(secret);
     }
   });
@@ -226,18 +263,22 @@ describe("ax/webmcp pages without WebMCP", () => {
   test("redactFormAction keeps a normal path, host:port and an @ in the path", () => {
     expect(redactFormAction("/users/@me")).toBe("/users/@me");
     expect(redactFormAction("https://h.example.com:8080/@me")).toBe(
-      "https://h.example.com:8080/@me",
+      "https://h.example.com:8080/@me"
     );
     expect(redactFormAction(" ht\ttps://u:p@h.example.com/a?t=1#f")).toBe(
-      "https://h.example.com/a",
+      "https://h.example.com/a"
     );
-    expect(redactFormAction("https:/u:p@h.example.com/x")).toBe("https:/h.example.com/x");
-    expect(redactFormAction("https:\\\\u:p@h.example.com\\x")).toBe("https:\\\\h.example.com\\x");
+    expect(redactFormAction("https:/u:p@h.example.com/x")).toBe(
+      "https:/h.example.com/x"
+    );
+    expect(redactFormAction("https:\\\\u:p@h.example.com\\x")).toBe(
+      "https:\\\\h.example.com\\x"
+    );
   });
 
   test("a form with only hidden inputs or buttons is not listed", async () => {
     const checks = await runAll(
-      `<form><input type="hidden" name="csrf"><button>Go</button></form>`,
+      `<form><input type="hidden" name="csrf"><button>Go</button></form>`
     );
     expect(byName(checks, "webmcp-forms-without-tools")).toBeUndefined();
   });
@@ -261,7 +302,9 @@ describe("ax/webmcp pages without WebMCP", () => {
 
 describe("ax/webmcp imperative API", () => {
   test("an inline registerTool call is detected", async () => {
-    const checks = await runAll(`<script>navigator.modelContext.registerTool({name:"x"})</script>`);
+    const checks = await runAll(
+      `<script>navigator.modelContext.registerTool({name:"x"})</script>`
+    );
     const c = byName(checks, "webmcp-imperative");
     expect(c?.status).toBe("info");
     expect(c?.message).toContain("not validated");
@@ -269,14 +312,14 @@ describe("ax/webmcp imperative API", () => {
 
   test("an inline provideContext call is detected", async () => {
     const checks = await runAll(
-      `<script type="module">navigator.modelContext.provideContext({tools:[]})</script>`,
+      `<script type="module">navigator.modelContext.provideContext({tools:[]})</script>`
     );
     expect(byName(checks, "webmcp-imperative")?.status).toBe("info");
   });
 
   test("an external script is not scanned", async () => {
     const checks = await runAll(
-      `<script src="/tools.js">navigator.modelContext.registerTool({})</script>`,
+      `<script src="/tools.js">navigator.modelContext.registerTool({})</script>`
     );
     expect(byName(checks, "webmcp-imperative")).toBeUndefined();
   });
@@ -284,13 +327,15 @@ describe("ax/webmcp imperative API", () => {
   test("JSON script types and unrelated mentions are ignored", async () => {
     expect(
       (
-        await runAll(`<script type="application/json">navigator.modelContext.registerTool</script>`)
-      ).some((c) => c.name === "webmcp-imperative"),
+        await runAll(
+          `<script type="application/json">navigator.modelContext.registerTool</script>`
+        )
+      ).some((c) => c.name === "webmcp-imperative")
     ).toBe(false);
     expect(
       (await runAll(`<script>navigator.modelContext</script>`)).some(
-        (c) => c.name === "webmcp-imperative",
-      ),
+        (c) => c.name === "webmcp-imperative"
+      )
     ).toBe(false);
   });
 });
@@ -313,19 +358,32 @@ describe("ax/webmcp challenge on a tool form", () => {
   });
 
   test.each([
-    ["invisible reCAPTCHA widget", `<div class="g-recaptcha" data-size="invisible"></div>`],
-    ["invisible hCaptcha widget", `<div class="h-captcha" data-size="invisible"></div>`],
-    ["reCAPTCHA bound to the button", `<button class="g-recaptcha" data-sitekey="k">Send</button>`],
+    [
+      "invisible reCAPTCHA widget",
+      `<div class="g-recaptcha" data-size="invisible"></div>`,
+    ],
+    [
+      "invisible hCaptcha widget",
+      `<div class="h-captcha" data-size="invisible"></div>`,
+    ],
+    [
+      "reCAPTCHA bound to the button",
+      `<button class="g-recaptcha" data-sitekey="k">Send</button>`,
+    ],
     [
       "interaction-only Turnstile",
       `<div class="cf-turnstile" data-appearance="interaction-only"></div>`,
     ],
   ])("an %s is not reported", async (_label, widget) => {
-    expect(byName(await runAll(tool(widget)), "webmcp-tool-form-challenge")).toBeUndefined();
+    expect(
+      byName(await runAll(tool(widget)), "webmcp-tool-form-challenge")
+    ).toBeUndefined();
   });
 
   test("a challenge on a form that is not a tool is not reported", async () => {
-    const checks = await runAll(`<form><input name="m"><div class="g-recaptcha"></div></form>`);
+    const checks = await runAll(
+      `<form><input name="m"><div class="g-recaptcha"></div></form>`
+    );
     expect(byName(checks, "webmcp-tool-form-challenge")).toBeUndefined();
   });
 });

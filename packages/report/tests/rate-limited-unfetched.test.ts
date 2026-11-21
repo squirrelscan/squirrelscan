@@ -5,12 +5,15 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { fullScanHint } from "../src/coverage";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 
-function report(rateLimited: NonNullable<AuditReport["rateLimited"]>): AuditReport {
+function report(
+  rateLimited: NonNullable<AuditReport["rateLimited"]>
+): AuditReport {
   return {
     baseUrl: "https://shop.example.com",
     timestamp: "2026-06-16T14:30:00.000Z",
@@ -20,42 +23,51 @@ function report(rateLimited: NonNullable<AuditReport["rateLimited"]>): AuditRepo
     failed: 0,
     ruleResults: {},
     status: "partial",
-    statusReason: "437 pages rate limited by shop.example.com; 918 more discovered but not fetched",
+    statusReason:
+      "437 pages rate limited by shop.example.com; 918 more discovered but not fetched",
     rateLimited,
   };
 }
 
-const throttled = report({ pages: 437, hosts: ["shop.example.com"], unfetched: 918 });
+const throttled = report({
+  pages: 437,
+  hosts: ["shop.example.com"],
+  unfetched: 918,
+});
 const legacy = report({ pages: 437, hosts: ["shop.example.com"] });
 
 describe("rate-limited unfetched count", () => {
   test("text names the failed and the unfetched counts", () => {
     expect(renderText(throttled)).toContain(
-      "Rate limited: 437 page(s) not verified (shop.example.com); 918 more discovered but not fetched",
+      "Rate limited: 437 page(s) not verified (shop.example.com); 918 more discovered but not fetched"
     );
   });
 
   test("markdown names the failed and the unfetched counts", () => {
     expect(renderMarkdown(throttled)).toContain(
-      "- Rate limited: 437 page(s) not verified (shop.example.com); 918 more discovered but not fetched",
+      "- Rate limited: 437 page(s) not verified (shop.example.com); 918 more discovered but not fetched"
     );
   });
 
   test("llm carries the count as an attribute and says what it means", () => {
     const xml = renderLlm(throttled);
-    expect(xml).toContain('<rate-limited pages="437" unfetched="918" hosts="shop.example.com">');
+    expect(xml).toContain(
+      '<rate-limited pages="437" unfetched="918" hosts="shop.example.com">'
+    );
     expect(xml).toContain("918 more URL(s) were discovered but never fetched");
   });
 
   test("a report without the count prints what it always did", () => {
     expect(renderText(legacy)).toContain(
-      "Rate limited: 437 page(s) not verified (shop.example.com)\n",
+      "Rate limited: 437 page(s) not verified (shop.example.com)\n"
     );
     expect(renderMarkdown(legacy)).toContain(
-      "- Rate limited: 437 page(s) not verified (shop.example.com)\n",
+      "- Rate limited: 437 page(s) not verified (shop.example.com)\n"
     );
     const xml = renderLlm(legacy);
-    expect(xml).toContain('<rate-limited pages="437" hosts="shop.example.com">');
+    expect(xml).toContain(
+      '<rate-limited pages="437" hosts="shop.example.com">'
+    );
     expect(xml).not.toContain("never fetched");
   });
 });

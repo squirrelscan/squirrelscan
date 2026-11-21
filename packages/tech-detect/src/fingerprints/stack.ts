@@ -1,4 +1,5 @@
 import type { Detector, TechFingerprint } from "../types";
+
 import { inScript, resourceAttr, scriptSrc } from "./helpers";
 
 // Stack fingerprints for logged-out audits (#1263): CMS and shop systems, tag
@@ -33,7 +34,10 @@ import { inScript, resourceAttr, scriptSrc } from "./helpers";
 /** An asset under `wp-content/plugins/<slug>/`, as a script URL or a link, img or source attribute. */
 function wpPlugin(slug: string): Detector[] {
   const url = String.raw`(?:(?:https?:)?\/\/[^\/"'\s]{1,200})?\/(?:[^"'\s?#]{0,200}\/)?wp-content\/plugins\/${slug}\/`;
-  return [...scriptSrc(url), resourceAttr("link|img|source", "href|src|srcset|data-src", url)];
+  return [
+    ...scriptSrc(url),
+    resourceAttr("link|img|source", "href|src|srcset|data-src", url),
+  ];
 }
 
 export const STACK_FINGERPRINTS: TechFingerprint[] = [
@@ -46,11 +50,15 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     icon: "borlabs-cookie",
     detectors: [
       ...wpPlugin("borlabs-cookie"),
-      inScript(String.raw`(?:window\.)?borlabsCookieConfig\s*=`, "borlabsCookieConfig"),
+      inScript(
+        String.raw`(?:window\.)?borlabsCookieConfig\s*=`,
+        "borlabsCookieConfig"
+      ),
       {
         type: "html",
         requires: "data-borlabs-cookie-",
-        pattern: /<(?:script|iframe|div)\s(?:[^>]{0,400}\s)?data-borlabs-cookie-[a-z-]{1,40}\s*=/i,
+        pattern:
+          /<(?:script|iframe|div)\s(?:[^>]{0,400}\s)?data-borlabs-cookie-[a-z-]{1,40}\s*=/i,
       },
     ],
     confidence: "high",
@@ -97,8 +105,12 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.consentmanager.net",
     icon: "consentmanager",
     detectors: [
-      ...scriptSrc(String.raw`(?:https:)?\/\/(?:cdn|delivery)\.consentmanager\.net\/`),
-      ...scriptSrc(String.raw`(?:https:)?\/\/[a-z0-9-]{1,63}\.delivery\.consentmanager\.net\/`),
+      ...scriptSrc(
+        String.raw`(?:https:)?\/\/(?:cdn|delivery)\.consentmanager\.net\/`
+      ),
+      ...scriptSrc(
+        String.raw`(?:https:)?\/\/[a-z0-9-]{1,63}\.delivery\.consentmanager\.net\/`
+      ),
     ],
     confidence: "high",
   },
@@ -111,7 +123,7 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       inScript(String.raw`(?:var\s+|window\.)klaroConfig\s*=`, "klaroConfig"),
       ...scriptSrc(
-        String.raw`[^"']{0,200}\/klaro(?:-no-css|-no-translations)?(?:\.min)?\.js(?:[?#][^"']{0,100})?`,
+        String.raw`[^"']{0,200}\/klaro(?:-no-css|-no-translations)?(?:\.min)?\.js(?:[?#][^"']{0,100})?`
       ),
     ],
     confidence: "high",
@@ -134,7 +146,9 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "security",
     website: "https://cookiefirst.com",
     icon: "cookiefirst",
-    detectors: [...scriptSrc(String.raw`(?:https:)?\/\/consent\.cookiefirst\.com\/`)],
+    detectors: [
+      ...scriptSrc(String.raw`(?:https:)?\/\/consent\.cookiefirst\.com\/`),
+    ],
     confidence: "high",
   },
   {
@@ -143,7 +157,11 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "security",
     website: "https://cookieinformation.com",
     icon: "cookie-information",
-    detectors: [...scriptSrc(String.raw`(?:https:)?\/\/policy\.app\.cookieinformation\.com\/`)],
+    detectors: [
+      ...scriptSrc(
+        String.raw`(?:https:)?\/\/policy\.app\.cookieinformation\.com\/`
+      ),
+    ],
     confidence: "high",
   },
   {
@@ -152,7 +170,9 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "security",
     website: "https://cookie-script.com",
     icon: "cookie-script",
-    detectors: [...scriptSrc(String.raw`(?:https:)?\/\/cdn\.cookie-script\.com\/`)],
+    detectors: [
+      ...scriptSrc(String.raw`(?:https:)?\/\/cdn\.cookie-script\.com\/`),
+    ],
     confidence: "high",
   },
 
@@ -177,11 +197,11 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     icon: "matomo-tag-manager",
     detectors: [
       ...scriptSrc(
-        String.raw`(?:https:)?\/\/cdn\.matomo\.cloud\/[A-Za-z0-9._-]{1,100}\/container_[A-Za-z0-9]{4,40}\.js`,
+        String.raw`(?:https:)?\/\/cdn\.matomo\.cloud\/[A-Za-z0-9._-]{1,100}\/container_[A-Za-z0-9]{4,40}\.js`
       ),
       inScript(
         String.raw`(?:var\s+)?_mtm\s*=\s*window\._mtm\s*=\s*window\._mtm\s*\|\|\s*\[\]`,
-        "_mtm",
+        "_mtm"
       ),
     ],
     confidence: "high",
@@ -195,7 +215,7 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       // The container script is a UUID-named file on the account's own Piwik PRO host.
       ...scriptSrc(
-        String.raw`(?:https:)?\/\/[a-z0-9-]{1,63}\.containers\.piwik\.pro\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.js`,
+        String.raw`(?:https:)?\/\/[a-z0-9-]{1,63}\.containers\.piwik\.pro\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.js`
       ),
     ],
     confidence: "high",
@@ -206,7 +226,11 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "tag-manager",
     website: "https://www.commandersact.com",
     icon: "commanders-act",
-    detectors: [...scriptSrc(String.raw`(?:https:)?\/\/cdn\.(?:tagcommander|commander1)\.com\/`)],
+    detectors: [
+      ...scriptSrc(
+        String.raw`(?:https:)?\/\/cdn\.(?:tagcommander|commander1)\.com\/`
+      ),
+    ],
     confidence: "high",
   },
 
@@ -221,7 +245,7 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
       resourceAttr(
         "link|script|img|source",
         "href|src|srcset|data-src",
-        String.raw`(?:https:)?\/\/(?:cdn\.webshopapp\.com|[a-z0-9-]{1,63}\.shoplightspeed\.com)\/`,
+        String.raw`(?:https:)?\/\/(?:cdn\.webshopapp\.com|[a-z0-9-]{1,63}\.shoplightspeed\.com)\/`
       ),
     ],
     confidence: "high",
@@ -232,7 +256,9 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "cms",
     website: "https://contao.org",
     icon: "contao",
-    detectors: [{ type: "meta", name: "generator", pattern: /^Contao Open Source CMS/i }],
+    detectors: [
+      { type: "meta", name: "generator", pattern: /^Contao Open Source CMS/i },
+    ],
     confidence: "high",
   },
   {
@@ -241,7 +267,9 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "cms",
     website: "https://www.silverstripe.org",
     icon: "silverstripe",
-    detectors: [{ type: "meta", name: "generator", pattern: /^SilverStripe\b/i }],
+    detectors: [
+      { type: "meta", name: "generator", pattern: /^SilverStripe\b/i },
+    ],
     confidence: "high",
   },
   {
@@ -286,7 +314,9 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "cms",
     website: "https://pimcore.com",
     icon: "pimcore",
-    detectors: [{ type: "header", name: "x-powered-by", pattern: /^pimcore\b/i }],
+    detectors: [
+      { type: "header", name: "x-powered-by", pattern: /^pimcore\b/i },
+    ],
     confidence: "high",
   },
 

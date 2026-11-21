@@ -3,7 +3,10 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { decodeCloudflareEmail, isCloudflareEmailProtectionUrl } from "../src/cloudflare-email";
+import {
+  decodeCloudflareEmail,
+  isCloudflareEmailProtectionUrl,
+} from "../src/cloudflare-email";
 
 /** Cloudflare's encoding: a key byte, then each UTF-8 byte XOR the key, all hex. */
 function encode(text: string, key = 0x5a): string {
@@ -13,20 +16,34 @@ function encode(text: string, key = 0x5a): string {
 
 describe("isCloudflareEmailProtectionUrl", () => {
   test("the email-protection path, relative or absolute, any host, with or without a hash", () => {
-    expect(isCloudflareEmailProtectionUrl("/cdn-cgi/l/email-protection#abcd")).toBe(true);
-    expect(isCloudflareEmailProtectionUrl("/cdn-cgi/l/email-protection")).toBe(true);
-    expect(isCloudflareEmailProtectionUrl("https://example.com/cdn-cgi/l/email-protection#a1b2")).toBe(
-      true,
+    expect(
+      isCloudflareEmailProtectionUrl("/cdn-cgi/l/email-protection#abcd")
+    ).toBe(true);
+    expect(isCloudflareEmailProtectionUrl("/cdn-cgi/l/email-protection")).toBe(
+      true
     );
-    expect(isCloudflareEmailProtectionUrl("https://other.example/CDN-CGI/L/Email-Protection")).toBe(
-      true,
-    );
+    expect(
+      isCloudflareEmailProtectionUrl(
+        "https://example.com/cdn-cgi/l/email-protection#a1b2"
+      )
+    ).toBe(true);
+    expect(
+      isCloudflareEmailProtectionUrl(
+        "https://other.example/CDN-CGI/L/Email-Protection"
+      )
+    ).toBe(true);
   });
 
   test("anything else under /cdn-cgi/ is not: image resizing URLs are real resources", () => {
-    expect(isCloudflareEmailProtectionUrl("/cdn-cgi/image/width=1200/photo.jpg")).toBe(false);
-    expect(isCloudflareEmailProtectionUrl("/cdn-cgi/l/email-protection-guide")).toBe(false);
-    expect(isCloudflareEmailProtectionUrl("/blog/cdn-cgi/l/email-protection")).toBe(false);
+    expect(
+      isCloudflareEmailProtectionUrl("/cdn-cgi/image/width=1200/photo.jpg")
+    ).toBe(false);
+    expect(
+      isCloudflareEmailProtectionUrl("/cdn-cgi/l/email-protection-guide")
+    ).toBe(false);
+    expect(
+      isCloudflareEmailProtectionUrl("/blog/cdn-cgi/l/email-protection")
+    ).toBe(false);
     expect(isCloudflareEmailProtectionUrl("mailto:hi@example.com")).toBe(false);
     expect(isCloudflareEmailProtectionUrl("")).toBe(false);
   });
@@ -34,9 +51,15 @@ describe("isCloudflareEmailProtectionUrl", () => {
 
 describe("decodeCloudflareEmail", () => {
   test("decodes the hex payload Cloudflare's script would", () => {
-    expect(decodeCloudflareEmail(encode("hi@example.com"))).toBe("hi@example.com");
-    expect(decodeCloudflareEmail(encode("hi@example.com", 0xd3).toUpperCase())).toBe("hi@example.com");
-    expect(decodeCloudflareEmail(encode("josé@exämple.com"))).toBe("josé@exämple.com");
+    expect(decodeCloudflareEmail(encode("hi@example.com"))).toBe(
+      "hi@example.com"
+    );
+    expect(
+      decodeCloudflareEmail(encode("hi@example.com", 0xd3).toUpperCase())
+    ).toBe("hi@example.com");
+    expect(decodeCloudflareEmail(encode("josé@exämple.com"))).toBe(
+      "josé@exämple.com"
+    );
   });
 
   test("null for anything that is not a well-formed payload", () => {
@@ -49,6 +72,8 @@ describe("decodeCloudflareEmail", () => {
     // Decodes to a control character.
     expect(decodeCloudflareEmail("0001")).toBeNull();
     // Longer than any address.
-    expect(decodeCloudflareEmail(encode(`${"a".repeat(600)}@example.com`))).toBeNull();
+    expect(
+      decodeCloudflareEmail(encode(`${"a".repeat(600)}@example.com`))
+    ).toBeNull();
   });
 });

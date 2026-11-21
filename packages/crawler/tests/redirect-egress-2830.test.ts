@@ -7,13 +7,13 @@
 // (this fixture is itself a localhost audit), and the hop connects to the
 // address it was vetted on unless the transport pins (the hosted container).
 
+import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
+import type { CrawlerConfig } from "../src/core/types";
 
 import { createCrawler } from "../src/core/crawler";
-import type { CrawlerConfig } from "../src/core/types";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 const CONFIG: Partial<CrawlerConfig> = {
@@ -40,7 +40,9 @@ const MARKER = "metadata-response-marker";
 function isRefusedHost(url: string): boolean {
   const host = new URL(url).hostname.replace(/^\[|\]$/g, "").toLowerCase();
   return (
-    host.startsWith("169.254.") || host.startsWith("fe80:") || host === "metadata.google.internal"
+    host.startsWith("169.254.") ||
+    host.startsWith("fe80:") ||
+    host === "metadata.google.internal"
   );
 }
 
@@ -59,7 +61,7 @@ beforeEach(() => {
         `<html><head><title>${MARKER}</title></head><body>${MARKER}</body></html>`,
         {
           headers: { "content-type": "text/html" },
-        },
+        }
       );
     }
     return realFetch(input, init);
@@ -77,9 +79,10 @@ const html = (body: string, title = "Fixture") =>
     `<!doctype html><html><head><title>${title}</title></head><body>${body}</body></html>`,
     {
       headers: { "content-type": "text/html; charset=utf-8" },
-    },
+    }
   );
-const redirect = (location: string) => new Response(null, { status: 302, headers: { location } });
+const redirect = (location: string) =>
+  new Response(null, { status: 302, headers: { location } });
 
 /**
  * The audited site is `localhost`. Its pages link to open redirects into
@@ -102,25 +105,29 @@ function serveSite(): string {
               `<a href="/go?u=meta-ip">a</a>`,
               `<a href="/go?u=meta-host">b</a>`,
               `<a href="/go?u=link-local">c</a>`,
-            ].join(""),
+            ].join("")
           );
         case "/about":
           return html("About us", "About");
         case "/go": {
           const to = url.searchParams.get("u");
           return redirect(
-            to === "meta-ip" ? METADATA_IP : to === "meta-host" ? METADATA_HOST : LINK_LOCAL,
+            to === "meta-ip"
+              ? METADATA_IP
+              : to === "meta-host"
+                ? METADATA_HOST
+                : LINK_LOCAL
           );
         }
         case "/robots.txt":
           return new Response(
             `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\nSitemap: ${origin}/sitemap-go.xml\nSitemap: http://169.254.169.254/sitemap.xml\n`,
-            { headers: { "content-type": "text/plain" } },
+            { headers: { "content-type": "text/plain" } }
           );
         case "/sitemap.xml":
           return new Response(
             `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/about</loc></url></urlset>`,
-            { headers: { "content-type": "application/xml" } },
+            { headers: { "content-type": "application/xml" } }
           );
         case "/sitemap-go.xml":
           return redirect(`${METADATA_IP}sitemap.xml`);
@@ -148,7 +155,10 @@ async function crawl(seed: string, config: Partial<CrawlerConfig> = {}) {
   return Effect.runPromise(
     Effect.gen(function* () {
       yield* storage.init();
-      const crawler = yield* createCrawler({ config: { ...CONFIG, ...config }, storage });
+      const crawler = yield* createCrawler({
+        config: { ...CONFIG, ...config },
+        storage,
+      });
       const crawlId = yield* crawler.start(seed, seed);
       return {
         pages: yield* storage.getPages(crawlId),
@@ -157,51 +167,60 @@ async function crawl(seed: string, config: Partial<CrawlerConfig> = {}) {
         wellKnown: yield* storage.getWellKnownProbe(crawlId),
         markdown: yield* storage.getMarkdownProbe(crawlId),
       };
-    }),
+    })
   );
 }
 
 describe.each([
   ["the crawler's own fetch", {}],
   ["a document fetcher", { documentFetcher: createFetchDocumentFetcher() }],
-] as const)("redirect hops off the site on the CLI, via %s (repo#2830)", (_name, fetcher) => {
-  test("a page, root file or sitemap redirect to a metadata or link-local address is never requested", async () => {
-    const origin = serveSite();
-    const stored = await crawl(`${origin}/`, fetcher);
+] as const)(
+  "redirect hops off the site on the CLI, via %s (repo#2830)",
+  (_name, fetcher) => {
+    test("a page, root file or sitemap redirect to a metadata or link-local address is never requested", async () => {
+      const origin = serveSite();
+      const stored = await crawl(`${origin}/`, fetcher);
 
-    // Non-vacuous: every redirect was reached, so each hop was a real decision.
-    const paths = requested.map((r) => new URL(r.url)).filter((u) => u.origin === origin);
-    const seen = new Set(paths.map((u) => `${u.pathname}${u.search}`));
-    for (const path of [
-      "/go?u=meta-ip",
-      "/go?u=meta-host",
-      "/go?u=link-local",
-      "/llms-full.txt",
-      "/index.md",
-      "/.well-known/security.txt",
-      "/sitemap-go.xml",
-    ]) {
-      expect(seen).toContain(path);
-    }
+      // Non-vacuous: every redirect was reached, so each hop was a real decision.
+      const paths = requested
+        .map((r) => new URL(r.url))
+        .filter((u) => u.origin === origin);
+      const seen = new Set(paths.map((u) => `${u.pathname}${u.search}`));
+      for (const path of [
+        "/go?u=meta-ip",
+        "/go?u=meta-host",
+        "/go?u=link-local",
+        "/llms-full.txt",
+        "/index.md",
+        "/.well-known/security.txt",
+        "/sitemap-go.xml",
+      ]) {
+        expect(seen).toContain(path);
+      }
 
-    expect(requested.filter((r) => isRefusedHost(r.url)).map((r) => r.url)).toEqual([]);
-    expect(JSON.stringify(stored)).not.toContain(MARKER);
-  });
+      expect(
+        requested.filter((r) => isRefusedHost(r.url)).map((r) => r.url)
+      ).toEqual([]);
+      expect(JSON.stringify(stored)).not.toContain(MARKER);
+    });
 
-  test("the localhost site's own pages and root files are still crawled", async () => {
-    const origin = serveSite();
-    const { pages, robots, llms } = await crawl(`${origin}/`, fetcher);
+    test("the localhost site's own pages and root files are still crawled", async () => {
+      const origin = serveSite();
+      const { pages, robots, llms } = await crawl(`${origin}/`, fetcher);
 
-    const ok = pages.filter((p) => p.status === 200 && p.html).map((p) => p.url);
-    expect(ok).toContain(`${origin}/`);
-    expect(ok).toContain(`${origin}/about`);
-    expect(robots?.exists).toBe(true);
-    expect(llms?.llmsTxt.exists).toBe(true);
-    // Refused at the hop: no answer, so recorded as absent, never as the
-    // metadata service's reply.
-    expect(llms?.llmsFullTxt.exists).toBe(false);
-  });
-});
+      const ok = pages
+        .filter((p) => p.status === 200 && p.html)
+        .map((p) => p.url);
+      expect(ok).toContain(`${origin}/`);
+      expect(ok).toContain(`${origin}/about`);
+      expect(robots?.exists).toBe(true);
+      expect(llms?.llmsTxt.exists).toBe(true);
+      // Refused at the hop: no answer, so recorded as absent, never as the
+      // metadata service's reply.
+      expect(llms?.llmsFullTxt.exists).toBe(false);
+    });
+  }
+);
 
 describe("an off-site redirect hop that is allowed (repo#2830)", () => {
   /** `/hop` on 127.0.0.1 redirects to `localhost`, another host on the same server. */
@@ -211,7 +230,8 @@ describe("an off-site redirect hop that is allowed (repo#2830)", () => {
       fetch(req) {
         const url = new URL(req.url);
         if (url.pathname === "/") return html(`<a href="/hop">hop</a>`);
-        if (url.pathname === "/hop") return redirect(`http://localhost:${url.port}/landed`);
+        if (url.pathname === "/hop")
+          return redirect(`http://localhost:${url.port}/landed`);
         if (url.pathname === "/landed") return html("Landed", "Landed");
         return new Response("not found", { status: 404 });
       },
@@ -224,7 +244,9 @@ describe("an off-site redirect hop that is allowed (repo#2830)", () => {
     const origin = serveHop();
     await crawl(`${origin}/`);
     const port = new URL(origin).port;
-    const landed = requested.filter((r) => new URL(r.url).pathname === "/landed");
+    const landed = requested.filter(
+      (r) => new URL(r.url).pathname === "/landed"
+    );
     expect(landed.length).toBeGreaterThan(0);
     for (const r of landed) {
       expect(new URL(r.url).hostname).not.toBe("localhost");
@@ -236,9 +258,15 @@ describe("an off-site redirect hop that is allowed (repo#2830)", () => {
     const origin = serveHop();
     await crawl(`${origin}/`, { egressPinnedByTransport: true });
     const port = new URL(origin).port;
-    const landed = requested.filter((r) => new URL(r.url).pathname === "/landed");
-    expect(landed.map((r) => r.url)).toContain(`http://localhost:${port}/landed`);
-    expect(landed.every((r) => new URL(r.url).hostname === "localhost")).toBe(true);
+    const landed = requested.filter(
+      (r) => new URL(r.url).pathname === "/landed"
+    );
+    expect(landed.map((r) => r.url)).toContain(
+      `http://localhost:${port}/landed`
+    );
+    expect(landed.every((r) => new URL(r.url).hostname === "localhost")).toBe(
+      true
+    );
   });
 });
 
@@ -261,12 +289,12 @@ describe("root files that redirect off the site (repo#2830)", () => {
               `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
                 `<sitemap><loc>${origin}/sitemap-a.xml</loc></sitemap>` +
                 `<sitemap><loc>http://169.254.169.254/child.xml</loc></sitemap></sitemapindex>`,
-              { headers: { "content-type": "application/xml" } },
+              { headers: { "content-type": "application/xml" } }
             );
           case "/sitemap-a.xml":
             return new Response(
               `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/about</loc></url></urlset>`,
-              { headers: { "content-type": "application/xml" } },
+              { headers: { "content-type": "application/xml" } }
             );
           default:
             return new Response("not found", { status: 404 });
@@ -281,15 +309,19 @@ describe("root files that redirect off the site (repo#2830)", () => {
       requested
         .map((r) => new URL(r.url))
         .filter((u) => u.origin === origin)
-        .map((u) => u.pathname),
+        .map((u) => u.pathname)
     );
     for (const path of ["/robots.txt", "/sitemap.xml", "/sitemap-a.xml"])
       expect(own).toContain(path);
-    expect(requested.filter((r) => isRefusedHost(r.url)).map((r) => r.url)).toEqual([]);
+    expect(
+      requested.filter((r) => isRefusedHost(r.url)).map((r) => r.url)
+    ).toEqual([]);
     // Refused at the hop: robots.txt got no answer, which is not a missing file.
     expect(robots?.exists).toBe(false);
     expect(JSON.stringify(robots)).not.toContain(MARKER);
-    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(`${origin}/about`);
+    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(
+      `${origin}/about`
+    );
   });
 });
 
@@ -302,13 +334,18 @@ describe("the audited host on another port (repo#2830)", () => {
       fetch(req) {
         const url = new URL(req.url);
         if (url.pathname === "/") return html(`<a href="/other">other</a>`);
-        if (url.pathname === "/other") return redirect(`http://localhost:${other.port}/landed`);
+        if (url.pathname === "/other")
+          return redirect(`http://localhost:${other.port}/landed`);
         return new Response("not found", { status: 404 });
       },
     });
     servers.push(site);
     await crawl(`http://localhost:${site.port}/`);
-    const landed = requested.filter((r) => new URL(r.url).pathname === "/landed");
-    expect(landed.map((r) => r.url)).toEqual([`http://localhost:${other.port}/landed`]);
+    const landed = requested.filter(
+      (r) => new URL(r.url).pathname === "/landed"
+    );
+    expect(landed.map((r) => r.url)).toEqual([
+      `http://localhost:${other.port}/landed`,
+    ]);
   });
 });

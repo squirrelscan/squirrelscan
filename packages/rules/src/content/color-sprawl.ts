@@ -19,12 +19,19 @@
 // Both paths feed ONE accumulator and ONE check builder: the streaming path reads the page-time
 // signal (`ctx.collectedSignals`), the legacy path derives it with the same extractor.
 
-import { z } from "zod";
-import type { Document } from "linkedom";
 import type { CheckItem } from "@squirrelscan/core-contracts";
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import type { Document } from "linkedom";
 
-import type { CheckResult, Rule, RuleContext, RuleResult, StylesheetContentData } from "../types";
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { z } from "zod";
+
+import type {
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+  StylesheetContentData,
+} from "../types";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const COLOR_MIN_PAGES = 10;
@@ -57,7 +64,9 @@ export const optionsSchema = z.object({
     .int()
     .min(1)
     .default(COLOR_DEFAULT_MAX_REDUNDANT)
-    .describe("Most near-duplicate colors (beyond one per cluster) the site may carry before the rule warns"),
+    .describe(
+      "Most near-duplicate colors (beyond one per cluster) the site may carry before the rule warns"
+    ),
 });
 
 /** What one page's inline styles say about color. */
@@ -80,38 +89,153 @@ export const EMPTY_COLOR_USAGE: ColorUsageSignal = {
 };
 
 const NAMED: Record<string, string> = {
-  aliceblue: "f0f8ff", antiquewhite: "faebd7", aqua: "00ffff", aquamarine: "7fffd4", azure: "f0ffff",
-  beige: "f5f5dc", bisque: "ffe4c4", black: "000000", blanchedalmond: "ffebcd", blue: "0000ff",
-  blueviolet: "8a2be2", brown: "a52a2a", burlywood: "deb887", cadetblue: "5f9ea0", chartreuse: "7fff00",
-  chocolate: "d2691e", coral: "ff7f50", cornflowerblue: "6495ed", cornsilk: "fff8dc", crimson: "dc143c",
-  cyan: "00ffff", darkblue: "00008b", darkcyan: "008b8b", darkgoldenrod: "b8860b", darkgray: "a9a9a9",
-  darkgreen: "006400", darkgrey: "a9a9a9", darkkhaki: "bdb76b", darkmagenta: "8b008b",
-  darkolivegreen: "556b2f", darkorange: "ff8c00", darkorchid: "9932cc", darkred: "8b0000",
-  darksalmon: "e9967a", darkseagreen: "8fbc8f", darkslateblue: "483d8b", darkslategray: "2f4f4f",
-  darkslategrey: "2f4f4f", darkturquoise: "00ced1", darkviolet: "9400d3", deeppink: "ff1493",
-  deepskyblue: "00bfff", dimgray: "696969", dimgrey: "696969", dodgerblue: "1e90ff", firebrick: "b22222",
-  floralwhite: "fffaf0", forestgreen: "228b22", fuchsia: "ff00ff", gainsboro: "dcdcdc", ghostwhite: "f8f8ff",
-  gold: "ffd700", goldenrod: "daa520", gray: "808080", green: "008000", greenyellow: "adff2f",
-  grey: "808080", honeydew: "f0fff0", hotpink: "ff69b4", indianred: "cd5c5c", indigo: "4b0082",
-  ivory: "fffff0", khaki: "f0e68c", lavender: "e6e6fa", lavenderblush: "fff0f5", lawngreen: "7cfc00",
-  lemonchiffon: "fffacd", lightblue: "add8e6", lightcoral: "f08080", lightcyan: "e0ffff",
-  lightgoldenrodyellow: "fafad2", lightgray: "d3d3d3", lightgreen: "90ee90", lightgrey: "d3d3d3",
-  lightpink: "ffb6c1", lightsalmon: "ffa07a", lightseagreen: "20b2aa", lightskyblue: "87cefa",
-  lightslategray: "778899", lightslategrey: "778899", lightsteelblue: "b0c4de", lightyellow: "ffffe0",
-  lime: "00ff00", limegreen: "32cd32", linen: "faf0e6", magenta: "ff00ff", maroon: "800000",
-  mediumaquamarine: "66cdaa", mediumblue: "0000cd", mediumorchid: "ba55d3", mediumpurple: "9370db",
-  mediumseagreen: "3cb371", mediumslateblue: "7b68ee", mediumspringgreen: "00fa9a",
-  mediumturquoise: "48d1cc", mediumvioletred: "c71585", midnightblue: "191970", mintcream: "f5fffa",
-  mistyrose: "ffe4e1", moccasin: "ffe4b5", navajowhite: "ffdead", navy: "000080", oldlace: "fdf5e6",
-  olive: "808000", olivedrab: "6b8e23", orange: "ffa500", orangered: "ff4500", orchid: "da70d6",
-  palegoldenrod: "eee8aa", palegreen: "98fb98", paleturquoise: "afeeee", palevioletred: "db7093",
-  papayawhip: "ffefd5", peachpuff: "ffdab9", peru: "cd853f", pink: "ffc0cb", plum: "dda0dd",
-  powderblue: "b0e0e6", purple: "800080", rebeccapurple: "663399", red: "ff0000", rosybrown: "bc8f8f",
-  royalblue: "4169e1", saddlebrown: "8b4513", salmon: "fa8072", sandybrown: "f4a460", seagreen: "2e8b57",
-  seashell: "fff5ee", sienna: "a0522d", silver: "c0c0c0", skyblue: "87ceeb", slateblue: "6a5acd",
-  slategray: "708090", slategrey: "708090", snow: "fffafa", springgreen: "00ff7f", steelblue: "4682b4",
-  tan: "d2b48c", teal: "008080", thistle: "d8bfd8", tomato: "ff6347", turquoise: "40e0d0",
-  violet: "ee82ee", wheat: "f5deb3", white: "ffffff", whitesmoke: "f5f5f5", yellow: "ffff00",
+  aliceblue: "f0f8ff",
+  antiquewhite: "faebd7",
+  aqua: "00ffff",
+  aquamarine: "7fffd4",
+  azure: "f0ffff",
+  beige: "f5f5dc",
+  bisque: "ffe4c4",
+  black: "000000",
+  blanchedalmond: "ffebcd",
+  blue: "0000ff",
+  blueviolet: "8a2be2",
+  brown: "a52a2a",
+  burlywood: "deb887",
+  cadetblue: "5f9ea0",
+  chartreuse: "7fff00",
+  chocolate: "d2691e",
+  coral: "ff7f50",
+  cornflowerblue: "6495ed",
+  cornsilk: "fff8dc",
+  crimson: "dc143c",
+  cyan: "00ffff",
+  darkblue: "00008b",
+  darkcyan: "008b8b",
+  darkgoldenrod: "b8860b",
+  darkgray: "a9a9a9",
+  darkgreen: "006400",
+  darkgrey: "a9a9a9",
+  darkkhaki: "bdb76b",
+  darkmagenta: "8b008b",
+  darkolivegreen: "556b2f",
+  darkorange: "ff8c00",
+  darkorchid: "9932cc",
+  darkred: "8b0000",
+  darksalmon: "e9967a",
+  darkseagreen: "8fbc8f",
+  darkslateblue: "483d8b",
+  darkslategray: "2f4f4f",
+  darkslategrey: "2f4f4f",
+  darkturquoise: "00ced1",
+  darkviolet: "9400d3",
+  deeppink: "ff1493",
+  deepskyblue: "00bfff",
+  dimgray: "696969",
+  dimgrey: "696969",
+  dodgerblue: "1e90ff",
+  firebrick: "b22222",
+  floralwhite: "fffaf0",
+  forestgreen: "228b22",
+  fuchsia: "ff00ff",
+  gainsboro: "dcdcdc",
+  ghostwhite: "f8f8ff",
+  gold: "ffd700",
+  goldenrod: "daa520",
+  gray: "808080",
+  green: "008000",
+  greenyellow: "adff2f",
+  grey: "808080",
+  honeydew: "f0fff0",
+  hotpink: "ff69b4",
+  indianred: "cd5c5c",
+  indigo: "4b0082",
+  ivory: "fffff0",
+  khaki: "f0e68c",
+  lavender: "e6e6fa",
+  lavenderblush: "fff0f5",
+  lawngreen: "7cfc00",
+  lemonchiffon: "fffacd",
+  lightblue: "add8e6",
+  lightcoral: "f08080",
+  lightcyan: "e0ffff",
+  lightgoldenrodyellow: "fafad2",
+  lightgray: "d3d3d3",
+  lightgreen: "90ee90",
+  lightgrey: "d3d3d3",
+  lightpink: "ffb6c1",
+  lightsalmon: "ffa07a",
+  lightseagreen: "20b2aa",
+  lightskyblue: "87cefa",
+  lightslategray: "778899",
+  lightslategrey: "778899",
+  lightsteelblue: "b0c4de",
+  lightyellow: "ffffe0",
+  lime: "00ff00",
+  limegreen: "32cd32",
+  linen: "faf0e6",
+  magenta: "ff00ff",
+  maroon: "800000",
+  mediumaquamarine: "66cdaa",
+  mediumblue: "0000cd",
+  mediumorchid: "ba55d3",
+  mediumpurple: "9370db",
+  mediumseagreen: "3cb371",
+  mediumslateblue: "7b68ee",
+  mediumspringgreen: "00fa9a",
+  mediumturquoise: "48d1cc",
+  mediumvioletred: "c71585",
+  midnightblue: "191970",
+  mintcream: "f5fffa",
+  mistyrose: "ffe4e1",
+  moccasin: "ffe4b5",
+  navajowhite: "ffdead",
+  navy: "000080",
+  oldlace: "fdf5e6",
+  olive: "808000",
+  olivedrab: "6b8e23",
+  orange: "ffa500",
+  orangered: "ff4500",
+  orchid: "da70d6",
+  palegoldenrod: "eee8aa",
+  palegreen: "98fb98",
+  paleturquoise: "afeeee",
+  palevioletred: "db7093",
+  papayawhip: "ffefd5",
+  peachpuff: "ffdab9",
+  peru: "cd853f",
+  pink: "ffc0cb",
+  plum: "dda0dd",
+  powderblue: "b0e0e6",
+  purple: "800080",
+  rebeccapurple: "663399",
+  red: "ff0000",
+  rosybrown: "bc8f8f",
+  royalblue: "4169e1",
+  saddlebrown: "8b4513",
+  salmon: "fa8072",
+  sandybrown: "f4a460",
+  seagreen: "2e8b57",
+  seashell: "fff5ee",
+  sienna: "a0522d",
+  silver: "c0c0c0",
+  skyblue: "87ceeb",
+  slateblue: "6a5acd",
+  slategray: "708090",
+  slategrey: "708090",
+  snow: "fffafa",
+  springgreen: "00ff7f",
+  steelblue: "4682b4",
+  tan: "d2b48c",
+  teal: "008080",
+  thistle: "d8bfd8",
+  tomato: "ff6347",
+  turquoise: "40e0d0",
+  violet: "ee82ee",
+  wheat: "f5deb3",
+  white: "ffffff",
+  whitesmoke: "f5f5f5",
+  yellow: "ffff00",
   yellowgreen: "9acd32",
 };
 
@@ -119,17 +243,34 @@ type Rgb = [number, number, number];
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 const toHex = (rgb: Rgb) =>
-  "#" + rgb.map((c) => Math.round(clamp01(c) * 255).toString(16).padStart(2, "0")).join("");
+  "#" +
+  rgb
+    .map((c) =>
+      Math.round(clamp01(c) * 255)
+        .toString(16)
+        .padStart(2, "0")
+    )
+    .join("");
 
-const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-const linearToSrgb = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+const srgbToLinear = (c: number) =>
+  c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+const linearToSrgb = (c: number) =>
+  c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
 
 /** sRGB (0..1 channels) to OKLab. */
 export function rgbToOklab([r, g, b]: Rgb): [number, number, number] {
-  const lr = srgbToLinear(r), lg = srgbToLinear(g), lb = srgbToLinear(b);
-  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
-  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
-  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  const lr = srgbToLinear(r),
+    lg = srgbToLinear(g),
+    lb = srgbToLinear(b);
+  const l = Math.cbrt(
+    0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb
+  );
+  const m = Math.cbrt(
+    0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb
+  );
+  const s = Math.cbrt(
+    0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb
+  );
   return [
     0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
     1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
@@ -142,9 +283,15 @@ function oklabToRgb(L: number, a: number, b: number): Rgb {
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
   return [
-    linearToSrgb(clamp01(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s)),
-    linearToSrgb(clamp01(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s)),
-    linearToSrgb(clamp01(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)),
+    linearToSrgb(
+      clamp01(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s)
+    ),
+    linearToSrgb(
+      clamp01(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s)
+    ),
+    linearToSrgb(
+      clamp01(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)
+    ),
   ];
 }
 
@@ -166,7 +313,8 @@ function hslToRgb(h: number, s: number, l: number): Rgb {
 function num(token: string, pctScale: number): number | null {
   const t = token.trim().toLowerCase();
   if (t === "none") return 0;
-  const m = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%|deg|rad|grad|turn)?$/.exec(t);
+  const m =
+    /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%|deg|rad|grad|turn)?$/.exec(t);
   if (!m) return null;
   const v = Number(m[1]);
   switch (m[2]) {
@@ -186,7 +334,10 @@ function num(token: string, pctScale: number): number | null {
 /** Split function arguments on commas, spaces and the alpha slash. Returns channels and alpha. */
 function fnArgs(inner: string): { chans: string[]; alpha: string | null } {
   const [body = "", alpha = null] = inner.split("/");
-  return { chans: body.split(/[\s,]+/).filter(Boolean), alpha: alpha === null ? null : alpha.trim() };
+  return {
+    chans: body.split(/[\s,]+/).filter(Boolean),
+    alpha: alpha === null ? null : alpha.trim(),
+  };
 }
 
 /** Parse a CSS color literal to a `#rrggbb` string, or null when it is not one (or fully transparent). */
@@ -219,25 +370,33 @@ export function parseColor(raw: string): string | null {
     switch (fn[1]) {
       case "rgb":
       case "rgba": {
-        const r = num(c1, 255), g = num(c2, 255), b = num(c3, 255);
+        const r = num(c1, 255),
+          g = num(c2, 255),
+          b = num(c3, 255);
         if (r === null || g === null || b === null) return null;
         return toHex([r / 255, g / 255, b / 255]);
       }
       case "hsl":
       case "hsla": {
-        const h = num(c1, 360), s = num(c2, 1), l = num(c3, 1);
+        const h = num(c1, 360),
+          s = num(c2, 1),
+          l = num(c3, 1);
         if (h === null || s === null || l === null) return null;
         // Bare numbers for s/l in legacy syntax are written with %, so they arrive already scaled.
         return toHex(hslToRgb(h, clamp01(s), clamp01(l)));
       }
       case "oklch": {
-        const L = num(c1, 1), C = num(c2, 0.4), h = num(c3, 360);
+        const L = num(c1, 1),
+          C = num(c2, 0.4),
+          h = num(c3, 360);
         if (L === null || C === null || h === null) return null;
         const rad = (h * Math.PI) / 180;
         return toHex(oklabToRgb(L, C * Math.cos(rad), C * Math.sin(rad)));
       }
       default: {
-        const L = num(c1, 1), a = num(c2, 0.4), b = num(c3, 0.4);
+        const L = num(c1, 1),
+          a = num(c2, 0.4),
+          b = num(c3, 0.4);
         if (L === null || a === null || b === null) return null;
         return toHex(oklabToRgb(L, a, b));
       }
@@ -277,7 +436,9 @@ const COLOR_TOKEN =
 /** Every color literal in one declaration value, `url()` and `var()` bodies excluded (`var(--gray)` is not the color gray). */
 function literalsIn(value: string): string[] {
   const out: string[] = [];
-  const cleaned = value.replace(/(?:url|var)\([^)]*\)/gi, " ").replace(/!important/gi, " ");
+  const cleaned = value
+    .replace(/(?:url|var)\([^)]*\)/gi, " ")
+    .replace(/!important/gi, " ");
   for (const m of cleaned.matchAll(COLOR_TOKEN)) {
     const c = parseColor(m[0]);
     if (c) out.push(c);
@@ -291,14 +452,22 @@ interface Acc {
   varRefs: number;
 }
 
-function scanCss(raw: string, acc: Acc, maxChars = MAX_STYLE_CHARS, maxColors = MAX_COLORS_PER_PAGE): void {
-  const css = stripComments(raw.length > maxChars ? raw.slice(0, maxChars) : raw);
+function scanCss(
+  raw: string,
+  acc: Acc,
+  maxChars = MAX_STYLE_CHARS,
+  maxColors = MAX_COLORS_PER_PAGE
+): void {
+  const css = stripComments(
+    raw.length > maxChars ? raw.slice(0, maxChars) : raw
+  );
   for (const m of css.matchAll(DECL)) {
     const prop = m[1]!.toLowerCase();
     const value = m[2] ?? "";
     if (prop.startsWith("--")) continue;
     if (!COLOR_PROP.test(prop)) continue;
-    if (/var\(\s*--/i.test(value)) acc.varRefs += (value.match(/var\(\s*--/gi) ?? []).length;
+    if (/var\(\s*--/i.test(value))
+      acc.varRefs += (value.match(/var\(\s*--/gi) ?? []).length;
     for (const c of literalsIn(value)) {
       if (acc.colors.size < maxColors) acc.colors.add(c);
     }
@@ -312,7 +481,9 @@ function scanCss(raw: string, acc: Acc, maxChars = MAX_STYLE_CHARS, maxColors = 
 }
 
 /** The page's color signal from its live document. Shared by the collector and the legacy path. */
-export function extractColorUsage(doc: Document | null | undefined): ColorUsageSignal {
+export function extractColorUsage(
+  doc: Document | null | undefined
+): ColorUsageSignal {
   if (!doc) return { ...EMPTY_COLOR_USAGE };
   const acc: Acc = { colors: new Set(), tokens: new Set(), varRefs: 0 };
   for (const style of querySelectorAllOutsideNoscript(doc, "style")) {
@@ -324,7 +495,12 @@ export function extractColorUsage(doc: Document | null | undefined): ColorUsageS
   }
   let linked = false;
   for (const link of querySelectorAllOutsideNoscript(doc, "link[href]")) {
-    if ((link.getAttribute("rel") || "").toLowerCase().split(/\s+/).includes("stylesheet")) {
+    if (
+      (link.getAttribute("rel") || "")
+        .toLowerCase()
+        .split(/\s+/)
+        .includes("stylesheet")
+    ) {
       linked = true;
       break;
     }
@@ -347,10 +523,16 @@ export interface StylesheetPalette {
   colors: string[];
 }
 
-export const EMPTY_STYLESHEET_PALETTE: StylesheetPalette = { read: 0, notRead: 0, colors: [] };
+export const EMPTY_STYLESHEET_PALETTE: StylesheetPalette = {
+  read: 0,
+  notRead: 0,
+  colors: [],
+};
 
 /** The palette the read stylesheet bodies define: every color they use or define as a token. */
-export function stylesheetPalette(sheets: readonly StylesheetContentData[] | undefined): StylesheetPalette {
+export function stylesheetPalette(
+  sheets: readonly StylesheetContentData[] | undefined
+): StylesheetPalette {
   if (!sheets || sheets.length === 0) return EMPTY_STYLESHEET_PALETTE;
   const palette = new Set<string>();
   let read = 0;
@@ -367,7 +549,8 @@ export function stylesheetPalette(sheets: readonly StylesheetContentData[] | und
 }
 
 function coverageNote(sheets: StylesheetPalette): string {
-  if (sheets.read === 0) return "inline styles only; linked stylesheets are not read";
+  if (sheets.read === 0)
+    return "inline styles only; linked stylesheets are not read";
   const unread = sheets.notRead > 0 ? `, ${sheets.notRead} not read` : "";
   return `inline styles counted; ${sheets.read} linked stylesheet(s) read for the palette${unread}`;
 }
@@ -393,7 +576,11 @@ function emptyRollup(): ColorRollup {
   };
 }
 
-function accumulate(rollup: ColorRollup, url: string, sig: ColorUsageSignal): void {
+function accumulate(
+  rollup: ColorRollup,
+  url: string,
+  sig: ColorUsageSignal
+): void {
   rollup.pageCount += 1;
   if (sig.linkedStylesheets) rollup.pagesWithLinkedCss += 1;
   if (sig.colors.length > 0 || sig.varRefs > 0) rollup.pagesWithColors += 1;
@@ -421,21 +608,33 @@ function hexToRgb(hex: string): Rgb {
 /** Greedy perceptual clustering, most-used colors first so each cluster is named by its dominant member. */
 export function clusterColors(colorPages: Map<string, string[]>): Cluster[] {
   const ordered = [...colorPages.keys()].sort(
-    (a, b) => colorPages.get(b)!.length - colorPages.get(a)!.length || a.localeCompare(b),
+    (a, b) =>
+      colorPages.get(b)!.length - colorPages.get(a)!.length ||
+      a.localeCompare(b)
   );
   const clusters: (Cluster & { lab: [number, number, number] })[] = [];
   for (const hex of ordered) {
     const lab = rgbToOklab(hexToRgb(hex));
     let home: (typeof clusters)[number] | undefined;
     for (const c of clusters) {
-      const d = Math.hypot(lab[0] - c.lab[0], lab[1] - c.lab[1], lab[2] - c.lab[2]);
+      const d = Math.hypot(
+        lab[0] - c.lab[0],
+        lab[1] - c.lab[1],
+        lab[2] - c.lab[2]
+      );
       if (d < COLOR_CLUSTER_DISTANCE) {
         home = c;
         break;
       }
     }
     if (!home) {
-      home = { seed: hex, members: [], pages: new Set(), chroma: Math.hypot(lab[1], lab[2]), lab };
+      home = {
+        seed: hex,
+        members: [],
+        pages: new Set(),
+        chroma: Math.hypot(lab[1], lab[2]),
+        lab,
+      };
       clusters.push(home);
     }
     home.members.push(hex);
@@ -445,7 +644,12 @@ export function clusterColors(colorPages: Map<string, string[]>): Cluster[] {
 }
 
 function skip(message: string, details?: Record<string, unknown>): CheckResult {
-  return { name: CHECK_NAME, status: "skipped", message, ...(details ? { details } : {}) };
+  return {
+    name: CHECK_NAME,
+    status: "skipped",
+    message,
+    ...(details ? { details } : {}),
+  };
 }
 
 /** Build the checks. `sitePageCount` is the crawl's page count (the norm floor reads it). */
@@ -453,12 +657,17 @@ export function buildChecks(
   rollup: ColorRollup,
   sitePageCount: number,
   maxRedundant: number,
-  sheets: StylesheetPalette = EMPTY_STYLESHEET_PALETTE,
+  sheets: StylesheetPalette = EMPTY_STYLESHEET_PALETTE
 ): CheckResult[] {
   const note = coverageNote(sheets);
-  const coverage = sheets.read > 0 ? "inline-plus-stylesheet-palette" : "inline-only";
+  const coverage =
+    sheets.read > 0 ? "inline-plus-stylesheet-palette" : "inline-only";
   if (sitePageCount < COLOR_MIN_PAGES) {
-    return [skip(`Only ${sitePageCount} page(s) crawled; ${COLOR_MIN_PAGES} needed to judge color consistency`)];
+    return [
+      skip(
+        `Only ${sitePageCount} page(s) crawled; ${COLOR_MIN_PAGES} needed to judge color consistency`
+      ),
+    ];
   }
   if (rollup.pagesWithColors === 0) {
     return [
@@ -469,7 +678,7 @@ export function buildChecks(
           pagesWithLinkedStylesheets: rollup.pagesWithLinkedCss,
           stylesheetsRead: sheets.read,
           stylesheetsNotRead: sheets.notRead,
-        },
+        }
       ),
     ];
   }
@@ -499,7 +708,10 @@ export function buildChecks(
   if (redundant > maxRedundant) {
     const items: CheckItem[] = clusters
       .filter((c) => c.members.length > 1)
-      .sort((a, b) => b.members.length - a.members.length || a.seed.localeCompare(b.seed))
+      .sort(
+        (a, b) =>
+          b.members.length - a.members.length || a.seed.localeCompare(b.seed)
+      )
       .slice(0, MAX_ITEMS)
       .map((c) => ({
         id: c.seed,
@@ -507,7 +719,9 @@ export function buildChecks(
         sourcePages: [...c.pages].slice(0, 5),
       }));
     const grayPart =
-      grayLiterals > 0 ? `${grayLiterals} gray(s), ${grayRedundant} visually indistinguishable; ` : "";
+      grayLiterals > 0
+        ? `${grayLiterals} gray(s), ${grayRedundant} visually indistinguishable; `
+        : "";
     checks.push({
       name: CHECK_NAME,
       status: redundant >= maxRedundant * 3 ? "fail" : "warn",
@@ -525,9 +739,15 @@ export function buildChecks(
     const inStylesheets = (c: Cluster) =>
       c.members.some((hex) => {
         const [L, a, b] = rgbToOklab(hexToRgb(hex));
-        return paletteLabs.some((p) => Math.hypot(L - p[0], a - p[1], b - p[2]) < COLOR_CLUSTER_DISTANCE);
+        return paletteLabs.some(
+          (p) =>
+            Math.hypot(L - p[0], a - p[1], b - p[2]) < COLOR_CLUSTER_DISTANCE
+        );
       });
-    const outliers = clusters.filter((c) => c.pages.size === 1 && c.chroma >= OUTLIER_CHROMA && !inStylesheets(c));
+    const outliers = clusters.filter(
+      (c) =>
+        c.pages.size === 1 && c.chroma >= OUTLIER_CHROMA && !inStylesheets(c)
+    );
     if (outliers.length > 0) {
       const where = sheets.read > 0 ? " and in no read stylesheet" : "";
       checks.push({
@@ -537,7 +757,11 @@ export function buildChecks(
         value: outliers.length,
         items: outliers.slice(0, MAX_ITEMS).map((c) => {
           const page = [...c.pages][0]!;
-          return { id: c.seed, label: `${c.seed}: only on ${page}`, sourcePages: [page] };
+          return {
+            id: c.seed,
+            label: `${c.seed}: only on ${page}`,
+            sourcePages: [page],
+          };
         }),
         details,
       });
@@ -546,7 +770,9 @@ export function buildChecks(
 
   if (checks.length === 0) {
     const tokens =
-      rollup.varRefs > 0 ? `, ${rollup.varRefs} var() reference(s) (token definitions are not counted)` : "";
+      rollup.varRefs > 0
+        ? `, ${rollup.varRefs} var() reference(s) (token definitions are not counted)`
+        : "";
     checks.push({
       name: CHECK_NAME,
       status: "pass",
@@ -562,7 +788,8 @@ export const colorSprawlRule: Rule = {
   meta: {
     id: "content/color-sprawl",
     name: "Color Sprawl",
-    description: "Finds near-duplicate colors and palette outliers across the site's inline styles",
+    description:
+      "Finds near-duplicate colors and palette outliers across the site's inline styles",
     solution:
       "Near-identical colors (a gray at #333 on one page and #343434 on another) are almost always drift, not design. Collapse each cluster to one value and define it once as a custom property such as --gray-700, then reference it with var(). A color that only one page uses usually came from a pasted snippet or a one-off template: switch it to a palette color. Token definitions in :root are not counted, so a design system that defines a full scale and references it through var() stays clean. Near-duplicates are counted from inline styles only. Linked same-site stylesheets the audit read define the palette, so a color one of them uses is never called an outlier; check any stylesheet the result reports as not read by hand before deleting anything. Alpha is ignored.",
     category: "content",
@@ -574,7 +801,11 @@ export const colorSprawlRule: Rule = {
     checks: [
       { name: CHECK_NAME, outcome: "problem" },
       { name: OUTLIER_CHECK_NAME, outcome: "problem" },
-      { name: CHECK_NAME, outcome: "clean", clears: [CHECK_NAME, OUTLIER_CHECK_NAME] },
+      {
+        name: CHECK_NAME,
+        outcome: "clean",
+        clears: [CHECK_NAME, OUTLIER_CHECK_NAME],
+      },
       { name: CHECK_NAME, outcome: "skipped" },
     ],
   },
@@ -584,11 +815,13 @@ export const colorSprawlRule: Rule = {
     const rollup = emptyRollup();
     let pageCount: number;
     if (ctx.collectedSignals) {
-      for (const s of ctx.collectedSignals.pages) accumulate(rollup, s.url, s.colorUsage ?? EMPTY_COLOR_USAGE);
+      for (const s of ctx.collectedSignals.pages)
+        accumulate(rollup, s.url, s.colorUsage ?? EMPTY_COLOR_USAGE);
       pageCount = ctx.siteQuery?.pageCount() ?? rollup.pageCount;
     } else {
       const pages = ctx.site?.pages ?? [];
-      if (pages.length === 0) return { checks: [skip("No pages available for analysis")] };
+      if (pages.length === 0)
+        return { checks: [skip("No pages available for analysis")] };
       for (const p of pages) {
         // A bodiless 4xx/5xx page joins site.pages as EMPTY_PARSED_PAGE (no document). The streaming
         // path's page count (page_features) leaves it out, so this one does too.
@@ -598,7 +831,12 @@ export const colorSprawlRule: Rule = {
       pageCount = rollup.pageCount;
     }
     return {
-      checks: buildChecks(rollup, pageCount, opts.max_redundant, stylesheetPalette(ctx.site?.stylesheets)),
+      checks: buildChecks(
+        rollup,
+        pageCount,
+        opts.max_redundant,
+        stylesheetPalette(ctx.site?.stylesheets)
+      ),
     };
   },
 };

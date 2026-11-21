@@ -2,16 +2,41 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { cspRule, CSP_PROXY_PATHS } from "../src/security/csp";
 import type { RuleContext } from "../src/types";
 
-function run(policy: string, scriptUrls: string[], header = "content-security-policy") {
+import { cspRule, CSP_PROXY_PATHS } from "../src/security/csp";
+
+function run(
+  policy: string,
+  scriptUrls: string[],
+  header = "content-security-policy"
+) {
   const ctx = {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     site: {
       baseUrl: "https://example.com",
-      pages: [{ url: "https://example.com/", statusCode: 200, headers: { [header]: policy } }],
-      scripts: scriptUrls.map((url) => ({ url, status: 200, error: null, contentType: null, sizeBytes: 1, content: null, sourcePages: [] })),
+      pages: [
+        {
+          url: "https://example.com/",
+          statusCode: 200,
+          headers: { [header]: policy },
+        },
+      ],
+      scripts: scriptUrls.map((url) => ({
+        url,
+        status: 200,
+        error: null,
+        contentType: null,
+        sizeBytes: 1,
+        content: null,
+        sourcePages: [],
+      })),
     },
     options: {},
   } as unknown as RuleContext;
@@ -20,7 +45,8 @@ function run(policy: string, scriptUrls: string[], header = "content-security-po
   return result.checks.find((c) => c.name === "csp-self-proxy-script");
 }
 
-const SELF = "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'";
+const SELF =
+  "default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'";
 
 describe("security/csp first-party proxy paths (#1604)", () => {
   test("the constant lists the documented paths", () => {
@@ -47,7 +73,13 @@ describe("security/csp first-party proxy paths (#1604)", () => {
   });
 
   test("ordinary first-party script paths get no check", () => {
-    expect(run(SELF, ["https://example.com/assets/app.js", "https://example.com/statsig/a.js", "https://example.com/ingestor.js"])).toBeUndefined();
+    expect(
+      run(SELF, [
+        "https://example.com/assets/app.js",
+        "https://example.com/statsig/a.js",
+        "https://example.com/ingestor.js",
+      ])
+    ).toBeUndefined();
   });
 
   test("a third-party host with a proxy-looking path is not first-party", () => {
@@ -55,16 +87,29 @@ describe("security/csp first-party proxy paths (#1604)", () => {
   });
 
   test("no check when 'self' is not in the effective script list", () => {
-    expect(run("script-src https://example.com", ["https://example.com/ingest/a.js"])).toBeUndefined();
+    expect(
+      run("script-src https://example.com", ["https://example.com/ingest/a.js"])
+    ).toBeUndefined();
   });
 
   test("script-src-elem decides over script-src", () => {
-    expect(run("script-src 'self'; script-src-elem https://x.test", ["https://example.com/ingest/a.js"])).toBeUndefined();
-    expect(run("script-src https://x.test; script-src-elem 'self'", ["https://example.com/ingest/a.js"])).toBeDefined();
+    expect(
+      run("script-src 'self'; script-src-elem https://x.test", [
+        "https://example.com/ingest/a.js",
+      ])
+    ).toBeUndefined();
+    expect(
+      run("script-src https://x.test; script-src-elem 'self'", [
+        "https://example.com/ingest/a.js",
+      ])
+    ).toBeDefined();
   });
 
   test("bounded: a script past the scan cap is not seen, the list stays short", () => {
-    const urls = Array.from({ length: 5000 }, (_, i) => `https://example.com/ingest/${i}.js`);
+    const urls = Array.from(
+      { length: 5000 },
+      (_, i) => `https://example.com/ingest/${i}.js`
+    );
     const check = run(SELF, [...urls, "https://example.com/stats/a.js"]);
     expect(check).toBeDefined();
     expect(String(check?.message)).toContain("/ingest");
@@ -74,14 +119,20 @@ describe("security/csp first-party proxy paths (#1604)", () => {
 
   test("'strict-dynamic' makes browsers ignore 'self': no check", () => {
     const urls = ["https://example.com/ingest/a.js"];
-    expect(run("script-src 'self' 'strict-dynamic' 'nonce-abc'", urls)).toBeUndefined();
-    expect(run("script-src-elem 'self' 'strict-dynamic'; script-src 'self'", urls)).toBeUndefined();
+    expect(
+      run("script-src 'self' 'strict-dynamic' 'nonce-abc'", urls)
+    ).toBeUndefined();
+    expect(
+      run("script-src-elem 'self' 'strict-dynamic'; script-src 'self'", urls)
+    ).toBeUndefined();
     expect(run("script-src 'self' 'nonce-abc'", urls)).toBeDefined();
   });
 
   test("comma-joined policies intersect, so no check is raised", () => {
     const urls = ["https://example.com/ingest/a.js"];
-    expect(run("script-src 'self', script-src https://cdn.x.test", urls)).toBeUndefined();
+    expect(
+      run("script-src 'self', script-src https://cdn.x.test", urls)
+    ).toBeUndefined();
     expect(run("script-src 'self', default-src 'none'", urls)).toBeUndefined();
   });
 

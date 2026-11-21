@@ -1,6 +1,7 @@
 // a11y/aria-required-attr - Required ARIA attributes present
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { requiredAttributesByRole } from "./aria-data";

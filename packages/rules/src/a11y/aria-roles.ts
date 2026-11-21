@@ -1,6 +1,7 @@
 // a11y/aria-roles - Valid ARIA role values
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { validAriaRoles } from "./aria-data";

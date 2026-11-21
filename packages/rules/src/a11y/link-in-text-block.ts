@@ -1,8 +1,9 @@
 // a11y/link-in-text-block - Links distinguishable from text
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import type { ChildrenParent } from "../shared/attribute-lookup";
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const TEXT_BLOCK_SELECTOR = "p, li, td, th, dd, blockquote, figcaption";
 
@@ -59,7 +60,8 @@ function accessibleName(link: Element): string {
   const text = link.textContent?.trim();
   if (text) return text;
   const label =
-    link.getAttribute("aria-label")?.trim() || link.getAttribute("title")?.trim();
+    link.getAttribute("aria-label")?.trim() ||
+    link.getAttribute("title")?.trim();
   return label || link.getAttribute("href") || "link";
 }
 
@@ -114,7 +116,8 @@ export const linkInTextBlockRule: Rule = {
       // Another visual cue the solution text accepts.
       const hasCue = /(^|[;\s])(border|background)/i.test(style);
 
-      if ((hasNoUnderlineStyle || hasNoUnderlineClass) && !hasCue) linksWithoutUnderline.push(link);
+      if ((hasNoUnderlineStyle || hasNoUnderlineClass) && !hasCue)
+        linksWithoutUnderline.push(link);
     }
 
     if (linksWithoutUnderline.length > 0) {

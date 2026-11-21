@@ -1,9 +1,9 @@
 // images/picture-element - Validates <picture> elements have required <img> fallback
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const pictureElementRule: Rule = {
   meta: {
@@ -37,7 +37,10 @@ The <img> provides fallback for:
     const checks: CheckResult[] = [];
     if (!document) return { checks: [] };
 
-    const pictureElements = querySelectorAllOutsideNoscript(document, "picture");
+    const pictureElements = querySelectorAllOutsideNoscript(
+      document,
+      "picture"
+    );
 
     if (pictureElements.length === 0) {
       checks.push({

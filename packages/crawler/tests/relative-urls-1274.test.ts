@@ -6,8 +6,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { parseSitemap } from "../src/sitemaps";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
@@ -19,7 +20,10 @@ const urlset = (...locs: string[]) =>
 
 describe("parseSitemap with relative <loc> values", () => {
   test("a relative loc is resolved against the sitemap URL and reported", () => {
-    const result = parseSitemap(urlset("/", "/pricing", "https://example.com/abs"), SITEMAP_URL);
+    const result = parseSitemap(
+      urlset("/", "/pricing", "https://example.com/abs"),
+      SITEMAP_URL
+    );
 
     expect(result.urls.map((u) => u.loc)).toEqual([
       "https://example.com/",
@@ -27,7 +31,9 @@ describe("parseSitemap with relative <loc> values", () => {
       "https://example.com/abs",
     ]);
     expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]).toContain("2 <url> <loc> values are not an absolute URL");
+    expect(result.errors[0]).toContain(
+      "2 <url> <loc> values are not an absolute URL"
+    );
     expect(result.errors[0]).toContain("/pricing");
   });
 
@@ -41,14 +47,19 @@ describe("parseSitemap with relative <loc> values", () => {
     const result = parseSitemap(index, SITEMAP_URL);
 
     expect(result.childSitemaps).toEqual(["https://example.com/child.xml"]);
-    expect(result.errors[0]).toContain("1 <sitemap> <loc> value is not an absolute URL");
+    expect(result.errors[0]).toContain(
+      "1 <sitemap> <loc> value is not an absolute URL"
+    );
   });
 });
 
 const html = (body: string) =>
-  new Response(`<!doctype html><html><head><title>Fixture</title></head><body>${body}</body></html>`, {
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
+  new Response(
+    `<!doctype html><html><head><title>Fixture</title></head><body>${body}</body></html>`,
+    {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }
+  );
 
 let site: ReturnType<typeof Bun.serve>;
 let base: string;
@@ -64,8 +75,10 @@ beforeAll(() => {
           headers: { "content-type": "application/xml" },
         });
       }
-      if (path === "/") return html(`<a href="other-host.example.net/apps/x">x</a>`);
-      if (path === "/pricing" || path.startsWith("/other-host")) return html("page");
+      if (path === "/")
+        return html(`<a href="other-host.example.net/apps/x">x</a>`);
+      if (path === "/pricing" || path.startsWith("/other-host"))
+        return html("page");
       return new Response("not found", { status: 404 });
     },
   });
@@ -98,13 +111,16 @@ describe("a crawl seeded by a relative-loc sitemap", () => {
         yield* storage.init();
         const crawler = yield* createCrawler({ config: CONFIG, storage });
         const events = Effect.runFork(
-          Stream.runForEach(crawler.events, (_event: CrawlerEvent) => Effect.void),
+          Stream.runForEach(
+            crawler.events,
+            (_event: CrawlerEvent) => Effect.void
+          )
         );
         const crawlId = yield* crawler.start(`${base}/`, `${base}/`);
         const stored = yield* storage.getPages(crawlId);
         yield* Fiber.interrupt(events);
         return stored;
-      }),
+      })
     );
 
     expect(pages.length).toBeGreaterThan(1);

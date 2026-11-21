@@ -4,15 +4,17 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { IntelConfig, IntelTransport } from "../src/index";
+
 import { MemoryKvStore, getOrRefresh } from "../src/cache";
 import { lookupInSnapshot, refreshFeeds } from "../src/feeds";
-import type { IntelConfig, IntelTransport } from "../src/index";
 
 function jsonResponse(body: unknown): ReturnType<IntelTransport> {
   return Promise.resolve({
     ok: true,
     status: 200,
-    text: () => Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
+    text: () =>
+      Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
     json: () => Promise.resolve(body),
   });
 }
@@ -42,7 +44,7 @@ describe("getOrRefresh — daily-pull cache", () => {
       "k",
       1000,
       () => Promise.reject<string>(new Error("feed down")),
-      5000, // expired → would refresh, but refresh throws
+      5000 // expired → would refresh, but refresh throws
     );
     expect(served).toBe("good");
   });
@@ -50,7 +52,7 @@ describe("getOrRefresh — daily-pull cache", () => {
   test("rethrows when nothing is cached and refresh fails", async () => {
     const kv = new MemoryKvStore();
     await expect(
-      getOrRefresh(kv, "k", 1000, () => Promise.reject(new Error("boom")), 0),
+      getOrRefresh(kv, "k", 1000, () => Promise.reject(new Error("boom")), 0)
     ).rejects.toThrow("boom");
   });
 });
@@ -68,12 +70,21 @@ describe("refreshFeeds + lookupInSnapshot", () => {
   // Mock transport: OpenPhish returns a URL list, ThreatFox returns a domain IOC.
   const transport: IntelTransport = (url) => {
     if (url.includes("openphish")) {
-      return jsonResponse("https://evil-collector.tk/grab\nhttps://phish.example/login");
+      return jsonResponse(
+        "https://evil-collector.tk/grab\nhttps://phish.example/login"
+      );
     }
     if (url.includes("threatfox")) {
       return jsonResponse({
         query_status: "ok",
-        data: [{ id: "42", ioc: "bad-domain.tk", ioc_type: "domain", threat_type: "phishing" }],
+        data: [
+          {
+            id: "42",
+            ioc: "bad-domain.tk",
+            ioc_type: "domain",
+            threat_type: "phishing",
+          },
+        ],
       });
     }
     return jsonResponse({});
@@ -98,7 +109,10 @@ describe("refreshFeeds + lookupInSnapshot", () => {
       kv: new MemoryKvStore(),
       now: 0,
     });
-    const hit = lookupInSnapshot(snap, "https://www.bad-domain.tk/some/deep/path?x=1");
+    const hit = lookupInSnapshot(
+      snap,
+      "https://www.bad-domain.tk/some/deep/path?x=1"
+    );
     expect(hit.some((s) => s.provider === "threatfox")).toBe(true);
   });
 
@@ -120,14 +134,22 @@ describe("refreshFeeds + lookupInSnapshot", () => {
         : jsonResponse("");
     const snap = await refreshFeeds(
       { ...config, providers: { threatfox: { enabled: true } } },
-      { transport: t, kv: new MemoryKvStore(), now: 0 },
+      { transport: t, kv: new MemoryKvStore(), now: 0 }
     );
     // The listed host + its subdomains match.
-    expect(lookupInSnapshot(snap, "https://phish.shared-host.com/x").length).toBeGreaterThan(0);
-    expect(lookupInSnapshot(snap, "https://a.phish.shared-host.com/").length).toBeGreaterThan(0);
+    expect(
+      lookupInSnapshot(snap, "https://phish.shared-host.com/x").length
+    ).toBeGreaterThan(0);
+    expect(
+      lookupInSnapshot(snap, "https://a.phish.shared-host.com/").length
+    ).toBeGreaterThan(0);
     // A sibling host on the SAME registrable domain must NOT be flagged.
-    expect(lookupInSnapshot(snap, "https://www.shared-host.com/")).toHaveLength(0);
-    expect(lookupInSnapshot(snap, "https://other.shared-host.com/")).toHaveLength(0);
+    expect(lookupInSnapshot(snap, "https://www.shared-host.com/")).toHaveLength(
+      0
+    );
+    expect(
+      lookupInSnapshot(snap, "https://other.shared-host.com/")
+    ).toHaveLength(0);
   });
 
   test("URL membership ignores scheme / www / trailing slash / query", async () => {
@@ -136,15 +158,19 @@ describe("refreshFeeds + lookupInSnapshot", () => {
       kv: new MemoryKvStore(),
       now: 0,
     });
-    expect(lookupInSnapshot(snap, "http://www.phish.example/login/").length).toBeGreaterThan(0);
+    expect(
+      lookupInSnapshot(snap, "http://www.phish.example/login/").length
+    ).toBeGreaterThan(0);
   });
 
   test("disabled providers are not pulled", async () => {
     const snap = await refreshFeeds(
       { ...config, providers: {} },
-      { transport, kv: new MemoryKvStore(), now: 0 },
+      { transport, kv: new MemoryKvStore(), now: 0 }
     );
     expect(snap.providers).toHaveLength(0);
-    expect(lookupInSnapshot(snap, "https://evil-collector.tk/grab")).toHaveLength(0);
+    expect(
+      lookupInSnapshot(snap, "https://evil-collector.tk/grab")
+    ).toHaveLength(0);
   });
 });

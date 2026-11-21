@@ -1,10 +1,14 @@
 // schema/product - Product schema validation
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { flattenJsonLdNodes } from "@squirrelscan/utils";
 
-import { fieldEvidenceCheck, readProductEvidence, type ProductField } from "./product-evidence";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  fieldEvidenceCheck,
+  readProductEvidence,
+  type ProductField,
+} from "./product-evidence";
 
 const REQUIRED_PROPS: ProductField[] = ["name", "image"];
 
@@ -49,7 +53,8 @@ export const productSchemaRule: Rule = {
         if (
           type === "Product" ||
           type === "ProductGroup" ||
-          (Array.isArray(type) && (type.includes("Product") || type.includes("ProductGroup")))
+          (Array.isArray(type) &&
+            (type.includes("Product") || type.includes("ProductGroup")))
         ) {
           productSchema = schema;
           break;
@@ -68,12 +73,17 @@ export const productSchemaRule: Rule = {
       return { checks };
     }
 
-    const statusOf = (field: ProductField) => evidence.fields.find((f) => f.field === field)?.status;
+    const statusOf = (field: ProductField) =>
+      evidence.fields.find((f) => f.field === field)?.status;
 
     // Required properties. Only a field proven absent from a complete read
     // warns; an unchecked one (truncated read, rendered-only shell) does not.
-    const missing = REQUIRED_PROPS.filter((prop) => statusOf(prop) === "absent");
-    const unchecked = REQUIRED_PROPS.filter((prop) => statusOf(prop) === "unknown");
+    const missing = REQUIRED_PROPS.filter(
+      (prop) => statusOf(prop) === "absent"
+    );
+    const unchecked = REQUIRED_PROPS.filter(
+      (prop) => statusOf(prop) === "unknown"
+    );
 
     if (missing.length > 0) {
       checks.push({
@@ -109,7 +119,10 @@ export const productSchemaRule: Rule = {
           value: "Add Offer with price and availability",
         });
       }
-    } else if (statusOf("price") === "absent" || statusOf("availability") === "absent") {
+    } else if (
+      statusOf("price") === "absent" ||
+      statusOf("availability") === "absent"
+    ) {
       checks.push({
         name: "product-offer-details",
         status: "warn",

@@ -66,7 +66,7 @@ export const sitemap4xxRule: Rule = {
               name: "sitemap-4xx",
               status: "pass",
               message: "No sitemap URL checks available",
-            },
+            }
       );
       checks.push(...offSiteRow);
       return { checks };
@@ -76,7 +76,7 @@ export const sitemap4xxRule: Rule = {
     // the 4xx band but mean the host throttled US. Reported as info below
     // instead of as sitemap rot.
     const rateLimitedUrls = statuses.filter(
-      (entry) => entry.rateLimited === true || isRateLimitStatus(entry.status),
+      (entry) => entry.rateLimited === true || isRateLimitStatus(entry.status)
     );
     const rateLimitedSet = new Set(rateLimitedUrls.map((entry) => entry.url));
 
@@ -85,7 +85,7 @@ export const sitemap4xxRule: Rule = {
         entry.status !== null &&
         entry.status >= 400 &&
         entry.status < 500 &&
-        !rateLimitedSet.has(entry.url),
+        !rateLimitedSet.has(entry.url)
     );
 
     if (badUrls.length > 0) {

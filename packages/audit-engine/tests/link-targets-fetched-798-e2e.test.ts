@@ -5,14 +5,18 @@
 // as unfetched with no answer, so a site linking its own PDF never read as fully
 // checked; the internal link check skips them too, as the crawl fetched them.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
-import { SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const BASE = "https://site.example.com";
@@ -36,7 +40,7 @@ function pageRecord(
   status: number,
   body: string,
   contentType = "text/html",
-  server: string | null = null,
+  server: string | null = null
 ): PageRecord {
   const url = `${BASE}${path}`;
   return {
@@ -86,7 +90,7 @@ const PAGES = [
   pageRecord(
     "/busy",
     429,
-    "<!doctype html><html><head><title>Slow down</title></head><body>Too many requests</body></html>",
+    "<!doctype html><html><head><title>Slow down</title></head><body>Too many requests</body></html>"
   ),
   pageRecord("/walled", 403, CHALLENGE, "text/html", "cloudflare"),
   // A redirect the crawl could not follow (a loop): stored as the 3xx, no answer.
@@ -131,17 +135,34 @@ async function brokenLinks(engine: "v1" | "streaming"): Promise<CheckResult[]> {
       } as never);
       for (const page of PAGES) yield* storage.upsertPage(crawlId, page);
 
-      const preRules = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
+      const preRules = yield* runStreamingPreRules(
+        storage,
+        crawlId,
+        CONFIG,
+        {}
+      );
       let result;
       if (engine === "streaming") {
-        result = yield* runStreamingRules(storage, crawlId, CONFIG, preRules.assets);
+        result = yield* runStreamingRules(
+          storage,
+          crawlId,
+          CONFIG,
+          preRules.assets
+        );
       } else {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, preRules.assets);
+        result = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          preRules.assets
+        );
       }
-      return (result.ruleResultsMap.get("links/broken-links")?.checks ?? []) as CheckResult[];
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+      return (result.ruleResultsMap.get("links/broken-links")?.checks ??
+        []) as CheckResult[];
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
@@ -167,7 +188,7 @@ for (const engine of ["v1", "streaming"] as const) {
       expect(rateLimited?.items?.map((i) => i.id)).toEqual([`${BASE}/busy`]);
       const refused = checks.find((c) => c.name === "refused-links");
       expect(refused?.message).toBe(
-        "1 internal link(s) answered the crawl with a bot-wall challenge - status unverifiable",
+        "1 internal link(s) answered the crawl with a bot-wall challenge - status unverifiable"
       );
       expect(refused?.items?.map((i) => i.id)).toEqual([`${BASE}/walled`]);
       // Builds a whole engine run: the first one in a one-process gate pays the

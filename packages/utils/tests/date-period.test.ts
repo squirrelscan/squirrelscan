@@ -4,7 +4,12 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { type DatePeriod, datePeriod, periodGapMs, w3cDatePeriod } from "../src/date-period";
+import {
+  type DatePeriod,
+  datePeriod,
+  periodGapMs,
+  w3cDatePeriod,
+} from "../src/date-period";
 
 const ZONES = ["UTC", "America/New_York", "Asia/Tokyo", "Pacific/Kiritimati"];
 /** Offset of 1 January 2024 in each zone, as `getTimezoneOffset` gives it. */
@@ -12,7 +17,8 @@ const JANUARY_OFFSETS = [0, 300, -540, -840];
 
 // The zone to put back. Bun keeps the last zone set when `TZ` is deleted, and
 // then ignores later assignments, so it is always assigned, never deleted.
-const ORIGINAL_ZONE = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+const ORIGINAL_ZONE =
+  process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /** `read` under each time zone in turn; the process zone is restored after. */
 function inEveryZone<T>(read: () => T): T[] {
@@ -27,8 +33,12 @@ function inEveryZone<T>(read: () => T): T[] {
 }
 
 test("the zone switch takes effect for every zone", () => {
-  expect(inEveryZone(() => new Date(2024, 0, 1).getTimezoneOffset())).toEqual(JANUARY_OFFSETS);
-  expect(inEveryZone(() => new Date(2024, 0, 1).getTimezoneOffset())).toEqual(JANUARY_OFFSETS);
+  expect(inEveryZone(() => new Date(2024, 0, 1).getTimezoneOffset())).toEqual(
+    JANUARY_OFFSETS
+  );
+  expect(inEveryZone(() => new Date(2024, 0, 1).getTimezoneOffset())).toEqual(
+    JANUARY_OFFSETS
+  );
 });
 
 describe("w3cDatePeriod", () => {
@@ -51,19 +61,34 @@ describe("w3cDatePeriod", () => {
       precision: "instant",
       day: "2024-09-10",
     });
-    expect(w3cDatePeriod("2024-09-10T08:00+0530")?.start).toBe(Date.UTC(2024, 8, 10, 2, 30));
-    expect(w3cDatePeriod("2024-09-10T08:00:00.25Z")?.start).toBe(Date.UTC(2024, 8, 10, 8, 0, 0, 250));
+    expect(w3cDatePeriod("2024-09-10T08:00+0530")?.start).toBe(
+      Date.UTC(2024, 8, 10, 2, 30)
+    );
+    expect(w3cDatePeriod("2024-09-10T08:00:00.25Z")?.start).toBe(
+      Date.UTC(2024, 8, 10, 8, 0, 0, 250)
+    );
   });
 
   test("a datetime with no zone, or a space for the T, is read in UTC on every machine", () => {
     const expected = Date.UTC(2024, 8, 10, 12);
-    for (const value of ["2024-09-10T12:00:00", "2024-09-10 12:00:00", "2024-09-10T12:00"]) {
-      expect(inEveryZone(() => w3cDatePeriod(value)?.start)).toEqual(ZONES.map(() => expected));
+    for (const value of [
+      "2024-09-10T12:00:00",
+      "2024-09-10 12:00:00",
+      "2024-09-10T12:00",
+    ]) {
+      expect(inEveryZone(() => w3cDatePeriod(value)?.start)).toEqual(
+        ZONES.map(() => expected)
+      );
     }
   });
 
   test("anything outside the W3C forms is null", () => {
-    for (const value of ["2024/09/10", "Tue, 10 Sep 2024 12:00:00 GMT", "2024-9", "September 2024"]) {
+    for (const value of [
+      "2024/09/10",
+      "Tue, 10 Sep 2024 12:00:00 GMT",
+      "2024-9",
+      "September 2024",
+    ]) {
       expect(w3cDatePeriod(value)).toBeNull();
     }
   });
@@ -71,45 +96,93 @@ describe("w3cDatePeriod", () => {
 
 describe("datePeriod", () => {
   test("reads the W3C forms as w3cDatePeriod does", () => {
-    for (const value of ["2024", "2024-09", "2024-09-10", "2024-09-10T23:30:00-05:00"]) {
+    for (const value of [
+      "2024",
+      "2024-09",
+      "2024-09-10",
+      "2024-09-10T23:30:00-05:00",
+    ]) {
       expect(datePeriod(value)).toEqual(w3cDatePeriod(value));
     }
   });
 
   test("a value that names its zone is read in that zone, with the day as written", () => {
     const cases: Array<[string, number, string]> = [
-      ["Tue, 10 Sep 2024 23:30:00 -0500", Date.UTC(2024, 8, 11, 4, 30), "2024-09-10"],
-      ["Tue, 10 Sep 2024 12:00:00 GMT", Date.UTC(2024, 8, 10, 12), "2024-09-10"],
+      [
+        "Tue, 10 Sep 2024 23:30:00 -0500",
+        Date.UTC(2024, 8, 11, 4, 30),
+        "2024-09-10",
+      ],
+      [
+        "Tue, 10 Sep 2024 12:00:00 GMT",
+        Date.UTC(2024, 8, 10, 12),
+        "2024-09-10",
+      ],
       ["Tue, 10 Sep 2024 22:00:00 EST", Date.UTC(2024, 8, 11, 3), "2024-09-10"],
       ["Sep 10 2024 11:00 PM GMT-0500", Date.UTC(2024, 8, 11, 4), "2024-09-10"],
       ["Sep 10 2024 23:00 +2", Date.UTC(2024, 8, 10, 21), "2024-09-10"],
       ["Sep 10 2024 12:00:00Z", Date.UTC(2024, 8, 10, 12), "2024-09-10"],
       // A comment in parentheses is ignored, zone name or not.
-      ["Tue Sep 10 2024 12:00:00 GMT+0200 (Central European Summer Time)", Date.UTC(2024, 8, 10, 10), "2024-09-10"],
+      [
+        "Tue Sep 10 2024 12:00:00 GMT+0200 (Central European Summer Time)",
+        Date.UTC(2024, 8, 10, 10),
+        "2024-09-10",
+      ],
       ["Sep 10 2024 12:00 (EST)", Date.UTC(2024, 8, 10, 12), "2024-09-10"],
     ];
     for (const [value, start, day] of cases) {
-      expect(inEveryZone(() => [datePeriod(value)?.start, datePeriod(value)?.day])).toEqual(
-        ZONES.map(() => [start, day]),
-      );
+      expect(
+        inEveryZone(() => [datePeriod(value)?.start, datePeriod(value)?.day])
+      ).toEqual(ZONES.map(() => [start, day]));
     }
     // A coarse value with a zone is still its whole period.
     expect(datePeriod("2024 GMT")?.precision).toBe("year");
-    expect(datePeriod("2024-09-10Z")).toMatchObject({ precision: "day", day: "2024-09-10" });
+    expect(datePeriod("2024-09-10Z")).toMatchObject({
+      precision: "day",
+      day: "2024-09-10",
+    });
     expect(datePeriod("2024-09-10 GMT")?.precision).toBe("day");
   });
 
   test("a value with no zone in another format is read as written, in UTC", () => {
     const cases: Array<[string, Partial<DatePeriod>]> = [
-      ["September 10, 2024", { start: Date.UTC(2024, 8, 10), precision: "day", day: "2024-09-10" }],
-      ["2024/09/10", { start: Date.UTC(2024, 8, 10), precision: "day", day: "2024-09-10" }],
-      ["2024/09/10 08:00", { start: Date.UTC(2024, 8, 10, 8), precision: "instant", day: "2024-09-10" }],
+      [
+        "September 10, 2024",
+        { start: Date.UTC(2024, 8, 10), precision: "day", day: "2024-09-10" },
+      ],
+      [
+        "2024/09/10",
+        { start: Date.UTC(2024, 8, 10), precision: "day", day: "2024-09-10" },
+      ],
+      [
+        "2024/09/10 08:00",
+        {
+          start: Date.UTC(2024, 8, 10, 8),
+          precision: "instant",
+          day: "2024-09-10",
+        },
+      ],
       ["Tue, 10 Sep 2024", { start: Date.UTC(2024, 8, 10), precision: "day" }],
-      ["September 2024", { start: Date.UTC(2024, 8, 1), end: Date.UTC(2024, 9, 1) - 1, precision: "month" }],
-      ["2024/09", { start: Date.UTC(2024, 8, 1), end: Date.UTC(2024, 9, 1) - 1, precision: "month" }],
+      [
+        "September 2024",
+        {
+          start: Date.UTC(2024, 8, 1),
+          end: Date.UTC(2024, 9, 1) - 1,
+          precision: "month",
+        },
+      ],
+      [
+        "2024/09",
+        {
+          start: Date.UTC(2024, 8, 1),
+          end: Date.UTC(2024, 9, 1) - 1,
+          precision: "month",
+        },
+      ],
     ];
     for (const [value, expected] of cases) {
-      for (const period of inEveryZone(() => datePeriod(value))) expect(period).toMatchObject(expected);
+      for (const period of inEveryZone(() => datePeriod(value)))
+        expect(period).toMatchObject(expected);
     }
   });
 
@@ -125,7 +198,9 @@ describe("datePeriod", () => {
       "last tuesday",
       "Tuesday 2024",
     ]) {
-      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => null));
+      expect(inEveryZone(() => datePeriod(value))).toEqual(
+        ZONES.map(() => null)
+      );
     }
   });
 });
@@ -138,7 +213,9 @@ describe("datePeriod refuses what it cannot read the same everywhere (#780 revie
       "12:00 Sep 10 2024 +0200",
       "Sep 10 2024 12:00 GMT EST",
     ]) {
-      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => null));
+      expect(inEveryZone(() => datePeriod(value))).toEqual(
+        ZONES.map(() => null)
+      );
     }
   });
 
@@ -157,11 +234,15 @@ describe("datePeriod refuses what it cannot read the same everywhere (#780 revie
       "Marketing 10 2024",
       "Mayday 10, 2024",
     ]) {
-      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => null));
+      expect(inEveryZone(() => datePeriod(value))).toEqual(
+        ZONES.map(() => null)
+      );
     }
     expect(datePeriod("Sept 2024")?.precision).toBe("month");
     expect(datePeriod("June 10, 2024")?.day).toBe("2024-06-10");
-    expect(datePeriod("Sep 10 2024 12:00 +05:30")?.start).toBe(Date.UTC(2024, 8, 10, 6, 30));
+    expect(datePeriod("Sep 10 2024 12:00 +05:30")?.start).toBe(
+      Date.UTC(2024, 8, 10, 6, 30)
+    );
   });
 
   test("a zone wrapped in any punctuation, or glued to a time, is refused in every zone", () => {
@@ -180,8 +261,15 @@ describe("datePeriod refuses what it cannot read the same everywhere (#780 revie
         }
       }
     }
-    for (const value of ["12:00+0200 Sep 10 2024", "12:00-0500 Sep 10 2024", "12:00Z Sep 10 2024", "Sep 10 2024 12:00+0200 PM"]) {
-      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => null));
+    for (const value of [
+      "12:00+0200 Sep 10 2024",
+      "12:00-0500 Sep 10 2024",
+      "12:00Z Sep 10 2024",
+      "Sep 10 2024 12:00+0200 PM",
+    ]) {
+      expect(inEveryZone(() => datePeriod(value))).toEqual(
+        ZONES.map(() => null)
+      );
     }
     expect(differing).toEqual([]);
   });
@@ -208,7 +296,16 @@ describe("datePeriod refuses what it cannot read the same everywhere (#780 revie
     // A run of `(` made the old comment pattern rescan the rest of the value
     // from every one. Values over 200 characters are not read at all, and
     // nothing under that can cost much.
-    const shapes = ["(", "1:11 ", "Sep ", "+0", "12:00 GMT", " ", "2024-", "a(b"];
+    const shapes = [
+      "(",
+      "1:11 ",
+      "Sep ",
+      "+0",
+      "12:00 GMT",
+      " ",
+      "2024-",
+      "a(b",
+    ];
     for (const shape of shapes) {
       for (const count of [50_000, 100_000, 200_000]) {
         const value = `${shape.repeat(count)}x`;
@@ -238,22 +335,45 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
       "Sep 10 2024 11:00 AM-1:00 PM",
       "10 Sep 2024 12:00\u201314:00",
     ]) {
-      expect(inEveryZone(() => datePeriod(value))).toEqual([null, null, null, null]);
+      expect(inEveryZone(() => datePeriod(value))).toEqual([
+        null,
+        null,
+        null,
+        null,
+      ]);
     }
     // A numeric zone with no colon is still a zone, and W3C values are untouched.
-    expect(datePeriod("Sep 10 2024 12:00 -0500")?.start).toBe(Date.UTC(2024, 8, 10, 17));
-    expect(datePeriod("2024-09-10T12:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
-    expect(datePeriod("2024-09-10T12:00-05:00 (updated)")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    expect(datePeriod("Sep 10 2024 12:00 -0500")?.start).toBe(
+      Date.UTC(2024, 8, 10, 17)
+    );
+    expect(datePeriod("2024-09-10T12:00-05:00")?.start).toBe(
+      Date.UTC(2024, 8, 10, 17)
+    );
+    expect(datePeriod("2024-09-10T12:00-05:00 (updated)")?.start).toBe(
+      Date.UTC(2024, 8, 10, 17)
+    );
     // A first time with seconds is a time and its zone, not a range.
-    expect(datePeriod("Sep 10 2024 12:00:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
-    expect(datePeriod("2024-09-10 12:00:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    expect(datePeriod("Sep 10 2024 12:00:00-05:00")?.start).toBe(
+      Date.UTC(2024, 8, 10, 17)
+    );
+    expect(datePeriod("2024-09-10 12:00:00-05:00")?.start).toBe(
+      Date.UTC(2024, 8, 10, 17)
+    );
     // The same shape with a second time that can only be an offset is one.
-    expect(datePeriod("Sep 10 2024 12:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
-    expect(datePeriod("Sep 10 2024 12:00 -05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
-    expect(datePeriod("Sep 10 2024 11:30 PM -05:30")?.start).toBe(Date.UTC(2024, 8, 11, 5));
+    expect(datePeriod("Sep 10 2024 12:00-05:00")?.start).toBe(
+      Date.UTC(2024, 8, 10, 17)
+    );
+    expect(datePeriod("Sep 10 2024 12:00 -05:00")?.start).toBe(
+      Date.UTC(2024, 8, 10, 17)
+    );
+    expect(datePeriod("Sep 10 2024 11:30 PM -05:30")?.start).toBe(
+      Date.UTC(2024, 8, 11, 5)
+    );
     // 12 AM is 00:00, 12 PM is 12:00: a second time after it is a range.
     expect(datePeriod("Sep 10 2024 12:30 AM-05:00")).toBeNull();
-    expect(datePeriod("Sep 10 2024 12:30 PM-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17, 30));
+    expect(datePeriod("Sep 10 2024 12:30 PM-05:00")?.start).toBe(
+      Date.UTC(2024, 8, 10, 17, 30)
+    );
     // Every pair is weighed: a range anywhere in the value refuses it.
     expect(datePeriod("Sep 10 2024 9:00-12:00 or 18:00-05:00")).toBeNull();
     // A range written to the second on both sides is still not read.
@@ -264,9 +384,18 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
   test("a local time a daylight-saving zone skips reads as written, in every zone", () => {
     // 02:30 on 10 March 2024 does not exist in America/New_York; read at local
     // time, `Date` moved it to 03:30 there and nowhere else.
-    const expected = { start: Date.UTC(2024, 2, 10, 2, 30), end: Date.UTC(2024, 2, 10, 2, 30), precision: "instant", day: "2024-03-10" } as const;
-    expect(inEveryZone(() => datePeriod("2024/03/10 02:30"))).toEqual(ZONES.map(() => expected));
-    expect(inEveryZone(() => datePeriod("Mar 10 2024 2:30 AM"))).toEqual(ZONES.map(() => expected));
+    const expected = {
+      start: Date.UTC(2024, 2, 10, 2, 30),
+      end: Date.UTC(2024, 2, 10, 2, 30),
+      precision: "instant",
+      day: "2024-03-10",
+    } as const;
+    expect(inEveryZone(() => datePeriod("2024/03/10 02:30"))).toEqual(
+      ZONES.map(() => expected)
+    );
+    expect(inEveryZone(() => datePeriod("Mar 10 2024 2:30 AM"))).toEqual(
+      ZONES.map(() => expected)
+    );
   });
 
   test("written forms read the same fields in every zone", () => {
@@ -289,7 +418,9 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
       ["September 10, 2024 11:00 PM", instant(23)],
       ["2024/09/10 08:05", instant(8, 5)],
     ] as const) {
-      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => expected));
+      expect(inEveryZone(() => datePeriod(value))).toEqual(
+        ZONES.map(() => expected)
+      );
     }
   });
 });

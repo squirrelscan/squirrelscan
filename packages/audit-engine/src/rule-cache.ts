@@ -73,9 +73,14 @@
 // same page key (see `fanReplayable` in streaming.ts); otherwise the page runs
 // fresh and takes the verdicts a fresh audit would give it.
 
-import { isSlowBlockingScript } from "@squirrelscan/utils/constants";
-import type { CheckResult, PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  PageFeatureRow,
+  PageRecord,
+} from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
+
+import { isSlowBlockingScript } from "@squirrelscan/utils/constants";
 
 /**
  * Bumped when the payload shape or the key's ingredients change; old rows then miss.
@@ -181,9 +186,15 @@ function projectEntries(
 // keeps its reuse, while a script turning slow (or fast) still invalidates the
 // pages that reference it. The cost is that a replayed message can quote the
 // previous run's milliseconds.
-function entryValue(field: string, value: unknown, record: Record<string, unknown>): unknown {
+function entryValue(
+  field: string,
+  value: unknown,
+  record: Record<string, unknown>
+): unknown {
   if (field !== "responseMs") return value;
-  return typeof value === "number" ? isSlowBlockingScript(value, record.hostFirst === true) : null;
+  return typeof value === "number"
+    ? isSlowBlockingScript(value, record.hostFirst === true)
+    : null;
 }
 
 /**
@@ -194,7 +205,9 @@ function entryValue(field: string, value: unknown, record: Record<string, unknow
  * the key would churn with it and the run would lose its reuse — conservative,
  * and never a stale verdict.
  */
-export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown> {
+export function pageRuleSiteContext(
+  siteData: SiteData
+): Record<string, unknown> {
   const resourceSizes = siteData.resourceSizes;
   return {
     baseUrl: siteData.baseUrl,
@@ -204,14 +217,36 @@ export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown>
     // distinct so the key says exactly what the run saw.
     siteIndexable: siteData.siteIndexable ?? null,
     // Only what the rule reads of each stylesheet: its url and the background it sets (#1756).
-    stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [s.url, s.background, s.selectors ?? null, s.selectorsTruncated === true]),
-    stylesheetMotion: (siteData.stylesheetMotion ?? []).map((s) => [s.url, s.read, s.mentionsReducedMotion, s.hasInfiniteAnimation, s.hasSmoothScroll, s.infiniteAnimationSelectors, s.smoothScrollSelectors, s.reducedMotionSelectors ?? null, s.reducedMotionMatchers ?? null, s.reducedMotionGlobal ?? null]),
+    stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [
+      s.url,
+      s.background,
+      s.selectors ?? null,
+      s.selectorsTruncated === true,
+    ]),
+    stylesheetMotion: (siteData.stylesheetMotion ?? []).map((s) => [
+      s.url,
+      s.read,
+      s.mentionsReducedMotion,
+      s.hasInfiniteAnimation,
+      s.hasSmoothScroll,
+      s.infiniteAnimationSelectors,
+      s.smoothScrollSelectors,
+      s.reducedMotionSelectors ?? null,
+      s.reducedMotionMatchers ?? null,
+      s.reducedMotionGlobal ?? null,
+    ]),
     scripts: projectEntries(siteData.scripts, PAGE_RULE_SCRIPT_FIELDS),
-    preloadedScripts: projectEntries(siteData.preloadedScripts, PAGE_RULE_SCRIPT_FIELDS),
+    preloadedScripts: projectEntries(
+      siteData.preloadedScripts,
+      PAGE_RULE_SCRIPT_FIELDS
+    ),
     resourceSizes: resourceSizes
       ? {
           css: projectEntries(resourceSizes.css, PAGE_RULE_RESOURCE_FIELDS),
-          images: projectEntries(resourceSizes.images, PAGE_RULE_RESOURCE_FIELDS),
+          images: projectEntries(
+            resourceSizes.images,
+            PAGE_RULE_RESOURCE_FIELDS
+          ),
         }
       : null,
   };
@@ -232,7 +267,10 @@ export interface PageRuleCacheEntry {
    * of the representative whose template verdicts the page holds: its OWN key when it was the
    * representative, another page's when it inherited them, `null` when that page had no key.
    */
-  readonly fan?: { readonly cluster: string | null; readonly rep: string | null };
+  readonly fan?: {
+    readonly cluster: string | null;
+    readonly rep: string | null;
+  };
   /** What `extractPageFeatures` returned, replayed via `upsertPageFeatures`. */
   readonly features: PageFeatureRow;
   /** Per-collector snapshot: collector id -> whatever its `collect` returned. */
@@ -280,7 +318,10 @@ export async function sha256Hex(input: string): Promise<string> {
  * verdicts; the callers turn a throw into "no cache this run", which costs time
  * and never correctness.
  */
-export function canonicalJson(value: unknown, seen: Set<unknown> = new Set()): string {
+export function canonicalJson(
+  value: unknown,
+  seen: Set<unknown> = new Set()
+): string {
   if (value === undefined) return "u";
   if (value === null) return "null";
   const t = typeof value;
@@ -292,7 +333,11 @@ export function canonicalJson(value: unknown, seen: Set<unknown> = new Set()): s
     if (Number.isFinite(value as number)) {
       return Object.is(value, -0) ? "-0" : JSON.stringify(value);
     }
-    return Number.isNaN(value as number) ? "nan" : (value as number) > 0 ? "inf" : "-inf";
+    return Number.isNaN(value as number)
+      ? "nan"
+      : (value as number) > 0
+        ? "inf"
+        : "-inf";
   }
   if (t === "string" || t === "boolean") return JSON.stringify(value);
   if (t === "bigint") return `bi:${(value as bigint).toString()}`;
@@ -323,11 +368,16 @@ export function canonicalJson(value: unknown, seen: Set<unknown> = new Set()): s
     if (value instanceof Date) return `D:${value.getTime()}`;
     const proto = Object.getPrototypeOf(value);
     if (proto !== Object.prototype && proto !== null) {
-      throw new TypeError(`canonicalJson: not plain data (${proto?.constructor?.name ?? "?"})`);
+      throw new TypeError(
+        `canonicalJson: not plain data (${proto?.constructor?.name ?? "?"})`
+      );
     }
     const keys = Object.keys(value as Record<string, unknown>).sort();
     const body = keys
-      .map((k) => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k], seen)}`)
+      .map(
+        (k) =>
+          `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k], seen)}`
+      )
       .join(",");
     return `{${body}}`;
   } finally {
@@ -361,7 +411,11 @@ export interface RunContextInput {
    * it (#1262), their signature: a waiver changes the rule's verdict, so editing one must
    * miss the cache, and only for the rules it names.
    */
-  readonly pageRules: ReadonlyArray<{ id: string; options: unknown; ignore?: string }>;
+  readonly pageRules: ReadonlyArray<{
+    id: string;
+    options: unknown;
+    ignore?: string;
+  }>;
   /** The site data handed to page rules; only {@link PAGE_RULE_SITE_FIELDS} is read. */
   readonly siteData: SiteData;
   /** `RunnerScope.siteMetadata` — drives `appliesWhen` gating and `ctx.siteMetadata`. */
@@ -414,8 +468,14 @@ export interface RunContextInput {
  * `pages` is excluded from the site-data projection on purpose; see the header.
  */
 /** A rule's key part: its id and options, plus its `[[ignore]]` signature when it has one (absent keeps every existing key unchanged). */
-function pageRuleKey(r: { id: string; options: unknown; ignore?: string }): unknown[] {
-  return r.ignore === undefined ? [r.id, r.options] : [r.id, r.options, r.ignore];
+function pageRuleKey(r: {
+  id: string;
+  options: unknown;
+  ignore?: string;
+}): unknown[] {
+  return r.ignore === undefined
+    ? [r.id, r.options]
+    : [r.id, r.options, r.ignore];
 }
 
 export async function computeRunContextHash(
@@ -557,10 +617,14 @@ export function encodeCacheValue(value: unknown): unknown {
   if (value === undefined) return { $u: 1 } satisfies TaggedUndefined;
   if (value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map(encodeCacheValue);
-  if (value instanceof Set) return { $s: [...value].map(encodeCacheValue) } satisfies TaggedSet;
+  if (value instanceof Set)
+    return { $s: [...value].map(encodeCacheValue) } satisfies TaggedSet;
   if (value instanceof Map) {
     return {
-      $m: [...value].map(([k, v]) => [encodeCacheValue(k), encodeCacheValue(v)]),
+      $m: [...value].map(([k, v]) => [
+        encodeCacheValue(k),
+        encodeCacheValue(v),
+      ]),
     } satisfies TaggedMap;
   }
   // A Date reaches `JSON.stringify` as an ISO string on a fresh run; walked as a
@@ -573,7 +637,8 @@ export function encodeCacheValue(value: unknown): unknown {
     return { $d: Number.isNaN(time) ? null : time } satisfies TaggedDate;
   }
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value)) setOwn(out, k, encodeCacheValue(v));
+  for (const [k, v] of Object.entries(value))
+    setOwn(out, k, encodeCacheValue(v));
   // A plain object whose own keys start with "$" would decode as a tag; wrap it.
   return isTagged(out) ? ({ $e: out } satisfies TaggedEscape) : out;
 }
@@ -587,19 +652,25 @@ export function decodeCacheValue(value: unknown): unknown {
   if ("$s" in obj) return new Set((obj.$s as unknown[]).map(decodeCacheValue));
   if ("$m" in obj) {
     return new Map(
-      (obj.$m as Array<[unknown, unknown]>).map(([k, v]) => [decodeCacheValue(k), decodeCacheValue(v)])
+      (obj.$m as Array<[unknown, unknown]>).map(([k, v]) => [
+        decodeCacheValue(k),
+        decodeCacheValue(v),
+      ])
     );
   }
   // An escaped object's OWN keys start with "$", so its values must be decoded
   // without running the tag checks over it again — recursing into
   // decodeCacheValue here would read `{"$u": "text"}` as the undefined tag and
   // return undefined for the whole object.
-  if ("$d" in obj) return obj.$d === null ? new Date(NaN) : new Date(obj.$d as number);
+  if ("$d" in obj)
+    return obj.$d === null ? new Date(NaN) : new Date(obj.$d as number);
   if ("$e" in obj) return decodePlainObject(obj.$e as Record<string, unknown>);
   return decodePlainObject(obj);
 }
 
-function decodePlainObject(obj: Record<string, unknown>): Record<string, unknown> {
+function decodePlainObject(
+  obj: Record<string, unknown>
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) setOwn(out, k, decodeCacheValue(v));
   return out;
@@ -613,7 +684,11 @@ function decodePlainObject(obj: Record<string, unknown>): Record<string, unknown
  * one in `check.details`, and losing it would make the replayed report differ from
  * the fresh one in a way no round-trip written with `=` can see.
  */
-function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+function setOwn(
+  target: Record<string, unknown>,
+  key: string,
+  value: unknown
+): void {
   Object.defineProperty(target, key, {
     value,
     enumerable: true,
@@ -628,10 +703,13 @@ export function encodePageRuleCacheEntry(entry: PageRuleCacheEntry): string {
 }
 
 /** Parse one stored entry, or null when it cannot be read (treated as a miss). */
-export function decodePageRuleCacheEntry(payload: string): PageRuleCacheEntry | null {
+export function decodePageRuleCacheEntry(
+  payload: string
+): PageRuleCacheEntry | null {
   try {
     const decoded = decodeCacheValue(JSON.parse(payload)) as PageRuleCacheEntry;
-    if (!decoded || !Array.isArray(decoded.ruleResults) || !decoded.features) return null;
+    if (!decoded || !Array.isArray(decoded.ruleResults) || !decoded.features)
+      return null;
     return decoded;
   } catch {
     return null;
@@ -674,7 +752,9 @@ export interface StreamRuleCache {
     soft404Confirmation: ParsedPage["soft404Confirmation"] | undefined
   ): Promise<string | null>;
   /** Entries for whichever of `keys` are cached. */
-  load(keys: readonly string[]): Promise<ReadonlyMap<string, PageRuleCacheEntry>>;
+  load(
+    keys: readonly string[]
+  ): Promise<ReadonlyMap<string, PageRuleCacheEntry>>;
   /** Persist what a freshly-run page produced, under this crawl. */
   putFresh(key: string, page: PageRecord, entry: PageRuleCacheEntry): void;
   /**
@@ -707,8 +787,15 @@ export interface RuleCacheStats {
 }
 
 /** The stats a run with no cache reports. */
-export function emptyRuleCacheStats(disabledReason?: RuleCacheDisabledReason): RuleCacheStats {
-  return { freshPages: 0, replayedPages: 0, storedEntries: 0, ...(disabledReason ? { disabledReason } : {}) };
+export function emptyRuleCacheStats(
+  disabledReason?: RuleCacheDisabledReason
+): RuleCacheStats {
+  return {
+    freshPages: 0,
+    replayedPages: 0,
+    storedEntries: 0,
+    ...(disabledReason ? { disabledReason } : {}),
+  };
 }
 
 /**
@@ -719,7 +806,10 @@ export function emptyRuleCacheStats(disabledReason?: RuleCacheDisabledReason): R
  * A payload that will not decode is treated as a MISS, not an error — a
  * half-written or older-format row costs a page's rules and never a wrong report.
  */
-export function bindRuleCache(store: RuleCacheStore, runContextHash: string): StreamRuleCache {
+export function bindRuleCache(
+  store: RuleCacheStore,
+  runContextHash: string
+): StreamRuleCache {
   // The year the run context was hashed under. A long audit can cross UTC New
   // Year while it runs, and `content/stale-copyright` reads the clock itself: a
   // page replayed after midnight would serve last year's verdict while a fresh
@@ -762,7 +852,10 @@ export function bindRuleCache(store: RuleCacheStore, runContextHash: string): St
  * the one the list gives with its full budget, and replaying it would hide the
  * timeout notice and keep the partial verdict. Loading and carrying forward are unchanged.
  */
-export function withoutStoringAfterIgnoreTimeout(cache: StreamRuleCache, timedOut: () => number): StreamRuleCache {
+export function withoutStoringAfterIgnoreTimeout(
+  cache: StreamRuleCache,
+  timedOut: () => number
+): StreamRuleCache {
   return {
     ...cache,
     putFresh(key, page, entry) {

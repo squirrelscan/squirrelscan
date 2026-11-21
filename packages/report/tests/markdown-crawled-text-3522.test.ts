@@ -6,9 +6,15 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { AuditReport, EntityMap, HealthScore, ReportRuleResult } from "../src/types";
-import { renderMarkdown } from "../src/output/markdown";
+import type {
+  AuditReport,
+  EntityMap,
+  HealthScore,
+  ReportRuleResult,
+} from "../src/types";
+
 import { renderEntityDiffMarkdown } from "../src/entities-diff";
+import { renderMarkdown } from "../src/output/markdown";
 import {
   escapeHtmlText,
   escapeMarkdownCell,
@@ -37,7 +43,9 @@ function baseReport(extra: Partial<AuditReport> = {}): AuditReport {
   };
 }
 
-function rule(checks: ReportRuleResult["checks"]): Record<string, ReportRuleResult> {
+function rule(
+  checks: ReportRuleResult["checks"]
+): Record<string, ReportRuleResult> {
   return {
     "links/broken-links": {
       meta: {
@@ -57,7 +65,10 @@ function rule(checks: ReportRuleResult["checks"]): Record<string, ReportRuleResu
 /** The rendered HTML's links and images that point at the attacker's host. */
 function hostileTargets(markdown: string): string[] {
   const html = Bun.markdown.html(markdown);
-  return Array.from(html.matchAll(/(?:href|src)="(https?:\/\/evil\.example[^"]*)"/g), (m) => m[1]!);
+  return Array.from(
+    html.matchAll(/(?:href|src)="(https?:\/\/evil\.example[^"]*)"/g),
+    (m) => m[1]!
+  );
 }
 
 describe("crawled text in the Markdown report is inert (#3522)", () => {
@@ -71,12 +82,18 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
 
   test("a check's page list renders the hostile page as one link to itself", () => {
     const md = renderMarkdown(
-      baseReport({ ruleResults: rule([{ name: "broken", status: "warn", message: "m", pages: [HOSTILE] }]) }),
+      baseReport({
+        ruleResults: rule([
+          { name: "broken", status: "warn", message: "m", pages: [HOSTILE] },
+        ]),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
     const html = Bun.markdown.html(md);
     // Still a working link to the audited page, its path shown as text.
-    expect(html).toContain('href="https://example.com/a%5D%28https://evil.example/x%29!%5Bi%5D%28https://evil.example/p.png%29"');
+    expect(html).toContain(
+      'href="https://example.com/a%5D%28https://evil.example/x%29!%5Bi%5D%28https://evil.example/p.png%29"'
+    );
   });
 
   test("item rows: a URL item, a plain label and its source pages", () => {
@@ -93,10 +110,12 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
             ],
           },
         ]),
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
-    expect(Bun.markdown.html(md)).not.toContain("<img src=https://evil.example");
+    expect(Bun.markdown.html(md)).not.toContain(
+      "<img src=https://evil.example"
+    );
   });
 
   test("a partial audit's reason cannot open a link, an image or a new block", () => {
@@ -105,7 +124,7 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
         status: "partial",
         statusReason: `Crawl stopped at ${PAYLOAD}\n\n# Injected heading`,
         healthScore: { overall: 80, categories: [] } as unknown as HealthScore, // partial on purpose
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
     expect(Bun.markdown.html(md)).not.toContain("<h1>Injected heading</h1>");
@@ -121,7 +140,7 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
       baseReport({
         generatorVersion: `0.0.1 ${PAYLOAD}`,
         scanScope: { origin: "cli", pagesCrawled: 1, capped: false },
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
     expect(md).toContain("Scan: 1 page crawled from the CLI.");
@@ -132,7 +151,7 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
       baseReport({
         generatorVersion: "0.0.137-beta.1",
         scanScope: { origin: "cli", pagesCrawled: 1, capped: false },
-      }),
+      })
     );
     expect(md).toContain("Scan: 1 page crawled from the CLI v0.0.137-beta.1.");
   });
@@ -155,7 +174,7 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
           removed: [],
           firstScan: true,
         },
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
   });
@@ -173,10 +192,12 @@ describe("sinks the first pass missed (#3522 review)", () => {
             pages: ["https://example.com/a"],
           },
         ]),
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
-    expect(Bun.markdown.html(md)).not.toContain("<img src=https://evil.example");
+    expect(Bun.markdown.html(md)).not.toContain(
+      "<img src=https://evil.example"
+    );
   });
 
   test("a plain item label cannot open a heading, a rule or a nested list", () => {
@@ -194,7 +215,7 @@ describe("sinks the first pass missed (#3522 review)", () => {
             ],
           },
         ]),
-      }),
+      })
     );
     const html = Bun.markdown.html(md);
     // Each label is its own list item's plain text, not a block inside it.
@@ -223,7 +244,7 @@ describe("sinks the first pass missed (#3522 review)", () => {
           removed: [],
           firstScan: true,
         },
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
     // The quote cannot close the alt attribute and add one of its own.
@@ -242,7 +263,7 @@ describe("sinks the first pass missed (#3522 review)", () => {
           hasOwnershipVerified: false,
           confidence: "high",
         },
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
   });
@@ -280,7 +301,11 @@ describe("sinks the first pass missed (#3522 review)", () => {
             {
               property: `url\` ${PAYLOAD} \``,
               values: [
-                { value: PAYLOAD, pages: ["https://example.com/a"], morePages: 0 },
+                {
+                  value: PAYLOAD,
+                  pages: ["https://example.com/a"],
+                  morePages: 0,
+                },
                 { value: "b", pages: ["https://example.com/b"], morePages: 0 },
               ],
             },
@@ -299,7 +324,8 @@ describe("sinks the first pass missed (#3522 review)", () => {
 });
 
 /** Blank lines end a raw HTML block, so whatever follows parses as Markdown again. */
-const BLOCK_BREAK = "x\n\n![i](https://evil.example/p.png)\n\n[t](https://evil.example/x)";
+const BLOCK_BREAK =
+  "x\n\n![i](https://evil.example/p.png)\n\n[t](https://evil.example/x)";
 
 describe("line breaks inside raw HTML (#3522 review round 2)", () => {
   test("a check name with blank lines cannot end the <summary> HTML block", () => {
@@ -314,7 +340,7 @@ describe("line breaks inside raw HTML (#3522 review round 2)", () => {
             items: [{ id: "k", label: "l" }],
           },
         ]),
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
   });
@@ -338,13 +364,18 @@ describe("line breaks inside raw HTML (#3522 review round 2)", () => {
           removed: [],
           firstScan: true,
         },
-      }),
+      })
     );
     expect(hostileTargets(md)).toEqual([]);
   });
 
   test("the entity diff's property code span keeps its cell and its text", () => {
-    const side = { site: "https://example.com/", generatedAt: "2026-10-27T00:00:00.000Z", nodeCount: 1, pagesTotal: 1 };
+    const side = {
+      site: "https://example.com/",
+      generatedAt: "2026-10-27T00:00:00.000Z",
+      nodeCount: 1,
+      pagesTotal: 1,
+    };
     const md = renderEntityDiffMarkdown({
       format: "squirrelscan/entity-map-diff",
       version: 1,
@@ -383,7 +414,8 @@ describe("line breaks inside raw HTML (#3522 review round 2)", () => {
 
 describe("markdown-escape helpers (#3522)", () => {
   test("ordinary message text stays readable: parentheses, bangs, > and a bare & are not escaped", () => {
-    const message = "Title is 72 characters (recommended: 30-60) on 3 pages! nav > a, R&D, 5 > 3";
+    const message =
+      "Title is 72 characters (recommended: 30-60) on 3 pages! nav > a, R&D, 5 > 3";
     expect(escapeMarkdownText(message)).toBe(message);
     expect(escapeMarkdownCell(message)).toBe(message);
   });
@@ -395,7 +427,7 @@ describe("markdown-escape helpers (#3522)", () => {
 
   test("escapeMarkdownText escapes link, image, code and HTML syntax and flattens lines", () => {
     expect(escapeMarkdownText("a](b) ![c] `d` <e> &f |g\\h\nnext")).toBe(
-      "a\\](b) !\\[c\\] \\`d\\` \\<e> &f \\|g\\\\h next",
+      "a\\](b) !\\[c\\] \\`d\\` \\<e> &f \\|g\\\\h next"
     );
     // Underscores and asterisks stay readable: they can only emphasise.
     expect(escapeMarkdownText("/my_page*")).toBe("/my_page*");
@@ -405,24 +437,28 @@ describe("markdown-escape helpers (#3522)", () => {
   });
 
   test("escapeMarkdownDestination encodes what ends or restructures a destination, not !", () => {
-    expect(escapeMarkdownDestination("https://e.com/a b(c)<d>`e`[f]\\g!\n")).toBe(
-      "https://e.com/a%20b%28c%29%3Cd%3E%60e%60%5Bf%5D%5Cg!%0A",
-    );
+    expect(
+      escapeMarkdownDestination("https://e.com/a b(c)<d>`e`[f]\\g!\n")
+    ).toBe("https://e.com/a%20b%28c%29%3Cd%3E%60e%60%5Bf%5D%5Cg!%0A");
     // An entity-shaped `&` is kept as typed; a query separator stays readable.
     expect(escapeMarkdownDestination("https://e.com/?a=1&b=2&amp;c")).toBe(
-      "https://e.com/?a=1&b=2\\&amp;c",
+      "https://e.com/?a=1&b=2\\&amp;c"
     );
   });
 
   test("markdownLink links only http(s) and root-relative URLs", () => {
-    expect(markdownLink("/a", "https://example.com/a")).toBe("[/a](https://example.com/a)");
+    expect(markdownLink("/a", "https://example.com/a")).toBe(
+      "[/a](https://example.com/a)"
+    );
     expect(markdownLink("/a", "/a")).toBe("[/a](/a)");
     expect(markdownLink("x", "javascript:alert(1)")).toBe("x");
     expect(markdownLink("x", "//evil.example/x")).toBe("x");
   });
 
   test("escapeHtmlText escapes markup and flattens line breaks", () => {
-    expect(escapeHtmlText(`a"b'<c>&\n\nd`)).toBe("a&quot;b&#39;&lt;c&gt;&amp; d");
+    expect(escapeHtmlText(`a"b'<c>&\n\nd`)).toBe(
+      "a&quot;b&#39;&lt;c&gt;&amp; d"
+    );
   });
 
   test("markdownCodeSpan fences past the longest backtick run", () => {

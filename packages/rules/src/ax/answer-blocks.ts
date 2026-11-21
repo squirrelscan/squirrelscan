@@ -6,6 +6,7 @@
 // report links to them from the Agents section instead of repeating them here.
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
+
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -30,7 +31,8 @@ const HEADING_SELECTOR = "h2, h3, h4";
 const ANY_HEADING = "h1, h2, h3, h4, h5, h6";
 const CHROME_SELECTOR = "nav, footer, aside, [hidden], [aria-hidden='true']";
 
-const PRONOUN_OPENER = /^(it|its|they|them|their|he|she|this|that|these|those)\b/i;
+const PRONOUN_OPENER =
+  /^(it|its|they|them|their|he|she|this|that|these|those)\b/i;
 const DEMONSTRATIVES = new Set(["this", "that", "these", "those"]);
 // A demonstrative followed by one of these is standing in for a noun; followed by a noun it is a determiner.
 const DEMONSTRATIVE_VERBS = new Set([
@@ -59,14 +61,19 @@ const SOURCE_CUE =
   /\b(?:source|sources|credit|credits|via|data from|data by|courtesy|retrieved from|adapted from|according to|photo by|image by|chart by)\b|©|\(c\)/i;
 const CHART_HINT = /chart|graph|diagram|infographic|statistic|survey/i;
 
-const collapse = (s: string | null | undefined): string => (s ?? "").replace(/\s+/g, " ").trim();
-const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+const collapse = (s: string | null | undefined): string =>
+  (s ?? "").replace(/\s+/g, " ").trim();
+const clip = (s: string, n: number): string =>
+  s.length > n ? `${s.slice(0, n - 1)}…` : s;
 
 function isQuestion(text: string): boolean {
   return /[?？]\s*$/.test(text) && text.split(" ").length >= 3;
 }
 
-type Answer = { kind: "text"; text: string } | { kind: "structured" } | { kind: "none" };
+type Answer =
+  | { kind: "text"; text: string }
+  | { kind: "structured" }
+  | { kind: "none" };
 
 function containsHeading(el: Element): boolean {
   return !!el.querySelector(ANY_HEADING);
@@ -83,7 +90,9 @@ function firstBlock(start: Element): Answer {
       if (tag === "p") {
         const text = collapse(sib.textContent).slice(0, MAX_TEXT);
         if (text) return { kind: "text", text };
-      } else if (["ul", "ol", "dl", "table", "pre", "blockquote"].includes(tag)) {
+      } else if (
+        ["ul", "ol", "dl", "table", "pre", "blockquote"].includes(tag)
+      ) {
         return { kind: "structured" };
       } else if (["div", "section", "span"].includes(tag)) {
         const p = sib.querySelector("p");
@@ -120,17 +129,23 @@ function labelOf(el: Element, fallback: string): string {
 }
 
 function hasSourceNearby(el: Element): boolean {
-  const container = el.tagName.toLowerCase() === "table" ? (el.closest("figure") ?? el) : el;
+  const container =
+    el.tagName.toLowerCase() === "table" ? (el.closest("figure") ?? el) : el;
   const near: Element[] = [];
   for (const q of ["caption", "figcaption", "tfoot"]) {
     const found = container.querySelector(q);
     if (found) near.push(found);
   }
-  for (const sib of [container.previousElementSibling, container.nextElementSibling]) {
+  for (const sib of [
+    container.previousElementSibling,
+    container.nextElementSibling,
+  ]) {
     if (sib && collapse(sib.textContent).length <= 400) near.push(sib);
   }
   return near.some(
-    (n) => SOURCE_CUE.test(collapse(n.textContent)) || !!n.querySelector("a[href^='http']"),
+    (n) =>
+      SOURCE_CUE.test(collapse(n.textContent)) ||
+      !!n.querySelector("a[href^='http']")
   );
 }
 
@@ -138,7 +153,9 @@ function isDataTable(t: Element): boolean {
   const role = t.getAttribute("role");
   if (role === "presentation" || role === "none") return false;
   if (t.querySelector("table")) return false;
-  return t.querySelectorAll("tr").length >= 3 && !!t.querySelector("th, td + td");
+  return (
+    t.querySelectorAll("tr").length >= 3 && !!t.querySelector("th, td + td")
+  );
 }
 
 function isChartFigure(f: Element): boolean {
@@ -206,7 +223,10 @@ export const answerBlocksRule: Rule = {
 
     // 1. Question headings and their answers.
     const questions: { text: string; reason: string | null }[] = [];
-    const headings = Array.from(doc.querySelectorAll(HEADING_SELECTOR)).slice(0, MAX_HEADINGS);
+    const headings = Array.from(doc.querySelectorAll(HEADING_SELECTOR)).slice(
+      0,
+      MAX_HEADINGS
+    );
     for (const h of headings) {
       const text = collapse(h.textContent);
       if (!isQuestion(text) || h.closest(CHROME_SELECTOR)) continue;
@@ -247,14 +267,20 @@ export const answerBlocksRule: Rule = {
     // 2. Data tables and charts carry a source.
     const figures: { el: Element; kind: string }[] = [];
     const seen = new Set<Element>();
-    for (const f of Array.from(doc.querySelectorAll("figure")).slice(0, MAX_FIGURES)) {
+    for (const f of Array.from(doc.querySelectorAll("figure")).slice(
+      0,
+      MAX_FIGURES
+    )) {
       if (isChartFigure(f) && !f.closest(CHROME_SELECTOR)) {
         figures.push({ el: f, kind: "figure" });
         seen.add(f);
         for (const t of Array.from(f.querySelectorAll("table"))) seen.add(t);
       }
     }
-    for (const t of Array.from(doc.querySelectorAll("table")).slice(0, MAX_FIGURES)) {
+    for (const t of Array.from(doc.querySelectorAll("table")).slice(
+      0,
+      MAX_FIGURES
+    )) {
       if (!seen.has(t) && isDataTable(t) && !t.closest(CHROME_SELECTOR))
         figures.push({ el: t, kind: "table" });
     }
@@ -285,7 +311,9 @@ export const answerBlocksRule: Rule = {
     }
 
     if (checks.length === 0) {
-      return notApplicable("No question headings, data tables or charts on this page");
+      return notApplicable(
+        "No question headings, data tables or charts on this page"
+      );
     }
     return { checks };
   },

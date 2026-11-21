@@ -2,20 +2,6 @@
 // This module consolidates all extraction functions for use by the rule runner
 // IMPORTANT: HTML is parsed ONCE and the document is reused by all extractors and rules
 
-import { clampItemString } from "@squirrelscan/core-contracts/clamp";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import {
-  coerceSchemelessUrl,
-  decodeCloudflareEmail,
-  getAttrCI,
-  isCloudflareEmailProtectionUrl,
-  querySelectorAllOutsideNoscript,
-  shouldSkipUrl,
-} from "@squirrelscan/utils";
-import type { Document, Element } from "linkedom";
-
-import { parseHTML, parseNotices } from "./dom";
-
 import type {
   ContactLinkData,
   ContentAnalysis,
@@ -30,18 +16,34 @@ import type {
   SchemaData,
   TwitterData,
 } from "@squirrelscan/core-contracts";
+import type { Document, Element } from "linkedom";
 
-import { runClassifier, type ParsePageOptions } from "./classifier-hook";
-import { anchorText, anchorTextResult } from "./extractors/anchor-text";
-import { createSiteChromeTest } from "./extractors/chrome";
-import { hasNofollow, parseRel } from "./extractors/links";
-import { makeLinkSectionResolver, type LinkPlacer } from "./extractors/link-section";
-import { isHiddenFromMarkup } from "./hidden-markup";
+import { clampItemString } from "@squirrelscan/core-contracts/clamp";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import {
+  coerceSchemelessUrl,
+  decodeCloudflareEmail,
+  getAttrCI,
+  isCloudflareEmailProtectionUrl,
+  querySelectorAllOutsideNoscript,
+  shouldSkipUrl,
+} from "@squirrelscan/utils";
 
-import type { AuthorInfo } from "./schema";
 import type { PageType } from "./page-type";
+import type { AuthorInfo } from "./schema";
 import type { SchemaCollection } from "./schema/collection";
 import type { Soft404Confirmation, Soft404Signal } from "./soft404";
+
+import { runClassifier, type ParsePageOptions } from "./classifier-hook";
+import { parseHTML, parseNotices } from "./dom";
+import { anchorText, anchorTextResult } from "./extractors/anchor-text";
+import { createSiteChromeTest } from "./extractors/chrome";
+import {
+  makeLinkSectionResolver,
+  type LinkPlacer,
+} from "./extractors/link-section";
+import { hasNofollow, parseRel } from "./extractors/links";
+import { isHiddenFromMarkup } from "./hidden-markup";
 import { hasErrorShellMarker } from "./soft404";
 
 // Full ParsedPage with DOM reference (extends core-contracts version)
@@ -77,9 +79,13 @@ import { extractVisibleMeta } from "./visible-meta";
 export function extractMeta(doc: Document): MetaData {
   return {
     title: doc.querySelector("title")?.textContent ?? null,
-    description: doc.querySelector('meta[name="description"]')?.getAttribute("content") ?? null,
-    canonical: doc.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? null,
-    robots: doc.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null,
+    description:
+      doc.querySelector('meta[name="description"]')?.getAttribute("content") ??
+      null,
+    canonical:
+      doc.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? null,
+    robots:
+      doc.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null,
   };
 }
 
@@ -99,7 +105,10 @@ const HREFLANG_VALUE_MAX_CHARS = 35;
  * cannot grow the stored record without bound. Markup only: Link headers and
  * sitemap annotations are not read here.
  */
-export function extractHreflangAlternates(doc: Document, pageUrl: string): HreflangAlternate[] {
+export function extractHreflangAlternates(
+  doc: Document,
+  pageUrl: string
+): HreflangAlternate[] {
   const out: HreflangAlternate[] = [];
   const seen = new Set<string>();
   for (const node of doc.querySelectorAll("link[hreflang]")) {
@@ -108,7 +117,8 @@ export function extractHreflangAlternates(doc: Document, pageUrl: string): Hrefl
     if (!rel.includes("alternate")) continue;
     const hreflang = (el.getAttribute("hreflang") ?? "").trim().toLowerCase();
     const rawHref = (el.getAttribute("href") ?? "").trim();
-    if (!hreflang || !rawHref || hreflang.length > HREFLANG_VALUE_MAX_CHARS) continue;
+    if (!hreflang || !rawHref || hreflang.length > HREFLANG_VALUE_MAX_CHARS)
+      continue;
     let href: string;
     try {
       href = new URL(rawHref, pageUrl).toString();
@@ -136,7 +146,10 @@ export function extractH1(doc: Document): { count: number; texts: string[] } {
     // (NOT `headings.h1Texts`), so an unbounded h1 here 400'd whole publishes
     // before the server clamp existed — same cap as extractHeadings.
     texts: h1Array.map((h1) =>
-      clampItemString(h1.textContent?.trim() ?? "", REPORT_LIMITS.maxMediumString),
+      clampItemString(
+        h1.textContent?.trim() ?? "",
+        REPORT_LIMITS.maxMediumString
+      )
     ),
   };
 }
@@ -144,7 +157,9 @@ export function extractH1(doc: Document): { count: number; texts: string[] } {
 // Extract Open Graph tags from parsed document
 export function extractOG(doc: Document): OpenGraphData {
   const getOG = (property: string): string | null =>
-    doc.querySelector(`meta[property="og:${property}"]`)?.getAttribute("content") ?? null;
+    doc
+      .querySelector(`meta[property="og:${property}"]`)
+      ?.getAttribute("content") ?? null;
 
   return {
     title: getOG("title"),
@@ -159,7 +174,9 @@ export function extractOG(doc: Document): OpenGraphData {
 // Extract Twitter Card tags from parsed document
 export function extractTwitter(doc: Document): TwitterData {
   const getTwitter = (name: string): string | null =>
-    doc.querySelector(`meta[name="twitter:${name}"]`)?.getAttribute("content") ?? null;
+    doc
+      .querySelector(`meta[name="twitter:${name}"]`)
+      ?.getAttribute("content") ?? null;
 
   return {
     card: getTwitter("card"),
@@ -171,7 +188,11 @@ export function extractTwitter(doc: Document): TwitterData {
 
 // Extract links from parsed document. `placeLink` is the page classifier's placer when the caller
 // ran it: it fills in `section` where the markup says nothing (see ./extractors/link-section.ts).
-export function extractLinks(doc: Document, baseUrl: string, placeLink?: LinkPlacer): LinkData[] {
+export function extractLinks(
+  doc: Document,
+  baseUrl: string,
+  placeLink?: LinkPlacer
+): LinkData[] {
   const anchors = doc.querySelectorAll("a[href]");
   const links: LinkData[] = [];
   const baseUrlObj = new URL(baseUrl);
@@ -246,7 +267,10 @@ export const MAX_CONTACT_LINKS = 32;
  * addresses in the text) Cloudflare's email obfuscation rewrote. Each is
  * carried as the `mailto:` it stands for, flagged `obfuscated`.
  */
-export function extractContactLinks(doc: Document, placeLink?: LinkPlacer): ContactLinkData[] {
+export function extractContactLinks(
+  doc: Document,
+  placeLink?: LinkPlacer
+): ContactLinkData[] {
   const contacts: ContactLinkData[] = [];
   // Obfuscated addresses get a cap of their own, so a footer of them cannot
   // push out the `tel:` links local/nap-consistency compares.
@@ -261,7 +285,7 @@ export function extractContactLinks(doc: Document, placeLink?: LinkPlacer): Cont
   };
 
   for (const anchor of doc.querySelectorAll(
-    'a[href^="tel:" i], a[href^="mailto:" i], a[href*="/cdn-cgi/l/email-protection" i]',
+    'a[href^="tel:" i], a[href^="mailto:" i], a[href*="/cdn-cgi/l/email-protection" i]'
   )) {
     if (plain >= MAX_CONTACT_LINKS && obfuscated >= MAX_CONTACT_LINKS) break;
     const href = (anchor as Element).getAttribute("href");
@@ -271,7 +295,10 @@ export function extractContactLinks(doc: Document, placeLink?: LinkPlacer): Cont
     if (isCloudflareEmailProtectionUrl(trimmed)) {
       if (obfuscated >= MAX_CONTACT_LINKS) continue;
       obfuscated++;
-      contacts.push({ ...cloudflareEmailContact(anchor as Element, trimmed), ...placedOf(anchor as Element) });
+      contacts.push({
+        ...cloudflareEmailContact(anchor as Element, trimmed),
+        ...placedOf(anchor as Element),
+      });
       continue;
     }
     if (plain >= MAX_CONTACT_LINKS) continue;
@@ -297,7 +324,10 @@ export function extractContactLinks(doc: Document, placeLink?: LinkPlacer): Cont
  * payload is the link's `#<hex>` (a rewritten `mailto:` link) or a
  * `data-cfemail` on the anchor or inside it (a rewritten address in the text).
  */
-function cloudflareEmailContact(anchor: Element, href: string): ContactLinkData {
+function cloudflareEmailContact(
+  anchor: Element,
+  href: string
+): ContactLinkData {
   const hash = href.indexOf("#");
   const payload =
     (hash >= 0 ? href.slice(hash + 1) : "") ||
@@ -339,7 +369,8 @@ export function extractImages(doc: Document, baseUrl: string): ImageData[] {
     try {
       const absoluteSrc = new URL(src, baseUrl).toString();
       const el = img as Element;
-      const srcset = el.getAttribute("srcset") || el.getAttribute("data-srcset");
+      const srcset =
+        el.getAttribute("srcset") || el.getAttribute("data-srcset");
       const sizes = el.getAttribute("sizes") || el.getAttribute("data-sizes");
       const loading = el.getAttribute("loading");
       images.push({
@@ -353,7 +384,9 @@ export function extractImages(doc: Document, baseUrl: string): ImageData[] {
         ...(srcset ? { srcset } : {}),
         ...(sizes ? { sizes } : {}),
         ...(loading ? { loading } : {}),
-        ...(el.parentElement?.tagName.toLowerCase() === "picture" ? { inPicture: true } : {}),
+        ...(el.parentElement?.tagName.toLowerCase() === "picture"
+          ? { inPicture: true }
+          : {}),
       });
     } catch {
       // Skip invalid URLs
@@ -416,9 +449,13 @@ export function extractHeadings(doc: Document): HeadingHierarchy {
       // as extractors/headings.ts; oversize h1s must never leave the parser.
       const text = clampItemString(
         (el as Element).textContent?.trim() ?? "",
-        REPORT_LIMITS.maxMediumString,
+        REPORT_LIMITS.maxMediumString
       );
-      const heading: HeadingHierarchy["headings"][number] = { level, text, order: order++ };
+      const heading: HeadingHierarchy["headings"][number] = {
+        level,
+        text,
+        order: order++,
+      };
       // A placeholder the reader never sees is not an empty heading (#547).
       if (!text && isHiddenFromMarkup(el as Element)) heading.hidden = true;
       headings.push(heading);
@@ -438,12 +475,14 @@ export function extractHeadings(doc: Document): HeadingHierarchy {
 
   // Find duplicates
   const duplicateHeadings = headingTexts.filter(
-    (text, index) => headingTexts.indexOf(text) !== index && text !== "",
+    (text, index) => headingTexts.indexOf(text) !== index && text !== ""
   );
 
   // Build outline
   const outline = headings
-    .map((h: HeadingData) => `${"  ".repeat(h.level - 1)}H${h.level}: ${h.text}`)
+    .map(
+      (h: HeadingData) => `${"  ".repeat(h.level - 1)}H${h.level}: ${h.text}`
+    )
     .join("\n");
 
   return {
@@ -512,7 +551,11 @@ function simpleHash(str: string): string {
 }
 
 // Parse all data from HTML - parses ONCE, reuses document for all extractors
-export function parsePage(html: string, url: string, options?: ParsePageOptions): ParsedPage {
+export function parsePage(
+  html: string,
+  url: string,
+  options?: ParsePageOptions
+): ParsedPage {
   // Single DOM parse - this document is reused by all extractors and available to rules
   const { document: doc } = parseHTML(html);
 
@@ -547,7 +590,9 @@ export function parsePage(html: string, url: string, options?: ParsePageOptions)
     // crawl cache reads it as a prefix, never from a nested property. Stamped even when the classifier
     // returned nothing, so the cache can tell "classified by this version, no answer" from "never
     // classified" (pub#841).
-    ...(options?.classify?.version ? { classifierVersion: options.classify.version } : {}),
+    ...(options?.classify?.version
+      ? { classifierVersion: options.classify.version }
+      : {}),
     meta: extractMeta(doc),
     h1: extractH1(doc),
     og: extractOG(doc),
@@ -558,7 +603,9 @@ export function parsePage(html: string, url: string, options?: ParsePageOptions)
     headings: extractHeadings(doc),
     content: extractContent(doc, html),
     errorShell: hasErrorShellMarker(doc),
-    ...(parseNotices(doc).length > 0 ? { parseNotices: parseNotices(doc) } : {}),
+    ...(parseNotices(doc).length > 0
+      ? { parseNotices: parseNotices(doc) }
+      : {}),
 
     // New schema data
     schemas,

@@ -4,30 +4,37 @@
 // (a no-js fallback on a page with an unread stylesheet included) is
 // `select-name-unconfirmed`, not a failure.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { ariaInputFieldNameRule } from "../src/a11y/aria-input-field-name";
 import { formLabelsRule } from "../src/a11y/form-labels";
 import { selectNameRule } from "../src/a11y/select-name";
-import { SCRIPT_STATE_LABEL, UNCONFIRMED_LABEL } from "../src/shared/static-hidden";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
+import {
+  SCRIPT_STATE_LABEL,
+  UNCONFIRMED_LABEL,
+} from "../src/shared/static-hidden";
 
 type AnyRule = Pick<Rule, "run">;
 
 async function checks(rule: AnyRule, html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
-  return (await rule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  })).checks as CheckResult[];
+  return (
+    await rule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    })
+  ).checks as CheckResult[];
 }
 
 const LINK = '<link rel="stylesheet" href="/site.css">';
-const SELECT = '<form><select class="no-js" name="sort"><option>a</option></select></form>';
+const SELECT =
+  '<form><select class="no-js" name="sort"><option>a</option></select></form>';
 
 function page(head: string, body: string): string {
   return `<!doctype html><html lang="en" class="js"><head><title>t</title>${head}</head><body>${body}</body></html>`;
@@ -35,8 +42,10 @@ function page(head: string, body: string): string {
 
 describe("select-name and hidden selects", () => {
   test("a no-js select on a page with an external stylesheet is unconfirmed, with the script-state reason", async () => {
-    const out = (await checks(selectNameRule, page(LINK, SELECT)));
-    expect(out.map((c) => [c.name, c.status])).toEqual([["select-name-unconfirmed", "warn"]]);
+    const out = await checks(selectNameRule, page(LINK, SELECT));
+    expect(out.map((c) => [c.name, c.status])).toEqual([
+      ["select-name-unconfirmed", "warn"],
+    ]);
     expect(out[0]?.items?.[0]).toMatchObject({
       id: 'select[name="sort"]',
       label: SCRIPT_STATE_LABEL,
@@ -46,23 +55,29 @@ describe("select-name and hidden selects", () => {
   test("a select under a non-root no-js wrapper is unconfirmed", async () => {
     const body =
       '<div class="no-js"><form><select name="sort"><option>a</option></select></form></div>';
-    expect((await checks(selectNameRule, page(LINK, body))).map((c) => c.name)).toEqual([
-      "select-name-unconfirmed",
-    ]);
+    expect(
+      (await checks(selectNameRule, page(LINK, body))).map((c) => c.name)
+    ).toEqual(["select-name-unconfirmed"]);
   });
 
   test("all styles read: a no-js select keeps failing", async () => {
-    expect((await checks(selectNameRule, page("", SELECT))).map((c) => [c.name, c.status])).toEqual([
-      ["select-name", "fail"],
-    ]);
+    expect(
+      (await checks(selectNameRule, page("", SELECT))).map((c) => [
+        c.name,
+        c.status,
+      ])
+    ).toEqual([["select-name", "fail"]]);
   });
 
   test("no marker: a visible unnamed select fails, with or without an external sheet", async () => {
     const body = '<form><select name="sort"><option>a</option></select></form>';
     for (const head of ["", LINK, LINK + "<style>.x{display:flex}</style>"]) {
-      expect((await checks(selectNameRule, page(head, body))).map((c) => [c.name, c.status])).toEqual([
-        ["select-name", "fail"],
-      ]);
+      expect(
+        (await checks(selectNameRule, page(head, body))).map((c) => [
+          c.name,
+          c.status,
+        ])
+      ).toEqual([["select-name", "fail"]]);
     }
   });
 
@@ -74,32 +89,38 @@ describe("select-name and hidden selects", () => {
       "<dialog><select><option>a</option></select></dialog>",
       '<style>.x{display:none}</style><select class="x"><option>a</option></select>',
     ]) {
-      const out = (await checks(selectNameRule, page("", body)));
-      expect(out.map((c) => [c.name, c.status])).toEqual([["select-name", "pass"]]);
+      const out = await checks(selectNameRule, page("", body));
+      expect(out.map((c) => [c.name, c.status])).toEqual([
+        ["select-name", "pass"],
+      ]);
       expect(out[0]?.details).toMatchObject({ hiddenWithoutName: 1 });
     }
   });
 
   test("a style squirrel cannot settle: unconfirmed with the generic reason", async () => {
-    const out = (await checks(
+    const out = await checks(
       selectNameRule,
       page(
         "<style>.a .b{display:none}</style>",
-        '<div class="a"><select class="b"><option>a</option></select></div>',
-      ),
-    ));
+        '<div class="a"><select class="b"><option>a</option></select></div>'
+      )
+    );
     expect(out.map((c) => c.name)).toEqual(["select-name-unconfirmed"]);
     expect(out[0]?.items?.[0]).toMatchObject({ label: UNCONFIRMED_LABEL });
   });
 
   test("a named select passes and a page without selects is info", async () => {
     expect(
-      (await checks(
-        selectNameRule,
-        page(LINK, '<select aria-label="Sort"><option>a</option></select>'),
-      )).map((c) => [c.name, c.status]),
+      (
+        await checks(
+          selectNameRule,
+          page(LINK, '<select aria-label="Sort"><option>a</option></select>')
+        )
+      ).map((c) => [c.name, c.status])
     ).toEqual([["select-name", "pass"]]);
-    expect((await checks(selectNameRule, page("", "<p>x</p>"))).map((c) => c.status)).toEqual(["info"]);
+    expect(
+      (await checks(selectNameRule, page("", "<p>x</p>"))).map((c) => c.status)
+    ).toEqual(["info"]);
   });
 });
 
@@ -111,30 +132,30 @@ describe("parity: select-name, form-labels and aria-input-field-name agree", () 
     hidden: page("", "<select hidden><option>a</option></select>"),
     "display:none class": page(
       "<style>.x{display:none}</style>",
-      '<select class="x"><option>a</option></select>',
+      '<select class="x"><option>a</option></select>'
     ),
     "undecidable rule": page(
       "<style>.a .b{display:none}</style>",
-      '<div class="a"><select class="b"><option>a</option></select></div>',
+      '<div class="a"><select class="b"><option>a</option></select></div>'
     ),
     "vendor display chain": page(
       "<style>.b{display:-webkit-box;display:flex}</style>",
-      '<select class="b"><option>a</option></select>',
+      '<select class="b"><option>a</option></select>'
     ),
     "operator attribute, no match": page(
       '<style>.o [id$="-drawer"]{display:none}</style>',
-      '<div class="o"><select><option>a</option></select></div>',
+      '<div class="o"><select><option>a</option></select></div>'
     ),
   };
   const kind = async (rule: AnyRule, html: string): Promise<string> => {
-    const out = (await checks(rule, html));
+    const out = await checks(rule, html);
     if (out.some((c) => c.name.endsWith("-unconfirmed"))) return "unconfirmed";
     if (out.some((c) => c.status === "fail")) return "fail";
     return out[0]?.status ?? "none";
   };
   for (const [name, html] of Object.entries(fixtures)) {
     test(name, async () => {
-      const base = (await kind(selectNameRule, html));
+      const base = await kind(selectNameRule, html);
       expect(await kind(formLabelsRule, html)).toBe(base);
       expect(await kind(ariaInputFieldNameRule, html)).toBe(base);
     });

@@ -5,7 +5,12 @@ import { describe, expect, test } from "bun:test";
 import { normalizeCategoryCode } from "../src/index";
 
 describe("normalizeCategoryCode own-property lookup (#3368)", () => {
-  for (const name of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+  for (const name of [
+    "constructor",
+    "toString",
+    "__proto__",
+    "hasOwnProperty",
+  ]) {
     test(`${name} is returned unchanged, like an unknown code`, () => {
       expect(normalizeCategoryCode(name)).toBe(name);
       expect(normalizeCategoryCode("unknown-code")).toBe("unknown-code");

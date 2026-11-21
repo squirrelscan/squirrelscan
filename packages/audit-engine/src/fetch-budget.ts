@@ -75,17 +75,23 @@ function hostOf(url: string): string {
  * always returns false and `summary().degraded` stays false — so callers can
  * always create one and only the cloud path (which passes real limits) engages it.
  */
-export function createFetchBudget(options: FetchBudgetOptions = {}): FetchBudget {
+export function createFetchBudget(
+  options: FetchBudgetOptions = {}
+): FetchBudget {
   const now = options.now ?? Date.now;
   const startedAt = now();
   const hasBudget = !!options.totalBudgetMs && options.totalBudgetMs > 0;
-  const deadlineAt = hasBudget ? startedAt + options.totalBudgetMs! : Number.POSITIVE_INFINITY;
+  const deadlineAt = hasBudget
+    ? startedAt + options.totalBudgetMs!
+    : Number.POSITIVE_INFINITY;
   const tarpitLatencyMs =
     options.tarpitLatencyMs && options.tarpitLatencyMs > 0
       ? options.tarpitLatencyMs
       : Number.POSITIVE_INFINITY;
   const tarpitStrikes =
-    options.tarpitStrikes && options.tarpitStrikes > 0 ? options.tarpitStrikes : 0;
+    options.tarpitStrikes && options.tarpitStrikes > 0
+      ? options.tarpitStrikes
+      : 0;
 
   const hostStrikes = new Map<string, number>();
   const tarpitHosts = new Set<string>();
@@ -97,7 +103,8 @@ export function createFetchBudget(options: FetchBudgetOptions = {}): FetchBudget
   const markDegraded = (r: "budget" | "tarpit") => {
     degraded = true;
     // Budget exhaustion is the broader signal; don't let a later tarpit overwrite it.
-    if (reason === undefined || (reason === "tarpit" && r === "budget")) reason = r;
+    if (reason === undefined || (reason === "tarpit" && r === "budget"))
+      reason = r;
   };
 
   return {
@@ -119,7 +126,10 @@ export function createFetchBudget(options: FetchBudgetOptions = {}): FetchBudget
       if (tarpitStrikes <= 0) return;
       const host = hostOf(url);
       if (tarpitHosts.has(host)) return;
-      const isStrike = outcome === "timeout" || outcome === "error" || elapsedMs >= tarpitLatencyMs;
+      const isStrike =
+        outcome === "timeout" ||
+        outcome === "error" ||
+        elapsedMs >= tarpitLatencyMs;
       if (!isStrike) {
         // A fast, clean success clears the streak — transient slowness ≠ tarpit.
         hostStrikes.set(host, 0);

@@ -3,18 +3,22 @@
 // counts: a render that navigated, or an end that will not parse, keeps the
 // page URL.
 
+import type { RedirectChain } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { RedirectChain } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../src/types";
 
 import { hreflangRule } from "../src/i18n/hreflang";
-import type { RuleContext } from "../src/types";
 
 const OLD = "https://example.com/en/old";
 const NEW = "https://example.com/en/new";
 
-async function names(url: string, redirectChain: RedirectChain | undefined): Promise<string[]> {
+async function names(
+  url: string,
+  redirectChain: RedirectChain | undefined
+): Promise<string[]> {
   const html = `<!doctype html><html lang="en"><head><title>t</title><link rel="alternate" hreflang="en" href="${NEW}"><link rel="alternate" hreflang="x-default" href="${NEW}"></head><body></body></html>`;
   const ctx = {
     page: {
@@ -23,16 +27,29 @@ async function names(url: string, redirectChain: RedirectChain | undefined): Pro
       statusCode: 200,
       loadTime: 0,
       headers: {},
-      ...(redirectChain ? { redirectChain, finalUrl: redirectChain.finalUrl } : {}),
+      ...(redirectChain
+        ? { redirectChain, finalUrl: redirectChain.finalUrl }
+        : {}),
     },
     parsed: parsePage(html, url),
     options: {},
   } as unknown as RuleContext;
-  return (await hreflangRule.run(ctx)).checks.map((c) => `${c.name}:${c.status}`);
+  return (await hreflangRule.run(ctx)).checks.map(
+    (c) => `${c.name}:${c.status}`
+  );
 }
 
 function chain(finalUrl: string, hops: RedirectChain["hops"]): RedirectChain {
-  return { sourceUrl: OLD, finalUrl, hops, chainLength: hops.length - 1, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false };
+  return {
+    sourceUrl: OLD,
+    finalUrl,
+    hops,
+    chainLength: hops.length - 1,
+    isLoop: false,
+    endsInError: false,
+    httpsToHttp: false,
+    httpToHttps: false,
+  };
 }
 
 describe("i18n/hreflang self reference after a redirect (pub#827)", () => {

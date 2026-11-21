@@ -28,7 +28,10 @@ export function extractFontUrls(doc: Document, baseUrl: string): string[] {
 
   for (const link of querySelectorAllOutsideNoscript(doc, "link[href]")) {
     const rel = (link.getAttribute("rel") || "").toLowerCase().split(/\s+/);
-    if (rel.includes("preload") && link.getAttribute("as")?.toLowerCase() === "font") {
+    if (
+      rel.includes("preload") &&
+      link.getAttribute("as")?.toLowerCase() === "font"
+    ) {
       add(link.getAttribute("href"));
     }
   }

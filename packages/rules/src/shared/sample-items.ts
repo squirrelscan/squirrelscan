@@ -3,6 +3,7 @@
 // most of an 80 MB report.
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
+
 import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 
 /** The sample a capped check keeps: what a published report shows anyway. */
@@ -39,7 +40,9 @@ export function sampleUrlItems(
     items: sample,
     truncation: {
       additional: count - sample.length,
-      ...(distinctTotal > sampledPages ? { pagesTruncated: distinctTotal } : {}),
+      ...(distinctTotal > sampledPages
+        ? { pagesTruncated: distinctTotal }
+        : {}),
     },
   };
 }

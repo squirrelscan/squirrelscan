@@ -48,7 +48,7 @@ describe("selectSuspiciousPaths", () => {
           inSitemap: false,
         }),
       ],
-      { maxPages: 10, recentDays: 14, hasSitemap: true, now: NOW },
+      { maxPages: 10, recentDays: 14, hasSitemap: true, now: NOW }
     );
     expect(sel).toEqual([{ url: `${SITE}/hidden`, reason: "orphan" }]);
   });
@@ -56,8 +56,14 @@ describe("selectSuspiciousPaths", () => {
   test("flags recently-modified sitemap pages", () => {
     const recent = new Date(NOW - 2 * 86_400_000).toISOString();
     const sel = selectSuspiciousPaths(
-      [candidate({ url: `${SITE}/fresh`, normalizedUrl: `${SITE}/fresh`, lastmod: recent })],
-      { maxPages: 10, recentDays: 14, hasSitemap: true, now: NOW },
+      [
+        candidate({
+          url: `${SITE}/fresh`,
+          normalizedUrl: `${SITE}/fresh`,
+          lastmod: recent,
+        }),
+      ],
+      { maxPages: 10, recentDays: 14, hasSitemap: true, now: NOW }
     );
     expect(sel).toEqual([{ url: `${SITE}/fresh`, reason: "recent-lastmod" }]);
   });
@@ -66,7 +72,7 @@ describe("selectSuspiciousPaths", () => {
     const old = new Date(NOW - 400 * 86_400_000).toISOString();
     const sel = selectSuspiciousPaths(
       [candidate({ lastmod: old, inboundCount: 9, inSitemap: true })],
-      { maxPages: 10, recentDays: 14, hasSitemap: true, now: NOW },
+      { maxPages: 10, recentDays: 14, hasSitemap: true, now: NOW }
     );
     expect(sel).toEqual([]);
   });
@@ -101,24 +107,41 @@ describe("selectSuspiciousPaths", () => {
   });
 
   test("a page dated precisely outranks one stamped only with the year (#772)", () => {
-    const day = (offset: number) => new Date(NOW - offset * 86_400_000).toISOString().slice(0, 10);
+    const day = (offset: number) =>
+      new Date(NOW - offset * 86_400_000).toISOString().slice(0, 10);
     const sel = selectSuspiciousPaths(
       [
         ...[1, 2, 3, 4, 5].map((i) =>
-          candidate({ url: `${SITE}/y${i}`, normalizedUrl: `${SITE}/y${i}`, lastmod: "2026" }),
+          candidate({
+            url: `${SITE}/y${i}`,
+            normalizedUrl: `${SITE}/y${i}`,
+            lastmod: "2026",
+          })
         ),
-        candidate({ url: `${SITE}/yesterday`, normalizedUrl: `${SITE}/yesterday`, lastmod: day(1) }),
-        candidate({ url: `${SITE}/today`, normalizedUrl: `${SITE}/today`, lastmod: day(0) }),
+        candidate({
+          url: `${SITE}/yesterday`,
+          normalizedUrl: `${SITE}/yesterday`,
+          lastmod: day(1),
+        }),
+        candidate({
+          url: `${SITE}/today`,
+          normalizedUrl: `${SITE}/today`,
+          lastmod: day(0),
+        }),
       ],
-      { maxPages: 3, recentDays: 14, hasSitemap: true, now: NOW },
+      { maxPages: 3, recentDays: 14, hasSitemap: true, now: NOW }
     );
-    expect(sel.map((s) => s.url)).toEqual([`${SITE}/today`, `${SITE}/yesterday`, `${SITE}/y1`]);
+    expect(sel.map((s) => s.url)).toEqual([
+      `${SITE}/today`,
+      `${SITE}/yesterday`,
+      `${SITE}/y1`,
+    ]);
   });
 
   test("skips non-2xx pages", () => {
     const sel = selectSuspiciousPaths(
       [candidate({ status: 404, inboundCount: 0, inSitemap: false })],
-      { maxPages: 10, recentDays: 14, hasSitemap: true, now: NOW },
+      { maxPages: 10, recentDays: 14, hasSitemap: true, now: NOW }
     );
     expect(sel).toEqual([]);
   });
@@ -127,7 +150,11 @@ describe("selectSuspiciousPaths", () => {
     const recent = new Date(NOW - 1 * 86_400_000).toISOString();
     const sel = selectSuspiciousPaths(
       [
-        candidate({ url: `${SITE}/r`, normalizedUrl: `${SITE}/r`, lastmod: recent }),
+        candidate({
+          url: `${SITE}/r`,
+          normalizedUrl: `${SITE}/r`,
+          lastmod: recent,
+        }),
         candidate({
           url: `${SITE}/o`,
           normalizedUrl: `${SITE}/o`,
@@ -135,7 +162,7 @@ describe("selectSuspiciousPaths", () => {
           inSitemap: false,
         }),
       ],
-      { maxPages: 1, recentDays: 14, hasSitemap: true, now: NOW },
+      { maxPages: 1, recentDays: 14, hasSitemap: true, now: NOW }
     );
     expect(sel).toEqual([{ url: `${SITE}/o`, reason: "orphan" }]);
   });
@@ -150,7 +177,7 @@ describe("selectSuspiciousPaths", () => {
           inSitemap: false,
         }),
       ],
-      { maxPages: 10, recentDays: 14, hasSitemap: false, now: NOW },
+      { maxPages: 10, recentDays: 14, hasSitemap: false, now: NOW }
     );
     expect(sel).toEqual([{ url: `${SITE}/x`, reason: "orphan" }]);
   });
@@ -160,8 +187,12 @@ describe("parseLastmod", () => {
   test("parses ISO + RFC dates, rejects junk", () => {
     const now = Date.UTC(2026, 9, 15, 12);
     // A day is the whole day: the page may have changed at any time in it.
-    expect(parseLastmod("2026-06-01", now)).toBe(Date.UTC(2026, 5, 1, 23, 59, 59, 999));
-    expect(parseLastmod("Mon, 01 Jun 2026 08:00:00 GMT", now)).toBe(Date.UTC(2026, 5, 1, 8));
+    expect(parseLastmod("2026-06-01", now)).toBe(
+      Date.UTC(2026, 5, 1, 23, 59, 59, 999)
+    );
+    expect(parseLastmod("Mon, 01 Jun 2026 08:00:00 GMT", now)).toBe(
+      Date.UTC(2026, 5, 1, 8)
+    );
     expect(parseLastmod(null, now)).toBeNull();
     expect(parseLastmod("not-a-date", now)).toBeNull();
   });
@@ -182,7 +213,7 @@ describe("parseLastmod", () => {
 describe("visibleTokens + jaccard", () => {
   test("strips markup/script/style", () => {
     const tokens = visibleTokens(
-      "<html><head><style>.x{color:red}</style></head><body><script>var a=1</script><p>Hello World</p></body></html>",
+      "<html><head><style>.x{color:red}</style></head><body><script>var a=1</script><p>Hello World</p></body></html>"
     );
     expect(tokens.has("hello")).toBe(true);
     expect(tokens.has("world")).toBe(true);
@@ -197,31 +228,46 @@ describe("visibleTokens + jaccard", () => {
   });
 });
 
-const resp = (status: number, body: string): ProbeResponse => ({ status, body });
+const resp = (status: number, body: string): ProbeResponse => ({
+  status,
+  body,
+});
 
 describe("classifyDivergence", () => {
   test("identical 2xx bodies = not divergent", () => {
-    const html = "<p>welcome to acme corp the leading widget vendor since 1999</p>";
+    const html =
+      "<p>welcome to acme corp the leading widget vendor since 1999</p>";
     const out = classifyDivergence(resp(200, html), resp(200, html), 0.6);
     expect(out.divergent).toBe(false);
     expect(out.similarity).toBe(1);
   });
 
   test("2xx vs non-2xx flip = divergent", () => {
-    const out = classifyDivergence(resp(403, ""), resp(200, "<p>hidden spam payload</p>"), 0.6);
+    const out = classifyDivergence(
+      resp(403, ""),
+      resp(200, "<p>hidden spam payload</p>"),
+      0.6
+    );
     expect(out.divergent).toBe(true);
     expect(out.similarity).toBe(0);
   });
 
   test("both 2xx but wholly different content = divergent", () => {
     const a = resp(200, "<p>acme corp widgets and gadgets for industry</p>");
-    const b = resp(200, "<p>buy cheap replica watches and luxury handbags online</p>");
+    const b = resp(
+      200,
+      "<p>buy cheap replica watches and luxury handbags online</p>"
+    );
     const out = classifyDivergence(a, b, 0.6);
     expect(out.divergent).toBe(true);
   });
 
   test("network error (status 0) is inconclusive, never divergent", () => {
-    const out = classifyDivergence(resp(0, ""), resp(200, "<p>content</p>"), 0.6);
+    const out = classifyDivergence(
+      resp(0, ""),
+      resp(200, "<p>content</p>"),
+      0.6
+    );
     expect(out.divergent).toBe(false);
   });
 
@@ -234,9 +280,11 @@ describe("classifyDivergence", () => {
 describe("appendProbeToken", () => {
   test("adds the probe param", () => {
     expect(appendProbeToken("https://example.com/p")).toBe(
-      "https://example.com/p?ss_cloak_probe=1",
+      "https://example.com/p?ss_cloak_probe=1"
     );
-    expect(appendProbeToken("https://example.com/p?x=1")).toContain("ss_cloak_probe=1");
+    expect(appendProbeToken("https://example.com/p?x=1")).toContain(
+      "ss_cloak_probe=1"
+    );
   });
 });
 
@@ -255,7 +303,10 @@ describe("runCloakingProbe", () => {
     const url = `${SITE}/p`;
     const fetchImpl = stubFetch({
       [`${url}::${DEFAULT_UA}`]: resp(403, ""),
-      [`${url}::${GOOGLEBOT}`]: resp(200, "<p>injected casino spam doorway content here</p>"),
+      [`${url}::${GOOGLEBOT}`]: resp(
+        200,
+        "<p>injected casino spam doorway content here</p>"
+      ),
     });
     const [probe] = await runCloakingProbe(
       [{ url, reason: "orphan" }],
@@ -266,7 +317,7 @@ describe("runCloakingProbe", () => {
         googlebotUserAgent: GOOGLEBOT,
         defaultUserAgent: DEFAULT_UA,
       },
-      fetchImpl,
+      fetchImpl
     );
     expect(probe.uaCloaking).toBe(true);
     expect(probe.defaultStatus).toBe(403);
@@ -276,7 +327,8 @@ describe("runCloakingProbe", () => {
 
   test("identical content = no cloaking", async () => {
     const url = `${SITE}/p`;
-    const html = "<p>this is the same honest page for everyone who visits it</p>";
+    const html =
+      "<p>this is the same honest page for everyone who visits it</p>";
     const fetchImpl = stubFetch({
       [`${url}::${DEFAULT_UA}`]: resp(200, html),
       [`${url}::${GOOGLEBOT}`]: resp(200, html),
@@ -290,7 +342,7 @@ describe("runCloakingProbe", () => {
         googlebotUserAgent: GOOGLEBOT,
         defaultUserAgent: DEFAULT_UA,
       },
-      fetchImpl,
+      fetchImpl
     );
     expect(probe.uaCloaking).toBe(false);
     expect(probe.uaSimilarity).toBe(1);
@@ -300,11 +352,17 @@ describe("runCloakingProbe", () => {
     const url = `${SITE}/p`;
     const tokenUrl = appendProbeToken(url);
     const fetchImpl = stubFetch({
-      [`${url}::${DEFAULT_UA}`]: resp(200, "<p>nothing to see here move along please</p>"),
-      [`${url}::${GOOGLEBOT}`]: resp(200, "<p>nothing to see here move along please</p>"),
+      [`${url}::${DEFAULT_UA}`]: resp(
+        200,
+        "<p>nothing to see here move along please</p>"
+      ),
+      [`${url}::${GOOGLEBOT}`]: resp(
+        200,
+        "<p>nothing to see here move along please</p>"
+      ),
       [`${tokenUrl}::${DEFAULT_UA}`]: resp(
         200,
-        "<p>secret phishing kit credential harvest form</p>",
+        "<p>secret phishing kit credential harvest form</p>"
       ),
     });
     const [probe] = await runCloakingProbe(
@@ -316,7 +374,7 @@ describe("runCloakingProbe", () => {
         googlebotUserAgent: GOOGLEBOT,
         defaultUserAgent: DEFAULT_UA,
       },
-      fetchImpl,
+      fetchImpl
     );
     expect(probe.uaCloaking).toBe(false);
     expect(probe.tokenGated).toBe(true);
@@ -338,7 +396,7 @@ describe("runCloakingProbe", () => {
         googlebotUserAgent: GOOGLEBOT,
         defaultUserAgent: DEFAULT_UA,
       },
-      fetchImpl,
+      fetchImpl
     );
     expect(probes).toHaveLength(2);
   });
@@ -365,7 +423,7 @@ describe("probeSiteForCloaking", () => {
       [`${SITE}/hidden-kit::${DEFAULT_UA}`]: resp(403, ""),
       [`${SITE}/hidden-kit::${GOOGLEBOT}`]: resp(
         200,
-        "<p>hidden injected payload visible only to googlebot</p>",
+        "<p>hidden injected payload visible only to googlebot</p>"
       ),
     });
     const probes = await probeSiteForCloaking(
@@ -382,7 +440,7 @@ describe("probeSiteForCloaking", () => {
         defaultUserAgent: DEFAULT_UA,
         now: NOW,
       },
-      fetchImpl,
+      fetchImpl
     );
     // /hidden-kit is orphan (no inbound, not in sitemap); /about is linked + in sitemap.
     expect(probes).toHaveLength(1);
@@ -405,7 +463,7 @@ describe("probeSiteForCloaking", () => {
         defaultUserAgent: DEFAULT_UA,
         now: NOW,
       },
-      stubFetch({}),
+      stubFetch({})
     );
     expect(probes).toEqual([]);
   });
@@ -429,7 +487,9 @@ describe("probeSiteForCloaking", () => {
       now: NOW,
     };
     const urls = async (entryUrls?: string[]) =>
-      (await probeSiteForCloaking({ ...site, entryUrls }, opts, stubFetch({}))).map((p) => p.url);
+      (
+        await probeSiteForCloaking({ ...site, entryUrls }, opts, stubFetch({}))
+      ).map((p) => p.url);
     expect(await urls()).toEqual([landing, `${SITE}/help`]);
     expect(await urls([landing, `${SITE}/`])).toEqual([`${SITE}/help`]);
   });
@@ -454,13 +514,18 @@ describe("resolveCloakingProbes", () => {
       },
       site,
       runtime,
-      stubFetch({}),
+      stubFetch({})
     );
     expect(out).toBeUndefined();
   });
 
   test("returns undefined when config absent", async () => {
-    const out = await resolveCloakingProbes(undefined, site, runtime, stubFetch({}));
+    const out = await resolveCloakingProbes(
+      undefined,
+      site,
+      runtime,
+      stubFetch({})
+    );
     expect(out).toBeUndefined();
   });
 
@@ -478,13 +543,13 @@ describe("resolveCloakingProbes", () => {
       stubFetch({
         [`${SITE}/x::${DEFAULT_UA}`]: resp(
           200,
-          "<p>same content here for all visitors of the site</p>",
+          "<p>same content here for all visitors of the site</p>"
         ),
         [`${SITE}/x::${GOOGLEBOT}`]: resp(
           200,
-          "<p>same content here for all visitors of the site</p>",
+          "<p>same content here for all visitors of the site</p>"
         ),
-      }),
+      })
     );
     expect(Array.isArray(out)).toBe(true);
     expect(out).toHaveLength(1);

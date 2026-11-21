@@ -37,7 +37,9 @@ function lines(tag: string, size: number, prefix = "var v_"): string {
     if (out.length + line.length > size) break;
     out += line;
   }
-  return out.length < size ? `${out}/${" ".repeat(Math.max(0, size - out.length - 2))}\n` : out;
+  return out.length < size
+    ? `${out}/${" ".repeat(Math.max(0, size - out.length - 2))}\n`
+    : out;
 }
 
 const KEY = `phc_${"a".repeat(43)}`;
@@ -51,23 +53,34 @@ interface Page {
   ids: string[];
 }
 
-function build(scripts: Array<{ url: string; content: string }>, limits: TechBundleLimits): Page {
+function build(
+  scripts: Array<{ url: string; content: string }>,
+  limits: TechBundleLimits
+): Page {
   const inputs = buildTechInputs(
     [{ url: HOME, headers: {}, html: `<!doctype html><div id="root"></div>` }],
     scripts.map((script) => ({ ...script, sourcePages: [HOME] })),
-    limits,
+    limits
   );
   const emitted = new Map<string, string>();
-  for (const script of inputs[0]!.scripts ?? []) if (script.content) emitted.set(script.url, script.content);
-  const ids = detectReportTechnologiesMulti(inputs, undefined, LOCAL_TECH_DETECT_OPTIONS).items.map((item) => item.id);
+  for (const script of inputs[0]!.scripts ?? [])
+    if (script.content) emitted.set(script.url, script.content);
+  const ids = detectReportTechnologiesMulti(
+    inputs,
+    undefined,
+    LOCAL_TECH_DETECT_OPTIONS
+  ).items.map((item) => item.id);
   return { inputs, emitted, ids };
 }
 
 /** Full source lines (those that start with `var v_`) that appear more than once in the text sent for a script. */
 function repeatedFullLines(sent: string, source: string): number {
-  const full = new Set(source.split("\n").filter((line) => line.startsWith("var v_")));
+  const full = new Set(
+    source.split("\n").filter((line) => line.startsWith("var v_"))
+  );
   const seen = new Map<string, number>();
-  for (const line of sent.split("\n")) if (full.has(line)) seen.set(line, (seen.get(line) ?? 0) + 1);
+  for (const line of sent.split("\n"))
+    if (full.has(line)) seen.set(line, (seen.get(line) ?? 0) + 1);
   return [...seen.values()].filter((n) => n > 1).length;
 }
 
@@ -79,7 +92,10 @@ describe("a hinted bundle over bundleBytes spends its whole allowance, with no t
     test(`${name}: emits the allowance, keeps the hint, repeats no line`, () => {
       // The first window sits early, so the head can only grow a little before it: the rest of the allowance is spent after it.
       const content = `${lines("a", 30_000)}${CALL}${lines("b", limits.bundleBytes * 3)}`;
-      const { emitted, ids } = build([{ url: "https://example.com/a.js", content }], limits);
+      const { emitted, ids } = build(
+        [{ url: "https://example.com/a.js", content }],
+        limits
+      );
       const sent = emitted.get("https://example.com/a.js") ?? "";
       // ASCII text: one byte a character, so the allowance is spent to the byte
       expect(bytes(sent)).toBe(limits.bundleBytes);
@@ -90,7 +106,10 @@ describe("a hinted bundle over bundleBytes spends its whole allowance, with no t
 
     test(`${name}: multi-byte text is counted in UTF-8 bytes, the allowance still holds`, () => {
       const content = `${lines("m", 30_000, "var é_")}${CALL}${lines("n", limits.bundleBytes, "var é_")}`;
-      const { emitted } = build([{ url: "https://example.com/a.js", content }], limits);
+      const { emitted } = build(
+        [{ url: "https://example.com/a.js", content }],
+        limits
+      );
       const sent = emitted.get("https://example.com/a.js") ?? "";
       expect(bytes(sent)).toBeLessThanOrEqual(limits.bundleBytes);
       expect(bytes(sent)).toBeGreaterThanOrEqual(limits.bundleBytes - 64);
@@ -102,7 +121,10 @@ describe("a hinted bundle over bundleBytes spends its whole allowance, with no t
       // Every character is an astral one (two UTF-16 units, four bytes), so a cut by characters would split a pair.
       const astral = (n: number): string => "😀".repeat(n);
       const content = `${astral(9_000)}\n${CALL}${astral(limits.bundleBytes)}\n${astral(limits.bundleBytes)}`;
-      const { emitted } = build([{ url: "https://example.com/a.js", content }], limits);
+      const { emitted } = build(
+        [{ url: "https://example.com/a.js", content }],
+        limits
+      );
       const sent = emitted.get("https://example.com/a.js") ?? "";
       expect(sent.isWellFormed()).toBe(true);
       expect(bytes(sent)).toBeLessThanOrEqual(limits.bundleBytes);
@@ -119,7 +141,10 @@ describe("a hinted bundle over bundleBytes spends its whole allowance, with no t
 
   test("a bundle with no hint is read from the front up to the cap, once", () => {
     const content = lines("p", 300 * KB);
-    const { emitted } = build([{ url: "https://example.com/a.js", content }], cloud);
+    const { emitted } = build(
+      [{ url: "https://example.com/a.js", content }],
+      cloud
+    );
     const sent = emitted.get("https://example.com/a.js") ?? "";
     expect(bytes(sent)).toBeGreaterThanOrEqual(cloud.bundleBytes - 32);
     expect(bytes(sent)).toBeLessThanOrEqual(cloud.bundleBytes);
@@ -260,8 +285,14 @@ describe("hints dense late in a bundle larger than bundleBytes keep every vendor
   ];
   const shape = (count: number): string => {
     const out: string[] = [FILLER.repeat(375), "\n"];
-    for (const marker of MARKERS.slice(0, count)) out.push(`/*v*/ ${marker} \n`, FILLER.repeat(9));
-    out.push(FIREBASE[0]!, FILLER.repeat(63), FIREBASE[1]!, FILLER.repeat(1250));
+    for (const marker of MARKERS.slice(0, count))
+      out.push(`/*v*/ ${marker} \n`, FILLER.repeat(9));
+    out.push(
+      FIREBASE[0]!,
+      FILLER.repeat(63),
+      FIREBASE[1]!,
+      FILLER.repeat(1250)
+    );
     return out.join("");
   };
 
@@ -269,8 +300,14 @@ describe("hints dense late in a bundle larger than bundleBytes keep every vendor
     test(`${count} markers: local 128 KB finds every vendor the whole body has`, () => {
       const content = shape(count);
       expect(content.length).toBeGreaterThan(local128k.bundleBytes);
-      const whole = build([{ url: "https://example.com/a.js", content }], localWhole);
-      const capped = build([{ url: "https://example.com/a.js", content }], local128k);
+      const whole = build(
+        [{ url: "https://example.com/a.js", content }],
+        localWhole
+      );
+      const capped = build(
+        [{ url: "https://example.com/a.js", content }],
+        local128k
+      );
       expect(whole.ids.length).toBeGreaterThan(30);
       expect(capped.ids.slice().sort()).toEqual(whole.ids.slice().sort());
       const sent = capped.emitted.get("https://example.com/a.js") ?? "";
@@ -302,7 +339,10 @@ describe("a call straddling the head boundary is kept whole on a tight-budget pa
         test(`${count} plain scripts, loader ${position}, posthog.init ${before} characters before the head ends`, () => {
           const ph = loaderScript(before);
           const plain = plainScripts(count);
-          const { emitted, ids } = build(position === "first" ? [ph, ...plain] : [...plain, ph], cloud);
+          const { emitted, ids } = build(
+            position === "first" ? [ph, ...plain] : [...plain, ph],
+            cloud
+          );
           expect(ids).toContain("posthog");
           const sent = emitted.get(ph.url) ?? "";
           expect(sent).toContain(LOADER.trim().slice(0, -1));
@@ -315,7 +355,12 @@ describe("a call straddling the head boundary is kept whole on a tight-budget pa
             const body = emitted.get(script.url) ?? "";
             total += bytes(body);
             // a script's head is its first 16 KB whole, whatever follows it
-            expect(body.startsWith(script.content.slice(0, script === ph ? HEAD - before : HEAD)), script.url).toBe(true);
+            expect(
+              body.startsWith(
+                script.content.slice(0, script === ph ? HEAD - before : HEAD)
+              ),
+              script.url
+            ).toBe(true);
           }
           expect(total).toBe(cloud.pageBytes);
         });
@@ -328,26 +373,39 @@ describe("a call straddling the head boundary is kept whole on a tight-budget pa
 // and two pieces are separated only where text is left out. A piece that touches the next one is not split by a
 // separator, no text is sent twice, and no byte is skipped while the allowance has room.
 describe("emitted pieces are disjoint, in order, and abut without a separator (#1534)", () => {
-  const unique = (tag: string, size: number): string => lines(tag, size, "var u_");
+  const unique = (tag: string, size: number): string =>
+    lines(tag, size, "var u_");
   /** Unique statements with no newline in them: nothing but the sampler's own cuts decides where a window starts. */
   const flat = (tag: string, size: number): string => {
     let out = "";
-    for (let i = 0; out.length < size; i++) out += `u_${tag}_${i}=${(((i + 1) * 2654435761) % 4294967296).toString(16)};`;
+    for (let i = 0; out.length < size; i++)
+      out += `u_${tag}_${i}=${(((i + 1) * 2654435761) % 4294967296).toString(16)};`;
     return out.slice(0, size);
   };
-  const pieces = (sent: string, source: string): Array<{ at: number; length: number }> =>
+  const pieces = (
+    sent: string,
+    source: string
+  ): Array<{ at: number; length: number }> =>
     sent.split(SEP).map((piece) => {
       const at = source.indexOf(piece);
       expect(at, "piece is verbatim source").toBeGreaterThanOrEqual(0);
-      expect(source.lastIndexOf(piece), "piece is unique in the source").toBe(at);
+      expect(source.lastIndexOf(piece), "piece is unique in the source").toBe(
+        at
+      );
       return { at, length: piece.length };
     });
   const tails = new Map<(tag: string, size: number) => string, string>();
-  const check = (callAt: number, make: (tag: string, size: number) => string): void => {
+  const check = (
+    callAt: number,
+    make: (tag: string, size: number) => string
+  ): void => {
     const start = callAt - CALL_AT;
     if (!tails.has(make)) tails.set(make, make("b", 200 * KB));
     const content = `${make("a", start)}${CALL}${tails.get(make)}`;
-    const { emitted, ids } = build([{ url: "https://example.com/a.js", content }], cloud);
+    const { emitted, ids } = build(
+      [{ url: "https://example.com/a.js", content }],
+      cloud
+    );
     const sent = emitted.get("https://example.com/a.js") ?? "";
     expect(ids, `call at ${callAt}`).toContain("posthog");
     expect(sent, `call at ${callAt}`).toContain(INIT);
@@ -355,11 +413,16 @@ describe("emitted pieces are disjoint, in order, and abut without a separator (#
     expect(found[0]!.at).toBe(0);
     for (let n = 1; n < found.length; n++) {
       // strictly after: text is left out between two pieces, otherwise they would be one
-      expect(found[n]!.at, `call at ${callAt}, piece ${n}`).toBeGreaterThan(found[n - 1]!.at + found[n - 1]!.length);
+      expect(found[n]!.at, `call at ${callAt}, piece ${n}`).toBeGreaterThan(
+        found[n - 1]!.at + found[n - 1]!.length
+      );
     }
     // Text is left out only because the allowance ran out, and the allowance is then spent to the byte.
-    expect(bytes(sent), `call at ${callAt}`).toBeLessThanOrEqual(cloud.bundleBytes);
-    if (found.length > 1) expect(bytes(sent), `call at ${callAt}`).toBe(cloud.bundleBytes);
+    expect(bytes(sent), `call at ${callAt}`).toBeLessThanOrEqual(
+      cloud.bundleBytes
+    );
+    if (found.length > 1)
+      expect(bytes(sent), `call at ${callAt}`).toBe(cloud.bundleBytes);
   };
 
   for (const callAt of [HEAD - 10, HEAD - 5, HEAD + 5, 40_000, 120_000]) {
@@ -369,9 +432,17 @@ describe("emitted pieces are disjoint, in order, and abut without a separator (#
       if (callAt <= 40_000) {
         const start = callAt - CALL_AT;
         const content = `${unique("a", start)}${CALL}${unique("b", 200 * KB)}`;
-        const sent = build([{ url: "https://example.com/a.js", content }], cloud).emitted.get("https://example.com/a.js") ?? "";
-        expect(sent.startsWith(content.slice(0, callAt + CALL.length - CALL_AT))).toBe(true);
-        expect(sent.split(SEP)[0]!.length).toBeGreaterThanOrEqual(callAt + CALL.length - CALL_AT);
+        const sent =
+          build(
+            [{ url: "https://example.com/a.js", content }],
+            cloud
+          ).emitted.get("https://example.com/a.js") ?? "";
+        expect(
+          sent.startsWith(content.slice(0, callAt + CALL.length - CALL_AT))
+        ).toBe(true);
+        expect(sent.split(SEP)[0]!.length).toBeGreaterThanOrEqual(
+          callAt + CALL.length - CALL_AT
+        );
       }
     });
   }
@@ -382,7 +453,8 @@ describe("emitted pieces are disjoint, in order, and abut without a separator (#
     ["statements", flat],
   ] as const) {
     test(`every call offset from 400 characters before the head boundary to 400 after it (${style})`, () => {
-      for (let callAt = HEAD - 400; callAt <= HEAD + 400; callAt++) check(callAt, make);
+      for (let callAt = HEAD - 400; callAt <= HEAD + 400; callAt++)
+        check(callAt, make);
     }, 60_000);
   }
 });
@@ -394,14 +466,18 @@ describe("a hint just after the head boundary keeps the context before it, once 
   const SIGNAL = `var s=mk("https://p0000000000000000001.supabase.co","eyJ${"x".repeat(40)}");`;
   const flat = (tag: string, size: number): string => {
     let out = "";
-    for (let i = 0; out.length < size; i++) out += `u_${tag}_${i}=${(((i + 1) * 2654435761) % 4294967296).toString(16)};`;
+    for (let i = 0; out.length < size; i++)
+      out += `u_${tag}_${i}=${(((i + 1) * 2654435761) % 4294967296).toString(16)};`;
     return out.slice(0, size);
   };
   const tail = flat("t", 200 * KB);
   test("every signal offset from 330 characters before the boundary to 180 after it", () => {
     for (let at = HEAD - 330; at <= HEAD + 180; at++) {
       const content = `${flat("h", at)}${SIGNAL}${tail}`;
-      const { emitted, ids } = build([{ url: "https://example.com/a.js", content }], cloud);
+      const { emitted, ids } = build(
+        [{ url: "https://example.com/a.js", content }],
+        cloud
+      );
       const sent = emitted.get("https://example.com/a.js") ?? "";
       expect(ids, `signal at ${at}`).toContain("supabase");
       expect(sent, `signal at ${at}`).toContain(SIGNAL);
@@ -409,7 +485,10 @@ describe("a hint just after the head boundary keeps the context before it, once 
       let from = 0;
       for (const piece of sent.split(SEP)) {
         const found = content.indexOf(piece, from);
-        expect(found, `signal at ${at}: piece after ${from}`).toBeGreaterThanOrEqual(from);
+        expect(
+          found,
+          `signal at ${at}: piece after ${from}`
+        ).toBeGreaterThanOrEqual(from);
         from = found + piece.length + 1;
       }
       expect(bytes(sent), `signal at ${at}`).toBe(cloud.bundleBytes);
@@ -418,7 +497,8 @@ describe("a hint just after the head boundary keeps the context before it, once 
 });
 
 describe("page shapes from the #1534 report repeat no full line (#1534)", () => {
-  const late = (): string => `${lines("late", 100_000)}${CALL}${lines("late2", 100_000)}`;
+  const late = (): string =>
+    `${lines("late", 100_000)}${CALL}${lines("late2", 100_000)}`;
 
   for (const count of [7, 13, 16]) {
     test(`${count} x 40 KB scripts plus a late bundle`, () => {
@@ -451,10 +531,15 @@ describe("page shapes from the #1534 report repeat no full line (#1534)", () => 
       ];
       const { emitted } = build(scripts, cloud);
       for (const script of scripts) {
-        expect(repeatedFullLines(emitted.get(script.url) ?? "", script.content), script.url).toBe(0);
+        expect(
+          repeatedFullLines(emitted.get(script.url) ?? "", script.content),
+          script.url
+        ).toBe(0);
       }
       expect(emitted.get("https://example.com/a.js")).toBe(scripts[0]!.content);
-      expect(bytes(emitted.get("https://example.com/b.js") ?? "")).toBeGreaterThanOrEqual(cloud.bundleBytes - 32);
+      expect(
+        bytes(emitted.get("https://example.com/b.js") ?? "")
+      ).toBeGreaterThanOrEqual(cloud.bundleBytes - 32);
     });
   }
 });

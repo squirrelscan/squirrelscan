@@ -1,9 +1,17 @@
 // links/redirect-chains - Redirect detection
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { formatRedirectHop, type RedirectChain } from "@squirrelscan/core-contracts";
+import {
+  formatRedirectHop,
+  type RedirectChain,
+} from "@squirrelscan/core-contracts";
 
-import { didRedirect, requestTarget, targetKey } from "../shared/redirect-evidence";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  didRedirect,
+  requestTarget,
+  targetKey,
+} from "../shared/redirect-evidence";
 import {
   regionsField,
   sectionMeta,
@@ -31,7 +39,16 @@ export const redirectChainsRule: Rule = {
       { name: "links-to-redirect", outcome: "problem" },
       { name: "redirect-chain-multi-hop", outcome: "problem" },
       { name: "canonical-redirects", outcome: "problem" },
-      { name: "redirect-chains", outcome: "clean", clears: ["redirect-pages", "links-to-redirect", "redirect-chain-multi-hop", "canonical-redirects"] },
+      {
+        name: "redirect-chains",
+        outcome: "clean",
+        clears: [
+          "redirect-pages",
+          "links-to-redirect",
+          "redirect-chain-multi-hop",
+          "canonical-redirects",
+        ],
+      },
       { name: "redirect-chains", outcome: "skipped" },
     ],
   },
@@ -70,7 +87,8 @@ export const redirectChainsRule: Rule = {
         // Redirect responses followed before the landing page: the last hop is the
         // destination, so a chain of N hops holds N-1 redirects. Unobserved chains
         // (no hop list) still count as one (#1750).
-        const hopCount = chain && chain.hops.length > 1 ? chain.hops.length - 1 : 1;
+        const hopCount =
+          chain && chain.hops.length > 1 ? chain.hops.length - 1 : 1;
         const path =
           chain && chain.hops.length > 1
             ? chain.hops.map((hop) => formatRedirectHop(hop)).join(" → ")
@@ -105,7 +123,9 @@ export const redirectChainsRule: Rule = {
 
       // A chain of two or more redirects costs a round trip per hop and is the
       // one to collapse first, so it gets its own failing check (#1750).
-      const chained = [...redirectTargets.values()].filter((t) => t.hopCount > 1);
+      const chained = [...redirectTargets.values()].filter(
+        (t) => t.hopCount > 1
+      );
       if (chained.length > 0) {
         const longest = Math.max(...chained.map((t) => t.hopCount));
         checks.push({
@@ -161,7 +181,8 @@ export const redirectChainsRule: Rule = {
         items: [...linksToRedirect.entries()].map(([target, tally]) => {
           const redirect = redirectTargets.get(target);
           const label = redirect ? redirect.chainLabel : target;
-          const { sourcePages, sources, sections, regions } = tallyFields(tally);
+          const { sourcePages, sources, sections, regions } =
+            tallyFields(tally);
           return {
             id: redirect?.originalUrl ?? target,
             label: withSection(label, sections),
@@ -182,17 +203,34 @@ export const redirectChainsRule: Rule = {
     // A page whose canonical names a URL that redirected to it (#1762). The redirecting URL is not
     // a page of its own, so this is where the canonical-names-a-redirect finding lives now.
     if (redirectTargets.size > 0) {
-      const byRequest = new Map<string, (typeof redirectTargets extends Map<string, infer V> ? V : never)>();
-      for (const target of redirectTargets.values()) byRequest.set(requestTarget(target.originalUrl), target);
-      const canonicalToRedirect: Array<{ page: string; canonical: string; label: string; chain?: RedirectChain }> = [];
+      const byRequest = new Map<
+        string,
+        typeof redirectTargets extends Map<string, infer V> ? V : never
+      >();
+      for (const target of redirectTargets.values())
+        byRequest.set(requestTarget(target.originalUrl), target);
+      const canonicalToRedirect: Array<{
+        page: string;
+        canonical: string;
+        label: string;
+        chain?: RedirectChain;
+      }> = [];
       for (const page of pages) {
         const canonical = page.parsed?.meta?.canonical;
         if (!canonical || page.redirectSource) continue;
         try {
           const absolute = new URL(canonical, page.url).href;
           const redirect = byRequest.get(requestTarget(absolute));
-          if (redirect && requestTarget(redirect.finalUrl) === requestTarget(page.url)) {
-            canonicalToRedirect.push({ page: page.url, canonical: absolute, label: redirect.chainLabel, chain: redirect.chain });
+          if (
+            redirect &&
+            requestTarget(redirect.finalUrl) === requestTarget(page.url)
+          ) {
+            canonicalToRedirect.push({
+              page: page.url,
+              canonical: absolute,
+              label: redirect.chainLabel,
+              chain: redirect.chain,
+            });
           }
         } catch {
           continue;

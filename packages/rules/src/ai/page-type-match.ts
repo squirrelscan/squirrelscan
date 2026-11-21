@@ -43,7 +43,11 @@ export const pageTypeMatchRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<AiParseResult>(ctx.cloudResults, "ai-parse", ctx.page.url);
+    const envelope = readCloudResult<AiParseResult>(
+      ctx.cloudResults,
+      "ai-parse",
+      ctx.page.url
+    );
     if (!envelope || envelope.status === "skipped") {
       const reason = envelope?.skipReason ?? "not-prefetched";
       checks.push({
@@ -67,7 +71,9 @@ export const pageTypeMatchRule: Rule = {
     }
 
     // Expected type from declared JSON-LD (first mapped @type wins).
-    const declared = ctx.parsed.schemas.types.find((t) => SCHEMA_TYPE_TO_PAGE_TYPE[t]);
+    const declared = ctx.parsed.schemas.types.find(
+      (t) => SCHEMA_TYPE_TO_PAGE_TYPE[t]
+    );
     const expected = declared ? SCHEMA_TYPE_TO_PAGE_TYPE[declared] : null;
 
     if (!expected) {
@@ -80,7 +86,10 @@ export const pageTypeMatchRule: Rule = {
       return { checks };
     }
 
-    if (classified.pageType === expected || classified.confidence < MIN_CONFIDENCE) {
+    if (
+      classified.pageType === expected ||
+      classified.confidence < MIN_CONFIDENCE
+    ) {
       checks.push({
         name: "page-type-match",
         status: "pass",

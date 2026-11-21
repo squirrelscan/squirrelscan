@@ -2,8 +2,9 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
-import { fieldSnippet, formSelector } from "../shared/form-fields";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import { fieldSnippet, formSelector } from "../shared/form-fields";
 
 /** `javascript:`, `mailto:` and friends never travel over the network. */
 const NON_NETWORK_SCHEMES = /^(?:javascript|mailto|tel|sms|data|blob|about):/i;
@@ -66,7 +67,8 @@ export const formHttpsRule: Rule = {
 
     forms.forEach((form, index) => {
       const raw = form.getAttribute("action");
-      if (raw !== null) submitters.push({ el: form, raw, attribute: "action", index });
+      if (raw !== null)
+        submitters.push({ el: form, raw, attribute: "action", index });
     });
     for (const el of doc.querySelectorAll(FORMACTION_SUBMITTERS)) {
       const raw = el.getAttribute("formaction");
@@ -94,7 +96,8 @@ export const formHttpsRule: Rule = {
       }
       // An unparseable action still submits in the clear when it literally
       // starts with http:// — the old rule caught those and so must this one.
-      if (resolved ? resolved.protocol !== "http:" : !LITERAL_HTTP.test(value)) continue;
+      if (resolved ? resolved.protocol !== "http:" : !LITERAL_HTTP.test(value))
+        continue;
       const target = resolved?.href ?? value;
 
       if (!pageIsHttps) onInsecurePage++;

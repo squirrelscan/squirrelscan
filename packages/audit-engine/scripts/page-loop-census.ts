@@ -14,6 +14,8 @@
 //
 // modes: none | checks | collected | full
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import {
   buildCollectedPageSignal,
@@ -23,10 +25,14 @@ import {
   type RuleRunResult,
   type SiteData,
 } from "@squirrelscan/rules";
-import type { CheckResult } from "@squirrelscan/core-contracts";
 import { Effect } from "effect";
 
-import { buildHeadersMap, buildSiteContext, isRenderedFetch, releaseSiteContextDocuments } from "../src/adapter";
+import {
+  buildHeadersMap,
+  buildSiteContext,
+  isRenderedFetch,
+  releaseSiteContextDocuments,
+} from "../src/adapter";
 import { collectDroppedBatch } from "../src/batch-gc";
 import { detachFromPage } from "../src/detach";
 import { isAuditablePage } from "../src/page-features";
@@ -101,23 +107,29 @@ for (let offset = 0; ; offset += BATCH) {
         redirectChain: page.redirectChain,
         rendered: isRenderedFetch(page.fetcherId),
       },
-      SITE_DATA,
+      SITE_DATA
     );
 
     if (KEEP_CHECKS) {
       const byRule = [...raw.ruleResults];
       const detached = detachFromPage(
         { checks: raw.checks, ruleChecks: byRule.map(([, rr]) => rr.checks) },
-        "page-rules",
+        "page-rules"
       );
       const pageUrl = page.normalizedUrl;
       pageResults.set(pageUrl, detached.checks);
       const perRule = new Map<string, CheckResult[]>();
-      byRule.forEach(([ruleId], i) => perRule.set(ruleId, detached.ruleChecks[i]!));
+      byRule.forEach(([ruleId], i) =>
+        perRule.set(ruleId, detached.ruleChecks[i]!)
+      );
       pageRuleResults.set(pageUrl, perRule);
       byRule.forEach(([ruleId, rr], i) => {
-        const withChecks = { ...rr, checks: detached.ruleChecks[i]! } as RuleRunResult;
-        for (const check of withChecks.checks) if (!check.pageUrl) check.pageUrl = pageUrl;
+        const withChecks = {
+          ...rr,
+          checks: detached.ruleChecks[i]!,
+        } as RuleRunResult;
+        for (const check of withChecks.checks)
+          if (!check.pageUrl) check.pageUrl = pageUrl;
         mergeRuleRunResult(ruleResultsMap, ruleId, withChecks);
         foldRuleResultIntoTallies(tallies, ruleId, withChecks);
       });
@@ -133,8 +145,8 @@ for (let offset = 0; ; offset += BATCH) {
             // i18n/hreflang-targets reads X-Robots-Tag noindex from these.
             headers: buildHeadersMap(page),
           }),
-          "collected-signal",
-        ),
+          "collected-signal"
+        )
       );
     }
 
@@ -190,8 +202,8 @@ console.log(
     heldMB: Math.round((after - before) / 1024 / 1024),
     ...counts,
     perPageKB: Object.fromEntries(
-      drops.map(([name, bytes]) => [name, Math.round(bytes / pages / KB)]),
+      drops.map(([name, bytes]) => [name, Math.round(bytes / pages / KB)])
     ),
-  }),
+  })
 );
 await run(storage.close());

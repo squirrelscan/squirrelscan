@@ -1,6 +1,7 @@
 // a11y/landmark-regions - Check for landmark regions
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const landmarkRegionsRule: Rule = {

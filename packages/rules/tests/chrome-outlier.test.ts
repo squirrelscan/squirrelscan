@@ -4,15 +4,20 @@
 // requires byte-identical output. The streamed rows carry a template label as their
 // stored key, which is all the rule reads from them.
 
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { chromeOutlierRule } from "../src/integrity/chrome-outlier";
 import { fingerprintPage } from "../src/integrity/fingerprint";
 import { templateDiscontinuityRule } from "../src/integrity/template-discontinuity";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 const SITE = "https://example.com";
 const u = (path: string): string => `${SITE}${path}`;
@@ -112,7 +117,12 @@ function legacyCtx(specs: Spec[]): RuleContext {
 function streamCtx(specs: Spec[], withCollected = true): RuleContext {
   const parsed = specs.map((s, i) => parsePage(html(s.kind, i), u(s.path)));
   const rows = specs.map(
-    (s) => ({ normalizedUrl: u(s.path), status: s.status ?? 200, templateFp: s.kind }) as PageFeatureRow
+    (s) =>
+      ({
+        normalizedUrl: u(s.path),
+        status: s.status ?? 200,
+        templateFp: s.kind,
+      }) as PageFeatureRow
   );
   const unused = (): never => {
     throw new Error("chrome-outlier must not use this SiteQuery method");
@@ -182,12 +192,20 @@ describe("integrity/chrome-outlier", () => {
   });
 
   test("a route-level CSS chunk or body class on top of the site chrome is not flagged", async () => {
-    const check = await bothPaths([...many("main", 20), ...many("chunk", 1), ...many("restyled", 2)]);
+    const check = await bothPaths([
+      ...many("main", 20),
+      ...many("chunk", 1),
+      ...many("restyled", 2),
+    ]);
     expect(check.status).toBe("pass");
   });
 
   test("only pages missing dominant chrome are flagged among small clusters", async () => {
-    const check = await bothPaths([...many("main", 20), ...many("chunk", 1), ...many("bare", 1)]);
+    const check = await bothPaths([
+      ...many("main", 20),
+      ...many("chunk", 1),
+      ...many("bare", 1),
+    ]);
     expect(check.items?.map((i) => i.id)).toEqual([u("/bare/0")]);
   });
 
@@ -207,7 +225,9 @@ describe("integrity/chrome-outlier", () => {
   test("a page that shares no stylesheet or code host with the template is flagged", async () => {
     const check = await bothPaths([...many("main", 20), ...many("moved", 1)]);
     expect(check.items?.map((i) => i.id)).toEqual([u("/moved/0")]);
-    expect(check.items?.[0]?.label).toBe("Missing site stylesheets, site CSS and script hosts");
+    expect(check.items?.[0]?.label).toBe(
+      "Missing site stylesheets, site CSS and script hosts"
+    );
   });
 
   test("a streamed page without a page-time fingerprint is not reported", async () => {
@@ -217,7 +237,11 @@ describe("integrity/chrome-outlier", () => {
   });
 
   test("many stragglers fail", async () => {
-    const check = await bothPaths([...many("main", 24), ...many("old", 2), ...many("bare", 2)]);
+    const check = await bothPaths([
+      ...many("main", 24),
+      ...many("old", 2),
+      ...many("bare", 2),
+    ]);
     expect(check.status).toBe("fail");
     expect(check.items).toHaveLength(4);
   });
@@ -232,7 +256,11 @@ describe("integrity/chrome-outlier", () => {
   });
 
   test("no dominant template is skipped", async () => {
-    const check = await bothPaths([...many("main", 6), ...many("docs", 5), ...many("blog", 5)]);
+    const check = await bothPaths([
+      ...many("main", 6),
+      ...many("docs", 5),
+      ...many("blog", 5),
+    ]);
     expect(check.status).toBe("skipped");
     expect(check.skipReason).toBe("No dominant template cluster");
   });
@@ -248,7 +276,10 @@ describe("integrity/chrome-outlier", () => {
   });
 
   test("error pages do not count as stragglers", async () => {
-    const specs = [...many("main", 15), { path: "/missing", kind: "bare" as Kind, status: 404 }];
+    const specs = [
+      ...many("main", 15),
+      { path: "/missing", kind: "bare" as Kind, status: 404 },
+    ];
     expect((await bothPaths(specs)).status).toBe("pass");
   });
 
@@ -256,9 +287,13 @@ describe("integrity/chrome-outlier", () => {
     const specs = [...many("main", 20), ...many("alien", 1), ...many("old", 1)];
     const discontinuity = await run(templateDiscontinuityRule, {
       ...legacyCtx(specs),
-      options: templateDiscontinuityRule.meta.optionsSchema!.parse({}) as Record<string, unknown>,
+      options: templateDiscontinuityRule.meta.optionsSchema!.parse(
+        {}
+      ) as Record<string, unknown>,
     });
-    const flagged = discontinuity.flatMap((c) => c.items ?? []).map((i) => i.id);
+    const flagged = discontinuity
+      .flatMap((c) => c.items ?? [])
+      .map((i) => i.id);
     expect(flagged).toContain(u("/alien/0"));
 
     const check = await bothPaths(specs);

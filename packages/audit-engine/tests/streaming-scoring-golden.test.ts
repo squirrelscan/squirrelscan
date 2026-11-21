@@ -6,10 +6,10 @@
 // details.additional, warn/fail/pass/skipped/info, advisory (info-severity)
 // rules, and the robots/sitemap critical penalty.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { RuleMeta, RuleRunResult } from "@squirrelscan/rules/types";
+
+import { mergeRuleRunResult } from "@squirrelscan/rules";
 import {
   RULE_ID_ROBOTS_TXT,
   RULE_ID_SITEMAP_EXISTS,
@@ -17,8 +17,8 @@ import {
   CHECK_NAME_ROBOTS_EXISTS,
   CHECK_NAME_SITEMAP_EXISTS,
 } from "@squirrelscan/utils/constants";
+import { describe, expect, test } from "bun:test";
 
-import { mergeRuleRunResult } from "@squirrelscan/rules";
 import {
   calculateHealthScore,
   calculateHealthScoreFromTallies,
@@ -38,10 +38,29 @@ function prng(seed: number): () => number {
   };
 }
 
-const CATEGORIES = ["core", "content", "crawl", "links", "perf", "security", "schema", "eeat"];
-const STATUSES: CheckResult["status"][] = ["pass", "warn", "fail", "skipped", "info"];
+const CATEGORIES = [
+  "core",
+  "content",
+  "crawl",
+  "links",
+  "perf",
+  "security",
+  "schema",
+  "eeat",
+];
+const STATUSES: CheckResult["status"][] = [
+  "pass",
+  "warn",
+  "fail",
+  "skipped",
+  "info",
+];
 
-function meta(rand: () => number, id: string, scope: "page" | "site"): RuleMeta {
+function meta(
+  rand: () => number,
+  id: string,
+  scope: "page" | "site"
+): RuleMeta {
   const category = CATEGORIES[Math.floor(rand() * CATEGORIES.length)]!;
   const severity = rand() < 0.2 ? "info" : rand() < 0.5 ? "warning" : "error";
   return {
@@ -56,14 +75,21 @@ function meta(rand: () => number, id: string, scope: "page" | "site"): RuleMeta 
   } as RuleMeta;
 }
 
-function randomChecks(rand: () => number, name: string, pageUrl: string): CheckResult[] {
+function randomChecks(
+  rand: () => number,
+  name: string,
+  pageUrl: string
+): CheckResult[] {
   const out: CheckResult[] = [];
   const n = Math.floor(rand() * 3); // 0..2 checks per (rule,page)
   for (let i = 0; i < n; i++) {
     const status = STATUSES[Math.floor(rand() * STATUSES.length)]!;
     const check: CheckResult = { name, status, message: "m", pageUrl };
     if ((status === "warn" || status === "fail") && rand() < 0.6) {
-      const items = Array.from({ length: 1 + Math.floor(rand() * 4) }, (_, k) => ({ id: `${k}` }));
+      const items = Array.from(
+        { length: 1 + Math.floor(rand() * 4) },
+        (_, k) => ({ id: `${k}` })
+      );
       check.items = items;
     }
     if (status === "fail" && rand() < 0.4) {
@@ -119,22 +145,43 @@ function buildRun(seed: number) {
   // Randomly inject the robots/sitemap critical-penalty rules with real checks.
   if (rand() < 0.7) {
     const robotsChecks: CheckResult[] = [
-      { name: CHECK_NAME_ROBOTS_EXISTS, status: rand() < 0.5 ? "warn" : "pass", message: "m" },
+      {
+        name: CHECK_NAME_ROBOTS_EXISTS,
+        status: rand() < 0.5 ? "warn" : "pass",
+        message: "m",
+      },
     ];
     if (rand() < 0.5)
-      robotsChecks.push({ name: CHECK_NAME_ROBOTS_DISALLOW, status: rand() < 0.5 ? "fail" : "pass", message: "m" });
+      robotsChecks.push({
+        name: CHECK_NAME_ROBOTS_DISALLOW,
+        status: rand() < 0.5 ? "fail" : "pass",
+        message: "m",
+      });
     const robotsMeta = meta(rand, RULE_ID_ROBOTS_TXT, "site");
     const rr: RuleRunResult = { meta: robotsMeta, checks: robotsChecks };
     foldBoth(RULE_ID_ROBOTS_TXT, rr);
-    penaltyResults.set(RULE_ID_ROBOTS_TXT, ruleResultsMap.get(RULE_ID_ROBOTS_TXT)!);
+    penaltyResults.set(
+      RULE_ID_ROBOTS_TXT,
+      ruleResultsMap.get(RULE_ID_ROBOTS_TXT)!
+    );
   }
   if (rand() < 0.7) {
     const sitemapChecks: CheckResult[] = [
-      { name: CHECK_NAME_SITEMAP_EXISTS, status: rand() < 0.5 ? "fail" : "pass", message: "m" },
+      {
+        name: CHECK_NAME_SITEMAP_EXISTS,
+        status: rand() < 0.5 ? "fail" : "pass",
+        message: "m",
+      },
     ];
-    const rr: RuleRunResult = { meta: meta(rand, RULE_ID_SITEMAP_EXISTS, "site"), checks: sitemapChecks };
+    const rr: RuleRunResult = {
+      meta: meta(rand, RULE_ID_SITEMAP_EXISTS, "site"),
+      checks: sitemapChecks,
+    };
     foldBoth(RULE_ID_SITEMAP_EXISTS, rr);
-    penaltyResults.set(RULE_ID_SITEMAP_EXISTS, ruleResultsMap.get(RULE_ID_SITEMAP_EXISTS)!);
+    penaltyResults.set(
+      RULE_ID_SITEMAP_EXISTS,
+      ruleResultsMap.get(RULE_ID_SITEMAP_EXISTS)!
+    );
   }
 
   return { ruleResultsMap, tallies, penaltyResults };

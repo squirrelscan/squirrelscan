@@ -3,14 +3,20 @@
  * no "/100", no page count the report does not state, never blank.
  */
 
+import type { EditorSummary } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
+
+import type { AuditReport } from "../src/types";
 
 import { editorSummaryView, summaryPageCounts } from "../src/editor-summary";
 import { renderHtml } from "../src/output/html";
 import { renderMarkdown } from "../src/output/markdown";
-import { guardSummaryText, pageCounts, scoreMentions } from "../src/summary-text";
-import type { EditorSummary } from "@squirrelscan/core-contracts";
-import type { AuditReport } from "../src/types";
+import {
+  guardSummaryText,
+  pageCounts,
+  scoreMentions,
+} from "../src/summary-text";
 
 function report(extra: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -20,7 +26,12 @@ function report(extra: Partial<AuditReport> = {}): AuditReport {
     passed: 40,
     warnings: 5,
     failed: 3,
-    scanScope: { origin: "cloud", maxPages: 10, pagesCrawled: 10, capped: true },
+    scanScope: {
+      origin: "cloud",
+      maxPages: 10,
+      pagesCrawled: 10,
+      capped: true,
+    },
     coverage: { auditedPages: 10, knownPages: 90, carriedFindings: 0 },
     ruleResults: {
       "a11y/label": {
@@ -57,11 +68,13 @@ describe("score rules", () => {
     expect(scoreMentions("Scores of 72/100 and 88/100 are mixed.")).toBe(2);
     expect(
       scoreMentions(
-        "Crawlability, analytics and reliability all score 99–100, and links score 79.",
-      ),
+        "Crawlability, analytics and reliability all score 99–100, and links score 79."
+      )
     ).toBe(3);
     expect(scoreMentions("Health is 88 OUT OF 100.")).toBe(1);
-    expect(scoreMentions("A solid score with some improvements to make.")).toBe(0);
+    expect(scoreMentions("A solid score with some improvements to make.")).toBe(
+      0
+    );
   });
 
   test("keeps the first score without /100 and drops later score sentences and verdict", () => {
@@ -71,7 +84,7 @@ describe("score rules", () => {
           "The site is in poor shape at 48/100. Accessibility scored 31 and drags it down.\n\nFix the form labels first.",
         verdict: "A 48 score with a clear path to fix.",
       }),
-      report(),
+      report()
     )!;
     expect(view.paragraphs).toEqual([
       "The site is in poor shape at 48.",
@@ -96,7 +109,7 @@ describe("score rules", () => {
           },
         ],
       }),
-      report(),
+      report()
     )!;
     expect(view.bigTicket).toEqual(["Accessibility at 31"]);
     expect(view.priorities[0]!.why).toBe("Accessibility sits at 31.");
@@ -106,12 +119,20 @@ describe("score rules", () => {
 
 describe("page counts", () => {
   test("allows the report's own counts and failing-rule occurrences", () => {
-    expect(summaryPageCounts(report()).sort((a, b) => a - b)).toEqual([7, 10, 10, 10, 13, 90]);
+    expect(summaryPageCounts(report()).sort((a, b) => a - b)).toEqual([
+      7, 10, 10, 10, 13, 90,
+    ]);
   });
 
   test("allows a capped crawl's queued count and the discovered total it makes", () => {
     const capped = report({
-      scanScope: { origin: "cloud", maxPages: 10, pagesCrawled: 10, capped: true, unfetched: 531 },
+      scanScope: {
+        origin: "cloud",
+        maxPages: 10,
+        pagesCrawled: 10,
+        capped: true,
+        unfetched: 531,
+      },
     });
     expect(summaryPageCounts(capped)).toContain(531);
     expect(summaryPageCounts(capped)).toContain(541);
@@ -123,10 +144,10 @@ describe("page counts", () => {
         prose:
           "This audit scanned 10 of 90 known pages. Form labels fail on 7 pages. About 400 pages share the problem. There are 80 more pages to check. Fix HTTP 404 on pages with broken links.",
       }),
-      report(),
+      report()
     )!;
     expect(view.prose).toBe(
-      "This audit scanned 10 of 90 known pages. Form labels fail on 7 pages. Fix HTTP 404 on pages with broken links.",
+      "This audit scanned 10 of 90 known pages. Form labels fail on 7 pages. Fix HTTP 404 on pages with broken links."
     );
   });
 
@@ -135,7 +156,7 @@ describe("page counts", () => {
     expect(pageCounts("It is a 999-page site.")).toEqual([999]);
     const out = guardSummaryText(
       { prose: "Problems on 0+ pages. Fix the labels.", verdict: "" },
-      { allowedPageCounts: [0, 10], fallbackProse: "x" },
+      { allowedPageCounts: [0, 10], fallbackProse: "x" }
     );
     expect(out.prose).toBe("Fix the labels.");
   });
@@ -150,9 +171,10 @@ describe("never blank", () => {
   test("falls back to the report totals when every sentence is dropped", () => {
     const view = editorSummaryView(
       summary({
-        prose: "About 400 pages share the problem. Scores of 72/100 and 88/100 are mixed.",
+        prose:
+          "About 400 pages share the problem. Scores of 72/100 and 88/100 are mixed.",
       }),
-      report(),
+      report()
     )!;
     expect(view.paragraphs).toEqual([
       "This audit found 3 failing checks and 5 warnings across 13 pages.",
@@ -171,7 +193,8 @@ describe("renderers", () => {
   const r = report({
     ruleResults: {},
     editorSummary: summary({
-      prose: "Poor shape at 48/100. Accessibility scored 31. About 400 pages share it.",
+      prose:
+        "Poor shape at 48/100. Accessibility scored 31. About 400 pages share it.",
       verdict: "Fix the forms.",
     }),
   });

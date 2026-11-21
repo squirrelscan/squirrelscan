@@ -1,19 +1,28 @@
+import { detectTechnologies } from "@squirrelscan/tech-detect";
+import {
+  EDGE_ASN_PROVIDERS,
+  EDGE_RANGE_PROVIDERS,
+  matchEdgeAsn,
+  matchEdgeRanges,
+} from "@squirrelscan/utils/geoip/edge";
 // #1807: edge detection from headers, published IP ranges and ASN, and the origin kept apart. Synthetic
 // header and IP fixtures only (the IPs are taken from the bundled provider range files).
 import { describe, expect, test } from "bun:test";
 
-import { detectTechnologies } from "@squirrelscan/tech-detect";
-import { EDGE_ASN_PROVIDERS, EDGE_RANGE_PROVIDERS, matchEdgeAsn, matchEdgeRanges } from "@squirrelscan/utils/geoip/edge";
-
 import { buildReportHost, cloudRangeOf, detectEdge } from "../src/host-info";
 
-const techs = (headers: Record<string, string>, url = "https://example.test/") =>
-  detectTechnologies({ url, headers, html: "<html><body>x</body></html>" }).map((t) => ({
-    id: t.id,
-    name: t.name,
-    category: t.category,
-    detectedBy: t.detectedBy,
-  }));
+const techs = (
+  headers: Record<string, string>,
+  url = "https://example.test/"
+) =>
+  detectTechnologies({ url, headers, html: "<html><body>x</body></html>" }).map(
+    (t) => ({
+      id: t.id,
+      name: t.name,
+      category: t.category,
+      detectedBy: t.detectedBy,
+    })
+  );
 
 const HEADER_CASES: Array<[string, Record<string, string>]> = [
   ["cloudflare", { "cf-ray": "8a1b2c3d4e5f-SYD" }],
@@ -48,7 +57,10 @@ describe("header source", () => {
   });
 
   test("an edge named only by page HTML is not a header match", () => {
-    const edge = detectEdge([], [{ id: "cloudfront", detectedBy: "html:cloudfront\\.net" }]);
+    const edge = detectEdge(
+      [],
+      [{ id: "cloudfront", detectedBy: "html:cloudfront\\.net" }]
+    );
     expect(edge).toBeNull();
   });
 });
@@ -61,7 +73,14 @@ describe("ip-range source", () => {
     ["fastly", "151.101.1.1"],
     ["azure-front-door", "4.145.22.161"],
   ];
-  const OUT: string[] = ["173.245.64.1", "151.102.1.1", "4.145.22.168", "8.8.8.8", "93.184.216.34", "2001:db8::1"];
+  const OUT: string[] = [
+    "173.245.64.1",
+    "151.102.1.1",
+    "4.145.22.168",
+    "8.8.8.8",
+    "93.184.216.34",
+    "2001:db8::1",
+  ];
 
   for (const [id, ip] of IN) {
     test(`${ip} is in the ${id} ranges alone`, () => {
@@ -77,12 +96,18 @@ describe("ip-range source", () => {
     });
   }
   test("an IPv4-mapped IPv6 address is the IPv4 address", () => {
-    expect(matchEdgeRanges("::ffff:151.101.1.1").map((m) => m.provider)).toEqual(["fastly"]);
+    expect(
+      matchEdgeRanges("::ffff:151.101.1.1").map((m) => m.provider)
+    ).toEqual(["fastly"]);
   });
   test("a whole-cloud range (Google Cloud) is not an edge on its own", () => {
-    expect(matchEdgeRanges("34.35.1.1").map((m) => m.provider)).toEqual(["google-cloud"]);
+    expect(matchEdgeRanges("34.35.1.1").map((m) => m.provider)).toEqual([
+      "google-cloud",
+    ]);
     expect(detectEdge(["34.35.1.1"], [])).toBeNull();
-    expect(detectEdge(["34.35.1.1"], techs({ "cf-ray": "x-SYD" }))?.alsoMatched).toBeUndefined();
+    expect(
+      detectEdge(["34.35.1.1"], techs({ "cf-ray": "x-SYD" }))?.alsoMatched
+    ).toBeUndefined();
   });
   test("a whole-cloud range never adds to or overrides a real edge", () => {
     const fastly = detectEdge(["34.35.1.1", "151.101.1.1"], []);
@@ -94,11 +119,17 @@ describe("ip-range source", () => {
     expect(cf?.matched).toEqual(["header"]);
   });
   test("a whole-cloud match is reported as provider information, with its address", () => {
-    expect(cloudRangeOf(["8.8.8.8", "34.35.1.1"])).toEqual({ id: "google-cloud", name: "Google Cloud", address: "34.35.1.1" });
+    expect(cloudRangeOf(["8.8.8.8", "34.35.1.1"])).toEqual({
+      id: "google-cloud",
+      name: "Google Cloud",
+      address: "34.35.1.1",
+    });
     expect(cloudRangeOf(["151.101.1.1"])).toBeUndefined();
   });
   test("a Cloudflare address matches only Cloudflare", () => {
-    expect(matchEdgeRanges("173.245.48.1").map((m) => m.provider)).toEqual(["cloudflare"]);
+    expect(matchEdgeRanges("173.245.48.1").map((m) => m.provider)).toEqual([
+      "cloudflare",
+    ]);
   });
 });
 
@@ -133,19 +164,35 @@ describe("combined sources and origin", () => {
   test("a disagreeing source is kept as alsoMatched, not merged", () => {
     const edge = detectEdge(["151.101.1.1"], techs({ "cf-ray": "x-SYD" }));
     expect(edge?.id).toBe("cloudflare");
-    expect(edge?.alsoMatched).toEqual([{ id: "fastly", name: "Fastly", source: "ip-range" }]);
+    expect(edge?.alsoMatched).toEqual([
+      { id: "fastly", name: "Fastly", source: "ip-range" },
+    ]);
   });
   test("an origin behind an edge is reported separately", () => {
     const edge = detectEdge(
       [],
       [
-        { id: "cloudflare-cdn", name: "Cloudflare", category: "cdn", detectedBy: "header:cf-ray" },
-        { id: "heroku", name: "Heroku", category: "hosting", detectedBy: "header:via" },
-      ],
+        {
+          id: "cloudflare-cdn",
+          name: "Cloudflare",
+          category: "cdn",
+          detectedBy: "header:cf-ray",
+        },
+        {
+          id: "heroku",
+          name: "Heroku",
+          category: "hosting",
+          detectedBy: "header:via",
+        },
+      ]
     );
     expect(edge?.id).toBe("cloudflare");
     expect(edge?.edgeHosted).toBe(false);
-    expect(edge?.origin).toEqual({ status: "identified", id: "heroku", name: "Heroku" });
+    expect(edge?.origin).toEqual({
+      status: "identified",
+      id: "heroku",
+      name: "Heroku",
+    });
   });
   test("no identifiable origin is unknown, never the edge", () => {
     const edge = detectEdge([], techs({ "cf-ray": "x-SYD" }));
@@ -156,7 +203,10 @@ describe("combined sources and origin", () => {
       { id: "vercel", detectedBy: "header:x-vercel-id" },
       { id: "netlify", detectedBy: "header:x-nf-request-id" },
     ]) {
-      const e = detectEdge([], [t, { id: "heroku", category: "hosting" as const }]);
+      const e = detectEdge(
+        [],
+        [t, { id: "heroku", category: "hosting" as const }]
+      );
       expect(e?.edgeHosted).toBe(true);
       expect(e?.origin).toEqual({ status: "edge-hosted" });
     }
@@ -165,7 +215,7 @@ describe("combined sources and origin", () => {
       [
         { id: "cloudflare-cdn", detectedBy: "header:cf-ray" },
         { id: "cloudflare-pages", detectedBy: "html:\\.pages\\.dev" },
-      ],
+      ]
     );
     expect(pages?.id).toBe("cloudflare");
     expect(pages?.edgeHosted).toBe(true);
@@ -175,53 +225,88 @@ describe("combined sources and origin", () => {
   });
   test("no edge: nothing is reported and the country stays an origin location", async () => {
     expect(detectEdge(["8.8.8.8"], [{ id: "wordpress" }])).toBeNull();
-    const host = await buildReportHost({ host: "x.test", ipv4: ["8.8.8.8"], ipv6: [] }, [{ id: "wordpress" }]);
+    const host = await buildReportHost(
+      { host: "x.test", ipv4: ["8.8.8.8"], ipv6: [] },
+      [{ id: "wordpress" }]
+    );
     expect(host?.edge).toBeUndefined();
     expect(host?.country?.location).toBe("origin");
   });
   test("a whole-cloud address is not an edge: no edge, country not labelled edge, cloudRange set", async () => {
-    const host = await buildReportHost({ host: "x.test", ipv4: ["34.35.1.1"], ipv6: [] }, []);
+    const host = await buildReportHost(
+      { host: "x.test", ipv4: ["34.35.1.1"], ipv6: [] },
+      []
+    );
     expect(host?.edge).toBeUndefined();
     expect(host?.country?.location).toBe("origin");
     expect(host?.country?.edge).toBeUndefined();
-    expect(host?.cloudRange).toEqual({ id: "google-cloud", name: "Google Cloud", address: "34.35.1.1" });
+    expect(host?.cloudRange).toEqual({
+      id: "google-cloud",
+      name: "Google Cloud",
+      address: "34.35.1.1",
+    });
     expect(JSON.parse(JSON.stringify(host)).edge).toBeUndefined();
   });
   test("a whole-cloud address beside a real edge leaves the edge and its country unchanged", async () => {
-    const host = await buildReportHost({ host: "x.test", ipv4: ["34.35.1.1", "151.101.1.1"], ipv6: [] }, []);
+    const host = await buildReportHost(
+      { host: "x.test", ipv4: ["34.35.1.1", "151.101.1.1"], ipv6: [] },
+      []
+    );
     expect(host?.edge?.id).toBe("fastly");
     expect(host?.country?.location).toBe("edge");
     expect(host?.cloudRange?.id).toBe("google-cloud");
   });
   test("an edge found only from an IP labels the country as the edge's", async () => {
-    const host = await buildReportHost({ host: "x.test", ipv4: ["151.101.1.1"], ipv6: [] }, []);
+    const host = await buildReportHost(
+      { host: "x.test", ipv4: ["151.101.1.1"], ipv6: [] },
+      []
+    );
     expect(host?.edge?.id).toBe("fastly");
     expect(host?.country?.location).toBe("edge");
-    expect(JSON.parse(JSON.stringify(host)).edge.origin).toEqual({ status: "unknown" });
+    expect(JSON.parse(JSON.stringify(host)).edge.origin).toEqual({
+      status: "unknown",
+    });
   });
 });
 
 describe("bundled data", () => {
   test("the range file covers every provider with a published list", () => {
-    for (const id of ["cloudflare", "cloudfront", "fastly", "azure-front-door", "google-cloud"]) {
+    for (const id of [
+      "cloudflare",
+      "cloudfront",
+      "fastly",
+      "azure-front-door",
+      "google-cloud",
+    ]) {
       expect(EDGE_RANGE_PROVIDERS).toContain(id);
     }
   });
   test("the ASN file covers the providers with edge-specific ASNs", () => {
-    for (const id of ["cloudflare", "fastly", "akamai", "vercel"]) expect(EDGE_ASN_PROVIDERS).toContain(id);
+    for (const id of ["cloudflare", "fastly", "akamai", "vercel"])
+      expect(EDGE_ASN_PROVIDERS).toContain(id);
   });
 });
 
 describe("refresh record", () => {
   test("SNAPSHOT.json records the fetch date and a sha256 for every file fetched", async () => {
-    const snap = (await Bun.file(new URL("../../utils/geoip-db/SNAPSHOT.json", import.meta.url)).json()) as any;
+    const snap = (await Bun.file(
+      new URL("../../utils/geoip-db/SNAPSHOT.json", import.meta.url)
+    ).json()) as any;
     expect(snap.edge.fetchedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(snap.edge.asn.sourceSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(snap.edge.asn.license).toBe("CC-BY-4.0");
     const urls = snap.edge.rangeSources.map((s: any) => s.url);
-    for (const u of ["cloudflare.com/ips-v4", "cloudflare.com/ips-v6", "ip-ranges.amazonaws.com", "api.fastly.com/public-ip-list", "gstatic.com/ipranges/cloud.json", "ServiceTags_Public"]) {
+    for (const u of [
+      "cloudflare.com/ips-v4",
+      "cloudflare.com/ips-v6",
+      "ip-ranges.amazonaws.com",
+      "api.fastly.com/public-ip-list",
+      "gstatic.com/ipranges/cloud.json",
+      "ServiceTags_Public",
+    ]) {
       expect(urls.some((x: string) => x.includes(u))).toBe(true);
     }
-    for (const s of snap.edge.rangeSources) expect(s.sha256).toMatch(/^[0-9a-f]{64}$/);
+    for (const s of snap.edge.rangeSources)
+      expect(s.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 });

@@ -1,7 +1,10 @@
 // a11y/autocomplete-tokens - Identified fields carry the right autofill token
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { CheckItem } from "@squirrelscan/core-contracts";
+
+import { wcag } from "@squirrelscan/core-contracts/wcag";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import {
   buildLabelIndex,
@@ -13,7 +16,6 @@ import {
   parseAutocomplete,
   segmentsOf,
 } from "../shared/form-fields";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** One field that carries the wrong token, or none at all. */
 interface Offender {
@@ -85,7 +87,7 @@ export const autocompleteTokensRule: Rule = {
       let personal = formHasPersonalField.get(form);
       if (personal === undefined) {
         personal = [...form.querySelectorAll("input, select, textarea")].some(
-          (f) => isDataField(f) && isOtherPersonalField(f, labels),
+          (f) => isDataField(f) && isOtherPersonalField(f, labels)
         );
         formHasPersonalField.set(form, personal);
       }
@@ -105,7 +107,8 @@ export const autocompleteTokensRule: Rule = {
       // that is present is still validated.
       if (
         purpose.token === "country" &&
-        (raw === null || ["", "on", "off"].includes(raw.trim().toLowerCase())) &&
+        (raw === null ||
+          ["", "on", "off"].includes(raw.trim().toLowerCase())) &&
         isLoneCountry(el)
       ) {
         continue;
@@ -119,7 +122,11 @@ export const autocompleteTokensRule: Rule = {
             id: selector,
             label: `${purpose.label} field has no autocomplete token (expected "${purpose.token}")`,
             snippet,
-            meta: { reason: "missing", purpose: purpose.label, expected: purpose.token },
+            meta: {
+              reason: "missing",
+              purpose: purpose.label,
+              expected: purpose.token,
+            },
           },
         });
         continue;

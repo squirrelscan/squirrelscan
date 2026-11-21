@@ -43,6 +43,7 @@
 // schema change: `canonical` is already a stored column.
 
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
@@ -95,7 +96,12 @@ const TRACKING_PARAM_NAMES = new Set([
 ]);
 
 /** The form axes compared across the site, in report order. */
-const DIMENSIONS = ["scheme", "host", "trailing slash", "tracking params"] as const;
+const DIMENSIONS = [
+  "scheme",
+  "host",
+  "trailing slash",
+  "tracking params",
+] as const;
 type Dimension = (typeof DIMENSIONS)[number];
 
 /**
@@ -191,7 +197,10 @@ function slashForm(pathname: string): string | null {
  * Fold one page in. Anything core/canonical or core/canonical-header would
  * already report is dropped here: this rule never doubles up on their findings.
  */
-function accumulatePage(rollup: CanonicalRollup, record: CanonicalPageRecord): void {
+function accumulatePage(
+  rollup: CanonicalRollup,
+  record: CanonicalPageRecord
+): void {
   rollup.pageCount += 1;
 
   if (record.status < 200 || record.status >= 300) return;
@@ -210,13 +219,18 @@ function accumulatePage(rollup: CanonicalRollup, record: CanonicalPageRecord): v
 
   // Cross-host canonicals belong to core/canonical too, and their form follows
   // whatever conventions the OTHER site keeps - comparing it here is meaningless.
-  if (stripWww(target.hostname.toLowerCase()) !== stripWww(page.hostname.toLowerCase())) {
+  if (
+    stripWww(target.hostname.toLowerCase()) !==
+    stripWww(page.hostname.toLowerCase())
+  ) {
     return;
   }
 
   const push = (dimension: Dimension, form: string | null): void => {
     if (!form) return;
-    const scope = SECTIONED_DIMENSIONS.has(dimension) ? sectionOf(target.pathname) : "";
+    const scope = SECTIONED_DIMENSIONS.has(dimension)
+      ? sectionOf(target.pathname)
+      : "";
     const key = `${dimension}\0${scope}`;
     let sample = rollup.samples.get(key);
     if (!sample) {
@@ -228,7 +242,10 @@ function accumulatePage(rollup: CanonicalRollup, record: CanonicalPageRecord): v
   };
 
   push("scheme", target.protocol === "https:" ? "https" : "http");
-  push("host", target.hostname.toLowerCase().startsWith("www.") ? "www" : "apex");
+  push(
+    "host",
+    target.hostname.toLowerCase().startsWith("www.") ? "www" : "apex"
+  );
   push("trailing slash", slashForm(target.pathname));
   push(
     "tracking params",
@@ -254,7 +271,10 @@ function byString(a: string, b: string): number {
  * `siteQuery.pageCount()` (which includes rows this rule cannot sample), so the
  * site floor is judged on the crawl, not on the comparable subset.
  */
-function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResult[] {
+function buildChecks(
+  rollup: CanonicalRollup,
+  sitePageCount: number
+): CheckResult[] {
   if (sitePageCount < CANONICAL_FORM_MIN_PAGES) {
     return [
       skip(
@@ -285,13 +305,17 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
     if (total < CANONICAL_FORM_MIN_SAMPLE) continue;
 
     const counts = new Map<string, number>();
-    for (const form of sample.forms) counts.set(form, (counts.get(form) ?? 0) + 1);
+    for (const form of sample.forms)
+      counts.set(form, (counts.get(form) ?? 0) + 1);
 
     // The modal form, ties broken by name so the two paths cannot disagree.
     let norm = "";
     let normCount = 0;
     for (const [form, count] of counts) {
-      if (count > normCount || (count === normCount && byString(form, norm) < 0)) {
+      if (
+        count > normCount ||
+        (count === normCount && byString(form, norm) < 0)
+      ) {
         norm = form;
         normCount = count;
       }
@@ -372,20 +396,22 @@ function buildChecks(rollup: CanonicalRollup, sitePageCount: number): CheckResul
       byString(a.scope, b.scope) ||
       byString(a.deviant, b.deviant)
   );
-  const items: CheckItem[] = drifts.slice(0, CANONICAL_FORM_MAX_ITEMS).map((d) => ({
-    id: `${d.dimension}${d.scope ? `@${d.scope}` : ""}:${d.deviant}`,
-    label: `${d.have} of ${d.total} canonicals${d.scope ? ` in ${d.scope}` : ""} use ${d.norm}, these ${d.deviantUrls.length} use ${d.deviant}`,
-    sourcePages: d.deviantUrls.slice(0, CANONICAL_FORM_MAX_URLS_PER_ITEM),
-    meta: {
-      dimension: d.dimension,
-      scope: d.scope,
-      norm: d.norm,
-      deviant: d.deviant,
-      have: d.have,
-      total: d.total,
-      drifted: d.deviantUrls.length,
-    },
-  }));
+  const items: CheckItem[] = drifts
+    .slice(0, CANONICAL_FORM_MAX_ITEMS)
+    .map((d) => ({
+      id: `${d.dimension}${d.scope ? `@${d.scope}` : ""}:${d.deviant}`,
+      label: `${d.have} of ${d.total} canonicals${d.scope ? ` in ${d.scope}` : ""} use ${d.norm}, these ${d.deviantUrls.length} use ${d.deviant}`,
+      sourcePages: d.deviantUrls.slice(0, CANONICAL_FORM_MAX_URLS_PER_ITEM),
+      meta: {
+        dimension: d.dimension,
+        scope: d.scope,
+        norm: d.norm,
+        deviant: d.deviant,
+        have: d.have,
+        total: d.total,
+        drifted: d.deviantUrls.length,
+      },
+    }));
 
   const share = deviantPages.size / judgedPages;
   return [

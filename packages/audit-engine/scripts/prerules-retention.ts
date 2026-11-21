@@ -47,7 +47,10 @@ const BATCH = Number.parseInt(arg("batch", "50"), 10);
 const MB = 1024 * 1024;
 
 /** The pre-#1860 body: every retained string still a slice of its page. */
-function absorbAttached(target: ExternalLinkOccurrences, siteContext: SiteContextPage[]): void {
+function absorbAttached(
+  target: ExternalLinkOccurrences,
+  siteContext: SiteContextPage[]
+): void {
   for (const { page, parsed } of siteContext) {
     if (!parsed || !parsed.document) continue;
     for (const link of extractLinks(parsed.document, page.finalUrl)) {
@@ -92,7 +95,9 @@ const storage = new SQLiteStorage(DB);
 await run(storage.init());
 const crawls = await run(storage.listCrawls(1));
 const crawlId = (crawls as Array<{ id: string }>)[0]!.id;
-const crawl = (await run(storage.getCrawl(crawlId))) as { baseUrl: string } | null;
+const crawl = (await run(storage.getCrawl(crawlId))) as {
+  baseUrl: string;
+} | null;
 const baseUrl = crawl?.baseUrl ?? "";
 
 const links: ExternalLinkOccurrences = new Map();
@@ -137,6 +142,6 @@ console.log(
     livePageMB: live.mb,
     hrefs: links.size,
     occurrences,
-  }),
+  })
 );
 await run(storage.close());

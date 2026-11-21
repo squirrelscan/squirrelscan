@@ -1,6 +1,7 @@
 // a11y/heading-order - Heading levels don't skip
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const headingOrderRule: Rule = {

@@ -13,11 +13,18 @@ describe("pageShare", () => {
 
   test("carries count and ratio", () => {
     const s = pageShare(50, 200);
-    expect(s).toMatchObject({ affectedPageCount: 50, crawledPages: 200, pageShare: 0.25 });
+    expect(s).toMatchObject({
+      affectedPageCount: 50,
+      crawledPages: 200,
+      pageShare: 0.25,
+    });
   });
 
   test("a one-page crawl is a single page, an empty crawl is share 0", () => {
     expect(pageShare(1, 1).label).toBe("single page");
-    expect(pageShare(3, 0)).toMatchObject({ pageShare: 0, label: "some pages" });
+    expect(pageShare(3, 0)).toMatchObject({
+      pageShare: 0,
+      label: "some pages",
+    });
   });
 });

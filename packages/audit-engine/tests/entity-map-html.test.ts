@@ -3,18 +3,21 @@
 // fetch at runtime), and nothing from the map can close the script block or
 // reach the DOM as markup.
 
-import { describe, expect, test } from "bun:test";
-
 import { parseDocument } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
 import { buildEntityMap, renderEntityMapHtml } from "../src/entity-map";
 
 const AT = "2026-01-01T00:00:00.000Z";
 
 function render(raw: string): string {
-  const map = buildEntityMap([{ url: "https://example.com/", raw }], "https://example.com/", {
-    generatedAt: AT,
-  });
+  const map = buildEntityMap(
+    [{ url: "https://example.com/", raw }],
+    "https://example.com/",
+    {
+      generatedAt: AT,
+    }
+  );
   return renderEntityMapHtml(map);
 }
 
@@ -26,7 +29,7 @@ describe("renderEntityMapHtml", () => {
         "@type": "Organization",
         "@id": "https://example.com/#org",
         name: "Acme",
-      }),
+      })
     );
 
     expect(html).toContain('<script type="application/json" id="em-data">');
@@ -46,7 +49,7 @@ describe("renderEntityMapHtml", () => {
         "@type": "Organization",
         name: "</script><script>window.pwned=1</script>",
         description: "<img src=x onerror=alert(1)>",
-      }),
+      })
     );
 
     // The payload survives, but only in escaped form.
@@ -61,21 +64,31 @@ describe("renderEntityMapHtml", () => {
     // And the inlined JSON still parses back to the original name.
     const start = html.indexOf('id="em-data">') + 'id="em-data">'.length;
     const end = html.indexOf("</script>", start);
-    const parsed = JSON.parse(html.slice(start, end)) as { nodes: { name: string | null }[] };
-    expect(parsed.nodes[0]?.name).toBe("</script><script>window.pwned=1</script>");
+    const parsed = JSON.parse(html.slice(start, end)) as {
+      nodes: { name: string | null }[];
+    };
+    expect(parsed.nodes[0]?.name).toBe(
+      "</script><script>window.pwned=1</script>"
+    );
   });
 
   test("a hostile site URL cannot break out of the title", () => {
-    const map = buildEntityMap([], '"><script>x()</script>', { generatedAt: AT });
+    const map = buildEntityMap([], '"><script>x()</script>', {
+      generatedAt: AT,
+    });
     const html = renderEntityMapHtml(map);
     expect(html).toContain("&quot;&gt;&lt;script&gt;");
     expect(html).not.toContain("<script>x()</script>");
   });
 
   test("renders an empty-state page for a site with no JSON-LD", () => {
-    const map = buildEntityMap([{ url: "https://example.com/", raw: null }], "https://example.com/", {
-      generatedAt: AT,
-    });
+    const map = buildEntityMap(
+      [{ url: "https://example.com/", raw: null }],
+      "https://example.com/",
+      {
+        generatedAt: AT,
+      }
+    );
     const html = renderEntityMapHtml(map);
     expect(html).toContain("This site declares no JSON-LD entities.");
     expect(html).toContain('"nodeCount":0');
@@ -94,7 +107,7 @@ describe("the viewer script itself", () => {
       "@type": "Organization",
       "@id": "https://example.com/#org",
       name: "Acme",
-    }),
+    })
   );
 
   test("parses as JavaScript", () => {
@@ -112,7 +125,11 @@ describe("the viewer script itself", () => {
     const scripts = [...document.querySelectorAll("script")]
       .filter((element) => {
         const type = element.getAttribute("type");
-        return type === null || type === "" || type.toLowerCase() === "text/javascript";
+        return (
+          type === null ||
+          type === "" ||
+          type.toLowerCase() === "text/javascript"
+        );
       })
       .map((element) => element.textContent ?? "")
       .filter((source) => source.trim().length > 0);
@@ -135,6 +152,8 @@ describe("the viewer script itself", () => {
     expect(html).toContain("var HOVER_LABEL_BUDGET = 12;");
     // The granted-label test must read the capped set, not the full neighbour
     // set — using `near` here is the bug this pins.
-    expect(html).toContain("neighbourLabels !== null && neighbourLabels[index]");
+    expect(html).toContain(
+      "neighbourLabels !== null && neighbourLabels[index]"
+    );
   });
 });

@@ -1,6 +1,7 @@
+import type { HTMLAttributes } from "react";
+
 // Classic JSX in the CLI build needs React in scope.
 import React from "react";
-import type { HTMLAttributes } from "react";
 
 import { cn } from "./utils";
 
@@ -17,7 +18,12 @@ export interface PanelProps extends HTMLAttributes<HTMLDivElement> {
   padded?: boolean;
 }
 
-export function Panel({ className, tone = "default", padded = true, ...props }: PanelProps) {
+export function Panel({
+  className,
+  tone = "default",
+  padded = true,
+  ...props
+}: PanelProps) {
   return (
     <div
       data-slot="panel"

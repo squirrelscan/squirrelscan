@@ -1,6 +1,7 @@
 // a11y/html-lang-valid - HTML lang attribute has valid value
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Common valid language codes (ISO 639-1)

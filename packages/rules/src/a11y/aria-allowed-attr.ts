@@ -1,6 +1,7 @@
 // a11y/aria-allowed-attr - Check for allowed ARIA attributes on elements
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { globalAriaAttributes, validAriaAttributes } from "./aria-data";

@@ -1,11 +1,11 @@
 // crawl/canonical-chain - Canonical redirect chain detection
 
+import { formatRedirectHop } from "@squirrelscan/core-contracts";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { formatRedirectHop } from "@squirrelscan/core-contracts";
-
 import { didRedirect, requestTarget } from "../shared/redirect-evidence";
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export const canonicalChainRule: Rule = {
   meta: {
@@ -166,7 +166,9 @@ export const canonicalChainRule: Rule = {
         items: [
           {
             id: absoluteCanonical,
-            label: canonicalChain.hops.map((hop) => formatRedirectHop(hop)).join(" → "),
+            label: canonicalChain.hops
+              .map((hop) => formatRedirectHop(hop))
+              .join(" → "),
             meta: { chain: canonicalChain, finalUrl },
           },
         ],

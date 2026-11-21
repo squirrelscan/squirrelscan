@@ -1,10 +1,9 @@
 // perf/css-file-size - Detect oversized CSS files
 
+import { RESOURCE_SIZE_LIMITS } from "@squirrelscan/utils/constants";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { RESOURCE_SIZE_LIMITS } from "@squirrelscan/utils/constants";
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) {

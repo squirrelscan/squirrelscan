@@ -43,7 +43,9 @@ describe("followRedirects scheme allowlist", () => {
   test("the refused target does not leak into the reported chain", async () => {
     // hops[].url and finalUrl surface in the report, so a blocked target must not
     // ride along in either.
-    serve({ "https://example.com/": { status: 302, location: "file:///etc/passwd" } });
+    serve({
+      "https://example.com/": { status: 302, location: "file:///etc/passwd" },
+    });
 
     const chain = await followRedirects("https://example.com/");
 
@@ -56,7 +58,9 @@ describe("followRedirects scheme allowlist", () => {
     ["javascript:alert(1)", "javascript"],
     ["ftp://example.com/f", "ftp"],
   ])("%s is refused", async (location) => {
-    const fetched = serve({ "https://example.com/": { status: 302, location } });
+    const fetched = serve({
+      "https://example.com/": { status: 302, location },
+    });
 
     const chain = await followRedirects("https://example.com/");
 
@@ -66,8 +70,14 @@ describe("followRedirects scheme allowlist", () => {
 
   test("ordinary http(s) chains still follow", async () => {
     const fetched = serve({
-      "https://example.com/": { status: 301, location: "https://example.com/a" },
-      "https://example.com/a": { status: 302, location: "https://example.com/b" },
+      "https://example.com/": {
+        status: 301,
+        location: "https://example.com/a",
+      },
+      "https://example.com/a": {
+        status: 302,
+        location: "https://example.com/b",
+      },
       "https://example.com/b": { status: 200 },
     });
 
@@ -128,7 +138,9 @@ describe("followRedirects egress", () => {
     "http://[fe80::1]/x",
     "http://imds.example.net/latest/",
   ])("a redirect to %s is never fetched", async (location) => {
-    const fetched = serve({ "http://example.com/go": { status: 302, location } });
+    const fetched = serve({
+      "http://example.com/go": { status: 302, location },
+    });
 
     const chain = await followRedirects("http://example.com/go", resolve);
 
@@ -141,7 +153,10 @@ describe("followRedirects egress", () => {
     resolved.length = 0;
     const fetched = serve({
       "http://example.com/": { status: 301, location: "https://example.com/" },
-      "https://example.com/": { status: 302, location: "http://intranet.test/home" },
+      "https://example.com/": {
+        status: 302,
+        location: "http://intranet.test/home",
+      },
       "http://intranet.test/home": { status: 200 },
     });
 
@@ -173,35 +188,49 @@ describe("followRedirects egress: fail closed, all answers, encodings, chains", 
       }) as unknown as (host: string) => Promise<string[]>,
     ],
     ["there is no answer", async () => []],
-  ])("a hop off the probed host is not followed when %s", async (_why, resolve) => {
-    const fetched = serve({
-      "http://example.com/go": { status: 302, location: "https://elsewhere.example.net/x" },
-    });
-    const chain = await followRedirects("http://example.com/go", resolve);
-    expect(fetched).toEqual(["http://example.com/go"]);
-    expect(chain.endsInError).toBe(true);
-  });
+  ])(
+    "a hop off the probed host is not followed when %s",
+    async (_why, resolve) => {
+      const fetched = serve({
+        "http://example.com/go": {
+          status: 302,
+          location: "https://elsewhere.example.net/x",
+        },
+      });
+      const chain = await followRedirects("http://example.com/go", resolve);
+      expect(fetched).toEqual(["http://example.com/go"]);
+      expect(chain.endsInError).toBe(true);
+    }
+  );
 
   test("a hop that stays on the probed host is followed whatever the resolver does", async () => {
     const fetched = serve({
-      "http://example.com/go": { status: 301, location: "https://example.com/go" },
+      "http://example.com/go": {
+        status: 301,
+        location: "https://example.com/go",
+      },
       "https://example.com/go": { status: 200 },
     });
     const chain = await followRedirects("http://example.com/go", async () => {
       throw new Error("ENOTFOUND");
     });
-    expect(fetched).toEqual(["http://example.com/go", "https://example.com/go"]);
+    expect(fetched).toEqual([
+      "http://example.com/go",
+      "https://example.com/go",
+    ]);
     expect(chain.endsInError).toBe(false);
   });
 
   test.each(["http://[::1", "http://exa mple.com/", "http://:80/"])(
     "a malformed Location (%s) is not followed",
     async (location) => {
-      const fetched = serve({ "http://example.com/go": { status: 302, location } });
+      const fetched = serve({
+        "http://example.com/go": { status: 302, location },
+      });
       const chain = await followRedirects("http://example.com/go", publicIp);
       expect(fetched).toEqual(["http://example.com/go"]);
       expect(chain.endsInError).toBe(true);
-    },
+    }
   );
 
   test.each([
@@ -211,14 +240,23 @@ describe("followRedirects egress: fail closed, all answers, encodings, chains", 
     [["93.184.215.14", "::ffff:169.254.169.254"]],
     [["93.184.215.14", "64:ff9b::a9fe:a9fe"]],
     [["93.184.215.14", "168.63.129.16"]],
-  ])("a name with any refused answer among %j is not followed", async (answers) => {
-    const fetched = serve({
-      "http://example.com/go": { status: 302, location: "http://rebind.example.net/x" },
-    });
-    const chain = await followRedirects("http://example.com/go", async () => answers);
-    expect(fetched).toEqual(["http://example.com/go"]);
-    expect(chain.endsInError).toBe(true);
-  });
+  ])(
+    "a name with any refused answer among %j is not followed",
+    async (answers) => {
+      const fetched = serve({
+        "http://example.com/go": {
+          status: 302,
+          location: "http://rebind.example.net/x",
+        },
+      });
+      const chain = await followRedirects(
+        "http://example.com/go",
+        async () => answers
+      );
+      expect(fetched).toEqual(["http://example.com/go"]);
+      expect(chain.endsInError).toBe(true);
+    }
+  );
 
   test.each([
     "http://169.254.169.254/",
@@ -240,11 +278,16 @@ describe("followRedirects egress: fail closed, all answers, encodings, chains", 
     "HTTP://Metadata.Google.Internal:80/computeMetadata/v1/",
   ])("%s is refused without a lookup", async (location) => {
     const asked: string[] = [];
-    const fetched = serve({ "http://example.com/go": { status: 302, location } });
-    const chain = await followRedirects("http://example.com/go", async (host) => {
-      asked.push(host);
-      return ["93.184.215.14"];
+    const fetched = serve({
+      "http://example.com/go": { status: 302, location },
     });
+    const chain = await followRedirects(
+      "http://example.com/go",
+      async (host) => {
+        asked.push(host);
+        return ["93.184.215.14"];
+      }
+    );
     expect(fetched).toEqual(["http://example.com/go"]);
     expect(chain.endsInError).toBe(true);
     expect(asked).toEqual([]);
@@ -253,15 +296,30 @@ describe("followRedirects egress: fail closed, all answers, encodings, chains", 
   test("a chain that leaves and re-enters the site is checked at every hop off it", async () => {
     const asked: string[] = [];
     const fetched = serve({
-      "http://example.com/a": { status: 301, location: "https://cdn.example.net/b" },
-      "https://cdn.example.net/b": { status: 302, location: "https://example.com/c" },
-      "https://example.com/c": { status: 302, location: "https://login.example.org/d" },
-      "https://login.example.org/d": { status: 302, location: "http://169.254.169.254/e" },
+      "http://example.com/a": {
+        status: 301,
+        location: "https://cdn.example.net/b",
+      },
+      "https://cdn.example.net/b": {
+        status: 302,
+        location: "https://example.com/c",
+      },
+      "https://example.com/c": {
+        status: 302,
+        location: "https://login.example.org/d",
+      },
+      "https://login.example.org/d": {
+        status: 302,
+        location: "http://169.254.169.254/e",
+      },
     });
-    const chain = await followRedirects("http://example.com/a", async (host) => {
-      asked.push(host);
-      return ["93.184.215.14"];
-    });
+    const chain = await followRedirects(
+      "http://example.com/a",
+      async (host) => {
+        asked.push(host);
+        return ["93.184.215.14"];
+      }
+    );
     expect(fetched).toEqual([
       "http://example.com/a",
       "https://cdn.example.net/b",
@@ -277,9 +335,18 @@ describe("followRedirects egress: fail closed, all answers, encodings, chains", 
     // every hop to that name, so a later answer cannot slip in mid-probe.
     let calls = 0;
     const fetched = serve({
-      "http://example.com/a": { status: 302, location: "https://flip.example.net/b" },
-      "https://flip.example.net/b": { status: 302, location: "https://example.com/c" },
-      "https://example.com/c": { status: 302, location: "https://flip.example.net/d" },
+      "http://example.com/a": {
+        status: 302,
+        location: "https://flip.example.net/b",
+      },
+      "https://flip.example.net/b": {
+        status: 302,
+        location: "https://example.com/c",
+      },
+      "https://example.com/c": {
+        status: 302,
+        location: "https://flip.example.net/d",
+      },
       "https://flip.example.net/d": { status: 200 },
     });
     const chain = await followRedirects("http://example.com/a", async () => {
@@ -295,8 +362,12 @@ describe("followRedirects egress: fail closed, all answers, encodings, chains", 
     const routes: Record<string, { status: number; location?: string }> = {};
     for (let i = 0; i < 30; i++) {
       const host = i % 2 === 0 ? "example.com" : `hop${i}.example.net`;
-      const next = (i + 1) % 2 === 0 ? "example.com" : `hop${i + 1}.example.net`;
-      routes[`https://${host}/${i}`] = { status: 302, location: `https://${next}/${i + 1}` };
+      const next =
+        (i + 1) % 2 === 0 ? "example.com" : `hop${i + 1}.example.net`;
+      routes[`https://${host}/${i}`] = {
+        status: 302,
+        location: `https://${next}/${i + 1}`,
+      };
     }
     const fetched = serve(routes);
     await followRedirects("https://example.com/0", publicIp);

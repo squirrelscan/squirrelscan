@@ -7,11 +7,13 @@
 // origin kept sending. Only a raw socket server can show this: Bun.serve hides
 // when the client hangs up, and these servers see the close.
 
+import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
+import {
+  fetchUndecoded,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
-import { fetchUndecoded, readBodyCapped } from "@squirrelscan/utils/response-body";
 
 import { safeFetchWithDeadline, withRequestDeadline } from "../src/deadline";
 import { fetchPage } from "../src/fetcher";
@@ -61,12 +63,19 @@ function endlessServer(head: string): Endless {
     },
   });
   stops.push(() => listener.stop(true));
-  return { url: `http://127.0.0.1:${listener.port}/`, closedAt: () => closedAt };
+  return {
+    url: `http://127.0.0.1:${listener.port}/`,
+    closedAt: () => closedAt,
+  };
 }
 
 /** Milliseconds from `returnedAt` to the close, or -1 if none came in 3 s. */
-async function closeDelay(server: Endless, returnedAt: number): Promise<number> {
-  while (server.closedAt() === 0 && Date.now() - returnedAt < 3_000) await Bun.sleep(10);
+async function closeDelay(
+  server: Endless,
+  returnedAt: number
+): Promise<number> {
+  while (server.closedAt() === 0 && Date.now() - returnedAt < 3_000)
+    await Bun.sleep(10);
   return server.closedAt() === 0 ? -1 : server.closedAt() - returnedAt;
 }
 
@@ -75,8 +84,11 @@ const HTML_HEAD = "HTTP/1.1 200 OK\r\ncontent-type: text/html; charset=utf-8";
 describe("a capped read closes its connection (#766)", () => {
   test("safeFetchWithDeadline: the shared probe helper", async () => {
     const server = endlessServer("HTTP/1.1 200 OK\r\ncontent-type: text/plain");
-    const body = await safeFetchWithDeadline(server.url, {}, DEADLINE_MS, (response) =>
-      readBodyCapped(response, 64 * 1024),
+    const body = await safeFetchWithDeadline(
+      server.url,
+      {},
+      DEADLINE_MS,
+      (response) => readBodyCapped(response, 64 * 1024)
     );
     const delay = await closeDelay(server, Date.now());
     expect(body.length).toBe(64 * 1024);
@@ -86,10 +98,13 @@ describe("a capped read closes its connection (#766)", () => {
 
   test("safeFetchWithDeadline: a body with a Content-Length past the cap", async () => {
     const server = endlessServer(
-      "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 1000000000000",
+      "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 1000000000000"
     );
-    const body = await safeFetchWithDeadline(server.url, {}, DEADLINE_MS, (response) =>
-      readBodyCapped(response, 64 * 1024),
+    const body = await safeFetchWithDeadline(
+      server.url,
+      {},
+      DEADLINE_MS,
+      (response) => readBodyCapped(response, 64 * 1024)
     );
     const delay = await closeDelay(server, Date.now());
     expect(body.length).toBe(64 * 1024);
@@ -98,13 +113,15 @@ describe("a capped read closes its connection (#766)", () => {
   });
 
   test("withRequestDeadline: a body cancelled unread", async () => {
-    const server = endlessServer("HTTP/1.1 200 OK\r\ncontent-type: application/pdf");
+    const server = endlessServer(
+      "HTTP/1.1 200 OK\r\ncontent-type: application/pdf"
+    );
     await withRequestDeadline(
       DEADLINE_MS,
       (signal) => fetchUndecoded(server.url, { signal }),
       async (response) => {
         await response.body?.cancel();
-      },
+      }
     );
     const delay = await closeDelay(server, Date.now());
     expect(delay).toBeGreaterThanOrEqual(0);
@@ -118,7 +135,7 @@ describe("a capped read closes its connection (#766)", () => {
         userAgent: "squirrel-test",
         timeoutMs: DEADLINE_MS,
         followRedirects: true,
-      }),
+      })
     );
     const delay = await closeDelay(server, Date.now());
     expect(page.status).toBe(200);
@@ -135,7 +152,7 @@ describe("a capped read closes its connection (#766)", () => {
         timeoutMs: DEADLINE_MS,
         followRedirects: true,
         fetcher: createFetchDocumentFetcher(),
-      }),
+      })
     );
     const delay = await closeDelay(server, Date.now());
     expect(page.status).toBe(200);
@@ -154,15 +171,20 @@ describe("a capped read closes its connection (#766)", () => {
           connections++;
         },
         data(socket) {
-          socket.write("HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 5\r\n\r\nhello");
+          socket.write(
+            "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 5\r\n\r\nhello"
+          );
         },
       },
     });
     stops.push(() => listener.stop(true));
     const url = `http://127.0.0.1:${listener.port}/`;
     for (let i = 0; i < 2; i++) {
-      const body = await safeFetchWithDeadline(url, {}, DEADLINE_MS, (response) =>
-        readBodyCapped(response, 64 * 1024),
+      const body = await safeFetchWithDeadline(
+        url,
+        {},
+        DEADLINE_MS,
+        (response) => readBodyCapped(response, 64 * 1024)
       );
       expect(body).toBe("hello");
     }

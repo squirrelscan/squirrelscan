@@ -1,10 +1,19 @@
 // schema/breadcrumb - BreadcrumbList schema validation
 
+import {
+  flattenJsonLdNodes,
+  indexJsonLdIds,
+  resolveJsonLdRef,
+} from "@squirrelscan/utils";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
-
-import { UNREADABLE_MESSAGE, jsonLdTypes, microdataAndRdfaTypes, typeNames } from "./markup-types";
+import {
+  UNREADABLE_MESSAGE,
+  jsonLdTypes,
+  microdataAndRdfaTypes,
+  typeNames,
+} from "./markup-types";
 
 /**
  * Markup-derived anchors in the breadcrumbs section (an ancestor whose aria-label,
@@ -69,7 +78,11 @@ export const breadcrumbSchemaRule: Rule = {
         allNodes.push(schema);
         // Bare names: `https://schema.org/BreadcrumbList` is the same type, as a
         // string or inside an array.
-        if (typeNames(schema["@type"]).some((name) => name.toLowerCase() === "breadcrumblist")) {
+        if (
+          typeNames(schema["@type"]).some(
+            (name) => name.toLowerCase() === "breadcrumblist"
+          )
+        ) {
           breadcrumbSchema = schema;
           break;
         }
@@ -81,17 +94,22 @@ export const breadcrumbSchemaRule: Rule = {
       // describes (#2307). The markup names it (an ancestor whose aria-label, class
       // or id says breadcrumb); a model-only placement is not counted (repo#3365).
       const trailLinks = (ctx.parsed.links ?? []).filter(
-        (link) => link.section === "breadcrumbs" && link.sectionSource !== "model",
+        (link) =>
+          link.section === "breadcrumbs" && link.sectionSource !== "model"
       ).length;
       if (trailLinks >= MIN_TRAIL_LINKS) {
         // A trail declared nested in another node (`WebPage.breadcrumb`), or marked
         // up as microdata or RDFa (older themes), is described, just not as a
         // top-level JSON-LD node, so it is not this finding. Scanned only here: a
         // page with no trail link never pays for the walk.
-        const isBreadcrumb = (name: string): boolean => name.toLowerCase() === "breadcrumblist";
+        const isBreadcrumb = (name: string): boolean =>
+          name.toLowerCase() === "breadcrumblist";
         const nested = jsonLdTypes(allNodes);
         const markup = microdataAndRdfaTypes(doc);
-        if (!nested.types.some(isBreadcrumb) && !markup.types.some(isBreadcrumb)) {
+        if (
+          !nested.types.some(isBreadcrumb) &&
+          !markup.types.some(isBreadcrumb)
+        ) {
           // A scan that hit a bound proves nothing about what is absent.
           if (!nested.complete || !markup.complete) {
             checks.push({
@@ -105,7 +123,8 @@ export const breadcrumbSchemaRule: Rule = {
           checks.push({
             name: "breadcrumb-schema",
             status: "fail",
-            message: "A breadcrumb trail on the page has no BreadcrumbList schema",
+            message:
+              "A breadcrumb trail on the page has no BreadcrumbList schema",
             value: "Add BreadcrumbList JSON-LD that mirrors the trail",
             details: { trailLinks },
           });

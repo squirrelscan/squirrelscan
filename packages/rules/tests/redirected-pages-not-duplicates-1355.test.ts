@@ -1,21 +1,28 @@
 // #1355: a page that redirected to another URL carries that URL's content, so
 // duplicate title and description count it once, where it is served from.
 
-import { describe, expect, test } from "bun:test";
-
 import { parsePage } from "@squirrelscan/parser";
 import { crawledPageKeys, redirectedAway } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
-import { titleUniqueRule } from "../src/core/title-unique";
+import type { Rule, RuleContext, SiteData } from "../src/types";
+
 import { duplicateDescriptionRule } from "../src/content/duplicate-description";
 import { duplicateTitleRule } from "../src/content/duplicate-title";
-import type { Rule, RuleContext, SiteData } from "../src/types";
+import { titleUniqueRule } from "../src/core/title-unique";
 
 const BASE = "https://shop.example";
 const doc = (title: string, description: string) =>
   `<!doctype html><html lang="en"><head><title>${title}</title><meta name="description" content="${description}"></head><body><h1>${title}</h1></body></html>`;
 
-function site(pages: Array<{ url: string; finalUrl?: string; title: string; description: string }>): SiteData {
+function site(
+  pages: Array<{
+    url: string;
+    finalUrl?: string;
+    title: string;
+    description: string;
+  }>
+): SiteData {
   return {
     baseUrl: BASE,
     pages: pages.map((p) => ({
@@ -41,7 +48,10 @@ function statuses(rule: Rule, data: SiteData): string[] {
   return result.checks.map((c) => c.status);
 }
 
-const SAME = { title: "Saddle shop", description: "English description of the saddle shop" };
+const SAME = {
+  title: "Saddle shop",
+  description: "English description of the saddle shop",
+};
 
 describe("redirectedAway", () => {
   const crawled = crawledPageKeys([`${BASE}/en`, `${BASE}/de-ch`]);
@@ -57,15 +67,21 @@ describe("redirectedAway", () => {
   test("a target the crawl never reached is not a redirect away: the requested row is the only copy", () => {
     expect(redirectedAway(`${BASE}/a`, `${BASE}/b`, crawled)).toBe(false);
     // A query-only redirect, with the target never crawled.
-    expect(redirectedAway(`${BASE}/q`, `${BASE}/q?lang=en`, crawled)).toBe(false);
+    expect(redirectedAway(`${BASE}/q`, `${BASE}/q?lang=en`, crawled)).toBe(
+      false
+    );
     // No crawl set at all: evaluate the row.
     expect(redirectedAway(`${BASE}/de-ch`, `${BASE}/en`)).toBe(false);
   });
 
   test("both sides use one canonicalisation: case, default port, fragment and trailing slash", () => {
     const keys = crawledPageKeys(["HTTPS://Shop.Example:443/en/"]);
-    expect(redirectedAway(`${BASE}/de-ch`, "https://shop.example/en#top", keys)).toBe(true);
-    expect(redirectedAway(`${BASE}/de-ch`, "https://shop.example/en?x=1", keys)).toBe(false);
+    expect(
+      redirectedAway(`${BASE}/de-ch`, "https://shop.example/en#top", keys)
+    ).toBe(true);
+    expect(
+      redirectedAway(`${BASE}/de-ch`, "https://shop.example/en?x=1", keys)
+    ).toBe(false);
   });
 });
 

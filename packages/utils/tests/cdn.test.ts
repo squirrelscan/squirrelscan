@@ -7,8 +7,12 @@ import { detectCdnFromHeaders } from "../src/cdn";
 describe("detectCdnFromHeaders", () => {
   test("each Cloudflare header identifies Cloudflare on its own", () => {
     expect(detectCdnFromHeaders({ server: "cloudflare" })).toBe("cloudflare");
-    expect(detectCdnFromHeaders({ "cf-cache-status": "HIT" })).toBe("cloudflare");
-    expect(detectCdnFromHeaders({ "cf-ray": "8d1f2a3b4c5d6e7f-SYD" })).toBe("cloudflare");
+    expect(detectCdnFromHeaders({ "cf-cache-status": "HIT" })).toBe(
+      "cloudflare"
+    );
+    expect(detectCdnFromHeaders({ "cf-ray": "8d1f2a3b4c5d6e7f-SYD" })).toBe(
+      "cloudflare"
+    );
   });
 
   test("matches the server value case-insensitively", () => {
@@ -16,28 +20,39 @@ describe("detectCdnFromHeaders", () => {
   });
 
   test("accepts a Headers object", () => {
-    expect(detectCdnFromHeaders(new Headers({ "CF-Ray": "abc-SYD" }))).toBe("cloudflare");
+    expect(detectCdnFromHeaders(new Headers({ "CF-Ray": "abc-SYD" }))).toBe(
+      "cloudflare"
+    );
     expect(detectCdnFromHeaders(new Headers({ Server: "nginx" }))).toBeNull();
   });
 
   test("other servers and CDNs are not Cloudflare", () => {
-    expect(detectCdnFromHeaders({ server: "Vercel", "x-vercel-cache": "HIT" })).toBeNull();
+    expect(
+      detectCdnFromHeaders({ server: "Vercel", "x-vercel-cache": "HIT" })
+    ).toBeNull();
     expect(detectCdnFromHeaders({ server: "Netlify" })).toBeNull();
-    expect(detectCdnFromHeaders({ "x-cache": "Miss from cloudfront" })).toBeNull();
+    expect(
+      detectCdnFromHeaders({ "x-cache": "Miss from cloudfront" })
+    ).toBeNull();
     // waf-detect reads this as AWS WAF, which is still not Cloudflare.
     expect(detectCdnFromHeaders({ "x-amz-cf-id": "abc" })).toBeNull();
   });
 
   test("Cloudflare wins when another provider's headers are present too", () => {
-    expect(detectCdnFromHeaders({ "x-amz-cf-id": "abc", server: "cloudflare" })).toBe("cloudflare");
+    expect(
+      detectCdnFromHeaders({ "x-amz-cf-id": "abc", server: "cloudflare" })
+    ).toBe("cloudflare");
   });
 
   // #750: a DataDome block on Cloudflare is attributed to DataDome, and it
   // still came through Cloudflare.
   test("Cloudflare is still the CDN when a bot vendor behind it is the attributed provider", () => {
-    expect(detectCdnFromHeaders({ "cf-cache-status": "DYNAMIC", "x-datadome": "protected" })).toBe(
-      "cloudflare",
-    );
+    expect(
+      detectCdnFromHeaders({
+        "cf-cache-status": "DYNAMIC",
+        "x-datadome": "protected",
+      })
+    ).toBe("cloudflare");
   });
 
   test("no headers is no CDN", () => {

@@ -6,6 +6,7 @@
 // The parity test (full charge + result set) guards against drift; unify later (#353 tech-debt).
 
 import type { CloudServicesClient } from "@squirrelscan/cloud-client";
+import type { Config } from "@squirrelscan/config";
 import type {
   AuditReport,
   CloudPagePayload,
@@ -16,15 +17,36 @@ import type {
   SiteMetadataPagePayload,
   SiteType,
 } from "@squirrelscan/core-contracts";
+
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
-import type { Config } from "@squirrelscan/config";
-import { buildEditorSummaryRequest, toEditorSummary } from "@squirrelscan/report/editor-summary";
-import { filterRules, loadAllRules, type RuleCloudSpec } from "@squirrelscan/rules";
+import { auditedEmpty } from "@squirrelscan/parser";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+import {
+  buildEditorSummaryRequest,
+  toEditorSummary,
+} from "@squirrelscan/report/editor-summary";
+import {
+  filterRules,
+  loadAllRules,
+  type RuleCloudSpec,
+} from "@squirrelscan/rules";
 import { truncateToBytes } from "@squirrelscan/utils/bytes";
-import { getHostname, getOrigin, getPathname, hasUnsafeUrlScheme } from "@squirrelscan/utils/url";
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils/dom";
+import { trimTrailing } from "@squirrelscan/utils/trim";
+import {
+  getHostname,
+  getOrigin,
+  getPathname,
+  hasUnsafeUrlScheme,
+} from "@squirrelscan/utils/url";
 
+import {
+  ensureSiteContextDocuments,
+  renderedPageUrlsFrom,
+  releaseSiteContextDocuments,
+  type SiteContextPage,
+} from "./adapter";
 import {
   prefetchCloudData,
   prefetchCloudDataWithDeadline,
@@ -33,16 +55,7 @@ import {
   type CloudPrefetchResult,
   type CloudSitePayloads,
 } from "./cloud-prefetch";
-import {
-  ensureSiteContextDocuments,
-  renderedPageUrlsFrom,
-  releaseSiteContextDocuments,
-  type SiteContextPage,
-} from "./adapter";
 import { detachFromPage } from "./detach";
-import { auditedEmpty } from "@squirrelscan/parser";
-import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
-import { trimTrailing } from "@squirrelscan/utils/trim";
 
 // The parsed page's linkedom Document, without adding a direct linkedom dep here.
 type Document = NonNullable<NonNullable<SiteContextPage["parsed"]>["document"]>;
@@ -55,7 +68,9 @@ const MAX_DESCRIPTION_CHARS = 500;
 const MAX_HEADING_CHARS = 200;
 
 /** Cloud-gated rules that are enabled under this config (drives which services run). */
-export function selectCloudRules(config: Config): Array<{ id: string; cloud: RuleCloudSpec }> {
+export function selectCloudRules(
+  config: Config
+): Array<{ id: string; cloud: RuleCloudSpec }> {
   const all = loadAllRules({ includeOptIn: true });
   const enabledIds = new Set(
     filterRules(
@@ -63,18 +78,21 @@ export function selectCloudRules(config: Config): Array<{ id: string; cloud: Rul
       config.rules.enable,
       config.rules.disable,
       config.rule_options as Record<string, { enabled?: boolean }>,
-      all,
-    ),
+      all
+    )
   );
   const selected: Array<{ id: string; cloud: RuleCloudSpec }> = [];
   for (const [id, rule] of all) {
-    if (rule.meta.cloud && enabledIds.has(id)) selected.push({ id, cloud: rule.meta.cloud });
+    if (rule.meta.cloud && enabledIds.has(id))
+      selected.push({ id, cloud: rule.meta.cloud });
   }
   return selected;
 }
 
 /** Slim per-page payloads from successfully crawled, parsed pages (mirrors the CLI). */
-export function buildCloudPagePayloads(siteContext: SiteContextPage[]): CloudPagePayload[] {
+export function buildCloudPagePayloads(
+  siteContext: SiteContextPage[]
+): CloudPagePayload[] {
   const payloads: CloudPagePayload[] = [];
   for (const { page, parsed } of siteContext) {
     if (!parsed || page.status < 200 || page.status >= 300) continue;
@@ -82,7 +100,10 @@ export function buildCloudPagePayloads(siteContext: SiteContextPage[]): CloudPag
     if (auditedEmpty(parsed)) continue;
     const meta: Record<string, string> = {};
     if (parsed.meta.description)
-      meta.description = parsed.meta.description.slice(0, MAX_DESCRIPTION_CHARS);
+      meta.description = parsed.meta.description.slice(
+        0,
+        MAX_DESCRIPTION_CHARS
+      );
     payloads.push(
       // Every field here is a SLICE of the page's html, and in JSC a retained
       // slice pins the buffer it was cut from (#240). One payload per page, so
@@ -96,14 +117,17 @@ export function buildCloudPagePayloads(siteContext: SiteContextPage[]): CloudPag
         {
           url: page.url,
           title: parsed.meta.title?.slice(0, MAX_TITLE_CHARS) ?? undefined,
-          textExcerpt: truncateToBytes(parsed.content.textContent, MAX_EXCERPT_BYTES),
+          textExcerpt: truncateToBytes(
+            parsed.content.textContent,
+            MAX_EXCERPT_BYTES
+          ),
           meta: Object.keys(meta).length > 0 ? meta : undefined,
           headings: parsed.headings.headings
             .slice(0, 20)
             .map((h) => h.text.slice(0, MAX_HEADING_CHARS)),
         },
-        "cloud-payload",
-      ),
+        "cloud-payload"
+      )
     );
   }
   return payloads;
@@ -115,7 +139,9 @@ const MAX_META_TAGS_PER_PAGE = 40;
 
 function extractJsonLdBlocks(doc: Document): string[] {
   const out: string[] = [];
-  for (const script of doc.querySelectorAll('script[type="application/ld+json"]')) {
+  for (const script of doc.querySelectorAll(
+    'script[type="application/ld+json"]'
+  )) {
     const content = (script as Element).textContent?.trim();
     if (content) out.push(content);
   }
@@ -129,7 +155,9 @@ function extractMetaNameContent(doc: Document): Record<string, string> {
   const out: Record<string, string> = Object.create(null);
   for (const meta of doc.querySelectorAll("meta")) {
     const el = meta as Element;
-    const key = (el.getAttribute("property") ?? el.getAttribute("name") ?? "").trim().toLowerCase();
+    const key = (el.getAttribute("property") ?? el.getAttribute("name") ?? "")
+      .trim()
+      .toLowerCase();
     const content = el.getAttribute("content");
     if (!key || content == null || key in out) continue;
     out[key] = content;
@@ -152,7 +180,8 @@ function extractVisibleLinks(doc: Document): { href: string; text?: string }[] {
   const seen = new Set<string>();
   for (const anchor of doc.querySelectorAll("a[href]")) {
     const href = (anchor as Element).getAttribute("href")?.trim();
-    if (!href || href.trimStart().startsWith("#") || hasUnsafeUrlScheme(href)) continue;
+    if (!href || href.trimStart().startsWith("#") || hasUnsafeUrlScheme(href))
+      continue;
     if (seen.has(href)) continue;
     seen.add(href);
     const text = (anchor as Element).textContent?.trim();
@@ -165,10 +194,11 @@ function extractVisibleLinks(doc: Document): { href: string; text?: string }[] {
 /** Stage-0 metadata sample (home first, then a deterministic few) — mirrors the CLI. */
 export function buildMetadataPayload(
   siteContext: SiteContextPage[],
-  baseUrl: string,
+  baseUrl: string
 ): SiteMetadataPagePayload[] {
   const usable = siteContext.filter(
-    ({ page, parsed }) => parsed?.document != null && page.status >= 200 && page.status < 300,
+    ({ page, parsed }) =>
+      parsed?.document != null && page.status >= 200 && page.status < 300
   );
   if (usable.length === 0) return [];
 
@@ -177,12 +207,18 @@ export function buildMetadataPayload(
     const path = getPathname(u);
     return getOrigin(u) === baseOrigin && (path === "" || path === "/");
   };
-  let homeIdx = usable.findIndex(({ page }) => page.finalUrl === baseUrl || page.url === baseUrl);
+  let homeIdx = usable.findIndex(
+    ({ page }) => page.finalUrl === baseUrl || page.url === baseUrl
+  );
   if (homeIdx < 0) {
-    homeIdx = usable.findIndex(({ page }) => isRoot(page.finalUrl || page.url) || isRoot(page.url));
+    homeIdx = usable.findIndex(
+      ({ page }) => isRoot(page.finalUrl || page.url) || isRoot(page.url)
+    );
   }
   const home = homeIdx >= 0 ? usable[homeIdx] : usable[0];
-  const rest = usable.filter((p) => p !== home).slice(0, SERVICE_LIMITS.metadataMaxPages - 1);
+  const rest = usable
+    .filter((p) => p !== home)
+    .slice(0, SERVICE_LIMITS.metadataMaxPages - 1);
   const sampled = [home, ...rest];
 
   let jsonLdBudget = SERVICE_LIMITS.metadataMaxJsonLdBytes;
@@ -238,7 +274,10 @@ function collectBlocklistUrls(siteContext: SiteContextPage[]): string[] {
  * pre-rules pass can feed it batch by batch. The BL_MAX_URLS cap is a Set-size
  * test, so stopping and resuming across batches sees exactly the sequence one
  * whole-array pass would. */
-function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]): void {
+function absorbBlocklistUrls(
+  urls: Set<string>,
+  siteContext: SiteContextPage[]
+): void {
   for (const { page, parsed } of siteContext) {
     if (!parsed || page.status < 200 || page.status >= 300) continue;
     const pageHost = getHostname(page.url);
@@ -252,7 +291,11 @@ function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]):
     }
     for (const image of parsed.images) {
       if (urls.size >= BL_MAX_URLS) return;
-      if (isHttpUrl(image.src) && getHostname(image.src) !== pageHost && !urls.has(image.src))
+      if (
+        isHttpUrl(image.src) &&
+        getHostname(image.src) !== pageHost &&
+        !urls.has(image.src)
+      )
         urls.add(detachFromPage(image.src, "cloud-payload"));
     }
     const doc = parsed.document;
@@ -262,7 +305,12 @@ function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]):
     for (const script of querySelectorAllOutsideNoscript(doc, "script[src]")) {
       if (urls.size >= BL_MAX_URLS) return;
       const src = (script as Element).getAttribute("src");
-      if (src && isHttpUrl(src) && getHostname(src) !== pageHost && !urls.has(src))
+      if (
+        src &&
+        isHttpUrl(src) &&
+        getHostname(src) !== pageHost &&
+        !urls.has(src)
+      )
         urls.add(detachFromPage(src, "cloud-payload"));
     }
   }
@@ -270,7 +318,8 @@ function absorbBlocklistUrls(urls: Set<string>, siteContext: SiteContextPage[]):
 
 /** Add a selector once, detaching only the copy that is actually kept. */
 function addSelector(selectors: Set<string>, selector: string): void {
-  if (!selectors.has(selector)) selectors.add(detachFromPage(selector, "cloud-payload"));
+  if (!selectors.has(selector))
+    selectors.add(detachFromPage(selector, "cloud-payload"));
 }
 
 function collectBlocklistSelectors(siteContext: SiteContextPage[]): string[] {
@@ -283,11 +332,15 @@ function collectBlocklistSelectors(siteContext: SiteContextPage[]): string[] {
  * budget (BL_MAX_SELECTOR_PAGES) spans batches instead of resetting per batch. */
 function absorbBlocklistSelectors(
   state: { selectors: Set<string>; pagesScanned: number },
-  siteContext: SiteContextPage[],
+  siteContext: SiteContextPage[]
 ): void {
   const { selectors } = state;
   for (const { page, parsed } of siteContext) {
-    if (selectors.size >= BL_MAX_SELECTORS || state.pagesScanned >= BL_MAX_SELECTOR_PAGES) return;
+    if (
+      selectors.size >= BL_MAX_SELECTORS ||
+      state.pagesScanned >= BL_MAX_SELECTOR_PAGES
+    )
+      return;
     if (!parsed?.document || page.status < 200 || page.status >= 300) continue;
     state.pagesScanned++;
     let elements: Iterable<Element>;
@@ -311,7 +364,7 @@ function absorbBlocklistSelectors(
 }
 
 export function buildBlocklistPayload(
-  siteContext: SiteContextPage[],
+  siteContext: SiteContextPage[]
 ): { urls: string[]; selectors: string[] } | null {
   const urls = collectBlocklistUrls(siteContext);
   const selectors = collectBlocklistSelectors(siteContext);
@@ -324,7 +377,10 @@ const MIN_SEED_LENGTH = 3;
 const MAX_SEED_LENGTH = 80;
 const TITLE_SEPARATOR_CHARS = new Set(["|", "·", "\u2014", "–"]);
 
-export type GapsPayloads = Pick<CloudSitePayloads, "keyword-gaps" | "content-gaps">;
+export type GapsPayloads = Pick<
+  CloudSitePayloads,
+  "keyword-gaps" | "content-gaps"
+>;
 
 interface GapsRuleOptions {
   country?: string;
@@ -344,8 +400,10 @@ function gapsOptions(config: Config, ruleId: string): GapsRuleOptions {
     competitors?: unknown;
   };
   const opts: GapsRuleOptions = {};
-  if (typeof raw.country === "string" && raw.country) opts.country = raw.country;
-  if (typeof raw.language === "string" && raw.language) opts.language = raw.language;
+  if (typeof raw.country === "string" && raw.country)
+    opts.country = raw.country;
+  if (typeof raw.language === "string" && raw.language)
+    opts.language = raw.language;
   if (Array.isArray(raw.competitors)) {
     const competitors = raw.competitors
       .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
@@ -385,7 +443,8 @@ function cleanSeed(text: string): string | null {
     }
   }
   const segment = parts.join("");
-  if (segment.length < MIN_SEED_LENGTH || segment.length > MAX_SEED_LENGTH) return null;
+  if (segment.length < MIN_SEED_LENGTH || segment.length > MAX_SEED_LENGTH)
+    return null;
   return segment;
 }
 
@@ -399,7 +458,7 @@ function collectSeeds(siteContext: SiteContextPage[]): string[] {
  * dedupe set span batches (#1860). */
 function absorbSeeds(
   state: { seeds: string[]; seen: Set<string> },
-  siteContext: SiteContextPage[],
+  siteContext: SiteContextPage[]
 ): void {
   const { seeds, seen } = state;
   if (seeds.length >= SERVICE_LIMITS.gapsMaxSeeds) return;
@@ -426,7 +485,7 @@ function absorbSeeds(
 export function buildGapsPayloads(
   siteContext: SiteContextPage[],
   baseUrl: string,
-  config: Config,
+  config: Config
 ): GapsPayloads {
   return buildGapsPayloadsFromSeeds(collectSeeds(siteContext), baseUrl, config);
 }
@@ -436,7 +495,7 @@ export function buildGapsPayloads(
 export function buildGapsPayloadsFromSeeds(
   seeds: string[],
   baseUrl: string,
-  config: Config,
+  config: Config
 ): GapsPayloads {
   const domain = apexDomain(baseUrl);
   if (!domain || seeds.length === 0) return {};
@@ -461,14 +520,20 @@ export function buildGapsPayloadsFromSeeds(
 }
 
 // ── Stage-1 gating policy (mirrors apps/cli/src/audit/cloud-gating.ts) ──
-const GAP_SKIP_SITE_TYPES: ReadonlySet<SiteType> = new Set(["personal", "portfolio"]);
+const GAP_SKIP_SITE_TYPES: ReadonlySet<SiteType> = new Set([
+  "personal",
+  "portfolio",
+]);
 const AUTHORITY_SITE_TYPES: ReadonlySet<SiteType> = new Set([
   "blog",
   "news",
   "healthcare_provider",
 ]);
 
-export const gateStage1 = (meta: SiteMetadata, service: CloudServiceId): boolean => {
+export const gateStage1 = (
+  meta: SiteMetadata,
+  service: CloudServiceId
+): boolean => {
   switch (service) {
     case "keyword-gaps":
     case "content-gaps":
@@ -537,8 +602,10 @@ export function createCloudPrefetchCollector(siteUrl: string): {
 
   return {
     absorb(siteContext: SiteContextPage[]): void {
-      for (const payload of buildCloudPagePayloads(siteContext)) pages.push(payload);
-      for (const url of renderedPageUrlsFrom(siteContext)) renderedPageUrls.add(url);
+      for (const payload of buildCloudPagePayloads(siteContext))
+        pages.push(payload);
+      for (const url of renderedPageUrlsFrom(siteContext))
+        renderedPageUrls.add(url);
       absorbBlocklistUrls(blocklistUrls, siteContext);
       absorbBlocklistSelectors(selectorState, siteContext);
       absorbSeeds(seedState, siteContext);
@@ -547,14 +614,19 @@ export function createCloudPrefetchCollector(siteUrl: string): {
         // Same "usable" test buildMetadataPayload applies.
         if (entry.parsed?.document == null) continue;
         if (entry.page.status < 200 || entry.page.status >= 300) continue;
-        if (metadataPrefix.length < SERVICE_LIMITS.metadataMaxPages) metadataPrefix.push(entry);
+        if (metadataPrefix.length < SERVICE_LIMITS.metadataMaxPages)
+          metadataPrefix.push(entry);
         if (
           !primaryHome &&
           (entry.page.finalUrl === siteUrl || entry.page.url === siteUrl)
         ) {
           primaryHome = entry;
         }
-        if (!rootHome && (isRoot(entry.page.finalUrl || entry.page.url) || isRoot(entry.page.url))) {
+        if (
+          !rootHome &&
+          (isRoot(entry.page.finalUrl || entry.page.url) ||
+            isRoot(entry.page.url))
+        ) {
           rootHome = entry;
         }
       }
@@ -585,7 +657,10 @@ export function createCloudPrefetchCollector(siteUrl: string): {
       return {
         pages,
         metadataPages,
-        blocklist: urls.length === 0 && selectors.length === 0 ? null : { urls, selectors },
+        blocklist:
+          urls.length === 0 && selectors.length === 0
+            ? null
+            : { urls, selectors },
         gapsSeeds: seedState.seeds,
         renderedPageUrls,
       };
@@ -641,7 +716,7 @@ export interface ContainerPrefetchInput {
  * /v1/services/* (chargeOrReplay) and stops at the cap / on a 402.
  */
 export async function runContainerCloudPrefetch(
-  input: ContainerPrefetchInput,
+  input: ContainerPrefetchInput
 ): Promise<CloudPrefetchResult | null> {
   if (input.remainingBudget <= 0) return null;
   if (selectCloudRules(input.config).length === 0) return null;
@@ -670,7 +745,7 @@ export async function runContainerCloudPrefetch(
       planRenderConcurrency: input.planRenderConcurrency,
       onCall: input.onCall,
     },
-    payloads,
+    payloads
   );
 }
 
@@ -681,7 +756,7 @@ export async function runContainerCloudPrefetch(
  */
 export async function runContainerCloudPrefetchFromPayloads(
   input: Omit<ContainerPrefetchInput, "siteContext">,
-  payloads: CloudPrefetchPayloadSet,
+  payloads: CloudPrefetchPayloadSet
 ): Promise<CloudPrefetchResult | null> {
   if (input.remainingBudget <= 0) return null;
   const rules = selectCloudRules(input.config);
@@ -689,7 +764,11 @@ export async function runContainerCloudPrefetchFromPayloads(
 
   const sitePayloads: CloudSitePayloads = {
     ...(payloads.blocklist ? { "blocklist-check": payloads.blocklist } : {}),
-    ...buildGapsPayloadsFromSeeds(payloads.gapsSeeds, input.siteUrl, input.config),
+    ...buildGapsPayloadsFromSeeds(
+      payloads.gapsSeeds,
+      input.siteUrl,
+      input.config
+    ),
     // Archive Indexing (#789) — payload is just the site URL.
     "archive-indexing": { url: input.siteUrl },
   };
@@ -726,7 +805,10 @@ export async function runContainerCloudPrefetchFromPayloads(
   if (input.deadlineMs !== undefined) {
     return prefetchCloudDataWithDeadline(prefetchInput, input.deadlineMs);
   }
-  return prefetchCloudData({ ...prefetchInput, accumulator: input.accumulator });
+  return prefetchCloudData({
+    ...prefetchInput,
+    accumulator: input.accumulator,
+  });
 }
 
 /**
@@ -749,7 +831,9 @@ export async function runContainerEditorSummary(input: {
   const credits = computeCost("editor_summary", 1);
   if (input.remainingBudget < credits) return null;
   try {
-    const res = await client.editorSummary(buildEditorSummaryRequest(report, { auditId }));
+    const res = await client.editorSummary(
+      buildEditorSummaryRequest(report, { auditId })
+    );
     // Same guard as the CLI path: a 2xx body is cast, not validated, so one that
     // is missing `prose` has to degrade here instead of throwing in a renderer.
     const editorSummary = toEditorSummary(res);
@@ -782,7 +866,11 @@ export async function runContainerDomainStats(input: {
   try {
     const res = await client.domainStats({ auditId, url: siteUrl });
     return {
-      domainStats: { domain: res.domain, metrics: res.metrics, capturedAt: res.capturedAt },
+      domainStats: {
+        domain: res.domain,
+        metrics: res.metrics,
+        capturedAt: res.capturedAt,
+      },
       // A 30-day cache hit is served free — don't bill it against the budget.
       credits: res.cached ? 0 : cost,
     };

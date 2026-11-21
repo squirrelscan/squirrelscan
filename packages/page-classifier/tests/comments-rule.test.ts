@@ -1,9 +1,9 @@
 // The deterministic comments rule (#2307): which markup is a comment section,
 // which look-alikes are not, and the wrapper and reviews cases.
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { describe, expect, test } from "bun:test";
 
-import { parseHTML } from "@squirrelscan/parser/dom";
 import {
   commentLookupOf,
   commentRule,
@@ -16,7 +16,7 @@ import {
 
 const page = (inner: string) =>
   parseHTML(
-    `<html><body><h1>Post title</h1><article><p>Body text</p></article>${inner}</body></html>`,
+    `<html><body><h1>Post title</h1><article><p>Body text</p></article>${inner}</body></html>`
   ).document;
 const linkIn = (inner: string, selector = "a.target") => {
   const el = page(inner).querySelector(selector);
@@ -72,7 +72,7 @@ describe("commentSectionOf", () => {
       `<div id="comments" class="comments-area"><ol class="comment-list"><li id="comment-7" class="comment">
         <article id="div-comment-7" class="comment-body"><footer class="comment-meta"><div class="comment-author">
         <a class="url target" rel="external nofollow ugc" href="https://spam.example/">Cheap pills</a></div></footer>
-        <div class="comment-content"><p>Great post</p></div></article></li></ol></div>`,
+        <div class="comment-content"><p>Great post</p></div></article></li></ol></div>`
     );
     expect(match?.label).toBe("comments");
     expect(match?.container.getAttribute("class")).toBe("comment-author");
@@ -81,17 +81,19 @@ describe("commentSectionOf", () => {
 
   test("a link in the reply form is in the comments", () => {
     const match = linkIn(
-      `<div id="respond"><form id="commentform"><p class="logged-in-as"><a class="target" href="/wp-login.php">Log in</a></p></form></div>`,
+      `<div id="respond"><form id="commentform"><p class="logged-in-as"><a class="target" href="/wp-login.php">Log in</a></p></form></div>`
     );
     expect(match?.label).toBe("comments");
   });
 
   test("the article's own links and a comment-count link are not", () => {
-    expect(linkIn(`<p><a class="target" href="https://a.example/">source</a></p>`)).toBeNull();
+    expect(
+      linkIn(`<p><a class="target" href="https://a.example/">source</a></p>`)
+    ).toBeNull();
     expect(
       linkIn(
-        `<div class="entry-meta"><span class="comments-link"><a class="target" href="#comments">3 comments</a></span></div>`,
-      ),
+        `<div class="entry-meta"><span class="comments-link"><a class="target" href="#comments">3 comments</a></span></div>`
+      )
     ).toBeNull();
   });
 
@@ -99,14 +101,14 @@ describe("commentSectionOf", () => {
     expect(
       linkIn(
         `<aside><section class="widget widget_recent_comments"><ul id="recentcomments"><li class="recentcomments">
-          <a class="target" href="https://x.example/">Ann</a></li></ul></section></aside>`,
-      ),
+          <a class="target" href="https://x.example/">Ann</a></li></ul></section></aside>`
+      )
     ).toBeNull();
   });
 
   test("a wrapper holding the page title is refused, and nothing above it counts", () => {
     const doc = parseHTML(
-      `<html><body><div class="site comments"><h1>Title</h1><p><a class="target" href="https://a.example/">x</a></p></div></body></html>`,
+      `<html><body><div class="site comments"><h1>Title</h1><p><a class="target" href="https://a.example/">x</a></p></div></body></html>`
     ).document;
     expect(commentSectionOf(doc.querySelector("a.target")!)).toBeNull();
   });
@@ -114,14 +116,14 @@ describe("commentSectionOf", () => {
   test("WooCommerce product reviews are reviews", () => {
     const match = linkIn(
       `<div id="reviews" class="woocommerce-Reviews"><div id="comments"><ol class="commentlist"><li class="review">
-        <a class="target" href="https://b.example/">Bob</a></li></ol></div></div>`,
+        <a class="target" href="https://b.example/">Bob</a></li></ol></div></div>`
     );
     expect(match?.label).toBe("reviews");
   });
 
   test("hops count from the link up to the matching element", () => {
     const match = linkIn(
-      `<div id="comments"><p><span><a class="target" href="x">x</a></span></p></div>`,
+      `<div id="comments"><p><span><a class="target" href="x">x</a></span></p></div>`
     );
     expect(match?.hops).toBe(3);
     expect(match?.token).toBe("comments");
@@ -131,7 +133,7 @@ describe("commentSectionOf", () => {
 describe("hasUgcRel and findCommentSections", () => {
   test("rel=ugc is read as a token", () => {
     const doc = page(
-      `<a id="u" rel="nofollow UGC" href="x">x</a><a id="n" rel="nofollow" href="y">y</a>`,
+      `<a id="u" rel="nofollow UGC" href="x">x</a><a id="n" rel="nofollow" href="y">y</a>`
     );
     expect(hasUgcRel(doc.querySelector("#u")!)).toBe(true);
     expect(hasUgcRel(doc.querySelector("#n")!)).toBe(false);
@@ -140,25 +142,27 @@ describe("hasUgcRel and findCommentSections", () => {
   test("one outermost section per thread, none on a page without comments", () => {
     const found = findCommentSections(
       page(
-        `<div id="comments"><ol class="commentlist"><li class="comment">a</li><li class="comment">b</li></ol></div>`,
-      ),
+        `<div id="comments"><ol class="commentlist"><li class="comment">a</li><li class="comment">b</li></ol></div>`
+      )
     );
     expect(found.map((el) => el.getAttribute("id"))).toEqual(["comments"]);
-    expect(findCommentSections(page(`<footer><a href="x">x</a></footer>`))).toEqual([]);
+    expect(
+      findCommentSections(page(`<footer><a href="x">x</a></footer>`))
+    ).toEqual([]);
   });
 });
 
 describe("passes and memos", () => {
   test("an <h1> that is itself the match is not a wrapper holding one", () => {
     const match = linkIn(
-      `<div><h1 class="comments-title"><a class="target" href="#respond">3 comments</a></h1></div>`,
+      `<div><h1 class="comments-title"><a class="target" href="#respond">3 comments</a></h1></div>`
     );
     expect(match?.token).toBe("comments-title");
   });
 
   test("a new pass sees edits made after an earlier one", () => {
     const doc = parseHTML(
-      `<html><body><div id="wrap"><div id="comments"><a class="target" href="x">x</a></div></div></body></html>`,
+      `<html><body><div id="wrap"><div id="comments"><a class="target" href="x">x</a></div></div></body></html>`
     ).document;
     const link = doc.querySelector("a.target")!;
     expect(commentSectionOf(link)?.label).toBe("comments");
@@ -183,18 +187,16 @@ describe("outermostCommentSections", () => {
     const doc = parseHTML(
       `<html><body><div class="site comments"><h1>Title</h1>
         <div id="comments"><ol class="commentlist"><li class="comment">a</li></ol></div>
-        <div id="respond"><form>f</form></div></div></body></html>`,
+        <div id="respond"><form>f</form></div></div></body></html>`
     ).document;
     const elements = Array.from(doc.body.querySelectorAll("*"));
     const found = outermostCommentSections(elements);
-    expect(found.map(({ match }) => match.container.getAttribute("id"))).toEqual([
-      "comments",
-      "respond",
-    ]);
-    expect(found.map(({ index }) => elements[index]!.getAttribute("id"))).toEqual([
-      "comments",
-      "respond",
-    ]);
+    expect(
+      found.map(({ match }) => match.container.getAttribute("id"))
+    ).toEqual(["comments", "respond"]);
+    expect(
+      found.map(({ index }) => elements[index]!.getAttribute("id"))
+    ).toEqual(["comments", "respond"]);
     expect(found[0]!.match.token).toBe("comments");
   });
 });
@@ -205,7 +207,9 @@ describe("a walk cut short fails closed", () => {
   const BUDGET_MS = 50;
   /** `depth` nested divs under `#root`; the thread container sits `threadAt` levels from the top. */
   function nest(depth: number, threadAt: number | null) {
-    const { document } = parseHTML(`<html><body><h1>Title</h1><div id="root"></div></body></html>`);
+    const { document } = parseHTML(
+      `<html><body><h1>Title</h1><div id="root"></div></body></html>`
+    );
     let parent = document.getElementById("root")!;
     for (let i = 0; i < depth; i++) {
       const child = document.createElement("div");
@@ -237,7 +241,9 @@ describe("a walk cut short fails closed", () => {
   });
 
   test("many elements under one deep chain share one walk, and stay under budget", () => {
-    const { document } = parseHTML(`<html><body><h1>Title</h1><div id="root"></div></body></html>`);
+    const { document } = parseHTML(
+      `<html><body><h1>Title</h1><div id="root"></div></body></html>`
+    );
     let parent = document.getElementById("root")!;
     for (let i = 0; i < 5000; i++) {
       const child = document.createElement("div");
@@ -253,7 +259,8 @@ describe("a walk cut short fails closed", () => {
     }
     const rule = commentRule();
     const started = performance.now();
-    for (const a of anchors) expect(rule.lookup(a)).toEqual({ truncated: true });
+    for (const a of anchors)
+      expect(rule.lookup(a)).toEqual({ truncated: true });
     expect(performance.now() - started).toBeLessThan(BUDGET_MS * 4);
   });
 });
@@ -263,7 +270,9 @@ describe("hostile markup stays cheap", () => {
 
   /** `depth` nested divs under `top`, returning the deepest one, as an anchor-like target. */
   function chain(depth: number, topClass?: string) {
-    const { document } = parseHTML(`<html><body><h1>Title</h1><div id="root"></div></body></html>`);
+    const { document } = parseHTML(
+      `<html><body><h1>Title</h1><div id="root"></div></body></html>`
+    );
     let parent = document.getElementById("root")!;
     if (topClass) parent.setAttribute("class", topClass);
     for (let i = 0; i < depth; i++) {
@@ -275,7 +284,8 @@ describe("hostile markup stays cheap", () => {
   }
 
   /** About 1 MB of distinct class tokens (a parser folds repeats, so they must differ). */
-  const manyTokens = (): string => Array.from({ length: 130_000 }, (_, i) => `t${i}`).join(" ") + " ";
+  const manyTokens = (): string =>
+    Array.from({ length: 130_000 }, (_, i) => `t${i}`).join(" ") + " ";
 
   const timed = <T>(fn: () => T): { value: T; ms: number } => {
     const started = performance.now();
@@ -291,7 +301,9 @@ describe("hostile markup stays cheap", () => {
   });
 
   test("a thread within 64 hops of the element is still found, however deep the page is", () => {
-    const { document } = parseHTML(`<html><body><h1>Title</h1><div id="root"></div></body></html>`);
+    const { document } = parseHTML(
+      `<html><body><h1>Title</h1><div id="root"></div></body></html>`
+    );
     let parent = document.getElementById("root")!;
     for (let i = 0; i < 5000; i++) {
       const child = document.createElement("div");
@@ -307,7 +319,7 @@ describe("hostile markup stays cheap", () => {
 
   test("a reviews container beyond 64 hops is not looked for", () => {
     const { document } = parseHTML(
-      `<html><body><h1>Title</h1><div id="root" class="reviews"></div></body></html>`,
+      `<html><body><h1>Title</h1><div id="root" class="reviews"></div></body></html>`
     );
     let parent = document.getElementById("root")!;
     for (let i = 0; i < 5000; i++) {
@@ -324,10 +336,10 @@ describe("hostile markup stays cheap", () => {
   test("a 1 MB class attribute: a comment word past the first 4 KB is ignored, one near the start counts", () => {
     const filler = manyTokens();
     const late = parseHTML(
-      `<html><body><h1>T</h1><div class="${filler}comments"><a class="t" href="/a">a</a></div></body></html>`,
+      `<html><body><h1>T</h1><div class="${filler}comments"><a class="t" href="/a">a</a></div></body></html>`
     ).document.querySelector("a.t")!;
     const early = parseHTML(
-      `<html><body><h1>T</h1><div class="comments ${filler}"><a class="t" href="/a">a</a></div></body></html>`,
+      `<html><body><h1>T</h1><div class="comments ${filler}"><a class="t" href="/a">a</a></div></body></html>`
     ).document.querySelector("a.t")!;
     const lateRun = timed(() => commentSectionOf(late));
     expect(lateRun.value).toBeNull();
@@ -340,7 +352,7 @@ describe("hostile markup stays cheap", () => {
   test("a 1 MB class value with no whitespace and a 1 MB id are cheap and match nothing", () => {
     const blob = "a".repeat(1_000_000);
     const el = parseHTML(
-      `<html><body><h1>T</h1><div id="${blob}" class="${blob}"><a class="t" href="/a">a</a></div></body></html>`,
+      `<html><body><h1>T</h1><div id="${blob}" class="${blob}"><a class="t" href="/a">a</a></div></body></html>`
     ).document.querySelector("a.t")!;
     const { value, ms } = timed(() => commentSectionOf(el));
     expect(value).toBeNull();
@@ -350,7 +362,9 @@ describe("hostile markup stays cheap", () => {
   /** Wraps every class value in `document` so the test sees the most characters of one the
    *  rule reads: a slice counts its length, anything that needs the whole string (a regex
    *  test, a split, toLowerCase) converts it and counts all of it. */
-  function countClassReads(document: { querySelectorAll(selector: string): ArrayLike<Element> }) {
+  function countClassReads(document: {
+    querySelectorAll(selector: string): ArrayLike<Element>;
+  }) {
     const reads = { longest: 0 };
     const note = (n: number) => {
       if (n > reads.longest) reads.longest = n;
@@ -376,7 +390,9 @@ describe("hostile markup stays cheap", () => {
       const get = el.getAttribute.bind(el);
       el.getAttribute = (name: string) => {
         const value = get(name);
-        return (name === "class" && value !== null ? new CountedString(value) : value) as string | null;
+        return (
+          name === "class" && value !== null ? new CountedString(value) : value
+        ) as string | null;
       };
     }
     return reads;
@@ -385,7 +401,7 @@ describe("hostile markup stays cheap", () => {
   test("the whole-page scan stays cheap on the same markup", () => {
     const filler = manyTokens();
     const { document } = parseHTML(
-      `<html><body><h1>T</h1><div class="${filler}comments"><p>x</p></div><div class="comments ${filler}"><p>y</p></div></body></html>`,
+      `<html><body><h1>T</h1><div class="${filler}comments"><p>x</p></div><div class="comments ${filler}"><p>y</p></div></body></html>`
     );
     // Work, not wall clock (#2198): the scan is a few ms either way and a loaded host has
     // stretched it past any budget a regression would still break. What makes it cheap is
@@ -409,7 +425,9 @@ describe("comment-class containers around headings (hostile page)", () => {
   };
 
   test("40,000 sibling containers that each hold an <h1> cost the nodes touched, not containers x headings", () => {
-    const { found, ms } = timedSections('<div class="comments"><h1>x</h1></div>'.repeat(40_000));
+    const { found, ms } = timedSections(
+      '<div class="comments"><h1>x</h1></div>'.repeat(40_000)
+    );
     // Each container wraps a page-title heading, so none is a thread.
     expect(found).toHaveLength(0);
     expect(ms).toBeLessThan(BOUND_MS);
@@ -418,7 +436,7 @@ describe("comment-class containers around headings (hostile page)", () => {
   test("40,000 nested containers with an <h1> at the bottom walk the chain once", () => {
     const n = 40_000;
     const { found, ms } = timedSections(
-      `${'<div class="comments">'.repeat(n)}<h1>x</h1>${"</div>".repeat(n)}`,
+      `${'<div class="comments">'.repeat(n)}<h1>x</h1>${"</div>".repeat(n)}`
     );
     expect(found).toHaveLength(0);
     expect(ms).toBeLessThan(BOUND_MS);
@@ -426,7 +444,7 @@ describe("comment-class containers around headings (hostile page)", () => {
 
   test("many <h1>s under one container, and a deep chain above them", () => {
     const { found, ms } = timedSections(
-      `<div class="comments">${"<h1>x</h1>".repeat(40_000)}</div>`,
+      `<div class="comments">${"<h1>x</h1>".repeat(40_000)}</div>`
     );
     expect(found).toHaveLength(0);
     expect(ms).toBeLessThan(BOUND_MS);
@@ -445,7 +463,7 @@ describe("comment-class containers around headings (hostile page)", () => {
         `<h1 class="comments-title" id="heading">Comments</h1>` +
         // an h1 inside an h1 (invalid, but parsers keep it)
         `<div class="comments" id="wraps-nested"><h1 id="o"><span>x</span></h1></div>` +
-        `</body></html>`,
+        `</body></html>`
     ).document;
     const ids = findCommentSections(document).map((el) => (el as Element).id);
     expect(ids).toContain("sibling");
@@ -456,7 +474,9 @@ describe("comment-class containers around headings (hostile page)", () => {
     expect(ids).not.toContain("wraps-nested");
     // The old and new code agree on a heading that is itself comment-class: it is not "above" itself.
     const withSelf = findCommentSections(
-      parseHTML(`<html><body><h1 class="comments-title" id="h">Comments</h1></body></html>`).document,
+      parseHTML(
+        `<html><body><h1 class="comments-title" id="h">Comments</h1></body></html>`
+      ).document
     ).map((el) => (el as Element).id);
     expect(withSelf).toEqual(["h"]);
   });

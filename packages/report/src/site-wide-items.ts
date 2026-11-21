@@ -89,7 +89,7 @@ function auditedPageUrls(report: unknown, total: number): string[] | undefined {
 export function siteWideItem(
   item: CheckItem,
   total: number,
-  pageUrls?: string[],
+  pageUrls?: string[]
 ): SiteWideItem | undefined {
   const sourcePages = item.sourcePages;
   if (!sourcePages || total < SITE_WIDE_MIN_PAGES) return undefined;
@@ -105,7 +105,10 @@ export function siteWideItem(
   return {
     pages: pages.size,
     of: total,
-    missing: absent.length > 0 && absent.length <= SITE_WIDE_MAX_EXCEPTIONS ? absent : [],
+    missing:
+      absent.length > 0 && absent.length <= SITE_WIDE_MAX_EXCEPTIONS
+        ? absent
+        : [],
   };
 }
 
@@ -116,7 +119,7 @@ export function siteWideItem(
 export function formatSiteWideItem(
   label: string,
   info: SiteWideItem,
-  format: (page: string) => string,
+  format: (page: string) => string
 ): string {
   const head = `Site-wide (${info.pages} of ${info.of} pages): ${label}`;
   if (info.missing.length === 0) return head;
@@ -133,7 +136,7 @@ export function formatSiteWideItem(
  */
 export function siteWideContext(
   report: unknown,
-  enabled = true,
+  enabled = true
 ): {
   total: number;
   pageUrls?: string[];

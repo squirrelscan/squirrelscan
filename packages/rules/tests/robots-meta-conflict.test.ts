@@ -4,20 +4,21 @@
 // robots.txt" the same way: the shared isRobotsTxtDisallowed, with Allow,
 // Disallow, longest-match and wildcards.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { parsePage } from "@squirrelscan/parser";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { indexabilityConflicts } from "../src/crawl/indexability-conflicts";
 import { robotsMetaConflictRule } from "../src/crawl/robots-meta-conflict";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 const BASE = "https://example.com";
 const ROBOTS = parseRobotsTxt(
   "User-agent: *\nDisallow: /blocked-\nDisallow: /dir/\nAllow: /dir/ok\nDisallow: /*.php\n",
-  `${BASE}/robots.txt`,
+  `${BASE}/robots.txt`
 );
 
 const html = (meta = "") =>
@@ -36,32 +37,51 @@ function page(path: string, opts: { meta?: string; header?: string } = {}) {
 
 function ctx(pages: ReturnType<typeof page>[]): RuleContext {
   return {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: { baseUrl: BASE, pages, robotsTxt: ROBOTS, sitemaps: null },
     options: {},
   } as unknown as RuleContext;
 }
 
-async function redundant(pages: ReturnType<typeof page>[]): Promise<CheckResult | undefined> {
-  const { checks } = await Promise.resolve(robotsMetaConflictRule.run(ctx(pages)));
+async function redundant(
+  pages: ReturnType<typeof page>[]
+): Promise<CheckResult | undefined> {
+  const { checks } = await Promise.resolve(
+    robotsMetaConflictRule.run(ctx(pages))
+  );
   return (checks as CheckResult[]).find((c) => c.name === "redundant-noindex");
 }
 
 describe("crawl/robots-meta-conflict (pub#556)", () => {
   test("a blocked page with header-only noindex is reported, with its URL", async () => {
-    const row = await redundant([page("/blocked-header", { header: "noindex" })]);
+    const row = await redundant([
+      page("/blocked-header", { header: "noindex" }),
+    ]);
     expect(row?.status).toBe("info");
     expect(row?.pages).toEqual([`${BASE}/blocked-header`]);
   });
 
   test("a blocked page with meta noindex is reported (existing behaviour)", async () => {
-    const row = await redundant([page("/blocked-meta", { meta: NOINDEX_META })]);
+    const row = await redundant([
+      page("/blocked-meta", { meta: NOINDEX_META }),
+    ]);
     expect(row?.pages).toEqual([`${BASE}/blocked-meta`]);
   });
 
   test("an allowed page with noindex, meta or header, is not reported", async () => {
-    expect(await redundant([page("/open", { meta: NOINDEX_META }), page("/open-h", { header: "noindex" })])).toBeUndefined();
+    expect(
+      await redundant([
+        page("/open", { meta: NOINDEX_META }),
+        page("/open-h", { header: "noindex" }),
+      ])
+    ).toBeUndefined();
   });
 
   test("a URL a longer Allow wins for is not blocked, and a wildcard Disallow is", async () => {
@@ -73,34 +93,62 @@ describe("crawl/robots-meta-conflict (pub#556)", () => {
   });
 
   test("a blocked page that could not be parsed is not counted as noindex", async () => {
-    const unparsed = { url: `${BASE}/blocked-x`, statusCode: 200, headers: {}, parsed: null as unknown as ParsedPage };
-    const { checks } = await Promise.resolve(robotsMetaConflictRule.run(ctx([unparsed as never])));
-    expect((checks as CheckResult[]).find((c) => c.name === "redundant-noindex")).toBeUndefined();
+    const unparsed = {
+      url: `${BASE}/blocked-x`,
+      statusCode: 200,
+      headers: {},
+      parsed: null as unknown as ParsedPage,
+    };
+    const { checks } = await Promise.resolve(
+      robotsMetaConflictRule.run(ctx([unparsed as never]))
+    );
+    expect(
+      (checks as CheckResult[]).find((c) => c.name === "redundant-noindex")
+    ).toBeUndefined();
   });
 
   test("both rules give the same blocked verdict on every URL", async () => {
     const paths = ["/blocked-a", "/dir/ok", "/dir/other", "/x.php", "/open"];
     // robots-meta-conflict lists blocked pages WITH noindex; indexability-
     // conflicts lists blocked pages WITHOUT it. Same pages, both shapes.
-    const withNoindex = (await redundant(paths.map((p) => page(p, { meta: NOINDEX_META }))))?.pages ?? [];
-    const { checks } = await Promise.resolve(indexabilityConflicts.run(ctx(paths.map((p) => page(p)))));
-    const withoutNoindex = (checks as CheckResult[]).find((c) => c.name === "robots-block-without-noindex")?.pages ?? [];
+    const withNoindex =
+      (await redundant(paths.map((p) => page(p, { meta: NOINDEX_META }))))
+        ?.pages ?? [];
+    const { checks } = await Promise.resolve(
+      indexabilityConflicts.run(ctx(paths.map((p) => page(p))))
+    );
+    const withoutNoindex =
+      (checks as CheckResult[]).find(
+        (c) => c.name === "robots-block-without-noindex"
+      )?.pages ?? [];
     expect([...withNoindex].sort()).toEqual([...withoutNoindex].sort());
-    expect([...withNoindex].sort()).toEqual([`${BASE}/blocked-a`, `${BASE}/dir/other`, `${BASE}/x.php`].sort());
+    expect([...withNoindex].sort()).toEqual(
+      [`${BASE}/blocked-a`, `${BASE}/dir/other`, `${BASE}/x.php`].sort()
+    );
   });
 
   test("an unparseable page URL does not throw on the legacy path, other pages are still checked", async () => {
-    const bad = { url: "http://", statusCode: 200, headers: {}, parsed: page("/x", { meta: NOINDEX_META }).parsed };
-    const pages = [bad, page("/blocked-ok", { meta: NOINDEX_META })] as ReturnType<typeof page>[];
+    const bad = {
+      url: "http://",
+      statusCode: 200,
+      headers: {},
+      parsed: page("/x", { meta: NOINDEX_META }).parsed,
+    };
+    const pages = [
+      bad,
+      page("/blocked-ok", { meta: NOINDEX_META }),
+    ] as ReturnType<typeof page>[];
     const row = await redundant(pages);
     expect(row?.pages).toEqual([`${BASE}/blocked-ok`]);
   });
 
   test("an unparseable page URL does not throw on the streaming path, other pages are still checked", async () => {
-    const rows = ["http://", "not a url", `${BASE}/blocked-ok`].map((normalizedUrl) => ({
-      normalizedUrl,
-      indexableReasons: ["meta:noindex"],
-    }));
+    const rows = ["http://", "not a url", `${BASE}/blocked-ok`].map(
+      (normalizedUrl) => ({
+        normalizedUrl,
+        indexableReasons: ["meta:noindex"],
+      })
+    );
     const siteQuery = {
       pageCount: () => rows.length,
       async *pagesMatching(pred: (r: unknown) => boolean) {
@@ -113,7 +161,9 @@ describe("crawl/robots-meta-conflict (pub#556)", () => {
       siteQuery,
     } as unknown as RuleContext;
     const { checks } = await Promise.resolve(robotsMetaConflictRule.run(c));
-    const row = (checks as CheckResult[]).find((x) => x.name === "redundant-noindex");
+    const row = (checks as CheckResult[]).find(
+      (x) => x.name === "redundant-noindex"
+    );
     expect(row?.pages).toEqual([`${BASE}/blocked-ok`]);
   });
 });

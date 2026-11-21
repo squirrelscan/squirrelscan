@@ -46,12 +46,16 @@
 // signed-in identities.
 
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
-import { fetchUndecoded, readBodyCapped } from "@squirrelscan/utils/response-body";
+import {
+  fetchUndecoded,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
 import type { EndpointCandidate } from "../endpoint-surface";
 import type { ProbeBudget } from "../probe-budget";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import { isStateChangingPath } from "./graphql-probe";
 
 const CHECK = "client-side-authz";
@@ -211,7 +215,8 @@ export function selectAdminCandidates(
   // URL called with GET in one place and POST in another is probed by GET.
   const groups = new Map<string, { getVia?: string; refs: number }>();
   for (const c of ctx.endpointSurface?.candidates ?? []) {
-    if (!c.probeEligible || !c.sameOrigin || c.source === "convention") continue;
+    if (!c.probeEligible || !c.sameOrigin || c.source === "convention")
+      continue;
     let u: URL;
     try {
       u = new URL(c.url, baseUrl);
@@ -225,7 +230,8 @@ export function selectAdminCandidates(
     const key = `${u.origin}${u.pathname}`;
     const group = groups.get(key) ?? { refs: 0 };
     group.refs++;
-    if (group.getVia === undefined && isGetCallable(c)) group.getVia = c.discoveredVia;
+    if (group.getVia === undefined && isGetCallable(c))
+      group.getVia = c.discoveredVia;
     groups.set(key, group);
   }
 
@@ -274,7 +280,10 @@ export type AdminProbeOutcome =
   | { sent: true; error: string };
 
 /** The exact URL and init for one probe. Exported so tests can pin what is sent. */
-export function buildAdminProbe(endpointUrl: string): { url: string; init: RequestInit } {
+export function buildAdminProbe(endpointUrl: string): {
+  url: string;
+  init: RequestInit;
+} {
   const u = new URL(endpointUrl);
   u.search = "";
   u.hash = "";
@@ -322,12 +331,17 @@ export async function sendAdminProbe(
       response: {
         status: res.status,
         contentType: (res.headers.get("content-type") ?? "").toLowerCase(),
-        body: truncated ? new TextDecoder().decode(bytes.subarray(0, ADMIN_RESPONSE_CAP)) : text,
+        body: truncated
+          ? new TextDecoder().decode(bytes.subarray(0, ADMIN_RESPONSE_CAP))
+          : text,
         truncated,
       },
     };
   } catch (err) {
-    return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
+    return {
+      sent: true,
+      error: err instanceof Error ? err.name || err.message : String(err),
+    };
   } finally {
     done.abort();
   }
@@ -465,7 +479,13 @@ const SENSITIVE_FIELD_RE =
 const DENIAL_RE =
   /\b(?:unauthori[sz]ed|unauthenticated|not authenticated|not authori[sz]ed|forbidden|access denied|permission denied|login required|not logged in|authentication required|sign in required|invalid token|missing token|no token)\b/i;
 
-const DENIAL_FLAG_KEYS = ["authenticated", "authorized", "loggedIn", "isLoggedIn", "isAuthenticated"];
+const DENIAL_FLAG_KEYS = [
+  "authenticated",
+  "authorized",
+  "loggedIn",
+  "isLoggedIn",
+  "isAuthenticated",
+];
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -480,12 +500,22 @@ function isPopulated(v: unknown): boolean {
 
 function saysDenied(json: Record<string, unknown>): boolean {
   if (DENIAL_FLAG_KEYS.some((k) => json[k] === false)) return true;
-  for (const key of ["error", "message", "msg", "detail", "reason", "code", "status", "title"]) {
+  for (const key of [
+    "error",
+    "message",
+    "msg",
+    "detail",
+    "reason",
+    "code",
+    "status",
+    "title",
+  ]) {
     const v = json[key];
     if (typeof v === "string" && DENIAL_RE.test(v.slice(0, 500))) return true;
     if (isPlainObject(v)) {
       const inner = v.message ?? v.code ?? v.detail;
-      if (typeof inner === "string" && DENIAL_RE.test(inner.slice(0, 500))) return true;
+      if (typeof inner === "string" && DENIAL_RE.test(inner.slice(0, 500)))
+        return true;
     }
   }
   if (Array.isArray(json.errors)) {
@@ -503,7 +533,11 @@ function fieldsOf(record: unknown): string[] {
 
 function summarize(records: number, first: unknown): ExposedData {
   const fields = fieldsOf(first);
-  return { records, fields, sensitiveFields: fields.filter((f) => SENSITIVE_FIELD_RE.test(f)) };
+  return {
+    records,
+    fields,
+    sensitiveFields: fields.filter((f) => SENSITIVE_FIELD_RE.test(f)),
+  };
 }
 
 /** The data in a parsed JSON answer, or null when it carries none. */
@@ -526,19 +560,31 @@ export function readExposedData(json: unknown): ExposedData | null {
     }
   }
   const dataKeys = Object.keys(json).filter(
-    (k) => !ENVELOPE_KEYS.has(k.toLowerCase()) && !COLLECTION_KEYS.has(k.toLowerCase()) && isPopulated(json[k])
+    (k) =>
+      !ENVELOPE_KEYS.has(k.toLowerCase()) &&
+      !COLLECTION_KEYS.has(k.toLowerCase()) &&
+      isPopulated(json[k])
   );
   if (dataKeys.length < 2) return null;
   const fields = dataKeys.slice(0, 12);
-  return { records: 1, fields, sensitiveFields: fields.filter((f) => SENSITIVE_FIELD_RE.test(f)) };
+  return {
+    records: 1,
+    fields,
+    sensitiveFields: fields.filter((f) => SENSITIVE_FIELD_RE.test(f)),
+  };
 }
 
 function looksLikeHtml(response: AdminProbeResponse): boolean {
-  return response.contentType.includes("html") || response.body.trimStart().startsWith("<");
+  return (
+    response.contentType.includes("html") ||
+    response.body.trimStart().startsWith("<")
+  );
 }
 
 /** Judge one probe answer. */
-export function classifyAdminResponse(response: AdminProbeResponse): AdminVerdict {
+export function classifyAdminResponse(
+  response: AdminProbeResponse
+): AdminVerdict {
   const { status } = response;
   if (status === 401 || status === 403) return { kind: "enforced" };
   if (status >= 300 && status < 400) return { kind: "redirected" };
@@ -548,11 +594,18 @@ export function classifyAdminResponse(response: AdminProbeResponse): AdminVerdic
   if (response.truncated) {
     // Longer than the cap: not parseable, but a JSON list or object this large
     // is data. Lower confidence, since its contents were not read in full.
-    const jsonish = response.contentType.includes("json") && (text.startsWith("[") || text.startsWith("{"));
-    if (!jsonish || DENIAL_RE.test(text.slice(0, 500))) return { kind: "not-data" };
-    return { kind: "exposed", data: { records: 1, fields: [], sensitiveFields: [], truncated: true } };
+    const jsonish =
+      response.contentType.includes("json") &&
+      (text.startsWith("[") || text.startsWith("{"));
+    if (!jsonish || DENIAL_RE.test(text.slice(0, 500)))
+      return { kind: "not-data" };
+    return {
+      kind: "exposed",
+      data: { records: 1, fields: [], sensitiveFields: [], truncated: true },
+    };
   }
-  if (!text.startsWith("[") && !text.startsWith("{")) return { kind: "not-data" };
+  if (!text.startsWith("[") && !text.startsWith("{"))
+    return { kind: "not-data" };
   let json: unknown;
   try {
     json = JSON.parse(text);
@@ -582,7 +635,8 @@ export function findClientRoleChecks(ctx: Pick<RuleContext, "site">): string[] {
     if (scanned >= MAX_ROLE_CHECK_SCRIPTS || hits.length >= 5) break;
     if (!script.content || originOf(script.url) !== siteOrigin) continue;
     scanned++;
-    if (ROLE_CHECK_RE.test(script.content.slice(0, MAX_ROLE_CHECK_SCAN_CHARS))) hits.push(script.url);
+    if (ROLE_CHECK_RE.test(script.content.slice(0, MAX_ROLE_CHECK_SCAN_CHARS)))
+      hits.push(script.url);
   }
   return hits;
 }
@@ -593,9 +647,13 @@ const LIMIT_NOTE =
   "An unauthenticated probe shows the endpoint answers anyone; it cannot show whether one signed-in user can read another's data.";
 
 function describeExposure(data: ExposedData): string {
-  if (data.truncated) return "a JSON answer larger than 256 KB, too large to read in full";
+  if (data.truncated)
+    return "a JSON answer larger than 256 KB, too large to read in full";
   const what = data.records === 1 ? "1 record" : `${data.records} records`;
-  const fields = data.fields.length > 0 ? ` (fields: ${data.fields.slice(0, 6).join(", ")})` : "";
+  const fields =
+    data.fields.length > 0
+      ? ` (fields: ${data.fields.slice(0, 6).join(", ")})`
+      : "";
   return `${what}${fields}`;
 }
 
@@ -659,7 +717,11 @@ export const clientSideAuthzRule: Rule = {
     let enforced = 0;
     let errored = 0;
     let budgetStopped = false;
-    const exposed: Array<{ candidate: AdminCandidate; status: number; data: ExposedData }> = [];
+    const exposed: Array<{
+      candidate: AdminCandidate;
+      status: number;
+      data: ExposedData;
+    }> = [];
     for (const candidate of selection.candidates) {
       const outcome = await sendAdminProbe(ctx.probe, candidate.url);
       if (!outcome.sent) {
@@ -674,7 +736,11 @@ export const clientSideAuthzRule: Rule = {
       const verdict = classifyAdminResponse(outcome.response);
       if (verdict.kind === "enforced") enforced++;
       if (verdict.kind === "exposed") {
-        exposed.push({ candidate, status: outcome.response.status, data: verdict.data });
+        exposed.push({
+          candidate,
+          status: outcome.response.status,
+          data: verdict.data,
+        });
       }
     }
 
@@ -683,7 +749,8 @@ export const clientSideAuthzRule: Rule = {
         name: CHECK,
         status: "skipped",
         skipReason: "probe-budget",
-        message: "The probe budget ran out before any admin endpoint was probed",
+        message:
+          "The probe budget ran out before any admin endpoint was probed",
         details,
       });
       return { checks };
@@ -701,7 +768,9 @@ export const clientSideAuthzRule: Rule = {
     }
 
     const roleNote =
-      roleCheckScripts.length > 0 ? " The site's JavaScript also checks the user's role client-side." : "";
+      roleCheckScripts.length > 0
+        ? " The site's JavaScript also checks the user's role client-side."
+        : "";
     for (const { candidate, status, data } of exposed) {
       checks.push({
         name: CHECK,
@@ -717,7 +786,9 @@ export const clientSideAuthzRule: Rule = {
               records: data.records,
               fields: data.fields,
               sensitiveFields: data.sensitiveFields,
-              ...(data.truncated ? { truncated: true, confidence: "lower" } : {}),
+              ...(data.truncated
+                ? { truncated: true, confidence: "lower" }
+                : {}),
               discoveredVia: candidate.discoveredVia,
             },
           },
@@ -726,7 +797,9 @@ export const clientSideAuthzRule: Rule = {
           endpoint: candidate.url,
           status,
           ...data,
-          ...(roleCheckScripts.length > 0 ? { clientRoleCheckScripts: roleCheckScripts } : {}),
+          ...(roleCheckScripts.length > 0
+            ? { clientRoleCheckScripts: roleCheckScripts }
+            : {}),
         },
       });
     }

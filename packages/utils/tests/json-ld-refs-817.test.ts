@@ -11,7 +11,10 @@ describe("indexJsonLdIds / resolveJsonLdRef (pub#817)", () => {
   test("a full node wins over a stub, whichever comes first", () => {
     const stub = { "@id": "#q", "@type": "Question" };
     const full = { "@id": "#q", "@type": "Question", name: "Q?" };
-    for (const nodes of [[stub, full], [full, stub]]) {
+    for (const nodes of [
+      [stub, full],
+      [full, stub],
+    ]) {
       const ids = indexJsonLdIds(nodes, BASE);
       expect(resolveJsonLdRef({ "@id": "#q" }, ids, BASE)).toBe(full);
     }
@@ -24,9 +27,21 @@ describe("indexJsonLdIds / resolveJsonLdRef (pub#817)", () => {
   });
 
   test("a non-string or empty @id is not indexed, and a non-reference value comes back as it was", () => {
-    const ids = indexJsonLdIds([{ "@id": 7, name: "x" }, { "@id": "", name: "y" }], BASE);
+    const ids = indexJsonLdIds(
+      [
+        { "@id": 7, name: "x" },
+        { "@id": "", name: "y" },
+      ],
+      BASE
+    );
     expect(ids.size).toBe(0);
-    for (const value of [null, "text", 3, [{ "@id": "#a" }], { "@id": "#a", name: "inline" }]) {
+    for (const value of [
+      null,
+      "text",
+      3,
+      [{ "@id": "#a" }],
+      { "@id": "#a", name: "inline" },
+    ]) {
       expect(resolveJsonLdRef(value, ids, BASE)).toBe(value);
     }
   });
@@ -43,10 +58,15 @@ describe("indexJsonLdIds / resolveJsonLdRef (pub#817)", () => {
   });
 
   test("the walk stops at the object cap: an id past it is not indexed", () => {
-    const filler = Array.from({ length: 20_000 }, (_, i) => ({ "@type": "Thing", name: `t${i}` }));
+    const filler = Array.from({ length: 20_000 }, (_, i) => ({
+      "@type": "Thing",
+      name: `t${i}`,
+    }));
     const late = { "@id": "#late", name: "late" };
     const ids = indexJsonLdIds([...filler, late], BASE);
     expect(ids.has(`${BASE}#late`)).toBe(false);
-    expect(resolveJsonLdRef({ "@id": "#late" }, ids, BASE)).toEqual({ "@id": "#late" });
+    expect(resolveJsonLdRef({ "@id": "#late" }, ids, BASE)).toEqual({
+      "@id": "#late",
+    });
   });
 });

@@ -13,21 +13,25 @@
 
 // oxlint-disable sonarjs/no-hardcoded-passwords -- the fixtures are fake leaked credentials, which is what the rules detect
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
-import { createProbeBudget, type ProbeBudget } from "../src/probe-budget";
 import { RULE_TIMED_OUT_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
+import type { Rule, SiteData } from "../src/types";
+
+import { createProbeBudget, type ProbeBudget } from "../src/probe-budget";
 import { RuleRunner, type RulesConfig } from "../src/runner";
-import { AUTH_ENDPOINT_DISCLOSURE_RULE_ID, authEndpointDisclosureRule } from "../src/security/auth-endpoint-disclosure";
+import {
+  AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+  authEndpointDisclosureRule,
+} from "../src/security/auth-endpoint-disclosure";
 import { dedupeEndpointFindings } from "../src/security/endpoint-dedupe";
 import {
   dropEndpointsReportedElsewhere,
   UNAUTHENTICATED_API_RULE_ID,
   unauthenticatedApiRule,
 } from "../src/security/unauthenticated-api";
-import type { Rule, SiteData } from "../src/types";
 import { BASE, candidate, surface } from "./helpers/graphql-server";
 
 const ME = `${BASE}/api/me`;
@@ -59,19 +63,31 @@ interface Server {
 
 function serve(): Server {
   const server: Server = { sent: [], afterMe: () => {} };
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit
+  ) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
     server.sent.push(url);
     init?.signal?.throwIfAborted();
     const { origin, pathname } = new URL(url);
     if (`${origin}${pathname}` === ME) {
-      const res = new Response(JSON.stringify(LEAKY_USER), { headers: { "content-type": "application/json" } });
+      const res = new Response(JSON.stringify(LEAKY_USER), {
+        headers: { "content-type": "application/json" },
+      });
       const after = server.afterMe;
       server.afterMe = () => {};
       after();
       return res;
     }
-    return new Response("<!doctype html><title>Home</title>", { headers: { "content-type": "text/html" } });
+    return new Response("<!doctype html><title>Home</title>", {
+      headers: { "content-type": "text/html" },
+    });
   }) as typeof fetch;
   return server;
 }
@@ -85,7 +101,11 @@ function controllableProbe(): {
   throwOnNextProbe: () => void;
 } {
   let clock = 1_000;
-  const base = createProbeBudget({ level: "active", budgetMs: 60_000, now: () => clock });
+  const base = createProbeBudget({
+    level: "active",
+    budgetMs: 60_000,
+    now: () => clock,
+  });
   const run = new AbortController();
   let throwNext = false;
   const probe: ProbeBudget = {
@@ -108,7 +128,8 @@ function controllableProbe(): {
     passDeadline: () => {
       clock += 120_000;
     },
-    abortRun: () => run.abort(new DOMException("The audit was aborted", "AbortError")),
+    abortRun: () =>
+      run.abort(new DOMException("The audit was aborted", "AbortError")),
     throwOnNextProbe: () => {
       throwNext = true;
     },
@@ -157,9 +178,16 @@ class OrderedRunner extends RuleRunner {
   ) {
     const config: RulesConfig = {
       rule_options: {},
-      rules: { enable: [UNAUTHENTICATED_API_RULE_ID, AUTH_ENDPOINT_DISCLOSURE_RULE_ID] },
+      rules: {
+        enable: [UNAUTHENTICATED_API_RULE_ID, AUTH_ENDPOINT_DISCLOSURE_RULE_ID],
+      },
     };
-    super({ config, probe, ruleConcurrency: 1, ruleTimeBudgetMs: RUNNER_BUDGET_MS });
+    super({
+      config,
+      probe,
+      ruleConcurrency: 1,
+      ruleTimeBudgetMs: RUNNER_BUDGET_MS,
+    });
   }
   override getEnabledRules(): Rule[] {
     return this.ordered;
@@ -174,7 +202,11 @@ const siteData: SiteData = {
 };
 
 type Order = "api rule first" | "auth rule first";
-type Exit = "probe deadline" | "run aborted" | "exception thrown" | "runner timeout";
+type Exit =
+  | "probe deadline"
+  | "run aborted"
+  | "exception thrown"
+  | "runner timeout";
 
 async function audit(order: Order, exit: Exit) {
   const server = serve();
@@ -195,24 +227,43 @@ async function audit(order: Order, exit: Exit) {
       ? [unauthenticatedApiRule, authEndpointDisclosureRule]
       : [authEndpointDisclosureRule, unauthenticatedApiRule];
   const runner = new OrderedRunner(rules, control.probe);
-  const result = await runner.runSiteRules(siteData, undefined, undefined, endpoints.surface);
+  const result = await runner.runSiteRules(
+    siteData,
+    undefined,
+    undefined,
+    endpoints.surface
+  );
   const api = result.ruleResults.get(UNAUTHENTICATED_API_RULE_ID)?.checks ?? [];
-  const auth = result.ruleResults.get(AUTH_ENDPOINT_DISCLOSURE_RULE_ID)?.checks ?? [];
+  const auth =
+    result.ruleResults.get(AUTH_ENDPOINT_DISCLOSURE_RULE_ID)?.checks ?? [];
   return { result, api, auth, server, probe: control.probe };
 }
 
-const problems = (checks: readonly CheckResult[]) => checks.filter((c) => c.status === "fail" || c.status === "warn");
+const problems = (checks: readonly CheckResult[]) =>
+  checks.filter((c) => c.status === "fail" || c.status === "warn");
 
 /** Findings on /api/me: the auth rule's by `details.endpoint`, unauthenticated-api's by item. */
-function findingsOnMe(api: readonly CheckResult[], auth: readonly CheckResult[]): string[] {
+function findingsOnMe(
+  api: readonly CheckResult[],
+  auth: readonly CheckResult[]
+): string[] {
   const out: string[] = [];
-  for (const c of problems(auth)) if (c.details?.endpoint === ME) out.push(AUTH_ENDPOINT_DISCLOSURE_RULE_ID);
-  for (const c of problems(api)) for (const i of c.items ?? []) if (i.id === ME) out.push(UNAUTHENTICATED_API_RULE_ID);
+  for (const c of problems(auth))
+    if (c.details?.endpoint === ME) out.push(AUTH_ENDPOINT_DISCLOSURE_RULE_ID);
+  for (const c of problems(api))
+    for (const i of c.items ?? [])
+      if (i.id === ME) out.push(UNAUTHENTICATED_API_RULE_ID);
   return out;
 }
 
 /** What each exit leaves in the auth rule's result, and which rule keeps the finding. */
-const EXITS: Record<Exit, { reporter: string; authEnded: (auth: CheckResult[], probe: ProbeBudget) => void }> = {
+const EXITS: Record<
+  Exit,
+  {
+    reporter: string;
+    authEnded: (auth: CheckResult[], probe: ProbeBudget) => void;
+  }
+> = {
   // The shared answer is read before the budget is asked, so the auth rule still
   // reports /api/me; it just sends nothing further.
   "probe deadline": {
@@ -228,14 +279,22 @@ const EXITS: Record<Exit, { reporter: string; authEnded: (auth: CheckResult[], p
     reporter: UNAUTHENTICATED_API_RULE_ID,
     authEnded: (auth) => {
       expect(problems(auth)).toHaveLength(0);
-      expect(auth.some((c) => c.status === "skipped" && c.details?.errored === true)).toBe(true);
+      expect(
+        auth.some((c) => c.status === "skipped" && c.details?.errored === true)
+      ).toBe(true);
     },
   },
   "runner timeout": {
     reporter: UNAUTHENTICATED_API_RULE_ID,
     authEnded: (auth) => {
       expect(problems(auth)).toHaveLength(0);
-      expect(auth.some((c) => c.skipReason === RULE_TIMED_OUT_SKIP_REASON && c.details?.timedOut === true)).toBe(true);
+      expect(
+        auth.some(
+          (c) =>
+            c.skipReason === RULE_TIMED_OUT_SKIP_REASON &&
+            c.details?.timedOut === true
+        )
+      ).toBe(true);
     },
   },
 };
@@ -250,8 +309,14 @@ describe("squirrelscan#2082: one finding per leaking endpoint, whichever way the
         expect(server.sent.filter((u) => u === ME)).toHaveLength(1);
         expect(findingsOnMe(api, auth)).toEqual([reporter]);
         // The flat check list the report counts from agrees with the per-rule results.
-        const flat = result.checks.filter((c) => c.status === "fail" || c.status === "warn");
-        expect(flat).toEqual([...problems(api), ...problems(auth)].sort((a, b) => result.checks.indexOf(a) - result.checks.indexOf(b)));
+        const flat = result.checks.filter(
+          (c) => c.status === "fail" || c.status === "warn"
+        );
+        expect(flat).toEqual(
+          [...problems(api), ...problems(auth)].sort(
+            (a, b) => result.checks.indexOf(a) - result.checks.indexOf(b)
+          )
+        );
         if (reporter === AUTH_ENDPOINT_DISCLOSURE_RULE_ID) {
           // Dropped whole: no tier check, and the rule reads clean, naming who reported it.
           expect(problems(api)).toHaveLength(0);
@@ -270,13 +335,22 @@ describe("squirrelscan#2082: one finding per leaking endpoint, whichever way the
 const OTHER = `${BASE}/api/orders`;
 /** The rule's own check names, by outcome. */
 const checkNamed = (outcome: string, n = 0): string =>
-  (unauthenticatedApiRule.meta.checks ?? []).filter((c) => c.outcome === outcome)[n]!.name;
+  (unauthenticatedApiRule.meta.checks ?? []).filter(
+    (c) => c.outcome === outcome
+  )[n]!.name;
 const SENSITIVE = checkNamed("problem");
 const CLEAN = checkNamed("clean");
 const UNCHECKED = checkNamed("skipped");
 
-function apiResult(endpoints: string[], opts: { incomplete?: boolean } = {}): CheckResult[] {
-  const items = endpoints.map((id) => ({ id, label: `GET ${id}: 2 records`, meta: { personal: ["email"] } }));
+function apiResult(
+  endpoints: string[],
+  opts: { incomplete?: boolean } = {}
+): CheckResult[] {
+  const items = endpoints.map((id) => ({
+    id,
+    label: `GET ${id}: 2 records`,
+    meta: { personal: ["email"] },
+  }));
   const checks: CheckResult[] = [
     {
       name: SENSITIVE,
@@ -287,7 +361,12 @@ function apiResult(endpoints: string[], opts: { incomplete?: boolean } = {}): Ch
     },
   ];
   if (opts.incomplete) {
-    checks.push({ name: UNCHECKED, status: "skipped", message: "incomplete", value: "not-checked" });
+    checks.push({
+      name: UNCHECKED,
+      status: "skipped",
+      message: "incomplete",
+      value: "not-checked",
+    });
   }
   return checks;
 }
@@ -300,7 +379,10 @@ const authFinding = (endpoint: string): CheckResult => ({
 
 describe("dropEndpointsReportedElsewhere (squirrelscan#2082)", () => {
   test("a partly covered tier check is rebuilt from what is left: count, message, endpoints", () => {
-    const out = dropEndpointsReportedElsewhere(apiResult([ME, OTHER]), new Set([ME]));
+    const out = dropEndpointsReportedElsewhere(
+      apiResult([ME, OTHER]),
+      new Set([ME])
+    );
     expect(out).toHaveLength(1);
     expect(out[0]!.items?.map((i) => i.id)).toEqual([OTHER]);
     expect(out[0]!.details).toMatchObject({ endpoints: 1, probed: 3 });
@@ -310,11 +392,16 @@ describe("dropEndpointsReportedElsewhere (squirrelscan#2082)", () => {
 
   test("a wholly covered run that verified every endpoint reads clean", () => {
     const out = dropEndpointsReportedElsewhere(apiResult([ME]), new Set([ME]));
-    expect(out).toEqual([expect.objectContaining({ name: CLEAN, status: "pass" })]);
+    expect(out).toEqual([
+      expect.objectContaining({ name: CLEAN, status: "pass" }),
+    ]);
   });
 
   test("a wholly covered run that left endpoints unchecked stays not-checked, never clean", () => {
-    const out = dropEndpointsReportedElsewhere(apiResult([ME], { incomplete: true }), new Set([ME]));
+    const out = dropEndpointsReportedElsewhere(
+      apiResult([ME], { incomplete: true }),
+      new Set([ME])
+    );
     expect(out.map((c) => c.name)).toEqual([UNCHECKED]);
   });
 
@@ -325,19 +412,39 @@ describe("dropEndpointsReportedElsewhere (squirrelscan#2082)", () => {
 
   test("keyed on the normalised URL both rules request: query and fragment do not split an endpoint", () => {
     const results = new Map([
-      [UNAUTHENTICATED_API_RULE_ID, { meta: unauthenticatedApiRule.meta, checks: apiResult([`${ME}?v=2#x`]) }],
-      [AUTH_ENDPOINT_DISCLOSURE_RULE_ID, { meta: authEndpointDisclosureRule.meta, checks: [authFinding(ME)] }],
+      [
+        UNAUTHENTICATED_API_RULE_ID,
+        {
+          meta: unauthenticatedApiRule.meta,
+          checks: apiResult([`${ME}?v=2#x`]),
+        },
+      ],
+      [
+        AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+        { meta: authEndpointDisclosureRule.meta, checks: [authFinding(ME)] },
+      ],
     ]);
-    expect(problems(dedupeEndpointFindings(results)?.checks ?? [])).toHaveLength(0);
+    expect(
+      problems(dedupeEndpointFindings(results)?.checks ?? [])
+    ).toHaveLength(0);
   });
 
   test("an auth rule that reported nothing (threw, timed out, disabled) leaves unauthenticated-api's finding", () => {
     const api = { meta: unauthenticatedApiRule.meta, checks: apiResult([ME]) };
-    expect(dedupeEndpointFindings(new Map([[UNAUTHENTICATED_API_RULE_ID, api]]))).toBeUndefined();
-    const errored: CheckResult = { name: `${AUTH_ENDPOINT_DISCLOSURE_RULE_ID}-error`, status: "skipped", message: "Rule error" };
+    expect(
+      dedupeEndpointFindings(new Map([[UNAUTHENTICATED_API_RULE_ID, api]]))
+    ).toBeUndefined();
+    const errored: CheckResult = {
+      name: `${AUTH_ENDPOINT_DISCLOSURE_RULE_ID}-error`,
+      status: "skipped",
+      message: "Rule error",
+    };
     const withErrored = new Map([
       [UNAUTHENTICATED_API_RULE_ID, api],
-      [AUTH_ENDPOINT_DISCLOSURE_RULE_ID, { meta: authEndpointDisclosureRule.meta, checks: [errored] }],
+      [
+        AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+        { meta: authEndpointDisclosureRule.meta, checks: [errored] },
+      ],
     ]);
     expect(dedupeEndpointFindings(withErrored)).toBeUndefined();
   });

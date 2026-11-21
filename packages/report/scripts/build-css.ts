@@ -18,7 +18,9 @@ export async function buildCss(): Promise<string> {
     base: dirname(entry),
     onDependency: () => {},
   });
-  const scanner = new Scanner({ sources: compiler.sources.map((s) => ({ ...s })) });
+  const scanner = new Scanner({
+    sources: compiler.sources.map((s) => ({ ...s })),
+  });
   return optimize(compiler.build(scanner.scan()), { minify: true }).code;
 }
 
@@ -32,7 +34,9 @@ if (import.meta.main) {
   if (process.argv.includes("--check")) {
     const current = await Bun.file(target).text();
     if (current !== next) {
-      console.error("styles.generated.ts is stale: run `bun run build:css` in packages/report");
+      console.error(
+        "styles.generated.ts is stale: run `bun run build:css` in packages/report"
+      );
       process.exit(1);
     }
     console.log("styles.generated.ts is up to date");

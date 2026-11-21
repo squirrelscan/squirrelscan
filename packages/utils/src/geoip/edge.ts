@@ -37,15 +37,30 @@ function toKey(ip: string): { v6: boolean; n: bigint } | null {
   if (kind !== 6) return null;
   const b = parseV6(bare);
   if (!b) return null;
-  if (b.subarray(0, 10).every((x) => x === 0) && b[10] === 0xff && b[11] === 0xff) {
-    return { v6: false, n: (BigInt(b[12]!) << 24n) | (BigInt(b[13]!) << 16n) | (BigInt(b[14]!) << 8n) | BigInt(b[15]!) };
+  if (
+    b.subarray(0, 10).every((x) => x === 0) &&
+    b[10] === 0xff &&
+    b[11] === 0xff
+  ) {
+    return {
+      v6: false,
+      n:
+        (BigInt(b[12]!) << 24n) |
+        (BigInt(b[13]!) << 16n) |
+        (BigInt(b[14]!) << 8n) |
+        BigInt(b[15]!),
+    };
   }
   let n = 0n;
   for (const x of b) n = (n << 8n) | BigInt(x);
   return { v6: true, n };
 }
 
-interface Cidr { v6: boolean; lo: bigint; hi: bigint }
+interface Cidr {
+  v6: boolean;
+  lo: bigint;
+  hi: bigint;
+}
 
 function parseCidr(c: string): Cidr | null {
   const [addr, len] = c.split("/");
@@ -59,27 +74,43 @@ function parseCidr(c: string): Cidr | null {
   return { v6: k.v6, lo, hi: lo | host };
 }
 
-let rangeIndex: Array<{ provider: string; name: string; broad: boolean; cidrs: Cidr[] }> | undefined;
+let rangeIndex:
+  | Array<{ provider: string; name: string; broad: boolean; cidrs: Cidr[] }>
+  | undefined;
 function ranges() {
-  return (rangeIndex ??= Object.entries(rangeData.providers).map(([provider, p]) => ({
-    provider,
-    name: p.name,
-    broad: "broad" in p && p.broad === true,
-    cidrs: p.cidrs.map(parseCidr).filter((c): c is Cidr => c !== null),
-  })));
+  return (rangeIndex ??= Object.entries(rangeData.providers).map(
+    ([provider, p]) => ({
+      provider,
+      name: p.name,
+      broad: "broad" in p && p.broad === true,
+      cidrs: p.cidrs.map(parseCidr).filter((c): c is Cidr => c !== null),
+    })
+  ));
 }
 
-let asnIndex: Array<{ provider: string; name: string; ranges: Array<{ v6: boolean; lo: bigint; hi: bigint; asn: number }> }> | undefined;
+let asnIndex:
+  | Array<{
+      provider: string;
+      name: string;
+      ranges: Array<{ v6: boolean; lo: bigint; hi: bigint; asn: number }>;
+    }>
+  | undefined;
 function asns() {
-  return (asnIndex ??= Object.entries(asnData.providers).map(([provider, p]) => ({
-    provider,
-    name: p.name,
-    ranges: (p.ranges as Array<[string, string, number]>).flatMap(([s, e, asn]) => {
-      const a = toKey(s);
-      const b = toKey(e);
-      return a && b && a.v6 === b.v6 ? [{ v6: a.v6, lo: a.n, hi: b.n, asn }] : [];
-    }),
-  })));
+  return (asnIndex ??= Object.entries(asnData.providers).map(
+    ([provider, p]) => ({
+      provider,
+      name: p.name,
+      ranges: (p.ranges as Array<[string, string, number]>).flatMap(
+        ([s, e, asn]) => {
+          const a = toKey(s);
+          const b = toKey(e);
+          return a && b && a.v6 === b.v6
+            ? [{ v6: a.v6, lo: a.n, hi: b.n, asn }]
+            : [];
+        }
+      ),
+    })
+  ));
 }
 
 /** Providers whose published range list contains the address, narrowest (non-broad) first. */
@@ -87,7 +118,9 @@ export function matchEdgeRanges(ip: string): EdgeRangeMatch[] {
   const k = toKey(ip);
   if (!k) return [];
   return ranges()
-    .filter((p) => p.cidrs.some((c) => c.v6 === k.v6 && k.n >= c.lo && k.n <= c.hi))
+    .filter((p) =>
+      p.cidrs.some((c) => c.v6 === k.v6 && k.n >= c.lo && k.n <= c.hi)
+    )
     .map((p) => ({ provider: p.provider, name: p.name, broad: p.broad }))
     .sort((a, b) => Number(a.broad) - Number(b.broad));
 }

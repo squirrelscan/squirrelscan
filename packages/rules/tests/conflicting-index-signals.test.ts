@@ -1,19 +1,27 @@
 // crawl/conflicting-index-signals: one finding per page that is in the sitemap and also carries two or more
 // "do not index" signals (#1771). A single mismatch stays with the existing rule that covers it.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { parsePage } from "@squirrelscan/parser";
 import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
+import { describe, expect, test } from "bun:test";
 
-import { conflictingIndexSignalsRule, evaluateIndexSignals, sitemapUrlSet } from "../src/crawl/conflicting-index-signals";
-import { noindexInSitemapRule } from "../src/crawl/noindex-in-sitemap";
 import type { ParsedPage, RuleContext } from "../src/types";
+
+import {
+  conflictingIndexSignalsRule,
+  evaluateIndexSignals,
+  sitemapUrlSet,
+} from "../src/crawl/conflicting-index-signals";
+import { noindexInSitemapRule } from "../src/crawl/noindex-in-sitemap";
 
 const BASE = "https://example.com";
 const NOINDEX = '<meta name="robots" content="noindex">';
-const ROBOTS = parseRobotsTxt("User-agent: *\nDisallow: /private/\n", `${BASE}/robots.txt`);
+const ROBOTS = parseRobotsTxt(
+  "User-agent: *\nDisallow: /private/\n",
+  `${BASE}/robots.txt`
+);
 
 interface Spec {
   path: string;
@@ -35,9 +43,17 @@ function build(specs: Spec[], robots = ROBOTS) {
       parsed: parsePage(html, url) as ParsedPage,
     };
   });
-  const urls = specs.filter((s) => s.inSitemap).map((s) => ({ loc: `${BASE}${s.path}` }));
+  const urls = specs
+    .filter((s) => s.inSitemap)
+    .map((s) => ({ loc: `${BASE}${s.path}` }));
   return {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: {
       baseUrl: BASE,
@@ -50,7 +66,9 @@ function build(specs: Spec[], robots = ROBOTS) {
 }
 
 async function run(specs: Spec[]): Promise<CheckResult> {
-  const { checks } = await Promise.resolve(conflictingIndexSignalsRule.run(build(specs)));
+  const { checks } = await Promise.resolve(
+    conflictingIndexSignalsRule.run(build(specs))
+  );
   return (checks as CheckResult[])[0]!;
 }
 
@@ -69,8 +87,12 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
     expect(item.id).toBe(`${BASE}/p/x`);
     expect(item.label).toContain("listed in the sitemap");
     expect(item.label).toContain("noindex in the robots meta tag");
-    expect(item.label).toContain(`canonical points to a different URL (${BASE}/)`);
-    expect(check.message).toContain("Decide whether each page should be indexed");
+    expect(item.label).toContain(
+      `canonical points to a different URL (${BASE}/)`
+    );
+    expect(check.message).toContain(
+      "Decide whether each page should be indexed"
+    );
     expect(check.message).toContain("To keep it out of search");
     expect(check.message).toContain("To put it in search");
     expect(check.details?.relatedRules).toContain("crawl/noindex-in-sitemap");
@@ -78,7 +100,10 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
   });
 
   test("noindex + sitemap only (the existing rule's case) is not reported", async () => {
-    const check = await run([...filler(4), { path: "/p/x", noindex: true, inSitemap: true }]);
+    const check = await run([
+      ...filler(4),
+      { path: "/p/x", noindex: true, inSitemap: true },
+    ]);
     expect(check.status).toBe("pass");
   });
 
@@ -91,7 +116,10 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
   });
 
   test("a consistent noindex page (noindex + canonical elsewhere, not in the sitemap) is not reported", async () => {
-    const check = await run([...filler(4), { path: "/p/x", noindex: true, canonical: `${BASE}/` }]);
+    const check = await run([
+      ...filler(4),
+      { path: "/p/x", noindex: true, canonical: `${BASE}/` },
+    ]);
     expect(check.status).toBe("pass");
   });
 
@@ -104,7 +132,10 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
   });
 
   test("header noindex plus a robots.txt block plus the sitemap counts", async () => {
-    const check = await run([...filler(4), { path: "/private/a", header: true, inSitemap: true }]);
+    const check = await run([
+      ...filler(4),
+      { path: "/private/a", header: true, inSitemap: true },
+    ]);
     expect(check.status).toBe("warn");
     expect(check.items![0]!.label).toContain("X-Robots-Tag");
     expect(check.items![0]!.label).toContain("blocked by robots.txt");
@@ -117,7 +148,9 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
       canonical: `${BASE}/`,
       inSitemap: true,
     }));
-    const { checks } = await Promise.resolve(conflictingIndexSignalsRule.run(build(all)));
+    const { checks } = await Promise.resolve(
+      conflictingIndexSignalsRule.run(build(all))
+    );
     expect(checks).toHaveLength(1);
     const check = (checks as CheckResult[])[0]!;
     expect(check.name).toBe("site-wide-noindex");
@@ -128,7 +161,9 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
   test("no sitemap: skipped", async () => {
     const ctx = build([{ path: "/a", noindex: true }]);
     (ctx.site as { sitemaps: unknown }).sitemaps = { discovered: [] };
-    const { checks } = await Promise.resolve(conflictingIndexSignalsRule.run(ctx));
+    const { checks } = await Promise.resolve(
+      conflictingIndexSignalsRule.run(ctx)
+    );
     expect((checks as CheckResult[])[0]!.status).toBe("skipped");
   });
 
@@ -142,7 +177,9 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
     const check = (checks as CheckResult[])[0]!;
     expect(check.status).toBe("warn");
     expect(check.items).toHaveLength(2);
-    expect(check.details?.alsoReportedBy).toBe("crawl/conflicting-index-signals");
+    expect(check.details?.alsoReportedBy).toBe(
+      "crawl/conflicting-index-signals"
+    );
     expect(check.details?.alsoReportedPages).toEqual([`${BASE}/p/x`]);
   });
 });
@@ -150,7 +187,13 @@ describe("crawl/conflicting-index-signals (#1771)", () => {
 describe("the sitemap is matched on normalized URLs (both engines share this)", () => {
   test("a sitemap entry with a trailing slash, a fragment or a different slash form still matches the page", () => {
     const sitemaps = {
-      discovered: [{ url: "https://x.test/sitemap.xml", type: "urlset", urls: [{ loc: "https://x.test/a/" }, { loc: "https://x.test/b#top" }] }],
+      discovered: [
+        {
+          url: "https://x.test/sitemap.xml",
+          type: "urlset",
+          urls: [{ loc: "https://x.test/a/" }, { loc: "https://x.test/b#top" }],
+        },
+      ],
     } as never;
     const urls = sitemapUrlSet(sitemaps);
     const page = (url: string) => ({
@@ -163,7 +206,8 @@ describe("the sitemap is matched on normalized URLs (both engines share this)", 
       const verdict = evaluateIndexSignals([page(url)], urls, null);
       expect(verdict.kind).toBe("conflicts");
     }
-    expect(evaluateIndexSignals([page("https://x.test/c")], urls, null).kind).toBe("none");
+    expect(
+      evaluateIndexSignals([page("https://x.test/c")], urls, null).kind
+    ).toBe("none");
   });
 });
-

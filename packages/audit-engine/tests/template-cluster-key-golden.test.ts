@@ -23,11 +23,15 @@
 // clusters REAL multi-page templates the way running per page would is #1950's
 // parity gate, not this file's job.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type { Config } from "@squirrelscan/config";
+import type { PageRecord } from "@squirrelscan/core-contracts";
+import type {
+  PageFingerprint,
+  ParsedPage,
+  SiteData,
+} from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import {
   buildCollectedPageSignal,
   createRunner,
@@ -35,12 +39,19 @@ import {
   fingerprintWalkCount,
   resetFingerprintWalkCount,
 } from "@squirrelscan/rules";
-import type { PageFingerprint, ParsedPage, SiteData } from "@squirrelscan/rules";
-import type { Config } from "@squirrelscan/config";
-import type { PageRecord } from "@squirrelscan/core-contracts";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
-import { createSiteQuery, extractPageFeatures, templateFingerprintKey } from "../src/index";
 import { parseHtmlForRules } from "../src/adapter";
+import {
+  createSiteQuery,
+  extractPageFeatures,
+  templateFingerprintKey,
+} from "../src/index";
 import { streamPageRules, type SharedPageSignals } from "../src/streaming";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -90,7 +101,9 @@ describe("templateFingerprintKey", () => {
       stylesheetHrefs: new Set(["/2.css", "/1.css"]),
     });
     expect([...forward.bodyClasses]).not.toEqual([...reversed.bodyClasses]); // orders really differ
-    expect(templateFingerprintKey(reversed)).toBe(templateFingerprintKey(forward));
+    expect(templateFingerprintKey(reversed)).toBe(
+      templateFingerprintKey(forward)
+    );
   });
 
   test("every marker is part of the key", () => {
@@ -111,15 +124,19 @@ describe("templateFingerprintKey", () => {
     // A delimiter-joined encoding would let a marker forge a different field
     // boundary; the JSON-of-arrays encoding is injective for this shape.
     const asHost = templateFingerprintKey(
-      fp({ assetHosts: new Set(["x"]), bodyClasses: new Set() }),
+      fp({ assetHosts: new Set(["x"]), bodyClasses: new Set() })
     );
     const asClass = templateFingerprintKey(
-      fp({ assetHosts: new Set(), bodyClasses: new Set(["x"]) }),
+      fp({ assetHosts: new Set(), bodyClasses: new Set(["x"]) })
     );
     expect(asClass).not.toBe(asHost);
 
-    const split = templateFingerprintKey(fp({ bodyClasses: new Set(["a", "b"]) }));
-    const joined = templateFingerprintKey(fp({ bodyClasses: new Set(['a","b']) }));
+    const split = templateFingerprintKey(
+      fp({ bodyClasses: new Set(["a", "b"]) })
+    );
+    const joined = templateFingerprintKey(
+      fp({ bodyClasses: new Set(['a","b']) })
+    );
     expect(joined).not.toBe(split);
   });
 
@@ -141,7 +158,10 @@ function html(chrome: string, bodyClass: string, body: string): string {
   return `<html><head><title>T</title>${chrome}</head><body class="${bodyClass}"><nav>n</nav>${body}<footer>f</footer></body></html>`;
 }
 
-function mkPage(url: string, pageHtml: string): { page: PageRecord; parsed: ParsedPage } {
+function mkPage(
+  url: string,
+  pageHtml: string
+): { page: PageRecord; parsed: ParsedPage } {
   const page = {
     url,
     normalizedUrl: url,
@@ -168,12 +188,22 @@ describe("extractPageFeatures — template_fp", () => {
     // Bodies differ the way real template siblings differ (a product page with a
     // different number of variants), which is exactly the case an exact DOM
     // skeleton splits and chrome clustering does not.
-    const a1 = mkPage("https://example.com/p1", html(CHROME_A, "tpl-a", "<p>one</p>"));
+    const a1 = mkPage(
+      "https://example.com/p1",
+      html(CHROME_A, "tpl-a", "<p>one</p>")
+    );
     const a2 = mkPage(
       "https://example.com/p2",
-      html(CHROME_A, "tpl-a", "<p>one</p><p>two</p><ul><li>x</li><li>y</li></ul>"),
+      html(
+        CHROME_A,
+        "tpl-a",
+        "<p>one</p><p>two</p><ul><li>x</li><li>y</li></ul>"
+      )
     );
-    const b1 = mkPage("https://example.com/q1", html(CHROME_B, "tpl-b", "<p>one</p>"));
+    const b1 = mkPage(
+      "https://example.com/q1",
+      html(CHROME_B, "tpl-b", "<p>one</p>")
+    );
 
     const keyA1 = extractPageFeatures(a1.page, a1.parsed).templateFp;
     const keyA2 = extractPageFeatures(a2.page, a2.parsed).templateFp;
@@ -185,10 +215,16 @@ describe("extractPageFeatures — template_fp", () => {
   });
 
   test("re-extracting an unchanged page gives the same key", () => {
-    const first = mkPage("https://example.com/p1", html(CHROME_A, "tpl-a", "<p>one</p>"));
-    const second = mkPage("https://example.com/p1", html(CHROME_A, "tpl-a", "<p>one</p>"));
+    const first = mkPage(
+      "https://example.com/p1",
+      html(CHROME_A, "tpl-a", "<p>one</p>")
+    );
+    const second = mkPage(
+      "https://example.com/p1",
+      html(CHROME_A, "tpl-a", "<p>one</p>")
+    );
     expect(extractPageFeatures(second.page, second.parsed).templateFp).toBe(
-      extractPageFeatures(first.page, first.parsed).templateFp,
+      extractPageFeatures(first.page, first.parsed).templateFp
     );
   });
 
@@ -196,14 +232,23 @@ describe("extractPageFeatures — template_fp", () => {
     // The streamed loop supplies one; this is what proves it is USED rather than
     // silently recomputed, and it is why the option is `PageFingerprint`-shaped
     // instead of a pre-hashed string.
-    const a = mkPage("https://example.com/p1", html(CHROME_A, "tpl-a", "<p>one</p>"));
-    const b = mkPage("https://example.com/q1", html(CHROME_B, "tpl-b", "<p>one</p>"));
+    const a = mkPage(
+      "https://example.com/p1",
+      html(CHROME_A, "tpl-a", "<p>one</p>")
+    );
+    const b = mkPage(
+      "https://example.com/q1",
+      html(CHROME_B, "tpl-b", "<p>one</p>")
+    );
     const bFingerprint = fingerprintPage(b.parsed, b.page.normalizedUrl);
 
-    expect(extractPageFeatures(a.page, a.parsed, { fingerprint: bFingerprint }).templateFp).toBe(
-      extractPageFeatures(b.page, b.parsed).templateFp,
-    );
-    expect(extractPageFeatures(a.page, a.parsed, { fingerprint: null }).templateFp).toBeNull();
+    expect(
+      extractPageFeatures(a.page, a.parsed, { fingerprint: bFingerprint })
+        .templateFp
+    ).toBe(extractPageFeatures(b.page, b.parsed).templateFp);
+    expect(
+      extractPageFeatures(a.page, a.parsed, { fingerprint: null }).templateFp
+    ).toBeNull();
     // Omitting the option is NOT the same as passing null: it computes.
     expect(extractPageFeatures(a.page, a.parsed, {}).templateFp).not.toBeNull();
   });
@@ -214,7 +259,10 @@ describe("extractPageFeatures — template_fp", () => {
       schemas: { types: [], valid: true, errors: [], raw: null },
       content: { wordCount: 0 },
     } as unknown as ParsedPage;
-    const { page } = mkPage("https://example.com/x", html(CHROME_A, "tpl-a", "<p>x</p>"));
+    const { page } = mkPage(
+      "https://example.com/x",
+      html(CHROME_A, "tpl-a", "<p>x</p>")
+    );
     expect(extractPageFeatures(page, bare).templateFp).toBeNull();
   });
 });
@@ -230,26 +278,42 @@ describe("templateClusters over the stored key", () => {
 
     const pages = [
       mkPage("https://example.com/a1", html(CHROME_A, "tpl-a", "<p>1</p>")),
-      mkPage("https://example.com/a2", html(CHROME_A, "tpl-a", "<p>1</p><p>2</p>")),
+      mkPage(
+        "https://example.com/a2",
+        html(CHROME_A, "tpl-a", "<p>1</p><p>2</p>")
+      ),
       mkPage("https://example.com/a3", html(CHROME_A, "tpl-a", "<h2>x</h2>")),
       mkPage("https://example.com/b1", html(CHROME_B, "tpl-b", "<p>1</p>")),
       mkPage("https://example.com/b2", html(CHROME_B, "tpl-b", "<p>2</p>")),
       // Its own chrome: one page, so not a cluster.
-      mkPage("https://example.com/solo", html(`<link rel="stylesheet" href="/solo.css">`, "tpl-c", "<p>s</p>")),
+      mkPage(
+        "https://example.com/solo",
+        html(`<link rel="stylesheet" href="/solo.css">`, "tpl-c", "<p>s</p>")
+      ),
     ];
     for (const { page, parsed } of pages) {
-      await run(store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed)));
+      await run(
+        store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed))
+      );
     }
 
-    const clusters = await run(createSiteQuery(store, CRAWL)).then((sq) => sq.templateClusters());
+    const clusters = await run(createSiteQuery(store, CRAWL)).then((sq) =>
+      sq.templateClusters()
+    );
     expect(clusters.map((c) => c.count)).toEqual([3, 2]);
     expect(clusters.map((c) => c.urls)).toEqual([
-      ["https://example.com/a1", "https://example.com/a2", "https://example.com/a3"],
+      [
+        "https://example.com/a1",
+        "https://example.com/a2",
+        "https://example.com/a3",
+      ],
       ["https://example.com/b1", "https://example.com/b2"],
     ]);
     // Distinct groups, and the singleton is absent (HAVING count > 1).
     expect(new Set(clusters.map((c) => c.fp)).size).toBe(2);
-    expect(clusters.flatMap((c) => c.urls)).not.toContain("https://example.com/solo");
+    expect(clusters.flatMap((c) => c.urls)).not.toContain(
+      "https://example.com/solo"
+    );
 
     await run(store.close());
   });
@@ -259,7 +323,10 @@ describe("templateClusters over the stored key", () => {
 // One fingerprint per page, two consumers
 // ---------------------------------------------------------------------------
 
-const CONFIG = { rule_options: {}, rules: { enable: ["*"] } } as unknown as Config;
+const CONFIG = {
+  rule_options: {},
+  rules: { enable: ["*"] },
+} as unknown as Config;
 const EMPTY_SITE_DATA = {
   baseUrl: "http://synthetic.example.com",
   pages: [],
@@ -278,10 +345,14 @@ describe("streamPageRules — the fingerprint is built once and shared", () => {
     // pages nearly all share one template.
     const { storage, crawlId } = await writeCrawlToStorage(
       generateSiteModel({ seed: 11, pageCount: 6 }),
-      ":memory:",
+      ":memory:"
     );
 
-    const seen: Array<{ url: string; shared: SharedPageSignals; live: PageFingerprint | null }> = [];
+    const seen: Array<{
+      url: string;
+      shared: SharedPageSignals;
+      live: PageFingerprint | null;
+    }> = [];
     const streamed = await run(
       streamPageRules(storage, crawlId, createRunner(CONFIG), EMPTY_SITE_DATA, {
         batchSize: 4,
@@ -298,7 +369,7 @@ describe("streamPageRules — the fingerprint is built once and shared", () => {
             },
           },
         ],
-      }),
+      })
     );
 
     expect(seen.length).toBe(streamed.extractedCount);
@@ -308,7 +379,9 @@ describe("streamPageRules — the fingerprint is built once and shared", () => {
       const stored = await run(storage.getPageFeatures(crawlId, url));
       expect(stored).not.toBeNull();
       // (a) the column holds the reduction of the fingerprint the collector saw…
-      expect(stored!.templateFp).toBe(templateFingerprintKey(shared.fingerprint));
+      expect(stored!.templateFp).toBe(
+        templateFingerprintKey(shared.fingerprint)
+      );
       // (b) …and that fingerprint is what a live walk of the same DOM produces,
       // so `template-discontinuity` still compares exactly what it always did.
       expect(shared.fingerprint).toEqual(live);
@@ -333,7 +406,7 @@ describe("streamPageRules — the fingerprint is built once and shared", () => {
     // which doubles the count.
     const { storage, crawlId } = await writeCrawlToStorage(
       generateSiteModel({ seed: 12, pageCount: 6 }),
-      ":memory:",
+      ":memory:"
     );
 
     resetFingerprintWalkCount();
@@ -353,7 +426,7 @@ describe("streamPageRules — the fingerprint is built once and shared", () => {
             },
           },
         ],
-      }),
+      })
     );
 
     expect(streamed.extractedCount).toBeGreaterThan(0);
@@ -366,7 +439,10 @@ describe("streamPageRules — the fingerprint is built once and shared", () => {
     // The other half of the sharing: a collector that passes `shared.fingerprint`
     // must not pay for a second walk. A sentinel that could not have been derived
     // from this page is the only way to see the difference.
-    const { page, parsed } = mkPage("https://example.com/p1", html(CHROME_A, "tpl-a", "<p>1</p>"));
+    const { page, parsed } = mkPage(
+      "https://example.com/p1",
+      html(CHROME_A, "tpl-a", "<p>1</p>")
+    );
     const sentinel = fp({ assetHosts: new Set(["sentinel.invalid"]) });
 
     const supplied = buildCollectedPageSignal({
@@ -377,13 +453,22 @@ describe("streamPageRules — the fingerprint is built once and shared", () => {
     expect(supplied.fingerprint).toBe(sentinel);
 
     // Omitted → computed, as before this change.
-    const computed = buildCollectedPageSignal({ url: page.normalizedUrl, parsed });
-    expect(computed.fingerprint).toEqual(fingerprintPage(parsed, page.normalizedUrl));
+    const computed = buildCollectedPageSignal({
+      url: page.normalizedUrl,
+      parsed,
+    });
+    expect(computed.fingerprint).toEqual(
+      fingerprintPage(parsed, page.normalizedUrl)
+    );
     expect(computed.fingerprint).not.toBe(sentinel);
 
     // An explicit null is honored too (a page whose DOM is gone).
     expect(
-      buildCollectedPageSignal({ url: page.normalizedUrl, parsed, fingerprint: null }).fingerprint,
+      buildCollectedPageSignal({
+        url: page.normalizedUrl,
+        parsed,
+        fingerprint: null,
+      }).fingerprint
     ).toBeNull();
   });
 });

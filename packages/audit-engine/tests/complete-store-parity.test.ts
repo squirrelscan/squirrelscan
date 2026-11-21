@@ -11,8 +11,6 @@
 //       not a 100-page sample, while the denominator grows to the true crawl);
 //   (c) the complete path's scoring crawledUrls == resolutionSignal.crawledUrls.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
@@ -20,12 +18,13 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   capChecksForPublish,
   sampleChecksForPublish,
   DEFAULT_PUBLISH_SAMPLE,
 } from "@squirrelscan/rules/fold";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { describe, expect, test } from "bun:test";
 
 import {
   aggregateUntouchedCarried,
@@ -35,6 +34,7 @@ import {
   type UntouchedCarriedPage,
   type UntouchedSamplePage,
 } from "../src/complete-store-fold";
+import { findingFingerprint } from "../src/fingerprint";
 import { findingKey, flattenChecks } from "../src/merge-core";
 import {
   runCloudSmartAudits,
@@ -48,17 +48,27 @@ import {
   calculateHealthScore,
   calculateHealthScoreFromTallies,
 } from "../src/scoring";
-import { findingFingerprint } from "../src/fingerprint";
-import { buildSkippedPassCounts, buildStreamFindings } from "../src/stream-findings";
+import {
+  buildSkippedPassCounts,
+  buildStreamFindings,
+} from "../src/stream-findings";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
-  private key(f: { normalizedUrl: string; ruleId: string; checkName: string; locator: string }) {
+  private key(f: {
+    normalizedUrl: string;
+    ruleId: string;
+    checkName: string;
+    locator: string;
+  }) {
     return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
   }
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -73,7 +83,9 @@ class MemStore implements SmartAuditStore {
       const prior = this.findings.get(k);
       this.findings.set(k, {
         ...f,
-        firstSeenAt: prior ? Math.min(prior.firstSeenAt, f.firstSeenAt) : f.firstSeenAt,
+        firstSeenAt: prior
+          ? Math.min(prior.firstSeenAt, f.firstSeenAt)
+          : f.firstSeenAt,
       });
     }
   }
@@ -84,7 +96,7 @@ class MemStore implements SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void> {
     this.pages.set(normalizedUrl, {
       siteKey,
@@ -96,17 +108,26 @@ class MemStore implements SmartAuditStore {
     });
     for (const [k, f] of this.findings) {
       if (f.normalizedUrl === normalizedUrl && f.state === "open") {
-        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+        this.findings.set(k, {
+          ...f,
+          state: "stale",
+          lastSeenCrawlId: crawlId,
+        });
       }
     }
   }
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void> {
     for (const p of pages)
-      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+      await this.markPageRemoved(
+        siteKey,
+        p.normalizedUrl,
+        crawlId,
+        p.lastStatus
+      );
   }
   async compactFindings(): Promise<number> {
     return 0;
@@ -137,7 +158,12 @@ function nativeChecks(total: number, failCount: number): CheckResult[] {
             message: "Missing meta description",
             pageUrl: url(i),
           }
-        : { name: "has-meta-description", status: "pass", message: "ok", pageUrl: url(i) },
+        : {
+            name: "has-meta-description",
+            status: "pass",
+            message: "ok",
+            pageUrl: url(i),
+          }
     );
   }
   return checks;
@@ -147,7 +173,7 @@ function nativeChecks(total: number, failCount: number): CheckResult[] {
 function toIngested(
   checks: CheckResult[],
   siteKey: string,
-  auditId: string,
+  auditId: string
 ): PageFindingRecord[] {
   const out: PageFindingRecord[] = [];
   // Group native per-page checks by page as flattenChecks expects (one call per
@@ -173,7 +199,12 @@ function toIngested(
         value: f.value,
         expected: f.expected,
         payload: f.payload,
-        fingerprint: findingFingerprint(f.status, f.message, f.value, f.expected),
+        fingerprint: findingFingerprint(
+          f.status,
+          f.message,
+          f.value,
+          f.expected
+        ),
         firstSeenAt: 1_700_000_000_000,
         lastSeenCrawlId: auditId,
         lastSeenAt: 1_700_000_000_000,
@@ -217,7 +248,7 @@ async function* pageSource(findings: PageFindingRecord[]): FindingPageSource {
 function completeInput(
   ingested: PageFindingRecord[],
   crawled: string[],
-  skippedPassCounts?: Record<string, Record<string, number>>,
+  skippedPassCounts?: Record<string, Record<string, number>>
 ) {
   return {
     findingPages: pageSource(ingested),
@@ -234,7 +265,10 @@ function completeInput(
  * `unionRuleResults` still supplies the robots/sitemap penalty rules verbatim.
  */
 function completeHealthScore(result: CloudSmartAuditsResult) {
-  return calculateHealthScoreFromTallies(result.scoringTallies!, result.unionRuleResults);
+  return calculateHealthScoreFromTallies(
+    result.scoringTallies!,
+    result.unionRuleResults
+  );
 }
 
 /**
@@ -245,7 +279,7 @@ function materializedCompleteScore(
   ruleResults: Record<string, { meta: typeof pageMeta; checks: CheckResult[] }>,
   ingested: PageFindingRecord[],
   crawled: string[],
-  skippedPassCounts?: Record<string, Record<string, number>>,
+  skippedPassCounts?: Record<string, Record<string, number>>
 ) {
   const crawledUrls = new Set(crawled);
   const freshResults = reconstructCompleteResults({
@@ -255,7 +289,7 @@ function materializedCompleteScore(
     skippedPassCounts,
   });
   const ruleMetaIndex = new Map(
-    Object.entries(ruleResults).map(([ruleId, r]) => [ruleId, r.meta]),
+    Object.entries(ruleResults).map(([ruleId, r]) => [ruleId, r.meta])
   );
   const union = buildScoringResultsFromMerged({
     freshResults,
@@ -266,7 +300,11 @@ function materializedCompleteScore(
   return calculateHealthScore({ results: union });
 }
 
-async function runSample(siteKey: string, native: CheckResult[], crawled: string[]) {
+async function runSample(
+  siteKey: string,
+  native: CheckResult[],
+  crawled: string[]
+) {
   const store = new MemStore();
   return runCloudSmartAudits({
     store,
@@ -277,13 +315,19 @@ async function runSample(siteKey: string, native: CheckResult[], crawled: string
   });
 }
 
-async function runComplete(siteKey: string, native: CheckResult[], crawled: string[]) {
+async function runComplete(
+  siteKey: string,
+  native: CheckResult[],
+  crawled: string[]
+) {
   const store = new MemStore();
   const ingested = toIngested(native, siteKey, "audit_1");
   // Passing-sibling counts from the COMPLETE (pre-sample) checks — empty for the
   // single-checkName fixtures below (a page is all-fail or all-pass), so those stay
   // byte-identical; only the multi-checkName fixture exercises it.
-  const skippedPassCounts = buildSkippedPassCounts({ [pageMeta.id]: { checks: native } });
+  const skippedPassCounts = buildSkippedPassCounts({
+    [pageMeta.id]: { checks: native },
+  });
   return runCloudSmartAudits({
     store,
     siteKey,
@@ -321,7 +365,9 @@ describe("reconstruct round-trip (flattenChecks inverse)", () => {
     }).get(pageMeta.id)!;
 
     // One check per (page, checkName); scoring reads status/pageUrl/items/details.additional.
-    const byPage = new Map(rebuilt.checks.map((c) => [`${c.pageUrl}|${c.name}`, c]));
+    const byPage = new Map(
+      rebuilt.checks.map((c) => [`${c.pageUrl}|${c.name}`, c])
+    );
     const whole = byPage.get(`${url(0)}|c-whole`)!;
     expect(whole.status).toBe("fail");
     expect(whole.items).toBeUndefined();
@@ -340,15 +386,24 @@ describe("reconstruct round-trip (flattenChecks inverse)", () => {
     // lexicographic string sort, so the store hands reconstruct these findings in
     // SCRAMBLED order ("parse-10" < "parse-2"). The reconstruction must restore the
     // rule's original emission order regardless.
-    const items = Array.from({ length: 13 }, (_, i) => ({ id: `parse-${i}`, label: `L${i}` }));
+    const items = Array.from({ length: 13 }, (_, i) => ({
+      id: `parse-${i}`,
+      label: `L${i}`,
+    }));
     const native: CheckResult[] = [
-      { name: "c-items", status: "fail", message: "bad items", pageUrl: url(0), items },
+      {
+        name: "c-items",
+        status: "fail",
+        message: "bad items",
+        pageUrl: url(0),
+        items,
+      },
     ];
     const emitted = items.map((it) => it.id); // parse-0 … parse-12
 
     // Reproduce loadIngestedFindings' `ORDER BY … locator` (byte lexicographic).
     const loaded = [...toIngested(native, "web", "audit_1")].sort((a, b) =>
-      a.locator < b.locator ? -1 : a.locator > b.locator ? 1 : 0,
+      a.locator < b.locator ? -1 : a.locator > b.locator ? 1 : 0
     );
     // Sanity: the load order really is scrambled vs emission (else the test can't
     // catch the regression it targets).
@@ -372,12 +427,18 @@ describe("reconstruct round-trip (flattenChecks inverse)", () => {
       ingestedFindings: findings,
       crawledUrls: new Set(native.map((c) => c.pageUrl!)),
     }).get(pageMeta.id)!;
-    const reflattened = rebuilt.checks.flatMap((c) => flattenChecks(c.pageUrl!, pageMeta.id, [c]));
+    const reflattened = rebuilt.checks.flatMap((c) =>
+      flattenChecks(c.pageUrl!, pageMeta.id, [c])
+    );
     const origKeys = new Set(
-      findings.map((f) => findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator)),
+      findings.map((f) =>
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator)
+      )
     );
     const newKeys = new Set(
-      reflattened.map((f) => findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator)),
+      reflattened.map((f) =>
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator)
+      )
     );
     expect(newKeys).toEqual(origKeys);
   });
@@ -402,8 +463,18 @@ describe("multi-checkName rule: passing sibling on a partial-fail page (#1305)",
 
   test("one page warn+pass under one rule → complete score == sampled score", async () => {
     const native: CheckResult[] = [
-      { name: "faq-questions", status: "warn", message: "1 invalid question", pageUrl: url(0) },
-      { name: "faq-valid", status: "pass", message: "2 valid questions", pageUrl: url(0) },
+      {
+        name: "faq-questions",
+        status: "warn",
+        message: "1 invalid question",
+        pageUrl: url(0),
+      },
+      {
+        name: "faq-valid",
+        status: "pass",
+        message: "2 valid questions",
+        pageUrl: url(0),
+      },
     ];
     const crawled = [url(0)];
     const ruleResults = { [faqMeta.id]: { meta: faqMeta, checks: native } };
@@ -423,7 +494,9 @@ describe("multi-checkName rule: passing sibling on a partial-fail page (#1305)",
       ...r,
       ruleId: faqMeta.id,
     }));
-    const skippedPassCounts = buildSkippedPassCounts({ [faqMeta.id]: { checks: native } });
+    const skippedPassCounts = buildSkippedPassCounts({
+      [faqMeta.id]: { checks: native },
+    });
     const complete = await runCloudSmartAudits({
       store: new MemStore(),
       siteKey: "web_faq_c",
@@ -438,7 +511,7 @@ describe("multi-checkName rule: passing sibling on a partial-fail page (#1305)",
     expect(complete.scoringTallies!.get(faqMeta.id)!.tally.passed).toBe(1);
     // Byte-identical to the sampled path (both 1.5/2 = 75%). Fails pre-#1305 (0.5/1).
     expect(completeHealthScore(complete)).toEqual(
-      calculateHealthScore({ results: sample.unionRuleResults }),
+      calculateHealthScore({ results: sample.unionRuleResults })
     );
   });
 
@@ -448,14 +521,26 @@ describe("multi-checkName rule: passing sibling on a partial-fail page (#1305)",
     // drives passRate → ~1.0 on a genuinely-failing rule (the #1179 integrity class
     // this PR fixes). The server clamps the per-rule sum to crawledUrls.size.
     const native: CheckResult[] = [
-      { name: "faq-questions", status: "fail", message: "bad", pageUrl: url(0) },
-      { name: "faq-questions", status: "fail", message: "bad", pageUrl: url(1) },
+      {
+        name: "faq-questions",
+        status: "fail",
+        message: "bad",
+        pageUrl: url(0),
+      },
+      {
+        name: "faq-questions",
+        status: "fail",
+        message: "bad",
+        pageUrl: url(1),
+      },
     ];
     const crawled = new Set([url(0), url(1)]);
-    const ingested = toIngested(native, "web_faq_clamp", "audit_1").map((r) => ({
-      ...r,
-      ruleId: faqMeta.id,
-    }));
+    const ingested = toIngested(native, "web_faq_clamp", "audit_1").map(
+      (r) => ({
+        ...r,
+        ruleId: faqMeta.id,
+      })
+    );
     const rebuilt = reconstructCompleteResults({
       ruleResults: { [faqMeta.id]: { meta: faqMeta, checks: [] } },
       ingestedFindings: ingested,
@@ -509,7 +594,9 @@ describe("(b) sample<complete: complete scores LOWER (more failing pages counted
 
     const sample = await runSample("web_s", native, crawled);
     const complete = await runComplete("web_c", native, crawled);
-    const sOverall = calculateHealthScore({ results: sample.unionRuleResults }).overall!;
+    const sOverall = calculateHealthScore({
+      results: sample.unionRuleResults,
+    }).overall!;
     const cOverall = completeHealthScore(complete).overall!;
 
     // Direction: complete counts every failing page → strictly lower score.
@@ -556,10 +643,22 @@ describe("skip-as-pass divergence (measured, bounded, expected direction)", () =
     const native: CheckResult[] = [];
     let i = 0;
     for (let k = 0; k < fail; k++, i++)
-      native.push({ name: "ttfb-fast", status: "fail", message: "slow", pageUrl: url(i) });
+      native.push({
+        name: "ttfb-fast",
+        status: "fail",
+        message: "slow",
+        pageUrl: url(i),
+      });
     for (let k = 0; k < pass; k++, i++)
-      native.push({ name: "ttfb-fast", status: "pass", message: "ok", pageUrl: url(i) });
-    const crawled = Array.from({ length: fail + pass + skip }, (_, j) => url(j));
+      native.push({
+        name: "ttfb-fast",
+        status: "pass",
+        message: "ok",
+        pageUrl: url(i),
+      });
+    const crawled = Array.from({ length: fail + pass + skip }, (_, j) =>
+      url(j)
+    );
     return { native, crawled };
   }
 
@@ -575,7 +674,10 @@ describe("skip-as-pass divergence (measured, bounded, expected direction)", () =
       pageStatuses: crawled.map((u) => ({ url: u, status: 200 })),
     });
     // Complete: findings (fails only) + crawledUrls; skipped pages become synthetic passes.
-    const ingested = toIngested(native, "web_skip_c", "a1").map((r) => ({ ...r, ruleId: skipMeta.id }));
+    const ingested = toIngested(native, "web_skip_c", "a1").map((r) => ({
+      ...r,
+      ruleId: skipMeta.id,
+    }));
     const complete = await runCloudSmartAudits({
       store: new MemStore(),
       siteKey: "web_skip_c",
@@ -597,15 +699,17 @@ describe("skip-as-pass divergence (measured, bounded, expected direction)", () =
   test("skip-heavy rule (20 fail, 100 pass, 80 skipped of 200) — complete inflates, bounded", async () => {
     const { s, c, sampleRule, completeTally } = await scores(20, 100, 80);
     // Per-rule pass-ratio: sample = 100/120 = 0.833; complete = 180/200 = 0.90.
-    const sampleTotal = sampleRule.checks.length + (sampleRule.syntheticPassCount ?? 0);
-    const completeTotal = completeTally.passed + completeTally.warnings + completeTally.failed;
+    const sampleTotal =
+      sampleRule.checks.length + (sampleRule.syntheticPassCount ?? 0);
+    const completeTotal =
+      completeTally.passed + completeTally.warnings + completeTally.failed;
     expect(sampleTotal).toBe(120); // evaluated only
     expect(completeTotal).toBe(200); // + 80 skipped counted as passes
     expect(completeTally.passed).toBe(180);
 
     // eslint-disable-next-line no-console
     console.log(
-      `[skip-as-pass] 20f/100p/80skip: sample overall=${s.overall} complete overall=${c.overall} Δ=${c.overall! - s.overall!}`,
+      `[skip-as-pass] 20f/100p/80skip: sample overall=${s.overall} complete overall=${c.overall} Δ=${c.overall! - s.overall!}`
     );
     // Direction: complete inflates (skipped read as clean).
     expect(c.overall!).toBeGreaterThan(s.overall!);
@@ -624,7 +728,7 @@ describe("skip-as-pass divergence (measured, bounded, expected direction)", () =
     const { s, c } = await scores(10, 180, 10);
     // eslint-disable-next-line no-console
     console.log(
-      `[skip-as-pass] 10f/180p/10skip: sample overall=${s.overall} complete overall=${c.overall} Δ=${c.overall! - s.overall!}`,
+      `[skip-as-pass] 10f/180p/10skip: sample overall=${s.overall} complete overall=${c.overall} Δ=${c.overall! - s.overall!}`
     );
     expect(c.overall!).toBeGreaterThanOrEqual(s.overall!);
     expect(c.overall! - s.overall!).toBeLessThanOrEqual(3);
@@ -637,7 +741,10 @@ describe("container producer (buildStreamFindings) → server reconstruct", () =
     const native = nativeChecks(80, 25);
     const crawled = native.map((c) => c.pageUrl!);
     // The container flattens the PRE-sample report to complete stream lines.
-    const lines = buildStreamFindings({ [pageMeta.id]: { meta: pageMeta, checks: native } }, 1);
+    const lines = buildStreamFindings(
+      { [pageMeta.id]: { meta: pageMeta, checks: native } },
+      1
+    );
     // The server stamps siteKey + lastSeenCrawlId as it ingests each line.
     const ingested: PageFindingRecord[] = lines.map((l) => ({
       ...l,
@@ -655,7 +762,7 @@ describe("container producer (buildStreamFindings) → server reconstruct", () =
     });
     const sample = await runSample("web_ps", native, crawled);
     expect(completeHealthScore(complete)).toEqual(
-      calculateHealthScore({ results: sample.unionRuleResults }),
+      calculateHealthScore({ results: sample.unionRuleResults })
     );
     // Producer dedupes by PK so the streamed count equals the store row count
     // (finalize's received>=expected gate). No dup keys here → 25 fail findings.
@@ -704,7 +811,7 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
         completeStore: completeInput(ingested, crawled),
       });
       expect(completeHealthScore(bounded)).toEqual(
-        materializedCompleteScore(shell, ingested, crawled),
+        materializedCompleteScore(shell, ingested, crawled)
       );
     });
   }
@@ -721,7 +828,10 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
         status: i % 3 === 0 ? "warn" : "fail",
         message: "missing alt",
         pageUrl: url(i),
-        items: Array.from({ length: 1 + (i % 7) }, (_, k) => ({ id: `img-${k}`, label: `#${k}` })),
+        items: Array.from({ length: 1 + (i % 7) }, (_, k) => ({
+          id: `img-${k}`,
+          label: `#${k}`,
+        })),
         details: { additional: i % 5 },
       });
     }
@@ -737,14 +847,24 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
       completeStore: completeInput(ingested, crawled),
     });
     expect(completeHealthScore(bounded)).toEqual(
-      materializedCompleteScore(shell, ingested, crawled),
+      materializedCompleteScore(shell, ingested, crawled)
     );
   });
 
   test("skippedPassCounts (#1305) and its security clamp fold identically", async () => {
     const native: CheckResult[] = [
-      { name: "faq-questions", status: "warn", message: "1 invalid", pageUrl: url(0) },
-      { name: "faq-questions", status: "fail", message: "broken", pageUrl: url(1) },
+      {
+        name: "faq-questions",
+        status: "warn",
+        message: "1 invalid",
+        pageUrl: url(0),
+      },
+      {
+        name: "faq-questions",
+        status: "fail",
+        message: "broken",
+        pageUrl: url(1),
+      },
     ];
     const crawled = [url(0), url(1), url(2)];
     const ingested = toIngested(native, "web_skip", "audit_1");
@@ -762,7 +882,7 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
         completeStore: completeInput(ingested, crawled, counts),
       });
       expect(completeHealthScore(bounded)).toEqual(
-        materializedCompleteScore(shell, ingested, crawled, counts),
+        materializedCompleteScore(shell, ingested, crawled, counts)
       );
     }
   });
@@ -783,7 +903,10 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
       siteKey: "web_gone",
       crawlId: "audit_1",
       ruleResults: shell,
-      pageStatuses: crawled.map((u) => ({ url: u, status: u === removed ? 404 : 200 })),
+      pageStatuses: crawled.map((u) => ({
+        url: u,
+        status: u === removed ? 404 : 200,
+      })),
       completeStore: completeInput(ingested, crawled),
     });
 
@@ -806,7 +929,7 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
             ? { syntheticPassCount: r.syntheticPassCount }
             : {}),
         },
-      ]),
+      ])
     );
     const union = buildScoringResultsFromMerged({
       freshResults: freshForUnion,
@@ -814,7 +937,9 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
       carriedPageUrls: new Set<string>(),
       ruleMetaIndex: new Map([[pageMeta.id, pageMeta]]),
     });
-    expect(completeHealthScore(bounded)).toEqual(calculateHealthScore({ results: union }));
+    expect(completeHealthScore(bounded)).toEqual(
+      calculateHealthScore({ results: union })
+    );
 
     // 3 pages failed, one of them is gone: 2 fails scored over the 9 live pages.
     const tally = bounded.scoringTallies!.get(pageMeta.id)!.tally;
@@ -833,7 +958,10 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
     const shell = sampledReport(native);
 
     const store = new MemStore();
-    const carriedPages = Array.from({ length: 5 }, (_, i) => `https://x.test/old/${i}`);
+    const carriedPages = Array.from(
+      { length: 5 },
+      (_, i) => `https://x.test/old/${i}`
+    );
     const seeded: PageFindingRecord[] = carriedPages.slice(0, 2).map((u) => ({
       siteKey: "web_carry",
       normalizedUrl: u,
@@ -846,7 +974,12 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
       value: null,
       expected: null,
       payload: null,
-      fingerprint: findingFingerprint("fail", "Missing meta description", null, null),
+      fingerprint: findingFingerprint(
+        "fail",
+        "Missing meta description",
+        null,
+        null
+      ),
       firstSeenAt: 1_600_000_000_000,
       lastSeenCrawlId: "audit_0",
       lastSeenAt: 1_600_000_000_000,
@@ -862,7 +995,7 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
         state: "active" as const,
         lastSeenCrawlId: "audit_0",
         lastSeenAt: 1_600_000_000_000,
-      })),
+      }))
     );
 
     const bounded = await runCloudSmartAudits({
@@ -874,9 +1007,9 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
       completeStore: {
         findingPages: pageSource(ingested),
         // Mirrors the API: prior OPEN rows EXCLUDING this audit's own ingest.
-        priorOpenFindings: (await store.getFindings("web_carry", ["open"])).filter(
-          (f) => f.lastSeenCrawlId !== "audit_1",
-        ),
+        priorOpenFindings: (
+          await store.getFindings("web_carry", ["open"])
+        ).filter((f) => f.lastSeenCrawlId !== "audit_1"),
         crawledUrls: crawled,
       },
     });
@@ -903,7 +1036,9 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
       carriedPageUrls: new Set(carriedPages),
       ruleMetaIndex: new Map([[pageMeta.id, pageMeta]]),
     });
-    expect(completeHealthScore(bounded)).toEqual(calculateHealthScore({ results: union }));
+    expect(completeHealthScore(bounded)).toEqual(
+      calculateHealthScore({ results: union })
+    );
 
     // And the carried terms really are there: 2 fresh + 2 carried fails, 8 fresh
     // clean + 3 clean carried pages.
@@ -959,7 +1094,9 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     [ruleD.id]: { meta: ruleD, checks: [] as CheckResult[] },
     [ruleSite.id]: {
       meta: ruleSite,
-      checks: [{ name: "site-check", status: "warn", message: "site-wide" }] as CheckResult[],
+      checks: [
+        { name: "site-check", status: "warn", message: "site-wide" },
+      ] as CheckResult[],
     },
   };
 
@@ -973,11 +1110,17 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     checkName: string,
     locator: string,
     auditId: string,
-    overrides: Partial<PageFindingRecord> = {},
+    overrides: Partial<PageFindingRecord> = {}
   ): PageFindingRecord {
     const status = overrides.status ?? "fail";
-    const message = overrides.message ?? `${checkName}${locator ? `: ${locator}` : ""}`;
-    const t = auditId === AUDIT ? T_NOW : auditId === OLDER ? T_PRIOR - 50_000 : T_PRIOR;
+    const message =
+      overrides.message ?? `${checkName}${locator ? `: ${locator}` : ""}`;
+    const t =
+      auditId === AUDIT
+        ? T_NOW
+        : auditId === OLDER
+          ? T_PRIOR - 50_000
+          : T_PRIOR;
     return {
       siteKey: SITE,
       normalizedUrl,
@@ -989,7 +1132,9 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
       message,
       value: null,
       expected: null,
-      payload: locator ? JSON.stringify({ items: [{ id: locator, label: locator }], i: 0 }) : null,
+      payload: locator
+        ? JSON.stringify({ items: [{ id: locator, label: locator }], i: 0 })
+        : null,
       fingerprint: findingFingerprint(status, message, null, null),
       firstSeenAt: t,
       lastSeenCrawlId: auditId,
@@ -1032,7 +1177,10 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     statuses: Array<{ url: string; status: number }>;
   }
 
-  function sitePage(normalizedUrl: string, state: "active" | "removed" = "active"): SitePageRecord {
+  function sitePage(
+    normalizedUrl: string,
+    state: "active" | "removed" = "active"
+  ): SitePageRecord {
     return {
       siteKey: SITE,
       normalizedUrl,
@@ -1055,7 +1203,10 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     const rows: PageFindingRecord[] = [];
     const pages: SitePageRecord[] = [];
     const late = "https://x.test/zz/late";
-    const crawled = [...Array.from({ length: 8 }, (_, i) => crawledPage(i)), late];
+    const crawled = [
+      ...Array.from({ length: 8 }, (_, i) => crawledPage(i)),
+      late,
+    ];
     for (const u of crawled) pages.push(sitePage(u));
     rows.push(row(late, ruleD.id, "check-d", "", AUDIT));
 
@@ -1065,16 +1216,28 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     for (let k = 0; k < 24; k++) {
       rows.push(
         row(crawled[1]!, ruleA.id, "check-1", `item-${pad(k)}`, AUDIT, {
-          payload: JSON.stringify({ items: [{ id: `item-${pad(k)}` }], details: { additional: 4 }, i: k }),
-        }),
+          payload: JSON.stringify({
+            items: [{ id: `item-${pad(k)}` }],
+            details: { additional: 4 },
+            i: k,
+          }),
+        })
       );
     }
-    rows.push(row(crawled[2]!, ruleB.id, "advice", "", AUDIT, { status: "warn" }));
+    rows.push(
+      row(crawled[2]!, ruleB.id, "advice", "", AUDIT, { status: "warn" })
+    );
     // Reappearing: resolved once, back this run, keeping its old first-seen.
-    rows.push(row(crawled[3]!, ruleA.id, "check-1", "", AUDIT, { firstSeenAt: T_PRIOR - 1_000 }));
+    rows.push(
+      row(crawled[3]!, ruleA.id, "check-1", "", AUDIT, {
+        firstSeenAt: T_PRIOR - 1_000,
+      })
+    );
     // Priors the run re-crawled and did not re-observe: resolve.
     rows.push(row(crawled[4]!, ruleA.id, "check-1", "", PRIOR));
-    rows.push(row(crawled[5]!, ruleB.id, "advice", "", PRIOR, { status: "warn" }));
+    rows.push(
+      row(crawled[5]!, ruleB.id, "advice", "", PRIOR, { status: "warn" })
+    );
 
     // Removed this run: its prior stales, and an ingested row on it leaves the score.
     const removed = "https://x.test/a/gone";
@@ -1087,7 +1250,8 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
       const u = backlogPage(i);
       // Every 7th page was never rendered (no site_pages row); every 11th was
       // seen removed by an older audit (rendered, not active).
-      if (i % 7 !== 3) pages.push(sitePage(u, i % 11 === 5 ? "removed" : "active"));
+      if (i % 7 !== 3)
+        pages.push(sitePage(u, i % 11 === 5 ? "removed" : "active"));
       const provenance = i % 2 === 0 ? "carried" : "fresh"; // steady and first carries
       const auditId = i % 3 === 0 ? OLDER : PRIOR;
       rows.push(row(u, ruleA.id, "check-1", "", auditId, { provenance }));
@@ -1104,7 +1268,7 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
                 m: "3 things wrong",
                 v: "3",
               }),
-            }),
+            })
           );
         }
       }
@@ -1113,25 +1277,34 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
           provenance,
           status: i % 5 === 0 ? "warn" : "fail",
           payload: ODD_PAYLOADS[i % ODD_PAYLOADS.length]!,
-        }),
+        })
       );
       if (i % 3 === 1) {
-        rows.push(row(u, ruleB.id, "advice", "", auditId, { status: i % 2 ? "warn" : "fail" }));
+        rows.push(
+          row(u, ruleB.id, "advice", "", auditId, {
+            status: i % 2 ? "warn" : "fail",
+          })
+        );
       }
-      if (i % 10 === 2) rows.push(row(u, ruleSite.id, "site-check", "", auditId));
+      if (i % 10 === 2)
+        rows.push(row(u, ruleSite.id, "site-check", "", auditId));
       if (i % 12 === 6) {
         rows.push(
           row(u, ruleC.id, "odd-items", "", auditId, {
-            payload: NON_ITERABLE_ITEMS[(i / 12) % NON_ITERABLE_ITEMS.length | 0]!,
-          }),
+            payload:
+              NON_ITERABLE_ITEMS[((i / 12) % NON_ITERABLE_ITEMS.length) | 0]!,
+          })
         );
       }
-      if (i % 10 === 4) rows.push(row(u, "content/not-in-shell", "ghost", "", auditId));
+      if (i % 10 === 4)
+        rows.push(row(u, "content/not-in-shell", "ghost", "", auditId));
     }
     // The class's newest sighting is on a row the report sample drops.
     const newest = findingKey(backlogPage(57), ruleA.id, "check-1", "");
     rows.forEach((r, i) => {
-      if (findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator) === newest) {
+      if (
+        findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator) === newest
+      ) {
         rows[i] = { ...r, lastSeenAt: T_PRIOR + 1_234 };
       }
     });
@@ -1164,20 +1337,35 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
   function seed(fixture: Fixture): MemStore {
     const store = new MemStore();
     for (const r of fixture.rows) {
-      store.findings.set(findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator), { ...r });
+      store.findings.set(
+        findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator),
+        { ...r }
+      );
     }
     for (const p of fixture.pages) store.pages.set(p.normalizedUrl, { ...p });
     return store;
   }
 
   /** The store's open findings, page by page in cursor (primary-key) order. */
-  function openPagesInOrder(store: MemStore): Array<[string, PageFindingRecord[]]> {
+  function openPagesInOrder(
+    store: MemStore
+  ): Array<[string, PageFindingRecord[]]> {
     const byPage = new Map<string, PageFindingRecord[]>();
     const sorted = [...store.findings.values()]
       .filter((f) => f.state === "open")
       .sort((a, b) => {
-        const ka = findingKey(a.normalizedUrl, a.ruleId, a.checkName, a.locator);
-        const kb = findingKey(b.normalizedUrl, b.ruleId, b.checkName, b.locator);
+        const ka = findingKey(
+          a.normalizedUrl,
+          a.ruleId,
+          a.checkName,
+          a.locator
+        );
+        const kb = findingKey(
+          b.normalizedUrl,
+          b.ruleId,
+          b.checkName,
+          b.locator
+        );
         return ka < kb ? -1 : ka > kb ? 1 : 0;
       });
     for (const f of sorted) {
@@ -1188,7 +1376,10 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     return [...byPage];
   }
 
-  function openPage(normalizedUrl: string, rows: PageFindingRecord[]): OpenFindingPage {
+  function openPage(
+    normalizedUrl: string,
+    rows: PageFindingRecord[]
+  ): OpenFindingPage {
     return {
       normalizedUrl,
       fresh: rows.filter((f) => f.lastSeenCrawlId === AUDIT),
@@ -1230,7 +1421,7 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
   async function runSplit(
     fixture: Fixture,
     streamAnyway: Set<string> = new Set(),
-    sampleMode: SampleMode = "exact",
+    sampleMode: SampleMode = "exact"
   ) {
     const store = seed(fixture);
     let sampleRows = 0;
@@ -1252,7 +1443,10 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
             ([u, rows]) =>
               scope.crawledUrls.has(u) ||
               scope.removedUrls.has(u) ||
-              rows.every((r) => r.lastSeenCrawlId === AUDIT || isAggregatableCarriedRow(r)),
+              rows.every(
+                (r) =>
+                  r.lastSeenCrawlId === AUDIT || isAggregatableCarriedRow(r)
+              )
           );
           const isTouched = (u: string, rows: PageFindingRecord[]) =>
             !exact ||
@@ -1274,26 +1468,45 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
           const { aggregate, sample } = aggregateUntouchedCarried(untouched);
           const sampled = new Set(
             sample.flatMap((p) =>
-              p.sample.map((r) => findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator)),
-            ),
+              p.sample.map((r) =>
+                findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator)
+              )
+            )
           );
           let extra = 0;
           const sampleByUrl = new Map<string, UntouchedSamplePage>();
           for (const p of untouched) {
             const rows = p.rows.filter((r) => {
-              if (sampled.has(findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator))) return true;
+              if (
+                sampled.has(
+                  findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator)
+                )
+              )
+                return true;
               if (sampleMode === "all") return true;
               return sampleMode === "some" && extra++ % 2 === 0;
             });
             if (rows.length > 0) {
-              sampleByUrl.set(p.normalizedUrl, { normalizedUrl: p.normalizedUrl, untouched: true, sample: rows });
+              sampleByUrl.set(p.normalizedUrl, {
+                normalizedUrl: p.normalizedUrl,
+                untouched: true,
+                sample: rows,
+              });
             }
           }
           // The store's own carry of the rows the merge will never see.
           for (const p of untouched) {
             for (const r of p.rows) {
-              const k = findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator);
-              store.findings.set(k, { ...store.findings.get(k)!, provenance: "carried" });
+              const k = findingKey(
+                r.normalizedUrl,
+                r.ruleId,
+                r.checkName,
+                r.locator
+              );
+              store.findings.set(k, {
+                ...store.findings.get(k)!,
+                provenance: "carried",
+              });
             }
           }
           async function* merged() {
@@ -1322,7 +1535,10 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     return {
       tallies: JSON.stringify([...result.scoringTallies!]),
       score: JSON.stringify(
-        calculateHealthScoreFromTallies(result.scoringTallies!, result.unionRuleResults),
+        calculateHealthScoreFromTallies(
+          result.scoringTallies!,
+          result.unionRuleResults
+        )
       ),
       coverage: JSON.stringify(result.coverage),
       union: JSON.stringify([...result.unionRuleResults]),
@@ -1333,11 +1549,18 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
   }
 
   function storeBytes(store: MemStore) {
-    const rows = [...store.findings.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const rows = [...store.findings.entries()].sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0
+    );
     // This MemStore stamps a removed page with the wall clock, so that one field
     // differs between any two runs.
     const pages = [...store.pages.entries()]
-      .map(([k, p]) => [k, p.state === "removed" && p.lastSeenCrawlId === AUDIT ? { ...p, lastSeenAt: 0 } : p])
+      .map(([k, p]) => [
+        k,
+        p.state === "removed" && p.lastSeenCrawlId === AUDIT
+          ? { ...p, lastSeenAt: 0 }
+          : p,
+      ])
       .sort(([a], [b]) => (a! < b! ? -1 : a! > b! ? 1 : 0));
     return JSON.stringify({ rows, pages });
   }
@@ -1357,11 +1580,16 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     expect(a.some((c) => c.details?.aggregated === true)).toBe(true);
     expect(a.some((c) => c.name === "zz-late-class")).toBe(true);
     expect(full.result.coverage.unrenderedFindings).toBeGreaterThan(0);
-    expect(full.result.coverage.carriedFindings).toBeGreaterThan(CARRIED_REPORT_SAMPLE_PER_RULE);
-    expect(full.result.scoringTallies!.get(ruleB.id)!.tally.failed).toBeGreaterThan(0);
+    expect(full.result.coverage.carriedFindings).toBeGreaterThan(
+      CARRIED_REPORT_SAMPLE_PER_RULE
+    );
+    expect(
+      full.result.scoringTallies!.get(ruleB.id)!.tally.failed
+    ).toBeGreaterThan(0);
     // A dropped row's newer sighting reaches its class's aggregate.
     expect(
-      a.find((c) => c.name === "check-1" && c.provenance === "carried")!.lastSeenAt,
+      a.find((c) => c.name === "check-1" && c.provenance === "carried")!
+        .lastSeenAt
     ).toBe(T_PRIOR + 1_234);
     // Rule C, held only by untouched pages, takes its tally slot before rule D,
     // whose first page is a touched one later in the order.
@@ -1373,13 +1601,17 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     const fixture = everyShape();
     const full = await runRowFold(fixture);
     const split = await runSplit(fixture);
-    const carried = full.result.coverage.carriedFindings + (full.result.coverage.unrenderedFindings ?? 0);
+    const carried =
+      full.result.coverage.carriedFindings +
+      (full.result.coverage.unrenderedFindings ?? 0);
     // Rows of the touched pages only: 30 on crawled pages, 2 on the removed one,
     // 3 on the uncrawled one holding a fresh row.
     expect(split.streamedRows).toBe(30 + 2 + 3);
     // Per rule: the first CARRIED_REPORT_SAMPLE_PER_RULE rows plus each later
     // class's first row, across 5 rules in the store.
-    expect(split.sampleRows).toBeLessThan(5 * CARRIED_REPORT_SAMPLE_PER_RULE + 10);
+    expect(split.sampleRows).toBeLessThan(
+      5 * CARRIED_REPORT_SAMPLE_PER_RULE + 10
+    );
     expect(split.sampleRows).toBeLessThan(carried);
   });
 
@@ -1388,7 +1620,10 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     // pages early in the order, so their carried checks take sample budget.
     const fixture = everyShape();
     const full = await runRowFold(fixture);
-    const split = await runSplit(fixture, new Set([backlogPage(0), backlogPage(7), backlogPage(19)]));
+    const split = await runSplit(
+      fixture,
+      new Set([backlogPage(0), backlogPage(7), backlogPage(19)])
+    );
     expect(bytes(split.result)).toEqual(bytes(full.result));
     expect(storeBytes(split.store)).toEqual(storeBytes(full.store));
   });
@@ -1415,21 +1650,26 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
       fixture.rows.push(
         row(backlogPage(10 + 20 * k), ruleC.id, "odd-items", "x", PRIOR, {
           payload: JSON.stringify({ items: { length } }),
-        }),
+        })
       );
     });
     fixture.rows.push(
       row(backlogPage(11), ruleA.id, "check-1", "x", PRIOR, {
         payload: `{"details":{"occurrences":${Number.MAX_SAFE_INTEGER + 1}}}`,
-      }),
+      })
     );
     const streamed = new Set([backlogPage(30)]);
     const oddRow = fixture.rows.at(-1)!;
     expect(isAggregatableCarriedRow(oddRow)).toBe(false);
     expect(() =>
       aggregateUntouchedCarried([
-        { normalizedUrl: oddRow.normalizedUrl, rows: [oddRow], rendered: true, active: true },
-      ]),
+        {
+          normalizedUrl: oddRow.normalizedUrl,
+          rows: [oddRow],
+          rendered: true,
+          active: true,
+        },
+      ])
     ).toThrow(/exact domain/);
 
     // The store streams everything instead, and that is the full fold.
@@ -1456,7 +1696,12 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
           crawledUrls: fixture.crawled,
           untouchedCarried: async () => {
             const { aggregate, sample } = aggregateUntouchedCarried([
-              { normalizedUrl: u, rows: untouchedRows, rendered: true, active: true },
+              {
+                normalizedUrl: u,
+                rows: untouchedRows,
+                rendered: true,
+                active: true,
+              },
             ]);
             async function* merged() {
               for (const [url, rows] of pages) {
@@ -1467,7 +1712,7 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
             return { pages: merged(), aggregate };
           },
         },
-      }),
+      })
     ).rejects.toThrow(/exact domain/);
   });
 
@@ -1475,7 +1720,9 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     const fixture = everyShape();
     // Keep the backlog small: no rule over the budget, nothing folded.
     fixture.rows = fixture.rows.filter(
-      (r) => !r.normalizedUrl.startsWith("https://x.test/b/") || r.normalizedUrl < backlogPage(6),
+      (r) =>
+        !r.normalizedUrl.startsWith("https://x.test/b/") ||
+        r.normalizedUrl < backlogPage(6)
     );
     const full = await runRowFold(fixture);
     const split = await runSplit(fixture);
@@ -1506,11 +1753,16 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
             }
             return {
               pages: pages(),
-              aggregate: { findings: 0, unrenderedFindings: 0, rules: [], classes: [] },
+              aggregate: {
+                findings: 0,
+                unrenderedFindings: 0,
+                rules: [],
+                classes: [],
+              },
             };
           },
         },
-      }),
+      })
     ).rejects.toThrow(/crawled or removed/);
   });
 
@@ -1518,7 +1770,9 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     const fixture = everyShape();
     const store = seed(fixture);
     const u = backlogPage(1);
-    const odd = row(u, ruleA.id, "check-1", "", PRIOR, { payload: '{"items":{"length":0.5}}' });
+    const odd = row(u, ruleA.id, "check-1", "", PRIOR, {
+      payload: '{"items":{"length":0.5}}',
+    });
     await expect(
       runCloudSmartAudits({
         store,
@@ -1535,11 +1789,16 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
             }
             return {
               pages: pages(),
-              aggregate: { findings: 1, unrenderedFindings: 0, rules: [], classes: [] },
+              aggregate: {
+                findings: 1,
+                unrenderedFindings: 0,
+                rules: [],
+                classes: [],
+              },
             };
           },
         },
-      }),
+      })
     ).rejects.toThrow(/exact domain/);
   });
 
@@ -1562,7 +1821,12 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
           crawledUrls: fixture.crawled,
           untouchedCarried: async () => {
             const { aggregate, sample } = aggregateUntouchedCarried([
-              { normalizedUrl: u, rows: [sampled], rendered: true, active: true },
+              {
+                normalizedUrl: u,
+                rows: [sampled],
+                rendered: true,
+                active: true,
+              },
             ]);
             async function* pages() {
               yield* sample;
@@ -1571,12 +1835,15 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
               pages: pages(),
               aggregate: {
                 ...aggregate,
-                classes: aggregate.classes.map((c) => ({ ...c, occurrences: Number.MAX_SAFE_INTEGER + 1 })),
+                classes: aggregate.classes.map((c) => ({
+                  ...c,
+                  occurrences: Number.MAX_SAFE_INTEGER + 1,
+                })),
               },
             };
           },
         },
-      }),
+      })
     ).rejects.toThrow(/safe integer range/);
   });
 
@@ -1596,17 +1863,29 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
           crawledUrls: fixture.crawled,
           untouchedCarried: async () => {
             async function* pages(): AsyncGenerator<UntouchedSamplePage> {
-              yield { normalizedUrl: u, untouched: true, sample: [row(u, ruleA.id, "check-1", "", PRIOR)] };
+              yield {
+                normalizedUrl: u,
+                untouched: true,
+                sample: [row(u, ruleA.id, "check-1", "", PRIOR)],
+              };
             }
             return {
               pages: pages(),
-              aggregate: { findings: 1, unrenderedFindings: 0, rules: [], classes: [] },
+              aggregate: {
+                findings: 1,
+                unrenderedFindings: 0,
+                rules: [],
+                classes: [],
+              },
             };
           },
         },
-      }),
+      })
     ).rejects.toThrow(/miss rows the sample holds/);
   });
 });
 
-describeSitePagesContract("complete-store-parity.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "complete-store-parity.test.ts MemStore",
+  () => new MemStore()
+);

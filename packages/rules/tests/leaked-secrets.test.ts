@@ -14,13 +14,15 @@
 // checksum / commit. The prefixed patterns (sk-, ghp_, AKIA, pk_live_…) carry
 // their own marker and are untouched — the last block pins that.
 
-import { describe, expect, test } from "bun:test";
-
 import { parsePage } from "@squirrelscan/parser";
 import {
   SECRET_CONTEXT_WINDOW_SIZE,
   SECRET_KEY_LOOKBEHIND_SIZE,
 } from "@squirrelscan/utils/constants";
+import { describe, expect, test } from "bun:test";
+
+import type { LeakedSecret } from "../src/security/leaked-secrets";
+import type { RuleContext } from "../src/types";
 
 import {
   CONTEXT_KEYWORD_GAP,
@@ -33,8 +35,6 @@ import {
   scanContent,
 } from "../src/security/leaked-secrets";
 import { githubChecksum } from "../src/security/secrets/confidence";
-import type { LeakedSecret } from "../src/security/leaked-secrets";
-import type { RuleContext } from "../src/types";
 
 // A GitHub token body (30 characters); the checksum it needs (#361) is
 // appended at runtime, so no line here is a whole token.
@@ -48,26 +48,35 @@ const PEM_RSA = [
 
 // A real SHA-256 of a release artifact: 64 hex characters, which is also the
 // exact shape of a Together AI key.
-const DIGEST = "01e4fbb0227e0f575e245eb0d8a4fc9b1d3a7e6c2f80b41d95ea7cd3f0b62a18"; // pragma: allowlist secret
-const DIGEST_2 = "7b2c40e91af38d605c7e1b94a2f6d083e5c19b7a4d0f38e6215ca9b70d4f8e32"; // pragma: allowlist secret
+const DIGEST =
+  "01e4fbb0227e0f575e245eb0d8a4fc9b1d3a7e6c2f80b41d95ea7cd3f0b62a18"; // pragma: allowlist secret
+const DIGEST_2 =
+  "7b2c40e91af38d605c7e1b94a2f6d083e5c19b7a4d0f38e6215ca9b70d4f8e32"; // pragma: allowlist secret
 // A second 64-hex value, this one actually assigned to an api_key.
-const TOGETHER_KEY = "9f3c1d7ba24e08f65c1b93d0e47af215c806b3e9d24f71a5c0938e6b1df42a70"; // pragma: allowlist secret
+const TOGETHER_KEY =
+  "9f3c1d7ba24e08f65c1b93d0e47af215c806b3e9d24f71a5c0938e6b1df42a70"; // pragma: allowlist secret
 const COMMIT = "3f9a1c5d7e2b48061a9c3d5f7e8b2a4c6d0e1f93"; // pragma: allowlist secret
 
 // #150 fixtures. Real standard base64 — 47 bytes each, so 64 characters and
 // one `=` of padding, and both carry a `+` and a `/` inside their first 20
 // characters, which is where the base64url class used to give up.
-const B64_TOKEN = "2MBqfKhL/eXCwg0Zt+RZ2klzNCF0inWnUM3Jb0UiyC1WDP53Cxm5f6UUyrjnQH8="; // pragma: allowlist secret
-const B64_TOKEN_2 = "yS9+/xwatK/BZkejOF5vKuKCuzfMdMV55oZv26BLG8DoO6+VamfQB1mP0TbXYOc="; // pragma: allowlist secret
+const B64_TOKEN =
+  "2MBqfKhL/eXCwg0Zt+RZ2klzNCF0inWnUM3Jb0UiyC1WDP53Cxm5f6UUyrjnQH8="; // pragma: allowlist secret
+const B64_TOKEN_2 =
+  "yS9+/xwatK/BZkejOF5vKuKCuzfMdMV55oZv26BLG8DoO6+VamfQB1mP0TbXYOc="; // pragma: allowlist secret
 // A real sha384 SRI hash is standard base64 too, `+` and `/` and all.
-const SRI_B64 = "oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"; // pragma: allowlist secret
+const SRI_B64 =
+  "oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"; // pragma: allowlist secret
 const OAUTH_TOKEN = "Zk8pR3vN6mQ1tX4wL7cH2sB5dF9gJ0aY"; // pragma: allowlist secret
 
 function html(body: string): string {
   return `<!DOCTYPE html><html><head><title>Releases</title></head><body>${body}</body></html>`;
 }
 
-function ctx(pageHtml: string, url = "https://squirrelscan.com/releases"): RuleContext {
+function ctx(
+  pageHtml: string,
+  url = "https://squirrelscan.com/releases"
+): RuleContext {
   return {
     site: {
       baseUrl: "https://squirrelscan.com",
@@ -79,9 +88,16 @@ function ctx(pageHtml: string, url = "https://squirrelscan.com/releases"): RuleC
   } as unknown as RuleContext;
 }
 
-function findings(checks: Awaited<ReturnType<typeof leakedSecretsRule.run>>["checks"]) {
+function findings(
+  checks: Awaited<ReturnType<typeof leakedSecretsRule.run>>["checks"]
+) {
   return checks
-    .filter((c) => c.name === "leaked-secrets-critical" || c.name === "leaked-secrets-high" || c.name === "leaked-secrets-medium")
+    .filter(
+      (c) =>
+        c.name === "leaked-secrets-critical" ||
+        c.name === "leaked-secrets-high" ||
+        c.name === "leaked-secrets-medium"
+    )
     .flatMap((c) => c.items ?? []);
 }
 
@@ -106,17 +122,23 @@ const COMMIT_ID = `<p>Built from commit <code data-commit="${COMMIT}">${COMMIT}<
 
 describe("security/leaked-secrets: hex digests are not secrets", () => {
   test("a release page of checksums, an SRI hash and a commit id reports nothing", async () => {
-    const page = html(`${RELEASE_PAYLOAD}${CHECKSUM_TABLE}${SRI_TAG}${COMMIT_ID}`);
-    const { checks } = (await leakedSecretsRule.run(ctx(page)));
+    const page = html(
+      `${RELEASE_PAYLOAD}${CHECKSUM_TABLE}${SRI_TAG}${COMMIT_ID}`
+    );
+    const { checks } = await leakedSecretsRule.run(ctx(page));
 
     expect(findings(checks)).toEqual([]);
-    expect(checks.find((c) => c.name === "leaked-secrets")?.status).toBe("pass");
+    expect(checks.find((c) => c.name === "leaked-secrets")?.status).toBe(
+      "pass"
+    );
   });
 
   test("the same page plus a real Together key reports exactly one finding", async () => {
     const leak = `<script>const api_key = "${TOGETHER_KEY}";</script>`; // pragma: allowlist secret
-    const page = html(`${RELEASE_PAYLOAD}${CHECKSUM_TABLE}${SRI_TAG}${COMMIT_ID}${leak}`);
-    const { checks } = (await leakedSecretsRule.run(ctx(page)));
+    const page = html(
+      `${RELEASE_PAYLOAD}${CHECKSUM_TABLE}${SRI_TAG}${COMMIT_ID}${leak}`
+    );
+    const { checks } = await leakedSecretsRule.run(ctx(page));
 
     const items = findings(checks);
     expect(items).toHaveLength(1);
@@ -163,7 +185,14 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
   });
 
   test("a cache key built by hashing its inputs reports nothing", () => {
-    for (const key of ["cacheKey", "cache_key", "cachekey", "cache", "eTag", "eTagKey"]) {
+    for (const key of [
+      "cacheKey",
+      "cache_key",
+      "cachekey",
+      "cache",
+      "eTag",
+      "eTagKey",
+    ]) {
       const content = `{together:true,${key}:"${DIGEST}"}`;
       expect(scanContent(content, "inline-script")).toEqual([]);
     }
@@ -178,7 +207,11 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
     // #177: the key and the value are one assignment however far apart an
     // aligned manifest writes them. The look-back used to spend its budget on
     // the spaces and lose `sha256` entirely, reporting the checksum as a key.
-    for (const gap of [1, SECRET_KEY_LOOKBEHIND_SIZE, SECRET_KEY_LOOKBEHIND_SIZE * 4]) {
+    for (const gap of [
+      1,
+      SECRET_KEY_LOOKBEHIND_SIZE,
+      SECRET_KEY_LOOKBEHIND_SIZE * 4,
+    ]) {
       const content = `{"vendor":"together","sha256"${" ".repeat(gap)}:"${DIGEST}"}`;
       expect(scanContent(content, "inline-script")).toEqual([]);
     }
@@ -221,7 +254,10 @@ describe("security/leaked-secrets: hex digests are not secrets", () => {
     }
     // The same page with a key that does name a credential reports.
     expect(
-      scanContent(`<script>x={vendor:"together",token:"${TOGETHER_KEY}"}</script>`, "html").map((f) => f.value) // pragma: allowlist secret
+      scanContent(
+        `<script>x={vendor:"together",token:"${TOGETHER_KEY}"}</script>`,
+        "html"
+      ).map((f) => f.value) // pragma: allowlist secret
     ).toEqual([TOGETHER_KEY]);
   });
 });
@@ -261,15 +297,24 @@ describe("security/leaked-secrets: real credentials still report", () => {
       slack: "xoxb-",
     };
     const fixtures: Array<[string, string]> = [
-      ["GitHub Personal Access Token", `${PREFIX.github}${GH_BODY}${githubChecksum(GH_BODY)}`], // pragma: allowlist secret
+      [
+        "GitHub Personal Access Token",
+        `${PREFIX.github}${GH_BODY}${githubChecksum(GH_BODY)}`,
+      ], // pragma: allowlist secret
       ["Stripe Live Key", `${PREFIX.stripe}51HxQ2mKz9pLvA3nR7dTfJw8Y`], // pragma: allowlist secret
       ["AWS Access Key ID", `${PREFIX.aws}2XJQ7LP4RNVD3KEB`], // pragma: allowlist secret
-      ["Slack Token", `${PREFIX.slack}2094857361-3948572610-Kj8dPqR2mTvX5nB7wLcH1sZa`], // pragma: allowlist secret
+      [
+        "Slack Token",
+        `${PREFIX.slack}2094857361-3948572610-Kj8dPqR2mTvX5nB7wLcH1sZa`,
+      ], // pragma: allowlist secret
       ["Private Key (RSA)", PEM_RSA], // pragma: allowlist secret
     ];
 
     for (const [type, value] of fixtures) {
-      const found = scanContent(`<script>const v = "${value}";</script>`, "html");
+      const found = scanContent(
+        `<script>const v = "${value}";</script>`,
+        "html"
+      );
       expect(found.map((f) => f.type)).toContain(type);
     }
   });
@@ -297,7 +342,9 @@ describe("security/leaked-secrets: real credentials still report", () => {
     expect(scanContent(content, "inline-script")).toEqual([]);
     // The same value under a named key still reports.
     const named = `/* together.ai client */var t={};t.token="${TOGETHER_KEY}";`; // pragma: allowlist secret
-    expect(scanContent(named, "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
+    expect(scanContent(named, "inline-script").map((f) => f.value)).toEqual([
+      TOGETHER_KEY,
+    ]);
   });
 
   test("a naming attribute of the same tag is read in either order (#357)", () => {
@@ -309,19 +356,42 @@ describe("security/leaked-secrets: real credentials still report", () => {
     // 64-hex value is not an Algolia key: this uses one of Algolia's length.
     const ALGOLIA_KEY = TOGETHER_KEY.slice(0, 32);
     const before = `<meta name="algolia-api-key" content="${ALGOLIA_KEY}">`; // pragma: allowlist secret
-    expect(scanContent(before, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
+    expect(scanContent(before, "html").map((f) => f.value)).toEqual([
+      ALGOLIA_KEY,
+    ]);
     const after = `<meta content="${ALGOLIA_KEY}" name="algolia-api-key">`; // pragma: allowlist secret
-    expect(scanContent(after, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
+    expect(scanContent(after, "html").map((f) => f.value)).toEqual([
+      ALGOLIA_KEY,
+    ]);
     // With other attributes between them, past the gap, still one tag.
     const spread = `<meta content="${ALGOLIA_KEY}" lang="en" dir="ltr" data-testid="release-row" property="og:x" name="algolia-api-key">`; // pragma: allowlist secret
-    expect(scanContent(spread, "html").map((f) => f.value)).toEqual([ALGOLIA_KEY]);
+    expect(scanContent(spread, "html").map((f) => f.value)).toEqual([
+      ALGOLIA_KEY,
+    ]);
     // The exception is the TAG's: the same keyword in the next tag, or in
     // text after the value, does not reach back.
-    expect(scanContent(`<meta content="${ALGOLIA_KEY}"><meta name="algolia-api-key">`, "html")).toEqual([]);
-    expect(scanContent(`<meta content="${ALGOLIA_KEY}"> algolia`, "html")).toEqual([]);
+    expect(
+      scanContent(
+        `<meta content="${ALGOLIA_KEY}"><meta name="algolia-api-key">`,
+        "html"
+      )
+    ).toEqual([]);
+    expect(
+      scanContent(`<meta content="${ALGOLIA_KEY}"> algolia`, "html")
+    ).toEqual([]);
     // And a digest-naming attribute still suppresses in either order.
-    expect(scanContent(`<meta content="${DIGEST}" name="release-sha256"> together`, "html")).toEqual([]);
-    expect(scanContent(`<meta name="together" content="${DIGEST}" data-sha256="x">`, "html")).toEqual([]);
+    expect(
+      scanContent(
+        `<meta content="${DIGEST}" name="release-sha256"> together`,
+        "html"
+      )
+    ).toEqual([]);
+    expect(
+      scanContent(
+        `<meta name="together" content="${DIGEST}" data-sha256="x">`,
+        "html"
+      )
+    ).toEqual([]);
   });
 
   test("the brand word names the value from up to the keyword gap before it, never after (#357)", () => {
@@ -334,14 +404,27 @@ describe("security/leaked-secrets: real credentials still report", () => {
     const at = (gap: number) =>
       `/* together */${"x".repeat(gap - 3 - 1 - 'credential="'.length)};${assignment}`;
     // 30 characters before the value: fires.
-    expect(scanContent(at(30), "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
+    expect(scanContent(at(30), "inline-script").map((f) => f.value)).toEqual([
+      TOGETHER_KEY,
+    ]);
     // Exactly the gap: fires. One past it: the word is elsewhere on the page.
-    expect(scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.value)).toEqual([TOGETHER_KEY]);
-    expect(scanContent(at(CONTEXT_KEYWORD_GAP + 1), "inline-script")).toEqual([]);
+    expect(
+      scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.value)
+    ).toEqual([TOGETHER_KEY]);
+    expect(scanContent(at(CONTEXT_KEYWORD_GAP + 1), "inline-script")).toEqual(
+      []
+    );
     expect(scanContent(at(60), "inline-script")).toEqual([]);
     // After the value, at any distance: never.
-    expect(scanContent(`${assignment}; // together.ai`, "inline-script")).toEqual([]);
-    expect(scanContent(`${assignment};${"x".repeat(SECRET_CONTEXT_WINDOW_SIZE)}together`, "inline-script")).toEqual([]);
+    expect(
+      scanContent(`${assignment}; // together.ai`, "inline-script")
+    ).toEqual([]);
+    expect(
+      scanContent(
+        `${assignment};${"x".repeat(SECRET_CONTEXT_WINDOW_SIZE)}together`,
+        "inline-script"
+      )
+    ).toEqual([]);
   });
 
   test("a long key beginning past the look-back budget still reports", () => {
@@ -352,9 +435,9 @@ describe("security/leaked-secrets: real credentials still report", () => {
     for (const distance of [N, N + 1, N + 2]) {
       const key = `${"z".repeat(distance - "togetherKey".length)}togetherKey`;
       const content = `;${key}="${TOGETHER_KEY}"`; // pragma: allowlist secret
-      expect(scanContent(content, "inline-script").map((f) => f.value)).toContain(
-        TOGETHER_KEY
-      );
+      expect(
+        scanContent(content, "inline-script").map((f) => f.value)
+      ).toContain(TOGETHER_KEY);
     }
   });
 
@@ -365,10 +448,14 @@ describe("security/leaked-secrets: real credentials still report", () => {
     // under its own key is.
     const longer = `${TOGETHER_KEY}${"a1b2c3d4".repeat(2)}`;
     expect(scanContent(`togetherKey:"${longer}"`, "inline-script")).toEqual([]);
-    expect(scanContent(`twilioAuth:"${TOGETHER_KEY}"`, "inline-script")).toEqual([]);
-    expect(scanContent(`togetherKey:"${TOGETHER_KEY}"`, "inline-script").map((f) => f.value)).toEqual([
-      TOGETHER_KEY,
-    ]);
+    expect(
+      scanContent(`twilioAuth:"${TOGETHER_KEY}"`, "inline-script")
+    ).toEqual([]);
+    expect(
+      scanContent(`togetherKey:"${TOGETHER_KEY}"`, "inline-script").map(
+        (f) => f.value
+      )
+    ).toEqual([TOGETHER_KEY]);
   });
 
   test("a key too long for the look-back cannot invent a digest word", () => {
@@ -383,9 +470,9 @@ describe("security/leaked-secrets: real credentials still report", () => {
     for (const separator of ["_", "-", ".", "7"]) {
       const key = `api_key_${"q".repeat(100)}${separator}${"z".repeat(84)}_xsha256_together`;
       const content = `"${key}"${" ".repeat(20)}:"${TOGETHER_KEY}";`; // pragma: allowlist secret
-      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
-        TOGETHER_KEY,
-      ]);
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual(
+        [TOGETHER_KEY]
+      );
     }
 
     // A digest key the walk does reach the start of still suppresses, so the
@@ -396,12 +483,14 @@ describe("security/leaked-secrets: real credentials still report", () => {
 
   test("public-by-design client keys stay informational, not leaks", async () => {
     const page = html(
-      `<script>const cfg={apiKey:"AIzaSyD3mQ8xR2vT7pLnK4hW9cB1sE6yU0zJfXa"};</script>`, // pragma: allowlist secret
+      `<script>const cfg={apiKey:"AIzaSyD3mQ8xR2vT7pLnK4hW9cB1sE6yU0zJfXa"};</script>` // pragma: allowlist secret
     );
-    const { checks } = (await leakedSecretsRule.run(ctx(page)));
+    const { checks } = await leakedSecretsRule.run(ctx(page));
 
     expect(findings(checks)).toEqual([]);
-    expect(checks.find((c) => c.name === "leaked-secrets-public")?.status).toBe("info");
+    expect(checks.find((c) => c.name === "leaked-secrets-public")?.status).toBe(
+      "info"
+    );
   });
 });
 
@@ -419,9 +508,16 @@ describe("security/leaked-secrets: real credentials still report", () => {
 describe("security/leaked-secrets: the content prefilter never loses a finding", () => {
   // Minified-looking JavaScript, so the gram index is populated the way a real
   // bundle populates it. Nothing here is a credential shape.
-  const PAD = "function q0(a,b){return a+b*2}var z9=[1,2,3].map(q0);".repeat(1400);
+  const PAD = "function q0(a,b){return a+b*2}var z9=[1,2,3].map(q0);".repeat(
+    1400
+  );
 
-  const PREFIX = { github: "ghp_", stripe: "sk_live_", aws: "AKIA", slack: "xoxb-" };
+  const PREFIX = {
+    github: "ghp_",
+    stripe: "sk_live_",
+    aws: "AKIA",
+    slack: "xoxb-",
+  };
 
   // The quote is varied because the character IMMEDIATELY BEFORE a pattern's
   // literal is what the index's window hash must not depend on, and `"` (34)
@@ -448,19 +544,30 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
   test("every finding made unpadded is still made, unchanged, inside 70 KB of bundle", () => {
     const lost: string[] = [];
     const paddedPrefix = `${PAD}\n;\n`;
-    const withoutOffset = ({ offset: _offset, context: _context, ...finding }: LeakedSecret) => finding;
+    const withoutOffset = ({
+      offset: _offset,
+      context: _context,
+      ...finding
+    }: LeakedSecret) => finding;
     for (const fixture of fixtures) {
       const bare = scanContent(fixture, "inline-script");
       expect(bare.length).toBeGreaterThan(0); // a vacuous fixture proves nothing
-      const padded = scanContent(`${paddedPrefix}${fixture}\n;\n${PAD}`, "inline-script");
+      const padded = scanContent(
+        `${paddedPrefix}${fixture}\n;\n${PAD}`,
+        "inline-script"
+      );
       for (const finding of bare) {
         const same = padded.find(
-          (candidate) => JSON.stringify(withoutOffset(candidate)) === JSON.stringify(withoutOffset(finding))
+          (candidate) =>
+            JSON.stringify(withoutOffset(candidate)) ===
+            JSON.stringify(withoutOffset(finding))
         );
         if (same) {
           expect(same.offset).toBe(finding.offset + paddedPrefix.length);
         } else {
-          const near = padded.find((candidate) => candidate.value.includes(finding.value));
+          const near = padded.find((candidate) =>
+            candidate.value.includes(finding.value)
+          );
           lost.push(
             `${fixture.slice(0, 40)} → ${JSON.stringify(finding)} became ${JSON.stringify(near)}`
           );
@@ -493,18 +600,24 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
 
     const expected = scanContent(ascii, "inline-script").map((f) => f.value);
     expect(expected).toContain(UUID);
-    expect(scanContent(folded, "inline-script").map((f) => f.value)).toEqual(expected);
+    expect(scanContent(folded, "inline-script").map((f) => f.value)).toEqual(
+      expected
+    );
   });
 });
 
 describe("classifyKeyContext", () => {
   test("names the key in front of a value", () => {
-    expect(classifyKeyContext(`{filename:"x",sha256:"`, "together")).toBe("digest");
+    expect(classifyKeyContext(`{filename:"x",sha256:"`, "together")).toBe(
+      "digest"
+    );
     expect(classifyKeyContext(`<code>sha256: `, "together")).toBe("digest");
     expect(classifyKeyContext(`integrity="sha384-`, "together")).toBe("digest");
     expect(classifyKeyContext(`"x-api-key": "`, "together")).toBe("credential");
     expect(classifyKeyContext(`api_key = "`, "together")).toBe("credential");
-    expect(classifyKeyContext(`Authorization: Bearer `, "together")).toBe("credential");
+    expect(classifyKeyContext(`Authorization: Bearer `, "together")).toBe(
+      "credential"
+    );
     expect(classifyKeyContext(`together: "`, "together")).toBe("credential");
     expect(classifyKeyContext(`<td>`, "together")).toBe("none");
     expect(classifyKeyContext(`monkey: "`, "together")).toBe("none");
@@ -515,9 +628,15 @@ describe("classifyKeyContext", () => {
   });
 
   test("parses a bracket access as the preceding key", () => {
-    expect(classifyKeyContext(`cfg["apiKey"] = "`, "together")).toBe("credential");
-    expect(classifyKeyContext(`cfg['x-api-key'] = "`, "together")).toBe("credential");
-    expect(classifyKeyContext(`cfg["together"] = "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`cfg["apiKey"] = "`, "together")).toBe(
+      "credential"
+    );
+    expect(classifyKeyContext(`cfg['x-api-key'] = "`, "together")).toBe(
+      "credential"
+    );
+    expect(classifyKeyContext(`cfg["together"] = "`, "together")).toBe(
+      "credential"
+    );
     expect(classifyKeyContext(`cfg["sha256"] = "`, "together")).toBe("digest");
     expect(classifyKeyContext(`cfg["filename"] = "`, "together")).toBe("none");
   });
@@ -529,11 +648,15 @@ describe("classifyKeyContext", () => {
     // A `:` or `=` still lands in the plain assignment fallback, which reports
     // on purpose — an unreadable key is how minified bundles look. Only the
     // fallback operators, where the left side is an expression, mean "none".
-    expect(classifyKeyContext(`labels[apiKey]: "`, "together")).toBe("assigned");
-    expect(classifyKeyContext(`cfg["apiKey"] || "`, "together")).toBe("credential");
-    expect(classifyKeyContext(`process.env["SECRET_KEY"] || "`, "together")).toBe(
+    expect(classifyKeyContext(`labels[apiKey]: "`, "together")).toBe(
+      "assigned"
+    );
+    expect(classifyKeyContext(`cfg["apiKey"] || "`, "together")).toBe(
       "credential"
     );
+    expect(
+      classifyKeyContext(`process.env["SECRET_KEY"] || "`, "together")
+    ).toBe("credential");
   });
 
   test("a minifier's member access names nothing, and nothing is not a credential (#357)", () => {
@@ -563,9 +686,9 @@ describe("classifyKeyContext", () => {
     for (const distance of [N, N + 1, N + 2]) {
       const key = `key${"Z".padEnd(distance - 2 - "key".length, "z")}`;
       const text = `;${key}="`;
-      expect(classifyKeyContext(lookBehind(text, text.length), "together")).toBe(
-        "credential"
-      );
+      expect(
+        classifyKeyContext(lookBehind(text, text.length), "together")
+      ).toBe("credential");
     }
   });
 
@@ -594,7 +717,11 @@ describe("classifyKeyContext", () => {
     const classify = (text: string) =>
       classifyKeyContext(lookBehind(text, text.length), "together");
 
-    for (const gap of [1, SECRET_KEY_LOOKBEHIND_SIZE, SECRET_KEY_LOOKBEHIND_SIZE * 4]) {
+    for (const gap of [
+      1,
+      SECRET_KEY_LOOKBEHIND_SIZE,
+      SECRET_KEY_LOOKBEHIND_SIZE * 4,
+    ]) {
       const space = " ".repeat(gap);
       expect(classify(`{"sha256"${space}:"`)).toBe("digest");
       // The same shape under a credential key still reads as one, so the
@@ -602,15 +729,17 @@ describe("classifyKeyContext", () => {
       expect(classify(`{"api_key"${space}:"`)).toBe("credential");
     }
     // Newlines and indentation are the same separator, however they are spelt.
-    expect(classify(`{\n  "checksum"\n${" ".repeat(80)}:\n    "`)).toBe("digest");
+    expect(classify(`{\n  "checksum"\n${" ".repeat(80)}:\n    "`)).toBe(
+      "digest"
+    );
     // A non-breaking space is whitespace to the `\s*` in the key patterns, so
     // the walk has to agree with them about it.
     expect(classify(`{"sha256"${"\u00a0".repeat(100)}:"`)).toBe("digest");
     // Free is not unbounded: past the scan limit the key is out of reach and
     // the look-back is a cut read again, which reports rather than suppresses.
-    expect(classify(`{"sha256"${" ".repeat(SECRET_CONTEXT_WINDOW_SIZE * 4)}:"`)).toBe(
-      "assigned"
-    );
+    expect(
+      classify(`{"sha256"${" ".repeat(SECRET_CONTEXT_WINDOW_SIZE * 4)}:"`)
+    ).toBe("assigned");
   });
 
   test("a look-back that opens on a fragment reports the cut", () => {
@@ -621,9 +750,9 @@ describe("classifyKeyContext", () => {
 
     const fragment = readBack(`sha256"${" ".repeat(200)}:"`);
     expect(fragment.cut).toBe(true);
-    expect(classifyKeyContext(fragment.before, "together", undefined, true)).toBe(
-      "assigned"
-    );
+    expect(
+      classifyKeyContext(fragment.before, "together", undefined, true)
+    ).toBe("assigned");
     // Read as if it were whole, the same text says "digest" — which is exactly
     // the suppression the flag exists to withhold.
     expect(classifyKeyContext(fragment.before, "together")).toBe("digest");
@@ -631,21 +760,22 @@ describe("classifyKeyContext", () => {
     // A key with its left edge in view is not a fragment.
     const whole = readBack(`{"sha256"${" ".repeat(200)}:"`);
     expect(whole.cut).toBe(false);
-    expect(classifyKeyContext(whole.before, "together", undefined, whole.cut)).toBe(
-      "digest"
-    );
+    expect(
+      classifyKeyContext(whole.before, "together", undefined, whole.cut)
+    ).toBe("digest");
 
     // Cutting must not cost the assignment itself: a minified member access at
     // the edge still means the value was assigned, and assigned values report.
     const minified = readBack(`t.a||"`);
     expect(minified.cut).toBe(true);
-    expect(classifyKeyContext(minified.before, "together", undefined, true)).toBe(
-      "assigned"
-    );
+    expect(
+      classifyKeyContext(minified.before, "together", undefined, true)
+    ).toBe("assigned");
   });
 
   test("a cut is where the key stops being readable, not where it starts", () => {
-    const cut = (text: string) => classifyKeyContext(text, "together", undefined, true);
+    const cut = (text: string) =>
+      classifyKeyContext(text, "together", undefined, true);
 
     // The key patterns cannot open on a digit, a `-` or a `.`, so the match can
     // start one character into the fragment and still be built out of it.
@@ -684,14 +814,20 @@ describe("classifyKeyContext", () => {
       )
     ).toBe("credential");
     expect(
-      classifyKeyContext(`<meta content="`, "together", tag(`content="x" name="release-sha256"`))
+      classifyKeyContext(
+        `<meta content="`,
+        "together",
+        tag(`content="x" name="release-sha256"`)
+      )
     ).toBe("digest");
     // Intervening attributes past the 64-char look-back no longer break it.
     expect(
       classifyKeyContext(
         `" data-testid="release-row" content="`,
         "algolia",
-        tag(`name="algolia-api-key" lang="en" dir="ltr" data-testid="release-row" content="x"`)
+        tag(
+          `name="algolia-api-key" lang="en" dir="ltr" data-testid="release-row" content="x"`
+        )
       )
     ).toBe("credential");
   });
@@ -700,7 +836,9 @@ describe("classifyKeyContext", () => {
     expect(classifyKeyContext(`process.env.SECRET_KEY || "`, "together")).toBe(
       "credential"
     );
-    expect(classifyKeyContext(`process.env.TOKEN ?? "`, "together")).toBe("credential");
+    expect(classifyKeyContext(`process.env.TOKEN ?? "`, "together")).toBe(
+      "credential"
+    );
     expect(classifyKeyContext(`togetherKey||"`, "together")).toBe("credential");
     // The fallback does not launder a digest key into a credential.
     expect(classifyKeyContext(`cacheKey || "`, "together")).toBe("digest");
@@ -739,7 +877,14 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // keyword in the pattern, so `commit` can never reach it, and the
     // bare-shape CONTEXT tier needs a brand keyword a release page has no
     // reason to carry.
-    for (const key of ["commit", "gitCommit", "sha", "revision", "etag", "cacheKey"]) {
+    for (const key of [
+      "commit",
+      "gitCommit",
+      "sha",
+      "revision",
+      "etag",
+      "cacheKey",
+    ]) {
       expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
     }
   });
@@ -757,7 +902,9 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
       "access_token_sha256",
     ]) {
       expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
-      expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).toEqual([]);
+      expect(
+        scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")
+      ).toEqual([]);
     }
   });
 
@@ -767,14 +914,26 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // classifyKeyContext behind it, so the pattern reads its own left edge.
     // `_` and camelCase join a name wherever they appear; `-` needs syntax to
     // say so, which is the next test.
-    for (const key of ["cache_api_key", "cacheApiKey", "checksumSecret", "sha256_secret"]) {
+    for (const key of [
+      "cache_api_key",
+      "cacheApiKey",
+      "checksumSecret",
+      "sha256_secret",
+    ]) {
       expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
       expect(scanContent(`{${key}:"${COMMIT}"}`, "html")).toEqual([]);
-      expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).toEqual([]);
+      expect(
+        scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")
+      ).toEqual([]);
     }
     // The word to the left has to actually say digest: `x-api-key` and
     // `stripe_secret` are the same shape and both still report.
-    for (const key of ["x-api-key", "myApiKey", "stripe_secret", "next_auth_token"]) {
+    for (const key of [
+      "x-api-key",
+      "myApiKey",
+      "stripe_secret",
+      "next_auth_token",
+    ]) {
       expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).not.toEqual([]); // pragma: allowlist secret
     }
   });
@@ -791,12 +950,20 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
       expect(scanContent(`{"${key}":"${COMMIT}"}`, "html")).toEqual([]);
       expect(scanContent(`{'${key}':"${COMMIT}"}`, "html")).toEqual([]);
       // An HTML attribute name: also one name.
-      expect(scanContent(`<img alt="" ${key}="${COMMIT}">`, "html")).toEqual([]);
-      expect(scanContent(`<img alt="" data-${key}="${COMMIT}">`, "html")).toEqual([]);
+      expect(scanContent(`<img alt="" ${key}="${COMMIT}">`, "html")).toEqual(
+        []
+      );
+      expect(
+        scanContent(`<img alt="" data-${key}="${COMMIT}">`, "html")
+      ).toEqual([]);
       // Bare, in identifier position, `-` is the subtraction operator. Reading
       // it as one key is what let a minified expression swallow a credential.
-      expect(scanContent(`const x=${key}||"${COMMIT}"`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
-      expect(scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
+      expect(
+        scanContent(`const x=${key}||"${COMMIT}"`, "inline-script")
+      ).not.toEqual([]); // pragma: allowlist secret
+      expect(
+        scanContent(`x = ${key} || "${COMMIT}";`, "inline-script")
+      ).not.toEqual([]); // pragma: allowlist secret
     }
     // The shape the fix exists for: a real credential behind a minified
     // subtraction. `cache-apiKey` is `cache` minus `apiKey`, not a cache key.
@@ -833,8 +1000,14 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
   test("a digest word in a member path is not part of the key", () => {
     // `cache.apiKey` is the apiKey OF a cache, not a key called
     // `cache.apiKey` — the walk stops at the dot.
-    for (const path of ["cache.apiKey", "config.cache.apiKey", "sha256.apiKey"]) {
-      expect(scanContent(`${path} = "${COMMIT}";`, "inline-script")).not.toEqual([]); // pragma: allowlist secret
+    for (const path of [
+      "cache.apiKey",
+      "config.cache.apiKey",
+      "sha256.apiKey",
+    ]) {
+      expect(
+        scanContent(`${path} = "${COMMIT}";`, "inline-script")
+      ).not.toEqual([]); // pragma: allowlist secret
     }
   });
 
@@ -872,9 +1045,14 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     // A name in front of the fallback still reports; a minified member is not
     // a name (#357).
     expect(
-      scanContent(`/* together.ai */ const v = cfg.token || "${TOGETHER_KEY}";`, "inline-script").map((f) => f.value) // pragma: allowlist secret
+      scanContent(
+        `/* together.ai */ const v = cfg.token || "${TOGETHER_KEY}";`,
+        "inline-script"
+      ).map((f) => f.value) // pragma: allowlist secret
     ).toEqual([TOGETHER_KEY]);
-    expect(scanContent(`/* together.ai */ t.a||"${TOGETHER_KEY}";`, "inline-script")).toEqual([]); // pragma: allowlist secret
+    expect(
+      scanContent(`/* together.ai */ t.a||"${TOGETHER_KEY}";`, "inline-script")
+    ).toEqual([]); // pragma: allowlist secret
   });
 
   test("a hardcoded fallback behind an env var is reported", () => {
@@ -903,12 +1081,18 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
       `const v = togetherKey || "${TOGETHER_KEY}";`, // pragma: allowlist secret
       `/* together.ai */ const v = credential ?? "${TOGETHER_KEY}";`, // pragma: allowlist secret
     ]) {
-      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual([
-        TOGETHER_KEY,
-      ]);
+      expect(scanContent(content, "inline-script").map((f) => f.value)).toEqual(
+        [TOGETHER_KEY]
+      );
     }
     // Same shape, digest key: the published checksum stays silent.
-    for (const key of ["cacheKey", "sha256", "etag", "commitHash", "integrityHash"]) {
+    for (const key of [
+      "cacheKey",
+      "sha256",
+      "etag",
+      "commitHash",
+      "integrityHash",
+    ]) {
       const content = `/* together.ai */ const v = ${key} || "${DIGEST}";`;
       expect(scanContent(content, "inline-script")).toEqual([]);
     }
@@ -955,14 +1139,18 @@ describe("security/leaked-secrets: #150 missed shapes", () => {
     expect(scanContent(tag, "html")).toEqual([]);
     // Still silent with the word Bearer on the same page: the class stops at
     // the space, so `Bearer token.` never reaches the length threshold.
-    expect(scanContent(`<p>Send a Bearer token.</p>${tag}`, "html")).toEqual([]);
+    expect(scanContent(`<p>Send a Bearer token.</p>${tag}`, "html")).toEqual(
+      []
+    );
   });
 
   test("a base64 image data URI reports nothing", async () => {
     const page = html(
       `<img alt="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg==">`
     );
-    expect(findings((await leakedSecretsRule.run(ctx(page))).checks)).toEqual([]);
+    expect(findings((await leakedSecretsRule.run(ctx(page))).checks)).toEqual(
+      []
+    );
   });
 
   test("two secrets on one line are both reported", () => {
@@ -1019,10 +1207,15 @@ describe("security/leaked-secrets: overlap suppression", () => {
     kept.some((seen) => value.includes(seen) || seen.includes(value));
 
   const rng = (seed: number) => () =>
-    ((seed = Math.imul(seed ^ (seed >>> 15), 2246822519) + 1) >>> 0) / 4294967296;
-  const CHARS = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    ((seed = Math.imul(seed ^ (seed >>> 15), 2246822519) + 1) >>> 0) /
+    4294967296;
+  const CHARS =
+    "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const runOf = (r: () => number, n: number) =>
-    Array.from({ length: n }, () => CHARS[Math.floor(r() * CHARS.length)]!).join("");
+    Array.from(
+      { length: n },
+      () => CHARS[Math.floor(r() * CHARS.length)]!
+    ).join("");
 
   test("the index answers exactly what the pairwise scan answered", () => {
     // The shapes that break a window index if it is wrong: values shorter than
@@ -1039,22 +1232,30 @@ describe("security/leaked-secrets: overlap suppression", () => {
       for (let i = 0; i < 60; i++) {
         const pickShape = Math.floor(r() * 9);
         let value =
-          pickShape === 0 ? runOf(r, 1 + Math.floor(r() * 11)) // below one window
-          : pickShape === 1 ? `${head}${runOf(r, 1 + Math.floor(r() * 20))}`
-          : pickShape === 2 ? `${runOf(r, 1 + Math.floor(r() * 20))}${tail}`
-          : pickShape === 3 ? `${head}${runOf(r, 10)}${tail}`
-          : pickShape === 4 && kept.length > 0 ? kept[Math.floor(r() * kept.length)]!
-          : pickShape === 5 && kept.length > 0
-            ? (() => {
-                const base = kept[Math.floor(r() * kept.length)]!;
-                return base.slice(Math.floor(r() * base.length)) || base;
-              })()
-          : pickShape === 6 && kept.length > 0
-            ? `${runOf(r, 3)}${kept[Math.floor(r() * kept.length)]!}${runOf(r, 3)}`
-          // Past the length the index will take: a runaway connection-string
-          // match is megabytes, and those are held aside rather than indexed.
-          : pickShape === 7 ? `${head}${runOf(r, 1000 + Math.floor(r() * 60))}`
-            : runOf(r, 12 + Math.floor(r() * 40));
+          pickShape === 0
+            ? runOf(r, 1 + Math.floor(r() * 11)) // below one window
+            : pickShape === 1
+              ? `${head}${runOf(r, 1 + Math.floor(r() * 20))}`
+              : pickShape === 2
+                ? `${runOf(r, 1 + Math.floor(r() * 20))}${tail}`
+                : pickShape === 3
+                  ? `${head}${runOf(r, 10)}${tail}`
+                  : pickShape === 4 && kept.length > 0
+                    ? kept[Math.floor(r() * kept.length)]!
+                    : pickShape === 5 && kept.length > 0
+                      ? (() => {
+                          const base = kept[Math.floor(r() * kept.length)]!;
+                          return (
+                            base.slice(Math.floor(r() * base.length)) || base
+                          );
+                        })()
+                      : pickShape === 6 && kept.length > 0
+                        ? `${runOf(r, 3)}${kept[Math.floor(r() * kept.length)]!}${runOf(r, 3)}`
+                        : // Past the length the index will take: a runaway connection-string
+                          // match is megabytes, and those are held aside rather than indexed.
+                          pickShape === 7
+                          ? `${head}${runOf(r, 1000 + Math.floor(r() * 60))}`
+                          : runOf(r, 12 + Math.floor(r() * 40));
         if (value === "") value = "x";
 
         expect(index.overlaps(value)).toBe(pairwise(kept, value));
@@ -1097,7 +1298,10 @@ describe("security/leaked-secrets: overlap suppression", () => {
     // 64x for an 8x page whatever the machine.
     const r = rng(7);
     const page = (n: number) =>
-      Array.from({ length: n }, () => `cfg.push({k:"AIza${runOf(r, 35)}"});`).join("");
+      Array.from(
+        { length: n },
+        () => `cfg.push({k:"AIza${runOf(r, 35)}"});`
+      ).join("");
     const small = page(2000);
     const large = page(16000);
 
@@ -1140,7 +1344,7 @@ const AWS_SHAPE = "AKIA" + "IOSFODNN7EXAMPLE"; // pragma: allowlist secret
 const REAL_SECRET = "sk_live_" + "Zq7mR2xKd9LpV4nB8cT5wY3j"; // pragma: allowlist secret
 
 async function reported(pageHtml: string) {
-  const result = (await leakedSecretsRule.run(ctx(pageHtml)));
+  const result = await leakedSecretsRule.run(ctx(pageHtml));
   return {
     findings: findings(result.checks),
     names: result.checks.map((c) => c.name),
@@ -1150,9 +1354,11 @@ async function reported(pageHtml: string) {
 describe("security/leaked-secrets: vendor public identifiers in URL queries (#574)", () => {
   // The issue's repro, in the shape its reporter saw (a medium finding).
   test("the Mida optimize.js repro reports nothing", async () => {
-    const { findings: items, names } = (await reported(
-      html(`<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>`)
-    ));
+    const { findings: items, names } = await reported(
+      html(
+        `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>`
+      )
+    );
     expect(items).toEqual([]);
     expect(names).toEqual(["leaked-secrets"]);
   });
@@ -1162,18 +1368,26 @@ describe("security/leaked-secrets: vendor public identifiers in URL queries (#57
     ["Mida", "https://cdn.mida.so/js/optimize.js?key="],
     ["Mida (EU)", "https://cdn-eu.mida.so/js/optimize.js?key="],
     ["Klaviyo", "https://static.klaviyo.com/onsite/js/klaviyo.js?company_id="],
-    ["Klaviyo (extra params)", "https://static.klaviyo.com/onsite/js/klaviyo.js?v=2&company_id="],
+    [
+      "Klaviyo (extra params)",
+      "https://static.klaviyo.com/onsite/js/klaviyo.js?v=2&company_id=",
+    ],
     ["reCAPTCHA", "https://www.google.com/recaptcha/api.js?render="],
-    ["reCAPTCHA (recaptcha.net)", "https://www.recaptcha.net/recaptcha/enterprise.js?render="],
+    [
+      "reCAPTCHA (recaptcha.net)",
+      "https://www.recaptcha.net/recaptcha/enterprise.js?render=",
+    ],
     ["protocol-relative", "//cdn.mida.so/js/optimize.js?key="],
   ];
 
   for (const value of [SPACES_SHAPE, AWS_SHAPE]) {
     for (const [vendor, prefix] of VENDOR_CASES) {
       test(`${vendor}: ${value.slice(0, 4)}-shaped value in src and href is not reported`, async () => {
-        const { findings: items, names } = (await reported(
-          html(`<script async src="${prefix}${value}"></script><link rel="preload" as="script" href="${prefix}${value}&x=1">`)
-        ));
+        const { findings: items, names } = await reported(
+          html(
+            `<script async src="${prefix}${value}"></script><link rel="preload" as="script" href="${prefix}${value}&x=1">`
+          )
+        );
         expect(items).toEqual([]);
         expect(names).not.toContain("leaked-secrets-public");
       });
@@ -1193,60 +1407,79 @@ describe("security/leaked-secrets: vendor public identifiers in URL queries (#57
 
   // Same parameter, same shape: not a known vendor, so still a credential.
   const STILL_REPORTED: Array<[string, string]> = [
-    ["unknown host, Mida's path and param", "https://cdn.example.net/js/optimize.js?key="],
-    ["unknown host, Klaviyo's path and param", "https://static.example.net/onsite/js/klaviyo.js?company_id="],
-    ["lookalike host suffix", "https://cdn.mida.so.evil.test/js/optimize.js?key="],
+    [
+      "unknown host, Mida's path and param",
+      "https://cdn.example.net/js/optimize.js?key=",
+    ],
+    [
+      "unknown host, Klaviyo's path and param",
+      "https://static.example.net/onsite/js/klaviyo.js?company_id=",
+    ],
+    [
+      "lookalike host suffix",
+      "https://cdn.mida.so.evil.test/js/optimize.js?key=",
+    ],
     ["lookalike host prefix", "https://evilcdn.mida.so/js/optimize.js?key="],
     ["userinfo trick", "https://cdn.mida.so@evil.test/js/optimize.js?key="],
     ["port on the vendor host", "https://cdn.mida.so:8443/js/optimize.js?key="],
-    ["vendor host inside another URL's path", "https://evil.test/redirect//cdn.mida.so/js/optimize.js?key="],
+    [
+      "vendor host inside another URL's path",
+      "https://evil.test/redirect//cdn.mida.so/js/optimize.js?key=",
+    ],
     ["vendor host, other path", "https://cdn.mida.so/js/other.js?key="],
     ["vendor host, other param", "https://cdn.mida.so/js/optimize.js?token="],
-    ["vendor param, wrong parameter name case", "https://cdn.mida.so/js/optimize.js?KEY="],
+    [
+      "vendor param, wrong parameter name case",
+      "https://cdn.mida.so/js/optimize.js?KEY=",
+    ],
   ];
   for (const [label, prefix] of STILL_REPORTED) {
     test(`still reported: ${label}`, async () => {
-      const { findings: items } = (await reported(html(`<script async src="${prefix}${SPACES_SHAPE}"></script>`)));
+      const { findings: items } = await reported(
+        html(`<script async src="${prefix}${SPACES_SHAPE}"></script>`)
+      );
       expect(items.length).toBe(1);
       expect(items[0]!.id).toContain("DigitalOcean Spaces Key");
     });
   }
 
   test("a vendor URL does not hide a real secret elsewhere on the page", async () => {
-    const { findings: items } = (await reported(
+    const { findings: items } = await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
           `<script>var cfg = { token: "${REAL_SECRET}" };</script>`
       )
-    ));
+    );
     expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
     expect(items.some((i) => i.id.includes("DigitalOcean"))).toBe(false);
   });
 
   test("the same value outside the vendor URL is still reported", async () => {
-    const { findings: items } = (await reported(
+    const { findings: items } = await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
           `<p>Spaces key: ${SPACES_SHAPE}</p>`
       )
-    ));
+    );
     expect(items.length).toBe(1);
   });
 
   test("a longer secret that contains the identifier is not hidden by it", async () => {
-    const { findings: items } = (await reported(
+    const { findings: items } = await reported(
       html(
         `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
           `<script>var u = "postgres://app:${SPACES_SHAPE}@db.internal/prod";</script>`
       )
-    ));
+    );
     expect(items.map((i) => i.id).join("\n")).toContain("PostgreSQL");
   });
 
   test("a secret in a non-identifier parameter of a vendor URL is still reported", async () => {
-    const { findings: items } = (await reported(
-      html(`<script async src="https://cdn.mida.so/js/optimize.js?key=abc123&auth=${REAL_SECRET}"></script>`)
-    ));
+    const { findings: items } = await reported(
+      html(
+        `<script async src="https://cdn.mida.so/js/optimize.js?key=abc123&auth=${REAL_SECRET}"></script>`
+      )
+    );
     expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
   });
 });
@@ -1257,7 +1490,11 @@ describe("evidence context (repo#2215)", () => {
     const key = ["sk", "live", "abcdefghijklmnopqrstuvwx12"].join("_"); // assembled so the fixture is not a literal secret
     const neighbour = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
     const html = `<script>var a="x"; var k="${key}"; var other="${neighbour}";</script>`;
-    const found = scanContent(html, "inline-script", "https://example.com/a.js");
+    const found = scanContent(
+      html,
+      "inline-script",
+      "https://example.com/a.js"
+    );
     const stripe = found.find((f) => f.type === "Stripe Live Key");
     expect(stripe?.context).toBe(
       `<script>var a="*"; var k="sk_liv********************wx12"; var other="********************";</script>`
@@ -1296,7 +1533,8 @@ describe("evidence context redacts every nearby secret (repo#2215)", () => {
   });
 
   test("a token run cut off at either window edge is dropped, not shown in part", async () => {
-    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } = await import("../src/security/leaked-secrets");
+    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } =
+      await import("../src/security/leaked-secrets");
     const left = "L".repeat(10) + "0123456789abcdefghij"; // 30 token chars, only the tail inside the window
     const right = "zyxwvutsrqponmlkjihg" + "R".repeat(10);
     const fill = (n: number) => " ".repeat(n);
@@ -1304,12 +1542,14 @@ describe("evidence context redacts every nearby secret (repo#2215)", () => {
     const at = content.indexOf(key);
     const ctx = evidenceContext(content, at, key.length, key);
     expect(ctx).toBeDefined();
-    for (const frag of ["fghij", "abcde", "zyxwv", "rqpon"]) expect(ctx).not.toContain(frag);
+    for (const frag of ["fghij", "abcde", "zyxwv", "rqpon"])
+      expect(ctx).not.toContain(frag);
     expect(ctx).toBe(` =sk_liv********************wx12; `);
   });
 
   test("a literal cut off at the window edge is masked up to that edge", async () => {
-    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } = await import("../src/security/leaked-secrets");
+    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } =
+      await import("../src/security/leaked-secrets");
     const secretTail = "my secret pass!";
     const content = `x="${"a".repeat(EVIDENCE_CONTEXT_RADIUS)} ${secretTail}"; k="${key}"`;
     const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
@@ -1327,9 +1567,19 @@ describe("evidence context redacts every nearby secret (repo#2215)", () => {
 
   test("an unquoted password beside a quoted match is masked, punctuation and all", async () => {
     const { evidenceContext } = await import("../src/security/leaked-secrets");
-    for (const pw of [["p@ss", "w0rd!"].join(""), ["a#b$", "c&d!e%f"].join(""), ["s3cr", "et"].join(""), ["p@ss", "w0rd!x".repeat(4)].join("")]) {
+    for (const pw of [
+      ["p@ss", "w0rd!"].join(""),
+      ["a#b$", "c&d!e%f"].join(""),
+      ["s3cr", "et"].join(""),
+      ["p@ss", "w0rd!x".repeat(4)].join(""),
+    ]) {
       const content = `STRIPE_KEY="${key}"\nDB_PASSWORD=${pw}\nDEBUG=1`;
-      const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
+      const ctx = evidenceContext(
+        content,
+        content.indexOf(key),
+        key.length,
+        key
+      );
       expect(ctx).toBeDefined();
       expect(ctx).not.toContain(pw);
       expect(ctx).not.toContain(pw.slice(4));
@@ -1351,7 +1601,8 @@ describe("evidence context redacts every nearby secret (repo#2215)", () => {
   });
 
   test("a punctuated run cut off at the window edge is dropped", async () => {
-    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } = await import("../src/security/leaked-secrets");
+    const { evidenceContext, EVIDENCE_CONTEXT_RADIUS } =
+      await import("../src/security/leaked-secrets");
     const tail = "!@#$%^&*p@ss";
     const content = `${"x".repeat(10)}${tail}${" ".repeat(EVIDENCE_CONTEXT_RADIUS - tail.length)}${key}`;
     const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
@@ -1372,7 +1623,8 @@ describe("evidence context never shows part of a nearby secret (repo#2215)", () 
     const content = `const s="${key}"; fetch(u,{headers:{Authorization: Bearer ${token}}})`;
     const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
     expect(ctx).toBeDefined();
-    for (const frag of [token.slice(0, 4), token.slice(-4), token.slice(4, 12)]) expect(ctx).not.toContain(frag);
+    for (const frag of [token.slice(0, 4), token.slice(-4), token.slice(4, 12)])
+      expect(ctx).not.toContain(frag);
   });
 
   test("a letter-and-digit word after a label is starred out", async () => {
@@ -1390,14 +1642,17 @@ describe("evidence context never shows part of a nearby secret (repo#2215)", () 
     const content = `var k="${key}"; var pw="${pw}";`;
     const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
     expect(ctx).toContain(`var pw="${"*".repeat(pw.length)}"`);
-    for (const frag of [pw.slice(0, 4), pw.slice(-4)]) expect(ctx).not.toContain(frag);
+    for (const frag of [pw.slice(0, 4), pw.slice(-4)])
+      expect(ctx).not.toContain(frag);
   });
 
   test("the match itself is masked exactly as its item id", async () => {
     const { evidenceContext } = await import("../src/security/leaked-secrets");
     const content = `var k="${key}";`;
     const ctx = evidenceContext(content, content.indexOf(key), key.length, key);
-    expect(ctx).toBe(`var k="${key.slice(0, 6)}${"*".repeat(20)}${key.slice(-4)}";`);
+    expect(ctx).toBe(
+      `var k="${key.slice(0, 6)}${"*".repeat(20)}${key.slice(-4)}";`
+    );
     expect(ctx).not.toContain(key);
   });
 });
@@ -1415,38 +1670,50 @@ describe("evidence context masks short quoted values and survives a stray apostr
 
   test("a 7-character JSON password after its label is starred out", async () => {
     const pw = ["Zx9!", "qT4"].join("");
-    expect(await ctxOf(`{"key":"${key}","password":"${pw}"}`)).toBe(`{"***"*"${masked}"*"********"*"*******"}`);
+    expect(await ctxOf(`{"key":"${key}","password":"${pw}"}`)).toBe(
+      `{"***"*"${masked}"*"********"*"*******"}`
+    );
   });
 
   test("a 7-character value after => is starred out", async () => {
     const pw = ["Sum", "mer1"].join("");
-    expect(await ctxOf(`$cfg = ['stripe' => '${key}', 'db_pass' => '${pw}'];`)).toBe(
-      `$cfg = *'******' => '${masked}', '*******' => '*******'];`
-    );
+    expect(
+      await ctxOf(`$cfg = ['stripe' => '${key}', 'db_pass' => '${pw}'];`)
+    ).toBe(`$cfg = *'******' => '${masked}', '*******' => '*******'];`);
   });
 
   test("a 7-character HTML attribute value is starred out", async () => {
     const pw = ["Pw12", "345"].join("");
-    expect(await ctxOf(`<input name="k" value="${pw}"><script>var k="${key}";</script>`)).toBe(
+    expect(
+      await ctxOf(
+        `<input name="k" value="${pw}"><script>var k="${key}";</script>`
+      )
+    ).toBe(
       `<input name="*" value="*******"><script>var k="${masked}";</script>`
     );
   });
 
   test("a 4-character assigned literal is starred out", async () => {
     const pw = ["Pa", "55"].join("");
-    expect(await ctxOf(`const k = "${key}"; const pw = "${pw}";`)).toBe(`const k = "${masked}"; const pw = "****";`);
+    expect(await ctxOf(`const k = "${key}"; const pw = "${pw}";`)).toBe(
+      `const k = "${masked}"; const pw = "****";`
+    );
   });
 
   test("an apostrophe in a comment after the match does not unmask the next literal", async () => {
     const pw = ["Correct", "Horse", "Battery"].join("");
-    expect(await ctxOf(`const k = "${key}"; // don't ship this\nconst pw='${pw}';`)).toBe(
+    expect(
+      await ctxOf(`const k = "${key}"; // don't ship this\nconst pw='${pw}';`)
+    ).toBe(
       `const k = "${masked}"; // don'${"*".repeat(20)}'${"*".repeat(19)}'*`
     );
   });
 
   test("an apostrophe in a comment before the match does not unmask the literal before it", async () => {
     const pw = ["Correct", "Horse", "Battery"].join("");
-    expect(await ctxOf(`const pw='${pw}'; // don't ship\nconst k = "${key}";`)).toBe(
+    expect(
+      await ctxOf(`const pw='${pw}'; // don't ship\nconst k = "${key}";`)
+    ).toBe(
       `${"*".repeat(9)}'${"*".repeat(19)}'********'t ship const k = "${masked}";`
     );
   });
@@ -1454,7 +1721,8 @@ describe("evidence context masks short quoted values and survives a stray apostr
   test("no 3-character run of a generated secret appears in any quoting style (property)", async () => {
     // Deterministic generator: the alphabet avoids lowercase letters, quotes, backslashes, whitespace and `*`, so a run of
     // three secret characters cannot occur in the labels, the match mask or the stars by chance.
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|";
+    const alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|";
     let seed = 2215;
     const next = () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -1475,15 +1743,24 @@ describe("evidence context masks short quoted values and survives a stray apostr
     let checked = 0;
     for (let len = 1; len <= 40; len++) {
       for (let round = 0; round < 3; round++) {
-        const secret = Array.from({ length: len }, () => alphabet[next() % alphabet.length]).join("");
+        const secret = Array.from(
+          { length: len },
+          () => alphabet[next() % alphabet.length]
+        ).join("");
         for (const style of styles) {
-          for (const content of [`var k="${key}"; ${style(secret)}`, `${style(secret)} var k="${key}";`]) {
+          for (const content of [
+            `var k="${key}"; ${style(secret)}`,
+            `${style(secret)} var k="${key}";`,
+          ]) {
             const ctx = await ctxOf(content);
             expect(ctx).toBeDefined();
             expect(ctx).toContain(masked);
             for (let i = 0; i + 3 <= len; i++) {
               const frag = secret.slice(i, i + 3);
-              if (ctx?.includes(frag)) throw new Error(`"${frag}" of ${JSON.stringify(secret)} shows in ${JSON.stringify(ctx)}`);
+              if (ctx?.includes(frag))
+                throw new Error(
+                  `"${frag}" of ${JSON.stringify(secret)} shows in ${JSON.stringify(ctx)}`
+                );
             }
             checked++;
           }
@@ -1509,42 +1786,104 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
   const stars = (n: number) => "*".repeat(n);
 
   test.each([
-    ["a bundle regex with quotes, then || 'fallback'", `var k=${Q};var r=/['"]/g;var v=e.PW||'Hunt&er;x';`, `var k="${masked}";var r=**'${stars(17)}'${stars(9)}'*`],
-    ["a stray apostrophe, then || 'fallback'", `var k=${Q}; ${D}var v = env.PW || 'Hunt&er;x';`, `var k="${masked}"; // don'${stars(20)}'${stars(9)}'*`],
-    ["a stray apostrophe, then && 'x'", `var k=${Q}; ${D}ok && 'Hunt&er;x';`, `var k="${masked}"; // don'${stars(17)}'${stars(9)}'*`],
-    ["a stray apostrophe, then echo 'x'", `var k=${Q}; ${D}echo 'Hunt;er2pass'`, `var k="${masked}"; // don'${stars(16)}'${stars(12)}'`],
-    ["a stray apostrophe, then mysql -p'x'", `var k=${Q}; ${D}cmd = mysql -u root -p'S3cr;tPw' db;`, `var k="${masked}"; // don'${stars(20)}'${stars(8)}'****`],
-    ["an apostrophe in HTML text, then login 'x'", `<a data-k=${Q}>it's</a><code>login 'Pw;9xQ!'</code>`, `<a data-k="${masked}****'${stars(17)}'${stars(7)}'*******`],
-    ["|| 'fallback', then a stray apostrophe before the match", `x = cond || 'Hunt&er;x'; // don't\nvar k=${Q};`, `${stars(12)}'${stars(9)}'********'t var k="${masked}";`],
-  ])("a punctuation literal in a non-operand place is starred out: %s", async (_name, content, expected) => {
-    const ctx = await ctxOf(content);
-    expect(ctx).toBe(expected);
-    for (const secret of ["Hunt&er;x", "Hunt;er2pass", "S3cr;tPw", "Pw;9xQ!"]) expect(ctx).not.toContain(secret.slice(-4));
-  });
+    [
+      "a bundle regex with quotes, then || 'fallback'",
+      `var k=${Q};var r=/['"]/g;var v=e.PW||'Hunt&er;x';`,
+      `var k="${masked}";var r=**'${stars(17)}'${stars(9)}'*`,
+    ],
+    [
+      "a stray apostrophe, then || 'fallback'",
+      `var k=${Q}; ${D}var v = env.PW || 'Hunt&er;x';`,
+      `var k="${masked}"; // don'${stars(20)}'${stars(9)}'*`,
+    ],
+    [
+      "a stray apostrophe, then && 'x'",
+      `var k=${Q}; ${D}ok && 'Hunt&er;x';`,
+      `var k="${masked}"; // don'${stars(17)}'${stars(9)}'*`,
+    ],
+    [
+      "a stray apostrophe, then echo 'x'",
+      `var k=${Q}; ${D}echo 'Hunt;er2pass'`,
+      `var k="${masked}"; // don'${stars(16)}'${stars(12)}'`,
+    ],
+    [
+      "a stray apostrophe, then mysql -p'x'",
+      `var k=${Q}; ${D}cmd = mysql -u root -p'S3cr;tPw' db;`,
+      `var k="${masked}"; // don'${stars(20)}'${stars(8)}'****`,
+    ],
+    [
+      "an apostrophe in HTML text, then login 'x'",
+      `<a data-k=${Q}>it's</a><code>login 'Pw;9xQ!'</code>`,
+      `<a data-k="${masked}****'${stars(17)}'${stars(7)}'*******`,
+    ],
+    [
+      "|| 'fallback', then a stray apostrophe before the match",
+      `x = cond || 'Hunt&er;x'; // don't\nvar k=${Q};`,
+      `${stars(12)}'${stars(9)}'********'t var k="${masked}";`,
+    ],
+  ])(
+    "a punctuation literal in a non-operand place is starred out: %s",
+    async (_name, content, expected) => {
+      const ctx = await ctxOf(content);
+      expect(ctx).toBe(expected);
+      for (const secret of ["Hunt&er;x", "Hunt;er2pass", "S3cr;tPw", "Pw;9xQ!"])
+        expect(ctx).not.toContain(secret.slice(-4));
+    }
+  );
 
   test.each([
-    ["DB_PASS=Tr0ub;4dor&x", `STRIPE=${Q}\nDB_PASS=Tr0ub;4dor&x`, `STRIPE="${masked}" DB_PASS=${stars(12)}`],
-    ["PASS=Xy;kq,Lm2", `var k=${Q};\nPASS=Xy;kq,Lm2`, `var k="${masked}"; PASS=${stars(9)}`],
-    ["password: Xy;kq,Lmzz", `stripe: ${Q}\npassword: Xy;kq,Lmzz`, `stripe: "${masked}" password: ${stars(10)}`],
-  ])("an unquoted value is starred to the next whitespace, punctuation and all: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+    [
+      "DB_PASS=Tr0ub;4dor&x",
+      `STRIPE=${Q}\nDB_PASS=Tr0ub;4dor&x`,
+      `STRIPE="${masked}" DB_PASS=${stars(12)}`,
+    ],
+    [
+      "PASS=Xy;kq,Lm2",
+      `var k=${Q};\nPASS=Xy;kq,Lm2`,
+      `var k="${masked}"; PASS=${stars(9)}`,
+    ],
+    [
+      "password: Xy;kq,Lmzz",
+      `stripe: ${Q}\npassword: Xy;kq,Lmzz`,
+      `stripe: "${masked}" password: ${stars(10)}`,
+    ],
+  ])(
+    "an unquoted value is starred to the next whitespace, punctuation and all: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test("an unquoted value of 1 to 3 characters is starred out", async () => {
     // Keys that are not secret labels, so the value is starred to the next whitespace (a label stars the whole line).
-    expect(await ctxOf(`var k=${Q}; n=482; cvv=91; x:Ab9`)).toBe(`var k="${masked}"; n=**** cvv=*** x:***`);
+    expect(await ctxOf(`var k=${Q}; n=482; cvv=91; x:Ab9`)).toBe(
+      `var k="${masked}"; n=**** cvv=*** x:***`
+    );
   });
 
   test.each([
-    ["X-Api-Key abcdEFGHijklMNOP", `var k=${Q}; X-Api-Key abcdEFGHijklMNOP`, `var k="${masked}"; X-Api-Key ${stars(16)}`],
-    ["// password qwertyuiopasdfghjk", `var k=${Q}; // password qwertyuiopasdfghjk\n`, `var k="${masked}"; // password ${stars(18)} `],
-  ])("a 12+ character run after a secret's label with no = or : is starred out: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+    [
+      "X-Api-Key abcdEFGHijklMNOP",
+      `var k=${Q}; X-Api-Key abcdEFGHijklMNOP`,
+      `var k="${masked}"; X-Api-Key ${stars(16)}`,
+    ],
+    [
+      "// password qwertyuiopasdfghjk",
+      `var k=${Q}; // password qwertyuiopasdfghjk\n`,
+      `var k="${masked}"; // password ${stars(18)} `,
+    ],
+  ])(
+    "a 12+ character run after a secret's label with no = or : is starred out: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test("prose after a label keeps its words", async () => {
     const content = `var k=${Q}; // the password field is required\n`;
-    expect(await ctxOf(content)).toBe(`var k="${masked}"; // the password field is required `);
+    expect(await ctxOf(content)).toBe(
+      `var k="${masked}"; // the password field is required `
+    );
   });
 
   // The reviewer's probes (redact4.ts, redact5.ts) against pub#1959 at 94ca8926 and at this fix, ported case for case:
@@ -1552,56 +1891,222 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
   const PK = ["sk", "live", "Zq8vT3mP9wX2kL7nR4bY6cJ1"].join("_");
   const PQ = `"${PK}"`;
   const probes: Array<[string, string, string[], "inline-script" | "html"]> = [
-    ["label: 'p;ss!w0rd'", `var k=${PQ};\nvar o={password: 'p;ss!w0rd'};`, ["p;ss!w0rd", "ss!w0rd"], "inline-script"],
+    [
+      "label: 'p;ss!w0rd'",
+      `var k=${PQ};\nvar o={password: 'p;ss!w0rd'};`,
+      ["p;ss!w0rd", "ss!w0rd"],
+      "inline-script",
+    ],
     ['"pwd":"a,b;c"', `{"k":${PQ},"pwd":"a,b;c"}`, ["a,b;c"], "inline-script"],
-    ['pass => "x(y)z"', `$c=['k'=>${PQ}, 'pass' => "x(y)z"];`, ["x(y)z"], "inline-script"],
-    ["desync label: 'p;ss!w0rd'", `var k=${PQ}; ${D}var o={password: 'p;ss!w0rd'};`, ["p;ss!w0rd", "ss!w0rd"], "inline-script"],
-    ['desync pass => "x(y)z"', `$c=['k'=>${PQ}]; ${D}$d=['pass' => "x(y)z"];`, ["x(y)z"], "inline-script"],
-    ["desync sshpass -p 'Pa;ss'", `var k=${PQ}; ${D}run("sshpass -p 'Pa;ssw'");`, ["Pa;ssw"], "inline-script"],
-    ["desync mysql -p'S3cr;t'", `var k=${PQ}; ${D}cmd = mysql -u root -p'S3cr;tPw' db;`, ["S3cr;tPw", "S3cr"], "inline-script"],
-    ["desync || 'a&b;c'", `var k=${PQ}; ${D}var pw = env.PW || 'Hunt&er;x';`, ["Hunt&er;x"], "inline-script"],
-    ["desync && 'x'", `var k=${PQ}; ${D}ok && 'Hunt&er;x';`, ["Hunt&er;x"], "inline-script"],
-    ["desync echo 'a;b'", `var k=${PQ}; ${D}echo 'Hunt;er2pass'`, ["Hunt;er2pass", "er2pass"], "inline-script"],
-    ["desync html text", `<a data-k=${PQ}>it's</a><code>login 'Pw;9xQ!'</code>`, ["Pw;9xQ!"], "html"],
-    ["template with apostrophe", "var k=`" + PK + "`; var m=`Don't share ${user}: p;ss!w0rd`;", ["p;ss!w0rd"], "inline-script"],
-    ["template nested quote", "var k=" + PQ + "; var m=`pw=${'Zx9;q'}`;", ["Zx9;q"], "inline-script"],
-    ["backtick after desync", `var k=${PQ}; ${D}x = run \`Hu;nter\`;`, ["Hu;nter"], "inline-script"],
-    ["multiline json", `{\n  "stripe": ${PQ},\n  "db": {\n    "user": "admin",\n    "pass": "a;b,c"\n  }\n}`, ["a;b,c"], "inline-script"],
-    ["multiline json apostrophe value", `{\n  "stripe": ${PQ},\n  "note": "it's",\n  "pass": "Hu;nt,er"\n}`, ["Hu;nt,er"], "inline-script"],
-    ["escaped quote in secret", `var k=${PQ}; var pw="ab\\"c;d";`, ["c;d", 'ab\\"c'], "inline-script"],
-    ["escaped apostrophe in secret", `var k=${PQ}; var pw='it\\'s;pw';`, ["s;pw"], "inline-script"],
-    ["json in string", `var k=${PQ}; var cfg="{\\"pass\\":\\"Zx;9q\\"}";`, ["Zx;9q"], "inline-script"],
-    ["url with apostrophe then pw", `var k=${PQ}; var u="https://ex.com/o'brien"; login('Hu;nt');`, ["Hu;nt"], "inline-script"],
-    ["far side of url, label", `var k=${PQ}; fetch("https://api.example.com/v1/it's"); pw = 'a;b';`, ["a;b"], "inline-script"],
-    ["comment then unquoted", `var k=${PQ}; // don't\n PASS = Xy7;kq,Lm2`, ["Xy7;kq,Lm2", "kq,Lm2", "Lm2"], "inline-script"],
-    ["unquoted yaml-ish", `stripe: ${PK}\npassword: Xy;kq,Lmzz`, ["Xy;kq,Lmzz", "kq,Lmzz", "Lmzz"], "inline-script"],
-    ["unquoted env ;", `STRIPE=${PK}\nDB_PASS=Tr0ub;4dor&x`, ["4dor&x", "Tr0ub;4dor"], "inline-script"],
-    ["unquoted after =>", `$c = [k => ${PK}, pass => hunterpass];`, ["hunterpass"], "inline-script"],
-    ["label space no digit", `var k=${PQ}; X-Api-Key abcdEFGHijklMNOP`, ["abcdEFGHijklMNOP"], "inline-script"],
-    ["quoted match, unquoted ; value", `var k=${PQ};\nPASS=Xy7;kq,Lm2`, ["Xy7;kq,Lm2", "kq,Lm2", "Lm2", "Xy7"], "inline-script"],
-    ["quoted match, yaml ; value", `stripe: ${PQ}\npassword: Xy;kq,Lmzz`, ["kq,Lmzz", "Lmzz"], "inline-script"],
-    ["quoted match, env ; value 5+", `STRIPE="${PK}"\nDB_PASS=Tr0ub;4dor&x`, ["4dor&x"], "inline-script"],
-    ["in sync || fallback", `var k=${PQ}; var pw = env.PW || 'Hunt&er;x';`, ["Hunt&er;x"], "inline-script"],
-    ["bundle regex quote then ||", `var k=${PQ};var r=/['"]/g;var pw=e.PW||'Hunt&er;x';`, ["Hunt&er;x"], "inline-script"],
-    ["1-3 char unquoted", `var k=${PQ}; pin=482; pw:Ab9`, ["482", "Ab9"], "inline-script"],
+    [
+      'pass => "x(y)z"',
+      `$c=['k'=>${PQ}, 'pass' => "x(y)z"];`,
+      ["x(y)z"],
+      "inline-script",
+    ],
+    [
+      "desync label: 'p;ss!w0rd'",
+      `var k=${PQ}; ${D}var o={password: 'p;ss!w0rd'};`,
+      ["p;ss!w0rd", "ss!w0rd"],
+      "inline-script",
+    ],
+    [
+      'desync pass => "x(y)z"',
+      `$c=['k'=>${PQ}]; ${D}$d=['pass' => "x(y)z"];`,
+      ["x(y)z"],
+      "inline-script",
+    ],
+    [
+      "desync sshpass -p 'Pa;ss'",
+      `var k=${PQ}; ${D}run("sshpass -p 'Pa;ssw'");`,
+      ["Pa;ssw"],
+      "inline-script",
+    ],
+    [
+      "desync mysql -p'S3cr;t'",
+      `var k=${PQ}; ${D}cmd = mysql -u root -p'S3cr;tPw' db;`,
+      ["S3cr;tPw", "S3cr"],
+      "inline-script",
+    ],
+    [
+      "desync || 'a&b;c'",
+      `var k=${PQ}; ${D}var pw = env.PW || 'Hunt&er;x';`,
+      ["Hunt&er;x"],
+      "inline-script",
+    ],
+    [
+      "desync && 'x'",
+      `var k=${PQ}; ${D}ok && 'Hunt&er;x';`,
+      ["Hunt&er;x"],
+      "inline-script",
+    ],
+    [
+      "desync echo 'a;b'",
+      `var k=${PQ}; ${D}echo 'Hunt;er2pass'`,
+      ["Hunt;er2pass", "er2pass"],
+      "inline-script",
+    ],
+    [
+      "desync html text",
+      `<a data-k=${PQ}>it's</a><code>login 'Pw;9xQ!'</code>`,
+      ["Pw;9xQ!"],
+      "html",
+    ],
+    [
+      "template with apostrophe",
+      "var k=`" + PK + "`; var m=`Don't share ${user}: p;ss!w0rd`;",
+      ["p;ss!w0rd"],
+      "inline-script",
+    ],
+    [
+      "template nested quote",
+      "var k=" + PQ + "; var m=`pw=${'Zx9;q'}`;",
+      ["Zx9;q"],
+      "inline-script",
+    ],
+    [
+      "backtick after desync",
+      `var k=${PQ}; ${D}x = run \`Hu;nter\`;`,
+      ["Hu;nter"],
+      "inline-script",
+    ],
+    [
+      "multiline json",
+      `{\n  "stripe": ${PQ},\n  "db": {\n    "user": "admin",\n    "pass": "a;b,c"\n  }\n}`,
+      ["a;b,c"],
+      "inline-script",
+    ],
+    [
+      "multiline json apostrophe value",
+      `{\n  "stripe": ${PQ},\n  "note": "it's",\n  "pass": "Hu;nt,er"\n}`,
+      ["Hu;nt,er"],
+      "inline-script",
+    ],
+    [
+      "escaped quote in secret",
+      `var k=${PQ}; var pw="ab\\"c;d";`,
+      ["c;d", 'ab\\"c'],
+      "inline-script",
+    ],
+    [
+      "escaped apostrophe in secret",
+      `var k=${PQ}; var pw='it\\'s;pw';`,
+      ["s;pw"],
+      "inline-script",
+    ],
+    [
+      "json in string",
+      `var k=${PQ}; var cfg="{\\"pass\\":\\"Zx;9q\\"}";`,
+      ["Zx;9q"],
+      "inline-script",
+    ],
+    [
+      "url with apostrophe then pw",
+      `var k=${PQ}; var u="https://ex.com/o'brien"; login('Hu;nt');`,
+      ["Hu;nt"],
+      "inline-script",
+    ],
+    [
+      "far side of url, label",
+      `var k=${PQ}; fetch("https://api.example.com/v1/it's"); pw = 'a;b';`,
+      ["a;b"],
+      "inline-script",
+    ],
+    [
+      "comment then unquoted",
+      `var k=${PQ}; // don't\n PASS = Xy7;kq,Lm2`,
+      ["Xy7;kq,Lm2", "kq,Lm2", "Lm2"],
+      "inline-script",
+    ],
+    [
+      "unquoted yaml-ish",
+      `stripe: ${PK}\npassword: Xy;kq,Lmzz`,
+      ["Xy;kq,Lmzz", "kq,Lmzz", "Lmzz"],
+      "inline-script",
+    ],
+    [
+      "unquoted env ;",
+      `STRIPE=${PK}\nDB_PASS=Tr0ub;4dor&x`,
+      ["4dor&x", "Tr0ub;4dor"],
+      "inline-script",
+    ],
+    [
+      "unquoted after =>",
+      `$c = [k => ${PK}, pass => hunterpass];`,
+      ["hunterpass"],
+      "inline-script",
+    ],
+    [
+      "label space no digit",
+      `var k=${PQ}; X-Api-Key abcdEFGHijklMNOP`,
+      ["abcdEFGHijklMNOP"],
+      "inline-script",
+    ],
+    [
+      "quoted match, unquoted ; value",
+      `var k=${PQ};\nPASS=Xy7;kq,Lm2`,
+      ["Xy7;kq,Lm2", "kq,Lm2", "Lm2", "Xy7"],
+      "inline-script",
+    ],
+    [
+      "quoted match, yaml ; value",
+      `stripe: ${PQ}\npassword: Xy;kq,Lmzz`,
+      ["kq,Lmzz", "Lmzz"],
+      "inline-script",
+    ],
+    [
+      "quoted match, env ; value 5+",
+      `STRIPE="${PK}"\nDB_PASS=Tr0ub;4dor&x`,
+      ["4dor&x"],
+      "inline-script",
+    ],
+    [
+      "in sync || fallback",
+      `var k=${PQ}; var pw = env.PW || 'Hunt&er;x';`,
+      ["Hunt&er;x"],
+      "inline-script",
+    ],
+    [
+      "bundle regex quote then ||",
+      `var k=${PQ};var r=/['"]/g;var pw=e.PW||'Hunt&er;x';`,
+      ["Hunt&er;x"],
+      "inline-script",
+    ],
+    [
+      "1-3 char unquoted",
+      `var k=${PQ}; pin=482; pw:Ab9`,
+      ["482", "Ab9"],
+      "inline-script",
+    ],
     ["4 char unquoted", `var k=${PQ}; pin=4821`, ["4821"], "inline-script"],
-    ["backward desync", `x = cond || 'Hunt&er;x'; // don't\nvar k=${PQ};`, ["Hunt&er;x"], "inline-script"],
+    [
+      "backward desync",
+      `x = cond || 'Hunt&er;x'; // don't\nvar k=${PQ};`,
+      ["Hunt&er;x"],
+      "inline-script",
+    ],
   ];
-  test.each(probes)("reviewer probe: %s", async (_name, content, secrets, loc) => {
-    const { scanContent } = await import("../src/security/leaked-secrets");
-    const found = scanContent(content, loc, "https://example.com/a.js");
-    const f = found.find((x) => /Stripe/.test(x.type));
-    expect(f?.context).toBeDefined();
-    expect(f?.context).toContain(`${PK.slice(0, 6)}${stars(20)}${PK.slice(-4)}`);
-    expect(secrets.filter((s) => f?.context?.includes(s))).toEqual([]);
-  });
+  test.each(probes)(
+    "reviewer probe: %s",
+    async (_name, content, secrets, loc) => {
+      const { scanContent } = await import("../src/security/leaked-secrets");
+      const found = scanContent(content, loc, "https://example.com/a.js");
+      const f = found.find((x) => /Stripe/.test(x.type));
+      expect(f?.context).toBeDefined();
+      expect(f?.context).toContain(
+        `${PK.slice(0, 6)}${stars(20)}${PK.slice(-4)}`
+      );
+      expect(secrets.filter((s) => f?.context?.includes(s))).toEqual([]);
+    }
+  );
 
   // Non-operand placements, punctuation-bearing secrets, and a stray apostrophe between the secret and the match on the
   // before side. A secret of 3 or more characters must show no 3-character run; a 1 or 2 character secret is checked
   // exactly: the context must equal the one where the secret's characters are stars.
   test("no part of a generated secret shows in a non-operand place, after or between a stray apostrophe (property)", async () => {
     // Lowercase letters and spaces are in (round 3: an alphabet without them hid the multi-word leak after a label).
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|    ";
+    const alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|    ";
     let seed = 1959;
     const next = () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -1623,7 +2128,10 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
       for (let round = 0; round < 3; round++) {
         // Every secret carries one of `; , ( ) & |`, so the code-punctuation path is always taken.
         const punct = ";,()&|"[next() % 6] as string;
-        const chars = Array.from({ length: len }, () => alphabet[next() % alphabet.length] as string);
+        const chars = Array.from(
+          { length: len },
+          () => alphabet[next() % alphabet.length] as string
+        );
         chars[next() % len] = punct;
         // Starts and ends visible, so an unquoted value is not trimmed by the operator's own whitespace.
         if (chars[0] === " ") chars[0] = "a";
@@ -1647,13 +2155,18 @@ describe("evidence context round 2: punctuation literals, unquoted values, short
               // Every character shown is one the all-stars context shows too; code punctuation next to the literal may be
               // starred on top (the stated "punctuation between two literals" behaviour), nothing more.
               expect(ctx?.length).toBe(starredCtx?.length);
-              const extra = [...(ctx ?? "")].filter((ch, i) => ch !== "*" && ch !== starredCtx?.[i]);
+              const extra = [...(ctx ?? "")].filter(
+                (ch, i) => ch !== "*" && ch !== starredCtx?.[i]
+              );
               expect(extra).toEqual([]);
             } else {
               for (let i = 0; i + 3 <= len; i++) {
                 const frag = secret.slice(i, i + 3);
                 // A run the surrounding code also holds (`var`, ` sh`) shows whatever the secret is: not a leak.
-                if (ctx?.includes(frag) && !starredCtx?.includes(frag)) throw new Error(`"${frag}" of ${JSON.stringify(secret)} shows in ${JSON.stringify(ctx)}`);
+                if (ctx?.includes(frag) && !starredCtx?.includes(frag))
+                  throw new Error(
+                    `"${frag}" of ${JSON.stringify(secret)} shows in ${JSON.stringify(ctx)}`
+                  );
               }
             }
             checked++;
@@ -1679,48 +2192,118 @@ describe("evidence context round 3: labelled values to the end of the line and m
   };
 
   test.each([
-    ["yaml password: with spaces", `stripe: ${Q}\npassword: correct horse battery staple`, `stripe: "${masked}" password: ${stars(20)}`],
-    ["dotenv DB_PASSWORD= with spaces", `STRIPE_KEY=${Q}\nDB_PASSWORD=correct horse battery staple`, `STRIPE_KEY="${masked}" DB_PASSWORD=${stars(20)}`],
-    ["ini password = with ; and spaces", `stripe = ${Q}\npassword = Hunt;er ab;cd`, `stripe = "${masked}" password = ${stars(13)}`],
-    ["camelCase key", `var k=${Q};\nconfig.dbPassword = correct horse`, `var k="${masked}"; config.dbPassword = ${stars(13)}`],
-    ["acronym then camelCase key", `var k=${Q};\nDBPassword: correct horse`, `var k="${masked}"; DBPassword: ${stars(13)}`],
-    ["header-style key", `var k=${Q};\nX-Api-Key: abcd efgh ijkl`, `var k="${masked}"; X-Api-Key: ${stars(14)}`],
-  ])("a labelled key's unquoted value is starred to the end of its line: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+    [
+      "yaml password: with spaces",
+      `stripe: ${Q}\npassword: correct horse battery staple`,
+      `stripe: "${masked}" password: ${stars(20)}`,
+    ],
+    [
+      "dotenv DB_PASSWORD= with spaces",
+      `STRIPE_KEY=${Q}\nDB_PASSWORD=correct horse battery staple`,
+      `STRIPE_KEY="${masked}" DB_PASSWORD=${stars(20)}`,
+    ],
+    [
+      "ini password = with ; and spaces",
+      `stripe = ${Q}\npassword = Hunt;er ab;cd`,
+      `stripe = "${masked}" password = ${stars(13)}`,
+    ],
+    [
+      "camelCase key",
+      `var k=${Q};\nconfig.dbPassword = correct horse`,
+      `var k="${masked}"; config.dbPassword = ${stars(13)}`,
+    ],
+    [
+      "acronym then camelCase key",
+      `var k=${Q};\nDBPassword: correct horse`,
+      `var k="${masked}"; DBPassword: ${stars(13)}`,
+    ],
+    [
+      "header-style key",
+      `var k=${Q};\nX-Api-Key: abcd efgh ijkl`,
+      `var k="${masked}"; X-Api-Key: ${stars(14)}`,
+    ],
+  ])(
+    "a labelled key's unquoted value is starred to the end of its line: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test.each([
-    ["passcode", `var k=${Q}; passcode qwertyuiopasdfgh`, `var k="${masked}"; passcode ${stars(16)}`],
-    ["API key", `var k=${Q}; API key qwertyuiopasdfgh`, `var k="${masked}"; API key ${stars(16)}`],
-    ["apikey", `var k=${Q}; apikey qwertyuiopasdfgh`, `var k="${masked}"; apikey ${stars(16)}`],
-    ["pin", `var k=${Q}; pin qwertyuiopasdfgh`, `var k="${masked}"; pin ${stars(16)}`],
-  ])("a 12+ character run after the new label is starred out: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+    [
+      "passcode",
+      `var k=${Q}; passcode qwertyuiopasdfgh`,
+      `var k="${masked}"; passcode ${stars(16)}`,
+    ],
+    [
+      "API key",
+      `var k=${Q}; API key qwertyuiopasdfgh`,
+      `var k="${masked}"; API key ${stars(16)}`,
+    ],
+    [
+      "apikey",
+      `var k=${Q}; apikey qwertyuiopasdfgh`,
+      `var k="${masked}"; apikey ${stars(16)}`,
+    ],
+    [
+      "pin",
+      `var k=${Q}; pin qwertyuiopasdfgh`,
+      `var k="${masked}"; pin ${stars(16)}`,
+    ],
+  ])(
+    "a 12+ character run after the new label is starred out: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test("pin is a whole-word label: spinner, pinned and pinterest keep their words", async () => {
     const content = `var k=${Q}; // spinner pinned pinterest qwertyuiopasdfgh\n`;
-    expect(await ctxOf(content)).toBe(`var k="${masked}"; // spinner pinned pinterest qwertyuiopasdfgh `);
+    expect(await ctxOf(content)).toBe(
+      `var k="${masked}"; // spinner pinned pinterest qwertyuiopasdfgh `
+    );
   });
 
   test.each([
-    ["yaml, label line after the match", `stripe: ${Q}\npassword: correct horse battery staple\nport: 5432`, `stripe: "${masked}" password: ${stars(20)} port: ****`],
-    ["yaml, label line before the match", `password: correct horse battery staple\nport: 5432\nstripe: ${Q}`, `password: ${stars(20)} port: **** stripe: "${masked}"`],
-    ["dotenv, label line after the match", `STRIPE_KEY=${Q}\nDB_PASSWORD=correct horse battery staple\nDEBUG=true\n`, `STRIPE_KEY="${masked}" DB_PASSWORD=${stars(20)} DEBUG=**** `],
-    ["dotenv, label line before the match", `DB_PASSWORD=correct horse battery staple\r\nDEBUG=true\r\nSTRIPE_KEY=${Q}`, `DB_PASSWORD=${stars(20)} DEBUG=**** STRIPE_KEY="${masked}"`],
-  ])("multi-line config: the label line is starred to its end and the next key stays: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+    [
+      "yaml, label line after the match",
+      `stripe: ${Q}\npassword: correct horse battery staple\nport: 5432`,
+      `stripe: "${masked}" password: ${stars(20)} port: ****`,
+    ],
+    [
+      "yaml, label line before the match",
+      `password: correct horse battery staple\nport: 5432\nstripe: ${Q}`,
+      `password: ${stars(20)} port: **** stripe: "${masked}"`,
+    ],
+    [
+      "dotenv, label line after the match",
+      `STRIPE_KEY=${Q}\nDB_PASSWORD=correct horse battery staple\nDEBUG=true\n`,
+      `STRIPE_KEY="${masked}" DB_PASSWORD=${stars(20)} DEBUG=**** `,
+    ],
+    [
+      "dotenv, label line before the match",
+      `DB_PASSWORD=correct horse battery staple\r\nDEBUG=true\r\nSTRIPE_KEY=${Q}`,
+      `DB_PASSWORD=${stars(20)} DEBUG=**** STRIPE_KEY="${masked}"`,
+    ],
+  ])(
+    "multi-line config: the label line is starred to its end and the next key stays: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test("a key that is not a label keeps today's behaviour: its value is starred to the next whitespace only", async () => {
-    expect(await ctxOf(`stripe: ${Q}\ntitle: The Nut Shop\nport: 5432`)).toBe(`stripe: "${masked}" title: *** Nut Shop port: ****`);
+    expect(await ctxOf(`stripe: ${Q}\ntitle: The Nut Shop\nport: 5432`)).toBe(
+      `stripe: "${masked}" title: *** Nut Shop port: ****`
+    );
   });
 
   // Unquoted values after a labelled key, with lowercase letters and spaces in the secret (the round 2 alphabet had neither,
   // which hid the multi-word leak). The context must equal the one where the secret's characters are stars, so no
   // character of it, in any length, shows.
   test("no character of a generated multi-word value after a labelled key shows (property)", async () => {
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|      ";
+    const alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}<>|      ";
     let seed = 3215;
     const next = () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -1736,7 +2319,10 @@ describe("evidence context round 3: labelled values to the end of the line and m
     let checked = 0;
     for (let len = 1; len <= 30; len++) {
       for (let round = 0; round < 3; round++) {
-        const chars = Array.from({ length: len }, () => alphabet[next() % alphabet.length] as string);
+        const chars = Array.from(
+          { length: len },
+          () => alphabet[next() % alphabet.length] as string
+        );
         // A value starts and ends with a visible character, and holds a space whenever it has room for one. It does not start
         // with `>`, which `KEY=>` reads as the `=>` operator.
         if (chars[0] === " " || chars[0] === ">") chars[0] = "a";
@@ -1769,29 +2355,84 @@ describe("evidence context round 3: labelled values to the end of the line and m
   const PQ = `"${PK}"`;
   const PM = `${PK.slice(0, 6)}${stars(20)}${PK.slice(-4)}`;
   const D = "// don't log this\n";
-  const findingOf = async (content: string, loc: "inline-script" | "html" = "inline-script") => {
+  const findingOf = async (
+    content: string,
+    loc: "inline-script" | "html" = "inline-script"
+  ) => {
     const { scanContent } = await import("../src/security/leaked-secrets");
     const found = scanContent(content, loc, "https://example.com/a.js");
     return found.find((x) => /Stripe/.test(x.type)) ?? found[0];
   };
   test.each([
-    ["sshpass -p after a stray apostrophe", `var k=${PQ}; ${D}run("sshpass -p 'my pass;word' ssh host")`, ["pass;word", "my pass"]],
-    ['|| "pass phrase!" desync', `var k=${PQ}; ${D}var pw = env.PW || "pass phrase!";`, ["pass phrase", "phrase!"]],
-    ["|| 'correct horse;battery' desync", `var k=${PQ}; ${D}var pw = env.PW || 'correct horse;battery';`, ["horse;battery", "correct horse"]],
-    ["&& passphrase desync", `var k=${PQ}; ${D}ok && 'correct horse;battery'`, ["horse;battery"]],
-    ["?? passphrase desync", `var k=${PQ}; ${D}pw = a ?? 'correct horse;battery'`, ["horse;battery"]],
-    ["regex desync then || passphrase", `var k=${PQ};var r=/['"]/g;var p=e.PW||'correct horse;battery';`, ["horse;battery"]],
-    ["backward || passphrase desync", `var p = e.PW || 'correct horse;battery'; // don't\nvar k=${PQ};`, ["horse;battery"]],
-    ["label not listed: passcode", `var k=${PQ}; passcode qwertyuiopasdfgh`, ["qwertyuiopasdfgh"]],
-    ["label with space: API key", `var k=${PQ}; API key qwertyuiopasdfgh`, ["qwertyuiopasdfgh"]],
+    [
+      "sshpass -p after a stray apostrophe",
+      `var k=${PQ}; ${D}run("sshpass -p 'my pass;word' ssh host")`,
+      ["pass;word", "my pass"],
+    ],
+    [
+      '|| "pass phrase!" desync',
+      `var k=${PQ}; ${D}var pw = env.PW || "pass phrase!";`,
+      ["pass phrase", "phrase!"],
+    ],
+    [
+      "|| 'correct horse;battery' desync",
+      `var k=${PQ}; ${D}var pw = env.PW || 'correct horse;battery';`,
+      ["horse;battery", "correct horse"],
+    ],
+    [
+      "&& passphrase desync",
+      `var k=${PQ}; ${D}ok && 'correct horse;battery'`,
+      ["horse;battery"],
+    ],
+    [
+      "?? passphrase desync",
+      `var k=${PQ}; ${D}pw = a ?? 'correct horse;battery'`,
+      ["horse;battery"],
+    ],
+    [
+      "regex desync then || passphrase",
+      `var k=${PQ};var r=/['"]/g;var p=e.PW||'correct horse;battery';`,
+      ["horse;battery"],
+    ],
+    [
+      "backward || passphrase desync",
+      `var p = e.PW || 'correct horse;battery'; // don't\nvar k=${PQ};`,
+      ["horse;battery"],
+    ],
+    [
+      "label not listed: passcode",
+      `var k=${PQ}; passcode qwertyuiopasdfgh`,
+      ["qwertyuiopasdfgh"],
+    ],
+    [
+      "label with space: API key",
+      `var k=${PQ}; API key qwertyuiopasdfgh`,
+      ["qwertyuiopasdfgh"],
+    ],
     ["label 'pin'", `var k=${PQ}; pin qwertyuiopasdfgh`, ["qwertyuiopasdfgh"]],
-    ["yaml passphrase", `stripe: ${PQ}\npassword: correct horse battery staple`, ["horse battery staple", "battery staple"]],
-    ["env passphrase", `STRIPE_KEY=${PQ}\nDB_PASSWORD=correct horse battery staple`, ["horse battery", "battery staple"]],
+    [
+      "yaml passphrase",
+      `stripe: ${PQ}\npassword: correct horse battery staple`,
+      ["horse battery staple", "battery staple"],
+    ],
+    [
+      "env passphrase",
+      `STRIPE_KEY=${PQ}\nDB_PASSWORD=correct horse battery staple`,
+      ["horse battery", "battery staple"],
+    ],
     ["ini spaced =", `stripe = ${PQ}\npassword = Hunt;er ab;cd`, ["ab;cd"]],
-    ["unquoted with quote inside", `var k=${PQ};\nDB_PASS=ab"cd;ef gh`, ["cd;ef"]],
+    [
+      "unquoted with quote inside",
+      `var k=${PQ};\nDB_PASS=ab"cd;ef gh`,
+      ["cd;ef"],
+    ],
     ["=> unquoted", `$c=[k=>${PQ}, pass=>Tr0ub;4dor&x];`, ["Tr0ub", "4dor"]],
     ["url guard pw://", `var k=${PQ}; pw://Hunt;er2`, ["Hunt;er2", "er2"]],
-    ["host:port no guard needed", `var k=${PQ}; db=pg.example.com:5432 user=admin`, []],
+    [
+      "host:port no guard needed",
+      `var k=${PQ}; db=pg.example.com:5432 user=admin`,
+      [],
+    ],
   ])("reviewer probe round 3: %s", async (_name, content, secrets) => {
     const f = await findingOf(content);
     expect(f?.context).toContain(PM);
@@ -1802,15 +2443,34 @@ describe("evidence context round 3: labelled values to the end of the line and m
   // literal with whitespace and code punctuation that is not an operand; (b) a letters-only word under 12 characters after a
   // label with no `=` or `:`. If one of these starts starring its value, update the changelog and docs with it.
   test.each([
-    ["limit a: echo 'a b;c'", `var k=${PQ}; ${D}echo 'correct horse;battery'`, "horse;battery"],
-    ["limit a: mysql -p'a b;c'", `var k=${PQ}; ${D}cmd = mysql -p'correct horse;battery' db;`, "horse;battery"],
-    ["limit b: password hunterabc", `var k=${PQ}; password hunterabc`, "hunterabc"],
-    ["limit b: secret Qwertyuiopa", `var k=${PQ}; secret Qwertyuiopa`, "Qwertyuiopa"],
-  ])("documented known limit still holds as stated: %s", async (_name, content, shown) => {
-    const f = await findingOf(content);
-    expect(f?.context).toContain(PM);
-    expect(f?.context).toContain(shown);
-  });
+    [
+      "limit a: echo 'a b;c'",
+      `var k=${PQ}; ${D}echo 'correct horse;battery'`,
+      "horse;battery",
+    ],
+    [
+      "limit a: mysql -p'a b;c'",
+      `var k=${PQ}; ${D}cmd = mysql -p'correct horse;battery' db;`,
+      "horse;battery",
+    ],
+    [
+      "limit b: password hunterabc",
+      `var k=${PQ}; password hunterabc`,
+      "hunterabc",
+    ],
+    [
+      "limit b: secret Qwertyuiopa",
+      `var k=${PQ}; secret Qwertyuiopa`,
+      "Qwertyuiopa",
+    ],
+  ])(
+    "documented known limit still holds as stated: %s",
+    async (_name, content, shown) => {
+      const f = await findingOf(content);
+      expect(f?.context).toContain(PM);
+      expect(f?.context).toContain(shown);
+    }
+  );
 
   test.each([
     [
@@ -1831,9 +2491,12 @@ describe("evidence context round 3: labelled values to the end of the line and m
       "html",
       `<div id="********" data-stripe-key="${PM}" class="***********">Pay now</div>`,
     ],
-  ] as const)("reviewer context-quality sample stays readable: %s", async (_name, content, loc, expected) => {
-    expect((await findingOf(content, loc))?.context).toBe(expected);
-  });
+  ] as const)(
+    "reviewer context-quality sample stays readable: %s",
+    async (_name, content, loc, expected) => {
+      expect((await findingOf(content, loc))?.context).toBe(expected);
+    }
+  );
 
   // Two samples the open-literal rule (NEARBY_OPEN_LITERAL_MIN) stars on the before side, since the match is not quoted:
   // the key is masked and nothing of the code around it is shown (unchanged from 96b78dfc).
@@ -1843,20 +2506,33 @@ describe("evidence context round 3: labelled values to the end of the line and m
       `function n(e){return fetch("/api/pay",{method:"POST",headers:{Authorization:"Bearer ${PK}","Content-Type":"application/json"},body:JSON.stringify(e)})}`,
       `${stars(20)}${PM}${stars(20)}`,
     ],
-    ["unquoted env", `NODE_ENV=production\nSTRIPE_SECRET_KEY=${PK}\nPORT=3000`, `${stars(20)}${PM}${stars(10)}`],
-  ])("reviewer context-quality sample, starred around the match: %s", async (_name, content, expected) => {
-    expect((await findingOf(content))?.context).toBe(expected);
-  });
+    [
+      "unquoted env",
+      `NODE_ENV=production\nSTRIPE_SECRET_KEY=${PK}\nPORT=3000`,
+      `${stars(20)}${PM}${stars(10)}`,
+    ],
+  ])(
+    "reviewer context-quality sample, starred around the match: %s",
+    async (_name, content, expected) => {
+      expect((await findingOf(content))?.context).toBe(expected);
+    }
+  );
 
   test("a 1 MB quote-dense line with 40 keys scans with context well within budget (timing probe)", async () => {
     const { scanContent } = await import("../src/security/leaked-secrets");
-    const alnum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const alnum =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let seed = 7;
     const rnd = (n: number) => {
       seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
       return seed % n;
     };
-    const mk = () => ["sk", "live", Array.from({ length: 24 }, () => alnum[rnd(62)]).join("")].join("_");
+    const mk = () =>
+      [
+        "sk",
+        "live",
+        Array.from({ length: 24 }, () => alnum[rnd(62)]).join(""),
+      ].join("_");
     const chunk = `a="x'y\\"z";b='p"q\\'r';c=\`t'u"v\`;d=/['"]/g;e=f||'g;h';`;
     let s = "";
     let keys = 0;
@@ -1868,7 +2544,11 @@ describe("evidence context round 3: labelled values to the end of the line and m
       }
     }
     const t0 = performance.now();
-    const found = scanContent(s, "external-script", "https://example.com/bundle.js");
+    const found = scanContent(
+      s,
+      "external-script",
+      "https://example.com/bundle.js"
+    );
     const ms = performance.now() - t0;
     expect(found.length).toBe(40);
     expect(found.filter((f) => f.context).length).toBe(40);
@@ -1892,16 +2572,27 @@ describe("evidence context round 4: same-line labels, YAML blocks, XML text and 
   };
 
   test.each([
-    ["yaml, `;` after the value", `password: correct horse battery; key=${Q}`, `password: ${stars(20)}"${masked}"`],
-    ["dotenv, one line", `PASSWORD=correct horse battery STRIPE=${Q}`, `PASSWORD=${stars(20)}"${masked}"`],
+    [
+      "yaml, `;` after the value",
+      `password: correct horse battery; key=${Q}`,
+      `password: ${stars(20)}"${masked}"`,
+    ],
+    [
+      "dotenv, one line",
+      `PASSWORD=correct horse battery STRIPE=${Q}`,
+      `PASSWORD=${stars(20)}"${masked}"`,
+    ],
     [
       "minified HTML",
       `<p>Password: correct horse battery</p><code data-k=${Q}></code>`,
       `<p>Password: ${stars(20)}"${masked}"${stars(8)}`,
     ],
-  ])("a labelled value on the match's own line, before the match, is starred up to it: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+  ])(
+    "a labelled value on the match's own line, before the match, is starred up to it: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test.each([
     [
@@ -1924,44 +2615,101 @@ describe("evidence context round 4: same-line labels, YAML blocks, XML text and 
       `db:\n  password: correct horse\n    battery staple\n  key: ${Q}`,
       `db: ${stars(9)} ${stars(13)} ${stars(14)} key: "${masked}"`,
     ],
-  ])("YAML: lines indented deeper than a labelled key are starred, the next key keeps its name: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+  ])(
+    "YAML: lines indented deeper than a labelled key are starred, the next key keeps its name: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test("a labelled key above the window still stars its value inside it", async () => {
-    const ctx = await ctxOf(`password: ${"word ".repeat(30)}correct horse battery\nstripe: ${Q}`);
+    const ctx = await ctxOf(
+      `password: ${"word ".repeat(30)}correct horse battery\nstripe: ${Q}`
+    );
     expect(ctx).toBe(`${stars(20)} stripe: "${masked}"`);
-    const block = await ctxOf(`db:\n  password: |\n${"    line of text\n".repeat(12)}    correct horse battery\n  key: ${Q}`);
+    const block = await ctxOf(
+      `db:\n  password: |\n${"    line of text\n".repeat(12)}    correct horse battery\n  key: ${Q}`
+    );
     expect(block).not.toContain("horse");
     expect(block).not.toContain("line of");
     expect(block).toContain(`key: "${masked}"`);
   });
 
   test.each([
-    ["12+ letters", `var k=${Q};\n<password>correcthorsebattery</password>`, `var k="${masked}"; <password>${stars(19)}</password>`],
-    ["under 12 letters", `var k=${Q};\n<password>hunterabc</password>`, `var k="${masked}"; <password>${stars(9)}</password>`],
-    ["passphrase", `var k=${Q};\n<password>correct horse battery</password>`, `var k="${masked}"; <password>${stars(20)}</password>`],
-    ["an element that is not a label keeps its text", `var k=${Q};\n<title>The Nut Shop</title>`, `var k="${masked}"; <title>The Nut Shop</title>`],
-  ])("XML: the text of an element named by a label is starred: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+    [
+      "12+ letters",
+      `var k=${Q};\n<password>correcthorsebattery</password>`,
+      `var k="${masked}"; <password>${stars(19)}</password>`,
+    ],
+    [
+      "under 12 letters",
+      `var k=${Q};\n<password>hunterabc</password>`,
+      `var k="${masked}"; <password>${stars(9)}</password>`,
+    ],
+    [
+      "passphrase",
+      `var k=${Q};\n<password>correct horse battery</password>`,
+      `var k="${masked}"; <password>${stars(20)}</password>`,
+    ],
+    [
+      "an element that is not a label keeps its text",
+      `var k=${Q};\n<title>The Nut Shop</title>`,
+      `var k="${masked}"; <title>The Nut Shop</title>`,
+    ],
+  ])(
+    "XML: the text of an element named by a label is starred: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test.each([
-    ["digit suffix PASSWORD2", `STRIPE=${Q}\nPASSWORD2=correct horse battery staple`, `STRIPE="${masked}" ${stars(20)}`],
-    ["digit segment db_pass_1", `STRIPE=${Q}\ndb_pass_1: correct horse battery`, `STRIPE="${masked}" ${stars(10)} ${stars(20)}`],
-    ["quoted yaml key", `stripe: ${Q}\n"password": correct horse battery staple`, `stripe: "${masked}" "********": ${stars(20)}`],
-    ["passwordless holds password: starred", `STRIPE=${Q}\npasswordless: correct horse battery\n`, `STRIPE="${masked}" passwordless: ${stars(20)} `],
+    [
+      "digit suffix PASSWORD2",
+      `STRIPE=${Q}\nPASSWORD2=correct horse battery staple`,
+      `STRIPE="${masked}" ${stars(20)}`,
+    ],
+    [
+      "digit segment db_pass_1",
+      `STRIPE=${Q}\ndb_pass_1: correct horse battery`,
+      `STRIPE="${masked}" ${stars(10)} ${stars(20)}`,
+    ],
+    [
+      "quoted yaml key",
+      `stripe: ${Q}\n"password": correct horse battery staple`,
+      `stripe: "${masked}" "********": ${stars(20)}`,
+    ],
+    [
+      "passwordless holds password: starred",
+      `STRIPE=${Q}\npasswordless: correct horse battery\n`,
+      `STRIPE="${masked}" passwordless: ${stars(20)} `,
+    ],
   ])("key variants are labels: %s", async (_name, content, expected) => {
     expect(await ctxOf(content)).toBe(expected);
   });
 
   test.each([
-    ["password_hint", `STRIPE=${Q}\npassword_hint: name of my first pet\n`, `STRIPE="${masked}" password_hint: **** of my first pet `],
-    ["spinner", `var k=${Q};\nspinner: very slow wheel`, `var k="${masked}"; spinner: **** slow wheel`],
-    ["token_url", `var k=${Q};\ntoken_url: see the docs page`, `var k="${masked}"; token_url: *** the docs page`],
-  ])("a key that names something about a secret keeps its later words: %s", async (_name, content, expected) => {
-    expect(await ctxOf(content)).toBe(expected);
-  });
+    [
+      "password_hint",
+      `STRIPE=${Q}\npassword_hint: name of my first pet\n`,
+      `STRIPE="${masked}" password_hint: **** of my first pet `,
+    ],
+    [
+      "spinner",
+      `var k=${Q};\nspinner: very slow wheel`,
+      `var k="${masked}"; spinner: **** slow wheel`,
+    ],
+    [
+      "token_url",
+      `var k=${Q};\ntoken_url: see the docs page`,
+      `var k="${masked}"; token_url: *** the docs page`,
+    ],
+  ])(
+    "a key that names something about a secret keeps its later words: %s",
+    async (_name, content, expected) => {
+      expect(await ctxOf(content)).toBe(expected);
+    }
+  );
 
   test("a single-quoted key is a label", async () => {
     const ctx = await ctxOf(`STRIPE=${Q}\n'api_key' = correct horse battery`);
@@ -1973,7 +2721,8 @@ describe("evidence context round 4: same-line labels, YAML blocks, XML text and 
   // The round 3 property put the labelled value on its own line; this one puts it on the match's line, before the match, and
   // on a deeper-indented line under a block key. The context must equal the one where the secret's characters are stars.
   test("no character of a generated value on the match's line or in a YAML block shows (property)", async () => {
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}|      ";
+    const alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&?~-_.+/;,:=()[]{}|      ";
     let seed = 4219;
     const next = () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -1990,13 +2739,21 @@ describe("evidence context round 4: same-line labels, YAML blocks, XML text and 
     let checked = 0;
     for (let len = 1; len <= 30; len++) {
       for (let round = 0; round < 3; round++) {
-        const chars = Array.from({ length: len }, () => alphabet[next() % alphabet.length] as string);
-        if (chars[0] === " " || chars[0] === ">" || chars[0] === "=") chars[0] = "a";
+        const chars = Array.from(
+          { length: len },
+          () => alphabet[next() % alphabet.length] as string
+        );
+        if (chars[0] === " " || chars[0] === ">" || chars[0] === "=")
+          chars[0] = "a";
         if (chars[len - 1] === " ") chars[len - 1] = "z";
         if (len >= 3) chars[1 + (next() % (len - 2))] = " ";
         const secret = chars.join("");
         for (const place of placements) {
-          const variants = (s: string) => [place(s), `// don't ship\n${place(s)}`, `${place(s)}\n// don't ship`];
+          const variants = (s: string) => [
+            place(s),
+            `// don't ship\n${place(s)}`,
+            `${place(s)}\n// don't ship`,
+          ];
           const real = variants(secret);
           const starred = variants(stars(len));
           for (let v = 0; v < real.length; v++) {
@@ -2015,45 +2772,144 @@ describe("evidence context round 4: same-line labels, YAML blocks, XML text and 
   const PK = ["sk", "live", "Zq8vT3mP9wX2kL7nR4bY6cJ1"].join("_");
   const PQ = `"${PK}"`;
   const PM = `${PK.slice(0, 6)}${stars(20)}${PK.slice(-4)}`;
-  const findingOf = async (content: string, loc: "inline-script" | "html" = "inline-script") => {
+  const findingOf = async (
+    content: string,
+    loc: "inline-script" | "html" = "inline-script"
+  ) => {
     const { scanContent } = await import("../src/security/leaked-secrets");
     const found = scanContent(content, loc, "https://example.com/a.js");
     return found.find((x) => /Stripe/.test(x.type)) ?? found[0];
   };
   test.each([
-    ["yaml block |", `stripe: ${PQ}\npassword: |\n  correct horse battery\n  staple\nport: 5432`, ["horse battery", "correct horse", "staple"]],
-    ["yaml folded >", `stripe: ${PQ}\npassword: >\n  correct horse\n  battery staple\n`, ["correct horse", "battery staple"]],
-    ["yaml plain multi-line", `password: correct horse\n  battery staple\nstripe: ${PQ}`, ["battery staple", "correct horse"]],
-    ["label above match, value spans lines", `db:\n  password: correct horse\n    battery staple\n  key: ${PQ}`, ["battery staple", "horse"]],
-    ["quoted then unquoted", `stripe: ${PQ}\npassword: "abc def" ghi jkl`, ["ghi jkl"]],
-    ["PASSWORD quoted with spaces + unquoted", `STRIPE=${PQ}\nPASSWORD = "quoted with spaces"\nSECRET = correct horse battery`, ["quoted with", "horse battery"]],
-    ["CRLF", `STRIPE=${PQ}\r\nDB_PASSWORD=correct horse battery staple\r\nPORT=5432`, ["horse battery", "battery staple"]],
-    ["CR only", `STRIPE=${PQ}\rDB_PASSWORD=correct horse battery staple\rPORT=5432`, ["horse battery"]],
-    ["password_hint (over-star?)", `STRIPE=${PQ}\npassword_hint: name of my first pet\n`, []],
-    ["passwordless", `STRIPE=${PQ}\npasswordless: correct horse battery\n`, ["horse battery"]],
+    [
+      "yaml block |",
+      `stripe: ${PQ}\npassword: |\n  correct horse battery\n  staple\nport: 5432`,
+      ["horse battery", "correct horse", "staple"],
+    ],
+    [
+      "yaml folded >",
+      `stripe: ${PQ}\npassword: >\n  correct horse\n  battery staple\n`,
+      ["correct horse", "battery staple"],
+    ],
+    [
+      "yaml plain multi-line",
+      `password: correct horse\n  battery staple\nstripe: ${PQ}`,
+      ["battery staple", "correct horse"],
+    ],
+    [
+      "label above match, value spans lines",
+      `db:\n  password: correct horse\n    battery staple\n  key: ${PQ}`,
+      ["battery staple", "horse"],
+    ],
+    [
+      "quoted then unquoted",
+      `stripe: ${PQ}\npassword: "abc def" ghi jkl`,
+      ["ghi jkl"],
+    ],
+    [
+      "PASSWORD quoted with spaces + unquoted",
+      `STRIPE=${PQ}\nPASSWORD = "quoted with spaces"\nSECRET = correct horse battery`,
+      ["quoted with", "horse battery"],
+    ],
+    [
+      "CRLF",
+      `STRIPE=${PQ}\r\nDB_PASSWORD=correct horse battery staple\r\nPORT=5432`,
+      ["horse battery", "battery staple"],
+    ],
+    [
+      "CR only",
+      `STRIPE=${PQ}\rDB_PASSWORD=correct horse battery staple\rPORT=5432`,
+      ["horse battery"],
+    ],
+    [
+      "password_hint (over-star?)",
+      `STRIPE=${PQ}\npassword_hint: name of my first pet\n`,
+      [],
+    ],
+    [
+      "passwordless",
+      `STRIPE=${PQ}\npasswordless: correct horse battery\n`,
+      ["horse battery"],
+    ],
     ["PIN=1234", `var k=${PQ};\nPIN=1234`, ["1234"]],
     ["user.pin = 9876", `var k=${PQ};\nuser.pin = 9876 ok`, ["9876"]],
     ["spinner key not label", `var k=${PQ};\nspinner: very slow wheel`, []],
-    ["password2 key", `STRIPE=${PQ}\nPASSWORD2=correct horse battery staple`, ["horse battery"]],
-    ["db_pass_1 key", `STRIPE=${PQ}\ndb_pass_1: correct horse battery`, ["horse battery"]],
-    ["quoted key yaml", `stripe: ${PQ}\n"password": correct horse battery staple`, ["horse battery"]],
-    ["same line before match", `password: correct horse battery; key=${PQ}`, ["horse battery"]],
-    ["same line before match html", `<p>Password: correct horse battery</p><code data-k=${PQ}></code>`, ["horse battery"], "html"],
-    ["xml element 12+ letters", `<key>${PK}</key><password>correcthorsebattery</password>`, ["correcthorsebattery"]],
-    ["xml element passphrase", `<key>${PK}</key>\n<password>correct horse battery</password>`, ["horse battery"]],
-    ["minified a.token=e trade-off", `var k=${PQ};a.token=e,b.c=function(){return n.user.name},d=1;`, []],
-    ["redact8: xml 12+ letters, quoted match", `var k=${PQ};\n<password>correcthorsebattery</password>`, ["correcthorsebattery"]],
-    ["redact8: xml under 12, quoted match", `var k=${PQ};\n<password>hunterabc</password>`, ["hunterabc"]],
-    ["redact8: one-line before match, labelled =", `PASSWORD=correct horse battery STRIPE=${PQ}`, ["horse battery"]],
-  ] as Array<[string, string, string[], ("inline-script" | "html")?]>)("reviewer probe round 4: %s", async (_name, content, secrets, loc) => {
-    // test.each passes a callback after the row's values when a row has no location, so read it only when it is a string.
-    const f = await findingOf(content, typeof loc === "string" ? loc : "inline-script");
-    expect(f?.context).toContain(PM);
-    expect(secrets.filter((s) => f?.context?.includes(s))).toEqual([]);
-  });
+    [
+      "password2 key",
+      `STRIPE=${PQ}\nPASSWORD2=correct horse battery staple`,
+      ["horse battery"],
+    ],
+    [
+      "db_pass_1 key",
+      `STRIPE=${PQ}\ndb_pass_1: correct horse battery`,
+      ["horse battery"],
+    ],
+    [
+      "quoted key yaml",
+      `stripe: ${PQ}\n"password": correct horse battery staple`,
+      ["horse battery"],
+    ],
+    [
+      "same line before match",
+      `password: correct horse battery; key=${PQ}`,
+      ["horse battery"],
+    ],
+    [
+      "same line before match html",
+      `<p>Password: correct horse battery</p><code data-k=${PQ}></code>`,
+      ["horse battery"],
+      "html",
+    ],
+    [
+      "xml element 12+ letters",
+      `<key>${PK}</key><password>correcthorsebattery</password>`,
+      ["correcthorsebattery"],
+    ],
+    [
+      "xml element passphrase",
+      `<key>${PK}</key>\n<password>correct horse battery</password>`,
+      ["horse battery"],
+    ],
+    [
+      "minified a.token=e trade-off",
+      `var k=${PQ};a.token=e,b.c=function(){return n.user.name},d=1;`,
+      [],
+    ],
+    [
+      "redact8: xml 12+ letters, quoted match",
+      `var k=${PQ};\n<password>correcthorsebattery</password>`,
+      ["correcthorsebattery"],
+    ],
+    [
+      "redact8: xml under 12, quoted match",
+      `var k=${PQ};\n<password>hunterabc</password>`,
+      ["hunterabc"],
+    ],
+    [
+      "redact8: one-line before match, labelled =",
+      `PASSWORD=correct horse battery STRIPE=${PQ}`,
+      ["horse battery"],
+    ],
+  ] as Array<[string, string, string[], ("inline-script" | "html")?]>)(
+    "reviewer probe round 4: %s",
+    async (_name, content, secrets, loc) => {
+      // test.each passes a callback after the row's values when a row has no location, so read it only when it is a string.
+      const f = await findingOf(
+        content,
+        typeof loc === "string" ? loc : "inline-script"
+      );
+      expect(f?.context).toContain(PM);
+      expect(secrets.filter((s) => f?.context?.includes(s))).toEqual([]);
+    }
+  );
 
   test("controls stay readable: password_hint and spinner keep their later words", async () => {
-    expect((await findingOf(`STRIPE=${PQ}\npassword_hint: name of my first pet\n`))?.context).toContain("of my first pet");
-    expect((await findingOf(`var k=${PQ};\nspinner: very slow wheel`))?.context).toContain("slow wheel");
+    expect(
+      (await findingOf(`STRIPE=${PQ}\npassword_hint: name of my first pet\n`))
+        ?.context
+    ).toContain("of my first pet");
+    expect(
+      (await findingOf(`var k=${PQ};\nspinner: very slow wheel`))?.context
+    ).toContain("slow wheel");
   });
 });
