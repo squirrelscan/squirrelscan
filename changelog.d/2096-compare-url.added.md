@@ -1,1 +1,0 @@
-- `squirrel audit --target-url` accepts `--compare-url` (repeatable): a comparison set fetched once next to the targets, so `content/duplicate-description` and `crawl/schema-noindex-conflict` run over those pages instead of skipping with `targeted-run`. Every other site rule is reported as not checked. (#2096)

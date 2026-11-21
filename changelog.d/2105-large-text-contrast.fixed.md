@@ -1,1 +1,0 @@
-- `a11y/color-contrast` now holds large text (18pt, or 14pt bold) to the WCAG 3:1 ratio instead of 4.5:1, so large headings and buttons are no longer flagged when they pass (#2105).

@@ -1,1 +1,0 @@
-- `squirrel entities` no longer fails or bloats on sites with very large entity maps: stored references per page and edges per source are capped at 1000, and a corrupt references row is skipped with a warning instead of aborting the command (#2135).

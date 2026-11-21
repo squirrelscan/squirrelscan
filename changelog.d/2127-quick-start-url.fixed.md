@@ -1,1 +1,0 @@
-- Quick crawls now fetch the start URL when the sitemap lists it past maxPages, so home-page-unreachable no longer fires falsely. (#2127)
