@@ -62,6 +62,11 @@ for a in "$@"; do
   fi
 done
 
+# SHIM_GET_RC: every request that is not the report POST exits with this code (a real curl failure, reports still go through).
+if [ -n "\${SHIM_GET_RC:-}" ]; then
+  case " $* " in *" POST "*) ;; *) exit "$SHIM_GET_RC" ;; esac
+fi
+
 # A second body for URLs matching SHIM_ALT_MATCH, so one source can answer with
 # something the other does not: a 200 carrying HTML from one host and a real
 # manifest from the other is the scenario this whole fallback exists for.
@@ -769,9 +774,32 @@ describe.concurrent("install.sh report_error payload", () => {
     // Before any request, with no failing command seen, curl is not blamed: the report says what it knows (#5020).
     const early = await run("( (exit 7) || report_on_exit ); sleep 1");
     expect(early.error_line).toMatch(/^exit 7: no failing command was recorded \(sourced, bash \d+\.\d+\)$/);
-    // A curl that really failed before any request is still named as curl.
-    const bareCurl = await run("( curl --version >/dev/null; (exit 7) || report_on_exit ); sleep 1");
+  }, SPAWN_TIMEOUT_MS);
+
+  test("a curl that really failed is named as curl, with the host once a request was made (#5020)", async () => {
+    // A curl that really failed (exit 7 on a real request, reports still go through) is named as curl.
+    const failing = async (script: string) => {
+      const { calls } = await runWithCurlShim(script, {
+        cut: "preamble",
+        env: { NO_TELEMETRY: undefined, SHIM_GET_RC: "7" },
+        settleMs: 5000,
+        untilPost: true,
+      });
+      const posts = calls.filter((argv) => argv.includes("POST"));
+      expect(posts).toHaveLength(1);
+      return JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>;
+    };
+    // The preamble stops before the traps, so install the two the script does.
+    const traps = `trap report_on_exit EXIT; set -E; trap 'record_failed_command "$LINENO" "$BASH_COMMAND"' ERR; `;
+    const bareCurl = await failing(`${traps}curl -fsS https://x.example/a; sleep 1`);
     expect(bareCurl.exit_code).toBe(7);
+    expect(bareCurl.error_line).toBe("curl exit 7 reaching an unknown host (before the first request)");
+    const namedCurl = await failing(
+      `${traps}note_fetch_host "https://install.squirrelscan.com/releases/stable"; curl -fsS https://install.squirrelscan.com/releases/stable; sleep 1`,
+    );
+    expect(namedCurl.exit_code).toBe(7);
+    expect(namedCurl.error_line).toBe("curl exit 7 reaching install.squirrelscan.com");
+    expect(namedCurl.host).toBe("install.squirrelscan.com");
   }, SPAWN_TIMEOUT_MS);
 
   test("a failure with its own message, or a non-network code, keeps its report as before", async () => {
