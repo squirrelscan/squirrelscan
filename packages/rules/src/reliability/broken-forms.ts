@@ -559,6 +559,20 @@ export function createBrokenFormsRule(deps: BrokenFormsDeps = {}): Rule {
       findingScope: "resource",
       severity: "error",
       weight: 6,
+      // Check names by outcome class (#1741, #2218).
+      checks: [
+        { name: "dead-form-action", outcome: "problem" },
+        { name: "form-action-not-found-to-probe", outcome: "problem" },
+        { name: "non-production-form-action", outcome: "problem" },
+        { name: "mailto-form-action", outcome: "problem" },
+        { name: "unreachable-form-action", outcome: "problem" },
+        { name: "unnamed-form-fields", outcome: "problem" },
+        { name: "unnamed-form-fields-no-action", outcome: "problem" },
+        { name: "broken-forms", outcome: "clean", clears: ["dead-form-action", "form-action-not-found-to-probe", "non-production-form-action", "mailto-form-action", "unreachable-form-action", "unnamed-form-fields", "unnamed-form-fields-no-action"] },
+        { name: "broken-forms", outcome: "skipped" },
+        { name: "unverified-form-actions", outcome: "skipped" },
+        { name: "unchecked-form-actions", outcome: "skipped" },
+      ],
     },
 
     async run(ctx: RuleContext): Promise<RuleResult> {

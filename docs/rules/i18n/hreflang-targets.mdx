@@ -77,6 +77,27 @@ enable = ["i18n/hreflang-targets"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `hreflang-to-redirect` | Problem |  |
+| `hreflang-to-broken` | Problem |  |
+| `hreflang-to-non-indexable` | Problem |  |
+| `hreflang-no-return-link` | Problem |  |
+| `hreflang-to-redirect` | Clean | `hreflang-to-redirect` |
+| `hreflang-to-broken` | Clean | `hreflang-to-broken` |
+| `hreflang-to-non-indexable` | Clean | `hreflang-to-non-indexable` |
+| `hreflang-no-return-link` | Clean | `hreflang-no-return-link` |
+| `hreflang-targets` | Not checked |  |
+| `hreflang-not-checked` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [i18n/hreflang](/rules/i18n/hreflang): the tags on one page, their codes, `x-default` and the self reference.

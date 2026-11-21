@@ -436,6 +436,20 @@ export const napConsistencyRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "local-business-schema", outcome: "problem" },
+      { name: "contact-info", outcome: "problem" },
+      { name: "phone-consistency", outcome: "problem" },
+      { name: "address-consistency", outcome: "problem" },
+      { name: "local-business-schema", outcome: "clean", clears: ["local-business-schema"] },
+      { name: "contact-info", outcome: "clean", clears: ["contact-info"] },
+      { name: "phone-consistency", outcome: "clean", clears: ["phone-consistency"] },
+      { name: "address-consistency", outcome: "clean", clears: ["address-consistency"] },
+      { name: "nap-consistency", outcome: "skipped" },
+      { name: "phone-consistency", outcome: "skipped" },
+      { name: "address-consistency", outcome: "skipped" },
+    ],
     // NAP consistency only matters for real-world local businesses. Skip with a
     // visible reason for global SaaS / blogs. Offline / no-metadata runs as today.
     appliesWhen: { requiresLocalBusiness: true },

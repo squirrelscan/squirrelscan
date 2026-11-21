@@ -15,6 +15,11 @@ export const interstitialsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "interstitials", outcome: "problem" },
+      { name: "interstitials", outcome: "clean", clears: ["interstitials"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

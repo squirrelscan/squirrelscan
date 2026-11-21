@@ -15,6 +15,12 @@ export const consentModeRule: Rule = {
     verdictScope: "template",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "consent-mode", outcome: "problem" },
+      { name: "consent-mode", outcome: "clean", clears: ["consent-mode"] },
+      { name: "consent-mode", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

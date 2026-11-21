@@ -37,6 +37,12 @@ export const pageTypeMatchRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "page-type-match", outcome: "problem" },
+      { name: "page-type-match", outcome: "clean", clears: ["page-type-match"] },
+      { name: "page-type-match", outcome: "skipped" },
+    ],
     cloud: { service: "ai-parse", unit: "page", creditFeature: "ai_parse" },
   },
 

@@ -232,6 +232,15 @@ export const brokenResourcesRule: Rule = {
     findingScope: "resource",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "broken-resources", outcome: "problem" },
+      { name: "unreachable-resources", outcome: "problem" },
+      { name: "broken-resources", outcome: "clean", clears: ["broken-resources", "unreachable-resources"] },
+      { name: "broken-resources", outcome: "skipped" },
+      { name: "unverified-resources", outcome: "skipped" },
+      { name: "unchecked-resources", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

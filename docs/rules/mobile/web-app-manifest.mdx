@@ -92,6 +92,22 @@ enable = ["mobile/web-app-manifest"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `web-app-manifest` | Problem |  |
+| `web-app-manifest-linked` | Problem |  |
+| `web-app-manifest` | Clean | `web-app-manifest`, `web-app-manifest-linked` |
+| `web-app-manifest` | Not checked |  |
+| `web-app-manifest-unchecked` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [core/favicon](/rules/core/favicon): the favicon and Apple touch icon, which the manifest does not replace.

@@ -276,6 +276,11 @@ export const cookieConsentRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "cookie-consent", outcome: "problem" },
+      { name: "cookie-consent", outcome: "clean", clears: ["cookie-consent"] },
+    ],
     // Personal sites / portfolios collect little data and rarely need a banner —
     // skip with a visible reason. Any other site type (and offline / no-metadata
     // / low-confidence) runs the check as today.

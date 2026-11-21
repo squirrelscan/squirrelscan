@@ -102,6 +102,19 @@ export const hreflangTargetsRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "hreflang-to-redirect", outcome: "problem" },
+      { name: "hreflang-to-broken", outcome: "problem" },
+      { name: "hreflang-to-non-indexable", outcome: "problem" },
+      { name: "hreflang-no-return-link", outcome: "problem" },
+      { name: "hreflang-to-redirect", outcome: "clean", clears: ["hreflang-to-redirect"] },
+      { name: "hreflang-to-broken", outcome: "clean", clears: ["hreflang-to-broken"] },
+      { name: "hreflang-to-non-indexable", outcome: "clean", clears: ["hreflang-to-non-indexable"] },
+      { name: "hreflang-no-return-link", outcome: "clean", clears: ["hreflang-no-return-link"] },
+      { name: "hreflang-targets", outcome: "skipped" },
+      { name: "hreflang-not-checked", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

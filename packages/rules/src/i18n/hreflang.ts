@@ -113,6 +113,13 @@ export const hreflangRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "hreflang-xdefault", outcome: "problem" },
+      { name: "hreflang-self", outcome: "problem" },
+      { name: "hreflang-codes", outcome: "problem" },
+      { name: "hreflang", outcome: "clean", clears: ["hreflang-xdefault", "hreflang-self", "hreflang-codes"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

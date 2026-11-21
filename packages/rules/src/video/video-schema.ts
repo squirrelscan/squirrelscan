@@ -15,6 +15,11 @@ export const videoSchemaPresenceRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "video-schema", outcome: "problem" },
+      { name: "video-schema", outcome: "clean", clears: ["video-schema"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

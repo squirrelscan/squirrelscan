@@ -504,6 +504,14 @@ export const webAppManifestRule: Rule = {
     // at the rule's severity, so that is an error. Warn-only results stay warnings.
     severity: "error",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "web-app-manifest", outcome: "problem" },
+      { name: "web-app-manifest-linked", outcome: "problem" },
+      { name: "web-app-manifest", outcome: "clean", clears: ["web-app-manifest", "web-app-manifest-linked"] },
+      { name: "web-app-manifest", outcome: "skipped" },
+      { name: "web-app-manifest-unchecked", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -26,6 +26,12 @@ export const siteMetadataRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 0, // report-only / non-scoring
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "site-metadata", outcome: "problem" },
+      { name: "site-metadata", outcome: "clean", clears: ["site-metadata"] },
+      { name: "site-metadata", outcome: "skipped" },
+    ],
     cloud: {
       service: "site-metadata",
       unit: "site",

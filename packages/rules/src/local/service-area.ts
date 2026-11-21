@@ -16,6 +16,12 @@ export const serviceAreaRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "service-area", outcome: "problem" },
+      { name: "service-area", outcome: "clean", clears: ["service-area"] },
+      { name: "service-area", outcome: "skipped" },
+    ],
     // Service-area pages only matter for real-world local businesses. Skip with a
     // visible reason for global SaaS / blogs. Offline / no-metadata runs as today.
     appliesWhen: { requiresLocalBusiness: true },

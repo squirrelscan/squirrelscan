@@ -708,6 +708,12 @@ export const assetDivergenceRule: Rule = {
     // Deliberately light: one site-wide check, capped items, so a single rule
     // cannot dominate the social category score.
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "asset-divergence", outcome: "problem" },
+      { name: "asset-divergence", outcome: "clean", clears: ["asset-divergence"] },
+      { name: "asset-divergence", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

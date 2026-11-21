@@ -310,6 +310,12 @@ export const blockedLinksRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "blocked-links", outcome: "problem" },
+      { name: "blocked-links", outcome: "clean", clears: ["blocked-links"] },
+      { name: "blocked-links", outcome: "skipped" },
+    ],
     optionsSchema,
     cloud: {
       service: "blocklist-check",

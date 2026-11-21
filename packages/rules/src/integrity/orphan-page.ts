@@ -33,6 +33,13 @@ export const orphanPageRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "orphan-page", outcome: "problem" },
+      { name: "orphan-page-review", outcome: "problem" },
+      { name: "orphan-page", outcome: "clean", clears: ["orphan-page", "orphan-page-review"] },
+      { name: "orphan-page", outcome: "skipped" },
+    ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
     ignorable: false,
     optionsSchema: z.object({

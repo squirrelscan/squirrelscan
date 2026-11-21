@@ -22,6 +22,12 @@ export const privacyPolicyRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "privacy-policy", outcome: "problem" },
+      { name: "privacy-policy", outcome: "clean", clears: ["privacy-policy"] },
+      { name: "privacy-policy", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
