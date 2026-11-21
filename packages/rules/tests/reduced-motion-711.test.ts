@@ -435,6 +435,34 @@ describe("a11y/reduced-motion", () => {
       expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-marquee:warn"]);
     });
 
+    test("Tailwind animate-spin with motion-reduce:animate-none on the element is handled", () => {
+      const css = `.animate-spin{animation:spin 1s linear infinite}@media (prefers-reduced-motion: reduce){.motion-reduce\\:animate-none{animation:none}}`;
+      const html = page(`<style>${css}</style>`, `<svg class="animate-spin motion-reduce:animate-none"></svg>`);
+      expect(run(html)).toHaveLength(0);
+      const bare = page(`<style>${css}</style>`, `<svg class="animate-spin"></svg>`);
+      expect(run(bare).map((c) => c.name)).toEqual(["reduced-motion-css-infinite-animation"]);
+    });
+
+    test("animate.css animate__infinite under a .animate__animated reduce rule is handled", () => {
+      const css = `.animate__animated.animate__infinite{animation-iteration-count:infinite}@media (prefers-reduced-motion: reduce){.animate__animated{animation-duration:1ms !important;animation-iteration-count:1 !important}}`;
+      const html = page(`<style>${css}</style>`, `<h1 class="animate__animated animate__infinite animate__pulse">hi</h1>`);
+      expect(run(html)).toHaveLength(0);
+    });
+
+    test("a reduce rule on .Spin does not clear .spin motion (class names are case-sensitive)", () => {
+      const css = `.spin{animation:s 1s infinite}@media (prefers-reduced-motion: reduce){.Spin{animation:none}}`;
+      const html = page(`<style>${css}</style>`, `<i class="spin"></i>`);
+      expect(run(html).map((c) => c.name)).toEqual(["reduced-motion-css-infinite-animation"]);
+    });
+
+    test("the element comparison spends the selector budget on a hostile page", () => {
+      const css = `.x{animation:s 1s infinite}@media (prefers-reduced-motion: reduce){.x{animation:none}}`;
+      const html = page(`<style>${css}</style>`, `<i class="x"></i>`.repeat(5000));
+      const start = performance.now();
+      expect(run(html)).toHaveLength(0);
+      expect(performance.now() - start).toBeLessThan(5000);
+    });
+
     test("stylesheetMotionOf reports covered selectors and the global flag", () => {
       const scoped = stylesheetMotionOf("@media (prefers-reduced-motion: reduce){.A , .b{animation:none} .c{color:red}}");
       expect(scoped.reducedMotionSelectors).toEqual([".a", ".b"]);
