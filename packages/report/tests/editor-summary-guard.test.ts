@@ -2,6 +2,7 @@
  * Render-time text rules for the editor's summary: at most one numeric score,
  * no "/100", no page count the report does not state, never blank.
  */
+
 import { describe, expect, test } from "bun:test";
 
 import { editorSummaryView, summaryPageCounts } from "../src/editor-summary";

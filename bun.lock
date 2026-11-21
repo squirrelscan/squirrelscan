@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.188",
+      "version": "0.0.190-beta.1",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
@@ -79,6 +79,11 @@
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/audit-engine": {
@@ -105,6 +110,11 @@
         "@supabase/supabase-js": "2.118.0",
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/cloud-client": {
@@ -112,6 +122,13 @@
       "version": "0.0.1",
       "dependencies": {
         "@squirrelscan/core-contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/config": {
@@ -124,6 +141,11 @@
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/core-contracts": {
@@ -135,6 +157,11 @@
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/crawler": {
@@ -154,6 +181,11 @@
         "@cloudflare/workers-types": "^4.20260609.1",
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/fetchers": {
@@ -166,6 +198,11 @@
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/page-classifier": {
@@ -177,6 +214,11 @@
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/parser": {
@@ -192,6 +234,11 @@
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/report": {
@@ -207,8 +254,13 @@
         "@types/bun": "^1.4.0",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
         "fast-xml-parser": "5.12.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
         "tailwindcss": "4.3.3",
+        "ultracite": "7.9.2",
       },
       "peerDependencies": {
         "react": "^19.2.7",
@@ -230,6 +282,11 @@
         "@cloudflare/workers-types": "^4.20260609.1",
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/synthetic-site": {
@@ -264,6 +321,11 @@
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/threat-intel": {
@@ -275,6 +337,11 @@
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/tls-probe": {
@@ -286,6 +353,11 @@
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/utils": {
@@ -301,6 +373,11 @@
       "devDependencies": {
         "@types/bun": "^1.4.0",
         "@types/node": "^24.13.1",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
     "packages/waf-detect": {
@@ -308,6 +385,11 @@
       "version": "0.0.1",
       "devDependencies": {
         "@types/bun": "^1.4.0",
+        "eslint-plugin-github": "^6.0.0",
+        "eslint-plugin-sonarjs": "^4.1.0",
+        "oxfmt": "^0.21.0",
+        "oxlint": "1.73.0",
+        "ultracite": "7.9.2",
       },
     },
   },

@@ -15,6 +15,7 @@
  * Every piece is one bounded line with control and format characters (bidi
  * overrides, zero-width) removed and fence markers defused.
  */
+
 import { affectedPages } from "../../affected-pages";
 import { getDocsUrl } from "../../docs";
 import type { FlatIssue } from "../../grouping";
