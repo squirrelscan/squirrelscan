@@ -9,9 +9,12 @@
 //   * a site whose sitemaps carry no image entries at all is SKIPPED, not flagged: image sitemaps are
 //     optional, and flagging every page of a site that never adopted them is noise, not a defect;
 //   * only an indexable page is judged: status 200, no noindex (meta or header), canonical absent or self;
-//   * a page absent from the sitemap, or without a main image, is not judged;
+//   * a page absent from the sitemap, listed with no image entries of its own (a stock Shopify sitemap lists
+//     the homepage and /pages/* that way), or without a main image, is not judged;
 //   * URLs are normalized before comparing (scheme, query string and fragment dropped, a CDN size suffix
-//     such as Shopify's `_800x` or WordPress's `-300x200` removed), so a stock Shopify sitemap passes;
+//     such as Shopify's `_800x` or WordPress's `-300x200` removed, and Shopify's two spellings of one file,
+//     `<shop>/cdn/shop/files/x.png` and `cdn.shopify.com/s/files/1/.../files/x.png`, made equal), so a
+//     stock Shopify sitemap passes;
 //   * any one candidate (og:image or a Product image) matching passes;
 //   * an entry whose image list was truncated at the crawler's cap is not judged.
 //
@@ -24,7 +27,16 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const SIZE_SUFFIX = /(?:_(?:\d+x\d*|x\d+|pico|icon|thumb|small|compact|medium|large|grande|master)|-\d+x\d+)(?=\.[a-z0-9]+$)/i;
 
-/** An image URL reduced to the part that names the picture: host and path, no size suffix, query or fragment. */
+/** Shopify's storefront image path: `<shop>/cdn/shop/<files|products|...>/x.png`. */
+const SHOPIFY_STOREFRONT_PATH = /^\/cdn\/shop\/(.+)$/;
+/** Shopify's CDN image path: `cdn.shopify.com/s/files/1/0123/4567/<files|products|...>/x.png`. */
+const SHOPIFY_CDN_PATH = /^\/s\/files\/\d+(?:\/\d+)*\/(.+)$/;
+
+/**
+ * An image URL reduced to the part that names the picture: host and path, no size suffix, query or fragment.
+ * Shopify serves one file from the shop's own host (`/cdn/shop/...`) and from `cdn.shopify.com`
+ * (`/s/files/1/<store id>/...`); both reduce to the same `shopify:` key.
+ */
 export function normalizeImageUrl(raw: string, base: string): string | null {
   let url: URL;
   try {
@@ -39,7 +51,13 @@ export function normalizeImageUrl(raw: string, base: string): string | null {
   } catch {
     // keep the path as written
   }
-  return `${url.hostname.toLowerCase()}${path.replace(SIZE_SUFFIX, "")}`;
+  path = path.replace(SIZE_SUFFIX, "");
+  const host = url.hostname.toLowerCase();
+  const storefront = SHOPIFY_STOREFRONT_PATH.exec(path);
+  if (storefront) return `shopify:${storefront[1]}`;
+  const cdn = host === "cdn.shopify.com" ? SHOPIFY_CDN_PATH.exec(path) : null;
+  if (cdn) return `shopify:${cdn[1]}`;
+  return `${host}${path}`;
 }
 
 /** A page URL as a lookup key: no fragment, no trailing slash, host lowercased. */
@@ -169,7 +187,9 @@ export const sitemapMissingRule: Rule = {
     if (canonical && pageKey(canonical, pageUrl) !== self) return { checks: [] };
 
     const slot = self ? index.byPage.get(self) : undefined;
-    if (!slot || slot.truncated) return { checks: [] };
+    // Not judged: a page outside the sitemap, an entry listed without image entries of its own (Shopify lists
+    // the homepage and /pages/* that way), or one whose image list was truncated at the crawler's cap.
+    if (!slot || slot.images.size === 0 || slot.truncated) return { checks: [] };
 
     const candidates = mainImages(ctx)
       .map((raw) => normalizeImageUrl(raw, pageUrl))

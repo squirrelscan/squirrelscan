@@ -11,14 +11,14 @@ Google's image sitemap extension lets a `<url>` entry list the images on that pa
 
 The rule makes no network request. squirrel's sitemap reader keeps up to 50 image entries per `<url>`, and the rule compares them with the page's main image: the `og:image`, or the `image` of a Product (or ProductGroup) JSON-LD block. An `ImageObject` or a list of images is read too. If any one candidate is in the page's entries, the page passes.
 
-Image URLs are normalized before they are compared, so these count as the same image: the scheme, the query string and the fragment are ignored, and a CDN size suffix is removed (Shopify's `_800x` and `_1200x630`, WordPress's `-300x200`). A stock Shopify sitemap therefore produces no finding.
+Image URLs are normalized before they are compared, so these count as the same image: the scheme, the query string and the fragment are ignored, and a CDN size suffix is removed (Shopify's `_800x` and `_1200x630`, WordPress's `-300x200`). Shopify serves one file under two URLs, the shop's own `/cdn/shop/files/mug.png` and `cdn.shopify.com/s/files/1/<store id>/files/mug.png`, and the rule treats them as the same image. A stock Shopify sitemap therefore produces no finding.
 
 The rule only judges a page that is:
 
 - served with status 200;
 - indexable: no `noindex` in the robots meta tag or the `X-Robots-Tag` header;
 - self-canonical, or without a canonical;
-- listed in a sitemap;
+- listed in a sitemap with at least one image entry of its own (a stock Shopify sitemap lists the homepage and `/pages/*` without images, and those are not judged);
 - not marked as having more image entries than squirrel keeps.
 
 A page with no `og:image` and no Product image is not flagged.

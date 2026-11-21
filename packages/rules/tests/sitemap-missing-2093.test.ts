@@ -48,8 +48,21 @@ describe("images/sitemap-missing", () => {
     expect(status(checks)).toBe("info");
   });
 
-  test("flags a page listed with no image entries while others have them", () => {
-    expect(status(run(og("https://cdn.example.com/mug.jpg"), [{ loc: PAGE }, OTHER]))).toBe("info");
+  test("not judged: a page listed with no image entries of its own while others have them (Shopify homepage, /pages/*)", () => {
+    expect(run(og("https://cdn.example.com/mug.jpg"), [{ loc: PAGE }, OTHER])).toEqual([]);
+  });
+
+  test("a stock Shopify product passes: storefront /cdn/shop og:image matches the cdn.shopify.com sitemap entry", () => {
+    const checks = run(og("http://shop.example.com/cdn/shop/files/mug.png?v=1700000000&width=1200"), [
+      { loc: PAGE, images: ["https://cdn.shopify.com/s/files/1/0123/4567/8901/files/mug.png?v=1700000000"] },
+      OTHER,
+    ]);
+    expect(status(checks)).toBe("pass");
+    const miss = run(og("http://shop.example.com/cdn/shop/files/cup.png?v=1"), [
+      { loc: PAGE, images: ["https://cdn.shopify.com/s/files/1/0123/4567/8901/files/mug.png?v=1"] },
+      OTHER,
+    ]);
+    expect(status(miss)).toBe("info");
   });
 
   test("a stock Shopify sitemap passes: size suffix, query string and protocol-relative og:image normalize", () => {
@@ -109,5 +122,9 @@ describe("images/sitemap-missing", () => {
     expect(n("https://CDN.a.com/p/x_800x.jpg?v=3#f")).toBe(n("http://cdn.a.com/p/x.jpg"));
     expect(n("/p/x-300x200.png")).toBe(n("https://a.com/p/x.png"));
     expect(n("data:image/png;base64,AAA")).toBeNull();
+    expect(n("//shop.a.com/cdn/shop/products/x_1200x.jpg?v=1")).toBe(
+      n("https://cdn.shopify.com/s/files/1/0123/4567/products/x.jpg?v=1"),
+    );
+    expect(n("https://other.com/s/files/1/0123/products/x.jpg")).not.toBe(n("https://shop.a.com/cdn/shop/products/x.jpg"));
   });
 });
