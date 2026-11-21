@@ -251,7 +251,9 @@ describe("first_signed_version", () => {
     ).toThrow("no key is pinned");
   });
 
-  test("the checked-in file leaves it unset until the maintainer pins the key", () => {
-    expect(getPinnedReleaseKeys().firstSignedVersion).toBe("");
+  test("the checked-in file starts the signed era at the first key-signed release", () => {
+    // literal on purpose: the test must fail if the pinned era start changes without review
+    expect(getPinnedReleaseKeys().firstSignedVersion).toBe("0.0.190-beta.1");
+    expect(getPinnedReleaseKeys().keys.map((k) => k.id)).toContain("3d10cf3775665622");
   });
 });
