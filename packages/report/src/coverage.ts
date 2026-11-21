@@ -19,7 +19,7 @@ import { checkAffectedPages } from "./affected-pages";
 import { reportFailureReasonCode } from "./failure-notice";
 
 const OFFLINE_NOTE = " Offline: cloud checks, rendering and external link checks did not run.";
-const TARGETED_NOTE = " Targeted: only the listed URLs were audited, and no links were checked.";
+const TARGETED_NOTE = " Targeted: only the listed URLs were audited.";
 
 /**
  * One-line audit level summary, e.g.
@@ -281,14 +281,14 @@ export function scanScopeTargeted(report: Pick<AuditReport, "scanScope">): {
 }
 
 /**
- * "Targeted run: 3 of 4 URLs given were audited; site-wide rules were not run." (#1777), or null for an
+ * "Targeted run: 3 of 4 URLs given were audited; rules that need the whole site were not run." (#1777), or null for an
  * ordinary audit. Read off a stored report of any origin: counts that are not whole numbers read as absent.
  */
 export function targetedRunNote(report: Pick<AuditReport, "scanScope">): string | null {
   const t = scanScopeTargeted(report);
   if (!t) return null;
   const { requested, audited } = t;
-  return `Targeted run: ${audited} of ${requested} URL${requested === 1 ? "" : "s"} given ${audited === 1 ? "was" : "were"} audited; site-wide rules were not run.`;
+  return `Targeted run: ${audited} of ${requested} URL${requested === 1 ? "" : "s"} given ${audited === 1 ? "was" : "were"} audited; rules that need the whole site were not run.`;
 }
 
 /** How many page types the per-type line names before it folds the rest into "other". */

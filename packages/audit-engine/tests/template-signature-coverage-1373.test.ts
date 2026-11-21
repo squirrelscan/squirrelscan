@@ -7,7 +7,11 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { SIGNATURE_ATTRIBUTES, SIGNATURE_SELECTORS } from "@squirrelscan/rules";
 
 import { parseHtmlForRules } from "../src/adapter";
-import { derivedFanoutSignature, measureSignatureCoverage } from "../src/index";
+import {
+  createCoverageAccumulator,
+  derivedFanoutSignature,
+  measureSignatureCoverage,
+} from "../src/index";
 import { CORPUS, ORIGIN } from "./helpers/template-corpus";
 
 // Bun's describe() has no timeout slot; apply the 30s file-wide.
@@ -55,5 +59,21 @@ describe("measureSignatureCoverage on the template corpus (ceiling, not an estim
       expect(() => doc.querySelectorAll(selector)).not.toThrow();
     }
     expect(SIGNATURE_ATTRIBUTES.length).toBeGreaterThan(0);
+  });
+});
+
+describe("createCoverageAccumulator (streamed pass, #1373)", () => {
+  for (const mode of ["current", "derived"] as const) {
+    test(`streamed in batches equals all-at-once (${mode})`, () => {
+      const acc = createCoverageAccumulator(mode);
+      for (let i = 0; i < CORPUS.length; i += 3) {
+        for (const page of CORPUS.slice(i, i + 3)) acc.add(page);
+      }
+      expect(acc.result()).toEqual(measureSignatureCoverage(CORPUS, mode));
+    });
+  }
+
+  test("empty accumulator reports zero coverage", () => {
+    expect(createCoverageAccumulator("current").result()).toMatchObject({ pages: 0, coverage: 0 });
   });
 });

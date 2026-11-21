@@ -355,6 +355,11 @@ export interface CrawlStats {
    * followed, no sitemap read, no discovery probes. Site-scope rules read this and skip.
    */
   targetedRun?: boolean;
+  /**
+   * A targeted run that also fetched a comparison set (`compareUrls`, #2096). A site-scope rule that declares
+   * `comparisonSet: "listed-pages"` runs over the fetched pages instead of skipping with `targeted-run`.
+   */
+  comparisonRun?: boolean;
   /** Targeted run: URLs in the list past `MAX_TARGET_URLS`, counted and not stored (#1777). */
   targetsOverLimit?: number;
   /**
@@ -503,6 +508,8 @@ export interface CrawlerConfigSnapshot {
    * refused: it would mix two scopes in one crawl. Absent on a normal crawl.
    */
   targetUrls?: string[];
+  /** The comparison set of a targeted run (#2096), kept with `targetUrls` so a resume under another set is refused. */
+  compareUrls?: string[];
 }
 
 // ============================================
