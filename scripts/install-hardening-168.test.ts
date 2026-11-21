@@ -39,7 +39,7 @@ if [ "$1" = "self" ] && [ "$2" = "install" ]; then
   echo "self install ok"
   exit 0
 fi
-echo "squirrel 9.9.9"
+echo "squirrel 0.0.150"
 `;
 
 // The curl shim answers the manifest and the binary from files, can stall on the binary (so a
@@ -133,7 +133,8 @@ async function install(options: Options = {}): Promise<Result> {
   writeFileSync(
     manifestPath,
     JSON.stringify({
-      version: "9.9.9",
+      // pre-signed-era fixture on purpose: these tests cover the paths before first_signed_version (0.0.190-beta.1)
+      version: "0.0.150",
       binaries: {
         "linux-x64": {
           filename: "squirrel-linux-x64",
@@ -160,7 +161,7 @@ async function install(options: Options = {}): Promise<Result> {
     SHIM_MANIFEST: manifestPath,
     SHIM_BINARY: binaryPath,
     SHIM_STALL_MARK: paths.stallMark,
-    SQUIRREL_VERSION: "9.9.9",
+    SQUIRREL_VERSION: "0.0.150",
     SQUIRREL_BIN_DIR: join(home, "bin"),
     SQUIRREL_NO_MODIFY_PATH: "1",
     CI: "true",

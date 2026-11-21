@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "Pinned release signing keys (squirrelscan/repo#5032). install.sh and `squirrel self update` accept a release",
+    "binary if EITHER its GitHub attestation OR an ECDSA P-256 signature from one of these keys verifies.",
+    "id = first 16 hex chars of SHA-256 over the key's DER SubjectPublicKeyInfo; pem = the PEM public key.",
+    "Two slots, current and next, so a rotation can pin the next key before releases switch to it.",
+    "A slot with an empty pem is unused. While BOTH are empty the signature path is off and both installers",
+    "behave exactly as before (attestation, else the sha256 checksum alone with a warning).",
+    "first_signed_version: empty until the maintainer pins the key (same PR). From that version up, a binary is accepted ONLY with a valid pinned-key signature or a valid GitHub attestation; sha256 alone is a hard failure. Versions look like 0.0.190 or 0.0.190-beta.1.",
+    "After editing run: bun run scripts/sync-install-header.ts (install.sh carries a generated copy)."
+  ],
+  "keys": [
+    {
+      "slot": "current",
+      "id": "3d10cf3775665622",
+      "pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN8K5cMpCjrfRAEv94Fiic1a65ED6\nwzfEsN/5YD0EUAJrlIL76/L4KPU+L6/Oloiua4UYWu9bK5YFBvKQpsn7FQ==\n-----END PUBLIC KEY-----\n"
+    },
+    { "slot": "next", "id": "", "pem": "" }
+  ],
+  "revoked_key_ids": [],
+  "first_signed_version": "0.0.190-beta.1"
+}

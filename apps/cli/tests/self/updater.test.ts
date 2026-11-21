@@ -31,6 +31,7 @@ import type {
 import { ok } from "@/controllers/types";
 import * as attestationModule from "@/self/attestation";
 import * as pathsModule from "@/self/paths";
+import * as releaseKeysModule from "@/self/release-keys";
 import * as releasesModule from "@/self/releases";
 import { downloadBinary } from "@/self/releases";
 import {
@@ -56,7 +57,13 @@ import {
   updateLandingWarnings,
 } from "@/self/updater";
 
+import {
+  makeTestReleaseKey,
+  type TestReleaseKey,
+} from "../fixtures/test-release-key";
+
 const originalEnv = { ...process.env };
+
 const originalFetch = globalThis.fetch;
 
 const CI_VARS = [
@@ -130,6 +137,16 @@ describe("updater", () => {
           ? realVerifyReleaseAttestation(data, deps)
           : ok({ status: "verified" as const })
     );
+    // repo#5032: no release key pinned unless a test injects one, so these
+    // tests never fetch .sig files, whatever release-keys.json pins.
+    spyOn(releaseKeysModule, "getPinnedReleaseKeys").mockReturnValue({
+      keys: [
+        { slot: "current", id: "", pem: "" },
+        { slot: "next", id: "", pem: "" },
+      ],
+      revokedKeyIds: [],
+      firstSignedVersion: "",
+    });
   });
 
   afterEach(async () => {
@@ -771,6 +788,105 @@ describe("updater", () => {
       expect(lines).toContain(
         "Attestation verified: built by squirrelscan/squirrelscan"
       );
+    });
+
+    // repo#5032: the signature path is wired into the same step.
+    function signedFiles(key: TestReleaseKey) {
+      const manifestJson = new TextEncoder().encode(
+        JSON.stringify({ ...manifest, signing_key_id: key.id })
+      );
+      return {
+        manifest: manifestJson,
+        manifestSig: key.sign(manifestJson),
+        assetSig: key.sign(BYTES),
+      };
+    }
+    const pinnedOnly = (key: TestReleaseKey) => ({
+      keys: [
+        { slot: "current" as const, id: key.id, pem: key.pem },
+        { slot: "next" as const, id: "", pem: "" },
+      ],
+      revokedKeyIds: [],
+      firstSignedVersion: "",
+    });
+    const ghNeverVerifies = async (args: string[]) =>
+      args[0] === "attestation" && args[2] !== "--help"
+        ? { code: 1, output: "no attestations found" }
+        : { code: 0, output: "" };
+
+    test("an interactive update installs on a pinned-key signature and says so", async () => {
+      const log = stubInteractiveUpdate();
+      const key = makeTestReleaseKey();
+      const result = await runInteractiveUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+        attestation: {
+          releaseKeys: pinnedOnly(key),
+          fetchSignatures: async () => signedFiles(key),
+          runGh: ghNeverVerifies,
+        },
+      });
+      expect(result.ok).toBe(true);
+      const lines = log.mock.calls.map((c) => String(c[0]));
+      expect(lines).toContain(
+        `Release signature verified: signed by squirrelscan release key ${key.id}`
+      );
+    });
+
+    test("a signature from an unpinned key fails the update with nothing installed", async () => {
+      stubInteractiveUpdate();
+      const pinnedKey = makeTestReleaseKey();
+      const foreign = makeTestReleaseKey();
+      const result = await runInteractiveUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+        attestation: {
+          releaseKeys: pinnedOnly(pinnedKey),
+          fetchSignatures: async () => signedFiles(foreign),
+          runGh: async () => ({ code: 0, output: "" }),
+        },
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("SIGNATURE_FAILED");
+      expect(existsSync(join(tempHome, "releases"))).toBe(false);
+    });
+
+    // The signed era: the target version is at or after first_signed_version.
+    const inEra = (key: TestReleaseKey) => ({
+      ...pinnedOnly(key),
+      firstSignedVersion: manifest.version,
+    });
+
+    test("signed era, gh absent, no .sig files: the update fails with nothing installed", async () => {
+      stubInteractiveUpdate();
+      const key = makeTestReleaseKey();
+      const result = await runInteractiveUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+        attestation: {
+          releaseKeys: inEra(key),
+          fetchSignatures: async () => ({
+            manifest: null,
+            manifestSig: null,
+            assetSig: null,
+          }),
+          runGh: async () => null,
+        },
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("SIGNATURE_REQUIRED");
+      expect(existsSync(join(tempHome, "releases"))).toBe(false);
+    });
+
+    test("signed era, gh absent, valid signature: the update installs", async () => {
+      stubInteractiveUpdate();
+      const key = makeTestReleaseKey();
+      const result = await runInteractiveUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+        attestation: {
+          releaseKeys: inEra(key),
+          fetchSignatures: async () => signedFiles(key),
+          runGh: async () => null,
+        },
+      });
+      expect(result.ok).toBe(true);
     });
 
     test("a verify timeout fails the update with nothing installed", async () => {

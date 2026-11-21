@@ -360,6 +360,210 @@ try { Test-ReleaseAttestation -Path $binaryStub -GhName "squirrel-fake-gh" } cat
 Check "a verify timeout fails closed" ($threw -and $script:ErrorsSeen[0] -eq "gh attestation verify timed out after 120s, nothing was installed.")
 $script:GhTimeoutOn = ""
 
+# ---------------------------------------------------------------------------
+Write-Host "release-key signatures and the signed era (squirrelscan/repo#5032)"
+$openssl = (Get-Command openssl -ErrorAction SilentlyContinue).Source
+if (-not $openssl) { Write-Host "  FAIL openssl is required for these checks"; $script:Failures++ }
+$work = Join-Path ([System.IO.Path]::GetTempPath()) "squirrel-ps-sig-$(Get-Random)"
+New-Item -ItemType Directory -Path $work | Out-Null
+$fixture = Get-Content (Join-Path $PSScriptRoot "fixtures/version-compare.json") -Raw | ConvertFrom-Json
+
+# The shared comparison table, the same one install.sh and the updater read.
+$cmpBad = @($fixture.compare | Where-Object { (Compare-ReleaseVersion $_.a $_.b) -ne $_.cmp })
+Check "version compare matches the shared table ($($fixture.compare.Count) cases)" ($cmpBad.Count -eq 0)
+$eraBad = @($fixture.era | Where-Object { (Test-SignedEra $_.version $_.first) -ne $_.era })
+Check "signed-era decisions match the shared table ($($fixture.era.Count) cases)" ($eraBad.Count -eq 0)
+Check "a prerelease of the first signed version is not signed-era" (-not (Test-SignedEra "0.0.190-beta.1" "0.0.190"))
+Check "an unset first_signed_version is never signed-era" (-not (Test-SignedEra "0.0.999" ""))
+
+# THROWAWAY test keys, made by the real openssl. Never a production key.
+function New-TestKey {
+    param([string]$Name)
+    & $openssl ecparam -name prime256v1 -genkey -noout -out (Join-Path $work "$Name.key") 2> $null
+    & $openssl ec -in (Join-Path $work "$Name.key") -pubout -out (Join-Path $work "$Name.pub") 2> $null
+    $spki = ConvertFrom-PemPublicKey (Get-Content (Join-Path $work "$Name.pub") -Raw)
+    $id = ([BitConverter]::ToString([System.Security.Cryptography.SHA256]::HashData($spki)) -replace '-', '').ToLowerInvariant().Substring(0, 16)
+    return @{ Name = $Name; Id = $id; Pem = (Get-Content (Join-Path $work "$Name.pub") -Raw).TrimEnd(); Spki = $spki }
+}
+function Set-OpensslSignature {
+    param([string]$Key, [string]$File, [string]$Out)
+    & $openssl dgst -sha256 -sign (Join-Path $work "$Key.key") -out $Out $File
+}
+$kGood = New-TestKey "good"
+$kRevoked = New-TestKey "revoked"
+$kForeign = New-TestKey "foreign"
+
+Write-Host "DER to raw r||s and the 5.1 key blob"
+# Real openssl signatures, verified after conversion by .NET's own P1363 verifier,
+# so the converter is checked against something that did not write it.
+$msg = [System.Text.Encoding]::UTF8.GetBytes("squirrel release")
+$msgFile = Join-Path $work "msg.bin"
+[System.IO.File]::WriteAllBytes($msgFile, $msg)
+function New-P256Verifier {
+    param([byte[]]$X, [byte[]]$Y)
+    $q = [System.Security.Cryptography.ECPoint]::new()
+    $q.X = $X
+    $q.Y = $Y
+    $p = [System.Security.Cryptography.ECParameters]::new()
+    $p.Curve = [System.Security.Cryptography.ECCurve]::CreateFromFriendlyName("nistP256")
+    $p.Q = $q
+    return [System.Security.Cryptography.ECDsa]::Create($p)
+}
+$point = Get-SpkiPoint $kGood.Spki
+$verifier = New-P256Verifier ([byte[]]$point[0..31]) ([byte[]]$point[32..63])
+$convBad = 0
+$sigFile = Join-Path $work "sig.der"
+for ($i = 0; $i -lt 150; $i++) {
+    Set-OpensslSignature "good" $msgFile $sigFile
+    $raw = ConvertFrom-DerSignature ([System.IO.File]::ReadAllBytes($sigFile))
+    if ($null -eq $raw -or $raw.Length -ne 64 -or -not $verifier.VerifyData($msg, $raw, [System.Security.Cryptography.HashAlgorithmName]::SHA256)) { $convBad++ }
+}
+Check "150 real openssl signatures convert to a raw signature that verifies" ($convBad -eq 0)
+
+# r or s with a leading zero byte (a short integer, or the 0x00 sign pad) is the
+# edge: sign with .NET until both shapes were seen, then convert every one.
+$ec2 = [System.Security.Cryptography.ECDsa]::Create([System.Security.Cryptography.ECCurve]::CreateFromFriendlyName("nistP256"))
+$p2 = $ec2.ExportParameters($false)
+$ver2 = New-P256Verifier $p2.Q.X $p2.Q.Y
+$short = 0; $padded = 0; $bad2 = 0; $n = 0
+while (($short -lt 5 -or $padded -lt 5) -and $n -lt 20000) {
+    $n++
+    $der = $ec2.SignData($msg, [System.Security.Cryptography.HashAlgorithmName]::SHA256, [System.Security.Cryptography.DSASignatureFormat]::Rfc3279DerSequence)
+    $rLen = $der[3]
+    $sLen = $der[5 + $rLen]
+    if ($rLen -lt 32 -or $sLen -lt 32) { $short++ }
+    if ($rLen -eq 33 -or $sLen -eq 33) { $padded++ }
+    $raw = ConvertFrom-DerSignature $der
+    if ($null -eq $raw -or -not $ver2.VerifyData($msg, $raw, [System.Security.Cryptography.HashAlgorithmName]::SHA256)) { $bad2++ }
+}
+Check "signatures with a short r or s ($short seen) and a 0x00-padded r or s ($padded seen) convert and verify" ($short -ge 5 -and $padded -ge 5 -and $bad2 -eq 0)
+$goodShort = ConvertFrom-DerSignature ([byte[]](0x30,0x06,0x02,0x01,0x01,0x02,0x01,0x02))
+Check "r=1, s=2 left-pads to 32 bytes each" ($goodShort.Length -eq 64 -and $goodShort[31] -eq 1 -and $goodShort[63] -eq 2 -and ($goodShort[0..30] + $goodShort[32..62] | Where-Object { $_ -ne 0 }).Count -eq 0)
+foreach ($case in @(
+    @("a negative integer", [byte[]](0x30,0x06,0x02,0x01,0x81,0x02,0x01,0x02)),
+    @("a non-minimal leading zero", [byte[]](0x30,0x07,0x02,0x02,0x00,0x01,0x02,0x01,0x02)),
+    @("trailing bytes", [byte[]](0x30,0x07,0x02,0x01,0x01,0x02,0x01,0x02,0x00)),
+    @("a wrong sequence length", [byte[]](0x30,0x05,0x02,0x01,0x01,0x02,0x01,0x02)),
+    @("not a sequence", [byte[]](0x31,0x06,0x02,0x01,0x01,0x02,0x01,0x02)),
+    @("an oversized integer", [byte[]](@(0x30,0x28,0x02,0x21,0x01) + (,0 * 32) + @(0x02,0x01,0x02))),
+    @("empty input", [byte[]]@())
+)) {
+    Check "DER with $($case[0]) is rejected" ($null -eq (ConvertFrom-DerSignature $case[1]))
+}
+
+$blob = New-EccPublicBlob $point
+Check "the blob is 72 bytes: magic ECS1, length 32, X, Y" (
+    $blob.Length -eq 72 -and [Text.Encoding]::ASCII.GetString($blob[0..3]) -eq "ECS1" -and
+    [BitConverter]::ToUInt32($blob, 4) -eq 32 -and ($blob[0] -eq 0x45 -and $blob[3] -eq 0x31))
+Set-OpensslSignature "good" $msgFile $sigFile
+$viaBlob = New-P256Verifier ([byte[]]$blob[8..39]) ([byte[]]$blob[40..71])
+Check "the key rebuilt from the blob verifies an openssl signature" ($viaBlob.VerifyData($msg, (ConvertFrom-DerSignature ([System.IO.File]::ReadAllBytes($sigFile))), [System.Security.Cryptography.HashAlgorithmName]::SHA256))
+Check "a SPKI that is not P-256 gives no point" ($null -eq (Get-SpkiPoint ([byte[]](1,2,3))))
+
+Write-Host "provenance: signature, attestation, and the signed-era hard fail"
+$script:Served = @{}
+function Invoke-WebRequest {
+    param($Uri, $OutFile, $TimeoutSec, [switch]$UseBasicParsing)
+    $name = ($Uri -split '/')[-1]
+    if (-not $script:Served.ContainsKey($name)) { throw "404" }
+    Copy-Item -Path $script:Served[$name] -Destination $OutFile -Force
+}
+function New-Release {
+    param([string]$Dir, [string]$Version, [string]$SignWith, [string]$KeyId, [string]$ManifestVersion = "")
+    if (-not $ManifestVersion) { $ManifestVersion = $Version }
+    New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+    $bin = Join-Path $Dir "squirrel.exe"
+    [System.IO.File]::WriteAllBytes($bin, [System.Text.Encoding]::UTF8.GetBytes("squirrel binary $Version"))
+    $sha = (Get-FileHash $bin -Algorithm SHA256).Hash.ToLowerInvariant()
+    $manifest = Join-Path $Dir "manifest.json"
+    [System.IO.File]::WriteAllText($manifest, "{`"version`":`"$ManifestVersion`",`"signing_key_id`":`"$KeyId`",`"binaries`":{`"windows-x64`":{`"filename`":`"squirrel.exe`",`"sha256`":`"$sha`"}}}`n")
+    if ($SignWith) {
+        Set-OpensslSignature $SignWith $manifest "$manifest.sig"
+        Set-OpensslSignature $SignWith $bin "$bin.sig"
+    }
+    return $Dir
+}
+function Invoke-Provenance {
+    param([string]$Dir, [string]$Version, [string]$Gh = "squirrel-fake-gh")
+    $script:Served = @{}
+    foreach ($f in Get-ChildItem $Dir) { $script:Served[$f.Name] = $f.FullName }
+    $null = Get-DownloadSources -Version $Version -Asset "squirrel.exe"
+    $script:DownloadSource = "github.com"
+    $script:GhCalls = @(); $script:Warnings = @(); $script:ErrorsSeen = @()
+    $threw = $false
+    try { Test-ReleaseProvenance -Version $Version -Filename "squirrel.exe" -BinaryPath (Join-Path $Dir "squirrel.exe") -GhName $Gh } catch { $threw = $true }
+    $verify = @($script:GhCalls | Where-Object { $_[0] -eq "attestation" -and $_[1] -eq "verify" -and $_[2] -ne "--help" })
+    return @{ Threw = $threw; Error = ($script:ErrorsSeen -join "`n"); Warn = ($script:Warnings -join "`n"); GhVerified = ($verify.Count -gt 0) }
+}
+
+$ReleaseKeyCurrentId = $kGood.Id;    $ReleaseKeyCurrentPem = $kGood.Pem
+$ReleaseKeyNextId = $kRevoked.Id;    $ReleaseKeyNextPem = $kRevoked.Pem
+$ReleaseKeysRevoked = $kRevoked.Id
+$ReleaseFirstSignedVersion = "0.0.190"
+$script:GhVerifyExit = 0; $script:GhAuthExit = 0; $script:GhHelpExit = 0
+$NoGh = "squirrel-no-such-gh-on-this-machine"
+$rel = Join-Path $work "rel"
+
+$d = New-Release "$rel/good" "0.0.190" "good" $kGood.Id
+$r = Invoke-Provenance $d "v0.0.190" $NoGh
+Check "signed era, no gh, valid signature: installs" (-not $r.Threw -and $r.Warn -eq "")
+$r = Invoke-Provenance $d "v0.0.190"
+Check "a valid signature never asks gh" (-not $r.Threw -and -not $r.GhVerified)
+
+$d = New-Release "$rel/nosig" "0.0.190" "" $kGood.Id
+$r = Invoke-Provenance $d "v0.0.190" $NoGh
+Check "signed era, no gh, no .sig: hard fail" ($r.Threw -and $r.Error -like "*sha256 checksum alone is not accepted*" -and $r.Error -like "*no .sig files*" -and $r.Error -like "*openssl dgst -sha256 -verify*")
+Check "signed era, no gh, no .sig: it is not a warning" ($r.Warn -eq "")
+$script:GhAuthExit = 1
+$r = Invoke-Provenance $d "v0.0.190"
+Check "signed era, gh not logged in, no .sig: hard fail" ($r.Threw -and $r.Error -like "*not logged in*")
+$script:GhAuthExit = 0; $script:GhHelpExit = 1
+$r = Invoke-Provenance $d "v0.0.190"
+Check "signed era, gh too old, no .sig: hard fail" ($r.Threw -and $r.Error -like "*too old*")
+$script:GhHelpExit = 0
+$r = Invoke-Provenance $d "v0.0.190"
+Check "signed era, valid attestation, no .sig: installs" (-not $r.Threw -and $r.GhVerified)
+$script:GhVerifyExit = 1
+$r = Invoke-Provenance $d "v0.0.190"
+Check "signed era, attestation fails, no .sig: hard fail" ($r.Threw -and $r.Error -like "*Attestation verification failed*")
+$script:GhVerifyExit = 0
+
+$d = New-Release "$rel/tampered" "0.0.190" "good" $kGood.Id
+[System.IO.File]::AppendAllText("$d/squirrel.exe", "X")
+$r = Invoke-Provenance $d "v0.0.190"
+Check "a tampered binary fails the signature even with a passing attestation" ($r.Threw -and $r.Error -like "*squirrel.exe is not signed by key*" -and -not $r.GhVerified)
+$d = New-Release "$rel/foreign" "0.0.190" "foreign" $kForeign.Id
+$r = Invoke-Provenance $d "v0.0.190"
+Check "a foreign key fails even with a passing attestation" ($r.Threw -and $r.Error -like "*does not pin*" -and -not $r.GhVerified)
+$d = New-Release "$rel/revoked" "0.0.190" "revoked" $kRevoked.Id
+$r = Invoke-Provenance $d "v0.0.190"
+Check "a revoked key id fails even with a passing attestation" ($r.Threw -and $r.Error -like "*revoked key*" -and -not $r.GhVerified)
+$d = New-Release "$rel/replay" "0.0.190" "good" $kGood.Id "0.0.189"
+$r = Invoke-Provenance $d "v0.0.190"
+Check "a signed manifest for another version fails" ($r.Threw -and $r.Error -like "*signed manifest is for version*")
+$d = New-Release "$rel/half" "0.0.190" "good" $kGood.Id
+Remove-Item "$d/squirrel.exe.sig"
+$r = Invoke-Provenance $d "v0.0.190"
+Check "one .sig without the other fails" ($r.Threw -and $r.Error -like "*squirrel.exe.sig is missing*")
+
+$d = New-Release "$rel/pre-era" "0.0.189" "" $kGood.Id
+$r = Invoke-Provenance $d "v0.0.189" $NoGh
+Check "before the era, no gh, no .sig: warns and installs (unchanged)" (-not $r.Threw -and $r.Warn -like "*relying on the sha256 checksum only*")
+$d = New-Release "$rel/pre-beta" "0.0.190-beta.1" "" $kGood.Id
+$r = Invoke-Provenance $d "0.0.190-beta.1" $NoGh
+Check "a prerelease of the first signed version is before the era (unchanged)" (-not $r.Threw)
+$ReleaseFirstSignedVersion = ""
+$d = New-Release "$rel/unset" "0.0.999" "" $kGood.Id
+$r = Invoke-Provenance $d "0.0.999" $NoGh
+Check "first_signed_version unset, no gh, no .sig: warns and installs (unchanged)" (-not $r.Threw -and $r.Warn -like "*relying on the sha256 checksum only*")
+$ReleaseKeyCurrentPem = ""; $ReleaseKeyNextPem = ""; $ReleaseKeyCurrentId = ""; $ReleaseKeyNextId = ""
+$d = New-Release "$rel/nokey" "0.0.189" "good" $kGood.Id
+$r = Invoke-Provenance $d "0.0.189"
+Check "no key pinned: signatures are ignored and the attestation decides" (-not $r.Threw -and $r.GhVerified)
+
+$verifier.Dispose(); $ec2.Dispose(); $ver2.Dispose(); $viaBlob.Dispose()
+Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+
 if ($script:Failures -gt 0) {
     Write-Host ""
     Write-Host "$($script:Failures) check(s) failed"

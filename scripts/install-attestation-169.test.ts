@@ -28,7 +28,7 @@ if [ "$1" = "self" ] && [ "$2" = "install" ]; then
   chmod 755 "$4/squirrel"
   exit 0
 fi
-echo "squirrel 9.9.9"
+echo "squirrel 0.0.150"
 `;
 
 const CURL_SHIM = `#!/bin/bash
@@ -97,7 +97,8 @@ async function install(ghEnv: Record<string, string> | null): Promise<Result> {
   writeFileSync(
     manifestPath,
     JSON.stringify({
-      version: "9.9.9",
+      // pre-signed-era fixture on purpose: these tests cover the paths before first_signed_version (0.0.190-beta.1)
+      version: "0.0.150",
       binaries: {
         "linux-x64": {
           filename: "squirrel-linux-x64",
@@ -116,7 +117,7 @@ async function install(ghEnv: Record<string, string> | null): Promise<Result> {
     SHIM_BINARY: binaryPath,
     GH_LOG: ghLog,
     GH_AUTH_ARGS: join(root, "auth-args"),
-    SQUIRREL_VERSION: "9.9.9",
+    SQUIRREL_VERSION: "0.0.150",
     SQUIRREL_BIN_DIR: join(home, "bin"),
     SQUIRREL_NO_MODIFY_PATH: "1",
     CI: "true",

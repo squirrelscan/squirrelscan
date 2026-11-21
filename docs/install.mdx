@@ -73,7 +73,7 @@ Set any of these before running the installer.
 
 - **Permissions.** It runs with the umask tightened to at least `022`, so the directories and the binary it creates are never group or world writable, whatever umask it inherited. A stricter umask (`077`) is kept.
 - **Size and checksum.** The release manifest records each binary's size. A download of a different size fails with a size mismatch, before the checksum, so a cut-short download reads as that and not as a bad hash.
-- **Provenance.** The checksum comes from a manifest served next to the binary, so on its own it cannot tell a compromised download origin from a good one. Every release binary and the manifest also carry a GitHub build attestation, signed by the release workflow. When the GitHub CLI (`gh`) is installed and logged in, the installer runs `gh attestation verify <file> --repo squirrelscan/squirrelscan --cert-identity <release workflow on main> --deny-self-hosted-runners` on the download and stops with nothing installed if it does not match. See [Verifying a release](#verifying-a-release).
+- **Provenance.** The checksum comes from a manifest served next to the binary, so on its own it cannot tell a compromised download origin from a good one. On top of it, a release must carry one of two proofs that squirrelscan built it: a signature from a pinned squirrelscan release key, checked with `openssl`, or a GitHub build attestation, checked with `gh attestation verify <file> --repo squirrelscan/squirrelscan --cert-identity <release workflow on main> --deny-self-hosted-runners` when the GitHub CLI (`gh`) is installed and logged in. A proof that does not match stops the install with nothing installed. See [Verifying a release](#verifying-a-release).
 - **Ctrl-C.** An interrupt, `SIGTERM` or `SIGHUP` during the install (including one sent to the installer alone, mid-download) removes the temporary directory, ends the download and exits with 130, 143 or 129. Stopping the install is not a failure, so no failure report is sent.
 - **No `HOME`.** If `HOME` is unset or empty it stops at once and tells you to set it. The installer keeps its state under `$HOME/.squirrel`, so it needs `HOME` even when `SQUIRREL_BIN_DIR` is set.
 - **A `noexec` temp directory.** The binary is first run from your temp directory. If it cannot be run there (a `noexec` mount, whatever language the system's messages are in), the installer retries from `~/.squirrel/tmp`. If that fails too it says a `noexec` mount is the likely cause and tells you to set `TMPDIR` to a directory on a filesystem that can run programs; if `~/.squirrel/tmp` cannot even be created it says that instead.
@@ -136,20 +136,69 @@ If both hosts are unreachable, the installer prints the two URLs it tried. Allow
 
 ## Verifying a release
 
-Each release binary (and `manifest.json`) has a build attestation made by the release workflow in `squirrelscan/squirrelscan`. The trust root is GitHub's attestation service (Sigstore), not the origin you downloaded from, so it holds even if that origin or the mirror were compromised. The SHA-256 checksum stays in place; the attestation is a second check on top of it.
+Every release is checked twice. First, the binary's SHA-256 must match the release manifest. Then, because that manifest is served from the same place as the binary, the release must also prove where it came from, in one of two ways:
 
-What the installers and `squirrel self update` do:
+- **Release-key signature.** `manifest.json.sig` and `<binary>.sig` are ECDSA P-256 signatures, made with the squirrelscan release key, over `manifest.json` and the binary. `manifest.json` names the key in `signing_key_id` and lists each binary's SHA-256. The installer and `squirrel self update` carry the public key's id and PEM (from [`release-keys.json`](https://github.com/squirrelscan/squirrelscan/blob/main/release-keys.json)) and verify with `openssl` and WebCrypto respectively. The trust root is that pinned key, so the check holds even if the download origin or the mirror were compromised.
+- **GitHub build attestation.** Releases built by the release workflow in `squirrelscan/squirrelscan` carry an attestation. The trust root is GitHub's attestation service (Sigstore). Checking it needs a logged-in `gh`.
+
+A release passes if **either** proof verifies. Until squirrelscan pins its release key, only the attestation path is active and nothing below about signatures applies yet.
+
+### The signed era
+
+When squirrelscan pins its release key it also records `first_signed_version` in `release-keys.json`, in the same change. From that version up (prereleases such as `0.0.190-beta.1` sort below their release, so `0.0.190-beta.1` is before `0.0.190`), the SHA-256 checksum alone is never enough, with or without `gh`. The binary is accepted **only** if a valid pinned-key signature verifies or a valid GitHub attestation verifies. Everything else is a hard failure, nothing is installed, and the error says what was missing and how to install by hand:
+
+- the release has no `.sig` files and the attestation cannot be checked (`gh` missing, too old or not logged in);
+- `openssl` is missing in `install.sh` and the attestation cannot be checked;
+- the attestation does not match, or a signature is present but invalid, from an unpinned key or from a revoked one (an attestation never rescues a bad signature).
+
+The installer decides this from the version it is installing (the latest on your channel, or the one you pin with `SQUIRREL_VERSION`), never from a field in `manifest.json`, because anyone who can strip a `.sig` can strip a manifest field too. For versions before `first_signed_version`, and while it is unset, the table below holds exactly as written. So **to install a signed-era version without `gh`, the release must carry its `.sig` files and (for `install.sh`) `openssl` must be installed**; otherwise [verify by hand](#verify-a-signature-by-hand) and install the binary yourself.
+
+What `install.sh` and `squirrel self update` do, in this order:
 
 | Situation | Result |
 |---|---|
-| `gh` is installed and logged in, and the attestation matches | Continues, and prints `Attestation verified` |
-| `gh` is installed and logged in, and the attestation does **not** match | Fails. Nothing is installed or run, and `gh`'s own output is shown. For `self update`, the current version stays in place |
-| `gh` is not installed, is too old to have `gh attestation`, is not logged in, or a `gh` probe (`--help`, `auth status`) takes longer than 15 seconds | Prints a warning and relies on the SHA-256 checksum alone |
+| The SHA-256 does not match the manifest | Fails. Nothing is installed or run |
+| The release is signed by a pinned key, and both signatures verify | Continues, and prints `Release signature verified`. `gh` is not consulted |
+| The release is signed, but by a key that is not pinned, by a revoked key, or a signature does not verify, or only one of the two `.sig` files exists | Fails, even if a GitHub attestation would pass. Nothing is installed or run |
+| No signature, `gh` is installed and logged in, and the attestation matches | Continues, and prints `Attestation verified` |
+| No signature, `gh` is installed and logged in, and there is no matching attestation | Fails. Nothing is installed or run, and `gh`'s own output is shown. For `self update`, the current version stays in place |
+| No signature, and `gh` is not installed, is too old to have `gh attestation`, is not logged in, or a `gh` probe (`--help`, `auth status`) takes longer than 15 seconds | Prints a warning and relies on the SHA-256 checksum alone |
 | `gh attestation verify` itself takes longer than 120 seconds | Fails with `gh attestation verify timed out after 120s, nothing was installed.` |
+| `install.sh` cannot find `openssl` | Prints a warning, skips the signature check and goes on to the attestation, as if the release were unsigned |
+| A signed-era version (see above) with no valid signature and no verifiable attestation | Fails. The warning rows above become hard failures, with or without `gh` |
 
-`gh attestation verify` needs a logged-in `gh`, so run `gh auth login` once to turn the check on. A `gh` that is not logged in cannot verify anything, so it is treated like a missing one, with the warning, and never as a pass.
+A hard failure means the download is not what squirrelscan published: delete it and do not run it. Run the installer again later, and if it keeps failing, [open an issue](https://github.com/squirrelscan/squirrelscan/issues).
 
-To verify a binary by hand, download it from the [releases page](https://github.com/squirrelscan/squirrelscan/releases) and run:
+`gh attestation verify` needs a logged-in `gh`, so run `gh auth login` once to turn that check on. A `gh` that is not logged in cannot verify anything, so it is treated like a missing one, with the warning, and never as a pass. The Windows installer (`install.ps1`) follows the same order and rules as `install.sh`: SHA-256, then the pinned-key signature, then the attestation. It verifies the signature with .NET (`ECDsa` on PowerShell 7, `ECDsaCng` on Windows PowerShell 5.1), so it needs no `openssl`. In the signed era a missing `.sig` with no verifiable attestation fails on Windows too.
+
+### Verify a signature by hand
+
+Download the binary, its `.sig`, `manifest.json` and `manifest.json.sig` from the [releases page](https://github.com/squirrelscan/squirrelscan/releases), save the release public key from [`release-keys.json`](https://github.com/squirrelscan/squirrelscan/blob/main/release-keys.json) as `squirrelscan-release.pub`, and run:
+
+```bash
+openssl dgst -sha256 -verify squirrelscan-release.pub \
+  -signature manifest.json.sig manifest.json
+openssl dgst -sha256 -verify squirrelscan-release.pub \
+  -signature squirrel-<version>-<platform>.sig squirrel-<version>-<platform>
+```
+
+Both must print `Verified OK`. Then check that the binary's SHA-256 (`shasum -a 256` on macOS, `sha256sum` on Linux) equals the one `manifest.json` lists for your platform, and that the manifest's `signing_key_id` is the id of the key you used. That id is the first 16 hex characters of the SHA-256 of the key in DER form:
+
+```bash
+openssl ec -pubin -in squirrelscan-release.pub -pubout -outform DER | openssl dgst -sha256
+```
+
+#### On Windows
+
+For the checksum, `certutil` is built in:
+
+```powershell
+certutil -hashfile .\squirrel-<version>-windows-x64.exe SHA256
+```
+
+Compare it with the `sha256` that `manifest.json` lists for `windows-x64`. Windows has no built-in tool for the signature itself. Use the `openssl` that ships with [Git for Windows](https://gitforwindows.org) (`C:\Program Files\Git\usr\bin\openssl.exe`) with the same two `openssl dgst` commands as above, or any OpenSSL build.
+
+### Verify an attestation by hand
 
 ```bash
 gh attestation verify ./squirrel-<version>-<platform> \

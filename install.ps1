@@ -22,6 +22,22 @@ $Repo = "squirrelscan/squirrelscan"
 $CertIdentity = "https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main"
 $Platform = "windows-x64"
 
+# Pinned release signing keys (squirrelscan/repo#5032), rendered from
+# release-keys.json. A release is accepted when EITHER a pinned, non-revoked key
+# signed it OR its GitHub attestation verifies; from $ReleaseFirstSignedVersion
+# up, nothing else is accepted. Both slots empty means the signature path is off.
+# BEGIN GENERATED RELEASE KEYS (scripts/sync-install-header.ts, from release-keys.json; do not edit)
+$ReleaseKeyCurrentId = '3d10cf3775665622'
+$ReleaseKeyCurrentPem = '-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN8K5cMpCjrfRAEv94Fiic1a65ED6
+wzfEsN/5YD0EUAJrlIL76/L4KPU+L6/Oloiua4UYWu9bK5YFBvKQpsn7FQ==
+-----END PUBLIC KEY-----'
+$ReleaseKeyNextId = ''
+$ReleaseKeyNextPem = ''
+$ReleaseKeysRevoked = ''
+$ReleaseFirstSignedVersion = '0.0.190-beta.1'
+# END GENERATED RELEASE KEYS
+
 function Write-Log { param($Message) Write-Host "==> " -ForegroundColor Green -NoNewline; Write-Host $Message }
 function Write-Info { param($Message) Write-Host ":: " -ForegroundColor Blue -NoNewline; Write-Host $Message }
 function Write-Warn { param($Message) Write-Host "Warning: " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
@@ -574,26 +590,26 @@ function Test-ReleaseAttestation {
 
     $script:CurrentStep = "verify_attestation"
     if (-not (Get-Command $GhName -ErrorAction SilentlyContinue)) {
-        Write-Warn "GitHub CLI (gh) not found: skipping the release provenance check, relying on the sha256 checksum only.`n  Install gh and run 'gh auth login' to verify installs against the GitHub attestation."
+        Skip-Attestation "gh is not installed" "GitHub CLI (gh) not found: skipping the release provenance check, relying on the sha256 checksum only.`n  Install gh and run 'gh auth login' to verify installs against the GitHub attestation."
         return
     }
 
     $help = Invoke-GhBounded -GhName $GhName -GhArgs @("attestation", "verify", "--help") -TimeoutSec 15
     if ($help.TimedOut) {
-        Write-Warn "gh attestation verify --help timed out after 15s: skipping the release provenance check, relying on the sha256 checksum only."
+        Skip-Attestation "gh attestation verify --help timed out" "gh attestation verify --help timed out after 15s: skipping the release provenance check, relying on the sha256 checksum only."
         return
     }
     if ($help.Code -ne 0) {
-        Write-Warn "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
+        Skip-Attestation "this gh is too old for 'gh attestation verify'" "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
         return
     }
     $auth = Invoke-GhBounded -GhName $GhName -GhArgs @("auth", "status", "--hostname", "github.com") -TimeoutSec 15
     if ($auth.TimedOut) {
-        Write-Warn "gh auth status timed out after 15s: skipping the release provenance check, relying on the sha256 checksum only."
+        Skip-Attestation "gh auth status timed out" "gh auth status timed out after 15s: skipping the release provenance check, relying on the sha256 checksum only."
         return
     }
     if ($auth.Code -ne 0) {
-        Write-Warn "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.`n  Run 'gh auth login' to enable it."
+        Skip-Attestation "gh is not logged in" "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.`n  Run 'gh auth login' to enable it."
         return
     }
 
@@ -605,9 +621,272 @@ function Test-ReleaseAttestation {
     if ($verify.Code -ne 0) {
         $tail = (($verify.Output -split "`n") | Select-Object -Last 10) -join "`n"
         Write-Host $tail
-        Write-Err "Attestation verification failed: this binary was not built by the $Repo release workflow.`n  Nothing was installed. Do not run it." -Output $tail
+        $noSig = if ($script:SigPinned) { "`n  The release carries no squirrelscan release-key signature either." } else { "" }
+        Write-Err "Attestation verification failed: this binary was not built by the $Repo release workflow.$noSig`n  Nothing was installed. Do not run it." -Output $tail
     }
     Write-Info "Attestation verified: built by $Repo"
+}
+
+# Signed era (squirrelscan/repo#5032), the same rule as install.sh. From
+# $ReleaseFirstSignedVersion up, a release is accepted ONLY on a valid
+# pinned-key signature or a valid GitHub attestation: sha256 alone is a hard
+# failure, with or without gh. The era comes from the version being installed
+# (the resolved target), never from a manifest field. Unset means no era.
+$script:SignedEra = $false
+$script:SignedEraVersion = ""
+$script:SigNote = ""
+$script:SigPinned = $false
+
+# Numeric identifiers compared as digit strings, so nothing overflows.
+function Compare-DigitString {
+    param([string]$A, [string]$B)
+    $A = $A.TrimStart('0'); $B = $B.TrimStart('0')
+    if ($A.Length -ne $B.Length) { return [Math]::Sign($A.Length - $B.Length) }
+    return [Math]::Sign([string]::CompareOrdinal($A, $B))
+}
+
+# Semver precedence of two versions that satisfy Test-ReleaseVersion: -1, 0 or 1.
+# A leading v and +build are ignored; a prerelease sorts below its release.
+function Compare-ReleaseVersion {
+    param([string]$A, [string]$B)
+    $pa = ($A -replace '^v', '' -split '\+')[0]
+    $pb = ($B -replace '^v', '' -split '\+')[0]
+    $ca, $ra = $pa -split '-', 2
+    $cb, $rb = $pb -split '-', 2
+    $na = $ca -split '\.'
+    $nb = $cb -split '\.'
+    for ($i = 0; $i -lt 3; $i++) {
+        $c = Compare-DigitString $na[$i] $nb[$i]
+        if ($c -ne 0) { return $c }
+    }
+    if (-not $ra -and -not $rb) { return 0 }
+    if (-not $ra) { return 1 }
+    if (-not $rb) { return -1 }
+    $ia = $ra -split '\.'
+    $ib = $rb -split '\.'
+    for ($i = 0; $i -lt [Math]::Max($ia.Count, $ib.Count); $i++) {
+        if ($i -ge $ia.Count) { return -1 }
+        if ($i -ge $ib.Count) { return 1 }
+        $xn = $ia[$i] -cmatch '^[0-9]+$'
+        $yn = $ib[$i] -cmatch '^[0-9]+$'
+        if ($xn -and $yn) {
+            $c = Compare-DigitString $ia[$i] $ib[$i]
+            if ($c -ne 0) { return $c }
+        } elseif ($xn) { return -1 }
+        elseif ($yn) { return 1 }
+        elseif ($ia[$i] -cne $ib[$i]) { return [Math]::Sign([string]::CompareOrdinal($ia[$i], $ib[$i])) }
+    }
+    return 0
+}
+
+# True when $Version is at or after $FirstSigned (default: the generated one).
+# A version that does not parse counts as signed-era, never as a way out.
+function Test-SignedEra {
+    param([string]$Version, [string]$FirstSigned = $ReleaseFirstSignedVersion)
+    if (-not $FirstSigned) { return $false }
+    if (-not (Test-ReleaseVersion $Version)) { return $true }
+    return (Compare-ReleaseVersion $Version $FirstSigned) -ge 0
+}
+
+function Stop-SignedEra {
+    param([string]$What)
+    Write-Err "Cannot verify squirrel $($script:SignedEraVersion -replace '^v', ''): $What.`n  This version is only installed with a valid release-key signature or GitHub attestation; the sha256 checksum alone is not accepted.`n  Nothing was installed.`n  To install by hand, download the binary and its .sig and check them with openssl dgst -sha256 -verify:`n    https://docs.squirrelscan.com/install#verifying-a-release"
+}
+
+# gh cannot check the attestation. Before the signed era that is a warning and
+# the sha256 decides; in it, it is a hard failure.
+function Skip-Attestation {
+    param([string]$Reason, [string]$Message)
+    if ($script:SignedEra) {
+        $note = if ($script:SigNote) { $script:SigNote } else { "no signature was checked" }
+        Stop-SignedEra "$note, and the GitHub attestation could not be checked ($Reason)"
+    }
+    Write-Warn $Message
+}
+
+# --- ECDSA P-256 verify (the .sig files are DER, from openssl dgst -sha256 -sign) ---
+# PowerShell 7 (.NET Core 3+) builds an ECDsa from the SPKI's point and verifies DER directly.
+# Windows PowerShell 5.1 (.NET Framework 4.x) has neither, so it goes through
+# ECDsaCng with an EccPublicBlob built from the SPKI's raw point and a raw r||s
+# signature. The helpers below are plain byte work, shared and unit-tested.
+
+function ConvertFrom-PemPublicKey {
+    param([string]$Pem)
+    $m = [regex]::Match(($Pem -replace "`r`n", "`n"), '^-----BEGIN PUBLIC KEY-----\n([A-Za-z0-9+/=\n]+)\n-----END PUBLIC KEY-----\n?\z')
+    if (-not $m.Success) { return $null }
+    try { return [Convert]::FromBase64String(($m.Groups[1].Value -replace "`n", "")) } catch { return $null }
+}
+
+# The 91-byte SPKI of a P-256 key: this 26-byte header, then 04 || X || Y.
+$script:P256SpkiHeader = [byte[]](0x30,0x59,0x30,0x13,0x06,0x07,0x2A,0x86,0x48,0xCE,0x3D,0x02,0x01,0x06,0x08,0x2A,0x86,0x48,0xCE,0x3D,0x03,0x01,0x07,0x03,0x42,0x00)
+
+# X || Y (64 bytes) from a P-256 SPKI, or $null when it is not one.
+function Get-SpkiPoint {
+    param([byte[]]$Spki)
+    if ($null -eq $Spki -or $Spki.Length -ne 91) { return $null }
+    for ($i = 0; $i -lt 26; $i++) { if ($Spki[$i] -ne $script:P256SpkiHeader[$i]) { return $null } }
+    if ($Spki[26] -ne 4) { return $null }
+    return [byte[]]($Spki[27..90])
+}
+
+# BCRYPT_ECCKEY_BLOB: magic ECS1 (0x31534345, ECDSA P-256 public), key length 32, X || Y.
+function New-EccPublicBlob {
+    param([byte[]]$Point)
+    $blob = New-Object byte[] 72
+    [BitConverter]::GetBytes([uint32]0x31534345).CopyTo($blob, 0)
+    [BitConverter]::GetBytes([uint32]32).CopyTo($blob, 4)
+    [Array]::Copy($Point, 0, $blob, 8, 64)
+    return ,$blob
+}
+
+# DER SEQUENCE { INTEGER r, INTEGER s } to 64 bytes r || s, each left-padded to
+# 32. Strict: anything that is not minimal DER for P-256 returns $null.
+function ConvertFrom-DerSignature {
+    param([byte[]]$Der)
+    if ($null -eq $Der -or $Der.Length -lt 8 -or $Der.Length -gt 72) { return $null }
+    if ($Der[0] -ne 0x30 -or $Der[1] -gt 0x7F -or $Der[1] -ne $Der.Length - 2) { return $null }
+    $raw = New-Object byte[] 64
+    $pos = 2
+    for ($part = 0; $part -lt 2; $part++) {
+        if ($pos + 2 -gt $Der.Length -or $Der[$pos] -ne 0x02) { return $null }
+        $len = $Der[$pos + 1]
+        $pos += 2
+        if ($len -lt 1 -or $len -gt 33 -or $pos + $len -gt $Der.Length) { return $null }
+        $start = $pos
+        $pos += $len
+        if ($Der[$start] -band 0x80) { return $null }
+        if ($len -gt 1 -and $Der[$start] -eq 0 -and -not ($Der[$start + 1] -band 0x80)) { return $null }
+        if ($Der[$start] -eq 0) { $start++; $len-- }
+        if ($len -gt 32) { return $null }
+        [Array]::Copy($Der, $start, $raw, $part * 32 + (32 - $len), $len)
+    }
+    if ($pos -ne $Der.Length) { return $null }
+    return ,$raw
+}
+
+# $true only for a valid signature of $Data by the key in $Pem. Any failure is $false.
+function Test-EcdsaP256Signature {
+    param([string]$Pem, [byte[]]$Data, [byte[]]$DerSignature)
+    try {
+        $spki = ConvertFrom-PemPublicKey $Pem
+        $point = Get-SpkiPoint $spki
+        if ($null -eq $point) { return $false }
+        if ('System.Security.Cryptography.DSASignatureFormat' -as [type]) {
+            # ImportSubjectPublicKeyInfo takes a ReadOnlySpan, which PowerShell cannot
+            # pass, so the already-checked point goes in as ECParameters.
+            $q = [System.Security.Cryptography.ECPoint]::new()
+            $q.X = [byte[]]$point[0..31]
+            $q.Y = [byte[]]$point[32..63]
+            $params = [System.Security.Cryptography.ECParameters]::new()
+            $params.Curve = [System.Security.Cryptography.ECCurve]::CreateFromFriendlyName("nistP256")
+            $params.Q = $q
+            $ecdsa = [System.Security.Cryptography.ECDsa]::Create($params)
+            try {
+                return $ecdsa.VerifyData($Data, $DerSignature, [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+                    [System.Security.Cryptography.DSASignatureFormat]::Rfc3279DerSequence)
+            } finally { $ecdsa.Dispose() }
+        }
+        $raw = ConvertFrom-DerSignature $DerSignature
+        if ($null -eq $raw) { return $false }
+        $cngKey = [System.Security.Cryptography.CngKey]::Import((New-EccPublicBlob $point), [System.Security.Cryptography.CngKeyBlobFormat]::EccPublicBlob)
+        $cng = New-Object System.Security.Cryptography.ECDsaCng($cngKey)
+        try {
+            $cng.HashAlgorithm = [System.Security.Cryptography.CngAlgorithm]::Sha256
+            return $cng.VerifyData($Data, $raw)
+        } finally { $cng.Dispose(); $cngKey.Dispose() }
+    } catch {
+        return $false
+    }
+}
+
+function Test-ReleaseKeysPinned {
+    return [bool]($ReleaseKeyCurrentPem -or $ReleaseKeyNextPem)
+}
+
+# The PEM of the pinned slot with this id, or $null.
+function Get-ReleaseKeyPem {
+    param([string]$Id)
+    if ($ReleaseKeyCurrentPem -and $Id -ceq $ReleaseKeyCurrentId) { return $ReleaseKeyCurrentPem }
+    if ($ReleaseKeyNextPem -and $Id -ceq $ReleaseKeyNextId) { return $ReleaseKeyNextPem }
+    return $null
+}
+
+# One quiet fetch of a small file as bytes. A missing .sig is normal for an
+# attested release. $null when absent, unreachable or larger than $MaxBytes.
+function Get-ReleaseFileBytes {
+    param([string]$Url, [int]$MaxBytes)
+    $tmp = [System.IO.Path]::GetTempFileName()
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $tmp -TimeoutSec 30 -UseBasicParsing
+        $bytes = [System.IO.File]::ReadAllBytes($tmp)
+        if ($bytes.Length -eq 0 -or $bytes.Length -gt $MaxBytes) { return $null }
+        return ,$bytes
+    } catch {
+        return $null
+    } finally {
+        Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Stop-SignatureFailed {
+    param([string]$Why)
+    Write-Err "Release signature verification failed: $Why.`n  Nothing was installed. Do not run it."
+}
+
+# Returns $true when a pinned key signed both manifest.json and the binary, and
+# $false when the release carries no signature (or the check cannot run), so the
+# attestation decides. Anything else is a hard failure, attestation or not: an
+# unpinned or revoked key, a signature that does not verify, a signed manifest
+# for another version, or only one of the two .sig files.
+function Test-ReleaseSignature {
+    param([string]$Version, [string]$Filename, [string]$BinaryPath)
+
+    $script:CurrentStep = "verify_signature"
+    $script:SigPinned = Test-ReleaseKeysPinned
+    if (-not $script:SigPinned) { $script:SigNote = "no release key is pinned"; return $false }
+
+    $binaryUrl = if ($script:DownloadSource -eq "github.com") { $script:DownloadUrlGitHub } else { $script:DownloadUrlMirror }
+    $base = $binaryUrl.Substring(0, $binaryUrl.Length - $Filename.Length)
+    $manifestBytes = Get-ReleaseFileBytes "${base}manifest.json" 1048576
+    $manifestSig = Get-ReleaseFileBytes "${base}manifest.json.sig" 1024
+    $assetSig = Get-ReleaseFileBytes "${binaryUrl}.sig" 1024
+    if (-not $manifestSig -and -not $assetSig) { $script:SigNote = "the release has no .sig files"; return $false }
+    if (-not $manifestSig) { Stop-SignatureFailed "manifest.json.sig is missing" }
+    if (-not $assetSig) { Stop-SignatureFailed "$Filename.sig is missing" }
+    if (-not $manifestBytes) { Stop-SignatureFailed "manifest.json could not be fetched to check it" }
+
+    try { $signed = [System.Text.Encoding]::UTF8.GetString($manifestBytes) | ConvertFrom-Json } catch { Stop-SignatureFailed "manifest.json is not valid JSON" }
+    $keyId = "$($signed.signing_key_id)"
+    if ($keyId -cnotmatch '^[0-9a-f]{16}\z') { Stop-SignatureFailed "manifest.json names no signing key id" }
+    if (($ReleaseKeysRevoked -split ' ') -ccontains $keyId) { Stop-SignatureFailed "it is signed with revoked key $keyId" }
+    $pem = Get-ReleaseKeyPem $keyId
+    if (-not $pem) { Stop-SignatureFailed "it is signed with key $keyId, which this installer does not pin" }
+
+    Write-Log "Verifying release signature..."
+    if (-not (Test-EcdsaP256Signature -Pem $pem -Data $manifestBytes -DerSignature $manifestSig)) {
+        Stop-SignatureFailed "manifest.json is not signed by key $keyId"
+    }
+    # A signed manifest replayed under another version's URL is a downgrade.
+    if (("$($signed.version)" -replace '^v', '') -cne ($Version -replace '^v', '')) {
+        Stop-SignatureFailed "the signed manifest is for version '$($signed.version)', not $Version"
+    }
+    if (-not (Test-EcdsaP256Signature -Pem $pem -Data ([System.IO.File]::ReadAllBytes($BinaryPath)) -DerSignature $assetSig)) {
+        Stop-SignatureFailed "$Filename is not signed by key $keyId"
+    }
+    Write-Info "Release signature verified: signed by squirrelscan release key $keyId"
+    return $true
+}
+
+# Provenance after the sha256 check: a pinned-key signature, else the
+# attestation. In the signed era neither skipping nor sha256 alone is an option.
+function Test-ReleaseProvenance {
+    param([string]$Version, [string]$Filename, [string]$BinaryPath, [string]$GhName = "gh")
+    $script:SignedEraVersion = $Version
+    $script:SignedEra = Test-SignedEra $Version
+    $script:SigNote = ""
+    if (-not (Test-ReleaseSignature -Version $Version -Filename $Filename -BinaryPath $BinaryPath)) {
+        Test-ReleaseAttestation -Path $BinaryPath -GhName $GhName
+    }
 }
 
 function Install-Squirrel {
@@ -660,7 +939,7 @@ function Install-Squirrel {
         }
         Write-Info "Checksum verified: $($expectedHash.Substring(0, 16))..."
 
-        Test-ReleaseAttestation -Path $binaryPath
+        Test-ReleaseProvenance -Version $Version -Filename $filename -BinaryPath $binaryPath
 
         # Run self install. Its output is echoed live AND captured, so a failure
         # reports what the binary actually said instead of a bare exit code

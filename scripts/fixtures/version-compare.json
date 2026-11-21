@@ -1,0 +1,212 @@
+{
+ "_comment": "Shared by install.sh (scripts/install-version-compare-5032.test.ts), install.ps1 (scripts/install-ps-contract.test.ps1) and the updater (apps/cli/tests/self/release-keys.test.ts). compare: semver precedence of a vs b. era: is `version` at or after first_signed_version `first`.",
+ "compare": [
+  {
+   "a": "0.0.189",
+   "b": "0.0.190",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.190",
+   "b": "0.0.189",
+   "cmp": 1
+  },
+  {
+   "a": "0.0.189",
+   "b": "0.0.189",
+   "cmp": 0
+  },
+  {
+   "a": "v0.0.189",
+   "b": "0.0.189",
+   "cmp": 0
+  },
+  {
+   "a": "v0.0.189",
+   "b": "v0.0.190",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.190-beta.1",
+   "b": "0.0.190",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.190",
+   "b": "0.0.190-beta.1",
+   "cmp": 1
+  },
+  {
+   "a": "0.0.190-beta.1",
+   "b": "0.0.190-beta.2",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.190-beta.2",
+   "b": "0.0.190-beta.10",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.190-beta",
+   "b": "0.0.190-beta.0",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.189",
+   "b": "0.0.190-beta.1",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.190-beta.1",
+   "b": "0.0.189",
+   "cmp": 1
+  },
+  {
+   "a": "0.0.52-beta.0",
+   "b": "0.0.52-beta.1",
+   "cmp": -1
+  },
+  {
+   "a": "1.0.0",
+   "b": "0.99.99",
+   "cmp": 1
+  },
+  {
+   "a": "0.0.10",
+   "b": "0.0.9",
+   "cmp": 1
+  },
+  {
+   "a": "0.1.0",
+   "b": "0.0.999",
+   "cmp": 1
+  },
+  {
+   "a": "0.0.190+build5",
+   "b": "0.0.190",
+   "cmp": 0
+  },
+  {
+   "a": "0.0.190-alpha",
+   "b": "0.0.190-beta",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.190-1",
+   "b": "0.0.190-alpha",
+   "cmp": -1
+  },
+  {
+   "a": "v0.0.190-beta.1",
+   "b": "0.0.190-beta.1",
+   "cmp": 0
+  },
+  {
+   "a": "0.0.4-beta",
+   "b": "0.0.4",
+   "cmp": -1
+  },
+  {
+   "a": "0.0.190-beta.1",
+   "b": "v0.0.190-beta.1",
+   "cmp": 0
+  }
+ ],
+ "era": [
+  {
+   "first": "0.0.190",
+   "version": "0.0.189",
+   "era": false
+  },
+  {
+   "first": "0.0.190",
+   "version": "0.0.190",
+   "era": true
+  },
+  {
+   "first": "0.0.190",
+   "version": "v0.0.190",
+   "era": true
+  },
+  {
+   "first": "0.0.190",
+   "version": "0.0.190-beta.1",
+   "era": false
+  },
+  {
+   "first": "0.0.190",
+   "version": "0.0.191-beta.1",
+   "era": true
+  },
+  {
+   "first": "0.0.190",
+   "version": "0.0.200",
+   "era": true
+  },
+  {
+   "first": "0.0.190",
+   "version": "1.0.0",
+   "era": true
+  },
+  {
+   "first": "0.0.190",
+   "version": "0.0.4",
+   "era": false
+  },
+  {
+   "first": "0.0.190",
+   "version": "garbage",
+   "era": true
+  },
+  {
+   "first": "0.0.190",
+   "version": "",
+   "era": true
+  },
+  {
+   "first": "0.0.190",
+   "version": "0.0.190/../x",
+   "era": true
+  },
+  {
+   "first": "0.0.190-beta.1",
+   "version": "0.0.190-beta.1",
+   "era": true
+  },
+  {
+   "first": "0.0.190-beta.1",
+   "version": "0.0.190-beta.2",
+   "era": true
+  },
+  {
+   "first": "0.0.190-beta.1",
+   "version": "0.0.190-beta.0",
+   "era": false
+  },
+  {
+   "first": "0.0.190-beta.1",
+   "version": "0.0.189",
+   "era": false
+  },
+  {
+   "first": "0.0.190-beta.1",
+   "version": "0.0.190",
+   "era": true
+  },
+  {
+   "first": "",
+   "version": "0.0.189",
+   "era": false
+  },
+  {
+   "first": "",
+   "version": "0.0.999",
+   "era": false
+  },
+  {
+   "first": "",
+   "version": "garbage",
+   "era": false
+  }
+ ]
+}

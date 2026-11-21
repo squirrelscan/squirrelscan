@@ -24,11 +24,6 @@ import type {
 } from "./types";
 
 import { version } from "../../package.json";
-import {
-  ATTESTATION_REPO,
-  type AttestationDeps,
-  verifyReleaseAttestation,
-} from "./attestation";
 import { updateSuppressedReason } from "./install-meta";
 import { linkBinary, unlinkIfPresent } from "./link-binary";
 import {
@@ -44,6 +39,11 @@ import {
   safeRealpath,
   samePath,
 } from "./paths";
+import {
+  type ProvenanceDeps,
+  provenanceVerifiedMessage,
+  verifyReleaseProvenance,
+} from "./provenance";
 import {
   checkForUpdates,
   downloadBinary,
@@ -877,8 +877,8 @@ export async function runAutoUpdate(options?: {
   landingDeps?: LandingDeps;
   /** Test seam for the download deadlines (#174). */
   downloadTimeouts?: DownloadTimeouts;
-  /** Test seam for the `gh attestation verify` step (#169). */
-  attestation?: AttestationDeps;
+  /** Test seam for the provenance step: gh (#169) and release keys (repo#5032). */
+  attestation?: ProvenanceDeps;
 }): Promise<string | null> {
   const settingsResult = loadSettings();
   if (!settingsResult.ok) return null;
@@ -1134,11 +1134,11 @@ async function performUpdate(
     abortIfDismissed?: boolean;
     landingDeps?: LandingDeps;
     downloadTimeouts?: DownloadTimeouts;
-    attestation?: AttestationDeps;
+    attestation?: ProvenanceDeps;
     /** Receives the "provenance check skipped" notice; a silent update has no console. */
     onAttestationSkipped?: (reason: string) => void;
-    /** Called when the attestation verified; only the interactive path prints it. */
-    onAttestationVerified?: () => void;
+    /** Called with what verified (signature or attestation); only the interactive path prints it. */
+    onAttestationVerified?: (message: string) => void;
   }
 ): Promise<Result<UpdateLanding>> {
   const platformArch = detectPlatformArch();
@@ -1149,16 +1149,24 @@ async function performUpdate(
   if (!downloadResult.ok) return downloadResult;
 
   // After the sha256 check inside downloadBinary, before anything is written
-  // into the install: a mismatch aborts the update, a missing gh only warns.
-  const attested = await verifyReleaseAttestation(
+  // into the install: a pinned-key signature or the GitHub attestation must
+  // verify; a bad signature or attestation aborts the update, a missing gh
+  // (with no signature) only warns. See provenance.ts (#169, repo#5032).
+  const attested = await verifyReleaseProvenance(
     downloadResult.data,
+    {
+      version: manifest.version,
+      platformArch,
+      // downloadBinary already refused a platform the manifest does not list.
+      filename: manifest.binaries[platformArch]?.filename ?? "",
+    },
     options?.attestation
   );
   if (!attested.ok) return attested;
   if (attested.data.status === "skipped") {
     options?.onAttestationSkipped?.(attested.data.reason);
   } else {
-    options?.onAttestationVerified?.();
+    options?.onAttestationVerified?.(provenanceVerifiedMessage(attested.data));
   }
 
   // A download takes long enough for `self update --dismiss` to land in the
@@ -1281,8 +1289,8 @@ export async function runInteractiveUpdate(options?: {
   force?: boolean;
   /** Test seam for the PATH/bin-dir landing check. */
   landingDeps?: LandingDeps;
-  /** Test seam for the `gh attestation verify` step (#169). */
-  attestation?: AttestationDeps;
+  /** Test seam for the provenance step: gh (#169) and release keys (repo#5032). */
+  attestation?: ProvenanceDeps;
 }): Promise<Result<UpdateResult>> {
   const settingsResult = loadSettings();
   if (!settingsResult.ok) return settingsResult;
@@ -1339,8 +1347,7 @@ export async function runInteractiveUpdate(options?: {
       landingDeps: options?.landingDeps,
       attestation: options?.attestation,
       onAttestationSkipped: (reason) => console.warn(`Warning: ${reason}`),
-      onAttestationVerified: () =>
-        console.log(`Attestation verified: built by ${ATTESTATION_REPO}`),
+      onAttestationVerified: (message) => console.log(message),
     });
     if (!applyResult.ok) return applyResult;
 
