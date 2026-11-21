@@ -150,6 +150,7 @@ PATH_NOGH="$SHIMS_CURL:$WORK/farm-nogh"
 PATH_NOGH_NOSSL="$SHIMS_CURL:$WORK/farm-nogh-nossl"
 PATH_NOSSL="$SHIMS:$WORK/farm-nogh-nossl"
 CASE_PATH=""
+CASE_OS_RELEASE=""
 
 # --- fake release ------------------------------------------------------------
 FAKE_BINARY='#!/bin/sh
@@ -202,7 +203,7 @@ run_case() {
   mkdir -p "$root/home" "$root/tmp"
   env -i \
     PATH="${CASE_PATH:-$SHIMS:/usr/bin:/bin:/usr/sbin:/sbin}" \
-    HOME="$root/home" TMPDIR="$root/tmp" \
+    HOME="$root/home" TMPDIR="$root/tmp" OS_RELEASE_FILE="${CASE_OS_RELEASE:-}" \
     RELEASE_DIR="$release" CURL_LOG="$root/curl.log" GH_LOG="$root/gh.log" GH_VERIFY_EXIT="$gh_exit" \
     SQUIRREL_VERSION="$VERSION" SQUIRREL_BIN_DIR="$root/home/bin" SQUIRREL_NO_MODIFY_PATH=1 \
     SQUIRREL_ERROR_ENDPOINT="http://127.0.0.1:9/error" NO_TELEMETRY=1 CI=true LC_ALL=C \
@@ -329,6 +330,85 @@ run_case "era: valid attestation, no .sig files" "$ERA" "$no_sig_dir" pass "Atte
 run_case "era: attestation fails, no .sig files" "$ERA" "$no_sig_dir" fail "Attestation verification failed" 1
 run_case "era: foreign key signature, attestation would pass" "$ERA" "$R/foreign" fail "which this installer does not pin" 0
 check eval '! gh_verify_ran'
+
+# No openssl, no gh, signed era: the error names the fix, the distro's line first,
+# and never runs a package manager.
+os_release() { printf '%s\n' "$2" > "$WORK/os-release.$1"; echo "$WORK/os-release.$1"; }
+CASE_PATH="$PATH_NOGH_NOSSL"
+CASE_OS_RELEASE="$(os_release debian 'ID=debian')"
+run_case "era: no openssl, no gh, Debian: names apt-get install -y openssl" "$ERA" "$R/good" fail "apt-get install -y openssl"
+check eval 'case "$LAST_STDERR" in *"Debian/Ubuntu: apt-get install -y openssl"*"Fedora/RHEL:   dnf install openssl"*"Alpine:        apk add openssl"*"log in to the GitHub CLI (gh)"*) true ;; *) false ;; esac'
+CASE_OS_RELEASE="$(os_release ubuntu-like 'ID=pop
+ID_LIKE="ubuntu debian"')"
+run_case "era: no openssl, no gh, Ubuntu derivative (ID_LIKE): apt line first" "$ERA" "$R/good" fail "Debian/Ubuntu: apt-get install -y openssl"
+CASE_OS_RELEASE="$(os_release fedora 'ID=fedora')"
+run_case "era: no openssl, no gh, Fedora: dnf line first" "$ERA" "$R/good" fail "Fedora/RHEL:   dnf install openssl"
+check eval 'case "$LAST_STDERR" in *"Fedora/RHEL:   dnf install openssl"*"Debian/Ubuntu: apt-get install -y openssl"*"Alpine:        apk add openssl"*) true ;; *) false ;; esac'
+CASE_OS_RELEASE="$(os_release alpine 'ID=alpine')"
+run_case "era: no openssl, no gh, Alpine: apk line first" "$ERA" "$R/good" fail "Alpine:        apk add openssl"
+check eval 'case "$LAST_STDERR" in *"Alpine:        apk add openssl"*"Debian/Ubuntu: apt-get install -y openssl"*) true ;; *) false ;; esac'
+CASE_OS_RELEASE="$WORK/no-such-os-release"
+run_case "era: no openssl, no gh, unknown distro: all three lines" "$ERA" "$R/good" fail "apk add openssl"
+check eval 'case "$LAST_STDERR" in *"apt-get install -y openssl"*"dnf install openssl"*"apk add openssl"*) true ;; *) false ;; esac'
+CASE_OS_RELEASE=""
+# The hint is only for a missing openssl: with openssl present but no .sig files it is absent.
+CASE_PATH="$PATH_NOGH"
+run_case "era: openssl present, no .sig files, no gh: no openssl hint" "$ERA" "$no_sig_dir" fail "the release has no .sig files"
+check eval 'case "$LAST_STDERR" in *"apt-get install -y openssl"*) false ;; *) true ;; esac'
+
+# musl: ensure_musl_runtime adds openssl with apk (as root), and the signed-era
+# install then succeeds on the signature alone. apk and id are shims: apk
+# "installs" openssl (a link to the real one, in the shims dir) and records its
+# arguments. detect_libc is forced to musl in a copy of the installer.
+SHIMS_MUSL="$WORK/shims-musl"
+mkdir -p "$SHIMS_MUSL"
+cp "$SHIMS/curl" "$SHIMS_MUSL/curl"
+printf '#!/bin/sh\necho 0\n' > "$SHIMS_MUSL/id"
+cat > "$SHIMS_MUSL/apk" <<APKEOF
+#!/bin/sh
+echo "\$*" >> "$WORK/apk.log"
+case "\$*" in *openssl*) ln -sf "$OPENSSL" "$SHIMS_MUSL/openssl" ;; esac
+exit 0
+APKEOF
+chmod 755 "$SHIMS_MUSL/id" "$SHIMS_MUSL/apk"
+sed 's/^detect_libc() {$/detect_libc() { echo "-musl"; return/' "$ERA" > "$WORK/install-era-musl.sh"
+rm -f "$WORK/apk.log"
+CASE_PATH="$SHIMS_MUSL:$WORK/farm-nogh-nossl"
+run_case "era: Alpine/musl, no openssl, no gh: ensure_musl_runtime adds openssl, install succeeds" \
+  "$WORK/install-era-musl.sh" "$R/good" pass "Release signature verified: signed by squirrelscan release key $PINNED_ID"
+check eval 'grep -q "add --no-cache.*openssl" "$WORK/apk.log"'
+check eval '! gh_verify_ran'
+CASE_PATH=""
+
+# apk add is atomic: with BOTH libstdc++ and openssl missing and openssl
+# unavailable from the mirror, the combined add fails; libstdc++ alone must be
+# retried, openssl reported as a warning, and the install must go on.
+SHIMS_MUSL2="$WORK/shims-musl2"
+mkdir -p "$SHIMS_MUSL2"
+cp "$SHIMS/curl" "$SHIMS_MUSL2/curl"
+cp "$SHIMS_MUSL/id" "$SHIMS_MUSL2/id"
+cat > "$SHIMS_MUSL2/apk" <<APKEOF
+#!/bin/sh
+echo "\$*" >> "$WORK/apk2.log"
+case "\$*" in *openssl*) exit 1 ;; esac
+echo "\$*" >> "$WORK/apk2.installed"
+exit 0
+APKEOF
+chmod 755 "$SHIMS_MUSL2/id" "$SHIMS_MUSL2/apk"
+# ensure_musl_runtime sees no libstdc++ (ls shim) and no openssl on PATH.
+{
+  echo 'ls() { return 1; }'
+  cat "$WORK/install-era-musl.sh"
+} > "$WORK/install-era-musl2.sh"
+rm -f "$WORK/apk2.log" "$WORK/apk2.installed"
+CASE_PATH="$SHIMS_MUSL2:$WORK/farm-nogh-nossl"
+# The install then stops at the signature check (no openssl anywhere), which
+# proves it got past ensure_musl_runtime instead of dying on libstdc++.
+run_case "era: Alpine/musl, libstdc++ and openssl missing, apk refuses openssl: libstdc++ retried alone, install continues" \
+  "$WORK/install-era-musl2.sh" "$R/good" fail "Auto-install of openssl failed"
+check eval 'case "$LAST_STDERR" in *"Missing libstdc++"*) false ;; *"Installed libstdc++"*) true ;; *) false ;; esac'
+check eval 'grep -qx "add --no-cache libstdc++" "$WORK/apk2.installed"'
+CASE_PATH=""
 
 # Before the era, and with the field unset, today's behaviour holds exactly.
 CASE_PATH="$PATH_NOGH"

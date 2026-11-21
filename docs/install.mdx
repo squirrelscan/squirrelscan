@@ -141,6 +141,8 @@ Every release is checked twice. First, the binary's SHA-256 must match the relea
 - **Release-key signature.** `manifest.json.sig` and `<binary>.sig` are ECDSA P-256 signatures, made with the squirrelscan release key, over `manifest.json` and the binary. `manifest.json` names the key in `signing_key_id` and lists each binary's SHA-256. The installer and `squirrel self update` carry the public key's id and PEM (from [`release-keys.json`](https://github.com/squirrelscan/squirrelscan/blob/main/release-keys.json)) and verify with `openssl` and WebCrypto respectively. The trust root is that pinned key, so the check holds even if the download origin or the mirror were compromised.
 - **GitHub build attestation.** Releases built by the release workflow in `squirrelscan/squirrelscan` carry an attestation. The trust root is GitHub's attestation service (Sigstore). Checking it needs a logged-in `gh`.
 
+Signed releases need `openssl` or a logged-in `gh` on Linux (`install.sh` adds `openssl` itself on Alpine; elsewhere it names the package command to run, such as `apt-get install -y openssl`, `dnf install openssl` or `apk add openssl`). Windows needs neither, it verifies with .NET.
+
 A release passes if **either** proof verifies. Until squirrelscan pins its release key, only the attestation path is active and nothing below about signatures applies yet.
 
 ### The signed era

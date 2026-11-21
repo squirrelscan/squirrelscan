@@ -1232,15 +1232,27 @@ describe.concurrent("install.sh report_error payload", () => {
         cut: "body",
         prelude: `ls() { return 1; }\napk() { :; }\n${prelude}`,
       });
+    const noOpenssl =
+      'command() { if [ "$1" = "-v" ] && [ "$2" = "openssl" ]; then return 1; fi; builtin command "$@"; }';
     const noSudo =
       'command() { if [ "$1" = "-v" ] && [ "$2" = "sudo" ]; then return 1; fi; builtin command "$@"; }';
 
     test("non-root with sudo: names sudo apk add and links the install page", async () => {
-      const r = await run("id() { echo 1000; }\nsudo() { :; }");
+      const r = await run(`id() { echo 1000; }\nsudo() { :; }\n${noOpenssl}`);
       expect(r.code).not.toBe(0);
-      expect(r.stderr).toContain("sudo apk add libstdc++");
+      expect(r.stderr).toContain("sudo apk add libstdc++ openssl");
       expect(r.stderr).toContain("https://docs.squirrelscan.com/install");
       expect(r.stderr).toContain("Missing libstdc++");
+    }, SPAWN_TIMEOUT_MS);
+
+    test("root with libstdc++ present but no openssl: apk adds openssl only", async () => {
+      const r = await runWithCurlShim("ensure_musl_runtime", {
+        cut: "body",
+        prelude: `ls() { return 0; }\nid() { echo 0; }\napk() { return 0; }\ncommand() { if [ "$1" = "-v" ] && [ "$2" = "openssl" ]; then return 1; fi; builtin command "$@"; }`,
+      });
+      expect(r.code).toBe(0);
+      expect(r.stderr).toContain("Installed openssl");
+      expect(r.stderr).not.toContain("libstdc++");
     }, SPAWN_TIMEOUT_MS);
 
     test("non-root without sudo: names plain apk add", async () => {
