@@ -1,0 +1,1 @@
+- Fixed the date column in the `squirrel report` list running into the Pages column. (#2095)

@@ -48,8 +48,7 @@ import {
   siteRuleBudgetMs,
 } from "./rule-budget";
 import { IgnoreTable, isIgnorable, stripItemSelectors, type IgnoreEntry } from "./ignore";
-import { dedupeEndpointFindings } from "./security/endpoint-dedupe";
-import { UNAUTHENTICATED_API_RULE_ID } from "./security/unauthenticated-api";
+import { dedupeCrossRuleFindings } from "./security/endpoint-dedupe";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
 import { pageTypeRuleSkip, skippablePageType } from "./shared/page-type";
 
@@ -1078,16 +1077,15 @@ export class RuleRunner {
         // the same shape as a timeout in the runner itself.
         const collectedTimeouts = collectedTimeoutChecks(collectedSignals);
 
-        // One finding per leaking endpoint (squirrelscan#2082): an endpoint both
-        // security/auth-endpoint-disclosure and security/unauthenticated-api
-        // reported keeps the auth rule's finding. Done here, before any check is
-        // collected, counted, stored or scored, so the dropped finding leaves no
-        // trace, and after every rule settled, so it holds whatever order they ran
-        // in and however either ended (thrown, timed out).
-        const dedupedApi = dedupeEndpointFindings(new Map(siteRules.map((rule, i) => [rule.meta.id, results[i]])));
-        if (dedupedApi) {
-          const i = siteRules.findIndex((rule) => rule.meta.id === UNAUTHENTICATED_API_RULE_ID);
-          results[i] = dedupedApi;
+        // One finding per leak across the probing rules that read the same
+        // endpoint (squirrelscan#2082, #2083; the pairs are CROSS_RULE_PAIRS in
+        // endpoint-dedupe.ts). Done here, before any check is collected, counted,
+        // stored or scored, so a dropped finding leaves no trace, and after every
+        // rule settled, so it holds whatever order they ran in and however each
+        // ended (thrown, timed out).
+        const deduped = dedupeCrossRuleFindings(new Map(siteRules.map((rule, i) => [rule.meta.id, results[i]])));
+        for (const [id, result] of deduped) {
+          results[siteRules.findIndex((rule) => rule.meta.id === id)] = result;
         }
 
         const allChecks: CheckResult[] = [];

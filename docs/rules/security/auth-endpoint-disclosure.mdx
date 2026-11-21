@@ -62,6 +62,10 @@ The rule emits these checks:
 - `auth-endpoint-disclosure`, failed, one check per leaking endpoint. Message: `https://example.com/api/me answered a GET with no credentials with 1 password hash (user.encrypted_password); 1 credential secret (user.reset_password_token); 3 internal user columns (user.sign_in_count, user.current_sign_in_ip, user.last_sign_in_ip)`. Each item names the endpoint, the JSON path of the field and its kind. The value is never stored or printed.
 - `auth-endpoint-clean`, passed, when no endpoint disclosed anything. Message: `No auth or session endpoint disclosed a password, password hash, credential secret or internal user record (4 endpoint(s) probed, 1 answered with JSON)`.
 
+### One finding per leak
+
+[security/unauthenticated-api](/rules/security/unauthenticated-api) and [security/json-sensitive-fields](/rules/security/json-sensitive-fields) can read the same endpoint, from the same anonymous `GET`, sent once per audit. Once every site rule has finished, squirrel keeps this rule's finding as the more specific one: `security/unauthenticated-api` drops its finding for an endpoint this rule reported, and `security/json-sensitive-fields` drops only the fields this rule reported and keeps the others, such as a card number or an access token.
+
 ### What is not flagged
 
 - A non-2xx answer, such as a 401 or 404, even when its body is JSON.

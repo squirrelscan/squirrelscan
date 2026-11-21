@@ -14,7 +14,12 @@ import { join } from "node:path";
 
 import { Effect } from "effect";
 
-import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
+import {
+  MAX_STORED_EDGES_PER_SOURCE,
+  MAX_STORED_PAGE_REFS,
+  SCHEMA_VERSION,
+  SQLiteStorage,
+} from "../src/storage/sqlite";
 import type { CrawlMetadata } from "../src/storage/types";
 
 const STATS = {
@@ -348,7 +353,7 @@ describe("entity map presence and per-page figures (repo#2105)", () => {
       );
       const rows = await run(storage.getEntityMapRows(crawlId));
       expect(rows.pages).toEqual([
-        { url: "http://x.test/a", entityCount: 2, references: [CRUMB.key] },
+        { url: "http://x.test/a", entityCount: 2, references: [CRUMB.key], referencesTotal: 1 },
       ]);
     });
   }, 30_000);
@@ -395,4 +400,83 @@ describe("entity map presence and per-page figures (repo#2105)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 30_000);
+});
+
+describe("entity map storage caps (#2135)", () => {
+  const manyRefs = (n: number) =>
+    Array.from({ length: n }, (_, i) => `id:http://x.test/${"p".repeat(1800)}#n${i}`);
+
+  test("a page with 20k expanded refs stores a bounded, sorted row with the total", async () => {
+    await withStorage(async (storage, crawlId) => {
+      const refs = manyRefs(20_000);
+      await run(
+        storage.saveEntityMap(crawlId, {
+          nodes: [],
+          edges: [],
+          occurrences: [],
+          pages: [
+            { url: "http://x.test/big", entityCount: 1, references: refs },
+            { url: "http://x.test/small", entityCount: 1, references: ["id:a"] },
+          ],
+        })
+      );
+      const rows = await run(storage.getEntityMapRows(crawlId));
+      expect(rows.written).toBe(true);
+      const big = rows.pages.find((p) => p.url === "http://x.test/big")!;
+      expect(big.references).toHaveLength(MAX_STORED_PAGE_REFS);
+      expect(big.referencesTotal).toBe(20_000);
+      expect(big.references).toEqual([...big.references].sort());
+      const small = rows.pages.find((p) => p.url === "http://x.test/small")!;
+      expect(small.references).toEqual(["id:a"]);
+      expect(small.referencesTotal).toBe(1);
+    });
+  });
+
+  test("edges are capped per source and the rest of the map still writes", async () => {
+    await withStorage(async (storage, crawlId) => {
+      const edges = Array.from({ length: MAX_STORED_EDGES_PER_SOURCE + 50 }, (_, i) => ({
+        source: "id:s",
+        predicate: "mentions",
+        target: `id:t${String(i).padStart(5, "0")}`,
+        dangling: true,
+        occurrences: 1,
+        pages: ["http://x.test/a"],
+        morePages: 0,
+      }));
+      await run(
+        storage.saveEntityMap(crawlId, {
+          nodes: [CRUMB],
+          edges,
+          occurrences: [],
+        })
+      );
+      const rows = await run(storage.getEntityMapRows(crawlId));
+      expect(rows.edges).toHaveLength(MAX_STORED_EDGES_PER_SOURCE);
+      expect(rows.nodes).toHaveLength(1);
+    });
+  });
+
+  test("a corrupt refs row is skipped with a warning, not a failed read", async () => {
+    await withStorage(async (storage, crawlId) => {
+      await run(
+        storage.saveEntityMap(crawlId, {
+          nodes: [],
+          edges: [],
+          occurrences: [],
+          pages: [
+            { url: "http://x.test/ok", entityCount: 1, references: ["id:a"] },
+            { url: "http://x.test/bad", entityCount: 1, references: ["id:b"] },
+          ],
+        })
+      );
+      (storage as unknown as { getDb(): Database })
+        .getDb()
+        .prepare("UPDATE entity_map_pages SET refs = ? WHERE normalized_url = ?")
+        .run("{not json", "http://x.test/bad");
+      const rows = await run(storage.getEntityMapRows(crawlId));
+      expect(rows.pages.map((p) => p.url)).toEqual(["http://x.test/ok"]);
+      expect(rows.warnings).toHaveLength(1);
+      expect(rows.warnings[0]).toContain("http://x.test/bad");
+    });
+  });
 });

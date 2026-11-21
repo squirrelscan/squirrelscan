@@ -38,6 +38,7 @@ import {
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { readStoreIntegrity } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
+import { logger } from "@/utils/logger";
 
 /** One crawl's entity map, with the crawl it came from. */
 export interface StoredEntityMap {
@@ -302,6 +303,7 @@ export async function listEntityMaps(
                 occurrences: [],
                 written: false,
                 pages: [],
+                warnings: [],
               })
             )
           )
@@ -378,6 +380,7 @@ export async function loadEntityMap(
           const rows = await Effect.runPromise(
             storage.getEntityMapRows(crawl.id)
           );
+          for (const warning of rows.warnings) logger.warn(warning);
           // A map that was written and came out empty is a real, current answer
           // (#2105). Only a crawl that never wrote one is passed over.
           if (rows.nodes.length === 0 && !rows.written && !crawlId) {

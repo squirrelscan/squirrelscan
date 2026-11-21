@@ -17,7 +17,7 @@ type Rgb = [number, number, number];
 
 // WCAG 2.1 AA contrast requirements
 const CONTRAST_RATIO_NORMAL = 4.5; // Normal text
-const _CONTRAST_RATIO_LARGE = 3.0; // Large text (18px+, or 14px+ bold) - reserved for future use
+const CONTRAST_RATIO_LARGE = 3.0; // Large text: 18pt (24px) and up, or 14pt (18.67px) and up when bold
 
 // Named colors with their RGB values (CSS Level 4)
 const NAMED_COLORS: Record<string, Rgb> = {
@@ -85,7 +85,13 @@ export const colorContrastRule: Rule = {
     if (!doc) return { checks: [] };
 
     const checks: CheckResult[] = [];
-    const lowContrast: Array<{ element: string; fg: string; bg: string; ratio: number }> = [];
+    const lowContrast: Array<{
+      element: string;
+      fg: string;
+      bg: string;
+      ratio: number;
+      size: TextSize;
+    }> = [];
     const unresolved: Array<{ id: string; reason: UnresolvedReason }> = [];
     let measuredPairs = 0;
 
@@ -129,8 +135,10 @@ export const colorContrastRule: Rule = {
 
       measuredPairs++;
       const ratio = calculateContrastRatio(fgRgb, bg.rgb);
-      if (ratio < CONTRAST_RATIO_NORMAL) {
-        lowContrast.push({ element, fg: color.value, bg: bg.raw, ratio });
+      const size = textSizeOf(el);
+      const required = size === "large" ? CONTRAST_RATIO_LARGE : CONTRAST_RATIO_NORMAL;
+      if (ratio < required) {
+        lowContrast.push({ element, fg: color.value, bg: bg.raw, ratio, size });
       }
     }
 
@@ -138,19 +146,34 @@ export const colorContrastRule: Rule = {
       const uniqueIssues = [
         ...new Set(
           lowContrast.map(
-            (issue) => `${issue.element}: ${issue.fg} on ${issue.bg} (${issue.ratio.toFixed(2)}:1)`
+            (issue) =>
+              `${issue.element}: ${issue.fg} on ${issue.bg} (${issue.ratio.toFixed(2)}:1${
+                issue.size === "large" ? ", large text" : ""
+              })`
           )
         ),
       ];
+      const largeFailures = lowContrast.filter((i) => i.size === "large").length;
+      const unknownSize = lowContrast.filter((i) => i.size === "unknown").length;
 
       checks.push({
         name: "color-contrast",
         status: "warn",
-        message: `${uniqueIssues.length} color contrast issue(s) below 4.5:1`,
+        message:
+          largeFailures > 0
+            ? `${uniqueIssues.length} color contrast issue(s) below the WCAG minimum (4.5:1, or 3:1 for large text)`
+            : `${uniqueIssues.length} color contrast issue(s) below 4.5:1`,
         items: uniqueIssues.slice(0, 10).map((id) => ({ id })),
         details: {
           note: "WCAG AA requires 4.5:1 for normal text, 3:1 for large text",
           measuredPairs,
+          ...(unknownSize > 0
+            ? {
+                sizeUnknown: unknownSize,
+                sizeNote:
+                  "The text size could not be read from inline styles, so these pairs were held to 4.5:1. Text of 18pt or larger, or 14pt bold, needs only 3:1",
+              }
+            : {}),
           ...(uniqueIssues.length > 10 ? { additional: uniqueIssues.length - 10 } : {}),
         },
       });
@@ -200,6 +223,82 @@ export const colorContrastRule: Rule = {
 };
 
 const WHITE: Rgb = [255, 255, 255];
+
+/** WCAG 1.4.3 large text: 18pt (24px), or 14pt (about 18.67px) when bold. */
+const LARGE_PX = (18 * 96) / 72;
+const LARGE_BOLD_PX = (14 * 96) / 72;
+
+type TextSize = "large" | "normal" | "unknown";
+
+const FONT_SIZE_KEYWORDS: Record<string, number> = {
+  "xx-small": 9,
+  "x-small": 10,
+  small: 13,
+  medium: 16,
+  large: 18,
+  "x-large": 24,
+  "xx-large": 32,
+  "xxx-large": 48,
+};
+
+const BOLD_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6", "b", "strong", "th"]);
+
+/** Declared font size in px from inline styles up the ancestors, or null when it cannot be told. */
+function fontSizePx(el: Element | null, depth = 0): number | null {
+  if (!el || depth > 50) return null;
+  const decl = winner(
+    parseDeclarations(el.getAttribute("style") || "").filter((d) => d.property === "font-size")
+  );
+  if (!decl) return fontSizePx(el.parentElement, depth + 1);
+  const value = decl.value.trim().toLowerCase();
+  const keyword = FONT_SIZE_KEYWORDS[value];
+  if (keyword !== undefined) return keyword;
+  const m = /^(\d*\.?\d+)(px|pt|rem|em|%)$/.exec(value);
+  if (!m) return null;
+  const n = Number.parseFloat(m[1]!);
+  switch (m[2]) {
+    case "px":
+      return n;
+    case "pt":
+      return (n * 96) / 72;
+    case "rem":
+      return n * 16;
+    default: {
+      const parent = fontSizePx(el.parentElement, depth + 1);
+      return parent === null ? null : (m[2] === "%" ? n / 100 : n) * parent;
+    }
+  }
+}
+
+/** Whether inline styles (or a heading/strong tag) make the text bold: true, false, or null when unclear. */
+function isBold(el: Element | null, depth = 0): boolean | null {
+  if (!el || depth > 50) return false;
+  const decl = winner(
+    parseDeclarations(el.getAttribute("style") || "").filter((d) => d.property === "font-weight")
+  );
+  if (decl) {
+    const v = decl.value.trim().toLowerCase();
+    if (v === "bold") return true;
+    if (v === "normal") return false;
+    if (/^\d+$/.test(v)) return Number.parseInt(v, 10) >= 700;
+    return null;
+  }
+  if (BOLD_TAGS.has(el.tagName.toLowerCase())) return true;
+  return isBold(el.parentElement, depth + 1);
+}
+
+/** WCAG 1.4.3 size class from declared inline size and weight; "unknown" keeps the 4.5:1 threshold. */
+function textSizeOf(el: Element): TextSize {
+  const px = fontSizePx(el);
+  if (px === null) return "unknown";
+  if (px >= LARGE_PX) return "large";
+  if (px >= LARGE_BOLD_PX) {
+    const bold = isBold(el);
+    if (bold === null) return "unknown";
+    return bold ? "large" : "normal";
+  }
+  return "normal";
+}
 const CSS_WIDE_KEYWORDS = new Set(["inherit", "initial", "unset", "revert", "revert-layer", "currentcolor"]);
 
 type UnresolvedReason = "stylesheet" | "image" | "color";

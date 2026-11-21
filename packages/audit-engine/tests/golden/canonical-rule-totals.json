@@ -154,7 +154,7 @@
   "crawl/robots-meta-conflict": 1,
   "crawl/robots-txt": 4,
   "crawl/schema-noindex-conflict": 1,
-  "crawl/server-errors": 1,
+  "crawl/server-errors": 501,
   "crawl/single-page-site": 0,
   "crawl/sitemap-4xx": 1,
   "crawl/sitemap-coverage": 1,

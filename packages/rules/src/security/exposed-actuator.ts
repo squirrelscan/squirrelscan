@@ -66,7 +66,7 @@ import type { ProbeBudget, ProbeKind } from "../probe-budget";
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { isStateChangingPath } from "./graphql-probe";
-import { isThrottledOrChallenged, readCappedBytes } from "./probe-http";
+import { isThrottledOrChallenged, isUnverifiedReply, readCappedBytes } from "./probe-http";
 
 /** Base paths one run probes. */
 export const MAX_ACTUATOR_BASES = 3;
@@ -768,13 +768,8 @@ export async function runExposedActuator(
         continue;
       }
       const { response } = outcome;
-      if (
-        isThrottledOrChallenged({
-          status: response.status,
-          headers: response.headers,
-          text: new TextDecoder().decode(response.bytes),
-        })
-      ) {
+      const reply = { status: response.status, headers: response.headers, text: new TextDecoder().decode(response.bytes) };
+      if (isThrottledOrChallenged(reply)) {
         // The site pushed back: the answer says nothing about the path, and
         // no further request is sent.
         throttled = true;
@@ -788,7 +783,9 @@ export async function runExposedActuator(
       if (spec.id === "heapdump" && !HEAPDUMP_CLOSED_STATUSES.has(response.status)) {
         heapdumpStop = "heapdump-stopped-after-answer";
       }
-      if (response.status >= 500) {
+      // A 5xx cannot show whether the path is open (the same reading as
+      // security/exposed-files): not checked, never part of a pass.
+      if (isUnverifiedReply(reply)) {
         unchecked.push({ url, endpoint: spec.id, why: "server-error" });
         continue;
       }

@@ -1,5 +1,6 @@
 // a11y/heading-order - Heading levels don't skip
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const headingOrderRule: Rule = {
@@ -12,6 +13,7 @@ export const headingOrderRule: Rule = {
     category: "a11y",
     wcagNone:
       "It flags a heading that skips a level (an H3 after an H1), which no WCAG success criterion forbids; 1.3.1 Info and Relationships asks that headings be marked up as headings, not that their levels run in sequence.",
+    wcagRelated: [wcag("1.3.1"), wcag("2.4.6")],
     scope: "page",
     findingScope: "page",
     verdictScope: "page",

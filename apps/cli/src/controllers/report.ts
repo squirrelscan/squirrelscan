@@ -13,6 +13,7 @@ import type {
 } from "@/crawler/storage/types";
 import type {
   AuditReport,
+  PartialAudit,
   AuditStatus,
   AuditStatusReasonCode,
   CheckResult,
@@ -29,6 +30,7 @@ export interface CrawlMetadataWithPublished extends CrawlMetadata {
 import { parseResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import { unpackSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
+import { isWcagLevel } from "@squirrelscan/core-contracts/wcag";
 import {
   parseSkippedChecks,
   restoreSkippedChecks,
@@ -166,6 +168,8 @@ interface SlimJsonReport {
     coverage?: { auditedPages?: unknown };
     /** The audit level snapshot; absent in slim JSON written before audit levels. Untrusted. */
     auditLevel?: unknown;
+    /** The rule-filter marker (repo#1082). Untrusted; `slimPartialAudit` validates it. */
+    partialAudit?: unknown;
   };
   // Audit validity (#801): absent in slim JSON written before #801 ⇒ completed.
   status?: AuditStatus;
@@ -273,6 +277,48 @@ function wholeCount(value: unknown): number | undefined {
 const CATEGORY_BY_NAME = new Map(
   Object.values(CATEGORIES).map((c) => [c.name.toLowerCase(), c.code as string])
 );
+
+/** Most entries kept per `partialAudit` list, and the longest entry kept. */
+const PARTIAL_AUDIT_MAX_ENTRIES = 50;
+const PARTIAL_AUDIT_MAX_ENTRY_LENGTH = 100;
+
+/** A `partialAudit` list off user-supplied JSON: short non-empty strings, bounded count. */
+function partialAuditList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(
+      (x): x is string =>
+        typeof x === "string" &&
+        x.length > 0 &&
+        x.length <= PARTIAL_AUDIT_MAX_ENTRY_LENGTH
+    )
+    .slice(0, PARTIAL_AUDIT_MAX_ENTRIES);
+}
+
+/**
+ * The export's `meta.partialAudit` (repo#1082, pub#2102), validated: the file is
+ * user-supplied, so only bounded arrays of short strings and a valid WCAG level
+ * survive. Undefined when the field is absent or carries no filter at all, so a
+ * file without it yields no marker.
+ */
+function slimPartialAudit(value: unknown): PartialAudit | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const raw = value as Record<string, unknown>;
+  const include = partialAuditList(raw.include);
+  const exclude = partialAuditList(raw.exclude);
+  const wcagLevel = isWcagLevel(raw.wcagLevel) ? raw.wcagLevel : undefined;
+  if (include.length === 0 && exclude.length === 0 && !wcagLevel) {
+    return undefined;
+  }
+  return {
+    include,
+    exclude,
+    includedCategories: partialAuditList(raw.includedCategories),
+    ...(wcagLevel ? { wcagLevel } : {}),
+  };
+}
 
 export function convertSlimReport(report: SlimJsonReport): AuditReport {
   const ruleResults: Record<string, ReportRuleResult> = {};
@@ -457,8 +503,11 @@ export function convertSlimReport(report: SlimJsonReport): AuditReport {
       : undefined;
   const robotsBlockedPages = wholeCount(report.meta.robotsBlockedPages);
 
+  const partialAudit = slimPartialAudit(report.meta.partialAudit);
+
   return {
     baseUrl: report.meta.baseUrl,
+    ...(partialAudit ? { partialAudit } : {}),
     // #1418: carry a refused off-site seed redirect back through the round
     // trip. Dropping it here would mean exporting JSON and re-rendering it
     // silently turns a report about a redirected seed back into what looks like

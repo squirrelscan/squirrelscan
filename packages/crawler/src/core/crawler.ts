@@ -1103,6 +1103,7 @@ export function createCrawler(
       source: "seed" | "sitemap" | "discovered" | "carried",
       sitemapPriority?: number,
       linkCountCache?: Map<string, number>,
+      replaceSitemapCopy = false,
     ): Effect.Effect<void, StorageError, never> =>
       Effect.gen(function* () {
         const { normalized, decision } = normalizeAndCheckScope(discoveredUrl);
@@ -1125,7 +1126,17 @@ export function createCrawler(
         // Check if already in frontier. Existence only: this runs once per
         // discovered link, so it must not read or materialise the whole row.
         const alreadyQueued = yield* storage.hasFrontierEntry(crawlId, normalized);
-        if (alreadyQueued) return;
+        if (alreadyQueued) {
+          // #2127: a sitemap that lists the start URL enqueued it first, as a plain sitemap
+          // entry. The seed is the user's own choice and must keep its source bonus, or a
+          // sitemap larger than maxPages crowds it out of the budget. Only a still-pending
+          // sitemap copy is replaced, and only for the URL the user typed (a redirect
+          // destination keeps the root-start order, #1405); anything fetched or already a
+          // seed is left alone.
+          if (source !== "seed" || !replaceSitemapCopy) return;
+          const existing = yield* storage.getFrontierEntry(crawlId, normalized);
+          if (!existing || existing.source === "seed" || existing.status !== "pending") return;
+        }
 
         // Oversize URLs (#1229): the publish schema caps pages[].url et al at
         // REPORT_LIMITS.maxUrlLength STRICT (no clamp — they're join keys the
@@ -3724,7 +3735,19 @@ export function createCrawler(
         // Origin-only audits retain the old order; deep starts were seeded
         // before the sitemap loop above.
         if (!prioritizeSeed) {
-          yield* enqueueUrl(crawlId, seedResolution.seedUrl, 0, undefined, "seed");
+          const typedStartIsSeed =
+            normalizeAndCheckScope(userProvidedUrl).normalized ===
+            normalizeAndCheckScope(seedResolution.seedUrl).normalized;
+          yield* enqueueUrl(
+            crawlId,
+            seedResolution.seedUrl,
+            0,
+            undefined,
+            "seed",
+            undefined,
+            undefined,
+            typedStartIsSeed,
+          );
         }
 
         // If nothing is pending after sitemaps + seed, every candidate URL was

@@ -74,6 +74,7 @@ import {
   type PluginRegistrySnapshot,
   type RuleNamespace,
 } from "@squirrelscan/rules";
+import { loadAllRules } from "@squirrelscan/rules";
 import {
   configuredPagePaths,
   createProbeBudget,
@@ -149,6 +150,7 @@ import {
 } from "@/audit/rule-filter";
 import { RULES_VERSION } from "@/audit/rules-version";
 import {
+  addPageCheckTallies,
   runSmartAudits,
   REMOVED_STATUSES as SMART_REMOVED_STATUSES,
 } from "@/audit/smart-audits";
@@ -2388,6 +2390,10 @@ export async function runAudit(
       // reach the sink by normalized URL already.
       const notEvaluatedCollector = createNotEvaluatedCollector((url) => url);
       const scoredPageUrls: string[] = [];
+      // (pub#2097) Per-check-name tallies of this run, for the carried pages' credit.
+      const freshCheckTallies: import("@squirrelscan/core-contracts").CheckTallies =
+        {};
+      const sinkRegistry = smartAuditsOn ? loadAllRules() : undefined;
       let pendingRuleRows = new Map<
         string,
         { ruleId: string; checks: import("@/types").CheckResult[] }[]
@@ -2407,6 +2413,13 @@ export async function runAudit(
           // kept is the finding set the store was going to hold anyway, not the
           // (mostly passing) check set.
           if (!smartAuditsOn || removedPageUrls.has(pageUrl)) return;
+          addPageCheckTallies(
+            freshCheckTallies,
+            entries as ReadonlyArray<
+              readonly [string, readonly import("@/types").CheckResult[]]
+            >,
+            (ruleId) => sinkRegistry?.get(ruleId)?.meta.severity ?? "warning"
+          );
           for (const [ruleId, checks] of entries) {
             for (const check of checks)
               notEvaluatedCollector.add(ruleId, check, pageUrl);
@@ -2645,6 +2658,7 @@ export async function runAudit(
               freshFindings,
               notEvaluated: notEvaluatedCollector.result(),
               scoredPageUrls,
+              checkTallies: freshCheckTallies,
               ruleMeta: ruleResults.tallies,
               // Collected during the pre-rules walk in the same
               // normalized_url order `getPages` returns (#1913).
