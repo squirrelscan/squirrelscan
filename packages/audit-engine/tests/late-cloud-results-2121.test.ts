@@ -565,20 +565,46 @@ describe("late cloud results: rejection, deadline, cache straddle, plugins (pub#
       const client = stubCloudClient(async (service) => {
         if (service === "render") await hold.promise;
       });
-      const deadlineMs = 2_500;
-      const deadlineAt = Date.now() + deadlineMs;
+      // No wall-clock race: Date.now is frozen, so the deadline timer (deadlineAt - now) is
+      // armed for DEADLINE_MS from the moment the page parks, however slow the host is. The
+      // held batch is released only after the page's waiter has been removed (the deadline
+      // won), or after a safety cap if it never is (a regression), so the test passes only
+      // by the deadline firing.
+      const DEADLINE_MS = 30;
+      const SAFETY_CAP_MS = 500;
+      const realNow = Date.now;
+      const frozen = realNow.call(Date);
+      let parkedSeen = false;
+      const deadlineAt = frozen + DEADLINE_MS;
       let acc: CloudPrefetchAccumulator | undefined;
       let parkedBeforeDeadline = 0;
       let parkedAfterDeadline = -1;
-      const sampler = setInterval(() => {
-        if (acc && Date.now() < deadlineAt) parkedBeforeDeadline = Math.max(parkedBeforeDeadline, acc.pendingChangeWaiters);
-      }, 10);
-      // After the deadline (the page pass has given up) sample, then let the prefetch finish
-      // so the site pass, which reads the settled store, can run.
-      const after = setTimeout(() => {
-        parkedAfterDeadline = acc?.pendingChangeWaiters ?? -1;
+      let parkedSince = 0;
+      let released = false;
+      const release = () => {
+        released = true;
         hold.resolve();
-      }, deadlineMs + 400);
+      };
+      // Frozen while the page is parked; once its waiter is gone (the deadline aborted
+      // it, or the safety cap released it) the clock reads past the deadline.
+      Date.now = () => {
+        const waiters = acc?.pendingChangeWaiters ?? 0;
+        if (waiters > 0) parkedSeen = true;
+        return (parkedSeen && waiters === 0) || released ? deadlineAt + 1 : frozen;
+      };
+      const sampler = setInterval(() => {
+        if (released || !acc) return;
+        const waiters = acc.pendingChangeWaiters;
+        if (waiters > 0) {
+          parkedBeforeDeadline = Math.max(parkedBeforeDeadline, waiters);
+          if (parkedSince === 0) parkedSince = realNow.call(Date);
+        }
+        if (parkedSince === 0) return;
+        if (waiters === 0 || realNow.call(Date) - parkedSince > SAFETY_CAP_MS) {
+          parkedAfterDeadline = waiters;
+          release();
+        }
+      }, 5);
       try {
         const outcome = await runOnce(dbPath, crawlId, "late", client, {
           deadlineAt,
@@ -592,8 +618,8 @@ describe("late cloud results: rejection, deadline, cache straddle, plugins (pub#
         expect(outcome.deadlineSkipped).toBeGreaterThan(0);
         expect(outcome.earlyPages).toBe(0);
       } finally {
+        Date.now = realNow;
         clearInterval(sampler);
-        clearTimeout(after);
         hold.resolve();
       }
     },
