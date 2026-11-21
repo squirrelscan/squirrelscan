@@ -9,7 +9,10 @@ import { parsePage } from "@squirrelscan/parser";
 
 import { duplicateContentRule, fingerprintForPage } from "../src/content/duplicate-content";
 import {
+  buildNearDuplicate,
   MAX_URLS_PER_CLUSTER,
+  NEAR_DUP_MAX_NODES,
+  type NearDupPage,
   NEAR_DUP_FAIL_CLUSTER,
   NEAR_DUP_MAX_DISTANCE,
   NEAR_DUP_MAX_TOKENS,
@@ -18,6 +21,7 @@ import {
   pageContentSimhash,
   simhashDistance,
 } from "../src/content/near-duplicate";
+import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { seoDoorwayRule } from "../src/integrity/seo-doorway";
 import { noindexSource } from "../src/shared/noindex";
 import type { RuleContext } from "../src/types";
@@ -557,6 +561,55 @@ describe("content/near-duplicate", () => {
       "Only 7 page(s) crawled; 10 needed to compare pages for near-duplicate content",
     );
   });
+
+  test("too few pages is a coded gap skip, not free text", async () => {
+    const res = await both([...distinct(4), ...locations(3)]);
+    expect(res.skipReason).toBe(SCAN_TRUNCATED_SKIP_REASON);
+    const few = await buildNearDuplicate([], 100);
+    expect(few.status).toBe("skipped");
+    expect(few.skipReason).toBe(SCAN_TRUNCATED_SKIP_REASON);
+  });
+
+  test("past the compare cap, uncompared near-identical pages are a gap, not a pass", async () => {
+    let seed = 12345;
+    const word = (): string => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed.toString(16).padStart(8, "0");
+    };
+    const pages: NearDupPage[] = [];
+    for (let i = 0; i < NEAR_DUP_MAX_NODES; i++) {
+      pages.push({
+        url: u(`/a/${String(i).padStart(6, "0")}`),
+        status: 200,
+        noindex: false,
+        canonical: undefined,
+        alternates: null,
+        simhash: word() + word(),
+        exactKey: null,
+      });
+    }
+    // Two copies one bit apart that sort after the cap.
+    const twin = word() + word();
+    const flipped = twin.slice(0, 15) + (parseInt(twin[15]!, 16) ^ 1).toString(16);
+    for (const [path, simhash] of [
+      ["/zz-1", twin],
+      ["/zz-2", flipped],
+    ] as const) {
+      pages.push({
+        url: u(path),
+        status: 200,
+        noindex: false,
+        canonical: undefined,
+        alternates: null,
+        simhash,
+        exactKey: null,
+      });
+    }
+    const res = await buildNearDuplicate(pages, pages.length);
+    expect(res.status).toBe("skipped");
+    expect(res.skipReason).toBe(SCAN_TRUNCATED_SKIP_REASON);
+    expect(res.details).toMatchObject({ unjudgedPages: 2 });
+  }, 30_000);
 
   test("exact duplicates alone are left to content/duplicate-content (no double report)", async () => {
     const specs: Spec[] = [

@@ -15,7 +15,7 @@ The rule is site-wide and emits a single check named `near-duplicate`. For every
 
 The text is lowercased and cut into words (runs of letters and digits, at most the first 20,000 per page). Each distinct run of three words is hashed once, and the hashes vote on a single 64-bit fingerprint, a simhash. A phrase repeated on the page, such as a sentence template, counts once, so it cannot out-vote the page's distinct text. Pages whose fingerprints differ in 5 bits or fewer are joined into a cluster. Two unrelated pages differ in about 32 bits and fall within 5 by chance with a probability of about 4.5 in 10 trillion, negligible even across a 10,000-page crawl. A city or date swap in a 300 to 400 word page measures 0 to 6 bits, and a cluster of many location pages links through its neighbours, so the cluster is found even when one pair sits just past the limit.
 
-- Skipped when fewer than 10 pages were crawled. Message: `Only N page(s) crawled; 10 needed to compare pages for near-duplicate content`.
+- Skipped when fewer than 10 pages were crawled. Message: `Only N page(s) crawled; 10 needed to compare pages for near-duplicate content`. This skip, and the one for fewer than 2 comparable pages, carries the coded reason `scan-truncated`: it is a gap, so a finding from an earlier audit stays open instead of resolving.
 - Skipped when fewer than two pages have enough main text to compare. Message: `Fewer than 2 pages have enough main text to compare`.
 - Fail when a cluster holds 10 or more distinct texts, the scale of a doorway set. Warn when every cluster is smaller. Message: `N near-duplicate cluster(s) found across M pages`. Each item is one cluster, labelled `N pages have nearly identical main text`, with the URLs in it. Clusters are ordered largest first, then by first URL, and URLs within a cluster are sorted. Severity warning, weight 4.
 - Pass otherwise. Message: `No pages have nearly identical main text`.
@@ -32,7 +32,7 @@ A page is not compared when it is:
 - marked `noindex`, by a `<meta name="robots">` tag or an `X-Robots-Tag` header (`excluded.noindex`).
 - a pagination page: a URL with a `page`, `p`, `pg`, `offset` or `start` query parameter, or a path ending in `/page/N` (`excluded.pagination`).
 
-The rule compares at most 10,000 distinct texts; pages beyond that are counted in `unjudgedPages`.
+The rule compares at most 10,000 distinct texts; pages beyond that are counted in `unjudgedPages`. When no cluster is found among the compared texts and some pages went uncompared, the check is skipped with reason `scan-truncated` rather than passed, so a finding on an uncompared page is not marked fixed.
 
 ### Exact copies
 
