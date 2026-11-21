@@ -434,6 +434,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          VERSION: ${{ needs.version.outputs.version }}
           WRANGLER_SEND_METRICS: "false"
         run: |
           set -euo pipefail
@@ -447,6 +448,14 @@ jobs:
 
           put install.sh install.sh "text/x-shellscript; charset=utf-8"
           put install.ps1 install.ps1 "text/plain; charset=utf-8"
+
+          # The installer worker reports the release the served scripts came
+          # from as `x-squirrel-installer-version`, read from this sidecar key
+          # (the bare version, e.g. 0.0.123). Written after both scripts so it
+          # never names a release whose scripts are not uploaded yet.
+          test -n "$VERSION"
+          printf '%s\n' "$VERSION" > installer-version.txt
+          put installer-version.txt installer-version.txt "text/plain; charset=utf-8"
 
           # Beta tracks every release; stable only non-prereleases. This mirrors
           # the worker's GitHub fallback (beta accepts prereleases, stable does
@@ -490,6 +499,24 @@ jobs:
           verify beta
           if [ "$PRERELEASE" != "true" ]; then
             verify stable
+          fi
+
+          # The served install.sh should now name this release. A warning, not
+          # a failure: the scripts and channel metadata are already live, and
+          # a stale header must not fail a release that otherwise shipped.
+          got_installer=""
+          for _ in $(seq 1 12); do
+            got_installer=$(curl -fsSI "https://install.squirrelscan.com/install.sh" \
+              | tr -d '\r' \
+              | awk -F': ' 'tolower($1) == "x-squirrel-installer-version" { print $2 }' || true)
+            if [ "$got_installer" = "$VERSION" ]; then
+              echo "install.sh x-squirrel-installer-version -> ${got_installer}"
+              break
+            fi
+            sleep 20
+          done
+          if [ "$got_installer" != "$VERSION" ]; then
+            echo "::warning::install.sh x-squirrel-installer-version is '${got_installer}', expected '${VERSION}'"
           fi
 
   hosted-release-refresh:
