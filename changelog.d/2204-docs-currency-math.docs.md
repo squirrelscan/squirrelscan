@@ -1,0 +1,1 @@
+- Docs prices no longer render as LaTeX math on the cloud team, credits, CLI credits and FAQ pages, and `make validate` now fails on unescaped currency amounts (#2204)
