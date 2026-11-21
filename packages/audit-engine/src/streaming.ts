@@ -302,6 +302,14 @@ export function streamPageRules(
      * responsible for every consumer that used to read the three maps.
      */
     retainPageResults?: boolean;
+    /**
+     * Late-bound cloud results (pub#2121): called with each page's url before the
+     * page is handled; a promise means its cloud results are not final yet, and
+     * the page waits for it (bounded by `deadlineAt`; `signal` aborts when the
+     * deadline wins, so the callee can drop its waiter). Null or absent: no wait,
+     * byte-identical to before. See {@link LateCloudResults.pageReady}.
+     */
+    cloudReady?: (pageUrl: string, signal: AbortSignal) => Promise<void> | null;
   }
 ): Effect.Effect<StreamPageRulesResult, never, never> {
   return Effect.gen(function* () {
@@ -373,6 +381,7 @@ export function streamPageRules(
     let pagesDone = 0;
     let batchIndex = 0;
     const deadlineAt = opts?.deadlineAt;
+    const cloudReady = opts?.cloudReady;
     let deadlineHit = false;
     const maxPageBytes = opts?.maxPageBytes;
     let oversizeSkipped = 0;
@@ -454,6 +463,11 @@ export function streamPageRules(
       const parsedByUrl = new Map(parsedBatch.map((e) => [e.page.normalizedUrl, e.parsed]));
 
       for (const page of batch) {
+        // pub#2121: a page whose cloud prefetch is still running waits here, before
+        // the deadline check, so a wait that runs past the deadline ends the loop
+        // exactly as a slow page before it would.
+        const cloudWait = cloudReady && waitForCloud(cloudReady, page.url, deadlineAt);
+        if (cloudWait) yield* Effect.promise(() => cloudWait);
         if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
           deadlineHit = true;
           break;
@@ -941,4 +955,27 @@ function replayPage(
       .pipe(Effect.catchAll(() => Effect.void));
     for (const c of collectors) c.replay!(page, entry.signals[c.id]);
   });
+}
+
+/**
+ * The page's cloud wait, or the deadline if it comes first (pub#2121); null when
+ * there is nothing to wait for. When the deadline wins the wait is aborted, so
+ * it leaves no waiter parked on the prefetch.
+ */
+function waitForCloud(
+  cloudReady: (pageUrl: string, signal: AbortSignal) => Promise<void> | null,
+  pageUrl: string,
+  deadlineAt: number | undefined,
+): Promise<void> | null {
+  const abort = new AbortController();
+  const wait = cloudReady(pageUrl, abort.signal);
+  if (!wait || deadlineAt === undefined) return wait;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      abort.abort();
+      resolve();
+    }, Math.max(0, deadlineAt - Date.now()));
+  });
+  return Promise.race([wait, deadline]).finally(() => clearTimeout(timer));
 }

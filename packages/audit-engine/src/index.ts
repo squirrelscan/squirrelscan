@@ -334,6 +334,7 @@ export {
   type LinkVerdictSettlement,
   type StartLateLinkVerdictsOptions,
 } from "./late-link-verdicts";
+export { LateCloudResults } from "./late-cloud-results";
 
 // Byte-budget batch sizing (#1860) — pages per batch derived from the site's own
 // average page size, because peak RSS is batch x per-page cost and per-page cost
