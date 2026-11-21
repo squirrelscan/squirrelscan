@@ -27,12 +27,15 @@ $Platform = "windows-x64"
 # signed it OR its GitHub attestation verifies; from $ReleaseFirstSignedVersion
 # up, nothing else is accepted. Both slots empty means the signature path is off.
 # BEGIN GENERATED RELEASE KEYS (scripts/sync-install-header.ts, from release-keys.json; do not edit)
-$ReleaseKeyCurrentId = ''
-$ReleaseKeyCurrentPem = ''
+$ReleaseKeyCurrentId = '3d10cf3775665622'
+$ReleaseKeyCurrentPem = '-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN8K5cMpCjrfRAEv94Fiic1a65ED6
+wzfEsN/5YD0EUAJrlIL76/L4KPU+L6/Oloiua4UYWu9bK5YFBvKQpsn7FQ==
+-----END PUBLIC KEY-----'
 $ReleaseKeyNextId = ''
 $ReleaseKeyNextPem = ''
 $ReleaseKeysRevoked = ''
-$ReleaseFirstSignedVersion = ''
+$ReleaseFirstSignedVersion = '0.0.190-beta.1'
 # END GENERATED RELEASE KEYS
 
 function Write-Log { param($Message) Write-Host "==> " -ForegroundColor Green -NoNewline; Write-Host $Message }

@@ -58,12 +58,15 @@ CERT_IDENTITY="https://github.com/squirrelscan/squirrelscan/.github/workflows/re
 # key signed it OR its GitHub attestation verifies; see verify_release_signature.
 # Both slots empty means the signature path is off and nothing changes.
 # BEGIN GENERATED RELEASE KEYS (scripts/sync-install-header.ts, from release-keys.json; do not edit)
-RELEASE_KEY_CURRENT_ID=''
-RELEASE_KEY_CURRENT_PEM=''
+RELEASE_KEY_CURRENT_ID='3d10cf3775665622'
+RELEASE_KEY_CURRENT_PEM='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEN8K5cMpCjrfRAEv94Fiic1a65ED6
+wzfEsN/5YD0EUAJrlIL76/L4KPU+L6/Oloiua4UYWu9bK5YFBvKQpsn7FQ==
+-----END PUBLIC KEY-----'
 RELEASE_KEY_NEXT_ID=''
 RELEASE_KEY_NEXT_PEM=''
 RELEASE_KEYS_REVOKED=''
-RELEASE_FIRST_SIGNED_VERSION=''
+RELEASE_FIRST_SIGNED_VERSION='0.0.190-beta.1'
 # END GENERATED RELEASE KEYS
 
 # Transport hardening for every curl this script runs. curl's own defaults will
