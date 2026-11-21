@@ -124,6 +124,12 @@ export interface CompleteStoreTallyInput {
   carriedPageUrls: PageUrlSet;
   /** ruleId -> meta for rules absent from `ruleResults` (carried-only rules). */
   ruleMetaIndex: Map<string, RuleRunResult["meta"]>;
+  /**
+   * (pub#2099) Per rule, the recorded not-evaluated checks of the carried pages
+   * (`countCarriedNotEvaluated` over the stored page rows): taken off the carried
+   * passes as the materialized path takes them (`MergedScoringInput.carriedNotEvaluated`).
+   */
+  carriedNotEvaluated?: ReadonlyMap<string, number>;
 }
 
 /** Everything {@link createCompleteStoreTallyFold} needs; the findings themselves
@@ -349,6 +355,7 @@ export function createCompleteStoreTallyFold(
     removedUrls,
     retainCarriedChecks,
     requireAggregatableCarried,
+    carriedNotEvaluated,
   } = input;
   // (#3413) A clipped signal lists only part of the crawl; its count sizes the rest.
   // The count rides in from a publish: an untrusted number, so it is bounded by the
@@ -592,8 +599,11 @@ export function createCompleteStoreTallyFold(
   const cleanCarriedPasses = (ruleId: string): number => {
     const clean = carriedPageUrls.size - (carriedDirtyPagesByRule.get(ruleId) ?? 0);
     const k = checksPerPage(ruleId);
-    if (k <= 1) return clean;
-    return Math.max(0, k * clean + (carriedDirtyPassesByRule.get(ruleId) ?? 0));
+    const passes = k <= 1 ? clean : k * clean + (carriedDirtyPassesByRule.get(ruleId) ?? 0);
+    // (pub#2099) No pass for a check a carried page's last crawl did not evaluate.
+    // The record never names a check the page holds a row for, so it comes off
+    // whole, the page's rows unread (an untouched page is only an aggregate here).
+    return Math.max(0, passes - (carriedNotEvaluated?.get(ruleId) ?? 0));
   };
 
   const foldShellRules: CompleteStoreTallyFold["foldShellRules"] = () => {

@@ -918,6 +918,21 @@ export interface SitePageRecord {
    * report with no variants, stay byte-identical to before.
    */
   canonical?: string | null;
+  /**
+   * (pub#2099) The page checks the run that last crawled this page did NOT evaluate there, as
+   * `${ruleId}|${checkName}`: skipped for want of data (perf/ttfb with no timing), stopped at a
+   * work cap, or not emitted while the check ran on other pages. A full audit scores such a check
+   * on the page as neither pass nor fail, so a later run that carries the page must too, rather
+   * than count it as a clean pass. Never names a check the page holds a finding row for (that row
+   * holds the verdict), so a scorer takes one pass per entry off the carried pages without reading
+   * their rows. A rule that did not run on the page at all names no check and is not recorded.
+   *
+   * Absent, null or empty: nothing recorded, and a carried page earns a pass for every check it
+   * holds no finding for, as before this field existed (a row written by an older engine or
+   * store reads that way). The row is replaced whole each time the page is crawled, so a record
+   * never outlives the crawl that wrote it.
+   */
+  notEvaluated?: string[] | null;
 }
 
 // ============================================
