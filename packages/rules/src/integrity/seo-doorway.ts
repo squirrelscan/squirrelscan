@@ -68,7 +68,7 @@ export const seoDoorwayRule: Rule = {
       status: escalate ? "fail" : "info",
       message: escalate
         ? `Likely injected SEO doorway page (${signals.size} corroborating integrity signals)`
-        : `Possible SEO doorway / affiliate spam page (single signal — review)`,
+        : `Possible SEO doorway / affiliate spam page (single signal, review)`,
       pageUrl: ctx.page.url,
       value: hit.reason,
       details: {

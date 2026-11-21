@@ -215,7 +215,7 @@ function judge(map: EntityMap, aliases: ReadonlySet<string>): RuleResult {
         .map((value) => `${value.value} (${value.pages.length + value.morePages} pages)`);
       rows.push({
         id: `${node.key} ${conflict.property}`,
-        label: `${entityLabel(node)} — ${conflict.property}: ${values.join(" vs ")}`,
+        label: `${entityLabel(node)}, ${conflict.property}: ${values.join(" vs ")}`,
         sourcePages: conflict.values.flatMap((value) => value.pages).slice(0, ENTITY_PAGE_CAP),
         meta: {
           key: node.key,

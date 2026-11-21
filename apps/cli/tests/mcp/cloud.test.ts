@@ -78,9 +78,9 @@ describe("apiResultToTool", () => {
     expect(text(out)).toContain("logged-in session");
   });
 
-  test("403 with an all-dots reason falls back instead of 'Forbidden — .'", () => {
+  test("403 with an all-dots reason falls back instead of 'Forbidden: .'", () => {
     const out = apiResultToTool(make(403, false, { error: "..." }));
-    expect(text(out)).not.toContain("Forbidden — .");
+    expect(text(out)).not.toContain("Forbidden: .");
     expect(text(out)).toContain("logged-in session");
   });
 
@@ -97,7 +97,7 @@ describe("apiResultToTool", () => {
 
   test("403 does not double-punctuate a reason ending in ! or ?", () => {
     const out = apiResultToTool(make(403, false, { error: "No access!" }));
-    expect(text(out)).toContain("Forbidden — No access!");
+    expect(text(out)).toContain("Forbidden: No access!");
     expect(text(out)).not.toContain("!.");
   });
 
@@ -125,7 +125,7 @@ describe("apiResultToTool", () => {
     );
     expect(out.isError).toBe(true);
     expect(text(out)).toContain(
-      "Forbidden — API key missing required scope: audits:write."
+      "Forbidden: API key missing required scope: audits:write."
     );
   });
 
@@ -141,7 +141,7 @@ describe("apiResultToTool", () => {
 
   test("403 does not double the period when the reason already ends in one", () => {
     const out = apiResultToTool(make(403, false, { error: "Missing scope." }));
-    expect(text(out)).toContain("Forbidden — Missing scope.");
+    expect(text(out)).toContain("Forbidden: Missing scope.");
     expect(text(out)).not.toContain("..");
   });
 

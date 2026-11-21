@@ -13,7 +13,7 @@ export const DOMAIN_STATS_NOTE = "Domain SEO stats: informational, not scored.";
  * under 1000 render as-is. Null → "—".
  */
 export function formatCompact(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return "—";
+  if (value == null || !Number.isFinite(value)) return "-";
   const abs = Math.abs(value);
   if (abs < 1_000) return String(Math.round(value));
   if (abs < 1_000_000) return `${trimZero(value / 1_000)}k`;
@@ -28,7 +28,7 @@ function trimZero(n: number): string {
 
 /** USD amount, compacted ("$1.2k"). Null → "—". */
 export function formatUsd(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return "—";
+  if (value == null || !Number.isFinite(value)) return "-";
   return `$${formatCompact(value)}`;
 }
 

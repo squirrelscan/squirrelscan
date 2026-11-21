@@ -981,7 +981,7 @@ function descendantDeclares(el: Element, index: StyleIndex, prop: string): boole
   const stack: Element[] = [...el.children] as Element[];
   let budget = 400;
   while (stack.length > 0) {
-    if (budget-- <= 0) return true; // too large to be sure — assume an override
+    if (budget-- <= 0) return true; // too large to be sure, assume an override
     const current = stack.pop() as Element;
     if (SKIPPED_TAGS.has(tagOf(current))) continue;
     const { resolved } = resolveDeclarations(current, index);
@@ -1331,7 +1331,7 @@ export const hiddenTextRule: Rule = {
         : `${findings.length} hidden element(s) containing ${totalChars} characters of text`,
       items: findings.slice(0, MAX_ITEMS).map((f) => ({
         id: f.selector,
-        label: `${f.selector} — ${f.techniques.join(", ")}`,
+        label: `${f.selector}: ${f.techniques.join(", ")}`,
         meta: {
           techniques: f.techniques,
           chars: f.chars,

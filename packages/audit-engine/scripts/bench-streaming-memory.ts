@@ -206,7 +206,7 @@ async function openCrawl(): Promise<{ storage: SQLiteStorage; crawlId: string }>
   await run(storage.init());
   const crawls = await run(storage.listCrawls(1));
   const crawlId = crawls[0]?.id;
-  if (!crawlId) throw new Error(`no crawl in ${DB} — run \`build\` first`);
+  if (!crawlId) throw new Error(`no crawl in ${DB}, run \`build\` first`);
   return { storage, crawlId };
 }
 

@@ -478,7 +478,7 @@ export function detectBrandImpersonation(
         .join(", ")}`;
       return {
         brand: spec.brand,
-        reason: `Page impersonates ${spec.brand} — ${where}`,
+        reason: `Page impersonates ${spec.brand}, ${where}`,
       };
     }
   }
@@ -659,7 +659,7 @@ export function detectFakeAuthOverlay(
       return {
         reason: `Full-viewport fixed iframe (z-index ${zIndex}${
           shownId ? `, #${shownId}` : ""
-        })${shownSrc ? ` loading ${shownSrc}` : ""} overlays the page — credential-overlay pattern`,
+        })${shownSrc ? ` loading ${shownSrc}` : ""} overlays the page, credential-overlay pattern`,
       };
     }
   }

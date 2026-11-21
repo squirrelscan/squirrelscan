@@ -72,16 +72,16 @@ describe("formatCompact", () => {
   });
 
   test("null/non-finite render as em dash", () => {
-    expect(formatCompact(null)).toBe("—");
-    expect(formatCompact(undefined)).toBe("—");
-    expect(formatCompact(Number.NaN)).toBe("—");
+    expect(formatCompact(null)).toBe("-");
+    expect(formatCompact(undefined)).toBe("-");
+    expect(formatCompact(Number.NaN)).toBe("-");
   });
 });
 
 describe("formatUsd", () => {
   test("prefixes a compacted dollar amount; null → dash", () => {
     expect(formatUsd(4500)).toBe("$4.5k");
-    expect(formatUsd(null)).toBe("—");
+    expect(formatUsd(null)).toBe("-");
   });
 });
 

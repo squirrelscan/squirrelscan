@@ -58,9 +58,9 @@ export const llmsTxtRule: Rule = {
     id: "ax/llms-txt",
     name: "llms.txt",
     description:
-      "Detects /llms.txt (and /llms-full.txt) at the domain root and checks its basic Markdown format — an emerging standard giving AI agents a curated, machine-readable map of your site",
+      "Detects /llms.txt (and /llms-full.txt) at the domain root and checks its basic Markdown format, an emerging standard giving AI agents a curated, machine-readable map of your site",
     solution:
-      "llms.txt (llmstxt.org) is a Markdown file at your domain root that points AI agents and answer engines at your most useful, clean content. Add a /llms.txt with an H1 title, a short summary, and sections of Markdown links to key pages; optionally add /llms-full.txt with that content inlined. This is a recommendation only — it never affects your score.",
+      "llms.txt (llmstxt.org) is a Markdown file at your domain root that points AI agents and answer engines at your most useful, clean content. Add a /llms.txt with an H1 title, a short summary, and sections of Markdown links to key pages; optionally add /llms-full.txt with that content inlined. This is a recommendation only, it never affects your score.",
     category: "ax",
     scope: "site",
     findingScope: "page",
@@ -118,7 +118,7 @@ export const llmsTxtRule: Rule = {
       checks.push({
         name: "llms-txt-present",
         status: "fail",
-        message: "/llms.txt returned 200 but the body is an HTML page (SPA fallback) — not a real llms.txt",
+        message: "/llms.txt returned 200 but the body is an HTML page (SPA fallback), not a real llms.txt",
         value: "spa-fallback",
       });
       return { checks };
@@ -135,7 +135,7 @@ export const llmsTxtRule: Rule = {
         name: "llms-txt-present",
         status: "warn",
         message:
-          "No /llms.txt found — consider adding one so AI agents can discover your key content",
+          "No /llms.txt found, consider adding one so AI agents can discover your key content",
         value: "absent",
       });
       return { checks };

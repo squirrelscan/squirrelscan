@@ -1043,10 +1043,10 @@ function pagesAtOnce(n: number): string {
 
 export function renderConcurrencyUpsellHint(planId: string): string {
   if (planId === "free") {
-    return ` — upgrade to Pro for ${pagesAtOnce(PLANS.starter.renderConcurrency)} rendered at once, per audit`;
+    return `, upgrade to Pro for ${pagesAtOnce(PLANS.starter.renderConcurrency)} rendered at once, per audit`;
   }
   if (planId === "starter") {
-    return ` — upgrade to Team for ${pagesAtOnce(PLANS.team.renderConcurrency)} rendered at once, per audit`;
+    return `, upgrade to Team for ${pagesAtOnce(PLANS.team.renderConcurrency)} rendered at once, per audit`;
   }
   return "";
 }
@@ -1755,7 +1755,7 @@ export async function runAudit(
           crawlPhaseStopped = true;
           logger.warn(
             "crawl phase timed out",
-            `stopping after ${Math.round(crawlPhaseTimeoutMs / 1000)}s — continuing with collected pages`
+            `stopping after ${Math.round(crawlPhaseTimeoutMs / 1000)}s, continuing with collected pages`
           );
           // Fire-and-forget; guard against a synchronous throw from stop()/
           // runPromise so it can never escape the timer callback.

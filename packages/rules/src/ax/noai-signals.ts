@@ -72,9 +72,9 @@ export const noaiSignalsRule: Rule = {
     id: "ax/noai-signals",
     name: "noai Signals",
     description:
-      "Reports declared noai / noimageai opt-outs and nosnippet / max-snippet:0 directives that limit AI-search quoting — informational only",
+      "Reports declared noai / noimageai opt-outs and nosnippet / max-snippet:0 directives that limit AI-search quoting, informational only",
     solution:
-      "noai and noimageai are an informal convention some AI companies said they'd honor for text and image use; nosnippet and max-snippet:0 are long-standing snippet-control directives that AI-search answer engines treat as 'don't quote this page verbatim.' To keep a page out of AI answers and snippets, declare it explicitly, e.g. `<meta name=\"robots\" content=\"noai, noimageai, nosnippet\">` or the same via an X-Robots-Tag header. Remember noai/noimageai are advisory with no enforcement — use robots.txt crawler blocks (see ax/ai-crawlers) as the enforcement layer and these tags as the declared-intent layer on top.",
+      "noai and noimageai are an informal convention some AI companies said they'd honor for text and image use; nosnippet and max-snippet:0 are long-standing snippet-control directives that AI-search answer engines treat as 'don't quote this page verbatim.' To keep a page out of AI answers and snippets, declare it explicitly, e.g. `<meta name=\"robots\" content=\"noai, noimageai, nosnippet\">` or the same via an X-Robots-Tag header. Remember noai/noimageai are advisory with no enforcement, use robots.txt crawler blocks (see ax/ai-crawlers) as the enforcement layer and these tags as the declared-intent layer on top.",
     category: "ax",
     scope: "page",
     findingScope: "page",
@@ -113,7 +113,7 @@ export const noaiSignalsRule: Rule = {
 
     const advisory = noai || noimageai;
     const caveat = advisory
-      ? " noai/noimageai are advisory only — honoring them is up to each crawler, with no enforcement behind the tag."
+      ? " noai/noimageai are advisory only, honoring them is up to each crawler, with no enforcement behind the tag."
       : "";
 
     const checks: CheckResult[] = [

@@ -209,13 +209,13 @@ export const API_KEY_PRESETS: readonly ApiKeyPreset[] = [
   {
     id: "read-only",
     label: "Read-only",
-    description: "Read audits, credits, and org details — no writes.",
+    description: "Read audits, credits, and org details, no writes.",
     scopes: API_KEY_SCOPE_PRESETS["read-only"],
   },
   {
     id: "ci",
     label: "CI",
-    description: "Run audits and read results — ideal for pipelines.",
+    description: "Run audits and read results, ideal for pipelines.",
     scopes: API_KEY_SCOPE_PRESETS.ci,
   },
 ];

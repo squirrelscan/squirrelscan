@@ -206,7 +206,7 @@ export function readAndParseSettingsFile(
  */
 export function formatSessionLoadWarning(error: CommandError): string {
   return (
-    `Warning: session could not be loaded (${error.code}), running anonymous — ` +
+    `Warning: session could not be loaded (${error.code}), running anonymous, ` +
     "run `squirrel auth status` to check your session."
   );
 }

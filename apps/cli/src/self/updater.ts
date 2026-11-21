@@ -1301,7 +1301,7 @@ export async function runInteractiveUpdate(options?: {
     return err(
       commandError(
         "UNMANAGED_INSTALL",
-        `This squirrel binary isn't managed by 'self update' — update it with: ${getUnmanagedUpdateHint()}\n` +
+        `This squirrel binary isn't managed by 'self update', update it with: ${getUnmanagedUpdateHint()}\n` +
           "(or re-run with --force to install the managed version alongside it)"
       )
     );
@@ -1313,7 +1313,7 @@ export async function runInteractiveUpdate(options?: {
     return err(
       commandError(
         "UPDATE_IN_PROGRESS",
-        "Another update is already in progress — try again in a minute"
+        "Another update is already in progress, try again in a minute"
       )
     );
   }

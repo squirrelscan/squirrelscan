@@ -13,7 +13,7 @@ export const rslLicenseRule: Rule = {
     description:
       "Checks for a robots.txt License: directive (or Link: rel=license header) pointing to a valid Really Simple Licensing (RSL) document",
     solution:
-      "Publish an RSL (rslstandard.org) document describing your usage terms — including AI-training permissions and any pay-per-crawl pricing — and reference it with a `License:` directive in robots.txt. This is a recommendation only — it never affects your score, except when a declared License: reference is broken (unfetchable or not valid RSL), which is flagged so you can fix the reference.",
+      "Publish an RSL (rslstandard.org) document describing your usage terms, including AI-training permissions and any pay-per-crawl pricing, and reference it with a `License:` directive in robots.txt. This is a recommendation only, it never affects your score, except when a declared License: reference is broken (unfetchable or not valid RSL), which is flagged so you can fix the reference.",
     category: "ax",
     scope: "site",
     findingScope: "page",
@@ -94,7 +94,7 @@ export const rslLicenseRule: Rule = {
           notAttempted.length === 1 ? "" : "s"
         })`,
         value: "unknown",
-        items: notAttempted.map((d) => ({ id: d.url, label: `${d.url} — not checked` })),
+        items: notAttempted.map((d) => ({ id: d.url, label: `${d.url}, not checked` })),
         details: { notCheckedUrls: notAttempted.map((d) => d.url) },
       });
       return { checks };
@@ -111,7 +111,7 @@ export const rslLicenseRule: Rule = {
       value: "broken",
       items: brokenDocs.map((d) => ({
         id: d.url,
-        label: `${d.url} — ${d.error ?? `HTTP ${d.status}${d.status === 200 ? ", not valid RSL XML" : ""}`}`,
+        label: `${d.url}, ${d.error ?? `HTTP ${d.status}${d.status === 200 ? ", not valid RSL XML" : ""}`}`,
       })),
       details: { brokenUrls: brokenDocs.map((d) => d.url) },
     });

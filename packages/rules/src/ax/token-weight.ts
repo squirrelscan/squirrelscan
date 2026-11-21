@@ -20,9 +20,9 @@ export const tokenWeightRule: Rule = {
     id: "ax/token-weight",
     name: "Token Weight",
     description:
-      "Estimates the LLM token cost of a page's raw HTML and reports the text-to-HTML ratio — how much of that cost is actual content versus markup, scripts, and styles",
+      "Estimates the LLM token cost of a page's raw HTML and reports the text-to-HTML ratio, how much of that cost is actual content versus markup, scripts, and styles",
     solution:
-      "Strip or externalize inline <script>/<style> blocks, avoid deeply nested wrapper divs and long utility-class strings on content-bearing elements, and serve lean server-rendered markup rather than a client framework's verbose hydration output — especially on content pages. Consider Markdown content negotiation, which sidesteps the ratio problem by removing HTML markup from the response entirely.",
+      "Strip or externalize inline <script>/<style> blocks, avoid deeply nested wrapper divs and long utility-class strings on content-bearing elements, and serve lean server-rendered markup rather than a client framework's verbose hydration output, especially on content pages. Consider Markdown content negotiation, which sidesteps the ratio problem by removing HTML markup from the response entirely.",
     category: "ax",
     scope: "page",
     findingScope: "page",
@@ -78,7 +78,7 @@ export const tokenWeightRule: Rule = {
         name: "token-weight-ratio",
         status: "warn",
         message:
-          "Visible text is under 15% of the page HTML — agents pay token cost mostly for markup, scripts, and styles",
+          "Visible text is under 15% of the page HTML, agents pay token cost mostly for markup, scripts, and styles",
         value: ratioPct,
         expected: Math.round(MIN_TEXT_RATIO * 100),
         items: [
@@ -105,7 +105,7 @@ export const tokenWeightRule: Rule = {
         name: "token-weight-budget",
         status: "warn",
         message:
-          "Raw HTML exceeds a generous 100,000-token budget for a single page fetch — too heavy for an agent's context window",
+          "Raw HTML exceeds a generous 100,000-token budget for a single page fetch, too heavy for an agent's context window",
         value: estimatedTokens,
         expected: MAX_ESTIMATED_TOKENS,
         items: [

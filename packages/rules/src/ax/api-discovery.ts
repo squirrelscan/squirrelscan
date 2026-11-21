@@ -94,9 +94,9 @@ export const apiDiscoveryRule: Rule = {
     id: "ax/api-discovery",
     name: "API & OAuth Discovery",
     description:
-      "Detects an RFC 9727 api-catalog, an OpenAPI specification, and OAuth discovery documents (RFC 8414 authorization server metadata, RFC 9728 protected-resource metadata) — the documents that let an agent introspect and call an API without a human reading docs first",
+      "Detects an RFC 9727 api-catalog, an OpenAPI specification, and OAuth discovery documents (RFC 8414 authorization server metadata, RFC 9728 protected-resource metadata), the documents that let an agent introspect and call an API without a human reading docs first",
     solution:
-      "If you expose a public API, publish an OpenAPI spec at a conventional path and, if practical, an api-catalog pointing to it. If the API requires OAuth, publish the discovery documents, and add registration_endpoint (Dynamic Client Registration) or client_id_metadata_document_supported (CIMD) to your authorization server metadata so an agent can self-onboard instead of waiting on a human to register a client. This is a recommendation only — it never affects your score; not every site has (or needs) a public API.",
+      "If you expose a public API, publish an OpenAPI spec at a conventional path and, if practical, an api-catalog pointing to it. If the API requires OAuth, publish the discovery documents, and add registration_endpoint (Dynamic Client Registration) or client_id_metadata_document_supported (CIMD) to your authorization server metadata so an agent can self-onboard instead of waiting on a human to register a client. This is a recommendation only, it never affects your score; not every site has (or needs) a public API.",
     category: "ax",
     scope: "site",
     findingScope: "page",
@@ -265,7 +265,7 @@ export const apiDiscoveryRule: Rule = {
       status: "info",
       message: `OAuth discovery found: ${found.join(
         ", ",
-      )}, but no registration_endpoint (DCR) or client_id_metadata_document_supported (CIMD) — an agent can find the authorization server but a human still has to register a client by hand`,
+      )}, but no registration_endpoint (DCR) or client_id_metadata_document_supported (CIMD), an agent can find the authorization server but a human still has to register a client by hand`,
       value: "no-self-onboarding",
       details: { authorizationServerPath: asHit.path, protectedResourcePath: prmHit?.path ?? null },
     });

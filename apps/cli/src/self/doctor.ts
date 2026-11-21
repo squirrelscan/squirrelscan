@@ -387,7 +387,7 @@ function checkUpdateStatus(): DoctorCheck {
     return {
       name,
       status: "warn",
-      message: "Not a managed install — won't self-update",
+      message: "Not a managed install, won't self-update",
       fix: getUnmanagedUpdateHint(),
     };
   }
@@ -399,7 +399,7 @@ function checkUpdateStatus(): DoctorCheck {
     return {
       name,
       status: "warn",
-      message: "Can't read settings — see the Settings file check",
+      message: "Can't read settings, see the Settings file check",
     };
   }
   const settings = result.data;
@@ -408,7 +408,7 @@ function checkUpdateStatus(): DoctorCheck {
   // version still surfaces even when automatic updates are off.
   const pending = settings.pending_update_notification;
   const pendingNote = pending
-    ? ` — update ready: v${pending.from_version} → v${pending.to_version} (${currentUpdateState(settings)})`
+    ? `, update ready: v${pending.from_version} → v${pending.to_version} (${currentUpdateState(settings)})`
     : "";
 
   if (!settings.auto_update) {
@@ -425,7 +425,7 @@ function checkUpdateStatus(): DoctorCheck {
   // The agent skills follow auto_update unless opted out on their own.
   const note =
     settings.skills_auto_update === false
-      ? `${pendingNote} — agent skills excluded (skills_auto_update is off)`
+      ? `${pendingNote}, agent skills excluded (skills_auto_update is off)`
       : pendingNote;
 
   if (!settings.last_update_check) {
@@ -441,7 +441,7 @@ function checkUpdateStatus(): DoctorCheck {
     return {
       name,
       status: "warn",
-      message: `Invalid last-check timestamp — will re-check${note}`,
+      message: `Invalid last-check timestamp, will re-check${note}`,
     };
   }
 
@@ -453,7 +453,7 @@ function checkUpdateStatus(): DoctorCheck {
     return {
       name,
       status: "warn",
-      message: `Last checked ${formatHoursAgo(hoursAgo)} ago — stale${note}`,
+      message: `Last checked ${formatHoursAgo(hoursAgo)} ago, stale${note}`,
       fix: "Verify update access: squirrel self update --check",
     };
   }

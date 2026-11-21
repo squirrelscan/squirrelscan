@@ -123,7 +123,7 @@ export function describeBlockedResource(url: string): string {
   // Host-specific entries (e.g. connect.facebook.net) win over the broader
   // registrable-domain entry (facebook.net) when both are listed.
   const vendor = VENDOR_DESCRIPTIONS[host] ?? VENDOR_DESCRIPTIONS[registrable];
-  return vendor ? `${host} — ${vendor}` : host;
+  return vendor ? `${host} (${vendor})` : host;
 }
 
 /**
@@ -257,7 +257,7 @@ function buildPerResourceChecks(
     return {
       name: "blocked-links",
       status: "warn",
-      message: `Blocked by ad blockers: ${description} — ${truncateMessageUrl(match.value)}${pageNote}`,
+      message: `Blocked by ad blockers: ${description}, ${truncateMessageUrl(match.value)}${pageNote}`,
       // Affected pages travel on the item's sourcePages: report grouping
       // collapses by message and only preserves item-level page references
       // (check.pages is rebuilt from per-page pageUrl, which site-scope rules

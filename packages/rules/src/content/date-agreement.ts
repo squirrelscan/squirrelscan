@@ -431,7 +431,7 @@ const BYLINE_NOISE_RE =
   /\b(\d+\s*min(?:ute)?s?\s*read|read\s*time|published|posted|updated|last\s+modified|on|in|at)\b/gi;
 
 /** What is left of a byline once the date and its decorations are gone. */
-const BYLINE_RESIDUE_RE = /^[\s·|•\-–—,.:;()]*(?:by\s+[^,|·•]{2,60}?)?[\s·|•\-–—,.:;()]*$/i;
+const BYLINE_RESIDUE_RE = /^[\s·|•\-–\u2014,.:;()]*(?:by\s+[^,|·•]{2,60}?)?[\s·|•\-–\u2014,.:;()]*$/i;
 
 function cleanText(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
@@ -713,7 +713,7 @@ export const dateAgreementRule: Rule = {
               message:
                 `The only schema date on this page is ${schema.fallback.field} ` +
                 `${schema.fallback.value} on a ${schema.fallback.type} node, which describes that ` +
-                `entity rather than this page — the visible date ${visible.value} has nothing to ` +
+                `entity rather than this page, the visible date ${visible.value} has nothing to ` +
                 "be checked against. Add datePublished/dateModified to an Article or WebPage node.",
               value: visible.value,
               details: {
@@ -782,7 +782,7 @@ export const dateAgreementRule: Rule = {
               status: "warn",
               message:
                 `The visible date reads ${best.shown.value} but the ${docNode.type} schema says ` +
-                `${best.nearest.source.replace("schema:", "")} ${best.nearest.value} — ` +
+                `${best.nearest.source.replace("schema:", "")} ${best.nearest.value}, ` +
                 `${best.gap} day(s) apart, so readers and crawlers are being told different things`,
               value: best.shown.value,
               expected: best.nearest.value,

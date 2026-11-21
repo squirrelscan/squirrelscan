@@ -32,7 +32,7 @@ export const keywordGapsRule: Rule = {
       "Finds keywords competitors rank for (or seed-keyword opportunities) that this site doesn't rank for",
     solution:
       "Review the listed gap keywords and prioritize the high-volume ones that match your site's intent. " +
-      "Create or expand pages targeting them — a dedicated page per keyword cluster generally outranks a " +
+      "Create or expand pages targeting them, a dedicated page per keyword cluster generally outranks a " +
       "page that mentions the topic in passing. Configure competitor domains via the rule's `competitors` " +
       "option to sharpen the analysis.",
     category: "gaps",
@@ -82,7 +82,7 @@ export const keywordGapsRule: Rule = {
       value: gaps.length,
       items: gaps.slice(0, MAX_ITEMS).map((g) => ({
         id: g.keyword,
-        label: g.volume != null ? `${g.keyword} — vol ${g.volume}` : g.keyword,
+        label: g.volume != null ? `${g.keyword}, vol ${g.volume}` : g.keyword,
       })),
       details: { summary },
     });
@@ -92,7 +92,7 @@ export const keywordGapsRule: Rule = {
       checks.push({
         name: "keyword-gaps-high-volume",
         status: "warn",
-        message: `${highVolume.length} high-volume keyword gaps (≥${HIGH_VOLUME_THRESHOLD} searches/mo) — significant untapped search demand`,
+        message: `${highVolume.length} high-volume keyword gaps (≥${HIGH_VOLUME_THRESHOLD} searches/mo), significant untapped search demand`,
         value: highVolume.length,
         expected: `<= ${HIGH_VOLUME_WARN_COUNT}`,
       });

@@ -164,7 +164,7 @@ export const ratingScopeRule: Rule = {
     name: "Rating Scope",
     description: "Checks AggregateRating is about the page's subject and visible to readers",
     solution:
-      "AggregateRating must describe the thing THIS page is about, and the rating has to be visible to the reader in the page content. A single sitewide rating emitted by a template lands on pages that cannot be rated — privacy policies, terms, blog posts — where it is a self-serving rating of the site rather than markup about the page. Google treats invisible or off-topic rating markup as a structured-data policy violation and issues manual actions for it, which costs the whole site its rich results, not just this page. Move the rating onto the pages whose subject it actually describes (the LocalBusiness on the homepage or location pages, the Product on its product page) and make sure the same rating is on screen.",
+      "AggregateRating must describe the thing THIS page is about, and the rating has to be visible to the reader in the page content. A single sitewide rating emitted by a template lands on pages that cannot be rated, privacy policies, terms, blog posts, where it is a self-serving rating of the site rather than markup about the page. Google treats invisible or off-topic rating markup as a structured-data policy violation and issues manual actions for it, which costs the whole site its rich results, not just this page. Move the rating onto the pages whose subject it actually describes (the LocalBusiness on the homepage or location pages, the Product on its product page) and make sure the same rating is on screen.",
     category: "schema",
     scope: "page",
     findingScope: "page",
@@ -395,7 +395,7 @@ function buildVisibilityCheck(
     status: "warn",
     message:
       `${describeRating(primary)} on ${describeEntityType(primary)} is not visible anywhere on ` +
-      `${pagePhrase(label)} — a rating readers cannot see is a structured-data policy violation ` +
+      `${pagePhrase(label)}, a rating readers cannot see is a structured-data policy violation ` +
       "and risks a manual action, not just a lost rich result",
     details: {
       pageType: label,
@@ -525,7 +525,7 @@ function ineligiblePageKind(ctx: RuleContext): IneligiblePageKind | null {
 
 const TERMS_HEADING_RE =
   /^(?:terms(?:\s*(?:&|and)\s*conditions|\s+of\s+(?:service|use|sale))?|terms|conditions\s+of\s+use|allgemeine\s+gesch[aä]ftsbedingungen|nutzungsbedingungen|t[eé]rminos\s+y\s+condiciones|conditions\s+g[eé]n[eé]rales(?:\s+d['’]utilisation)?)$/i;
-const TITLE_SEPARATORS = /[|–—\-:·•]+/;
+const TITLE_SEPARATORS = /[|–\u2014\-:·•]+/;
 
 function isTermsPage(ctx: RuleContext): boolean {
   const path = getPathname(ctx.page.url) || ctx.page.url;

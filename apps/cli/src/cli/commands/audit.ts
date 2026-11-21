@@ -691,7 +691,7 @@ async function promptContinueLocalOnly(
       rl.on("close", () => resolve(true));
       rl.on("error", () => resolve(true));
       rl.question(
-        `${why} — cloud features (renders, AI summary, tech detection) are unavailable.\nContinue with local-only checks? [Y/n] `,
+        `${why}, cloud features (renders, AI summary, tech detection) are unavailable.\nContinue with local-only checks? [Y/n] `,
         (answer) => {
           const a = answer.trim();
           resolve(a === "" || /^y(es)?$/i.test(a));
@@ -2050,7 +2050,7 @@ export const audit = defineCommand({
       // Drives the interactive guard below. null = no outage (clean state).
       let cloudOutage: "expired" | "unreachable" | null = null;
       if (args.offline) {
-        kv("Account", fmt.dim("offline (--offline) — cloud features disabled"));
+        kv("Account", fmt.dim("offline (--offline), cloud features disabled"));
         // #3649: accepted, and a no-op: offline already saves nothing.
         if (ephemeral) {
           log(fmt.dim("--ephemeral has no effect offline: nothing is saved."));
@@ -2084,7 +2084,7 @@ export const audit = defineCommand({
             // never collects the 402 that carries the same offer.
             kv(
               "Account",
-              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${MIN_AUDIT_CREDITS} a one-page audit needs, running local-only`)} · ${accountPlan === "paid" && !upgrade ? "top up" : "upgrade"}: ${fmt.cyan(upgrade?.url ?? upgradeUrl("cli-audit"))}`
+              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits, below the ${MIN_AUDIT_CREDITS} a one-page audit needs, running local-only`)} · ${accountPlan === "paid" && !upgrade ? "top up" : "upgrade"}: ${fmt.cyan(upgrade?.url ?? upgradeUrl("cli-audit"))}`
             );
           } else {
             signedIn = true;
@@ -2121,13 +2121,13 @@ export const audit = defineCommand({
             cloudOutage = "expired";
             kv(
               "Account",
-              `${accountLabel} · ${fmt.yellow("session expired")} — run ${fmt.bold("squirrel auth login")} to re-enable cloud`
+              `${accountLabel} · ${fmt.yellow("session expired")}, run ${fmt.bold("squirrel auth login")} to re-enable cloud`
             );
           } else {
             cloudOutage = "unreachable";
             kv(
               "Account",
-              `${accountLabel} · ${fmt.yellow("cloud unavailable")} — couldn't reach ${getApiUrl()}`
+              `${accountLabel} · ${fmt.yellow("cloud unavailable")}, couldn't reach ${getApiUrl()}`
             );
           }
         }
@@ -2607,7 +2607,7 @@ export const audit = defineCommand({
           log(
             cloudOutage === "expired"
               ? `Cancelled. Run ${fmt.bold("squirrel auth login")} to re-enable cloud features.`
-              : "Cancelled — the cloud API was unreachable."
+              : "Cancelled, the cloud API was unreachable."
           );
           await safeExit(0);
         }

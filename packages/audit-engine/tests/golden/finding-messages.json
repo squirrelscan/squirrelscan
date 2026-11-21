@@ -4023,9 +4023,9 @@
   ]
  },
  "security/sri": {
-  "digest": "173702681498471",
+  "digest": "215556054092134",
   "lines": [
-   "sri|info|No cross-origin scripts or stylesheets on this page — SRI not applicable||"
+   "sri|info|No cross-origin scripts or stylesheets on this page, SRI not applicable||"
   ]
  },
  "security/supabase-rls": {

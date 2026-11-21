@@ -320,7 +320,7 @@ if (PROFILE) {
     console.log(
       `\n=== ${mode} arm, SITE rules (one attempt, the one with the lowest total) ===\n` +
         `  page-rule invocations  ${a.pageInvocations} -> ${b.pageInvocations} ` +
-        `(counted, not timed — the profiler's whole-ms rounding makes their sum meaningless)\n` +
+        `(counted, not timed, the profiler's whole-ms rounding makes their sum meaningless)\n` +
         `  site-scope total       ${a.site.toFixed(0)}ms -> ${b.site.toFixed(0)}ms   ${k(a.site, b.site)}`,
     );
     const top = [...b.rules].sort((x, y) => y[1] - x[1]).slice(0, TOP_RULES);

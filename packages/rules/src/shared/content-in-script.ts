@@ -115,7 +115,7 @@ const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   lsquo: "‘",
   rdquo: "”",
   ldquo: "“",
-  mdash: "—",
+  mdash: "\u2014",
   ndash: "–",
   hellip: "…",
 };

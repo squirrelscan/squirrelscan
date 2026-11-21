@@ -800,7 +800,7 @@ export function carriedTag(check: GroupedCheck, now: number = Date.now()): strin
   }
   if (!check.carriedCount || check.carriedCount < check.count) return "";
   const seen =
-    check.lastSeenAt !== undefined ? ` — last seen ${timeAgo(check.lastSeenAt, now)}` : "";
+    check.lastSeenAt !== undefined ? `, last seen ${timeAgo(check.lastSeenAt, now)}` : "";
   return ` (carried${seen})`;
 }
 
@@ -814,7 +814,7 @@ export function carriedTag(check: GroupedCheck, now: number = Date.now()): strin
 export function checkCarriedLabel(check: GroupedCheck, now: number = Date.now()): string | null {
   if (!check.carriedCount || check.carriedCount < check.count) return null;
   const seen =
-    check.lastSeenAt !== undefined ? ` — last verified ${timeAgo(check.lastSeenAt, now)}` : "";
+    check.lastSeenAt !== undefined ? `, last verified ${timeAgo(check.lastSeenAt, now)}` : "";
   return `Not re-checked this run${seen}.`;
 }
 

@@ -44,8 +44,8 @@ export function escapeEntityJsonForScript(json: string): string {
  *
  * BOUNDED, because this blob is inlined into an HTML document and the browser
  * parses all of it before the viewer draws anything. The full document grows
- * linearly with the crawl — a 5,000-page store declaring four entities per page
- * measures 20,001 nodes and 15.3MB of inline JSON — while the graph draws 400
+ * linearly with the crawl, a 5,000-page store declaring four entities per page
+ * measures 20,001 nodes and 15.3MB of inline JSON, while the graph draws 400
  * nodes and the table shows 25. `slimEntityMapForViewer` takes that to 1.4MB by
  * keeping the 2,000 entities with the most reach and dropping `pages`, which
  * nothing in this file reads.
@@ -209,15 +209,15 @@ const SCRIPT = String.raw`
   var MIN_ZOOM = 0.15, MAX_ZOOM = 6;
   // Labelling every visible node at fit scale makes the dense centre
   // unreadable, and a plain zoom threshold is all-or-nothing: at 49 nodes every
-  // label appears at once. So the budget is a COUNT, not a switch — the N
+  // label appears at once. So the budget is a COUNT, not a switch, the N
   // best-connected entities get a label, and N grows with the square of the
   // zoom because the readable area does too. The hovered node, its neighbours
   // and the selected node are always labelled, at any zoom.
   var LABEL_BUDGET_AT_FIT = 12;
 
   // Neighbours of the hovered node that get a label, beyond the hovered node
-  // itself. Highlighting is unbounded — every neighbour stays bright, which is
-  // what makes the shape of the relationship readable — but labels are not.
+  // itself. Highlighting is unbounded, every neighbour stays bright, which is
+  // what makes the shape of the relationship readable, but labels are not.
   // Matches the dashboard.
   var HOVER_LABEL_BUDGET = 12;
 
@@ -320,7 +320,7 @@ const SCRIPT = String.raw`
           pageLocal: false,
           dangling: true,
           // An undeclared target has no occurrences of its own, so it never
-          // wins a label on reach — only by being hovered or selected.
+          // wins a label on reach, only by being hovered or selected.
           occurrences: 0,
           labelRank: Infinity,
           r: 5, x: 0, y: 0, vx: 0, vy: 0, fixed: false
@@ -553,8 +553,8 @@ const SCRIPT = String.raw`
     }
     neighbours = set;
     // Highlighting every neighbour is right; LABELLING every neighbour is not.
-    // Hovering a hub — a WebSite referenced by all 60 pages, an Organization on
-    // 39 — granted sixty labels at once and reproduced exactly the unreadable
+    // Hovering a hub, a WebSite referenced by all 60 pages, an Organization on
+    // 39, granted sixty labels at once and reproduced exactly the unreadable
     // centre the label budget exists to prevent, just triggered by the pointer
     // instead of by zoom. Cap the granted labels at the best-connected few.
     //
@@ -644,7 +644,7 @@ const SCRIPT = String.raw`
       // HOVER_LABEL_BUDGET of its neighbours. Every neighbour stays bright
       // regardless; only the labels are capped, because sixty of them at once
       // is the unreadable centre this budget exists to prevent.
-      // An earned label is dropped while its node is dimmed — a bright label on
+      // An earned label is dropped while its node is dimmed, a bright label on
       // a faded dot reads as noise, and dimmed means "not relevant right now".
       var granted =
         index === focus ||

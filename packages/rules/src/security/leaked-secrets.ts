@@ -5158,7 +5158,7 @@ export const leakedSecretsRule: Rule = {
       checks.push({
         name: "leaked-secrets-public",
         status: "info",
-        message: `${publicKeys.length} public client-side key(s) found (public by design — verify usage restrictions are configured)`,
+        message: `${publicKeys.length} public client-side key(s) found (public by design, verify usage restrictions are configured)`,
         ...(extra.additional !== undefined ? { details: extra } : {}),
         items,
       });

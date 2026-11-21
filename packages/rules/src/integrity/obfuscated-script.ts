@@ -78,7 +78,7 @@ export const obfuscatedScriptRule: Rule = {
       status: escalate ? "fail" : "info",
       message: escalate
         ? `Likely injected payload: ${kb}KB obfuscated inline script (${signals.size} corroborating integrity signals)`
-        : `Suspicious ${kb}KB obfuscated inline script (single signal — review${truncated ? `; ${cutParts.join("; ")} (scan work limit), so a corroborating signal may be unread` : ""})`,
+        : `Suspicious ${kb}KB obfuscated inline script (single signal, review${truncated ? `; ${cutParts.join("; ")} (scan work limit), so a corroborating signal may be unread` : ""})`,
       pageUrl: ctx.page.url,
       value: `${kb}KB, entropy ${hit.entropy}, markers: ${hit.markers.join(", ")}`,
       details: {

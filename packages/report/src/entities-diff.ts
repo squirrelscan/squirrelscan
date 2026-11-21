@@ -105,7 +105,7 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
   lines.push(
     ...nodeTable(
       "Removed",
-      "Gone from the newer audit, and every page that declared them WAS crawled again — so this is a real removal, not a coverage gap.",
+      "Gone from the newer audit, and every page that declared them WAS crawled again, so this is a real removal, not a coverage gap.",
       diff.removed,
     ),
   );

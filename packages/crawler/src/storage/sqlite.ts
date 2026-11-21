@@ -255,9 +255,9 @@ const MIGRATIONS: Record<number, string[]> = {
   ],
   // Version 11: Store request headers for Vary-aware cache keying (browser-cache emulation)
   11: ["ALTER TABLE pages ADD COLUMN request_headers TEXT"],
-  // Version 12: Smart audits — site-scoped, cross-crawl finding + page store (#110).
+  // Version 12: Smart audits, site-scoped, cross-crawl finding + page store (#110).
   // ADDITIVE: new tables only (no column changes), gated at runtime behind the
-  // `smart_audits` config flag. Local sqlite only — NOT a prod migration.
+  // `smart_audits` config flag. Local sqlite only, NOT a prod migration.
   12: [
     `CREATE TABLE IF NOT EXISTS page_findings (
       site_key TEXT NOT NULL,
@@ -314,16 +314,16 @@ const MIGRATIONS: Record<number, string[]> = {
     "CREATE INDEX IF NOT EXISTS idx_resource_sizes_lookup ON resource_sizes(type, url, crawl_id)",
   ],
   // Version 14: Persist per-page fetch egress/method + fallback reason (#512).
-  // Local sqlite only (crawler's own store) — NOT a prod migration.
+  // Local sqlite only (crawler's own store), NOT a prod migration.
   14: [
     "ALTER TABLE pages ADD COLUMN fetcher_id TEXT",
     "ALTER TABLE pages ADD COLUMN fallback_reason TEXT",
   ],
   // Version 15: Normalized-source fingerprint for render reuse (#839).
-  // Local sqlite only (crawler's own store) — NOT a prod migration.
+  // Local sqlite only (crawler's own store), NOT a prod migration.
   15: ["ALTER TABLE pages ADD COLUMN source_hash TEXT"],
-  // Version 16: Project-scoped key/value meta — sticky user-agent (#875).
-  // Local sqlite only (crawler's own store) — NOT a prod migration.
+  // Version 16: Project-scoped key/value meta, sticky user-agent (#875).
+  // Local sqlite only (crawler's own store), NOT a prod migration.
   16: [
     `CREATE TABLE IF NOT EXISTS project_meta (
       key TEXT PRIMARY KEY,
@@ -333,17 +333,17 @@ const MIGRATIONS: Record<number, string[]> = {
   ],
   // Version 17: Persist the ax/markdown-response header fingerprints (Vary,
   // Cloudflare x-markdown-tokens/x-original-tokens, Link rel=alternate).
-  // Local sqlite only (crawler's own store) — NOT a prod migration.
+  // Local sqlite only (crawler's own store), NOT a prod migration.
   17: [
     "ALTER TABLE markdown_response ADD COLUMN negotiated_vary TEXT",
     "ALTER TABLE markdown_response ADD COLUMN markdown_tokens_header TEXT",
     "ALTER TABLE markdown_response ADD COLUMN original_tokens_header TEXT",
     "ALTER TABLE markdown_response ADD COLUMN alternate_markdown_url TEXT",
   ],
-  // Version 18: page_features accumulator — one row/URL of the per-page scalars
+  // Version 18: page_features accumulator, one row/URL of the per-page scalars
   // the site rules read, so streaming rules can query bounded SQL aggregates
   // instead of holding every parsed page resident (#1022). ADDITIVE: new table +
-  // indexes only, nothing reads it yet. Local sqlite only — NOT a prod migration.
+  // indexes only, nothing reads it yet. Local sqlite only, NOT a prod migration.
   // Existing ~/.squirrel crawl stores migrate by creating the table on open.
   18: [
     `CREATE TABLE IF NOT EXISTS page_features (
@@ -375,14 +375,14 @@ const MIGRATIONS: Record<number, string[]> = {
     `CREATE INDEX IF NOT EXISTS idx_page_features_template ON page_features(crawl_id, template_fp)`,
     `CREATE INDEX IF NOT EXISTS idx_page_features_type ON page_features(crawl_id, page_type, normalized_url)`,
   ],
-  // Version 19: page_features indexability scalars — meta-only noindex + the
+  // Version 19: page_features indexability scalars, meta-only noindex + the
   // meta/header isPageIndexable reasons + rich-result @types, so the noindex /
   // schema-noindex site rules can query them instead of re-deriving from every
   // parsed page (#1022, PR-D). ADDITIVE columns; ALTER is idempotent (the runner
   // swallows "duplicate column name"). Local sqlite only.
   //
   // No backfill: the new columns are nullable and read as false/[] when NULL. That
-  // is safe because page_features is still DARK — `extractPageFeatures` is its
+  // is safe because page_features is still DARK, `extractPageFeatures` is its
   // first and only writer and always lands a FULL row (all v19 columns) via
   // INSERT OR REPLACE keyed by (crawl_id, normalized_url). No pre-v19 populated
   // rows exist, and each crawl writes its own crawl_id's rows, so a prior crawl's
@@ -393,16 +393,16 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE page_features ADD COLUMN indexable_reasons TEXT`,
     `ALTER TABLE page_features ADD COLUMN rich_result_types TEXT`,
   ],
-  // Version 20: page_features NAP scalars — the per-page Name/Address/Phone the
+  // Version 20: page_features NAP scalars, the per-page Name/Address/Phone the
   // local/nap-consistency rule compares across pages to find contact-detail drift
   // (#1373), so its streaming path reads these instead of re-holding every parsed
   // page. ADDITIVE columns; ALTER is idempotent (the runner swallows "duplicate
-  // column name"). Local sqlite only — NOT a prod migration.
+  // column name"). Local sqlite only, NOT a prod migration.
   //
   // No backfill, for the v19 reason: `extractPageFeatures` always writes a FULL
   // row via INSERT OR REPLACE keyed by (crawl_id, normalized_url), each crawl
   // writes only its own crawl_id, and the streaming loop re-extracts every scored
-  // page in the current run — so no pre-v20 row is ever read. NULL reads back as
+  // page in the current run, so no pre-v20 row is ever read. NULL reads back as
   // null / [] / false, which is the same as "this page declared no NAP".
   20: [
     `ALTER TABLE page_features ADD COLUMN nap_name TEXT`,
@@ -418,14 +418,14 @@ const MIGRATIONS: Record<number, string[]> = {
   // collapse onto 1-2 days; without this flag crawl/sitemap-lastmod-churn accused
   // every publisher that has one of build-stamping lastmod. NULL reads back as
   // false, which is the pre-v21 behaviour for every already-stored sitemap.
-  // Local sqlite only (crawler's own store) — NOT a prod migration.
+  // Local sqlite only (crawler's own store), NOT a prod migration.
   21: ["ALTER TABLE sitemaps ADD COLUMN is_news_sitemap INTEGER"],
-  // Version 22: page_features site-chrome scalars — the per-page favicon,
+  // Version 22: page_features site-chrome scalars, the per-page favicon,
   // theme-color and default OG image the social/asset-divergence rule compares
   // across the corpus to find pages running a stale layout (#1371), so its
   // streaming path reads these instead of re-holding every parsed page. ADDITIVE
   // columns; ALTER is idempotent (the runner swallows "duplicate column name").
-  // Local sqlite only — NOT a prod migration.
+  // Local sqlite only, NOT a prod migration.
   //
   // Authored as 21 before #115 took that number; renumbered to 22 on rebase.
   // The two are independent ALTERs on different tables, so ordering is moot.
@@ -433,7 +433,7 @@ const MIGRATIONS: Record<number, string[]> = {
   // No backfill, for the v19/v20 reason: `extractPageFeatures` always writes a
   // FULL row via INSERT OR REPLACE keyed by (crawl_id, normalized_url), each
   // crawl writes only its own crawl_id, and the streaming loop re-extracts every
-  // scored page in the current run — so no pre-v22 row is ever read. NULL reads
+  // scored page in the current run, so no pre-v22 row is ever read. NULL reads
   // back as null, which is the same as "this page declared no such asset".
   22: [
     `ALTER TABLE page_features ADD COLUMN favicon_href TEXT`,
@@ -445,16 +445,16 @@ const MIGRATIONS: Record<number, string[]> = {
   // probe the crawl budget cut short), and the weight-8 crawl/robots-txt rule
   // reported the second as a definite "No robots.txt found"
   // (squirrelscan/repo#1733). ADDITIVE; ALTER is idempotent (the runner swallows
-  // "duplicate column name"). Local sqlite only — NOT a prod migration.
+  // "duplicate column name"). Local sqlite only, NOT a prod migration.
   23: [`ALTER TABLE robots_txt ADD COLUMN error TEXT`],
   // Version 24: rate-limited link + sitemap-URL targets (squirrelscan/repo#1829).
   // A 429/430 (or a 503 carrying Retry-After) means the target's real status is
-  // UNKNOWN, not that it is dead — but the rules only ever see the stored row,
+  // UNKNOWN, not that it is dead, but the rules only ever see the stored row,
   // and the 503 case cannot be recovered from the status code alone. Persisting
   // the verdict is what stops `links/broken-external-links` and
   // `crawl/sitemap-4xx` reporting a throttled URL as broken. ADDITIVE; ALTER is
   // idempotent (the runner swallows "duplicate column name"). Local sqlite
-  // only — NOT a prod migration.
+  // only, NOT a prod migration.
   24: [
     `ALTER TABLE links ADD COLUMN rate_limited INTEGER`,
     `ALTER TABLE sitemap_url_statuses ADD COLUMN rate_limited INTEGER`,
@@ -462,16 +462,16 @@ const MIGRATIONS: Record<number, string[]> = {
   // Version 25: when an audit's data was reclaimed (squirrelscan/repo#1912).
   // `self disk --prune` deletes a crawl's derived rows and leaves the `crawls`
   // row, so without this the audit still reads as `completed` and the report
-  // path rebuilds a CONFIDENT EMPTY report from whatever pages survive — worse
+  // path rebuilds a CONFIDENT EMPTY report from whatever pages survive, worse
   // than the disk it saved. Stamped by `retireCrawls`; NULL for every audit that
   // has not been reclaimed, which is all of them until someone prunes. ADDITIVE;
   // ALTER is idempotent (the runner swallows "duplicate column name"). Local
-  // sqlite only — NOT a prod migration.
+  // sqlite only, NOT a prod migration.
   25: [`ALTER TABLE crawls ADD COLUMN retired_at INTEGER`],
   // Version 26: make the superseded-pages predicate a seek instead of a scan
   // (squirrelscan/repo#1912, criterion 5). `pages` is keyed on
   // (crawl_id, normalized_url), so nothing could serve a lookup by
-  // normalized_url ALONE — and both readers that need one are hot:
+  // normalized_url ALONE, and both readers that need one are hot:
   //
   //  - `getCachedPage` runs it once per url on every incremental re-audit,
   //  - the retention/prune delete runs it once per candidate page row, with a
@@ -489,7 +489,7 @@ const MIGRATIONS: Record<number, string[]> = {
   ],
   // Version 27: what the audit this crawl produced actually SAID
   // (squirrelscan/repo#1912). `crawls.status` is the crawl's lifecycle, and it
-  // reads `analyzed` for a run whose report came out `failed` or `blocked` —
+  // reads `analyzed` for a run whose report came out `failed` or `blocked` ,
   // a site that was down, or answered 403 to everything. Automatic retention
   // needs to tell those apart from real audits, or a week of downtime fills the
   // window and the next successful run deletes every audit from before the
@@ -500,7 +500,7 @@ const MIGRATIONS: Record<number, string[]> = {
   27: [`ALTER TABLE crawls ADD COLUMN report_status TEXT`],
   // Version 28: the per-page rule-result cache (squirrelscan/repo#1990) and the
   // exact-bytes HTML hash its key is built on. `pages.content_hash` is
-  // whitespace-normalized, so it cannot serve as that key — see
+  // whitespace-normalized, so it cannot serve as that key, see
   // `PageRecord.htmlHash`. ADDITIVE; both statements are idempotent, and
   // `html_hash` is also in PAGES_ALTER_COLUMNS so a version-collision cannot
   // leave it missing.
@@ -519,7 +519,7 @@ const MIGRATIONS: Record<number, string[]> = {
       ON page_rule_cache(cache_key, created_at DESC)`,
   ],
   // Version 29: the structured entity map (squirrelscan/repo#2091). One row per
-  // collapsed entity, one per typed reference, one per (entity, page) pair — see
+  // collapsed entity, one per typed reference, one per (entity, page) pair, see
   // the base schema below for what each column holds.
   29: [
     `CREATE TABLE IF NOT EXISTS entities (
@@ -562,18 +562,18 @@ const MIGRATIONS: Record<number, string[]> = {
   // Version 30: the per-page scalars the REPORT needs, captured while the DOM is
   // live (squirrelscan/repo#2343). Without them `reconstructReport` re-parsed
   // every stored page to recover a title, an og:title, an h1 count and a
-  // thin-content flag — a second full DOM build per page (2.4-4.8 ms, ~19 s on a
+  // thin-content flag, a second full DOM build per page (2.4-4.8 ms, ~19 s on a
   // 4,000-page crawl) for ~200 bytes of output. One nullable JSON column rather
   // than nine: none of these is a rule input or a query key, so widening the
   // table's aggregate surface for them would misdescribe what they are. ADDITIVE;
   // ALTER is idempotent (the runner swallows "duplicate column name"). Local
-  // sqlite only — NOT a prod migration.
+  // sqlite only, NOT a prod migration.
   //
   // No backfill, for the v19/v20/v22 reason: `extractPageFeatures` always writes a
   // FULL row via INSERT OR REPLACE keyed by (crawl_id, normalized_url), each crawl
   // writes only its own crawl_id, and the streaming loop re-extracts every scored
   // page in the current run. NULL reads back as null, which the report treats as
-  // "this page has no captured scalars" and falls back to parsing it — which is
+  // "this page has no captured scalars" and falls back to parsing it, which is
   // exactly what an audit stored before this version gets.
   30: [`ALTER TABLE page_features ADD COLUMN report_scalars TEXT`],
   // Version 31: an edge's example pages (squirrelscan/squirrelscan#492). The
@@ -760,7 +760,7 @@ const PAGE_COLUMNS_WITHOUT_BODIES = [
 
 // Nullable columns added to `pages` via ALTER migrations over time, with the
 // types they were added with. `reconcilePagesColumns` re-adds any that are
-// missing on open, INDEPENDENT of the schema_version counter — because a
+// missing on open, INDEPENDENT of the schema_version counter, because a
 // migration renumbering collision can leave a DB recorded at the current
 // version yet missing a column. It happened: a beta bumped SCHEMA_VERSION to 16
 // with migration 15 = project_meta (#875); the release redefined 15 =
@@ -804,7 +804,7 @@ const ROBOTS_TXT_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = 
 // Same guard for `links` and `sitemap_url_statuses`. Migration 24 added
 // `rate_limited` to both; a DB stamped past 24 by a build that numbered its own
 // migration 24 would skip it forever and then every upsertLink INSERT throws
-// "no column named rate_limited" — which fails the whole external-link phase,
+// "no column named rate_limited", which fails the whole external-link phase,
 // not just the new field. The guard goes on the list at the same time as the
 // migration, per the three tables this has already bitten.
 const LINKS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
@@ -822,14 +822,14 @@ const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: st
 // by a build that numbered its own migration 25 would skip it forever. The
 // failure is quieter than the four tables before it and worse for that: reads
 // are `SELECT *` mapped by key, so a missing column does not throw, it yields
-// `undefined` — every retired audit silently reads as NOT retired and renders
+// `undefined`, every retired audit silently reads as NOT retired and renders
 // the empty report this column exists to prevent. The prune's own UPDATE is the
 // only part that fails loudly. So the column goes on the list at the same time
 // it goes in the migration, like the five before it.
 const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "retired_at", type: "INTEGER" },
   // Same reasoning one row down: a missing `report_status` reads as `undefined`
-  // rather than throwing, and undefined is treated as "an ordinary audit" — so
+  // rather than throwing, and undefined is treated as "an ordinary audit", so
   // a database that skipped migration 27 would quietly put failed runs back in
   // the retention window instead of failing loudly.
   { name: "report_status", type: "TEXT" },
@@ -881,7 +881,7 @@ const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }>
 // numbering its own migration 37 would skip them forever. The failure splits both
 // ways this file has already seen: every saveRuleResults INSERT names the columns, so writes throw and the
 // audit stores no checks at all, while `SELECT *` reads map by key and would
-// merely yield `undefined` — a silent return to exactly the evidence-less report
+// merely yield `undefined`, a silent return to exactly the evidence-less report
 // that #2307 exists to fix. On the list at the same time as the migration.
 const RULE_RESULTS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "component_occurrences", type: "TEXT" },
@@ -1364,7 +1364,7 @@ CREATE TABLE IF NOT EXISTS project_meta (
 
 -- Page-features accumulator: one row/URL of the per-page scalars site rules
 -- read, so streaming rules query bounded SQL aggregates instead of holding
--- every parsed page resident (#1022). Purely additive — nothing reads it yet.
+-- every parsed page resident (#1022). Purely additive, nothing reads it yet.
 CREATE TABLE IF NOT EXISTS page_features (
   crawl_id TEXT NOT NULL,
   normalized_url TEXT NOT NULL,
@@ -1431,7 +1431,7 @@ CREATE TABLE IF NOT EXISTS page_rule_cache (
 
 -- The lookup: newest entry for a key, across crawls. created_at DESC is in the
 -- index so a hit is a single index seek and never a scan of a url's history
--- (#1908 — nothing here may grow a per-audit full scan).
+-- (#1908, nothing here may grow a per-audit full scan).
 CREATE INDEX IF NOT EXISTS idx_page_rule_cache_key
   ON page_rule_cache(cache_key, created_at DESC);
 
@@ -1536,7 +1536,7 @@ CREATE INDEX IF NOT EXISTS idx_page_features_type
 // LEVEL 1, not the default 6. This runs once per page on every COLD audit, which
 // is the run that gets nothing back from the cache, so its cost is the one paid
 // by a first-time user. Level 1 is several times faster and the rows are retired
-// with their crawl, so the extra bytes live no longer than the audit does — the
+// with their crawl, so the extra bytes live no longer than the audit does, the
 // wrong end of the trade to optimise.
 function gzipped(payload: string): Uint8Array<ArrayBuffer> {
   const out = Bun.gzipSync(Buffer.from(payload), { level: 1 });
@@ -1545,7 +1545,7 @@ function gzipped(payload: string): Uint8Array<ArrayBuffer> {
 
 
 // Conservative hardcoded compaction bounds (#197). No squirrel.toml surface in
-// v1 — these are the only defaults `compactFindings` uses unless a test overrides.
+// v1, these are the only defaults `compactFindings` uses unless a test overrides.
 const COMPACT_DEFAULT_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // ~90 days
 const COMPACT_DEFAULT_MAX_TERMINAL_FINDINGS = 5000;
 
@@ -1559,7 +1559,7 @@ const PAGE_FEATURE_DEFAULT_MAX_URLS_PER_GROUP = 200;
 const PAGE_FEATURE_DEFAULT_PAGE_SIZE = 500;
 
 // Injection-safe whitelist mapping the typed duplicate-scan field to fixed
-// column names. The raw `field` is NEVER interpolated into SQL — only these
+// column names. The raw `field` is NEVER interpolated into SQL, only these
 // constant column names / the NULL literal are ever spliced into the query.
 const DUP_FIELD_COLUMNS: Record<
   PageFeatureDuplicateField,
@@ -1797,7 +1797,7 @@ export class SQLiteStorage implements CrawlStorage {
   /**
    * Add any expected `pages` column that is missing, regardless of the recorded
    * schema version. Guards against migration renumbering collisions that leave
-   * a DB recorded as current but missing a column the INSERT references — which
+   * a DB recorded as current but missing a column the INSERT references, which
    * otherwise fails every page write and stores 0 pages. Idempotent and cheap
    * (one PRAGMA read + at most one ALTER per missing column).
    */
@@ -1827,7 +1827,7 @@ export class SQLiteStorage implements CrawlStorage {
         (c) => c.name
       )
     );
-    // No table yet (shouldn't happen — SCHEMA creates it first) → nothing to
+    // No table yet (shouldn't happen, SCHEMA creates it first) → nothing to
     // reconcile; a fresh CREATE TABLE already has every column.
     if (existing.size === 0) return;
 
@@ -1969,7 +1969,7 @@ export class SQLiteStorage implements CrawlStorage {
           // the first 20 texts PER DATABASE and NEVER EVICTS, so a statement
           // that gets in stays in and one that arrives late never gets in at
           // all: it recompiles on every call, forever and silently. Measured on
-          // a fresh database — 25 distinct texts, then three passes over the
+          // a fresh database, 25 distinct texts, then three passes over the
           // same 25, gave 15 compilations rather than 0, which is the five that
           // never made it, three times each.
           //
@@ -2140,7 +2140,7 @@ export class SQLiteStorage implements CrawlStorage {
         // content-addressed by `sha256(bytes)`, so `put` has already computed
         // it. Without a store (the cloud, which inlines HTML in the DB and has
         // no project.db to cache into) it stays NULL rather than paying a second
-        // hash over every page on the path #1862 made memory-critical — a NULL
+        // hash over every page on the path #1862 made memory-critical, a NULL
         // means "this page does not participate in the rule-result cache", which
         // is the safe answer, never a wrong one.
         let exactHtmlHash: string | null = null;
@@ -2243,7 +2243,7 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         // Deterministic order so repeat audits emit pages/affected-URLs in a
-        // stable order (#150) — normalized_url is the per-page primary key and
+        // stable order (#150), normalized_url is the per-page primary key and
         // how findings are keyed, so sorting by it keeps report diffs minimal.
         let query =
           "SELECT * FROM pages WHERE crawl_id = ? ORDER BY normalized_url ASC";
@@ -2413,7 +2413,7 @@ export class SQLiteStorage implements CrawlStorage {
    *
    * The entity-map diff needs exactly this. Its "was this page crawled again?"
    * test cannot use the entity tables, because a page the newer crawl DID visit
-   * and which now declares nothing has no row there — and treating that as
+   * and which now declares nothing has no row there, and treating that as
    * "not crawled" would hide the single most important thing a diff can report,
    * a site that dropped its structured data.
    *
@@ -3842,7 +3842,7 @@ export class SQLiteStorage implements CrawlStorage {
           mdVariantUrl: row.md_variant_url as string,
           mdVariantExists: (row.md_variant_exists as number) === 1,
           mdVariantContentType: row.md_variant_content_type as string | null,
-          // Columns added in schema v17 — undefined (not null) on rows persisted
+          // Columns added in schema v17, undefined (not null) on rows persisted
           // before this migration ran, since `row.x` is `undefined` for a column
           // SQLite has no value for yet vs. a column that exists and is NULL.
           negotiatedVary: (row.negotiated_vary as string | null | undefined) ?? null,
@@ -3862,7 +3862,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  // AX: well-known/agent-file probes — JSON blob per crawl.
+  // AX: well-known/agent-file probes, JSON blob per crawl.
   setWellKnownProbe(
     crawlId: string,
     probe: WellKnownProbeRecord
@@ -3898,7 +3898,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  // AX: homepage access probes (browser/gptbot/claude-user) — JSON blob per crawl.
+  // AX: homepage access probes (browser/gptbot/claude-user), JSON blob per crawl.
   setAgentAccess(
     crawlId: string,
     access: AgentAccessRecord
@@ -4019,7 +4019,7 @@ export class SQLiteStorage implements CrawlStorage {
           ),
           errors: this.safeJsonParse<string[]>(row.errors as string, []),
           fetchedAt: row.fetched_at as number,
-          // NULL on any sitemap stored before v21 — reads back false, the old behaviour.
+          // NULL on any sitemap stored before v21, reads back false, the old behaviour.
           isNewsSitemap: Boolean(row.is_news_sitemap),
         }));
       },
@@ -4173,7 +4173,7 @@ export class SQLiteStorage implements CrawlStorage {
         // The single most-recent resource per (type, url) across all OTHER
         // crawls, paired with that crawl's start time (resource_sizes has no
         // per-row timestamp). "Most recent" is ordered by (started_at, crawl_id)
-        // so ties on started_at resolve deterministically to ONE row — exactly
+        // so ties on started_at resolve deterministically to ONE row, exactly
         // one row per (type, url), no dupes. Expressed as a NOT EXISTS
         // anti-join (no window functions) for the bun:sqlite version in use.
         const stmt = db.prepare(`
@@ -4382,14 +4382,14 @@ export class SQLiteStorage implements CrawlStorage {
           const placeholders = chunk.map(() => "?").join(",");
           // ONE row per key, chosen in SQL. Every retained audit holds a row for
           // an unchanged page, so selecting them all and letting the last write
-          // win would decompress (pages x retained audits) payloads per audit —
+          // win would decompress (pages x retained audits) payloads per audit ,
           // work that grows with history rather than with the crawl, which is
           // exactly what a per-page cache must not do (#1908).
           //
           // `max(created_at)` with bare columns is SQLite's documented
           // min/max-aggregate case: the other columns come from the row holding
           // the maximum. Rows tie when two audits land in the same millisecond and
-          // SQLite may then return either — harmless HERE and only here, because
+          // SQLite may then return either, harmless HERE and only here, because
           // the key covers every input that determines the payload, so two rows
           // sharing a key hold the same bytes.
           const rows = db
@@ -4414,7 +4414,7 @@ export class SQLiteStorage implements CrawlStorage {
    * Write this crawl's page-rule cache entries (#1990), gzipped, in one
    * transaction.
    *
-   * Called with EVERY page the audit scored, replayed pages included — that
+   * Called with EVERY page the audit scored, replayed pages included, that
    * carry-forward is what lets `retireCrawls` delete an older crawl's rows
    * without making the next audit cold.
    */
@@ -4770,7 +4770,7 @@ export class SQLiteStorage implements CrawlStorage {
    * would put a full serialize + gzip of every page back on the warm run, which is
    * the run the whole feature exists to make cheap.
    *
-   * Silently skips a key with no row — the only way that happens is the entry
+   * Silently skips a key with no row, the only way that happens is the entry
    * being retired between the read and the write, and a missing carry-forward
    * costs the NEXT audit a page's rules, never this one's correctness.
    */
@@ -5397,7 +5397,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
-   * Tables holding a crawl's DERIVED output — everything that can be recomputed
+   * Tables holding a crawl's DERIVED output, everything that can be recomputed
    * by auditing again, and nothing another crawl reads (#1912).
    *
    * Deliberately excluded, and why:
@@ -5485,7 +5485,7 @@ export class SQLiteStorage implements CrawlStorage {
    * `started_at DESC` alone, because which audits fall outside the window has to
    * be decided the same way every time. Two crawls stamped in the same
    * millisecond tie, and SQLite's pick between tied rows is whatever the plan
-   * happens to produce — an index added later can flip it. `rowid` is insert
+   * happens to produce, an index added later can flip it. `rowid` is insert
    * order on this table, so DESC breaks the tie toward the newer row.
    *
    * Reads three small columns from `crawls`, which holds one row per audit, so
@@ -5886,7 +5886,7 @@ export class SQLiteStorage implements CrawlStorage {
    * `freelistPages * pageSize` is what deleting has already freed INSIDE the
    * file: reused by the next audit's inserts, but not returned to the
    * filesystem until something rewrites the file. That is the number a caller
-   * needs to decide whether a rewrite is worth it — see {@link vacuum} for why
+   * needs to decide whether a rewrite is worth it, see {@link vacuum} for why
    * it must not be routine.
    */
   databasePageStats(): Effect.Effect<
@@ -5922,7 +5922,7 @@ export class SQLiteStorage implements CrawlStorage {
    * without this a retention pass leaves the project MEASURABLY larger on disk
    * than it started, having deleted rows. Cheap: the work is proportional to
    * the log, which is being written either way. A checkpoint that cannot get
-   * its lock returns busy rather than failing, which is the right answer here —
+   * its lock returns busy rather than failing, which is the right answer here ,
    * the next one will do it.
    */
   checkpointWal(): Effect.Effect<void, StorageError, never> {
@@ -5982,7 +5982,7 @@ export class SQLiteStorage implements CrawlStorage {
    *
    * `getCachedPage` reads `ORDER BY fetched_at DESC, rowid DESC LIMIT 1`, so a
    * row with a newer sibling for the same url can never be returned by it. The
-   * predicate is that ordering, inverted — which is why these rows are dead to
+   * predicate is that ordering, inverted, which is why these rows are dead to
    * the crawler even though the crawl they belong to is being retired for a
    * different reason. A page whose ONLY row belongs to a retired crawl is kept:
    * it is still the freshest thing known about that url.
@@ -5998,7 +5998,7 @@ export class SQLiteStorage implements CrawlStorage {
    *   row value: SEARCH newer USING COVERING INDEX (normalized_url=? AND fetched_at>?)
    *
    * `fetched_at` is NOT NULL and every row has a rowid, so the comparison can
-   * never meet a NULL and the two forms select the same rows — including the
+   * never meet a NULL and the two forms select the same rows, including the
    * ties, which is the case the rowid half exists for.
    */
   private supersededPagesSql(select: string, placeholders: string): string {
@@ -6075,7 +6075,7 @@ export class SQLiteStorage implements CrawlStorage {
    * Their reports stop being renderable and they are stamped `retired_at`, which
    * is what lets `report` say so instead of rebuilding an empty one; the crawl
    * rows remain, so the audits are still listed. Everything the NEXT crawl reads
-   * is preserved — see RETIREABLE_TABLES for what is excluded
+   * is preserved, see RETIREABLE_TABLES for what is excluded
    * and why. One transaction, so a crash cannot leave a half-retired crawl that
    * renders a partial report.
    */
@@ -6221,7 +6221,7 @@ export class SQLiteStorage implements CrawlStorage {
    *
    * {@link retireCrawls} runs the same predicate once, at the moment it retires
    * a crawl, and keeps any page whose row is then the freshest known record of
-   * its url — correctly, because that row is the next crawl's cache entry. But
+   * its url, correctly, because that row is the next crawl's cache entry. But
    * a LATER audit can crawl that url again and supersede it, and by then the
    * crawl it belongs to is retired and nothing looks at it again. On a site
    * whose url set moves between audits, one dead row per such url stays
@@ -6439,7 +6439,7 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   // ============================================
-  // SMART AUDITS — SITE-SCOPED FINDING STORE (#110)
+  // SMART AUDITS, SITE-SCOPED FINDING STORE (#110)
   // ============================================
 
   /**
@@ -6496,10 +6496,10 @@ export class SQLiteStorage implements CrawlStorage {
     return Effect.try({
       try: () => {
         const db = this.getDb();
-        // Optional state filter — the merge hot-path passes ["open"] so it never
+        // Optional state filter, the merge hot-path passes ["open"] so it never
         // scans the resolved/stale history (can be large on churny sites, #197).
         // Deterministic order so repeat audits emit findings in a stable order
-        // (#150) — normalized_url is how findings are keyed (diff-friendly);
+        // (#150), normalized_url is how findings are keyed (diff-friendly);
         // the rest of the primary key tie-breaks for total determinism.
         const orderBy =
           " ORDER BY normalized_url ASC, rule_id ASC, check_name ASC, locator ASC";
@@ -6598,7 +6598,7 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         // Deterministic order so repeat audits emit pages in a stable order
-        // (#150) — normalized_url is the per-page key here.
+        // (#150), normalized_url is the per-page key here.
         const stmt = db.prepare(
           `SELECT site_key, normalized_url, last_status, state, last_seen_crawl_id,
                   last_seen_at, not_evaluated
@@ -6675,7 +6675,7 @@ export class SQLiteStorage implements CrawlStorage {
           // 3. Cap terminal findings per site, keeping the NEWEST. Scoped to
           //    terminal states in BOTH the count and the delete so 'open' rows
           //    never count toward the cap nor get pruned. Keyed on the implicit
-          //    `rowid` (page_findings is not WITHOUT ROWID) — simpler and faster
+          //    `rowid` (page_findings is not WITHOUT ROWID), simpler and faster
           //    than a 4-column tuple NOT IN. rowid is stable within this tx.
           const terminalCount = (
             db
@@ -6711,7 +6711,7 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  // Project meta — cross-crawl key/value store (sticky user-agent, #875)
+  // Project meta, cross-crawl key/value store (sticky user-agent, #875)
   getProjectMeta(
     key: string
   ): Effect.Effect<string | null, StorageError, never> {
@@ -6770,7 +6770,7 @@ export class SQLiteStorage implements CrawlStorage {
   // ============================================
   //
   // Additive read/write surface over the page_features table. Nothing in the v1
-  // pipeline reads these rows yet — the streaming rule loop (PR-E) will. Methods
+  // pipeline reads these rows yet, the streaming rule loop (PR-E) will. Methods
   // are SQLite-only (not on the CrawlStorage interface), matching the existing
   // getAllLinkAppearancesByHref / getRuleResultsByPage precedent.
 
@@ -6938,7 +6938,7 @@ export class SQLiteStorage implements CrawlStorage {
    * Keyset-paginated page scan (the cursor primitive PR-E wraps into
    * SiteQuery.pagesMatching). Ordered by normalized_url ASC; pass the last
    * returned `normalizedUrl` as `after` to fetch the next page. Never returns a
-   * full resident array — the caller bounds residency by consuming page-by-page.
+   * full resident array, the caller bounds residency by consuming page-by-page.
    */
   getPageFeaturesPage(
     crawlId: string,
@@ -7083,7 +7083,7 @@ export class SQLiteStorage implements CrawlStorage {
    * caps the number of groups (LIMIT) and the ROW_NUMBER filter caps URLs per
    * group, so the result set is bounded regardless of crawl size. `hashCol` and
    * `valueExpr` are ONLY ever class-internal constants (DUP_FIELD_COLUMNS /
-   * "template_fp" / "NULL") — never user input — so splicing them is
+   * "template_fp" / "NULL"), never user input, so splicing them is
    * injection-safe.
    */
   private groupedByColumn(

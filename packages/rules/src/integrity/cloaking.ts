@@ -45,9 +45,9 @@ export const cloakingRule: Rule = {
     id: "integrity/cloaking",
     name: "Cloaking / UA-Gated Content",
     description:
-      "Detects pages that serve materially different content to a Googlebot user-agent than to a normal visitor (UA cloaking), or that change their response when a URL query token is added (token-gating) — both are ways an injected SEO-spam or phishing payload hides from the site owner. Requires the opt-in integrity cloaking probe.",
+      "Detects pages that serve materially different content to a Googlebot user-agent than to a normal visitor (UA cloaking), or that change their response when a URL query token is added (token-gating), both are ways an injected SEO-spam or phishing payload hides from the site owner. Requires the opt-in integrity cloaking probe.",
     solution:
-      "A page that shows search engines (or tokened links) different content than it shows you is cloaking — almost always an injected payload or a deceptive doorway, and a likely compromise. Fetch the URL yourself with a Googlebot user-agent (e.g. `curl -A 'Googlebot' <url>`) to see the hidden content, then audit recently modified files/plugins and server-side rules that branch on user-agent or query string. Legitimate UA/geo personalization should never change the core indexable content.",
+      "A page that shows search engines (or tokened links) different content than it shows you is cloaking, almost always an injected payload or a deceptive doorway, and a likely compromise. Fetch the URL yourself with a Googlebot user-agent (e.g. `curl -A 'Googlebot' <url>`) to see the hidden content, then audit recently modified files/plugins and server-side rules that branch on user-agent or query string. Legitimate UA/geo personalization should never change the core indexable content.",
     category: "integrity",
     scope: "site",
     findingScope: "page",
@@ -97,7 +97,7 @@ export const cloakingRule: Rule = {
       checks.push({
         name: "cloaking",
         status: "fail",
-        message: `${cloaked.length} page(s) serve different content to googlebot than to a normal visitor — likely cloaking`,
+        message: `${cloaked.length} page(s) serve different content to googlebot than to a normal visitor, likely cloaking`,
         value: cloaked.slice(0, 5).map(describeUaDivergence).join("\n"),
         items: cloaked.map((p) => ({ id: p.url })),
         details: { total: cloaked.length, kind: "ua-cloaking" },
@@ -108,7 +108,7 @@ export const cloakingRule: Rule = {
       checks.push({
         name: "cloaking-token-gated",
         status: "warn",
-        message: `${tokenGated.length} page(s) change their response when a query token is appended — possible token-gated content`,
+        message: `${tokenGated.length} page(s) change their response when a query token is appended, possible token-gated content`,
         value: tokenGated.slice(0, 5).map(describeTokenGating).join("\n"),
         items: tokenGated.map((p) => ({ id: p.url })),
         details: { total: tokenGated.length, kind: "token-gating" },
@@ -119,7 +119,7 @@ export const cloakingRule: Rule = {
       checks.push({
         name: "cloaking",
         status: "pass",
-        message: `Probed ${probes.length} suspicious path(s) — no UA cloaking or token-gating detected`,
+        message: `Probed ${probes.length} suspicious path(s), no UA cloaking or token-gating detected`,
         details: { probed: probes.length },
       });
     }

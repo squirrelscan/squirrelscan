@@ -257,13 +257,13 @@ describe("renderConcurrencyUpsellHint", () => {
   // read from PLANS so the hint can never sell a number the plan does not have.
   test("free plan hints at Pro's pages rendered at once", () => {
     expect(renderConcurrencyUpsellHint("free")).toBe(
-      ` — upgrade to Pro for ${PLANS.starter.renderConcurrency} pages rendered at once, per audit`
+      `, upgrade to Pro for ${PLANS.starter.renderConcurrency} pages rendered at once, per audit`
     );
   });
 
   test('pro plan (planId "starter") hints at Team\'s pages rendered at once', () => {
     expect(renderConcurrencyUpsellHint("starter")).toBe(
-      ` — upgrade to Team for ${PLANS.team.renderConcurrency} pages rendered at once, per audit`
+      `, upgrade to Team for ${PLANS.team.renderConcurrency} pages rendered at once, per audit`
     );
   });
 

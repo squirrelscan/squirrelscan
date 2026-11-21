@@ -70,7 +70,7 @@ export const templateDiscontinuityRule: Rule = {
     id: "integrity/template-discontinuity",
     name: "Template Discontinuity",
     description:
-      "Detects pages whose markup diverges hard from the site's common template — a standalone page with none of the site's theme is a classic injected-page signal",
+      "Detects pages whose markup diverges hard from the site's common template, a standalone page with none of the site's theme is a classic injected-page signal",
     solution:
       "This page shares almost none of your site's theme: no stylesheets, asset hosts, nav or footer, or CSS variables in common with the rest of the crawl. That is usually deliberate: a campaign landing page, a signed-out or empty state, a checkout step, a status page. It is worth a glance only because an injected standalone page looks the same from the outside. Start by confirming the page is one you published. If it is not, and only then, treat the site as compromised: remove the page, audit recently modified files, and check server access logs.",
     category: "integrity",

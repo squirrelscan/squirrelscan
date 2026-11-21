@@ -97,25 +97,25 @@ export function readCloudResult<T>(
 export function humanizeCloudSkip(reason: CloudSkipReason): string {
   switch (reason) {
     case "not-authenticated":
-      return "Cloud analysis skipped — run `squirrel auth login` to enable it.";
+      return "Cloud analysis skipped: run `squirrel auth login` to enable it.";
     case "insufficient-credits":
-      return "Cloud analysis skipped — out of credits. Top up at https://squirrelscan.com/account/credits.";
+      return "Cloud analysis skipped: out of credits. Top up at https://squirrelscan.com/account/credits.";
     case "service-unavailable":
-      return "Cloud analysis skipped — the service was unavailable. Try again later.";
+      return "Cloud analysis skipped: the service was unavailable. Try again later.";
     case "payload-too-large":
-      return "Cloud analysis skipped — the page batch was too large to submit. Lower `[cloud].batch_size` and re-run.";
+      return "Cloud analysis skipped: the page batch was too large to submit. Lower `[cloud].batch_size` and re-run.";
     case "credit-cap-reached":
-      return "Cloud analysis skipped — hit the per-audit credit cap (`[cloud].max_credits_per_audit`).";
+      return "Cloud analysis skipped: hit the per-audit credit cap (`[cloud].max_credits_per_audit`).";
     case "not-applicable":
       // computeLockedRules keys off this exact sentence via
       // isNotApplicableCloudSkip — update both together on any copy edit.
-      return "Cloud analysis skipped — not applicable to this site type.";
+      return "Cloud analysis skipped: not applicable to this site type.";
     case "render-failed":
-      return "Cloud analysis skipped — the page could not be rendered (navigation timeout or JS error).";
+      return "Cloud analysis skipped: the page could not be rendered (navigation timeout or JS error).";
     case "render-disabled":
-      return "Cloud analysis skipped — render disabled by the run config.";
+      return "Cloud analysis skipped: render disabled by the run config.";
     case "not-prefetched":
-      return "Cloud analysis skipped — no result was prefetched for this page.";
+      return "Cloud analysis skipped: no result was prefetched for this page.";
     case "prefetch-out-of-time":
       // A coded not-checked reason (rule-outcome.ts), so reports list the rule
       // as "Not checked" rather than reading the missing result as clean.

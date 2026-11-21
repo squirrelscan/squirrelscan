@@ -1167,7 +1167,7 @@ export function createCrawler(
           if (decision.vetoedInclude) {
             yield* warnIncludeVetoed(decision.vetoedInclude, new URL(normalized).host);
           }
-          logger.debug("url skipped (scope)", `${normalized} — ${decision.reason}`);
+          logger.debug("url skipped (scope)", `${normalized}, ${decision.reason}`);
           yield* storage.upsertFrontier(crawlId, {
             normalizedUrl: normalized,
             rawUrl,
@@ -2669,7 +2669,7 @@ export function createCrawler(
               if (Date.now() - stallSince > urlTimeoutMs) {
                 logger.warn(
                   "crawl stalled",
-                  `${fetchingCount} url(s) stuck in fetching state — finishing with partial results`,
+                  `${fetchingCount} url(s) stuck in fetching state, finishing with partial results`,
                 );
                 stopRequested = true;
                 return { kind: "done" } as const;
@@ -2807,7 +2807,7 @@ export function createCrawler(
               stopRequested = true;
               logger.warn(
                 "crawl aborted",
-                `${attemptsFinished} pages attempted, none stored — the site or local page store is rejecting every page; stopping instead of draining the frontier`,
+                `${attemptsFinished} pages attempted, none stored, the site or local page store is rejecting every page; stopping instead of draining the frontier`,
               );
             }
           }
@@ -3764,7 +3764,7 @@ export function createCrawler(
         if (pendingAfterSeed === 0) {
           logger.warn(
             "nothing to crawl",
-            `${config.sitemapUrlCount} sitemap URL(s) and the seed were filtered (robots.txt/scope) — finishing with no pages`,
+            `${config.sitemapUrlCount} sitemap URL(s) and the seed were filtered (robots.txt/scope), finishing with no pages`,
           );
         }
 

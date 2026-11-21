@@ -49,8 +49,8 @@ export function apiResultToTool(
         extractApiError(result)?.trim().replace(/\.+$/, "") || null;
       return errorResult(
         reason
-          ? `Forbidden — ${reason}${/[!?]$/.test(reason) ? "" : "."}`
-          : `Forbidden — your credential lacks access for this tool (${API_KEYS_NOT_YET_SUPPORTED} here; use a logged-in session).`
+          ? `Forbidden: ${reason}${/[!?]$/.test(reason) ? "" : "."}`
+          : `Forbidden: your credential lacks access for this tool (${API_KEYS_NOT_YET_SUPPORTED} here; use a logged-in session).`
       );
     }
     case 404:

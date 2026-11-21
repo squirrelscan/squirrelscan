@@ -27,7 +27,7 @@ import { trackFirstRunEvent } from "@/self/telemetry";
  */
 export function localApiHint(apiUrl: string): string {
   return /localhost|127\.0\.0\.1|::1/.test(apiUrl)
-    ? ` The local API may be down — set SQUIRREL_API_SERVER=${DEFAULT_API_URL} to use production.`
+    ? ` The local API may be down, set SQUIRREL_API_SERVER=${DEFAULT_API_URL} to use production.`
     : "";
 }
 
@@ -307,7 +307,7 @@ export function startCallbackServer(
           } else if (status.status === "consumed") {
             onError(
               new Error(
-                "Login session already used — run 'squirrel auth login' again"
+                "Login session already used, run 'squirrel auth login' again"
               )
             );
           }

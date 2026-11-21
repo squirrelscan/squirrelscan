@@ -886,7 +886,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       lines.push("");
       for (const rule of locked.rules.map(lockedRuleView)) {
         const why = rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : "";
-        lines.push(`- ${markdownCodeSpan(rule.id)} — ${escapeMarkdownText(rule.name)}${why}`);
+        lines.push(`- ${markdownCodeSpan(rule.id)}, ${escapeMarkdownText(rule.name)}${why}`);
       }
       lines.push("");
     }

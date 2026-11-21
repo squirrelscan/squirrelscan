@@ -101,7 +101,7 @@ const ERROR_SHELL_ID_RE = /^__\w*error\w*__$/i;
 // strong signal. A title that LEADS with 404 (below) is the other strong path.
 const NOT_FOUND_PHRASE_RE =
   /\b(?:page|content|post|article|url)\s+(?:not\s+found|does(?:n['’]t| not)\s+exist|no\s+longer\s+(?:exists|available)|(?:cannot|can\s+not|can['’]t)\s+be\s+found|could(?:n['’]t| not)\s+be\s+found)\b/i;
-const LEADING_404_RE = /^\s*(?:error\s*)?404(?:\b|[\s:|/–—-])/i;
+const LEADING_404_RE = /^\s*(?:error\s*)?404(?:\b|[\s:|/–\u2014-])/i;
 
 /** True when a title/heading string reads as "page not found". */
 export function looksLikeNotFoundText(text: string | null | undefined): boolean {

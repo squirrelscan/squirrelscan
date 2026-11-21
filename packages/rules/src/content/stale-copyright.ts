@@ -41,7 +41,7 @@ const FOOTER_SELECTORS = [
  * padding, but is bounded so a year far away in unrelated text isn't captured.
  */
 const COPYRIGHT_RE =
-  /(?:©|\(c\)|&copy;|copyright)[^0-9]{0,30}?(\d{4})(?:\s*(?:[-–—]|to)\s*(\d{4}))?/gi;
+  /(?:©|\(c\)|&copy;|copyright)[^0-9]{0,30}?(\d{4})(?:\s*(?:[-–,]|to)\s*(\d{4}))?/gi;
 
 /** Years a page could plausibly assert. Anything outside is a version or an id, not a year. */
 const MIN_YEAR = 1990;
