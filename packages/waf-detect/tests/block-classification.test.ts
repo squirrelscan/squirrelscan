@@ -36,7 +36,7 @@ describe("a provider's challenge or block page is blocked", () => {
     for (const provider of providers) {
       expect(NEAR_MISSES.some((sample) => sample.provider === provider)).toBe(true);
     }
-    expect([...providers].sort()).toEqual(
+    expect<string[]>([...providers].sort()).toEqual(
       [
         "aws-waf",
         "akamai",

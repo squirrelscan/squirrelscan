@@ -122,6 +122,9 @@
         "@squirrelscan/utils": "workspace:*",
         "zod": "^4.6.6",
       },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+      },
     },
     "packages/core-contracts": {
       "name": "@squirrelscan/core-contracts",
@@ -129,6 +132,9 @@
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
         "effect": "^3.22.5",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
       },
     },
     "packages/crawler": {
@@ -256,6 +262,9 @@
       "dependencies": {
         "@squirrelscan/core-contracts": "workspace:*",
       },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+      },
     },
     "packages/threat-intel": {
       "name": "@squirrelscan/threat-intel",
@@ -263,6 +272,9 @@
       "dependencies": {
         "@squirrelscan/core-contracts": "workspace:*",
         "tldts": "^7",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
       },
     },
     "packages/tls-probe": {
@@ -294,6 +306,9 @@
     "packages/waf-detect": {
       "name": "@squirrelscan/waf-detect",
       "version": "0.0.1",
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+      },
     },
   },
   "overrides": {

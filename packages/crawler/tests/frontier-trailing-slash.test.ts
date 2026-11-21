@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import { normalizeUrl } from "../src/frontier";
 
-const opts = { baseUrl: "https://example.com/", allowQueryParams: [] as string[] };
+const opts = { baseUrl: "https://example.com/", allowQueryParams: [] as string[], dropQueryPrefixes: [] as string[] };
 
 describe("frontier normalizeUrl — trailing slash", () => {
   test("a linked trailing slash survives normalization", () => {

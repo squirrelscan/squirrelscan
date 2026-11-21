@@ -34,7 +34,7 @@ afterEach(() => {
   for (const server of servers.splice(0)) server.stop(true);
 });
 
-type Route = { body: string | Uint8Array | ReadableStream; headers: Record<string, string> };
+type Route = { body: string | Uint8Array<ArrayBuffer> | ReadableStream; headers: Record<string, string> };
 
 /** An origin serving `routes` (built from its own base URL) and 404 elsewhere. */
 function serve(routes: (base: string) => Record<string, Route>): string {

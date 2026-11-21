@@ -21,7 +21,7 @@ const page = (title: string) =>
   `<!doctype html><html><head><title>${title}</title></head><body><p>${title}</p></body></html>`;
 
 function serve(requested: string[]): string {
-  const server = Bun.serve({
+  const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     fetch(req) {
       const url = new URL(req.url);

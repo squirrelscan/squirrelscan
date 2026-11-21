@@ -2981,9 +2981,10 @@
   ]
  },
  "crawl/server-errors": {
-  "digest": "154105016346856",
+  "digest": "173452543819032",
   "lines": [
-   "server-errors|pass|No crawled page answered with a #xx status||"
+   "server-errors|pass|No crawled page answered with a #xx status||",
+   "server-errors|pass|The page did not answer with a #xx status||"
   ]
  },
  "crawl/sitemap-4xx": {

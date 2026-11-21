@@ -1,5 +1,6 @@
 // a11y/landmark-regions - Check for landmark regions
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const landmarkRegionsRule: Rule = {
@@ -12,6 +13,7 @@ export const landmarkRegionsRule: Rule = {
     category: "a11y",
     wcagNone:
       "It reports pages with no main, navigation or footer landmark, and pages with several main landmarks, best practices no WCAG success criterion requires.",
+    wcagRelated: [wcag("1.3.1"), wcag("2.4.1")],
     scope: "page",
     findingScope: "page",
     verdictScope: "page",

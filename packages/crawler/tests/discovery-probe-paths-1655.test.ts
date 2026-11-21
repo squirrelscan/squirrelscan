@@ -56,7 +56,7 @@ type Handler = (path: string, origin: string, host: string) => Response | undefi
 
 function serve(handler: Handler = () => undefined, latencyMs = 0): { url: string; hits: Hit[] } {
   const hits: Hit[] = [];
-  const server = Bun.serve({
+  const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     idleTimeout: 0,
     async fetch(req) {

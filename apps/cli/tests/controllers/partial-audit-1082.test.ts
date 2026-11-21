@@ -123,6 +123,30 @@ describe("zero-rules pre-check sees the WCAG level (repo#3093)", () => {
     expect(check(["a11y/*"], [], "A")).toBeNull();
   });
 
+  // pub#2110: the selection can come from `[rules] enable` alone, the way audit.ts calls it.
+  const checkConfig = (configEnable: string[], level?: "A" | "AA" | "AAA") => {
+    const resolved = resolveRulesConfig(
+      { enable: configEnable, disable: [] },
+      { enable: [], disable: [] }
+    );
+    return zeroRulesError(resolved.enable, resolved, {
+      level,
+      disables: wcagRuleDisables(level),
+    });
+  };
+
+  test("config-only [rules] enable of a rule the WCAG level leaves out is refused", () => {
+    expect(checkConfig(["a11y/touch-targets"], "AA")).toContain(
+      "WCAG level AA"
+    );
+  });
+
+  test("config-only enable the level keeps, or the default, is not refused", () => {
+    expect(checkConfig(["a11y/touch-targets"], "AAA")).toBeNull();
+    expect(checkConfig(["a11y/touch-targets"])).toBeNull();
+    expect(checkConfig(["*"], "AA")).toBeNull();
+  });
+
   test("the include/exclude contradiction keeps its own message", () => {
     expect(check(["ax/*"], ["ax/*"], "AA")).toContain("contradict each other");
   });

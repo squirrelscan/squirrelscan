@@ -3,6 +3,7 @@
 // its HTML, which is the cost the cap exists to bound. Drives a real two-pass incremental crawl: pass 1 stores the
 // page under a cap it exceeds, pass 2 reuses it from cache under the cap being tested. Synthetic host.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { describe, expect, test } from "bun:test";
@@ -88,7 +89,7 @@ async function crawlRecord(storage: CrawlStorage, config: Record<string, unknown
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );

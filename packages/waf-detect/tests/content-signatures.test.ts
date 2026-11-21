@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { WafProvider } from "../src";
 import { detectWaf, detectWafChallengePage, detectWafFromContent, isLikelyWafBlock } from "../src";
 
 const CF_HEADERS = { server: "cloudflare", cfCacheStatus: "DYNAMIC" };
@@ -94,7 +95,7 @@ describe("a page that mentions a provider (#667)", () => {
 });
 
 describe("each provider's body signatures are infrastructure, not prose", () => {
-  const signatures: Array<[string, string, "markup" | "text"]> = [
+  const signatures: Array<[WafProvider, string, "markup" | "text"]> = [
     ["cloudflare", '<p>Cloudflare Ray ID: <strong class="font-semibold">8d1f2a3b4c5d6e7f</strong></p>', "text"],
     ["cloudflare", "<h1>Checking your browser before accessing example.com</h1>", "text"],
     ["cloudflare", '<div id="cf-browser-verification"></div>', "markup"],
@@ -211,7 +212,7 @@ describe("a signature counts where it acts, not where a page quotes it (#693)", 
     }
   });
 
-  test.each([
+  test.each<[WafProvider, string]>([
     ["datadome", '<iframe src="https://js.datadome.co/frame.html"></iframe>'],
     ["imperva", '<iframe id="main-iframe" src="/_Incapsula_Resource?CWUDNSAI=24"></iframe>'],
     ["cloudflare", "<script>var s = '/cdn-cgi/challenge-platform/scripts/jsd/main.js';</script>"],

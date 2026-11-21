@@ -428,7 +428,7 @@ describe("startCrawlLease", () => {
         ownerHost: "same-host",
       });
       expect(leaseOf(path, id)).toEqual({
-        owner_pid: winner?.pid,
+        owner_pid: winner!.pid,
         owner_host: "same-host",
         heartbeat_at: 10_000_000,
       });

@@ -213,6 +213,7 @@ describe("the entry URL gets a second, relaxed-deadline fetch before the audit i
         const body = await res.text();
         const now = Date.now();
         return {
+          url: req.url,
           status: res.status,
           headers: { "content-type": "text/html" },
           body,

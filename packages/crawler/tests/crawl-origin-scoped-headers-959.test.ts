@@ -2,6 +2,7 @@
 // fetches (#959). Driven through the real crawler with a mock document fetcher,
 // asserting both that each URL WAS requested and what headers it carried.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -116,7 +117,7 @@ async function crawlUrls(
       originalUrl: crawl.originalUrl ?? `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );

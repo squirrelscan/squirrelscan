@@ -139,7 +139,7 @@ export { reconstructCompleteResults, reconstructPageRuleChecks } from "./reconst
 export type { ReconstructCompleteInput } from "./reconstruct";
 // Bounded complete-store scoring fold (#1873) — the memory-safe twin of
 // reconstructCompleteResults + buildScoringResultsFromMerged.
-export { foldCompleteStoreTallies } from "./complete-store-fold";
+export { foldCompleteStoreTallies, checksPerPageFromTallies } from "./complete-store-fold";
 export type { CompleteStoreTallyInput, FindingPageSource } from "./complete-store-fold";
 // Chunked-publish producer: flatten a report to complete streamable findings (#1023).
 export {

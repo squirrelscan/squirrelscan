@@ -52,7 +52,7 @@ afterEach(() => {
 // everything else is a 404 after `latencyMs`, so overlapping requests show up.
 function serve(latencyMs = 0): { url: string; hits: Hit[] } {
   const hits: Hit[] = [];
-  const server = Bun.serve({
+  const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     idleTimeout: 0,
     async fetch(req) {

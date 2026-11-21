@@ -304,7 +304,7 @@ describe("review fixes (#701)", () => {
     const rows = md.split("\n").filter((l) => l.startsWith("| `https://"));
     const pipes = (l: string) => l.match(/(?<!\\)\|/g)?.length;
     // Changed rows have 4 cells (5 pipes), added and removed rows 3 cells (4 pipes).
-    for (const line of rows) expect([4, 5]).toContain(pipes(line));
+    for (const line of rows) expect([4, 5] as Array<number | undefined>).toContain(pipes(line));
     expect(rows.some((l) => l.includes("p\\|pipe\\|x"))).toBe(true);
   });
 

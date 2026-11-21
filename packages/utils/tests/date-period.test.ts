@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { datePeriod, periodGapMs, w3cDatePeriod } from "../src/date-period";
+import { type DatePeriod, datePeriod, periodGapMs, w3cDatePeriod } from "../src/date-period";
 
 const ZONES = ["UTC", "America/New_York", "Asia/Tokyo", "Pacific/Kiritimati"];
 /** Offset of 1 January 2024 in each zone, as `getTimezoneOffset` gives it. */
@@ -100,7 +100,7 @@ describe("datePeriod", () => {
   });
 
   test("a value with no zone in another format is read as written, in UTC", () => {
-    const cases: Array<[string, Partial<ReturnType<typeof datePeriod>>]> = [
+    const cases: Array<[string, Partial<DatePeriod>]> = [
       ["September 10, 2024", { start: Date.UTC(2024, 8, 10), precision: "day", day: "2024-09-10" }],
       ["2024/09/10", { start: Date.UTC(2024, 8, 10), precision: "day", day: "2024-09-10" }],
       ["2024/09/10 08:00", { start: Date.UTC(2024, 8, 10, 8), precision: "instant", day: "2024-09-10" }],
@@ -264,7 +264,7 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
   test("a local time a daylight-saving zone skips reads as written, in every zone", () => {
     // 02:30 on 10 March 2024 does not exist in America/New_York; read at local
     // time, `Date` moved it to 03:30 there and nowhere else.
-    const expected = { start: Date.UTC(2024, 2, 10, 2, 30), end: Date.UTC(2024, 2, 10, 2, 30), precision: "instant", day: "2024-03-10" };
+    const expected = { start: Date.UTC(2024, 2, 10, 2, 30), end: Date.UTC(2024, 2, 10, 2, 30), precision: "instant", day: "2024-03-10" } as const;
     expect(inEveryZone(() => datePeriod("2024/03/10 02:30"))).toEqual(ZONES.map(() => expected));
     expect(inEveryZone(() => datePeriod("Mar 10 2024 2:30 AM"))).toEqual(ZONES.map(() => expected));
   });
@@ -273,13 +273,13 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
     const instant = (h: number, m = 0) => ({
       start: Date.UTC(2024, 8, 10, h, m),
       end: Date.UTC(2024, 8, 10, h, m),
-      precision: "instant",
+      precision: "instant" as const,
       day: "2024-09-10",
     });
     const wholeDay = {
       start: Date.UTC(2024, 8, 10),
       end: Date.UTC(2024, 8, 11) - 1,
-      precision: "day",
+      precision: "day" as const,
       day: "2024-09-10",
     };
     for (const [value, expected] of [

@@ -368,13 +368,14 @@ describe("security/supabase-rls", () => {
     expect(checks).toHaveLength(1);
     const fail = checks[0]!;
     expect(fail.status).toBe("fail");
-    expect(fail.message).toContain("profiles");
+    expect(fail.message).toStartWith(`1 Supabase table(s) in ${HOST} report rows`);
     expect(fail.message).not.toContain("todos");
     expect(fail.message).not.toContain("invoices");
     expect(fail.items).toHaveLength(1);
     expect(fail.items![0]).toMatchObject({
       id: `${HOST}/rest/v1/profiles`,
-      label: "profiles (42 row(s) visible to the anon key)",
+      label: "profiles",
+      snippet: "42 row(s) visible to the anon key",
       meta: { table: "profiles", rows: 42 },
     });
 
@@ -451,6 +452,61 @@ describe("security/supabase-rls", () => {
     ]).filterChecks("security/supabase-rls", undefined, checks);
     expect(all[0]!.status).toBe("pass");
     expect(all[0]!.message).toStartWith("2 waived by squirrel.toml");
+  });
+
+  // #2103: a table that is public on purpose is waived by its bare name, in
+  // every project, and the remaining finding stops naming it.
+  test("[[ignore]] items = [\"posts\"] waives the posts table in every project; glob:*/rest/v1/posts does too", async () => {
+    const REF2 = "zyxwvutsrqponmlkjihg";
+    const HOST2 = `${REF2}.supabase.co`;
+    const ANON2 = jwt({ iss: "supabase", ref: REF2, role: "anon", iat: 1700000000, exp: 2000000000 });
+    stubFetch({
+      [`${HOST}/rest/v1/posts`]: () => answer(200, "0-0/9"),
+      [`${HOST}/rest/v1/profiles`]: () => answer(200, "0-0/42"),
+      [`${HOST2}/rest/v1/posts`]: () => answer(200, "0-0/3"),
+      [`${HOST2}/rest/v1/profiles`]: () => answer(401),
+    });
+    const checks = await run(
+      ctx({
+        scripts: [
+          script(bundle(`sb.from("posts").select();sb.from("profiles").select()`)),
+          script(
+            `const sb2=createClient("https://${HOST2}","${ANON2}");sb2.from("posts").select()`,
+            "https://example.com/assets/other.js",
+          ),
+        ],
+      }),
+    );
+    const fails = checks.filter((c) => c.status === "fail");
+    expect(fails.map((c) => c.items!.map((i) => i.id))).toEqual([
+      [`${HOST}/rest/v1/posts`, `${HOST}/rest/v1/profiles`],
+      [`${HOST2}/rest/v1/posts`],
+    ]);
+
+    for (const pattern of ["posts", "glob:*/rest/v1/posts"]) {
+      const out = new IgnoreTable(
+        [{ rule: "security/supabase-rls", items: [pattern], reason: "posts is public by design" }],
+        { messageCountsItems: (id) => id === rule.meta.id && rule.meta.messageCountsItems === true },
+      ).filterChecks("security/supabase-rls", undefined, checks);
+      const [first, second] = out.filter((c) => c.details?.project !== undefined);
+      // Project one: profiles stays reported, posts is gone from the items and the message.
+      expect(first!.status).toBe("fail");
+      expect(first!.items!.map((i) => i.id)).toEqual([`${HOST}/rest/v1/profiles`]);
+      expect(first!.message).toStartWith(`1 Supabase table(s) in ${HOST} report rows`);
+      expect(first!.message).not.toContain("posts");
+      // Project two: its only exposed table was posts, so the check is waived whole.
+      expect(second!.status).toBe("pass");
+      expect(second!.items).toBeUndefined();
+      expect(second!.message).not.toContain("posts");
+    }
+
+    // A bare name is exact: it does not waive a table whose name merely contains it.
+    const other = new IgnoreTable([{ rule: "security/supabase-rls", items: ["post"] }]).filterChecks(
+      "security/supabase-rls",
+      undefined,
+      checks,
+    );
+    expect(other).toBe(checks);
   });
 
   test("tables behind RLS (401, 403, a zero total) or missing are not flagged", async () => {

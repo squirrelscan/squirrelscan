@@ -298,6 +298,73 @@ function sharesCompoundPart(anchor: readonly string[], target: readonly string[]
   );
 }
 
+// INFLECTIONS (#2092). Translated stores (Shopify Markets) keep the default-language handle and
+// inflect the label: Danish "Sadler" / "cykelsadlerne" for the title word "cykelsadel". Two words
+// of 5+ characters that share a 5+ character prefix match, and a stem tolerates the vowel a plural
+// drops ("sadel" -> "sadler"). Like the compound rule this is not language-gated.
+const MIN_STEM_WORD = 5;
+const MIN_STEM = 4;
+// Without the e-elision, a bare shared prefix needs 5: "artikel" and "articles" share 4 and are not one word.
+const MIN_BARE_STEM = 5;
+const MAX_ENDING = 4;
+
+// "sadel" -> "sadl", "finger" -> "fingr": the unstressed e of a final -el, -en or -er is dropped
+// when a plural or definite suffix is added in the Germanic languages.
+function elidedStem(word: string): string | null {
+  const m = /^(.{2,}[^aeiouy])e([lnr])$/.exec(word);
+  return m ? `${m[1]}${m[2]}` : null;
+}
+
+function commonPrefixLength(a: string, b: string): number {
+  const max = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < max && a.charCodeAt(i) === b.charCodeAt(i)) i++;
+  return i;
+}
+
+/** Inflections of one stem: a shared 5+ character prefix, or the same after e-elision. */
+export function sharesStem(a: string, b: string): boolean {
+  if (a.length < MIN_STEM_WORD || b.length < MIN_STEM_WORD) return false;
+  // A word that merely begins the other ("online" in "onlineshop") is the compound case, already
+  // judged by length; an inflection diverges from its stem instead.
+  if (a.startsWith(b) || b.startsWith(a)) return false;
+  // An inflection ending is short on both sides; a long tail is another word glued on.
+  const prefix = commonPrefixLength(a, b);
+  if (prefix >= MIN_BARE_STEM && a.length - prefix <= MAX_ENDING && b.length - prefix <= MAX_ENDING)
+    return true;
+  for (const [x, y] of [
+    [a, b],
+    [b, a],
+  ] as const) {
+    const stem = elidedStem(x);
+    if (stem !== null && stem.length >= MIN_STEM && y.startsWith(stem)) return true;
+  }
+  return false;
+}
+
+/** An inflected anchor word that ends a target compound whose last vowel the plural drops ("sadler" in "cykelsadel"). */
+function sharesInflectedCompound(anchor: readonly string[], target: readonly string[]): boolean {
+  return anchor.some((a) => {
+    if (a.length < MIN_STEM_WORD + 1) return false;
+    const stem = a.slice(0, -2);
+    return target.some((t) => {
+      const elided = elidedStem(t);
+      return (
+        elided !== null &&
+        elided.length - stem.length >= MIN_COMPOUND_PREFIX &&
+        elided.endsWith(stem)
+      );
+    });
+  });
+}
+
+function sharesInflection(anchor: readonly string[], target: readonly string[]): boolean {
+  return (
+    anchor.some((a) => target.some((t) => sharesStem(a, t))) ||
+    sharesInflectedCompound(anchor, target)
+  );
+}
+
 // Words that name a listing of articles, folded like tokens (NFD, no marks, ß -> ss).
 const LISTING_NOUNS: ReadonlySet<string> = new Set([
   "article",
@@ -373,6 +440,14 @@ function isListingTarget(target: string): boolean {
   );
 }
 
+// A leading locale segment (`/da-dk/`, `/pt-BR/`, `/en/`) is routing, not topic: `da` must not
+// match the Danish word "da". The target's title and H1 are already in that locale and carry the topic.
+const LOCALE_SEGMENT = /^\/[a-z]{2}(?:-[a-z]{2,4})?(?=\/.)/i;
+
+function stripLocaleSegment(path: string): string {
+  return path.replace(LOCALE_SEGMENT, "");
+}
+
 function isJudgeableTarget(page: AnchorGraphPage): boolean {
   if (page.status === null || page.status < 200 || page.status > 299) return false;
   return !page.contentType || /html/i.test(page.contentType);
@@ -409,6 +484,15 @@ function clipTitle(text: string | null): string | null {
 function clip(text: string): string {
   const t = text.replace(/\s+/g, " ").trim();
   return t.length > MAX_TEXT_LENGTH ? `${t.slice(0, MAX_TEXT_LENGTH - 1)}…` : t;
+}
+
+// A category pill reads "Beklaedning (15)": the count is theme chrome, not anchor wording.
+const TRAILING_COUNT = /\s*[([{]\s*\d[\d.,\s]*[)\]}]\s*$/;
+
+/** Anchor text without a trailing product or post count: `Shoes (15)` -> `Shoes`. */
+export function stripTrailingCount(text: string): string {
+  const stripped = text.replace(TRAILING_COUNT, "");
+  return stripped.trim() === "" ? text : stripped;
 }
 
 /** A link that can carry anchor text to another crawled page: internal, followed, contextual. */
@@ -576,7 +660,7 @@ export class AnchorGraphBuilder {
         );
         this.pairCount += 1;
       }
-      const text = link.text ?? "";
+      const text = stripTrailingCount(link.text ?? "");
       if (hasForeignScript(text)) pair.unspaced = true;
       if (link.textGlued) pair.glued = true;
       // Tokenised BEFORE clipping: a long card's matching word may sit past the clip.
@@ -718,7 +802,7 @@ export function evaluateAnchorGraph(
       // slug to compare against: too thin to warn on.
       const noWord = page.hasHeading && page.headingTokens.length === 0 && !page.headingTruncated;
       if (!page.headingForeign && !noWord) {
-        const slug = tokenize(safeDecode(getPathname(target)), { slug: true });
+        const slug = tokenize(stripLocaleSegment(safeDecode(getPathname(target))), { slug: true });
         const all = [...page.headingTokens, ...slug.tokens];
         // A bare id (`/p/123`) is no topic: with no title or H1 there is nothing to compare.
         if (all.some((t) => /\p{L}/u.test(t)))
@@ -763,6 +847,7 @@ export function evaluateAnchorGraph(
       sharesToken(anchor, target) ||
       sharesJoined(anchor, anchorJoined, target, targetJoined) ||
       sharesCompoundPart(anchor, target) ||
+      sharesInflection(anchor, target) ||
       (pair.glued &&
         (sharesInsideGlue(anchor, target) ||
           sharesToken(pair.partTokens, target) ||

@@ -266,7 +266,7 @@ describe("derived hints are sound against strings the pattern matches", () => {
     expect(deriveHints(new RegExp(String.raw`\u{41}bcdef`, "u")).hints).toEqual(["bcdef"]);
     expect(deriveHints(/ab\cJcdef/).hints).toEqual(["cdef"]);
     expect(deriveHints(/(?<n>x)\k<n>abcdef/).hints).toEqual(["abcdef"]);
-    expect(deriveHints(/(a)\12bcde/).hints).toEqual(["bcde"]);
+    expect(deriveHints(new RegExp(String.raw`(a)\12bcde`)).hints).toEqual(["bcde"]);
     expect(deriveHints(/\p{L}abcde/u).hints).toEqual(["abcde"]);
     for (const re of [/\x60foobar/, new RegExp(String.raw`\u0041bcdef`), new RegExp(String.raw`\u{41}bcdef`, "u"), /ab\cJcdef/, /\p{L}abcde/u]) {
       const result = violations(re, 20);

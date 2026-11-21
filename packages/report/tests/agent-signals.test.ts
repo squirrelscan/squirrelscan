@@ -13,6 +13,7 @@ import {
 import { renderHtml } from "../src/output/html";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
+import type { GroupScore } from "@squirrelscan/core-contracts";
 import type { AuditReport, ReportRuleResult } from "../src/types";
 
 function rule(id: string, check: string, value: string | null): ReportRuleResult {
@@ -30,9 +31,12 @@ function rule(id: string, check: string, value: string | null): ReportRuleResult
   };
 }
 
+// Fixture groups are partial on purpose (no `total`); `report` casts the whole report.
+type FixtureGroup = Omit<GroupScore, "group" | "total"> & { group: string };
+
 function report(
   results: ReportRuleResult[],
-  groups: AuditReport["healthScore"]["groups"],
+  groups: FixtureGroup[],
 ): AuditReport {
   return {
     baseUrl: "https://example.com",
