@@ -5,8 +5,10 @@
  * CI's "CLI tests" job used to be a single bare `bun test`. Bare `bun test` walks
  * the WHOLE tree, so packages/* were already gating every PR — but under a job
  * called "CLI tests", with one 400-file log, so nobody could tell. This module is
- * the single source of truth for the split: ci.yml runs one `--run <suite>` step
- * per suite, and a red step names the package.
+ * the single source of truth for the split: ci.yml runs one matrix leg per
+ * suite (`--run ${{ matrix.suite }}`), and a red leg names the package.
+ * scripts/ci-affected.ts maps a diff's affected workspaces onto these suites
+ * (suiteForRoot) so a leg the diff cannot reach skips (#2180).
  *
  * `rest` is the COMPLEMENT of the named suites, computed from the tree rather than
  * hand-kept, so a new package is covered the day it lands. `--check` (run in the
@@ -24,8 +26,8 @@ import { fileURLToPath } from "node:url";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const workflow = join(repoRoot, ".github/workflows/ci.yml");
 
-// Suites that get their own step, so a red step names the package. ci.yml orders
-// the steps cheapest-first; this order only shapes --list and error messages.
+// Suites that get their own matrix leg, so a red leg names the package. This
+// order only shapes --list, error messages and ci-affected.ts's output.
 const NAMED_SUITES: { name: string; roots: string[] }[] = [
   { name: "audit-engine", roots: ["packages/audit-engine"] },
   { name: "crawler", roots: ["packages/crawler"] },
@@ -90,24 +92,46 @@ export function selectedBy(roots: string[], files: string[]): string[] {
   return files.filter((f) => roots.some((root) => f === root || f.startsWith(`${root}/`)));
 }
 
+/**
+ * The suite that runs a workspace's tests: the named suite rooted at `dir`, or
+ * `rest` (scripts/ci-affected.ts maps affected workspaces through this).
+ */
+export function suiteForRoot(dir: string): string {
+  return NAMED_SUITES.find((s) => s.roots.includes(dir))?.name ?? REST_SUITE;
+}
+
 /** Suite names ci.yml is expected to run. */
 export function suiteNames(): string[] {
   return [...NAMED_SUITES.map((s) => s.name), REST_SUITE];
 }
 
 /**
- * Suite names ci.yml actually runs, parsed from its `--run <suite>` steps.
- * Comment lines are skipped: a commented-out step runs nothing and must not
- * count as coverage, and the job's own comment block names this script.
+ * Suite names ci.yml actually runs, parsed from its `--run <suite>` steps and,
+ * when a step runs `--run ${{ matrix.suite }}`, from the `suite: [...]` matrix
+ * list (#2180: one matrix job per suite). Comment lines are skipped: a
+ * commented-out step runs nothing and must not count as coverage, and the job's
+ * own comment block names this script.
  */
 export function suitesRunBy(workflowYaml: string): string[] {
   const names: string[] = [];
+  const matrix: string[] = [];
+  let runsMatrix = false;
   for (const line of workflowYaml.split("\n")) {
     if (/^\s*#/.test(line)) continue;
-    const match = line.match(/test-suites\.ts\s+--run\s+([a-z0-9-]+)/);
-    if (match) names.push(match[1] as string);
+    const run = line.match(/test-suites\.ts\s+--run\s+([a-z0-9-]+)/);
+    if (run) names.push(run[1] as string);
+    if (/test-suites\.ts\s+--run\s+"?\$\{\{\s*matrix\.suite\s*\}\}/.test(line)) runsMatrix = true;
+    const list = line.match(/^\s*suite:\s*\[([^\]]*)\]/);
+    if (list) {
+      matrix.push(
+        ...(list[1] as string)
+          .split(",")
+          .map((n) => n.trim().replace(/^["']|["']$/g, ""))
+          .filter((n) => n !== ""),
+      );
+    }
   }
-  return names;
+  return runsMatrix ? [...names, ...matrix] : names;
 }
 
 /**
