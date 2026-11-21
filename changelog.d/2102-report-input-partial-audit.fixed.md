@@ -1,1 +1,0 @@
-- `squirrel report --input` now keeps `meta.partialAudit` from the saved report and publishes with it, so a partial audit is no longer republished as complete. (#2102)

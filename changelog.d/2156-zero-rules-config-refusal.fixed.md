@@ -1,1 +1,0 @@
-- An audit whose config `[rules]` selection plus the WCAG level leaves zero rules to run is now refused before the crawl starts, instead of crawling the site and reporting an empty audit (#2110).

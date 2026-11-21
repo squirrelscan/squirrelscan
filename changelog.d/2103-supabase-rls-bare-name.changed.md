@@ -1,1 +1,0 @@
-- `security/supabase-rls` waives an intentionally public table by its bare name: `[[ignore]]` with `items = ["posts"]` waives the `posts` table in every project. Each finding item is now labelled with the table name alone, with the row count beside it, and the fail message no longer lists table names, so a waived table no longer appears in it (#2103)
