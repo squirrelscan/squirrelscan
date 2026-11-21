@@ -592,13 +592,17 @@ describe("security/exposed-actuator: a pass clears only what was checked", () =>
     expect(checks.find((c) => c.name === "exposed-actuator-heapdump-closed")?.status).toBe("pass");
   });
 
-  test("a server error (503) on one path: that path is not checked and nothing is cleared", async () => {
-    const { checks } = await run({ [`${BASE}/actuator/env`]: () => json({ error: "busy" }, 503) });
-    expect(clearedBy(checks)).toEqual([]);
-    expect(checks.find((c) => c.name === "exposed-actuator-not-checked")).toMatchObject({
-      status: "skipped",
-      skipReason: "probe-incomplete",
-    });
+  test("a server error (500 or 503) on /actuator/env, 404 elsewhere: env is not checked, no pass, nothing cleared", async () => {
+    for (const status of [500, 503]) {
+      const { checks, sent } = await run({ [`${BASE}/actuator/env`]: () => json({ error: "boom" }, status) });
+      expect(paths(sent)).toContain("GET /actuator/env");
+      expect(checks.some((c) => c.name === "exposed-actuator")).toBe(false);
+      expect(clearedBy(checks)).toEqual([]);
+      const nc = checks.find((c) => c.name === "exposed-actuator-not-checked");
+      expect(nc).toMatchObject({ status: "skipped", skipReason: "probe-incomplete" });
+      expect(nc?.message).toContain(`${BASE}/actuator/env (the server answered with an error (5xx))`);
+      restore?.();
+    }
   });
 
   test("throttled partway through an aggressive run: neither family is cleared", async () => {

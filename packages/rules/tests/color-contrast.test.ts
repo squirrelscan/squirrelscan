@@ -86,6 +86,44 @@ describe("guesses are not reported", () => {
   });
 });
 
+describe("large text is held to 3:1 (#2105)", () => {
+  // #888 on white is 3.54:1; #aaa on white is 2.32:1.
+  const big = (style: string) => run(page({ body: `<p style="${style};background:#fff">Text</p>` }));
+
+  test("large text at 3.5:1 passes", () => {
+    expect(big("color:#888;font-size:24px").status).toBe("pass");
+    expect(big("color:#888;font-size:14pt;font-weight:700").status).toBe("pass");
+  });
+
+  test("large text at 2.5:1 fails and says it was held to 3:1", () => {
+    const check = big("color:#aaa;font-size:18pt");
+    expect(check.status).toBe("warn");
+    expect(check.items).toEqual([{ id: "p: #aaa on #fff (2.32:1, large text)" }]);
+    expect(check.message).toContain("3:1 for large text");
+  });
+
+  test("normal text at 3.5:1 fails at 4.5:1", () => {
+    const check = big("color:#888;font-size:16px");
+    expect(check.status).toBe("warn");
+    expect(check.items).toEqual([{ id: "p: #888 on #fff (3.54:1)" }]);
+    expect(big("color:#888;font-size:14pt").status).toBe("warn");
+  });
+
+  test("a size the rule cannot read keeps 4.5:1 and says so", () => {
+    const check = big("color:#888");
+    expect(check.status).toBe("warn");
+    expect(check.details?.sizeUnknown).toBe(1);
+    expect(String(check.details?.sizeNote)).toContain("4.5:1");
+  });
+
+  test("size is inherited from an ancestor's inline style", () => {
+    const check = run(
+      page({ body: `<div style="font-size:30px"><p style="color:#888;background:#fff">Text</p></div>` })
+    );
+    expect(check.status).toBe("pass");
+  });
+});
+
 describe("measured pairs below 4.5:1 are reported", () => {
   test("gray on white, both inline", () => {
     const check = run(page({ body: `<span style="color:#999;background:#fff">Low</span>` }));

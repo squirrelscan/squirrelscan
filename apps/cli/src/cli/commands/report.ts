@@ -120,10 +120,19 @@ function filterBySeverity(
   };
 }
 
+export function formatAuditListDate(startedAt: number): string {
+  return new Date(startedAt).toLocaleString();
+}
+
+/** Width of the date column: the longest rendered date (and the header) plus a 2-space gutter. */
+export function auditListDateWidth(dates: string[]): number {
+  return Math.max("Date".length, ...dates.map((d) => d.length)) + 2;
+}
+
 /**
  * Print audit list table
  */
-function printAuditList(
+export function printAuditList(
   audits: Array<{
     id: string;
     baseUrl: string;
@@ -144,19 +153,24 @@ function printAuditList(
     return;
   }
 
+  // Size the date column from the rendered values: locale dates vary in width
+  // (e.g. "11/17/2026, 10:32:20 AM"), so a fixed width ran into the next column (#2095).
+  const dates = audits.map((a) => formatAuditListDate(a.startedAt));
+  const dateWidth = auditListDateWidth(dates);
+
   console.log("Recent Audits:");
   console.log("=".repeat(90));
   console.log(
     "ID".padEnd(11) +
-      "Date".padEnd(22) +
+      "Date".padEnd(dateWidth) +
       "Pages".padEnd(8) +
       "Status".padEnd(12) +
       "Published"
   );
   console.log("-".repeat(90));
 
-  for (const audit of audits) {
-    const date = new Date(audit.startedAt).toLocaleString();
+  for (const [index, audit] of audits.entries()) {
+    const date = dates[index] ?? "";
     const pages = audit.stats.pagesTotal.toString();
     const id = audit.id.slice(0, 8);
     const published = audit.published?.visibility ?? "-";
@@ -167,7 +181,7 @@ function printAuditList(
 
     console.log(
       id.padEnd(11) +
-        date.padEnd(22) +
+        date.padEnd(dateWidth) +
         pages.padEnd(8) +
         status.padEnd(12) +
         published

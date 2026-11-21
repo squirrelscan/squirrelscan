@@ -7,7 +7,7 @@ description: "A viewport that caps the zoom level stops low-vision users enlargi
 
 `<meta name="viewport">` tells a mobile browser how to lay out the page. Its `content` value is a comma-separated list of directives, and three of them constrain zoom: `user-scalable`, `maximum-scale` and `minimum-scale`.
 
-Someone with low vision may enlarge a page several times over to read it. Capping the zoom takes that away, and nothing on screen explains why pinching does nothing. WCAG success criterion 1.4.4 Resize Text, Level AA, requires text to scale to 200 percent without losing content or function.
+Someone with low vision may enlarge a page several times over to read it. Capping the zoom takes that away, and nothing on screen explains why pinching does nothing. WCAG success criterion 1.4.4 Resize Text, Level AA, requires text to scale to 200 percent without losing content or function. The rule's `maximum-scale` cutoff of 5 is the Lighthouse threshold, not a WCAG one.
 
 ## What squirrel checks
 

@@ -165,6 +165,27 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
 
 export const SCHEMA_VERSION = 48;
 
+/**
+ * Most node keys one page's `entity_map_pages.refs` row stores (#2135). A relative
+ * `@id` reference expands to the full page URL, so a hostile page can turn 300 KB
+ * of JSON-LD into a row past SQLite's value limit. Keys are kept in sorted order.
+ */
+export const MAX_STORED_PAGE_REFS = 1000;
+
+/** Most `entity_edges` rows stored per source entity (#2135), same reasoning. */
+export const MAX_STORED_EDGES_PER_SOURCE = 1000;
+
+/** Decode a stored `refs` column: a bare array, or `{keys, total}` once capped. */
+function decodeStoredRefs(raw: string): { keys: string[]; total: number } {
+  const parsed: unknown = JSON.parse(raw);
+  if (Array.isArray(parsed)) return { keys: parsed as string[], total: parsed.length };
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as { keys?: unknown }).keys)) {
+    const { keys, total } = parsed as { keys: string[]; total?: unknown };
+    return { keys, total: typeof total === "number" ? total : keys.length };
+  }
+  throw new Error("refs is not an array");
+}
+
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
   // Version 2: Add ttfb and download_time columns
@@ -4484,7 +4505,11 @@ export class SQLiteStorage implements CrawlStorage {
               node.pageLocal ? 1 : 0
             );
           }
+          const edgesPerSource = new Map<string, number>();
           for (const edge of map.edges) {
+            const kept = edgesPerSource.get(edge.source) ?? 0;
+            if (kept >= MAX_STORED_EDGES_PER_SOURCE) continue;
+            edgesPerSource.set(edge.source, kept + 1);
             insertEdge.run(
               crawlId,
               edge.source,
@@ -4505,11 +4530,22 @@ export class SQLiteStorage implements CrawlStorage {
           `);
           for (const page of map.pages ?? []) {
             if (page.entityCount === 0 && page.references.length === 0) continue;
+            const sorted =
+              page.references.length > MAX_STORED_PAGE_REFS
+                ? [...page.references].sort()
+                : page.references;
             insertPage.run(
               crawlId,
               page.url,
               page.entityCount,
-              JSON.stringify(page.references)
+              JSON.stringify(
+                sorted.length > MAX_STORED_PAGE_REFS
+                  ? {
+                      keys: sorted.slice(0, MAX_STORED_PAGE_REFS),
+                      total: sorted.length,
+                    }
+                  : sorted
+              )
             );
           }
           db.prepare(
@@ -4558,7 +4594,16 @@ export class SQLiteStorage implements CrawlStorage {
       /** True when this crawl's map was written, even if it came out empty (#2105). */
       written: boolean;
       /** Per-page figures; empty on a crawl that did not record them. */
-      pages: Array<{ url: string; entityCount: number; references: string[] }>;
+      pages: Array<{
+        url: string;
+        entityCount: number;
+        /** At most MAX_STORED_PAGE_REFS sorted keys (#2135). */
+        references: string[];
+        /** Distinct keys the page referenced before the cap. */
+        referencesTotal: number;
+      }>;
+      /** Rows skipped because they could not be decoded (#2135). */
+      warnings: string[];
     },
     StorageError,
     never
@@ -4620,13 +4665,34 @@ export class SQLiteStorage implements CrawlStorage {
           refs: string;
         }>;
 
+        const warnings: string[] = [];
+        const pages: Array<{
+          url: string;
+          entityCount: number;
+          references: string[];
+          referencesTotal: number;
+        }> = [];
+        for (const row of pageRows) {
+          try {
+            const { keys, total } = decodeStoredRefs(row.refs);
+            pages.push({
+              url: row.normalized_url,
+              entityCount: row.entity_count,
+              references: keys,
+              referencesTotal: total,
+            });
+          } catch (e) {
+            // One corrupt row must not fail the whole crawl's map (#2135).
+            warnings.push(
+              `skipped corrupt entity refs for ${row.normalized_url}: ${e instanceof Error ? e.message : String(e)}`
+            );
+          }
+        }
+
         return {
           written,
-          pages: pageRows.map((row) => ({
-            url: row.normalized_url,
-            entityCount: row.entity_count,
-            references: JSON.parse(row.refs) as string[],
-          })),
+          warnings,
+          pages,
           nodes: nodeRows.map((row) => ({
             key: row.key,
             id: row.entity_id,

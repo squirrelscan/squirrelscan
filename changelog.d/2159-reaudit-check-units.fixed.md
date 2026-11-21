@@ -1,0 +1,1 @@
+- Local incremental re-audit totals and score now count carried findings in the full audit's check units. (#2159)

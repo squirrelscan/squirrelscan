@@ -7,6 +7,8 @@ import { join } from "node:path";
 
 import type { AuditReport } from "../../src/types";
 
+import { resolvePublishDecision } from "../../src/cli/commands/audit";
+import { reportPublishDecision } from "../../src/cli/commands/report";
 import {
   getReportNotReadyReason,
   isReportReadyStatus,
@@ -418,5 +420,86 @@ describe("loadReport - slim JSON reconstruction", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("loadReport - meta.partialAudit round trip (pub#2102)", () => {
+  const slimWith = (partialAudit?: unknown) => ({
+    meta: {
+      version: "0.0.117",
+      baseUrl: "https://example.com",
+      timestamp: new Date().toISOString(),
+      totalPages: 1,
+      ...(partialAudit !== undefined ? { partialAudit } : {}),
+    },
+    score: { overall: 80, grade: "B", categories: [] },
+    summary: { passed: 0, warnings: 0, failed: 0 },
+    issues: [],
+  });
+
+  const load = (slim: unknown) => {
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-slim-"));
+    const path = join(dir, "report.json");
+    try {
+      writeFileSync(path, JSON.stringify(slim));
+      const result = loadReport(path);
+      if (!result.ok) throw new Error("loadReport failed");
+      return result.data;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  test("a rule-filtered export keeps its marker, through the json renderer and the publish decision", () => {
+    const marker = {
+      include: ["core/*"],
+      exclude: ["core/title"],
+      includedCategories: ["core"],
+      wcagLevel: "AA" as const,
+    };
+    const report = load(slimWith(marker));
+    expect(report.partialAudit).toEqual(marker);
+    const json = JSON.parse(renderJson(report)) as {
+      meta: { partialAudit?: unknown };
+    };
+    expect(json.meta.partialAudit).toEqual(marker);
+    // Decides through the rule-filter branch of the shared guard, not as unfiltered.
+    expect(reportPublishDecision(report)).toBe(
+      resolvePublishDecision({
+        signedIn: true,
+        offline: false,
+        explicitPublish: true,
+        noPublish: false,
+        configPublish: true,
+        ruleFilterActive: true,
+      })
+    );
+  });
+
+  test("a file without the field yields no marker", () => {
+    expect(load(slimWith()).partialAudit).toBeUndefined();
+  });
+
+  test("a hostile marker is bounded and validated", () => {
+    const report = load(
+      slimWith({
+        include: ["core/*", 7, "", "x".repeat(5000), { a: 1 }],
+        exclude: Array.from({ length: 500 }, (_, i) => `r/${i}`),
+        includedCategories: "core",
+        wcagLevel: "ZZ",
+      })
+    );
+    expect(report.partialAudit?.include).toEqual(["core/*"]);
+    expect(report.partialAudit?.exclude.length).toBeLessThanOrEqual(50);
+    expect(report.partialAudit?.includedCategories).toEqual([]);
+    expect(report.partialAudit?.wcagLevel).toBeUndefined();
+  });
+
+  test("a marker with no filter in it is dropped", () => {
+    expect(
+      load(slimWith({ include: [], exclude: [], includedCategories: ["core"] }))
+        .partialAudit
+    ).toBeUndefined();
+    expect(load(slimWith("nope")).partialAudit).toBeUndefined();
   });
 });
