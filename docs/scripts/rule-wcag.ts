@@ -31,11 +31,21 @@ const HEADING = "## WCAG success criteria";
 const SECTION_INTRO =
   "The WCAG success criteria this rule's findings map to. These automated checks cover part of WCAG; passing them does not mean a site conforms. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules mapped to a criterion at Level A or AA.";
 
+/** The W3C Understanding page for a criterion: the slug is its title lower-cased, punctuation dropped, spaces hyphenated. */
+function wcagUnderstandingUrl(sc: string): string {
+  const slug = (wcagTitle(sc) ?? sc).toLowerCase().replace(/[^a-z0-9 ]/g, "").trim().replace(/ +/g, "-");
+  return `https://www.w3.org/WAI/WCAG22/Understanding/${slug}.html`;
+}
+
 /** The generated block for a rule, markers included. */
 export function renderBlock(meta: RuleMeta): string {
   if (meta.wcagNone !== undefined) {
     const line = `No WCAG success criterion: ${meta.wcagNone.trim()} A run narrowed with \`--wcag-level\` leaves this rule out.`;
-    return [START, "", line, "", END].join("\n");
+    const related = (meta.wcagRelated ?? []).map(
+      (c) => `[${c.sc} ${wcagTitle(c.sc) ?? ""}](${wcagUnderstandingUrl(c.sc)})`,
+    );
+    const lines = related.length > 0 ? [line, "", `Related (not tested): ${related.join(", ")}.`] : [line];
+    return [START, "", ...lines, "", END].join("\n");
   }
   const rows = (meta.wcag ?? []).map(
     (c) => `| ${c.sc} ${wcagTitle(c.sc) ?? ""} | ${c.level} | WCAG ${c.version} |`,

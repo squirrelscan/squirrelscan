@@ -50,6 +50,25 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
     }
   });
 
+  test("wcagRelated appears only beside wcagNone and names criteria from the table", () => {
+    for (const r of a11y.filter((x) => x.meta.wcagRelated !== undefined)) {
+      expect(r.meta.wcagNone, `${r.meta.id} has wcagRelated without wcagNone`).toBeDefined();
+      for (const c of r.meta.wcagRelated!) {
+        const entry = WCAG_CRITERIA[c.sc];
+        expect(entry, `${r.meta.id} relates unknown ${c.sc}`).toBeDefined();
+        expect(c.level).toBe(entry!.level);
+        expect(c.version).toBe(entry!.version);
+      }
+    }
+  });
+
+  test("zoom-disabled does not present 500% as a WCAG requirement", () => {
+    const solution = a11y.find((r) => r.meta.id === "a11y/zoom-disabled")!.meta.solution!;
+    expect(solution).toContain("200%");
+    expect(solution).toContain("Lighthouse");
+    expect(solution).not.toContain("500%");
+  });
+
   test("a wcagNone reason is one non-empty sentence", () => {
     for (const r of a11y.filter((x) => x.meta.wcagNone !== undefined)) {
       const reason = r.meta.wcagNone!.trim();

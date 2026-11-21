@@ -251,6 +251,11 @@ export interface RuleMeta {
    * checks. Shown on the rule's docs page; `--wcag-level` leaves such a rule out.
    */
   wcagNone?: string;
+  /**
+   * Success criteria a `wcagNone` rule is related to without testing them, for readers. The docs page lists them
+   * as "Related:" links, never as tested criteria; `--wcag-level` ignores them. Only valid beside `wcagNone`.
+   */
+  wcagRelated?: WcagCriterion[];
   scope: RuleScope;
   severity: RuleSeverity;
   weight: number; // scoring weight (1-10)

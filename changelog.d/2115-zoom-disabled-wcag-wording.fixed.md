@@ -1,0 +1,1 @@
+- The `a11y/zoom-disabled` rule page and solution now say WCAG 1.4.4 requires 200% text resize and that the `maximum-scale` cutoff of 5 is the Lighthouse threshold. Rules with no WCAG criterion can now list related criteria as links on their rule page. (#2115)
