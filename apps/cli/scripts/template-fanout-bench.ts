@@ -21,6 +21,11 @@
 // fan-out key and reports how many would inherit a verdict, with the signature as
 // it is today (`current`, the default) or derived from every selector and attribute
 // the declared rules read (`derived`). Run both and compare. Parse only, no rules.
+// The pass streams: it reads pages until a batch holds `--batch-bytes` of HTML
+// (default 256 MB, UTF-8 bytes) or `--batch` pages (the ceiling, default 200),
+// whichever comes first, feeds the accumulator and drops the HTML. A page bigger
+// than the byte cap is its own batch. Storage is read 25 pages at a time. On a
+// 1.7 MB/page site, a fixed 200-page batch peaked near 6.6 GB RSS, 25 pages 1.2-1.8 GB.
 // On an authored or synthetic corpus the number is a CEILING, not an estimate.
 //
 // It measures the STREAMED PAGE-RULE PASS only (`streamPageRules`) — the phase
@@ -63,6 +68,8 @@
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { SiteData } from "@squirrelscan/rules";
 
+import { byteBatches, DEFAULT_BATCH_BYTES, htmlBytes } from "./byte-batches";
+
 import {
   bindRuleCache,
   createCoverageAccumulator,
@@ -97,7 +104,7 @@ const flag = (name: string): boolean => process.argv.includes(`--${name}`);
 const DB = arg("db", "");
 if (!DB) {
   console.error(
-    "usage: bun run scripts/template-fanout-bench.ts --db <project.db> [--repeat 3] [--verify] [--profile] [--batch 200]"
+    "usage: bun run scripts/template-fanout-bench.ts --db <project.db> [--repeat 3] [--verify] [--profile] [--batch 200] [--batch-bytes 268435456]"
   );
   process.exit(1);
 }
@@ -105,9 +112,9 @@ if (!DB) {
 // into 1, both of which pass an is-integer check afterwards. A non-positive batch
 // makes storage omit its LIMIT and never advance the offset (see the invariance
 // script's note) — an infinite read of the whole crawl.
-function positiveInt(name: string, fallback: string): number {
+function positiveInt(name: string, fallback: string, maxDigits = 7): number {
   const raw = arg(name, fallback);
-  if (!/^[1-9][0-9]{0,6}$/.test(raw)) {
+  if (!new RegExp(`^[1-9][0-9]{0,${maxDigits - 1}}$`).test(raw)) {
     console.error(
       `--${name} must be a positive integer, got ${JSON.stringify(raw)}`
     );
@@ -139,6 +146,7 @@ function pairedMedian(a: number[], b: number[]): number {
 }
 const REPEATS = positiveInt("repeat", "3");
 const BATCH = positiveInt("batch", "200");
+const BATCH_BYTES = positiveInt("batch-bytes", String(DEFAULT_BATCH_BYTES), 12);
 
 /**
  * Open a DISPOSABLE COPY. `SQLiteStorage.init()` opens the file writable,
@@ -284,9 +292,12 @@ try {
     const { storage, crawlId } = await openCrawl(corpus.db);
     // Streamed: each batch is keyed and dropped, so memory is one batch of HTML.
     const acc = createCoverageAccumulator(SIGNATURE);
-    for (let offset = 0; ; offset += BATCH) {
-      const batch = await run(storage.getPages(crawlId, { limit: BATCH, offset }));
-      if (batch.length === 0) break;
+    for await (const batch of byteBatches(
+      (offset, limit) => run(storage.getPages(crawlId, { limit, offset })),
+      (p) => htmlBytes(p.html),
+      BATCH_BYTES,
+      BATCH
+    )) {
       for (const p of batch) if (p.html) acc.add({ url: p.url, html: p.html });
     }
     await run(storage.close());
